@@ -4,20 +4,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import process.model.dto.JobDto;
-import process.model.dto.JobHistoryDto;
-import process.model.dto.SchedulerDto;
 import process.model.enums.Status;
-import process.model.mapper.JobHistoryMapper;
-import process.model.mapper.JobMapper;
-import process.model.mapper.SchedulerMapper;
 import process.model.pojo.*;
 import process.model.repository.*;
-import process.model.repository.projection.JobViewProjection;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -33,14 +24,6 @@ public class TransactionServiceImpl {
 
     private Logger logger = LoggerFactory.getLogger(TransactionServiceImpl.class);
 
-    // mapper
-    @Autowired
-    private JobMapper jobMapper;
-    @Autowired
-    private SchedulerMapper schedulerMapper;
-    @Autowired
-    private JobHistoryMapper jobHistoryMapper;
-
     // repo
     @Autowired
     private JobRepository jobRepository;
@@ -52,45 +35,6 @@ public class TransactionServiceImpl {
     private LookupDataRepository lookupDataRepository;
     @Autowired
     private JobAuditLogRepository jobAuditLogRepository;
-
-    /**
-     * The method use to save the job
-     * @param jobDto
-     * @return Job
-     */
-    public JobDto saveJob(JobDto jobDto) {
-        Job job = this.jobMapper.mapToEntity(jobDto);
-        this.jobRepository.saveAndFlush(job);
-        jobDto.setJobId(job.getJobId());
-        logger.info("Job Save " + job);
-        return jobDto;
-    }
-
-    /**
-     * The method use to save the scheduler
-     * @param schedulerDto
-     * @return SchedulerDto
-     */
-    public SchedulerDto saveScheduler(SchedulerDto schedulerDto) {
-        Scheduler scheduler = this.schedulerMapper.mapToEntity(schedulerDto);
-        this.schedulerRepository.saveAndFlush(scheduler);
-        schedulerDto.setJobId(scheduler.getJobId());
-        logger.info("Scheduler Save " + scheduler);
-        return schedulerDto;
-    }
-
-    /**
-     * The method use to save the jobHistory
-     * @param jobHistoryDto
-     * @return JobHistoryDto
-     */
-    public JobHistoryDto saveJobHistory(JobHistoryDto jobHistoryDto) {
-        JobHistory jobHistory = this.jobHistoryMapper.mapToEntity(jobHistoryDto);
-        this.jobHistoryRepository.saveAndFlush(jobHistory);
-        jobHistoryDto.setJobHistoryId(jobHistory.getJobHistoryId());
-        logger.info("JobHistory Save " + jobHistory);
-        return jobHistoryDto;
-    }
 
     /**
      * The method use to save the logs for job
@@ -107,17 +51,38 @@ public class TransactionServiceImpl {
         this.jobAuditLogRepository.save(jobAuditLogs);
     }
 
-    public void updateJobStatus(Job job) {
+    /**
+     * The method use to update the job
+     * @param job
+     * */
+    public void saveOrUpdateJob(Job job) {
         this.jobRepository.saveAndFlush(job);
     }
 
-    public void updateScheduler(Scheduler scheduler) {
+    /**
+     * The method use to update the scheduler
+     * @param scheduler
+     * */
+    public void saveOrUpdateScheduler(Scheduler scheduler) {
         this.schedulerRepository.saveAndFlush(scheduler);
     }
 
-    public void updateJobHistory(JobHistory jobHistory) {
+    /**
+     * The method use to update the job-history
+     * @param jobHistory
+     * */
+    public void saveOrUpdateJobHistory(JobHistory jobHistory) {
         this.jobHistoryRepository.saveAndFlush(jobHistory);
     }
+
+    /**
+     * The method use to update the lookup-data
+     * @param lookupData
+     */
+    public void updateLookupDate(LookupData lookupData) {
+        this.lookupDataRepository.save(lookupData);
+    }
+
 
     /**
      * The method use to get the job by name and job status
@@ -126,7 +91,6 @@ public class TransactionServiceImpl {
      * @return Job
      */
     public Optional<Job> findByJobNameAndJobStatus(String jobName, Status status) {
-        logger.info("JobName " + jobName + " Status " + status);
         return this.jobRepository.findByJobNameAndJobStatus(jobName, status);
     }
 
@@ -137,19 +101,18 @@ public class TransactionServiceImpl {
      * @return Job
      */
     public Optional<Job> findByJobIdAndJobStatus(Long jobId, Status status) {
-        logger.info("JobId " + jobId + " Status " + status);
         return this.jobRepository.findByJobIdAndJobStatus(jobId, status);
     }
 
+
     /**
-     * The method use to get the job by name and job status
-     * @param page
-     * @param size
-     * @return Job
+     * The method use to get the JobHistory by
+     * @param jobHistoryId
+     * @param jobHistoryId
+     * @return JobHistory
      */
-    public Page<JobViewProjection> getJobs(int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size);
-        return this.jobRepository.findByJobStatus(pageRequest);
+    public Optional<JobHistory> findJobHistoryByJobHistoryId(Long jobHistoryId) {
+        return this.jobHistoryRepository.findById(jobHistoryId);
     }
 
     /**
@@ -168,14 +131,6 @@ public class TransactionServiceImpl {
      */
     public List<JobHistory> findAllJobForTodayWithLimit(Long limit) {
         return this.jobHistoryRepository.findAllJobForTodayWithLimit(limit);
-    }
-
-    /**
-     * The method use to update the lookup-data
-     * @param lookupData
-     */
-    public void updateLookupDate(LookupData lookupData) {
-        this.lookupDataRepository.save(lookupData);
     }
 
     /**

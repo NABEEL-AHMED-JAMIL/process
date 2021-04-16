@@ -4,13 +4,13 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import process.model.dto.JobHistoryDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.Job;
 import process.model.pojo.JobHistory;
+import process.model.pojo.Scheduler;
 import process.model.service.impl.TransactionServiceImpl;
-
+import process.util.ProcessTimeUtil;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -33,8 +33,32 @@ public class BulkAction {
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
         Optional<Job> job = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
         job.get().setJobRunningStatus(jobStatus);
-        this.transactionService.updateJobStatus(job.get());
+        this.transactionService.saveOrUpdateJob(job.get());
     }
+
+    /**
+     * This method use the change the status of sub job
+     * @param jobHistoryId
+     * @param jobStatus
+     * */
+    public void changeJobHistoryStatus(Long jobHistoryId, JobStatus jobStatus) {
+        Optional<JobHistory> jobHistory = this.transactionService.findJobHistoryByJobHistoryId(jobHistoryId);
+        jobHistory.get().setJobStatus(jobStatus);
+        this.transactionService.saveOrUpdateJobHistory(jobHistory.get());
+    }
+
+    /**
+     * This method use the add the end date of running job
+     * @param jobHistoryId
+     * @param endTime
+     * */
+    public void changeJobHistoryEndDate(Long jobHistoryId, LocalDateTime endTime) {
+        Optional<JobHistory> jobHistory = this.transactionService.findJobHistoryByJobHistoryId(jobHistoryId);
+        jobHistory.get().setEndTime(endTime);
+        jobHistory.get().setJobStatusMessage(String.format("Job %s now complete.", jobHistory.get().getJobId()));
+        this.transactionService.saveOrUpdateJobHistory(jobHistory.get());
+    }
+
 
     /**
      * This method use to run the last job in the main job
@@ -44,7 +68,7 @@ public class BulkAction {
     public void changeJobLastJobRun(Long jobId, LocalDateTime lastJobRun) {
         Optional<Job> job = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
         job.get().setLastJobRun(lastJobRun);
-        this.transactionService.updateJobStatus(job.get());
+        this.transactionService.saveOrUpdateJob(job.get());
     }
 
     /**
@@ -54,12 +78,63 @@ public class BulkAction {
      * @param scheduledTime
      * @return JobHistoryDto
      * */
-    public JobHistoryDto createJobHistory(Long jobId, LocalDateTime scheduledTime) {
-        JobHistoryDto jobHistoryDto = new JobHistoryDto();
-        jobHistoryDto.setStartTime(scheduledTime);
-        jobHistoryDto.setJobStatus(JobStatus.Queue);
-        jobHistoryDto.setJobId(jobId);
-        jobHistoryDto.setJobStatusMessage(String.format("Job %s now in the queue.", jobId));
-        return this.transactionService.saveJobHistory(jobHistoryDto);
+    public JobHistory createJobHistory(Long jobId, LocalDateTime scheduledTime) {
+        JobHistory jobHistory = new JobHistory();
+        jobHistory.setStartTime(scheduledTime);
+        jobHistory.setJobStatus(JobStatus.Queue);
+        jobHistory.setJobId(jobId);
+        jobHistory.setJobStatusMessage(String.format("Job %s now in the queue.", jobId));
+        this.transactionService.saveOrUpdateJobHistory(jobHistory);
+        return jobHistory;
+    }
+
+    /**
+     * this method use to add the current job logs into the audit logs table
+     * @param jobId
+     * @param jobHistoryId
+     * @param logsDetail
+     * */
+    public void saveJobAuditLogs(Long jobId, Long jobHistoryId, String logsDetail) {
+        this.transactionService.saveJobAuditLogs(jobId, jobHistoryId, logsDetail);
+    }
+
+    /**
+     * this method use to update the scheduler next running time
+     * @param scheduler
+     * */
+    public void updateNextScheduler(Scheduler scheduler) {
+        LocalDateTime nextJobRun = null;
+        if (scheduler.getFrequency().equals("Mint")) {
+            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), scheduler.getRecurrence(), scheduler.getFrequency());
+        } else if (scheduler.getFrequency().equals("Hr")) {
+            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), scheduler.getRecurrence(), scheduler.getFrequency());
+        } else if (scheduler.getFrequency().equals("Daily")) {
+            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), "1", scheduler.getFrequency());
+        } else if (scheduler.getFrequency().equals("Weekly")) {
+            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), "1", scheduler.getFrequency());
+        } else if (scheduler.getFrequency().equals("Monthly")) {
+            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), "1", scheduler.getFrequency());
+        }
+        // end date there then check and update
+        if (scheduler.getEndDate() != null) {
+            // check with the end time of the
+            LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
+            if (schedulerEndDateTime.isEqual(schedulerEndDateTime) || schedulerEndDateTime.isBefore(nextJobRun)) {
+                scheduler.setRecurrenceTime(nextJobRun);
+                this.transactionService.saveOrUpdateScheduler(scheduler);
+            } else {
+                // change the status into the partial-complete table
+                this.changeJobStatus(scheduler.getJobId(), JobStatus.PartialComplete);
+            }
+        } else {
+            scheduler.setRecurrenceTime(nextJobRun);
+        }
+    }
+
+    /**
+     * This method use to change the partial-complete status into complete status
+     * */
+    public void checkJobStatus() {
+
     }
 }

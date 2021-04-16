@@ -58,7 +58,7 @@ public class AsyncDALTaskExecutor {
         (new Timer()).schedule(new TimerTask() {
             @Override public void run() {
                 logger.info("AsyncDAL Active No Threads: " + threadPool.getActiveCount() +
-                    " Core no of Threads: " + threadPool.getCorePoolSize() + " Current no of threads: " + threadPool.getPoolSize() +
+                    " Core Pool size of Threads: " + threadPool.getCorePoolSize() + " Current no of threads in pool: " + threadPool.getPoolSize() +
                     " Current Queue Size: " + queue.size() + " Max allowed Threads: "+threadPool.getMaximumPoolSize());
             }
         }, 5 * 60 * 1000, 60000);

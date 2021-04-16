@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import process.model.dto.*;
 import process.model.enums.Status;
+import process.model.pojo.Job;
+import process.model.pojo.Scheduler;
 import process.model.service.SchedulerApiService;
 import process.util.ProcessTimeUtil;
 import process.util.excel.BulkExcel;
@@ -165,26 +167,26 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
                             jobDetailValidations.forEach(jobDetailValidation -> {
                                 try {
                                     // save the job and scheduler
-                                    JobDto jobDto = new JobDto();
-                                    jobDto.setJobName(jobDetailValidation.getJobName());
-                                    jobDto.setTriggerDetail(jobDetailValidation.getTriggerDetail());
-                                    jobDto.setJobStatus(Status.Active);
-                                    this.transactionService.saveJob(jobDto);
+                                    Job job = new Job();
+                                    job.setJobName(jobDetailValidation.getJobName());
+                                    job.setTriggerDetail(jobDetailValidation.getTriggerDetail());
+                                    job.setJobStatus(Status.Active);
+                                    this.transactionService.saveOrUpdateJob(job);
                                     // ------------------
-                                    SchedulerDto schedulerDto = new SchedulerDto();
-                                    schedulerDto.setStartDate(LocalDate.parse(jobDetailValidation.getStartDate()));
+                                    Scheduler scheduler = new Scheduler();
+                                    scheduler.setStartDate(LocalDate.parse(jobDetailValidation.getStartDate()));
                                     if (!StringUtils.isEmpty(jobDetailValidation.getEndDate())) {
-                                        schedulerDto.setEndDate(LocalDate.parse(jobDetailValidation.getEndDate()));
+                                        scheduler.setEndDate(LocalDate.parse(jobDetailValidation.getEndDate()));
                                     }
-                                    schedulerDto.setStartTime(LocalTime.parse(jobDetailValidation.getStartTime()));
-                                    schedulerDto.setFrequency(jobDetailValidation.getFrequency());
+                                    scheduler.setStartTime(LocalTime.parse(jobDetailValidation.getStartTime()));
+                                    scheduler.setFrequency(jobDetailValidation.getFrequency());
                                     if (!StringUtils.isEmpty(jobDetailValidation.getRecurrence())) {
-                                        schedulerDto.setRecurrence(jobDetailValidation.getRecurrence());
+                                        scheduler.setRecurrence(jobDetailValidation.getRecurrence());
                                     }
-                                    schedulerDto.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
+                                    scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
                                         LocalDate.parse(jobDetailValidation.getStartDate()), jobDetailValidation.getStartTime()));
-                                    schedulerDto.setJobId(jobDto.getJobId());
-                                    this.transactionService.saveScheduler(schedulerDto);
+                                    scheduler.setJobId(job.getJobId());
+                                    this.transactionService.saveOrUpdateScheduler(scheduler);
                                 } catch (Exception ex) {
                                     logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
                                 }

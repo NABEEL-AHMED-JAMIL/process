@@ -20,26 +20,42 @@ public class ProcessCron {
 
     public static final int SCHEDULER_CRON_TIME_IN_ONE_MINUTES=1;
     public static final int SCHEDULER_CRON_TIME_IN_TWO_MINUTES=2;
+    public static final int SCHEDULER_CRON_TIME_IN_ONE_HOUR = 60;
 
     @Autowired
     private BulkEngine bulkEngine;
 
     /**
-     * This addJobInQueue method run every 1 minutes
+     * This addJobInQueue method run every 2 minutes
      * */
-    @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
+    @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_TWO_MINUTES * 1000)
     public void addJobInQueue() {
+        logger.info("++++++++++++++++++++++++Start++++++++++++++++++++++++++++++++");
         logger.info("CRON JOB QUEUE STARTED " + new Date(System.currentTimeMillis()));
         this.bulkEngine.addJobInQueue();
+        logger.info("+++++++++++++++++++++++++++End++++++++++++++++++++++++++++++++");
     }
 
     /**
-     * This runJob method run every 2 minutes and put the job into the running state
+     * This runJob method run every 1 minutes and put the job into the running state
      * */
-    @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_TWO_MINUTES * 1000)
+    @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     public void runJob() {
+        logger.info("************************Start********************************");
         logger.info("CRON JOB STARTED " + new Date(System.currentTimeMillis()));
         this.bulkEngine.runJobInCurrentTimeSlot();
+        logger.info("*************************End*********************************");
+    }
+
+    /**
+     * This runJob method run every 1 hour and put the job into the running state
+     * */
+    @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_HOUR * 1000)
+    public void checkJobStatus() {
+        logger.info("-------------------------Start-------------------------");
+        logger.info("CRON JOB STARTED " + new Date(System.currentTimeMillis()));
+        this.bulkEngine.checkJobStatus();
+        logger.info("-------------------------End-------------------------");
     }
 
     @Override

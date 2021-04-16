@@ -12,6 +12,8 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.time.temporal.ChronoUnit.DAYS;
+
 /**
  * This JobDetailValidation validate the information of the sheet
  * if the date not valid its stop the process and through the valid msg
@@ -33,8 +35,6 @@ public class JobDetailValidation {
     private String timeFormat = "^(0[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$";
     // date format validation
     private String dateFormat = "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$";
-    // date parse format
-    private String parseDateFormat = "yyyy-MM-dd";
 
     // required
     private String jobName;
@@ -204,6 +204,12 @@ public class JobDetailValidation {
             if (!this.isNull(this.recurrence)) {
                 this.errorMsg = "Recurrence should be empty for daily frequency at row %s.";
                 return false;
+            } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
+                    .filter(x -> x.equals(Integer.valueOf(this.recurrence)))
+                    .findFirst().isPresent()) {
+                this.errorMsg = String.format("Recurrence not valid its should be %s",
+                    this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
+                return false;
             } else {
                 return this.dateTimeValidation(false, false);
             }
@@ -323,6 +329,12 @@ public class JobDetailValidation {
                 if (userInputEndDate.isBefore(userInputStartDate)) {
                     this.errorMsg = "EndDate should not be previous date at row %s.";
                     return false;
+                } else if ((DAYS.between(userInputStartDate, userInputEndDate) < 6) && isWeekdayCheck) {
+                    this.errorMsg = "EndDate must be 7 day difference from StartDate at row %s.";
+                    return false;
+                } else if ((DAYS.between(userInputStartDate, userInputEndDate) < 30) && isMonthlyCheck) {
+                    this.errorMsg = "EndDate must be 31 day difference from StartDate at row %s.";
+                    return false;
                 }
             }
             String timeSplit[] = this.startTime.split(this.split);
@@ -331,6 +343,7 @@ public class JobDetailValidation {
                 this.errorMsg = "StartTime should not be previous time at row %s.";
                 return false;
             }
+
             return true;
         } else {
             this.errorMsg = "StartDate should not be previous date at row %s.";

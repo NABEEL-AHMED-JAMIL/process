@@ -17,6 +17,7 @@ public class ModelApplication {
 
     /**
      * Method run the application
+     * @param args
      * */
     public static void main(String[] args) {
         SpringApplication.run(ModelApplication.class, args);
@@ -24,7 +25,7 @@ public class ModelApplication {
 
     /**
      * Method run on the start to set the time
-     * zone for application
+     * zone for application Karachi
      * */
     @PostConstruct
     public void started() {
