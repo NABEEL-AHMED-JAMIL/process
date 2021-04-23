@@ -201,6 +201,11 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
         }
     }
 
+    @Override
+    public ResponseDto jobRunningAction(JobStatusChangeDto jobStatusChange) throws Exception {
+        return null;
+    }
+
     private String[] getHEADER_FILED_BATCH_FILE() {
         return HEADER_FILED_BATCH_FILE;
     }

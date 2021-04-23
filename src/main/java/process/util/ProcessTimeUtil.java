@@ -45,7 +45,7 @@ public class ProcessTimeUtil {
      * */
     private static List getMints() {
         List<Integer> mints = new ArrayList<>();
-        mints.add(5); mints.add(10); mints.add(15);
+        mints.add(5);  mints.add(10); mints.add(15);
         mints.add(20); mints.add(25); mints.add(30);
         mints.add(35); mints.add(40); mints.add(45);
         mints.add(50); mints.add(55);
@@ -58,9 +58,9 @@ public class ProcessTimeUtil {
      * */
     private static List getHr() {
         List<Integer> hr = new ArrayList<>();
-        hr.add(1); hr.add(2); hr.add(3);hr.add(4);
-        hr.add(5);hr.add(6); hr.add(7);hr.add(8);
-        hr.add(9);hr.add(10); hr.add(11); hr.add(12);
+        hr.add(1); hr.add(2); hr.add(3); hr.add(4);
+        hr.add(5); hr.add(6); hr.add(7); hr.add(8);
+        hr.add(9); hr.add(10);hr.add(11);hr.add(12);
         return hr;
     }
 
@@ -80,8 +80,8 @@ public class ProcessTimeUtil {
      * */
     private static List getWeekly() {
         List<String> days = new ArrayList<>();
-        days.add("Sunday"); days.add("Monday");
-        days.add("Tuesday"); days.add("Wednesday");
+        days.add("Sunday");   days.add("Monday");
+        days.add("Tuesday");  days.add("Wednesday");
         days.add("Thursday"); days.add("Friday");
         days.add("Saturday");
         return days;
@@ -93,16 +93,16 @@ public class ProcessTimeUtil {
      * */
     private static List getMonthly() {
         List<Integer> days = new ArrayList<>();
-        days.add(1); days.add(2); days.add(3);
-        days.add(4); days.add(5); days.add(6);
-        days.add(7); days.add(8); days.add(9);
+        days.add(1);  days.add(2);  days.add(3);
+        days.add(4);  days.add(5);  days.add(6);
+        days.add(7);  days.add(8);  days.add(9);
         days.add(10); days.add(11); days.add(12);
         days.add(13); days.add(14); days.add(15);
-        days.add(16); days.add(17);days.add(18);
+        days.add(16); days.add(17); days.add(18);
         days.add(19); days.add(20); days.add(21);
         days.add(22); days.add(23); days.add(24);
-        days.add(25);days.add(26); days.add(27);
-        days.add(28); days.add(29);days.add(30);
+        days.add(25); days.add(26); days.add(27);
+        days.add(28); days.add(29); days.add(30);
         days.add(31);
         return days;
     }

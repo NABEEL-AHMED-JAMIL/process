@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.repository.*;
@@ -140,5 +141,13 @@ public class TransactionServiceImpl {
      */
     public LookupData findByLookupType(String lookupType) {
         return this.lookupDataRepository.findByLookupType(lookupType);
+    }
+
+    /**
+     * This method use to fetch all jobId
+     * @return List<Long>
+     */
+    public List<Job> findJobByJobRunningStatus() {
+        return this.jobRepository.findJobByJobRunningStatus(JobStatus.PartialComplete);
     }
 }

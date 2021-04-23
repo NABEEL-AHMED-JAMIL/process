@@ -56,7 +56,7 @@ public class BulkEngine {
             List<Scheduler> schedulerForToday = this.transactionService.findAllSchedulerForToday(now.toLocalDate());
             logger.info("addJobInQueue --> FETCHED Scheduler of current day: size {} ", schedulerForToday.size());
             if (!schedulerForToday.isEmpty()) {
-                schedulerForToday.parallelStream().forEach(scheduler -> {
+                schedulerForToday.forEach(scheduler -> {
                     if (scheduler.getFrequency().equalsIgnoreCase("Mint") && this.isScheduled(lastSchedulerRun, now,
                         scheduler.getJobId(), scheduler.getRecurrenceTime())) {
                         // change the job status in-flight
@@ -134,7 +134,7 @@ public class BulkEngine {
             List<JobHistory> jobHistories = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(obj.getLookupName()));
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobHistories.size());
             if (!jobHistories.isEmpty()) {
-                jobHistories.parallelStream().forEach(jobHistory -> {
+                jobHistories.forEach(jobHistory -> {
                     Optional<Job> job = this.transactionService.findByJobIdAndJobStatus(jobHistory.getJobId(), Status.Active);
                     Map<String, Object> objectTransfer = new HashMap<>();
                     if (job.isPresent()) {
@@ -181,7 +181,7 @@ public class BulkEngine {
     public boolean isScheduled(LocalDateTime lastSchedulerTime, LocalDateTime currentTime, Long jobId, LocalDateTime scheduledTime) {
         LocalDateTime target = LocalDateTime.of(currentTime.toLocalDate(), scheduledTime.toLocalTime());
         boolean isExist=target.isBefore(currentTime) && target.isAfter(lastSchedulerTime);
-        if(isExist){
+        if(isExist) {
             logger.info("Scheduler -- jobId: " + jobId +
             " currentTime: " + currentTime + " lastSchedulerTime: " + lastSchedulerTime + " scheduledTime: " + scheduledTime);
         }

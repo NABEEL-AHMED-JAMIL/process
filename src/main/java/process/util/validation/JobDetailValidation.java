@@ -36,23 +36,14 @@ public class JobDetailValidation {
     // date format validation
     private String dateFormat = "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$";
 
-    // required
     private String jobName;
-    // required
     private String triggerDetail;
-    // required
     private String startDate;
-    // optional
     private String endDate;
-    // required
     private String startTime;
-    // required
     private String frequency;
-    // yes for all only no for daily
     private String recurrence;
-
-    // these are ext field for validation
-    private String errorMsg; // no
+    private String errorMsg;
 
     public JobDetailValidation() { }
 
@@ -113,7 +104,8 @@ public class JobDetailValidation {
     }
 
     /**
-     * This isValidJobDetail use to validate the job detail of the job valid return true
+     * This isValidJobDetail use to validate the
+     * job detail of the job valid return true
      * if non valid return false
      * @return boolean true|false
      * */
@@ -149,19 +141,14 @@ public class JobDetailValidation {
         } else if (!this.isNull(this.endDate) && this.isValidPattern(this.endDate, this.dateFormat)) {
             this.errorMsg = "Invalid EndDate at row %s.";
             return false;
-            // Process for validate the Mint data
         } else if (this.frequency.equals(frequencyDetail.get(0))) {
             return this.isValidMintANDHrDetail();
-            // Process for validate the Hr data
         } else if (this.frequency.equals(frequencyDetail.get(1))) {
-              return this.isValidMintANDHrDetail();
-            // Process for validate the Daily data
+            return this.isValidMintANDHrDetail();
         } else if (this.frequency.equals(frequencyDetail.get(2))) {
-              return this.isValidDailyDetail();
-            // Process for validate the Weekly data
+            return this.isValidDailyDetail();
         } else if (this.frequency.equals(frequencyDetail.get(3))) {
-              return this.isValidWeeklyDetail();
-            // Process for validate the Monthly data
+            return this.isValidWeeklyDetail();
         } else if (this.frequency.equals(frequencyDetail.get(4))) {
             return this.isValidMonthlyDetail();
         }
@@ -180,8 +167,7 @@ public class JobDetailValidation {
                 this.errorMsg = "Recurrence should not be empty at row %s.";
                 return false;
             } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
-                .filter(x -> x.equals(Integer.valueOf(this.recurrence)))
-                .findFirst().isPresent()) {
+                .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.errorMsg = String.format("Recurrence not valid its should be %s",
                 this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                 return false;
@@ -201,12 +187,11 @@ public class JobDetailValidation {
      * */
     private boolean isValidDailyDetail() {
         try {
-            if (!this.isNull(this.recurrence)) {
-                this.errorMsg = "Recurrence should be empty for daily frequency at row %s.";
+            if (this.isNull(this.recurrence)) {
+                this.errorMsg = "Recurrence should not be empty at row %s.";
                 return false;
             } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
-                    .filter(x -> x.equals(Integer.valueOf(this.recurrence)))
-                    .findFirst().isPresent()) {
+                .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.errorMsg = String.format("Recurrence not valid its should be %s",
                     this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                 return false;
@@ -228,8 +213,7 @@ public class JobDetailValidation {
                  this.errorMsg = "Recurrence should not be empty at row %s.";
                  return false;
              } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
-                 .filter(x -> x.equals(this.recurrence))
-                 .findFirst().isPresent()) {
+                 .filter(x -> x.equals(this.recurrence)).findFirst().isPresent()) {
                  this.errorMsg = String.format("Recurrence not valid its should be %s",
                  this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                  return false;
@@ -251,8 +235,7 @@ public class JobDetailValidation {
                 this.errorMsg = "Recurrence should not be empty at row %s.";
                 return false;
             } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
-                .filter(x -> x.equals(Integer.valueOf(this.recurrence)))
-                .findFirst().isPresent()) {
+                .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.errorMsg = String.format("Recurrence not valid its should be %s",
                 this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                 return false;
@@ -343,7 +326,6 @@ public class JobDetailValidation {
                 this.errorMsg = "StartTime should not be previous time at row %s.";
                 return false;
             }
-
             return true;
         } else {
             this.errorMsg = "StartDate should not be previous date at row %s.";

@@ -30,10 +30,10 @@ public class ProcessCron {
      * */
     @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_TWO_MINUTES * 1000)
     public void addJobInQueue() {
-        logger.info("++++++++++++++++++++++++Start++++++++++++++++++++++++++++++++");
+        logger.info("++++++++++++++++++++++++Start-AddJobInQueue++++++++++++++++++++++++++++++++");
         logger.info("CRON JOB QUEUE STARTED " + new Date(System.currentTimeMillis()));
         this.bulkEngine.addJobInQueue();
-        logger.info("+++++++++++++++++++++++++++End++++++++++++++++++++++++++++++++");
+        logger.info("+++++++++++++++++++++++++++End-AddJobInQueue++++++++++++++++++++++++++++++++");
     }
 
     /**
@@ -41,21 +41,21 @@ public class ProcessCron {
      * */
     @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     public void runJob() {
-        logger.info("************************Start********************************");
+        logger.info("************************Start-RunJob********************************");
         logger.info("CRON JOB STARTED " + new Date(System.currentTimeMillis()));
         this.bulkEngine.runJobInCurrentTimeSlot();
-        logger.info("*************************End*********************************");
+        logger.info("*************************End-RunJob*********************************");
     }
 
     /**
-     * This runJob method run every 1 hour and put the job into the running state
+     * This runJob method run every 1 minutes and put the job into the running state
      * */
     @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_HOUR * 1000)
     public void checkJobStatus() {
-        logger.info("-------------------------Start-------------------------");
+        logger.info("-------------------------Start-CheckJobStatus-------------------------");
         logger.info("CRON JOB STARTED " + new Date(System.currentTimeMillis()));
         this.bulkEngine.checkJobStatus();
-        logger.info("-------------------------End-------------------------");
+        logger.info("-------------------------End-CheckJobStatus-------------------------");
     }
 
     @Override

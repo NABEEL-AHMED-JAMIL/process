@@ -119,7 +119,7 @@ public class BulkAction {
         if (scheduler.getEndDate() != null) {
             // check with the end time of the
             LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
-            if (schedulerEndDateTime.isEqual(schedulerEndDateTime) || schedulerEndDateTime.isBefore(nextJobRun)) {
+            if (schedulerEndDateTime.isAfter(nextJobRun)) {
                 scheduler.setRecurrenceTime(nextJobRun);
                 this.transactionService.saveOrUpdateScheduler(scheduler);
             } else {
@@ -128,6 +128,7 @@ public class BulkAction {
             }
         } else {
             scheduler.setRecurrenceTime(nextJobRun);
+            this.transactionService.saveOrUpdateScheduler(scheduler);
         }
     }
 
@@ -135,6 +136,8 @@ public class BulkAction {
      * This method use to change the partial-complete status into complete status
      * */
     public void checkJobStatus() {
-
+        for (Job job: this.transactionService.findJobByJobRunningStatus()) {
+            this.changeJobStatus(job.getJobId(), JobStatus.Completed);
+        }
     }
 }

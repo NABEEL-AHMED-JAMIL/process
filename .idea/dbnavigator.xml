@@ -26,9 +26,8 @@
     <show-object-properties value="true" />
     <loaded-nodes>
       <connection connection-id="95f99d7b-0c41-4580-b659-55ff9e961b8b">
-        <schema name="information_schema" object-types="function, view, table" />
-        <schema name="pg_catalog" object-types="function, view, table" />
-        <schema name="public" object-types="function, view, constraint, sequence, table, dataset trigger, index, column" />
+        <schema name="pg_catalog" object-types="table, view, function" />
+        <schema name="public" object-types="table, view, function" />
       </connection>
     </loaded-nodes>
   </component>
@@ -36,20 +35,7 @@
     <connection id="95f99d7b-0c41-4580-b659-55ff9e961b8b">
       <console name="batch_process" type="STANDARD" schema="public" session="Main"><![CDATA[select * from job;
 
-
-select job_id, count(job_id) from job_history group by job_id;
-
-
-update job set job_running_status = 'Completed' where job_id in (
-
-select job_id from job
-inner join job_history on  job_history.job_id = job.job_id
-)
-
-
-select job.job_id from job
-inner join job_history on job_history.job_id = job.job_id
-where job.job_running_status='PartialComplete' and job.job_status = 'Active']]></console>
+select job_id, count(job_id) from job_history group by job_id;]]></console>
     </connection>
   </component>
   <component name="DBNavigator.Project.DatabaseFileManager">

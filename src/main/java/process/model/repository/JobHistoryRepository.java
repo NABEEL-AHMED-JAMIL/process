@@ -15,5 +15,8 @@ public interface JobHistoryRepository extends JpaRepository<JobHistory, Long> {
     @Query(value = "select job_history.* from job_history where job_status = 'Queue' limit ?1", nativeQuery = true)
     public List<JobHistory> findAllJobForTodayWithLimit(Long limit);
 
+    @Query(value = "select count(*) from job_history where job_id = ?1 and job_status in('Queue','Running');", nativeQuery = true)
+    public List<JobHistory> findJobHistoryCount(Long jobId);
+
 }
 

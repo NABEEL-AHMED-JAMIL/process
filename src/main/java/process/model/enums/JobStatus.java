@@ -6,8 +6,7 @@ package process.model.enums;
  */
 public enum JobStatus {
 
-    InFlight, Queue, Running,
-    Success, Failed, PartialComplete,
+    InFlight, Queue, Running, Failed, PartialComplete,
     Completed, Stop, Skip;
 
 }
