@@ -213,7 +213,7 @@ public class JobDetailValidation {
                  this.errorMsg = "Recurrence should not be empty at row %s.";
                  return false;
              } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
-                 .filter(x -> x.equals(this.recurrence)).findFirst().isPresent()) {
+                 .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                  this.errorMsg = String.format("Recurrence not valid its should be %s",
                  this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                  return false;

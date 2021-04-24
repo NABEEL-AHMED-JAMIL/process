@@ -10,7 +10,6 @@ import process.model.pojo.Job;
 import process.model.pojo.JobHistory;
 import process.model.pojo.Scheduler;
 import process.model.service.impl.TransactionServiceImpl;
-import process.util.ProcessTimeUtil;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -105,25 +104,22 @@ public class BulkAction {
     public void updateNextScheduler(Scheduler scheduler) {
         LocalDateTime nextJobRun = null;
         if (scheduler.getFrequency().equals("Mint")) {
-            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), scheduler.getRecurrence(), scheduler.getFrequency());
+            nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.valueOf(scheduler.getRecurrence()));
         } else if (scheduler.getFrequency().equals("Hr")) {
-            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), scheduler.getRecurrence(), scheduler.getFrequency());
+            nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.valueOf(scheduler.getRecurrence()));
         } else if (scheduler.getFrequency().equals("Daily")) {
-            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), "1", scheduler.getFrequency());
+            nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.valueOf(scheduler.getRecurrence()));
         } else if (scheduler.getFrequency().equals("Weekly")) {
-            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), "1", scheduler.getFrequency());
+            nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.valueOf(scheduler.getRecurrence()));
         } else if (scheduler.getFrequency().equals("Monthly")) {
-            nextJobRun = ProcessTimeUtil.nextJobRunTime(scheduler.getRecurrenceTime(), "1", scheduler.getFrequency());
+            nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.valueOf(scheduler.getRecurrence()));
         }
-        // end date there then check and update
         if (scheduler.getEndDate() != null) {
-            // check with the end time of the
             LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
-            if (schedulerEndDateTime.isAfter(nextJobRun)) {
+            if (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun)) {
                 scheduler.setRecurrenceTime(nextJobRun);
                 this.transactionService.saveOrUpdateScheduler(scheduler);
             } else {
-                // change the status into the partial-complete table
                 this.changeJobStatus(scheduler.getJobId(), JobStatus.PartialComplete);
             }
         } else {

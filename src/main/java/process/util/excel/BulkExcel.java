@@ -170,59 +170,6 @@ public class BulkExcel {
         sheet.addValidationData(validation);
     }
 
-    /**
-     * The createExcelDependentDataValidationListsUsingNamedRanges use to create the hide sheet with the all validation
-     * @param frequencyDetail
-     * @param wb
-     */
-    public void createExcelDependentDataValidationListsUsingNamedRanges(Map<String, List<?>> frequencyDetail,
-        XSSFWorkbook wb) {
-        Row row;
-        Name namedRange;
-        String colLetter;
-        String reference;
-        int c = 0;
-        //hidden sheet for list values
-        Sheet sheet = wb.createSheet(STATIC_SHEET);
-        for (String key:frequencyDetail.keySet()) {
-            int r = 0;
-            row = sheet.getRow(r); if (row == null) row = sheet.createRow(r); r++;
-            row.createCell(c).setCellValue(key);
-            if (key.equals(WEEKLY)) {
-                for (String item : (List<String>) frequencyDetail.get(key)) {
-                    row = sheet.getRow(r); if (row == null) row = sheet.createRow(r); r++;
-                    row.createCell(c).setCellValue(item);
-                }
-            } else {
-                if (!key.equals(DAILY)) {
-                    for (Integer item : (List<Integer>) frequencyDetail.get(key)) {
-                        row = sheet.getRow(r);
-                        if (row == null) { row = sheet.createRow(r); }
-                        r++;
-                        row.createCell(c).setCellValue(item);
-                    }
-                }
-            }
-            //create names for the item list constraints, each named from the current key
-            colLetter = CellReference.convertNumToColString(c);
-            namedRange = wb.createName();
-            namedRange.setNameName(key);
-            reference = "ListSheet!$" + colLetter + "$2:$" + colLetter + "$" + r;
-            namedRange.setRefersToFormula(reference);
-            c++;
-        }
-        //create name for Categories list constraint
-        colLetter = CellReference.convertNumToColString((c-1));
-        namedRange = wb.createName();
-        namedRange.setNameName(CATEGORIES);
-        reference = "ListSheet!$A$1:$" + colLetter + "$1";
-        namedRange.setRefersToFormula(reference);
-        //unselect that sheet because we will hide it later
-        sheet.setSelected(false);
-        //hide the ListSheet
-        wb.setSheetHidden(wb.getSheetIndex(sheet),true);
-    }
-
     @Override
     public String toString() {
         return new Gson().toJson(this);

@@ -1,7 +1,6 @@
 package process.model.service;
 
 import process.model.dto.FileUploadDto;
-import process.model.dto.JobStatusChangeDto;
 import process.model.dto.ResponseDto;
 import java.io.ByteArrayInputStream;
 
@@ -17,11 +16,6 @@ public interface SchedulerApiService {
     String ERROR = "ERROR";
     String SUCCESS = "SUCCESS";
     String JOB_ADD = "Job-Add";
-    String STATIC_SHEET = "ListSheet";
-    String CATEGORIES = "Categories";
-    String FORMULATE = "INDIRECT($F$2)";
-    String WEEKLY = "Weekly";
-    String DAILY = "Daily";
 
     String[] HEADER_FILED_BATCH_FILE = new String[] {
         "Job Name", "Trigger Detail", "Start Date", "End Date",
@@ -31,7 +25,5 @@ public interface SchedulerApiService {
     public ByteArrayInputStream downloadBatchSchedulerTemplateFile() throws Exception;
 
     public ResponseDto uploadJobFile(FileUploadDto object) throws Exception;
-
-    public ResponseDto jobRunningAction(JobStatusChangeDto jobStatusChange) throws Exception;
 
 }

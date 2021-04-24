@@ -79,12 +79,19 @@ public class ProcessTimeUtil {
      * @return List getWeekly
      * */
     private static List getWeekly() {
-        List<String> days = new ArrayList<>();
-        days.add("Sunday");   days.add("Monday");
-        days.add("Tuesday");  days.add("Wednesday");
-        days.add("Thursday"); days.add("Friday");
-        days.add("Saturday");
-        return days;
+        List<Integer> weekly = new ArrayList<>();
+        weekly.add(1);  weekly.add(2);  weekly.add(3);
+        weekly.add(4);  weekly.add(5);  weekly.add(6);
+        weekly.add(7);  weekly.add(8);  weekly.add(9);
+        weekly.add(10); weekly.add(11); weekly.add(12);
+        weekly.add(13); weekly.add(14); weekly.add(15);
+        weekly.add(16); weekly.add(17); weekly.add(18);
+        weekly.add(19); weekly.add(20); weekly.add(21);
+        weekly.add(22); weekly.add(23); weekly.add(24);
+        weekly.add(25); weekly.add(26); weekly.add(27);
+        weekly.add(28); weekly.add(29); weekly.add(30);
+        weekly.add(31);
+        return weekly;
     }
 
     /**
@@ -109,17 +116,6 @@ public class ProcessTimeUtil {
 
 
     /**
-     * this method return the day id
-     * @param targetDay
-     * @return int getWeekDay
-     * */
-    public static int getWeekDay(String targetDay) {
-        return "Sunday".equals(targetDay) ? 1 : "Monday".equals(targetDay) ? 2 : "Tuesday".equals(targetDay) ? 3 :
-        "Wednesday".equals(targetDay) ? 4 : "Thursday".equals(targetDay) ? 5 : "Friday".equals(targetDay) ? 6 :
-        "Saturday".equals(targetDay) ? 7 : -1;
-    }
-
-    /**
      * This method use to get the date and time
      * @param date
      * @param startTime
@@ -127,33 +123,7 @@ public class ProcessTimeUtil {
      * */
     public static LocalDateTime getRecurrenceTime(LocalDate date, String startTime) {
         String timeSplit[] = startTime.split(":");
-        return date.atStartOfDay().plusHours(Integer.valueOf(timeSplit[0]))
-            .plusMinutes(Integer.valueOf(timeSplit[1]));
-    }
-
-    /**
-     * This method use to get the next job run time
-     * @param oldLocalDateTime
-     * @param increment
-     * @param frequency
-     * @return LocalDateTime
-     * */
-    public static LocalDateTime nextJobRunTime(LocalDateTime oldLocalDateTime, String increment, String frequency) {
-        if (frequency.equals("Mint")) {
-            oldLocalDateTime = oldLocalDateTime.plusMinutes(Long.valueOf(increment));
-        } else if (frequency.equals("Hr")) {
-            oldLocalDateTime = oldLocalDateTime.plusHours(Long.valueOf(increment));
-        } else if (frequency.equals("Daily")) {
-            // if daily then set the 1
-            oldLocalDateTime = oldLocalDateTime.plusDays(Long.valueOf(increment));
-        } else if (frequency.equals("Weekly")) {
-            // if weekly then set the 1
-            oldLocalDateTime = oldLocalDateTime.plusWeeks(Long.valueOf(increment));
-        }else if (frequency.equals("Monthly")) {
-            // if monthly then set the 1
-            oldLocalDateTime = oldLocalDateTime.plusMonths(Long.valueOf(increment));
-        }
-        return oldLocalDateTime;
+        return date.atStartOfDay().plusHours(Integer.valueOf(timeSplit[0])).plusMinutes(Integer.valueOf(timeSplit[1]));
     }
 
 }

@@ -66,18 +66,12 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
         FileOutputStream fileOut = new FileOutputStream(fileUploadPath);
         IOUtils.copy(inputStream, fileOut);
         // after copy the stream into file close
-        if (inputStream != null) {
-            inputStream.close();
-        }
+        if (inputStream != null) { inputStream.close(); }
         // 2nd insert data to newly copied file. So that template coludn't be changed.
         XSSFWorkbook wb = new XSSFWorkbook(new File(fileUploadPath));
-        // this will create the sheet and hide the sheet
-        this.bulkExcel.createExcelDependentDataValidationListsUsingNamedRanges(ProcessTimeUtil.frequencyDetail, wb);
         XSSFSheet sheet = wb.getSheet(JOB_ADD);
         this.bulkExcel.fillDropDownValue(sheet,1,1, ProcessTimeUtil.triggerDetail.stream().toArray(String[]::new));
         this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.stream().toArray(String[]::new));
-        //this.fillDropDownValueV2(sheet,1,5, CATEGORIES);
-        //this.fillDropDownValueV2(sheet,1,6, FORMULATE);
         wb.write(fileOut);
         fileOut.close();
         wb.close();
@@ -199,11 +193,6 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
                 }
             }
         }
-    }
-
-    @Override
-    public ResponseDto jobRunningAction(JobStatusChangeDto jobStatusChange) throws Exception {
-        return null;
     }
 
     private String[] getHEADER_FILED_BATCH_FILE() {

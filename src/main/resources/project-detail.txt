@@ -9,3 +9,25 @@ Method-Type :- Post
 insert into lookup_data values
 ('1001','2021-03-31 22:09:43.244','This Scheduler use for send the job into the queue','2021-04-01T00:16:34.567','SCHEDULER_LAST_RUN_TIME'),
 ('1002','2021-03-31 23:06:48.744','This Queue fetch size use to fetch the limit of data from db','25','QUEUE_FETCH_LIMIT');
+
+update job set job_running_status = 'PartialComplete' where job_id = 1176
+select * from scheduler where frequency='Mint';
+select scheduler_id, frequency, start_date, end_date, start_time, recurrence, recurrence_time from scheduler where frequency='Mint';
+
+select * from job_history where job_id = 1180;
+
+select * from job;
+select * from job_history where job_status = 'Queue';
+select * from lookup_data;
+select * from job_audit_logs where job_id = 1179 order by job_audit_log_id desc;
+
+select scheduler.* from scheduler
+inner join job on scheduler.job_id=job.job_id
+where (('2021-04-25' BETWEEN start_date AND end_date) OR (start_date <= '2021-04-25' AND end_date is null))
+and job.job_status = 'Active'
+and (job.job_running_status is null or job.job_running_status = 'InFlight');
+
+select * from job_history where job_id in (1181,1183);
+
+update job set job_running_status = 'Completed' where job_running_status = 'PartialComplete' and
+(select count(*) from job_history where job_id = 1176 and job_status in('Queue','Running')) = 0;

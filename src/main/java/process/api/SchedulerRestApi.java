@@ -9,7 +9,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
-import process.model.dto.JobStatusChangeDto;
 import process.model.dto.ResponseDto;
 import process.model.service.SchedulerApiService;
 import process.util.exception.ExceptionUtil;
@@ -81,30 +80,4 @@ public class SchedulerRestApi {
                 HttpStatus.BAD_REQUEST);
         }
     }
-
-
-    /**
-     * This method use to change jobRunningAction
-     * @param jobStatusChange
-     * @return ResponseEntity<?> stopJob
-     */
-    @RequestMapping(value = "/jobRunningAction", method = RequestMethod.PUT)
-    public ResponseEntity<?> jobRunningAction(@RequestBody JobStatusChangeDto jobStatusChange) {
-        logger.info("##### jobRunningAction Start");
-        try {
-            if (jobStatusChange.getJobId() != null && jobStatusChange.getJobStatus() != null) {
-                logger.info("##### jobRunningAction End");
-                return new ResponseEntity<>(this.schedulerApiService.jobRunningAction(jobStatusChange), HttpStatus.OK);
-            } else {
-                logger.info("##### jobRunningAction End");
-                return new ResponseEntity<>(
-                        new ResponseDto("ERROR", jobStatusChange), HttpStatus.BAD_REQUEST);
-            }
-        } catch (Exception ex) {
-            logger.error("An error occurred while jobRunningAction ", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto("ERROR", "Sorry File Not Upload Contact With Support"),
-                    HttpStatus.BAD_REQUEST);
-        }
-    }
-
 }
