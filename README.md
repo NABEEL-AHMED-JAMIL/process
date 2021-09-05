@@ -40,6 +40,10 @@ select * from job_audit_logs where job_id = 1179 order by job_audit_log_id desc;
 ![alt text](image-1.png)
 ![alt text](image-2.png)
 
+## ELK Strcuture
+![alt text](elk config/ELK With Ewallet.png)
+
+
 
 
 
