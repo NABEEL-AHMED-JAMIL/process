@@ -1,0 +1,13 @@
+filebeat.inputs:
+
+- type: log
+  # Change to true to enable this input configuration.
+  enabled: true
+  # Paths that should be crawled and fetched. Glob based paths.
+  paths:
+    #- /var/log/*.log
+    - E:\100K\process\logs\process.log
+# ------------------------------ Logstash Output -------------------------------
+output.logstash:
+  # The Logstash hosts
+  hosts: ["localhost:5044"]
