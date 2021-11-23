@@ -48,7 +48,8 @@ public class ProcessCron {
     }
 
     /**
-     * This runJob method run every 1 minutes and put the job into the running state
+     * This checkJobStatus method run every 1 hour
+     * help to change the main job status from partial complete to complete
      * */
     @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_HOUR * 1000)
     public void checkJobStatus() {

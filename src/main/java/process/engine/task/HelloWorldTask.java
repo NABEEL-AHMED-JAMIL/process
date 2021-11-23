@@ -10,7 +10,6 @@ import process.engine.BulkAction;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobHistory;
 import process.util.exception.ExceptionUtil;
-
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -25,7 +24,6 @@ public class HelloWorldTask implements Runnable {
 
     @Autowired
     private BulkAction bulkAction;
-
     private Map<String, Object> data;
 
     public HelloWorldTask() { }

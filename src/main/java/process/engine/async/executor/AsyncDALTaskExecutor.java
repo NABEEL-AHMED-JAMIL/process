@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import process.util.exception.ExceptionUtil;
-
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.*;

@@ -12,7 +12,6 @@ import process.model.dto.FileUploadDto;
 import process.model.dto.ResponseDto;
 import process.model.service.SchedulerApiService;
 import process.util.exception.ExceptionUtil;
-
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -46,10 +45,11 @@ public class SchedulerRestApi {
             String fileName = "BatchUpload-"+dateFormat.format(new Date())+"-"+ UUID.randomUUID() + ".xlsx";
             headers.add("Content-Disposition", "attachment; filename=" + fileName);
             logger.info("##### downloadBatchSchedulerTemplateFile End");
-            return ResponseEntity.ok().headers(headers).body(new InputStreamResource(
-                this.schedulerApiService.downloadBatchSchedulerTemplateFile()));
+            return ResponseEntity.ok().headers(headers).body(
+                new InputStreamResource(this.schedulerApiService.downloadBatchSchedulerTemplateFile()));
         } catch (Exception ex) {
-            logger.error("An error occurred while downloadBatchSchedulerTemplateFile xlsx file", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while downloadBatchSchedulerTemplateFile xlsx file",
+                ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto("ERROR", "Sorry File Not Downland, Contact With Support"),
                 HttpStatus.BAD_REQUEST);
         }
@@ -69,15 +69,15 @@ public class SchedulerRestApi {
             if (object.getFile() != null) {
                 logger.info("##### uploadBatchSchedulerFile End");
                 return new ResponseEntity<>(this.schedulerApiService.uploadJobFile(object), HttpStatus.OK);
-            } else {
-                logger.info("##### uploadBatchSchedulerFile End");
-                return new ResponseEntity<>(
-                    new ResponseDto("ERROR", "File not found for process."), HttpStatus.BAD_REQUEST);
             }
+            logger.info("##### uploadBatchSchedulerFile End");
+            return new ResponseEntity<>(
+                new ResponseDto("ERROR", "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadBatchSchedulerFile ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto("ERROR", "Sorry File Not Upload Contact With Support"),
                 HttpStatus.BAD_REQUEST);
         }
     }
+
 }

@@ -36,4 +36,5 @@ public interface JobRepository extends JpaRepository<Job, Long> {
      * @return List<Long>
      * */
     List<Job> findJobByJobRunningStatus(JobStatus jobRunningStatus);
+
 }

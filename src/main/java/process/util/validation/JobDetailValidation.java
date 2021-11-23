@@ -163,17 +163,13 @@ public class JobDetailValidation {
      * */
     private boolean isValidMintANDHrDetail() {
         try {
-            if (this.isNull(this.recurrence)) {
-                this.errorMsg = "Recurrence should not be empty at row %s.";
-                return false;
-            } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
+            if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
                 .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.errorMsg = String.format("Recurrence not valid its should be %s",
                 this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                 return false;
-            } else {
-                return this.dateTimeValidation(false, false);
             }
+            return this.dateTimeValidation(false, false);
         } catch (Exception ex) {
             this.errorMsg = "Issue with (Start Date,End Date,Start Time,Recurrence) at row %s.";
             return false;
@@ -187,17 +183,13 @@ public class JobDetailValidation {
      * */
     private boolean isValidDailyDetail() {
         try {
-            if (this.isNull(this.recurrence)) {
-                this.errorMsg = "Recurrence should not be empty at row %s.";
-                return false;
-            } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
+            if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
                 .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.errorMsg = String.format("Recurrence not valid its should be %s",
                     this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                 return false;
-            } else {
-                return this.dateTimeValidation(false, false);
             }
+            return this.dateTimeValidation(false, false);
         } catch (Exception ex) {
             this.errorMsg = "Issue with (Start Date,End Date,Start Time,Recurrence) at row %s.";
             return false;
@@ -209,17 +201,13 @@ public class JobDetailValidation {
      * */
      private boolean isValidWeeklyDetail() {
          try {
-             if (this.isNull(this.recurrence)) {
-                 this.errorMsg = "Recurrence should not be empty at row %s.";
-                 return false;
-             } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
+            if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
                  .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                  this.errorMsg = String.format("Recurrence not valid its should be %s",
                  this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                  return false;
-             } else {
-                 return this.dateTimeValidation(true, false);
              }
+             return this.dateTimeValidation(true, false);
          } catch (Exception ex) {
              this.errorMsg = "Issue with (Start Date,End Date,Start Time,Recurrence) at row %s.";
              return false;
@@ -231,17 +219,13 @@ public class JobDetailValidation {
      * */
     private boolean isValidMonthlyDetail() {
         try {
-            if (this.isNull(this.recurrence)) {
-                this.errorMsg = "Recurrence should not be empty at row %s.";
-                return false;
-            } else if (!this.frequencyDetailByTime.get(this.frequency).stream()
+            if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
                 .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.errorMsg = String.format("Recurrence not valid its should be %s",
                 this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                 return false;
-            } else {
-                return this.dateTimeValidation(false, true) ;
             }
+            return this.dateTimeValidation(false, true) ;
         } catch (Exception ex) {
             this.errorMsg = "Issue with (Start Date,End Date,Start Time, Recurrence) at row %s.";
             return false;

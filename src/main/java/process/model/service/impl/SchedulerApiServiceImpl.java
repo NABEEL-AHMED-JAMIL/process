@@ -20,7 +20,6 @@ import process.util.ProcessTimeUtil;
 import process.util.excel.BulkExcel;
 import process.util.exception.ExceptionUtil;
 import process.util.validation.JobDetailValidation;
-
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -48,6 +47,10 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
     private BulkExcel bulkExcel;
     @Autowired
     private TransactionServiceImpl transactionService;
+
+    private String[] getHEADER_FILED_BATCH_FILE() {
+        return HEADER_FILED_BATCH_FILE;
+    }
 
     /**
      * The method used to download the template file for batch scheduler
@@ -94,108 +97,96 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
         if (!object.getFile().getContentType().equalsIgnoreCase(SHEET_NAME)) {
             logger.info("File Type " + object.getFile().getContentType());
             return new ResponseDto(ERROR, "You can upload only .xlsx extension file.");
-        } else {
-            // fill the stream of file into work-book
-            XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream());
-            if (workbook == null || workbook.getNumberOfSheets() == 0) {
-                return new ResponseDto(ERROR,  "You uploaded empty file.");
-            } else {
-                XSSFSheet sheet = workbook.getSheet(JOB_ADD);
-                if(sheet != null) {
-                    if (sheet.getLastRowNum() < 1) {
-                        return new ResponseDto(ERROR,  "You can't upload empty file.");
-                    } else if(sheet.getLastRowNum() > 1001) {
-                        return new ResponseDto(ERROR,"File support 1000 rows at a time.");
-                    } else {
-                        List<JobDetailValidation> jobDetailValidations = new ArrayList<>();
-                        Iterator<Row> rows = sheet.iterator();
-                        while (rows.hasNext()) {
-                            Row currentRow = rows.next();
-                            // header validation check
-                            if (currentRow.getRowNum() == 0) {
-                                if (currentRow.getPhysicalNumberOfCells() != 7) {
-                                    return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " heading missing.");
-                                } else {
-                                    // loop on the header
-                                    for (int i=0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
-                                        if (!currentRow.getCell(i).getStringCellValue().equals(this.getHEADER_FILED_BATCH_FILE()[i])) {
-                                            return new ResponseDto(ERROR,"File at row " +
-                                                (currentRow.getRowNum() + 1) + " " + this.getHEADER_FILED_BATCH_FILE()[i] + " heading missing.");
-                                        }
-                                    }
-                                }
-                            } else if (currentRow.getRowNum() > 0) {
-                                // data validation and save
-                                JobDetailValidation jobDetailValidation = new JobDetailValidation();
-                                // get the row data and add into job-dto
-                                for (int i=0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
-                                    if (i==0) {
-                                        jobDetailValidation.setJobName(this.bulkExcel.getCellDetail(currentRow, i));
-                                    } else if (i==1) {
-                                        jobDetailValidation.setTriggerDetail(this.bulkExcel.getCellDetail(currentRow, i));
-                                    } else if (i==2) {
-                                        jobDetailValidation.setStartDate(this.bulkExcel.getCellDetail(currentRow, i));
-                                    } else if (i==3) {
-                                        jobDetailValidation.setEndDate(this.bulkExcel.getCellDetail(currentRow, i));
-                                    } else if (i==4) {
-                                        jobDetailValidation.setStartTime(this.bulkExcel.getCellDetail(currentRow, i));
-                                    } else if (i==5) {
-                                        jobDetailValidation.setFrequency(this.bulkExcel.getCellDetail(currentRow, i));
-                                    } else if (i==6) {
-                                        jobDetailValidation.setRecurrence(this.bulkExcel.getCellDetail(currentRow, i));
-                                    }
-                                }
-                                // job name already exist
-                                if (this.transactionService.findByJobNameAndJobStatus(
-                                    jobDetailValidation.getJobName(), Status.Active).isPresent()) {
-                                    return new ResponseDto(ERROR,  "JobName already exist at row " + (currentRow.getRowNum() + 1) + ".");
-                                } else if (!jobDetailValidation.isValidJobDetail()) {
-                                    return new ResponseDto(ERROR, String.format(jobDetailValidation.getErrorMsg(), (currentRow.getRowNum() + 1)));
-                                } else {
-                                    jobDetailValidations.add(jobDetailValidation);
-                                }
-                            }
-                        }
-                        // convert the data into real data and save
-                        if (jobDetailValidations.size() > 0) {
-                            jobDetailValidations.forEach(jobDetailValidation -> {
-                                try {
-                                    // save the job and scheduler
-                                    Job job = new Job();
-                                    job.setJobName(jobDetailValidation.getJobName());
-                                    job.setTriggerDetail(jobDetailValidation.getTriggerDetail());
-                                    job.setJobStatus(Status.Active);
-                                    this.transactionService.saveOrUpdateJob(job);
-                                    // ------------------
-                                    Scheduler scheduler = new Scheduler();
-                                    scheduler.setStartDate(LocalDate.parse(jobDetailValidation.getStartDate()));
-                                    if (!StringUtils.isEmpty(jobDetailValidation.getEndDate())) {
-                                        scheduler.setEndDate(LocalDate.parse(jobDetailValidation.getEndDate()));
-                                    }
-                                    scheduler.setStartTime(LocalTime.parse(jobDetailValidation.getStartTime()));
-                                    scheduler.setFrequency(jobDetailValidation.getFrequency());
-                                    if (!StringUtils.isEmpty(jobDetailValidation.getRecurrence())) {
-                                        scheduler.setRecurrence(jobDetailValidation.getRecurrence());
-                                    }
-                                    scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
-                                        LocalDate.parse(jobDetailValidation.getStartDate()), jobDetailValidation.getStartTime()));
-                                    scheduler.setJobId(job.getJobId());
-                                    this.transactionService.saveOrUpdateScheduler(scheduler);
-                                } catch (Exception ex) {
-                                    logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
-                                }
-                            });
-                        }
-                        return new ResponseDto(SUCCESS, String.format("Total %d Job Save Successfully", jobDetailValidations.size()));
+        }
+        // fill the stream of file into work-book
+        XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream());
+        if (workbook == null || workbook.getNumberOfSheets() == 0) {
+            return new ResponseDto(ERROR,  "You uploaded empty file.");
+        }
+        XSSFSheet sheet = workbook.getSheet(JOB_ADD);
+        if(sheet != null) {
+            if (sheet.getLastRowNum() < 1) {
+                return new ResponseDto(ERROR,  "You can't upload empty file.");
+            } else if(sheet.getLastRowNum() > 1001) {
+                return new ResponseDto(ERROR,"File support 1000 rows at a time.");
+            }
+            List<JobDetailValidation> jobDetailValidations = new ArrayList<>();
+            Iterator<Row> rows = sheet.iterator();
+            while (rows.hasNext()) {
+                Row currentRow = rows.next();
+                // header validation check
+                if (currentRow.getRowNum() == 0) {
+                    if (currentRow.getPhysicalNumberOfCells() != 7) {
+                        return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " heading missing.");
                     }
-                } else {
-                    return new ResponseDto(ERROR, "Sheet not found with (Job-Add)");
+                    // loop on the header
+                    for (int i=0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
+                        if (!currentRow.getCell(i).getStringCellValue().equals(this.getHEADER_FILED_BATCH_FILE()[i])) {
+                            return new ResponseDto(ERROR,"File at row " +
+                                 (currentRow.getRowNum() + 1) + " " + this.getHEADER_FILED_BATCH_FILE()[i] + " heading missing.");
+                        }
+                    }
+                } else if (currentRow.getRowNum() > 0) {
+                    // data validation and save
+                    JobDetailValidation jobDetailValidation = new JobDetailValidation();
+                    // get the row data and add into job-dto
+                    for (int i=0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
+                        if (i==0) {
+                            jobDetailValidation.setJobName(this.bulkExcel.getCellDetail(currentRow, i));
+                        } else if (i==1) {
+                            jobDetailValidation.setTriggerDetail(this.bulkExcel.getCellDetail(currentRow, i));
+                        } else if (i==2) {
+                            jobDetailValidation.setStartDate(this.bulkExcel.getCellDetail(currentRow, i));
+                        } else if (i==3) {
+                            jobDetailValidation.setEndDate(this.bulkExcel.getCellDetail(currentRow, i));
+                        } else if (i==4) {
+                            jobDetailValidation.setStartTime(this.bulkExcel.getCellDetail(currentRow, i));
+                        } else if (i==5) {
+                            jobDetailValidation.setFrequency(this.bulkExcel.getCellDetail(currentRow, i));
+                        } else if (i==6) {
+                            jobDetailValidation.setRecurrence(this.bulkExcel.getCellDetail(currentRow, i));
+                        }
+                    }
+                    // job name already exist
+                    if (this.transactionService.findByJobNameAndJobStatus(jobDetailValidation.getJobName(),
+                        Status.Active).isPresent()) {
+                        return new ResponseDto(ERROR,  "JobName already exist at row " + (currentRow.getRowNum() + 1) + ".");
+                    } else if (!jobDetailValidation.isValidJobDetail()) {
+                        return new ResponseDto(ERROR, String.format(jobDetailValidation.getErrorMsg(), (currentRow.getRowNum() + 1)));
+                    }
+                    jobDetailValidations.add(jobDetailValidation);
                 }
             }
+            jobDetailValidations.forEach(jobDetailValidation -> {
+                try {
+                    // save the job and scheduler
+                    Job job = new Job();
+                    job.setJobName(jobDetailValidation.getJobName());
+                    job.setTriggerDetail(jobDetailValidation.getTriggerDetail());
+                    job.setJobStatus(Status.Active);
+                    this.transactionService.saveOrUpdateJob(job);
+                    // ------------------
+                    Scheduler scheduler = new Scheduler();
+                    scheduler.setStartDate(LocalDate.parse(jobDetailValidation.getStartDate()));
+                    if (!StringUtils.isEmpty(jobDetailValidation.getEndDate())) {
+                        scheduler.setEndDate(LocalDate.parse(jobDetailValidation.getEndDate()));
+                    }
+                    scheduler.setStartTime(LocalTime.parse(jobDetailValidation.getStartTime()));
+                    scheduler.setFrequency(jobDetailValidation.getFrequency());
+                    if (!StringUtils.isEmpty(jobDetailValidation.getRecurrence())) {
+                        scheduler.setRecurrence(jobDetailValidation.getRecurrence());
+                    }
+                    scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
+                        LocalDate.parse(jobDetailValidation.getStartDate()), jobDetailValidation.getStartTime()));
+                    scheduler.setJobId(job.getJobId());
+                    this.transactionService.saveOrUpdateScheduler(scheduler);
+                } catch (Exception ex) {
+                    logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+                }
+            });
+            return new ResponseDto(SUCCESS, String.format("Total %d Job Save Successfully", jobDetailValidations.size()));
         }
+        return new ResponseDto(ERROR, "Sheet not found with (Job-Add)");
     }
 
-    private String[] getHEADER_FILED_BATCH_FILE() {
-        return HEADER_FILED_BATCH_FILE;
-    }
 }

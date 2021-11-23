@@ -84,7 +84,6 @@ public class TransactionServiceImpl {
         this.lookupDataRepository.save(lookupData);
     }
 
-
     /**
      * The method use to get the job by name and job status
      * @param jobName
@@ -104,7 +103,6 @@ public class TransactionServiceImpl {
     public Optional<Job> findByJobIdAndJobStatus(Long jobId, Status status) {
         return this.jobRepository.findByJobIdAndJobStatus(jobId, status);
     }
-
 
     /**
      * The method use to get the JobHistory by

@@ -12,9 +12,7 @@ import com.google.gson.Gson;
 public class ResponseDto {
 
     private String status;
-
     private String message;
-
     private Object data;
 
     public ResponseDto() { }

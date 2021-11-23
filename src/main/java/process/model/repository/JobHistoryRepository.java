@@ -19,4 +19,3 @@ public interface JobHistoryRepository extends JpaRepository<JobHistory, Long> {
     public List<JobHistory> findJobHistoryCount(Long jobId);
 
 }
-

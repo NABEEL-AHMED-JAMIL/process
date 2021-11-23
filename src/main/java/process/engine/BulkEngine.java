@@ -37,7 +37,6 @@ public class BulkEngine {
     @Autowired
     private BulkAction bulkAction;
 
-
     public BulkEngine() { }
 
     /**

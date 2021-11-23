@@ -21,11 +21,9 @@
             <!-- 60 days to keep -->
             <maxHistory>60</maxHistory>
         </rollingPolicy>
-
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${hostName} --- [%15.15t] %-40.40c{1.} : %m%n%ex</pattern>
         </encoder>
-
     </appender>
 
     <logger name="process" level="debug" additivity="false">

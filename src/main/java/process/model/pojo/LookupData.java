@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-
 import javax.persistence.*;
 import java.sql.Timestamp;
 
@@ -90,4 +89,5 @@ public class LookupData {
     public String toString() {
         return new Gson().toJson(this);
     }
+
 }
