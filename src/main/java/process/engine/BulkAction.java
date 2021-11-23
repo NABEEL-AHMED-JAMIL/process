@@ -4,6 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.Job;
@@ -58,7 +59,6 @@ public class BulkAction {
         this.transactionService.saveOrUpdateJobHistory(jobHistory.get());
     }
 
-
     /**
      * This method use to run the last job in the main job
      * @param jobId
@@ -103,26 +103,26 @@ public class BulkAction {
      * */
     public void updateNextScheduler(Scheduler scheduler) {
         LocalDateTime nextJobRun = null;
-        if (scheduler.getFrequency().equals("Mint")) {
+        if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals("Hr")) {
+        } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals("Daily")) {
+        } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals("Weekly")) {
+        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals("Monthly")) {
+        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.valueOf(scheduler.getRecurrence()));
         }
         if (scheduler.getEndDate() != null) {
             LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
-            if (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun)) {
+            if (nextJobRun != null && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
                 scheduler.setRecurrenceTime(nextJobRun);
                 this.transactionService.saveOrUpdateScheduler(scheduler);
             } else {
                 this.changeJobStatus(scheduler.getJobId(), JobStatus.PartialComplete);
             }
-        } else {
+        } else if (nextJobRun != null) {
             scheduler.setRecurrenceTime(nextJobRun);
             this.transactionService.saveOrUpdateScheduler(scheduler);
         }
@@ -135,5 +135,9 @@ public class BulkAction {
         for (Job job: this.transactionService.findJobByJobRunningStatus()) {
             this.changeJobStatus(job.getJobId(), JobStatus.Completed);
         }
+    }
+
+    private static boolean isNull(String filed) {
+        return (filed == null || filed.length() == 0) ? true : false;
     }
 }

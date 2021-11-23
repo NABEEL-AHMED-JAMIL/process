@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.engine.task.HelloWorldTask;
 import process.engine.async.executor.AsyncDALTaskExecutor;
+import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
@@ -56,51 +57,10 @@ public class BulkEngine {
             logger.info("addJobInQueue --> FETCHED Scheduler of current day: size {} ", schedulerForToday.size());
             if (!schedulerForToday.isEmpty()) {
                 schedulerForToday.forEach(scheduler -> {
-                    if (scheduler.getFrequency().equalsIgnoreCase("Mint") && this.isScheduled(lastSchedulerRun, now,
-                        scheduler.getJobId(), scheduler.getRecurrenceTime())) {
-                        // change the job status in-flight
-                        this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.InFlight);
-                        // add the job into the job-history
-                        JobHistory jobHistory = this.bulkAction.createJobHistory(scheduler.getJobId(), scheduler.getRecurrenceTime());
-                        // add the job audit logs for job
-                        this.bulkAction.saveJobAuditLogs(scheduler.getJobId(), jobHistory.getJobHistoryId(),
-                            String.format("Job %s now in the queue.", scheduler.getJobId()));
-                        // update the next run in scheduler
-                        this.bulkAction.updateNextScheduler(scheduler);
-                    } else if (scheduler.getFrequency().equalsIgnoreCase("Hr") && this.isScheduled(lastSchedulerRun, now,
-                            scheduler.getJobId(), scheduler.getRecurrenceTime())) {
-                        // change the job status in-flight
-                        this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.InFlight);
-                        // add the job into the job-history
-                        JobHistory jobHistory = this.bulkAction.createJobHistory(scheduler.getJobId(), scheduler.getRecurrenceTime());
-                        // add the job audit logs for job
-                        this.bulkAction.saveJobAuditLogs(scheduler.getJobId(), jobHistory.getJobHistoryId(),
-                            String.format("Job %s now in the queue.", scheduler.getJobId()));
-                        // update the next run in scheduler
-                        this.bulkAction.updateNextScheduler(scheduler);
-                    } else if (scheduler.getFrequency().equalsIgnoreCase("Daily") && this.isScheduled(lastSchedulerRun, now,
-                            scheduler.getJobId(), scheduler.getRecurrenceTime())) {
-                        // change the job status in-flight
-                        this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.InFlight);
-                        // add the job into the job-history
-                        JobHistory jobHistory = this.bulkAction.createJobHistory(scheduler.getJobId(), scheduler.getRecurrenceTime());
-                        this.bulkAction.saveJobAuditLogs(scheduler.getJobId(), jobHistory.getJobHistoryId(),
-                            String.format("Job %s now in the queue.", scheduler.getJobId()));
-                        // update the next run in scheduler
-                        this.bulkAction.updateNextScheduler(scheduler);
-                    } else if (scheduler.getFrequency().equalsIgnoreCase("Weekly") && this.isScheduled(lastSchedulerRun, now,
-                            scheduler.getJobId(), scheduler.getRecurrenceTime())) {
-                        // change the job status in-flight
-                        this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.InFlight);
-                        // add the job into the job-history
-                        JobHistory jobHistory = this.bulkAction.createJobHistory(scheduler.getJobId(), scheduler.getRecurrenceTime());
-                        // add the job audit logs for job
-                        this.bulkAction.saveJobAuditLogs(scheduler.getJobId(), jobHistory.getJobHistoryId(),
-                            String.format("Job %s now in the queue.", scheduler.getJobId()));
-                        // update the next run in scheduler
-                        this.bulkAction.updateNextScheduler(scheduler);
-                    } else if (scheduler.getFrequency().equalsIgnoreCase("Monthly") && this.isScheduled(lastSchedulerRun, now,
-                            scheduler.getJobId(), scheduler.getRecurrenceTime())) {
+                    if ((scheduler.getFrequency().equalsIgnoreCase(Frequency.Mint.name()) || scheduler.getFrequency().equalsIgnoreCase(Frequency.Hr.name())
+                        || scheduler.getFrequency().equalsIgnoreCase(Frequency.Daily.name()) || scheduler.getFrequency().equalsIgnoreCase(Frequency.Weekly.name()) ||
+                        scheduler.getFrequency().equalsIgnoreCase(Frequency.Monthly.name())) &&
+                        this.isScheduled(lastSchedulerRun, now, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
                         // change the job status in-flight
                         this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.InFlight);
                         // add the job into the job-history
@@ -181,8 +141,8 @@ public class BulkEngine {
         LocalDateTime target = LocalDateTime.of(currentTime.toLocalDate(), scheduledTime.toLocalTime());
         boolean isExist=target.isBefore(currentTime) && target.isAfter(lastSchedulerTime);
         if(isExist) {
-            logger.info("Scheduler -- jobId: " + jobId +
-            " currentTime: " + currentTime + " lastSchedulerTime: " + lastSchedulerTime + " scheduledTime: " + scheduledTime);
+            logger.info("Scheduler -- jobId: " + jobId + " currentTime: " + currentTime
+                + " lastSchedulerTime: " + lastSchedulerTime + " scheduledTime: " + scheduledTime);
         }
         return isExist;
     }

@@ -45,13 +45,13 @@ public class HelloWorldTask implements Runnable {
             this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(),
                 String.format("Job %s now in the running.", jobHistory.getJobId()));
             // process for the current job.....
-            for (int i=0; i<10000; i++) {
+            for (int i=0; i<1000; i++) {
                 this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(), "Number Count " + i);
             }
             // change the status into the complete status
             this.bulkAction.changeJobHistoryStatus(jobHistory.getJobHistoryId(), JobStatus.Completed);
             this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(),
-                    String.format("Job %s now complete.", jobHistory.getJobId()));
+                String.format("Job %s now complete.", jobHistory.getJobId()));
             this.bulkAction.changeJobHistoryEndDate(jobHistory.getJobHistoryId(), LocalDateTime.now());
         } catch (Exception ex) {
             // change the status into the running status

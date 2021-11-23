@@ -5,13 +5,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import process.model.enums.Frequency;
 import process.util.ProcessTimeUtil;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import static java.time.temporal.ChronoUnit.DAYS;
 
 /**
@@ -141,95 +141,40 @@ public class JobDetailValidation {
         } else if (!this.isNull(this.endDate) && this.isValidPattern(this.endDate, this.dateFormat)) {
             this.errorMsg = "Invalid EndDate at row %s.";
             return false;
-        } else if (this.frequency.equals(frequencyDetail.get(0))) {
-            return this.isValidMintANDHrDetail();
-        } else if (this.frequency.equals(frequencyDetail.get(1))) {
-            return this.isValidMintANDHrDetail();
-        } else if (this.frequency.equals(frequencyDetail.get(2))) {
-            return this.isValidDailyDetail();
-        } else if (this.frequency.equals(frequencyDetail.get(3))) {
-            return this.isValidWeeklyDetail();
-        } else if (this.frequency.equals(frequencyDetail.get(4))) {
-            return this.isValidMonthlyDetail();
+        } else if (this.frequency.equals(Frequency.Mint.name()) || this.frequency.equals(Frequency.Hr.name())
+            || this.frequency.equals(Frequency.Daily.name()) || this.frequency.equals(Frequency.Weekly.name())
+            || this.frequency.equals(Frequency.Monthly.name())) {
+            return this.isValidDetail();
         }
         this.errorMsg = "Frequency Detail should not be empty at row %s.";
         return false;
     }
 
     /**
-     * This isValidMintANDHrDetail validate detail for mint & hr
+     * This isValidDetail validate detail for check the date time valid or not
      * if the detail are valid then its return true if not then false
      * @return boolean true|false
      * */
-    private boolean isValidMintANDHrDetail() {
+    private boolean isValidDetail() {
         try {
             if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
-                .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
+                    .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.errorMsg = String.format("Recurrence not valid its should be %s",
-                this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
+                        this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                 return false;
             }
-            return this.dateTimeValidation(false, false);
+            if (this.frequency.equals(Frequency.Mint.name()) || this.frequency.equals(Frequency.Hr.name())
+                || this.frequency.equals(Frequency.Daily.name())) {
+                return this.dateTimeValidation(false, false);
+            } else if (this.frequency.equals(Frequency.Weekly.name())) {
+                return this.dateTimeValidation(true, false);
+            } else if (this.frequency.equals(Frequency.Monthly.name())) {
+                return this.dateTimeValidation(false, true) ;
+            }
         } catch (Exception ex) {
             this.errorMsg = "Issue with (Start Date,End Date,Start Time,Recurrence) at row %s.";
-            return false;
         }
-    }
-
-    /**
-     * This isValidDailyDetail use to validate the daily detail
-     * if valid then return true if not then false
-     * @return boolean true|false
-     * */
-    private boolean isValidDailyDetail() {
-        try {
-            if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
-                .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
-                this.errorMsg = String.format("Recurrence not valid its should be %s",
-                    this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
-                return false;
-            }
-            return this.dateTimeValidation(false, false);
-        } catch (Exception ex) {
-            this.errorMsg = "Issue with (Start Date,End Date,Start Time,Recurrence) at row %s.";
-            return false;
-        }
-    }
-
-    /**
-     * This isValidWeeklyDetail use to validate detail form weekly detail
-     * */
-     private boolean isValidWeeklyDetail() {
-         try {
-            if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
-                 .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
-                 this.errorMsg = String.format("Recurrence not valid its should be %s",
-                 this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
-                 return false;
-             }
-             return this.dateTimeValidation(true, false);
-         } catch (Exception ex) {
-             this.errorMsg = "Issue with (Start Date,End Date,Start Time,Recurrence) at row %s.";
-             return false;
-         }
-     }
-
-    /**
-     * Validation Detail for Monthly
-     * */
-    private boolean isValidMonthlyDetail() {
-        try {
-            if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
-                .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
-                this.errorMsg = String.format("Recurrence not valid its should be %s",
-                this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
-                return false;
-            }
-            return this.dateTimeValidation(false, true) ;
-        } catch (Exception ex) {
-            this.errorMsg = "Issue with (Start Date,End Date,Start Time, Recurrence) at row %s.";
-            return false;
-        }
+        return false;
     }
 
     /**

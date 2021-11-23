@@ -41,17 +41,15 @@ public class AsyncDALTaskExecutor {
     public AsyncDALTaskExecutor(Integer minThreads, Integer maxThreads, Integer threadLifeInMins) {
         logger.info(">============AsyncDALTaskExecutor Start Successful============<");
         threadPool = new ThreadPoolExecutor(minThreads, maxThreads, threadLifeInMins, TimeUnit.MINUTES, queue);
-        threadPool.setRejectedExecutionHandler(new RejectedExecutionHandler() {
-            public void rejectedExecution(Runnable task, ThreadPoolExecutor executor) {
-                logger.error("Task Rejected : " + task.getClass().getCanonicalName());
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ex) {
-                    logger.error("DAL Task Interrupted " + ExceptionUtil.getRootCauseMessage(ex));
-                }
-                // if task reject then add same take for execution again
-                executor.execute(task);
+        threadPool.setRejectedExecutionHandler((Runnable task, ThreadPoolExecutor executor) -> {
+            logger.error("Task Rejected : " + task.getClass().getCanonicalName());
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException ex) {
+                logger.error("DAL Task Interrupted " + ExceptionUtil.getRootCauseMessage(ex));
             }
+            // if task reject then add same take for execution again
+            executor.execute(task);
         });
         // scheduler use to check how man thread are active and other pool size detail
         (new Timer()).schedule(new TimerTask() {

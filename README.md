@@ -1,4 +1,5 @@
 # Process
+Process is scheduler engine which is use to handle the scheduler job
 #### This project use to create the scheduler and scheduler run base on target time
 `Process have 5 type of scheduler`<br>
 1. Mint (scheduler run mint ex => every 5 mint)
@@ -35,10 +36,12 @@ select * from job_audit_logs where job_id = 1179 order by job_audit_log_id desc;
    http://localhost:8080/scheduler.json/uploadBatchSchedulerFile
 
 ## Process Structure
-![alt text](src/main/resources/Process.jpg)
+![alt text](ext-detail/Process.jpg)
+## Process DB-UML
+![alt text](ext-detail/process-db-detail.png)
 ## Images for sample xlsx with data
-![alt text](image-1.png)
-![alt text](image-2.png)
+![alt text](ext-detail/image-1.png)
+![alt text](ext-detail/image-2.png)
 
 [comment]: <> (## ELK Strcuture)
 
