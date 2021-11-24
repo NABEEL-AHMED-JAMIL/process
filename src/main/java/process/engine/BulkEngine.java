@@ -55,8 +55,11 @@ public class BulkEngine {
             LocalDateTime lastSchedulerRun = LocalDateTime.parse(obj.getLookupName());
             List<Scheduler> schedulerForToday = this.transactionService.findAllSchedulerForToday(now.toLocalDate());
             logger.info("addJobInQueue --> FETCHED Scheduler of current day: size {} ", schedulerForToday.size());
+            // update the lookup time
+            obj.setLookupName(now.toString());
+            this.transactionService.updateLookupDate(obj);
             if (!schedulerForToday.isEmpty()) {
-                schedulerForToday.forEach(scheduler -> {
+                schedulerForToday.parallelStream().forEach(scheduler -> {
                     if ((scheduler.getFrequency().equalsIgnoreCase(Frequency.Mint.name()) || scheduler.getFrequency().equalsIgnoreCase(Frequency.Hr.name())
                         || scheduler.getFrequency().equalsIgnoreCase(Frequency.Daily.name()) || scheduler.getFrequency().equalsIgnoreCase(Frequency.Weekly.name()) ||
                         scheduler.getFrequency().equalsIgnoreCase(Frequency.Monthly.name())) &&
@@ -75,8 +78,6 @@ public class BulkEngine {
             } else {
                 logger.info("addJobInQueue --> NO scheduler is set for this timestamp");
             }
-            obj.setLookupName(now.toString());
-            this.transactionService.updateLookupDate(obj);
         } catch (Exception ex) {
             logger.error("Error In addJobInQueue " + ExceptionUtil.getRootCauseMessage(ex));
         }
@@ -93,7 +94,7 @@ public class BulkEngine {
             List<JobHistory> jobHistories = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(obj.getLookupName()));
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobHistories.size());
             if (!jobHistories.isEmpty()) {
-                jobHistories.forEach(jobHistory -> {
+                jobHistories.parallelStream().forEach(jobHistory -> {
                     Optional<Job> job = this.transactionService.findByJobIdAndJobStatus(jobHistory.getJobId(), Status.Active);
                     Map<String, Object> objectTransfer = new HashMap<>();
                     if (job.isPresent()) {

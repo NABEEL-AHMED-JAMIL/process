@@ -46,7 +46,9 @@ public class HelloWorldTask implements Runnable {
                 String.format("Job %s now in the running.", jobHistory.getJobId()));
             // process for the current job.....
             for (int i=0; i<1000; i++) {
-                this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(), "Number Count " + i);
+                logger.info(String.format("Job Id %d with sub job id %d for number count %s",
+                    jobHistory.getJobId(), jobHistory.getJobHistoryId(), "Number Count " + i));
+                //this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(), "Number Count " + i);
             }
             // change the status into the complete status
             this.bulkAction.changeJobHistoryStatus(jobHistory.getJobHistoryId(), JobStatus.Completed);
@@ -67,4 +69,5 @@ public class HelloWorldTask implements Runnable {
     public String toString() {
         return new Gson().toJson(this);
     }
+
 }
