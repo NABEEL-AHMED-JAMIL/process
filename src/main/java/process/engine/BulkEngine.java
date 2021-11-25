@@ -7,11 +7,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.engine.task.HelloWorldTask;
 import process.engine.async.executor.AsyncDALTaskExecutor;
+import process.engine.task.StockPriceReportTask;
 import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.service.impl.TransactionServiceImpl;
+import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -30,6 +32,8 @@ public class BulkEngine {
     // task
     @Autowired
     private HelloWorldTask helloWorldTask;
+    @Autowired
+    private StockPriceReportTask stockPriceReportTask;
     // thread-pool
     @Autowired
     private AsyncDALTaskExecutor asyncDALTaskExecutor;
@@ -51,7 +55,7 @@ public class BulkEngine {
         try {
             logger.info("addJobInQueue --> FETCH Scheduler of current day STARTED ");
             LocalDateTime now = LocalDateTime.now();
-            LookupData obj = this.transactionService.findByLookupType("SCHEDULER_LAST_RUN_TIME");
+            LookupData obj = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
             LocalDateTime lastSchedulerRun = LocalDateTime.parse(obj.getLookupName());
             List<Scheduler> schedulerForToday = this.transactionService.findAllSchedulerForToday(now.toLocalDate());
             logger.info("addJobInQueue --> FETCHED Scheduler of current day: size {} ", schedulerForToday.size());
@@ -90,7 +94,7 @@ public class BulkEngine {
     public void runJobInCurrentTimeSlot() {
         try {
             logger.info("runJobInCurrentTimeSlot --> FETCH JobQueue of current day STARTED ");
-            LookupData obj = this.transactionService.findByLookupType("QUEUE_FETCH_LIMIT");
+            LookupData obj = this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT);
             List<JobHistory> jobHistories = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(obj.getLookupName()));
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobHistories.size());
             if (!jobHistories.isEmpty()) {
@@ -102,9 +106,15 @@ public class BulkEngine {
                             Thread.sleep(100);
                             switch (job.get().getTriggerDetail()) {
                                 case "process.engine.task.HelloWorldTask":
-                                    objectTransfer.put("jobHistory", jobHistory);
+                                    objectTransfer.put(ProcessUtil.JOB_HISTORY, jobHistory);
                                     this.helloWorldTask.setData(objectTransfer);
                                     this.asyncDALTaskExecutor.addTask(this.helloWorldTask);
+                                    break;
+                                case "process.engine.task.StockPriceReportTask":
+                                    objectTransfer.put(ProcessUtil.JOB_HISTORY, jobHistory);
+                                    objectTransfer.put(ProcessUtil.FILE_PATH, ProcessUtil.STOCK_PRICE_REPORT_DETAIL_JSON);
+                                    this.stockPriceReportTask.setData(objectTransfer);
+                                    this.asyncDALTaskExecutor.addTask(this.stockPriceReportTask);
                                     break;
                                 default:
                                     logger.info("No Trigger Found");

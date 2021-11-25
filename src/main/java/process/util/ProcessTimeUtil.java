@@ -36,6 +36,7 @@ public class ProcessTimeUtil {
         frequencyDetail.put("Monthly", getMonthly());
         // --------------------- //
         triggerDetail.add("process.engine.task.HelloWorldTask");
+        triggerDetail.add("process.engine.task.StockPriceReportTask");
     }
 
     /**

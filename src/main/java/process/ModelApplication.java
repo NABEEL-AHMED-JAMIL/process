@@ -7,6 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import process.model.pojo.LookupData;
 import process.model.service.impl.TransactionServiceImpl;
+import process.util.ProcessUtil;
 import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.util.TimeZone;
@@ -37,9 +38,9 @@ public class ModelApplication {
     @PostConstruct
     public void started() {
         // default system timezone for application
-        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Karachi"));
+        TimeZone.setDefault(TimeZone.getTimeZone(ProcessUtil.TIME_ZONE));
         LocalDateTime now = LocalDateTime.now();
-        LookupData obj = this.transactionService.findByLookupType("SCHEDULER_LAST_RUN_TIME");
+        LookupData obj = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
         obj.setLookupName(now.toString());
         this.transactionService.updateLookupDate(obj);
     }

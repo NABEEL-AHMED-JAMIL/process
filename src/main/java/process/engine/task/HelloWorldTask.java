@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import process.engine.BulkAction;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobHistory;
+import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -38,7 +39,7 @@ public class HelloWorldTask implements Runnable {
     @Override
     public void run() {
         // change the status into the running status
-        JobHistory jobHistory = (JobHistory) this.getData().get("jobHistory");
+        JobHistory jobHistory = (JobHistory) this.getData().get(ProcessUtil.JOB_HISTORY);
         try {
             this.bulkAction.changeJobLastJobRun(jobHistory.getJobId(), jobHistory.getStartTime());
             this.bulkAction.changeJobHistoryStatus(jobHistory.getJobHistoryId(), JobStatus.Running);

@@ -1,0 +1,26 @@
+{
+	"users": [{
+		"firstName": "NABEEL AHMED",
+		"lastName": "JAMIL",
+		"email": "nabeel.amd@gmail.com",
+		"address": "B3rd - 2601 STREET NO 87 BAHAWALPUR PUNJAB PAKISTAN",
+		"branch": {
+			"branchName": "MAIN MKT GULBERG LHR",
+			"branchCode": "0987",
+			"statementPeriod": "01-Oct-21 to 31-Oct-21",
+			"accountNo": "0011165915750010",
+			"accountType": "Allied Easy Current Account",
+			"currency": "Pakistan Rupee",
+			"iban": "PK00 ABPA 1001 0199 7151 0019"
+		}
+	}],
+	"data-source": {
+		"username": "postgres",
+		"password": "admin",
+		"database": "datacenter",
+		"table": "stock_price",
+		"total_count": 436869,
+		"port": 5432,
+		"ip": "127.0.0.1"
+	}
+}
