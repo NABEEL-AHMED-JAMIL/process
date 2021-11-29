@@ -163,4 +163,14 @@ public class BulkEngine {
         return new Gson().toJson(this);
     }
 
+    /**
+     * public static void main(String[] args) {
+     *    BulkEngine bulkEngine = new BulkEngine();
+     *    LocalDateTime lastSchedulerTime = LocalDateTime.of(2021, Month.NOVEMBER, 29, 23, 59, 00);
+     *    LocalDateTime currentTime = LocalDateTime.of(2021, Month.NOVEMBER, 30, 00, 05, 00);
+     *    LocalDateTime scheduledTime= LocalDateTime.of(2021, Month.NOVEMBER, 30, 00, 00, 00);
+     *    System.out.println(bulkEngine.isScheduled(lastSchedulerTime, currentTime, 1002L, scheduledTime));
+     * }
+     * */
+
 }

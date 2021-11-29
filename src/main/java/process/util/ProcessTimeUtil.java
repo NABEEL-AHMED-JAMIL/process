@@ -2,7 +2,6 @@ package process.util;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -13,7 +12,6 @@ import java.util.*;
  * This class use to handle the all time realted procss
  */
 @Component
-@Scope("prototype")
 public class ProcessTimeUtil {
 
     private Logger logger = LoggerFactory.getLogger(ProcessTimeUtil.class);
