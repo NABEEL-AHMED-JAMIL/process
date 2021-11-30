@@ -13,8 +13,8 @@
 
     <licenses>
         <license>
-            <name>System-Process</name>
-            <url>https://www.systemsltd.com/</url>
+            <name>Barco-Process</name>
+            <url>https://www.barco.com/</url>
             <distribution>repo</distribution>
         </license>
     </licenses>
@@ -22,9 +22,9 @@
     <developers>
         <developer>
             <name>NABEEL AHMED JAMIL</name>
-            <email>ahmjamil@etisalat.ae</email>
-            <organization>Etisalat</organization>
-            <organizationUrl>https://www.etisalat.ae/en/index.jsp</organizationUrl>
+            <email>ahmjamil@barco.ae</email>
+            <organization>Barco</organization>
+            <organizationUrl>https://www.barco.ae/en/index.jsp</organizationUrl>
         </developer>
     </developers>
 
@@ -109,6 +109,5 @@
             </plugin>
         </plugins>
     </build>
-
 
 </project>

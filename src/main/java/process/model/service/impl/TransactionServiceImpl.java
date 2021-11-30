@@ -3,7 +3,6 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.JobStatus;
@@ -20,7 +19,6 @@ import java.util.Optional;
  */
 @Service
 @Transactional
-@Scope("singleton")
 public class TransactionServiceImpl {
 
     private Logger logger = LoggerFactory.getLogger(TransactionServiceImpl.class);

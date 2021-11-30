@@ -7,14 +7,12 @@ import org.apache.logging.log4j.Logger;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.usermodel.*;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 /**
  * @author Nabeel Ahmed
  */
 @Component
-@Scope("prototype")
 public class BulkExcel {
 
     private Logger logger = LogManager.getLogger(BulkExcel.class);

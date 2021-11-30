@@ -13,7 +13,6 @@ import process.engine.async.properties.AsyncTaskProperties;
  * @author Nabeel Ahmed
  */
 @Component
-@Scope("singleton")
 public class ProcessConfig {
 
     public Logger logger = LogManager.getLogger(ProcessConfig.class);
