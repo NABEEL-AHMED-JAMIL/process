@@ -10,5 +10,10 @@ import process.model.pojo.LookupData;
 @Repository
 public interface LookupDataRepository extends JpaRepository<LookupData, Long> {
 
+    /**
+     * Method use to get the LookupData by lookupType if present in db
+     * @param lookupType
+     * @return LookupData
+     * */
     public LookupData findByLookupType(String lookupType);
 }

@@ -42,8 +42,8 @@ public class AsyncDALTaskExecutor {
         logger.info(">============AsyncDALTaskExecutor Start Successful============<");
         threadPool = new ThreadPoolExecutor(minThreads, maxThreads, threadLifeInMins, TimeUnit.MINUTES, queue);
         threadPool.setRejectedExecutionHandler((Runnable task, ThreadPoolExecutor executor) -> {
-            logger.error("Task Rejected : " + task.getClass().getCanonicalName());
             try {
+                logger.error("Task Rejected : " + task.getClass().getCanonicalName());
                 Thread.sleep(100);
             } catch (InterruptedException ex) {
                 logger.error("DAL Task Interrupted " + ExceptionUtil.getRootCauseMessage(ex));
