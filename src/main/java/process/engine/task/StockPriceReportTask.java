@@ -8,7 +8,6 @@ import com.google.gson.stream.JsonReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 import process.engine.BulkAction;
 import process.model.dao.JDBCHelper;
@@ -33,7 +32,6 @@ import java.util.Map;
  * @author Nabeel Ahmed
  */
 @Component
-@Scope("prototype")
 public class StockPriceReportTask implements Runnable {
 
     public Logger logger = LogManager.getLogger(HelloWorldTask.class);

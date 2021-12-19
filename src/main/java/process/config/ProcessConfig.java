@@ -4,7 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
-import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.engine.async.properties.AsyncTaskProperties;
@@ -12,7 +12,7 @@ import process.engine.async.properties.AsyncTaskProperties;
 /**
  * @author Nabeel Ahmed
  */
-@Component
+@Configuration
 public class ProcessConfig {
 
     public Logger logger = LogManager.getLogger(ProcessConfig.class);

@@ -54,10 +54,12 @@ public class AsyncDALTaskExecutor {
         // scheduler use to check how man thread are active and other pool size detail
         (new Timer()).schedule(new TimerTask() {
             @Override public void run() {
-                logger.info("AsyncDAL Active No Threads: " + threadPool.getActiveCount() +
+                logger.info(
+               "AsyncDAL Active No Threads: " + threadPool.getActiveCount() +
                 " Core Pool size of Threads: " + threadPool.getCorePoolSize() +
                 " Current no of threads in pool: " + threadPool.getPoolSize() +
-                " Current Blocking Queue Size: " + blockingQueue.size() + " Max allowed Threads: "+threadPool.getMaximumPoolSize());
+                " Current Blocking Queue Size: " + blockingQueue.size() +
+                " Max allowed Threads: "+threadPool.getMaximumPoolSize());
             }
         }, 5 * 60 * 1000, 60000);
         logger.info(">============AsyncDALTaskExecutor End Successful============<");

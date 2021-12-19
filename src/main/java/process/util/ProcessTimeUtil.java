@@ -68,7 +68,8 @@ public class ProcessTimeUtil {
      * */
     private static List getDaily() {
         List<Integer> daily = new ArrayList<>();
-        daily.add(1);
+        daily.add(1);  daily.add(2);  daily.add(3);
+        daily.add(4);  daily.add(5);  daily.add(6);
         return daily;
     }
 
