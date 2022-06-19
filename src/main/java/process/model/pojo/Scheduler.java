@@ -40,32 +40,42 @@ public class Scheduler {
         }
     )
     @Id
+    @Column(name = "scheduler_id")
     @GeneratedValue(generator = "schedulerSequenceGenerator")
     private Long schedulerId;
 
-    @Column(nullable = false, columnDefinition = "DATE")
+    @Column(name = "start_date",
+        nullable = false,
+        columnDefinition = "DATE")
     private LocalDate startDate;
 
-    @Column(columnDefinition = "DATE")
+    @Column(name = "end_date",
+        columnDefinition = "DATE")
     private LocalDate endDate;
 
-    @Column(nullable = false, columnDefinition = "TIME")
+    @Column(name = "start_time",
+        nullable = false,
+        columnDefinition = "TIME")
     private LocalTime startTime;
 
     // mint,hr,daily,weekly,monthly
-    @Column(nullable = false)
+    @Column(name = "frequency",
+        nullable = false)
     private String frequency;
 
     // mint, hr entry
+    @Column(name = "recurrence")
     private String recurrence;
 
     // like:- email notification job, so other job ect.
-    @Column(nullable = false)
+    @Column(name = "job_id",
+        nullable = false)
     private Long jobId;
 
-    @Column(nullable = false)
+    @Column(name = "date_created")
     private Timestamp dateCreated;
 
+    @Column(name = "recurrence_time")
     private LocalDateTime recurrenceTime;
 
     public Scheduler() {}

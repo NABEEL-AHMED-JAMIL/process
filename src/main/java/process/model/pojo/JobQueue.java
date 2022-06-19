@@ -11,8 +11,8 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 
 /**
- * Detail for job-history
- * this class store the detail for job-history
+ * Detail for job-queue
+ * this class store the detail for job-queue
  * like
  * startTime => start time of the job
  * endTime => end time of the job
@@ -23,53 +23,62 @@ import java.time.LocalDateTime;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "job_history")
+@Table(name = "job_queue")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class JobHistory {
+public class JobQueue {
 
     @GenericGenerator(
-        name = "jobHistorySequenceGenerator",
+        name = "jobQueueSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "job_history_source_Seq"),
+            @Parameter(name = "sequence_name", value = "job_queue_source_Seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }
     )
     @Id
-    @GeneratedValue(generator = "jobHistorySequenceGenerator")
-    private Long jobHistoryId;
+    @Column(name = "job_queue_id")
+    @GeneratedValue(generator = "jobQueueSequenceGenerator")
+    private Long jobQueueId;
 
-    @Column(columnDefinition = "TIMESTAMP")
+    @Column(name = "start_time",
+        columnDefinition = "TIMESTAMP")
     private LocalDateTime startTime;
 
-    @Column(columnDefinition = "TIMESTAMP")
+    @Column(name = "end_time",
+        columnDefinition = "TIMESTAMP")
     private LocalDateTime endTime;
 
-    @Column(nullable = false)
+    @Column(name = "job_status",
+        nullable = false)
     @Enumerated(EnumType.STRING)
     private JobStatus jobStatus;
 
+    @Column(name = "job_id",
+        nullable = false)
     private Long jobId;
 
+    @Column(name = "job_status_message")
     private String jobStatusMessage;
 
-    @Column(nullable = false)
+    @Column(name = "date_created",
+        nullable = false)
     private Timestamp dateCreated;
 
-    public JobHistory() {}
+    public JobQueue() {}
 
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
-    public Long getJobHistoryId() {
-        return jobHistoryId;
+    public Long getJobQueueId() {
+        return jobQueueId;
     }
-    public void setJobHistoryId(Long jobHistoryId) {
-        this.jobHistoryId = jobHistoryId;
+
+    public void setJobQueueId(Long jobQueueId) {
+        this.jobQueueId = jobQueueId;
     }
 
     public LocalDateTime getStartTime() {

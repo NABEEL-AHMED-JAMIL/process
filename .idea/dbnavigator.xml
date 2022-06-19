@@ -24,12 +24,7 @@
     <autoscroll-to-editor value="false" />
     <autoscroll-from-editor value="true" />
     <show-object-properties value="true" />
-    <loaded-nodes>
-      <connection connection-id="95f99d7b-0c41-4580-b659-55ff9e961b8b">
-        <schema name="pg_catalog" object-types="table, view, function" />
-        <schema name="public" object-types="table, view, function" />
-      </connection>
-    </loaded-nodes>
+    <loaded-nodes />
   </component>
   <component name="DBNavigator.Project.DatabaseConsoleManager">
     <connection id="95f99d7b-0c41-4580-b659-55ff9e961b8b">
@@ -65,18 +60,21 @@ select job_id, count(job_id) from job_history group by job_id;]]></console>
     <last-used-operator value="EQUAL" />
     <filters />
   </component>
+  <component name="DBNavigator.Project.ParserDiagnosticsManager">
+    <diagnostics-history />
+  </component>
   <component name="DBNavigator.Project.ScriptExecutionManager" clear-outputs="true">
     <recently-used-interfaces />
   </component>
   <component name="DBNavigator.Project.Settings">
     <connections>
-      <connection id="95f99d7b-0c41-4580-b659-55ff9e961b8b" active="true">
+      <connection id="95f99d7b-0c41-4580-b659-55ff9e961b8b" active="true" signed="true">
         <database>
           <name value="batch_process" />
           <description value="" />
           <database-type value="POSTGRES" />
           <config-type value="BASIC" />
-          <database-version value="12.1" />
+          <database-version value="10.2" />
           <driver-source value="BUILTIN" />
           <driver-library value="" />
           <driver value="" />

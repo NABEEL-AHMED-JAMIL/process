@@ -36,11 +36,11 @@ public class AsyncDALTaskExecutor {
      * either rejected thread add again into the thread or else save in the db with the as inQueue status
      * @param minThreads
      * @param maxThreads
-     * @param threadLifeInMins
+     * @param threadLifeInMains
      * */
-    public AsyncDALTaskExecutor(Integer minThreads, Integer maxThreads, Integer threadLifeInMins) {
+    public AsyncDALTaskExecutor(Integer minThreads, Integer maxThreads, Integer threadLifeInMains) {
         logger.info(">============AsyncDALTaskExecutor Start Successful============<");
-        threadPool = new ThreadPoolExecutor(minThreads, maxThreads, threadLifeInMins, TimeUnit.MINUTES, blockingQueue);
+        threadPool = new ThreadPoolExecutor(minThreads, maxThreads, threadLifeInMains, TimeUnit.MINUTES, blockingQueue);
         threadPool.setRejectedExecutionHandler((Runnable task, ThreadPoolExecutor executor) -> {
             try {
                 logger.error("Task Rejected : " + task.getClass().getCanonicalName());
@@ -54,8 +54,7 @@ public class AsyncDALTaskExecutor {
         // scheduler use to check how man thread are active and other pool size detail
         (new Timer()).schedule(new TimerTask() {
             @Override public void run() {
-                logger.info(
-               "AsyncDAL Active No Threads: " + threadPool.getActiveCount() +
+            logger.info("AsyncDAL Active No Threads: " + threadPool.getActiveCount() +
                 " Core Pool size of Threads: " + threadPool.getCorePoolSize() +
                 " Current no of threads in pool: " + threadPool.getPoolSize() +
                 " Current Blocking Queue Size: " + blockingQueue.size() +

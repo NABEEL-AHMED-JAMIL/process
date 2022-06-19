@@ -4,7 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import process.model.pojo.Job;
+import process.model.pojo.SourceJob;
 import java.util.Optional;
 import java.util.List;
 
@@ -12,7 +12,7 @@ import java.util.List;
  * @author Nabeel Ahmed
  */
 @Repository
-public interface JobRepository extends JpaRepository<Job, Long> {
+public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
 
     /**
      * Method use to get the job by status and the job id
@@ -20,7 +20,7 @@ public interface JobRepository extends JpaRepository<Job, Long> {
      * @return status
      * @return Optional<Job>
      * */
-    Optional<Job> findByJobIdAndJobStatus(Long jobId, Status status);
+    Optional<SourceJob> findByJobIdAndJobStatus(Long jobId, Status status);
 
     /**
      * Method use to get the job by status if present in db
@@ -28,13 +28,13 @@ public interface JobRepository extends JpaRepository<Job, Long> {
      * @param status
      * @return Optional<Job>
      * */
-    Optional<Job> findByJobNameAndJobStatus(String jobName, Status status);
+    Optional<SourceJob> findByJobNameAndJobStatus(String jobName, Status status);
 
     /**
      * Method use to get the job by status if present in db
      * @param jobRunningStatus
      * @return List<Long>
      * */
-    List<Job> findJobByJobRunningStatus(JobStatus jobRunningStatus);
+    List<SourceJob> findJobByJobRunningStatus(JobStatus jobRunningStatus);
 
 }

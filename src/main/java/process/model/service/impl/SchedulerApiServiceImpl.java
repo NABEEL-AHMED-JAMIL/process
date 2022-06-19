@@ -8,12 +8,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import process.model.dto.*;
 import process.model.enums.Status;
-import process.model.pojo.Job;
+import process.model.pojo.SourceJob;
 import process.model.pojo.Scheduler;
 import process.model.service.SchedulerApiService;
 import process.util.ProcessTimeUtil;
@@ -25,15 +24,13 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
+import static process.util.ProcessUtil.*;
 
 /**
  * @author Nabeel Ahmed
  */
 @Service
-@Scope("singleton")
 public class SchedulerApiServiceImpl implements SchedulerApiService {
 
     private Logger logger = LoggerFactory.getLogger(SchedulerApiServiceImpl.class);
@@ -53,7 +50,7 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
 
     /**
      * The method used to download the template file for batch scheduler
-     * @return ByteArrayInputStream
+     * @return ByteArrayInputStream downloadBatchSchedulerTemplateFile
      */
     @Override
     public ByteArrayInputStream downloadBatchSchedulerTemplateFile() throws Exception {
@@ -68,11 +65,15 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
         FileOutputStream fileOut = new FileOutputStream(fileUploadPath);
         IOUtils.copy(inputStream, fileOut);
         // after copy the stream into file close
-        if (inputStream != null) { inputStream.close(); }
-        // 2nd insert data to newly copied file. So that template coludn't be changed.
+        if (inputStream != null) {
+            inputStream.close();
+        }
+        // 2nd insert data to newly copied file. So that template couldn't be changed.
         XSSFWorkbook wb = new XSSFWorkbook(new File(fileUploadPath));
         XSSFSheet sheet = wb.getSheet(JOB_ADD);
-        this.bulkExcel.fillDropDownValue(sheet,1,1, ProcessTimeUtil.triggerDetail.stream().toArray(String[]::new));
+        /**Trigger Detail fetch from db as per user login*/
+        this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllTaskDetail()
+            .stream().map(taskId -> String.valueOf(taskId)).toArray(String[]::new));
         this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.stream().toArray(String[]::new));
         wb.write(fileOut);
         fileOut.close();
@@ -87,9 +88,9 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
 
     /**
      * The method use to process the batch file and upload the data into database
-     * max file have 1000 row if file have more then 1000 row its will reject the process
+     * max file have 1000 row if file have more than 1000 row it's will reject the process
      * @param object
-     * @return ResponseDto
+     * @return ResponseDto uploadJobFile
      */
     public ResponseDto uploadJobFile(FileUploadDto object) throws Exception {
         logger.info("### Start bulk uploading file!");
@@ -97,7 +98,7 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
             logger.info("File Type " + object.getFile().getContentType());
             return new ResponseDto(ERROR, "You can upload only .xlsx extension file.");
         }
-        // fill the stream of file into work-book
+        // fill the stream with file into work-book
         XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream());
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
@@ -117,13 +118,14 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
             // header validation check
             if (currentRow.getRowNum() == 0) {
                 if (currentRow.getPhysicalNumberOfCells() != 7) {
-                    return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " heading missing.");
+                    return new ResponseDto(ERROR, "File at row " +
+                        (currentRow.getRowNum() + 1) + " heading missing.");
                 }
                 // loop on the header
                 for (int i=0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
                     if (!currentRow.getCell(i).getStringCellValue().equals(this.getHEADER_FILED_BATCH_FILE()[i])) {
-                        return new ResponseDto(ERROR,"File at row " +
-                                (currentRow.getRowNum() + 1) + " " + this.getHEADER_FILED_BATCH_FILE()[i] + " heading missing.");
+                        return new ResponseDto(ERROR,"File at row " + (currentRow.getRowNum() + 1)
+                            + this.getHEADER_FILED_BATCH_FILE()[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
@@ -134,7 +136,7 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
                     if (i==0) {
                         jobDetailValidation.setJobName(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==1) {
-                        jobDetailValidation.setTriggerDetail(this.bulkExcel.getCellDetail(currentRow, i));
+                        jobDetailValidation.setTaskId(Long.valueOf(this.bulkExcel.getCellDetail(currentRow, i)));
                     } else if (i==2) {
                         jobDetailValidation.setStartDate(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==3) {
@@ -148,23 +150,24 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
                     }
                 }
                 // job name already exist
-                if (this.transactionService.findByJobNameAndJobStatus(jobDetailValidation.getJobName(),
-                        Status.Active).isPresent()) {
+                if (this.transactionService.findByJobNameAndJobStatus(jobDetailValidation.getJobName(), Status.Active).isPresent()) {
                     return new ResponseDto(ERROR,  "JobName already exist at row " + (currentRow.getRowNum() + 1) + ".");
                 } else if (!jobDetailValidation.isValidJobDetail()) {
                     return new ResponseDto(ERROR, String.format(jobDetailValidation.getErrorMsg(), (currentRow.getRowNum() + 1)));
+                } else if (!this.transactionService.findTaskDetailById(jobDetailValidation.getTaskId()).isPresent()) {
+                    return new ResponseDto(ERROR,  "TriggerDetail not valid at row " + (currentRow.getRowNum() + 1) + ".");
                 }
                 jobDetailValidations.add(jobDetailValidation);
             }
         }
         jobDetailValidations.forEach(jobDetailValidation -> {
             // save the job and scheduler
-            Job job = new Job();
-            job.setJobName(jobDetailValidation.getJobName());
-            job.setTriggerDetail(jobDetailValidation.getTriggerDetail());
-            job.setJobStatus(Status.Active);
-            this.transactionService.saveOrUpdateJob(job);
-
+            SourceJob sourceJob = new SourceJob();
+            sourceJob.setJobName(jobDetailValidation.getJobName());
+            sourceJob.setTriggerDetail(this.transactionService
+                .findTaskDetailById(jobDetailValidation.getTaskId()).get());
+            sourceJob.setJobStatus(Status.Active);
+            this.transactionService.saveOrUpdateJob(sourceJob);
             Scheduler scheduler = new Scheduler();
             scheduler.setStartDate(LocalDate.parse(jobDetailValidation.getStartDate()));
             if (!StringUtils.isEmpty(jobDetailValidation.getEndDate())) {
@@ -176,15 +179,13 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
                 scheduler.setRecurrence(jobDetailValidation.getRecurrence());
             }
             scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
-                LocalDate.parse(jobDetailValidation.getStartDate()), jobDetailValidation.getStartTime()));
-            scheduler.setJobId(job.getJobId());
+                LocalDate.parse(jobDetailValidation.getStartDate()),
+                jobDetailValidation.getStartTime()));
+            scheduler.setJobId(sourceJob.getJobId());
             this.transactionService.saveOrUpdateScheduler(scheduler);
         });
-        return new ResponseDto(SUCCESS, String.format("Total %d Job Save Successfully", jobDetailValidations.size()));
-    }
-
-    private boolean isNull(Object payload) {
-        return payload == null ? true : false;
+        return new ResponseDto(SUCCESS, String.format("Total %d Job Save Successfully",
+            jobDetailValidations.size()));
     }
 
 }

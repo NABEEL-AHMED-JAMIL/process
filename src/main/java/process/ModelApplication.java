@@ -1,5 +1,7 @@
 package process;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -20,6 +22,8 @@ import java.util.TimeZone;
 @SpringBootApplication
 public class ModelApplication {
 
+    private Logger logger = LoggerFactory.getLogger(ModelApplication.class);
+
     @Autowired
     private TransactionServiceImpl transactionService;
 
@@ -28,7 +32,11 @@ public class ModelApplication {
      * @param args
      * */
     public static void main(String[] args) {
-        SpringApplication.run(ModelApplication.class, args);
+        try {
+            SpringApplication.run(ModelApplication.class, args);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -38,10 +46,10 @@ public class ModelApplication {
     @PostConstruct
     public void started() {
         // default system timezone for application
-        TimeZone.setDefault(TimeZone.getTimeZone(ProcessUtil.TIME_ZONE));
+        TimeZone.setDefault(TimeZone.getTimeZone(ProcessUtil.QATAR_TIME_ZONE));
         LocalDateTime now = LocalDateTime.now();
         LookupData obj = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
-        obj.setLookupName(now.toString());
+        obj.setLookupValue(now.toString());
         this.transactionService.updateLookupDate(obj);
     }
 }

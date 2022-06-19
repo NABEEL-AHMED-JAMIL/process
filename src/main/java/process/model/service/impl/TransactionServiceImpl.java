@@ -25,37 +25,36 @@ public class TransactionServiceImpl {
 
     // repo
     @Autowired
-    private JobRepository jobRepository;
+    private SourceJobRepository sourceJobRepository;
     @Autowired
     private SchedulerRepository schedulerRepository;
     @Autowired
-    private JobHistoryRepository jobHistoryRepository;
+    private JobQueueRepository jobQueueRepository;
     @Autowired
     private LookupDataRepository lookupDataRepository;
     @Autowired
     private JobAuditLogRepository jobAuditLogRepository;
+    @Autowired
+    private TaskDetailRepository taskDetailRepository;
 
     /**
      * The method use to save the logs for job
-     * @param jobId
-     * @param jobHistoryId
+     * @param jobQueueId
      * @param logsDetail
-     * @return JobHistoryDto
      */
-    public void saveJobAuditLogs(Long jobId, Long jobHistoryId, String logsDetail) {
+    public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
         JobAuditLogs jobAuditLogs = new JobAuditLogs();
-        jobAuditLogs.setJobId(jobId);
-        jobAuditLogs.setJobHistoryId(jobHistoryId);
+        jobAuditLogs.setJobQueueId(jobQueueId);
         jobAuditLogs.setLogsDetail(logsDetail);
         this.jobAuditLogRepository.save(jobAuditLogs);
     }
 
     /**
      * The method use to update the job
-     * @param job
+     * @param sourceJob
      * */
-    public void saveOrUpdateJob(Job job) {
-        this.jobRepository.saveAndFlush(job);
+    public void saveOrUpdateJob(SourceJob sourceJob) {
+        this.sourceJobRepository.saveAndFlush(sourceJob);
     }
 
     /**
@@ -63,15 +62,15 @@ public class TransactionServiceImpl {
      * @param scheduler
      * */
     public void saveOrUpdateScheduler(Scheduler scheduler) {
-        this.schedulerRepository.saveAndFlush(scheduler);
+        this.schedulerRepository.save(scheduler);
     }
 
     /**
-     * The method use to update the job-history
-     * @param jobHistory
+     * The method use to update the job-queue
+     * @param jobQueue
      * */
-    public void saveOrUpdateJobHistory(JobHistory jobHistory) {
-        this.jobHistoryRepository.saveAndFlush(jobHistory);
+    public void saveOrUpdateJobQueue(JobQueue jobQueue) {
+        this.jobQueueRepository.save(jobQueue);
     }
 
     /**
@@ -88,28 +87,36 @@ public class TransactionServiceImpl {
      * @param status
      * @return Job
      */
-    public Optional<Job> findByJobNameAndJobStatus(String jobName, Status status) {
-        return this.jobRepository.findByJobNameAndJobStatus(jobName, status);
+    public Optional<SourceJob> findByJobNameAndJobStatus(String jobName, Status status) {
+        return this.sourceJobRepository.findByJobNameAndJobStatus(jobName, status);
     }
 
     /**
-     * The method use to get the job by name and job status
+     * The method use to get the job by jobId and job status
      * @param jobId
      * @param status
      * @return Job
      */
-    public Optional<Job> findByJobIdAndJobStatus(Long jobId, Status status) {
-        return this.jobRepository.findByJobIdAndJobStatus(jobId, status);
+    public Optional<SourceJob> findByJobIdAndJobStatus(Long jobId, Status status) {
+        return this.sourceJobRepository.findByJobIdAndJobStatus(jobId, status);
     }
 
     /**
-     * The method use to get the JobHistory by
-     * @param jobHistoryId
-     * @param jobHistoryId
-     * @return JobHistory
+     * The method use to get the job by id
+     * @param jobId
+     * @return Job
      */
-    public Optional<JobHistory> findJobHistoryByJobHistoryId(Long jobHistoryId) {
-        return this.jobHistoryRepository.findById(jobHistoryId);
+    public Optional<SourceJob> findByJobId(Long jobId) {
+        return this.sourceJobRepository.findById(jobId);
+    }
+
+    /**
+     * The method use to get the JobQueue by
+     * @param jobQueueId
+     * @return JobQueue
+     */
+    public Optional<JobQueue> findJobQueueByJobQueueId(Long jobQueueId) {
+        return this.jobQueueRepository.findById(jobQueueId);
     }
 
     /**
@@ -124,10 +131,10 @@ public class TransactionServiceImpl {
     /**
      * The method use to get the all job which status in queue state
      * @param limit
-     * @return JobHistory
+     * @return JobQueue
      */
-    public List<JobHistory> findAllJobForTodayWithLimit(Long limit) {
-        return this.jobHistoryRepository.findAllJobForTodayWithLimit(limit);
+    public List<JobQueue> findAllJobForTodayWithLimit(Long limit) {
+        return this.jobQueueRepository.findAllJobForTodayWithLimit(limit);
     }
 
     /**
@@ -143,7 +150,20 @@ public class TransactionServiceImpl {
      * This method use to fetch all jobId
      * @return List<Long>
      */
-    public List<Job> findJobByJobRunningStatus() {
-        return this.jobRepository.findJobByJobRunningStatus(JobStatus.PartialComplete);
+    public List<SourceJob> findJobByJobRunningStatus() {
+        return this.sourceJobRepository.findJobByJobRunningStatus(JobStatus.PartialComplete);
     }
+
+    public Optional<SourceJob> findJobById(Long sourceJobId) {
+        return this.sourceJobRepository.findById(sourceJobId);
+    }
+
+    public Optional<TaskDetail> findTaskDetailById(Long taskDetailId) {
+        return this.taskDetailRepository.findById(taskDetailId);
+    }
+
+    public List<Long> findAllTaskDetail() {
+        return this.taskDetailRepository.findAllTaskDetail();
+    }
+
 }

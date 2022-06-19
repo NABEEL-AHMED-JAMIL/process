@@ -27,49 +27,56 @@ import java.time.LocalDateTime;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "job")
+@Table(name = "source_job")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class Job {
+public class SourceJob {
 
     @GenericGenerator(
-        name = "jobSequenceGenerator",
+        name = "sourceJobSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "job_source_Seq"),
+            @Parameter(name = "sequence_name", value = "source_job_source_Seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }
     )
     @Id
-    @GeneratedValue(generator = "jobSequenceGenerator")
+    @Column(name = "job_id")
+    @GeneratedValue(generator = "sourceJobSequenceGenerator")
     private Long jobId;
 
     // job name should be unique
-    @Column(length = 1000, nullable = false)
+    @Column(name = "job_name",
+       length = 1000, nullable = false)
     private String jobName;
 
     // which class or method trigger
-    @Column(length = 1000, nullable = false)
-    private String triggerDetail;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "task_detail_id")
+    private TaskDetail taskDetail;
 
     // status of job (active or disable or delete)
-    @Column(nullable = false)
+    @Column(name = "job_status",
+         nullable = false)
     @Enumerated(EnumType.STRING)
     private Status jobStatus;
 
     // status :- blank,queue,running,fail,complete
+    @Column(name = "job_running_status")
     @Enumerated(EnumType.STRING)
     private JobStatus jobRunningStatus;
 
     // describe the last job run
-    @Column(columnDefinition = "TIMESTAMP")
+    @Column(name = "last_job_run",
+         columnDefinition = "TIMESTAMP")
     private LocalDateTime lastJobRun;
 
-    @Column(nullable = false)
+    @Column(name = "data_created",
+         nullable = false)
     private Timestamp dateCreated;
 
-    public Job() {}
+    public SourceJob() {}
 
     @PrePersist
     protected void onCreate() {
@@ -79,6 +86,7 @@ public class Job {
     public Long getJobId() {
         return jobId;
     }
+
     public void setJobId(Long jobId) {
         this.jobId = jobId;
     }
@@ -86,20 +94,23 @@ public class Job {
     public String getJobName() {
         return jobName;
     }
+
     public void setJobName(String jobName) {
         this.jobName = jobName;
     }
 
-    public String getTriggerDetail() {
-        return triggerDetail;
+    public TaskDetail getTriggerDetail() {
+        return taskDetail;
     }
-    public void setTriggerDetail(String triggerDetail) {
-        this.triggerDetail = triggerDetail;
+
+    public void setTriggerDetail(TaskDetail taskDetail) {
+        this.taskDetail = taskDetail;
     }
 
     public Status getJobStatus() {
         return jobStatus;
     }
+
     public void setJobStatus(Status jobStatus) {
         this.jobStatus = jobStatus;
     }
@@ -107,6 +118,7 @@ public class Job {
     public JobStatus getJobRunningStatus() {
         return jobRunningStatus;
     }
+
     public void setJobRunningStatus(JobStatus jobRunningStatus) {
         this.jobRunningStatus = jobRunningStatus;
     }
@@ -114,6 +126,7 @@ public class Job {
     public LocalDateTime getLastJobRun() {
         return lastJobRun;
     }
+
     public void setLastJobRun(LocalDateTime lastJobRun) {
         this.lastJobRun = lastJobRun;
     }
@@ -121,6 +134,7 @@ public class Job {
     public Timestamp getDateCreated() {
         return dateCreated;
     }
+
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
     }

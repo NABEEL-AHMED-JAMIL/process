@@ -5,14 +5,14 @@
 4) main job -> main job be Stop|Skip|Delete
 
 Note :- if the main job is skip check if the next job hai then update the next job
-if not then show missage not more next job after this and skip and next job time blank
-if the job skip alos logs the detail
+if not then show message not more next job after this and skip and next job time blank
+if the job skip also logs the detail
 
 if the main job is stop then -> stop all the in queue job also
-if the main job active again -> allow option to resume|delete the sub job too other wise no option show
-if the main job delete delete all the sub job too if have
+if the main job active again -> allow option to resume|delete the sub job too otherwise no option show
+if the main job delete all the sub job too if have
 
-5) queue job -> queeu job be Stop|Skip|Delete
+5) queue job -> queue job be Stop|Skip|Delete
 
 6) job statistics
 daily|weekly|monthly|year

@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.engine.BulkAction;
 import process.model.enums.JobStatus;
-import process.model.pojo.JobHistory;
+import process.model.pojo.JobQueue;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
@@ -37,29 +37,29 @@ public class HelloWorldTask implements Runnable {
     @Override
     public void run() {
         // change the status into the running status
-        JobHistory jobHistory = (JobHistory) this.getData().get(ProcessUtil.JOB_HISTORY);
+        JobQueue jobQueue = (JobQueue) this.getData().get(ProcessUtil.JOB_QUEUE);
         try {
-            this.bulkAction.changeJobLastJobRun(jobHistory.getJobId(), jobHistory.getStartTime());
-            this.bulkAction.changeJobHistoryStatus(jobHistory.getJobHistoryId(), JobStatus.Running);
-            this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(),
-                String.format("Job %s now in the running.", jobHistory.getJobId()));
+            this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
+            this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Running);
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
+                String.format("Job %s now in the running.", jobQueue.getJobId()));
             // process for the current job.....
             for (int i=0; i<1000; i++) {
                 logger.info(String.format("Job Id %d with sub job id %d for number count %s",
-                    jobHistory.getJobId(), jobHistory.getJobHistoryId(), "Number Count " + i));
-                //this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(), "Number Count " + i);
+                    jobQueue.getJobId(), jobQueue.getJobQueueId(), "Number Count " + i));
+                //this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), "Number Count " + i);
             }
             // change the status into the complete status
-            this.bulkAction.changeJobHistoryStatus(jobHistory.getJobHistoryId(), JobStatus.Completed);
-            this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(),
-                String.format("Job %s now complete.", jobHistory.getJobId()));
-            this.bulkAction.changeJobHistoryEndDate(jobHistory.getJobHistoryId(), LocalDateTime.now());
+            this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Completed);
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
+                String.format("Job %s now complete.", jobQueue.getJobId()));
+            this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
         } catch (Exception ex) {
             // change the status into the running status
-            this.bulkAction.changeJobHistoryStatus(jobHistory.getJobHistoryId(), JobStatus.Failed);
-            this.bulkAction.saveJobAuditLogs(jobHistory.getJobId(), jobHistory.getJobHistoryId(),
-                String.format("Job %s fail due to %s .", jobHistory.getJobId(), ExceptionUtil.getRootCauseMessage(ex)));
-            this.bulkAction.changeJobHistoryEndDate(jobHistory.getJobHistoryId(), LocalDateTime.now());
+            this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
+                String.format("Job %s fail due to %s .", jobQueue.getJobId(), ExceptionUtil.getRootCauseMessage(ex)));
+            this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
             logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
         }
     }

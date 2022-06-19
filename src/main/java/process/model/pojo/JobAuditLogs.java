@@ -31,19 +31,20 @@ public class JobAuditLogs {
         }
     )
     @Id
+    @Column(name = "job_audit_log_id")
     @GeneratedValue(generator = "jobAuditLogsSequenceGenerator")
     private Long jobAuditLogId;
 
-    @Column(nullable = false)
-    private Long jobId;
+    @Column(name = "job_queue_id",
+        nullable = false)
+    private Long jobQueueId;
 
-    @Column(nullable = false)
-    private Long jobHistoryId;
-
-    @Column(nullable = false)
+    @Column(name = "log_detail",
+        nullable = false)
     private String logsDetail;
 
-    @Column(nullable = false)
+    @Column(name = "date_created",
+        nullable = false)
     private Timestamp dateCreated;
 
     public JobAuditLogs() {}
@@ -60,18 +61,12 @@ public class JobAuditLogs {
         this.jobAuditLogId = jobAuditLogId;
     }
 
-    public Long getJobId() {
-        return jobId;
-    }
-    public void setJobId(Long jobId) {
-        this.jobId = jobId;
+    public Long getJobQueueId() {
+        return jobQueueId;
     }
 
-    public Long getJobHistoryId() {
-        return jobHistoryId;
-    }
-    public void setJobHistoryId(Long jobHistoryId) {
-        this.jobHistoryId = jobHistoryId;
+    public void setJobQueueId(Long jobQueueId) {
+        this.jobQueueId = jobQueueId;
     }
 
     public String getLogsDetail() {
