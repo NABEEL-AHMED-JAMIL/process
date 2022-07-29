@@ -17,6 +17,7 @@ public class TaskDetailDto {
     private Status taskStatus;
     private String taskPayload;
     private SourceTaskTypeDto sourceTaskType;
+    private Long totalLinksJobs;
 
     public TaskDetailDto() {}
 
@@ -58,6 +59,14 @@ public class TaskDetailDto {
 
     public void setSourceTaskType(SourceTaskTypeDto sourceTaskType) {
         this.sourceTaskType = sourceTaskType;
+    }
+
+    public Long getTotalLinksJobs() {
+        return totalLinksJobs;
+    }
+
+    public void setTotalLinksJobs(Long totalLinksJobs) {
+        this.totalLinksJobs = totalLinksJobs;
     }
 
     @Override

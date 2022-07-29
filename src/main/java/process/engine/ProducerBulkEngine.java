@@ -14,9 +14,9 @@ import process.model.service.impl.TransactionServiceImpl;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * @author Nabeel Ahmed
@@ -26,6 +26,8 @@ public class ProducerBulkEngine {
 
     public Logger logger = LogManager.getLogger(ProducerBulkEngine.class);
 
+    private final Pattern pattern;
+    private final String REGEX = "^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$";
     @Autowired
     private BulkAction bulkAction;
     @Autowired
@@ -33,7 +35,9 @@ public class ProducerBulkEngine {
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
 
-    public ProducerBulkEngine() { }
+    public ProducerBulkEngine() {
+        this.pattern = Pattern.compile(REGEX);
+    }
 
     /**
      * This method use to fetch the detail from the scheduler and match the current running slot if the data
@@ -92,8 +96,7 @@ public class ProducerBulkEngine {
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
                 jobQueues.parallelStream().forEach(jobQueue -> {
-                    Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(
-                       jobQueue.getJobId(), Status.Active);
+                    Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
                     if (sourceJob.isPresent()) {
                         try {
                             Thread.sleep(100);
@@ -146,28 +149,38 @@ public class ProducerBulkEngine {
      * @exception Exception
      * */
     private void pushMessageToQueue(SourceJob sourceJob, JobQueue jobQueue) {
-        TaskDetail taskDetail = sourceJob.getTriggerDetail();
+        TaskDetail taskDetail = sourceJob.getTaskDetail();
         if (taskDetail.getSourceTaskType() != null) {
             try {
                 SourceTaskType sourceTaskType = taskDetail.getSourceTaskType();
                 String queueTopicPartition = sourceTaskType.getQueueTopicPartition();
-                String[] splitTopicDetail = queueTopicPartition.split("&");
-                String topic = splitTopicDetail[0].split("=")[1];
-                String partition = splitTopicDetail[1].split("=")[1];
-                partition = partition.replace("[", "").replace("]", "");
-                // random key for send the msg for partitions
-                UUID uuid = UUID.randomUUID();
-                String key = uuid.toString();
-                /**
-                 * If the partitions is containing * then use the simple one
-                 * */
-                if (partition.contains("*")) {
+                Matcher matcher = pattern.matcher(queueTopicPartition);
+                Boolean resultRegex = matcher.matches();
+                if (resultRegex) {
+                    String topic = matcher.group(1);
+                    String partition = matcher.group(2);
+                    // random key for send the msg for partitions
+                    UUID uuid = UUID.randomUUID();
+                    String key = uuid.toString();
                     /**
-                     * Kafka will manage self partition detail
+                     * If the partitions is containing * then use the simple one
                      * */
-                    this.kafkaTemplate.send(topic, key, jobQueue.toString());
+                    Map<String, Object> payload = new HashMap<>();
+                    payload.put(ProcessUtil.JOB_QUEUE, jobQueue);
+                    payload.put(ProcessUtil.TASK_DETAIL, taskDetail);
+                    if (partition.contains(ProcessUtil.START)) {
+                        /**
+                         * Kafka will manage self to send the data to partition's
+                         * */
+                        this.kafkaTemplate.send(topic, key, payload.toString());
+                    } else {
+                        /**
+                         * Kafka send only the target topic -> partition
+                         * */
+                        this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString());
+                    }
                 } else {
-                    this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, jobQueue.toString());
+                    logger.error("Regex Not match..");
                 }
             } catch (Exception ex) {
                 logger.error("Error In pushMessageToQueue " + ExceptionUtil.getRootCauseMessage(ex));
@@ -187,7 +200,14 @@ public class ProducerBulkEngine {
      *    LocalDateTime currentTime = LocalDateTime.of(2021, Month.NOVEMBER, 30, 00, 05, 00);
      *    LocalDateTime scheduledTime= LocalDateTime.of(2021, Month.NOVEMBER, 30, 00, 00, 00);
      *    System.out.println(bulkEngine.isScheduled(lastSchedulerTime, currentTime, 1002L, scheduledTime));
+     *
+     *    Pattern twoDigitPattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$");
+     *    Matcher matcher = twoDigitPattern.matcher("topic=scrapping-topic&partitions=[*]");
+     *    Boolean resultRegex = matcher.matches();
+     *    if (resultRegex) {
+     *       System.out.println(matcher.group(1));
+     *       System.out.println(matcher.group(2));
+     *   }
      * }
      * */
-
 }

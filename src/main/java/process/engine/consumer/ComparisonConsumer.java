@@ -11,10 +11,8 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.engine.task.ComparisonTask;
-import process.model.pojo.JobQueue;
 import process.util.ProcessUtil;
-
-import java.util.HashMap;
+import process.util.exception.ExceptionUtil;
 import java.util.Map;
 
 /**
@@ -36,13 +34,16 @@ public class ComparisonConsumer {
     @KafkaListener(topicPartitions = @TopicPartition(topic = "comparison-topic", partitions = { "0" }),
         clientIdPrefix = "string", groupId = "tpd-process")
     public void webComparisonConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
-        logger.info("ComparisonConsumer web comparison [String] received key {}: Type [{}] | Payload: {} | Record: {}",
-            consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-        Map<String, Object> objectTransfer = new HashMap<>();
-        objectTransfer.put(ProcessUtil.JOB_QUEUE, new Gson().fromJson(payload, JobQueue.class));
-        this.comparisonTask.setData(objectTransfer);
-        this.asyncDALTaskExecutor.addTask(this.comparisonTask);
-        logger.info("ComparisonConsumer send the data to process worker thread.");
+        try {
+            logger.info("ComparisonConsumer web comparison [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+                consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
+            Map<String, Object> objectTransfer = new Gson().fromJson(payload, Map.class);
+            this.comparisonTask.setData(objectTransfer);
+            this.asyncDALTaskExecutor.addTask(this.comparisonTask);
+            logger.info("ComparisonConsumer send the data to process worker thread.");
+        } catch (Exception ex) {
+            logger.error("Exception in webComparisonConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+        }
     }
 
     /**
@@ -51,14 +52,16 @@ public class ComparisonConsumer {
     @KafkaListener(topicPartitions = @TopicPartition(topic = "comparison-topic", partitions = { "1" }),
         clientIdPrefix = "string", groupId = "tpd-process")
     public void dataComparisonConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
-        logger.info("ComparisonConsumer web comparison [String] received key {}: Type [{}] | Payload: {} | Record: {}",
-                consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-        Map<String, Object> objectTransfer = new HashMap<>();
-        objectTransfer.put(ProcessUtil.JOB_QUEUE, new Gson().fromJson(payload, JobQueue.class));
-        this.comparisonTask.setData(objectTransfer);
-        this.asyncDALTaskExecutor.addTask(this.comparisonTask);
-        logger.info("ComparisonConsumer send the data to process worker thread.");
-
+        try {
+            logger.info("ComparisonConsumer web comparison [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+                 consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
+            Map<String, Object> objectTransfer = new Gson().fromJson(payload, Map.class);
+            this.comparisonTask.setData(objectTransfer);
+            this.asyncDALTaskExecutor.addTask(this.comparisonTask);
+            logger.info("ComparisonConsumer send the data to process worker thread.");
+        } catch (Exception ex) {
+            logger.error("Exception in dataComparisonConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+        }
     }
 
     /**
@@ -67,13 +70,16 @@ public class ComparisonConsumer {
     @KafkaListener(topicPartitions = @TopicPartition(topic = "comparison-topic", partitions = { "2" }),
         clientIdPrefix = "string", groupId = "tpd-process")
     public void imageComparisonConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
-        logger.info("ComparisonConsumer web comparison [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+        try {
+            logger.info("ComparisonConsumer web comparison [String] received key {}: Type [{}] | Payload: {} | Record: {}",
                 consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-        Map<String, Object> objectTransfer = new HashMap<>();
-        objectTransfer.put(ProcessUtil.JOB_QUEUE, new Gson().fromJson(payload, JobQueue.class));
-        this.comparisonTask.setData(objectTransfer);
-        this.asyncDALTaskExecutor.addTask(this.comparisonTask);
-        logger.info("ComparisonConsumer send the data to process worker thread.");
+            Map<String, Object> objectTransfer = new Gson().fromJson(payload, Map.class);
+            this.comparisonTask.setData(objectTransfer);
+            this.asyncDALTaskExecutor.addTask(this.comparisonTask);
+            logger.info("ComparisonConsumer send the data to process worker thread.");
+        } catch (Exception ex) {
+            logger.error("Exception in imageComparisonConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+        }
     }
 
 }

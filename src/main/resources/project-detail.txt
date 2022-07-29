@@ -1,8 +1,8 @@
 1 Endpoint use to download batch file
-EndPoint :- http://localhost:8080/scheduler.json/downloadBatchSchedulerTemplateFile
+EndPoint :- http://localhost:8080/bulk.json/downloadBatchSchedulerTemplateFile
 Method-Type :- Get
 2 Endpoint use to upload batch file
-EndPoint :- http://localhost:8080/scheduler.json/uploadBatchSchedulerFile
+EndPoint :- http://localhost:8080/bulk.json/uploadBatchSchedulerFile
 Method-Type :- Post
 3 Pre-Run script for process
 

@@ -17,5 +17,5 @@ public interface TaskDetailRepository extends CrudRepository<TaskDetail, Long> {
     @Query(value = "select task_detail_id from task_detail", nativeQuery = true)
     public List<Long> findAllTaskDetail();
 
-    public Optional<TaskDetail> findTaskDetailByIdAndTaskStatus(Long taskDetailId, Status taskStatus);
+    public Optional<TaskDetail> findByTaskDetailIdAndTaskStatus(Long taskDetailId, Status taskStatus);
 }

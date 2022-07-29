@@ -3,10 +3,10 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import org.hibernate.annotations.GenericGenerator;
+import org.hibernate.annotations.Parameter;
+import process.model.enums.Status;
+import javax.persistence.*;
 
 /**
  * @author Nabeel Ahmed
@@ -17,46 +17,68 @@ import javax.persistence.Table;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskType {
 
+    @GenericGenerator(
+        name = "sourceTaskTypeSequenceGenerator",
+        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
+        parameters = {
+            @Parameter(name = "sequence_name", value = "source_task_type_source_Seq"),
+            @Parameter(name = "initial_value", value = "1000"),
+            @Parameter(name = "increment_size", value = "1")
+        }
+    )
     @Id
-    @Column(name="source_task_type_id",
-        unique=true, nullable=false)
-    private String sourceTaskTypeId;
+    @Column(name="source_task_type_id", unique=true, nullable=false)
+    @GeneratedValue(generator = "sourceTaskTypeSequenceGenerator")
+    private Long sourceTaskTypeId;
 
     @Column(name = "service_name",
         nullable = false)
     private String serviceName;
 
     @Column(name = "description",
-        nullable = false)
+         nullable = false)
     private String description;
 
     /**
      * filed help to send the source job to the right queue
      * */
     @Column(name = "queue_topic_partition",
-        nullable = false)
+         nullable = false)
     private String queueTopicPartition;
+
+    // status of job (active or disable or delete)
+    @Column(name = "task_type_status",
+        nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
+    @Column(name = "is_schema_register")
+    private boolean isSchemaRegister;
+
+    @Column(name = "schema_payload",
+        columnDefinition = "text")
+    private String schemaPayload;
 
     public SourceTaskType() {}
 
-    public SourceTaskType(String sourceTaskTypeId, String queueTopicPartition) {
+    public SourceTaskType(Long sourceTaskTypeId, String queueTopicPartition) {
         this.sourceTaskTypeId = sourceTaskTypeId;
         this.queueTopicPartition = queueTopicPartition;
     }
 
-    public SourceTaskType(String sourceTaskTypeId, String serviceName,
-                          String description, String queueTopicPartition) {
+    public SourceTaskType(Long sourceTaskTypeId, String serviceName,
+        String description, String queueTopicPartition) {
         this.sourceTaskTypeId = sourceTaskTypeId;
         this.serviceName = serviceName;
         this.description = description;
         this.queueTopicPartition = queueTopicPartition;
     }
 
-    public String getSourceTaskTypeId() {
+    public Long getSourceTaskTypeId() {
         return sourceTaskTypeId;
     }
 
-    public void setSourceTaskTypeId(String sourceTaskTypeId) {
+    public void setSourceTaskTypeId(Long sourceTaskTypeId) {
         this.sourceTaskTypeId = sourceTaskTypeId;
     }
 
@@ -82,6 +104,30 @@ public class SourceTaskType {
 
     public void setQueueTopicPartition(String queueTopicPartition) {
         this.queueTopicPartition = queueTopicPartition;
+    }
+
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        this.status = status;
+    }
+
+    public boolean isSchemaRegister() {
+        return isSchemaRegister;
+    }
+
+    public void setSchemaRegister(boolean schemaRegister) {
+        isSchemaRegister = schemaRegister;
+    }
+
+    public String getSchemaPayload() {
+        return schemaPayload;
+    }
+
+    public void setSchemaPayload(String schemaPayload) {
+        this.schemaPayload = schemaPayload;
     }
 
     @Override

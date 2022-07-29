@@ -6,7 +6,7 @@ import java.io.ByteArrayInputStream;
 /**
  * @author Nabeel Ahmed
  */
-public interface SchedulerApiService {
+public interface BulkApiService {
 
     public ByteArrayInputStream downloadBatchSchedulerTemplateFile() throws Exception;
 

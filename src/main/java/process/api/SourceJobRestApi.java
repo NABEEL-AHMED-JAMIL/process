@@ -7,10 +7,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.ResponseDto;
-import process.model.dto.SearchTextDto;
 import process.model.dto.SourceJobDto;
 import process.model.service.SourceJobApiService;
-import process.util.PagingUtil;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 
@@ -35,7 +33,7 @@ public class SourceJobRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -46,22 +44,45 @@ public class SourceJobRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while uploadSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     @RequestMapping(value = "/listSourceJob", method = RequestMethod.POST)
-    public ResponseEntity<?> listSourceJob(@RequestParam(value = "page") Long page, @RequestParam(value = "limit") Long limit,
-       @RequestParam(value = "startDate") String startDate, @RequestParam(value = "endDate") String endDate,
-       @RequestParam(value = "columnName") String columnName, @RequestParam(value = "order") String order,
-       @RequestBody SearchTextDto searchTextDto) {
+    public ResponseEntity<?> listSourceJob() {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.listSourceJob(startDate, endDate,
-                    PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobApiService.listSourceJob(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                     "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
+
+    @RequestMapping(value = "/fetchRunningJobEvent", method = RequestMethod.POST)
+    public ResponseEntity<?> fetchRunningJobEvent(@RequestBody SourceJobDto tempSourceJob) {
+        try {
+            return new ResponseEntity<>(this.sourceJobApiService.fetchRunningJobEvent(tempSourceJob), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchRunningJobEvent ", ExceptionUtil.getRootCauseMessage(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Method uses to get source job detail with id
+     * like :- json payload | validation detail |
+     * */
+    @RequestMapping(value = "/fetchSourceJobDetailWithSourceJobId", method = RequestMethod.GET)
+    public ResponseEntity<?> fetchSourceJobDetailWithSourceJobId(@RequestParam(value = "jobId") Long jobDetailId) {
+        try {
+            return new ResponseEntity<>(this.sourceJobApiService.fetchSourceJobDetailWithSourceJobId(jobDetailId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchAllLinkJobsWithSourceTask ", ExceptionUtil.getRootCauseMessage(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
 }

@@ -10,7 +10,6 @@ import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
-
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -40,21 +39,6 @@ public class ScrappingTask implements Runnable {
         // change the status into the running status
         JobQueue jobQueue = (JobQueue) this.getData().get(ProcessUtil.JOB_QUEUE);
         try {
-            this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
-            this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Running);
-            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-                    String.format("Job %s now in the running.", jobQueue.getJobId()));
-            // process for the current job.....
-            for (int i=0; i<1000; i++) {
-                logger.info(String.format("Job Id %d with sub job id %d for number count %s",
-                        jobQueue.getJobId(), jobQueue.getJobQueueId(), "Number Count " + i));
-                //this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), "Number Count " + i);
-            }
-            // change the status into the complete status
-            this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Completed);
-            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-                    String.format("Job %s now complete.", jobQueue.getJobId()));
-            this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
         } catch (Exception ex) {
             // change the status into the running status
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);

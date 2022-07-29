@@ -15,6 +15,8 @@ public interface SettingApiService {
 
     public ResponseDto updateSourceTaskType(SourceTaskTypeDto tempSourceTaskType) throws Exception;
 
+    public ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception;
+
     public ResponseDto addLookupData(LookupDataDto tempLookupData) throws Exception;
 
     public ResponseDto updateLookupData(LookupDataDto tempLookupData) throws Exception;

@@ -17,12 +17,6 @@ public class BulkExcel {
 
     private Logger logger = LogManager.getLogger(BulkExcel.class);
 
-    private String STATIC_SHEET = "ListSheet";
-    private String CATEGORIES = "Categories";
-    private String FORMULATE = "INDIRECT($F$2)";
-    private String WEEKLY = "Weekly";
-    private String DAILY = "Daily";
-
     public XSSFWorkbook wb;
     private XSSFSheet sheet;
     private final String FOUNT_NAME = "Calibre";

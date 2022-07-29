@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 import process.model.pojo.Scheduler;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * @author Nabeel Ahmed
@@ -23,5 +24,7 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
         "where ((?1 BETWEEN start_date AND end_date) OR (start_date <= ?1 AND end_date is null))\n" +
         "and source_job.job_status = 'Active' and (source_job.job_running_status is null or source_job.job_running_status = 'InFlight')", nativeQuery = true)
     public List<Scheduler> findAllSchedulerForToday(LocalDate todayDate);
+
+    public Optional<Scheduler> findSchedulerByJobId(Long jobId);
 
 }

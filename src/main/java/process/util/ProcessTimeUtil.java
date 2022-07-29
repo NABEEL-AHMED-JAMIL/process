@@ -117,7 +117,9 @@ public class ProcessTimeUtil {
      * */
     public static LocalDateTime getRecurrenceTime(LocalDate date, String startTime) {
         String timeSplit[] = startTime.split(":");
-        return date.atStartOfDay().plusHours(Integer.valueOf(timeSplit[0])).plusMinutes(Integer.valueOf(timeSplit[1]));
+        return date.atStartOfDay()
+            .plusHours(Integer.valueOf(timeSplit[0]))
+            .plusMinutes(Integer.valueOf(timeSplit[1]));
     }
 
 }

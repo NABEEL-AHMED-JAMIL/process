@@ -9,8 +9,10 @@ import org.springframework.web.bind.annotation.*;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
+import process.model.dto.XmlMakerRequest;
 import process.model.service.SettingApiService;
 import process.util.ProcessUtil;
+import process.util.XmlOutTagInfoUtil;
 import process.util.exception.ExceptionUtil;
 
 /**
@@ -26,6 +28,8 @@ public class SettingRestApi {
 
     @Autowired
     private SettingApiService settingApiService;
+    @Autowired
+    private XmlOutTagInfoUtil xmlOutTagInfoUtil;
 
     /**
      * Api use to fetch the app setting
@@ -39,7 +43,7 @@ public class SettingRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while appSetting ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -55,7 +59,7 @@ public class SettingRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceTaskType ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -71,7 +75,23 @@ public class SettingRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateSourceTaskType ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * method use to delete the sourceTaskType
+     * @param sourceTaskTypeId
+     * @return ResponseEntity<?> deleteSourceTaskType
+     * */
+    @RequestMapping(value = "/deleteSourceTaskType", method = RequestMethod.DELETE)
+    public ResponseEntity<?> deleteSourceTaskType(@RequestParam Long sourceTaskTypeId) {
+        try {
+            return new ResponseEntity<>(this.settingApiService.deleteSourceTaskType(sourceTaskTypeId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while deleteSourceTaskType ", ExceptionUtil.getRootCauseMessage(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -87,7 +107,7 @@ public class SettingRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addLookupData ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -102,6 +122,24 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.updateLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCauseMessage(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    // create the configuration for task
+    @RequestMapping(path = "xmlCreateChecker",  method = RequestMethod.POST)
+    public ResponseEntity<?> xmlCreateChecker(@RequestBody XmlMakerRequest xmlMakerRequest) {
+        try {
+            if(xmlMakerRequest.getTagsInfo() != null) {
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
+                    this.xmlOutTagInfoUtil.makeXml(xmlMakerRequest)), HttpStatus.OK);
+            } else {
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
+            "Wrong Input"), HttpStatus.OK);
+            }
+        } catch (Exception ex) {
+            logger.error("isValidXmlOrUrl -- Error occurred ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }

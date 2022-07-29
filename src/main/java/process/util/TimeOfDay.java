@@ -34,8 +34,7 @@ public class TimeOfDay {
         this.minute = minute;
     }
 
-    public void setHr(int hour)
-    {
+    public void setHr(int hour) {
         if (0 <= hour && hour < 23 ) {
             this.hour = hour;
         } else {
@@ -43,8 +42,7 @@ public class TimeOfDay {
         }
      }
 
-    public void setMin (int minute)
-    {
+    public void setMin (int minute) {
         if (0 <= minute && minute < 59) {
             this.minute = minute;
         } else {
@@ -52,16 +50,14 @@ public class TimeOfDay {
         }
     }
 
-    public void addHour()
-    {
+    public void addHour() {
         hour++;
         if (hour > 23) {
             hour = 0;
         }
     }
 
-    public void addMinute()
-    {
+    public void addMinute() {
         minute++;
         if (minute > 59)
         {

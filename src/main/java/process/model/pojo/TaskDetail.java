@@ -32,7 +32,7 @@ public class TaskDetail {
     private Long taskDetailId;
 
     @Column(name = "task_name",
-        unique = true, nullable = false)
+        nullable = false)
     private String taskName;
 
     @Column(name = "task_status", nullable = false)
@@ -40,7 +40,8 @@ public class TaskDetail {
     private Status taskStatus;
 
     // save lob data for job detail
-    @Column(name = "task_payload")
+    @Column(name = "task_payload",
+        columnDefinition = "text")
     private String taskPayload;
 
     @ManyToOne(fetch = FetchType.LAZY)

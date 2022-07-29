@@ -28,7 +28,8 @@ public class PagingDto implements Serializable {
         this.currentPage = currentPage;
     }
 
-    public PagingDto(Long totalRecord, Long pageSize, Long currentPage, String columnName, String order) {
+    public PagingDto(Long totalRecord, Long pageSize, Long currentPage,
+        String columnName, String order) {
         this.totalRecord = totalRecord;
         this.pageSize = pageSize;
         this.currentPage = currentPage;

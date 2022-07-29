@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
+import process.model.enums.Status;
 import process.model.pojo.LookupData;
 import process.model.pojo.SourceTaskType;
 import process.model.repository.LookupDataRepository;
@@ -15,8 +16,6 @@ import process.model.service.SettingApiService;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
-
 import static process.util.ProcessUtil.*;
 
 /**
@@ -25,7 +24,7 @@ import static process.util.ProcessUtil.*;
 @Service
 public class SettingApiServiceImpl implements SettingApiService {
 
-    private Logger logger = LoggerFactory.getLogger(SchedulerApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(BulkApiServiceImpl.class);
 
     private final String LOOKUP_DATA = "lookupDatas";
     private final String SOURCE_TASK_TYPE = "sourceTaskTaypes";
@@ -39,7 +38,7 @@ public class SettingApiServiceImpl implements SettingApiService {
     public ResponseDto appSetting() throws Exception {
         Map<String, Object> appSettingDetail = new HashMap<>();
         appSettingDetail.put(LOOKUP_DATA, this.lookupDataRepository.findAll());
-        appSettingDetail.put(SOURCE_TASK_TYPE, this.sourceTaskTypeRepository.findAll());
+        appSettingDetail.put(SOURCE_TASK_TYPE, this.sourceTaskTypeRepository.fetchAllSourceTaskType());
         return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
     }
 
@@ -53,7 +52,6 @@ public class SettingApiServiceImpl implements SettingApiService {
             return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition missing.");
         }
         SourceTaskType sourceTaskType = new SourceTaskType();
-        sourceTaskType.setSourceTaskTypeId(UUID.randomUUID().toString());
         sourceTaskType.setServiceName(tempSourceTaskType.getServiceName());
         sourceTaskType.setDescription(tempSourceTaskType.getDescription());
         sourceTaskType.setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
@@ -75,12 +73,38 @@ public class SettingApiServiceImpl implements SettingApiService {
             sourceTaskType.get().setServiceName(tempSourceTaskType.getServiceName());
             sourceTaskType.get().setDescription(tempSourceTaskType.getDescription());
             sourceTaskType.get().setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
+            if (!isNull(tempSourceTaskType.getStatus())) {
+                sourceTaskType.get().setStatus(tempSourceTaskType.getStatus());
+            }
             this.sourceTaskTypeRepository.save(sourceTaskType.get());
             return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.",
                 tempSourceTaskType.getSourceTaskTypeId()));
         }
         return new ResponseDto(ERROR, String.format("SourceTaskType not found with %s.",
             tempSourceTaskType.getSourceTaskTypeId()));
+    }
+
+    @Override
+    public ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception {
+        if (isNull(sourceTaskTypeId)) {
+            return new ResponseDto(ERROR, "SourceTaskType sourceTaskTypeId missing.");
+        }
+        /**
+         * if (isNull(sourceTaskTypeId)) {
+         *    return new ResponseDto(ERROR, "SourceTaskType sourceTaskTypeId missing.");
+         * } else if (this.sourceTaskTypeRepository.getLinkTaskCountBySourceTaskType(sourceTaskTypeId) > 0) {
+         *    return new ResponseDto(ERROR, "SourceTaskType link with tasks can't delete.");
+         * }
+         * Ph-2 change
+         * Note :- if the queue delete then all the link-source task delete +
+         * all the source job stop and job status into delete state
+         * */
+        Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(sourceTaskTypeId);
+        if (sourceTaskType.isPresent()) {
+            sourceTaskType.get().setStatus(Status.Delete);
+            this.sourceTaskTypeRepository.save(sourceTaskType.get());
+        }
+        return new ResponseDto(SUCCESS, String.format("SourceTaskType delete with %s.", sourceTaskTypeId));
     }
 
     @Override

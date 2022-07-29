@@ -79,9 +79,9 @@ select * from job_audit_logs where job_id = 1179 order by job_audit_log_id desc;
 ## Process Endpoint
 List of endpoint with detail of endpoint
 1. Endpoint use download batch file <br>
-   http://localhost:9098/api/v1/scheduler.json/downloadBatchSchedulerTemplateFile
+   http://localhost:9098/api/v1/bulk.json/downloadBatchSchedulerTemplateFile
 2. Endpoint use upload batch file <br>
-   http://localhost:9098/api/v1/scheduler.json/uploadBatchSchedulerFile
+   http://localhost:9098/api/v1/bulk.json/uploadBatchSchedulerFile
 ## Images for sample xlsx with data
 New Change in process will add soon
 Will add soon

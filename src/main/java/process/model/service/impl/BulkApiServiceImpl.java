@@ -14,7 +14,7 @@ import process.model.dto.*;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.pojo.Scheduler;
-import process.model.service.SchedulerApiService;
+import process.model.service.BulkApiService;
 import process.util.ProcessTimeUtil;
 import process.util.excel.BulkExcel;
 import process.util.validation.JobDetailValidation;
@@ -31,9 +31,9 @@ import static process.util.ProcessUtil.*;
  * @author Nabeel Ahmed
  */
 @Service
-public class SchedulerApiServiceImpl implements SchedulerApiService {
+public class BulkApiServiceImpl implements BulkApiService {
 
-    private Logger logger = LoggerFactory.getLogger(SchedulerApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(BulkApiServiceImpl.class);
 
     // env-filed
     @Value("${storage.efsFileDire}")
@@ -74,13 +74,15 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
         /**Trigger Detail fetch from db as per user login*/
         this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllTaskDetail()
             .stream().map(taskId -> String.valueOf(taskId)).toArray(String[]::new));
-        this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.stream().toArray(String[]::new));
+        this.bulkExcel.fillDropDownValue(sheet,1,5,
+            ProcessTimeUtil.frequency.stream().toArray(String[]::new));
         wb.write(fileOut);
         fileOut.close();
         wb.close();
         // read the file
         File file = new File(fileUploadPath);
-        ByteArrayInputStream byteArrayOutputStream = new ByteArrayInputStream(FileUtils.readFileToByteArray(file));
+        ByteArrayInputStream byteArrayOutputStream = new ByteArrayInputStream(
+            FileUtils.readFileToByteArray(file));
         // delete the file
         file.delete();
         return byteArrayOutputStream;
@@ -164,7 +166,7 @@ public class SchedulerApiServiceImpl implements SchedulerApiService {
             // save the job and scheduler
             SourceJob sourceJob = new SourceJob();
             sourceJob.setJobName(jobDetailValidation.getJobName());
-            sourceJob.setTriggerDetail(this.transactionService
+            sourceJob.setTaskDetail(this.transactionService
                 .findTaskDetailById(jobDetailValidation.getTaskId()).get());
             sourceJob.setJobStatus(Status.Active);
             this.transactionService.saveOrUpdateJob(sourceJob);

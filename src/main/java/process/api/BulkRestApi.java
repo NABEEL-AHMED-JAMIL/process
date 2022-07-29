@@ -9,7 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.*;
-import process.model.service.SchedulerApiService;
+import process.model.service.BulkApiService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.text.DateFormat;
@@ -23,13 +23,13 @@ import java.util.UUID;
  */
 @RestController
 @CrossOrigin(origins = "*")
-@RequestMapping(value = "/scheduler.json")
-public class SchedulerRestApi {
+@RequestMapping(value = "/bulk.json")
+public class BulkRestApi {
 
-    private Logger logger = LoggerFactory.getLogger(SchedulerRestApi.class);
+    private Logger logger = LoggerFactory.getLogger(BulkRestApi.class);
 
     @Autowired
-    private SchedulerApiService schedulerApiService;
+    private BulkApiService bulkApiService;
 
     /**
      * The method used to download the template file for batch scheduler
@@ -44,7 +44,7 @@ public class SchedulerRestApi {
             String fileName = "BatchUpload-"+dateFormat.format(new Date())+"-"+ UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
             return ResponseEntity.ok().headers(headers).body(new InputStreamResource(
-                    this.schedulerApiService.downloadBatchSchedulerTemplateFile()));
+                    this.bulkApiService.downloadBatchSchedulerTemplateFile()));
         } catch (Exception ex) {
             logger.error("An error occurred while downloadBatchSchedulerTemplateFile xlsx file",
                 ExceptionUtil.getRootCauseMessage(ex));
@@ -64,7 +64,7 @@ public class SchedulerRestApi {
     public ResponseEntity<?> uploadBatchSchedulerFile(FileUploadDto object) {
         try {
             if (object.getFile() != null) {
-                return new ResponseEntity<>(this.schedulerApiService.uploadJobFile(object), HttpStatus.OK);
+                return new ResponseEntity<>(this.bulkApiService.uploadJobFile(object), HttpStatus.OK);
             }
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 "File not found for process."), HttpStatus.BAD_REQUEST);

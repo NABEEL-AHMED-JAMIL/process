@@ -10,10 +10,8 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.engine.task.ExtractionTask;
-import process.model.pojo.JobQueue;
 import process.util.ProcessUtil;
-
-import java.util.HashMap;
+import process.util.exception.ExceptionUtil;
 import java.util.Map;
 
 /**
@@ -34,13 +32,16 @@ public class ExtractionConsumer {
      * */
     @KafkaListener(topics = "extraction-topic", clientIdPrefix = "string", groupId = "tpd-process")
     public void extractionConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
-        logger.info("ExtractionConsumer extraction [String] received key {}: Type [{}] | Payload: {} | Record: {}",
-            consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-        Map<String, Object> objectTransfer = new HashMap<>();
-        objectTransfer.put(ProcessUtil.JOB_QUEUE, new Gson().fromJson(payload, JobQueue.class));
-        this.extractionTask.setData(objectTransfer);
-        this.asyncDALTaskExecutor.addTask(this.extractionTask);
-        logger.info("ComparisonConsumer send the data to process worker thread.");
+        try {
+            logger.info("ExtractionConsumer extraction [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+                consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
+            Map<String, Object> objectTransfer = new Gson().fromJson(payload, Map.class);
+            this.extractionTask.setData(objectTransfer);
+            this.asyncDALTaskExecutor.addTask(this.extractionTask);
+            logger.info("ExtractionConsumer send the data to process worker thread.");
+        } catch (Exception ex) {
+            logger.error("Exception in extractionConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+        }
     }
 
 }

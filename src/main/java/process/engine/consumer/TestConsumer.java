@@ -2,7 +2,6 @@ package process.engine.consumer;
 
 import com.google.gson.Gson;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.header.Headers;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,12 +10,9 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.engine.task.HelloWorldTask;
-import process.model.pojo.JobQueue;
 import process.util.ProcessUtil;
-
-import java.util.HashMap;
+import process.util.exception.ExceptionUtil;
 import java.util.Map;
-import java.util.stream.StreamSupport;
 
 /**
  * @author Nabeel Ahmed
@@ -36,19 +32,16 @@ public class TestConsumer {
      * */
     @KafkaListener(topics = "test-topic", clientIdPrefix = "string", groupId = "tpd-process")
     public void testConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
-        logger.info("TestConsumer [String] received key {}: Type [{}] | Payload: {} | Record: {}",
-            consumerRecord.key(), typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-        Map<String, Object> objectTransfer = new HashMap<>();
-        objectTransfer.put(ProcessUtil.JOB_QUEUE, new Gson().fromJson(payload, JobQueue.class));
-        this.helloWorldTask.setData(objectTransfer);
-        this.asyncDALTaskExecutor.addTask(this.helloWorldTask);
-        logger.info("TestConsumer send the data to process worker thread.");
-    }
-
-    private String typeIdHeader(Headers headers) {
-        return StreamSupport.stream(headers.spliterator(), false)
-            .filter(header -> header.key().equals("__TypeId__"))
-            .findFirst().map(header -> new String(header.value())).orElse("N/A");
+        try {
+            logger.info("TestConsumer [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+                consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
+            Map<String, Object> objectTransfer = new Gson().fromJson(payload, Map.class);
+            this.helloWorldTask.setData(objectTransfer);
+            this.asyncDALTaskExecutor.addTask(this.helloWorldTask);
+            logger.info("TestConsumer send the data to process worker thread.");
+        } catch (Exception ex) {
+            logger.error("Exception in testConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+        }
     }
 
 }

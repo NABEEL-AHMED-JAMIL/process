@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import javax.persistence.*;
@@ -72,6 +73,15 @@ public class SourceJob {
          columnDefinition = "TIMESTAMP")
     private LocalDateTime lastJobRun;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "execution",
+        nullable = false)
+    private Execution execution;
+
+    @Column(name = "priority",
+        nullable = false)
+    private Integer priority;
+
     @Column(name = "data_created",
          nullable = false)
     private Timestamp dateCreated;
@@ -99,11 +109,11 @@ public class SourceJob {
         this.jobName = jobName;
     }
 
-    public TaskDetail getTriggerDetail() {
+    public TaskDetail getTaskDetail() {
         return taskDetail;
     }
 
-    public void setTriggerDetail(TaskDetail taskDetail) {
+    public void setTaskDetail(TaskDetail taskDetail) {
         this.taskDetail = taskDetail;
     }
 
@@ -129,6 +139,22 @@ public class SourceJob {
 
     public void setLastJobRun(LocalDateTime lastJobRun) {
         this.lastJobRun = lastJobRun;
+    }
+
+    public Execution getExecution() {
+        return execution;
+    }
+
+    public void setExecution(Execution execution) {
+        this.execution = execution;
+    }
+
+    public Integer getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Integer priority) {
+        this.priority = priority;
     }
 
     public Timestamp getDateCreated() {
