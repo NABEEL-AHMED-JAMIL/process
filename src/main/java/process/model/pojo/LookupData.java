@@ -11,6 +11,7 @@ import java.sql.Timestamp;
 /**
  * This LookupData use store the all scheduler detail
  * like last scheduler run
+ * and how much chuck data fetch at 1 time
  * */
 /**
  * @author Nabeel Ahmed
@@ -31,16 +32,22 @@ public class LookupData {
         }
     )
     @Id
+    @Column(name = "lookup_id")
     @GeneratedValue(generator = "lookupDataSequenceGenerator")
     private Long lookupId;
 
-    private String lookupName;
+    @Column(name = "lookup_value")
+    private String lookupValue;
 
+    @Column(name = "lookup_type",
+        unique = true)
     private String lookupType;
 
+    @Column(name = "description")
     private String description;
 
-    @Column(nullable = false)
+    @Column(name = "date_created",
+        nullable = false)
     private Timestamp dateCreated;
 
     public LookupData() { }
@@ -57,11 +64,12 @@ public class LookupData {
         this.lookupId = lookupId;
     }
 
-    public String getLookupName() {
-        return lookupName;
+    public String getLookupValue() {
+        return lookupValue;
     }
-    public void setLookupName(String lookupName) {
-        this.lookupName = lookupName;
+
+    public void setLookupValue(String lookupValue) {
+        this.lookupValue = lookupValue;
     }
 
     public String getLookupType() {

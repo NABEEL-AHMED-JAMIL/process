@@ -7,8 +7,8 @@ import org.springframework.stereotype.Component;
 import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import process.model.pojo.Job;
-import process.model.pojo.JobHistory;
+import process.model.pojo.SourceJob;
+import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
 import process.model.service.impl.TransactionServiceImpl;
 import java.time.LocalDateTime;
@@ -31,32 +31,32 @@ public class BulkAction {
      * @param jobStatus
      * */
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
-        Optional<Job> job = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
-        job.get().setJobRunningStatus(jobStatus);
-        this.transactionService.saveOrUpdateJob(job.get());
+        Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
+        sourceJob.get().setJobRunningStatus(jobStatus);
+        this.transactionService.saveOrUpdateJob(sourceJob.get());
     }
 
     /**
      * This method use the change the status of sub job
-     * @param jobHistoryId
+     * @param jobQueueId
      * @param jobStatus
      * */
-    public void changeJobHistoryStatus(Long jobHistoryId, JobStatus jobStatus) {
-        Optional<JobHistory> jobHistory = this.transactionService.findJobHistoryByJobHistoryId(jobHistoryId);
-        jobHistory.get().setJobStatus(jobStatus);
-        this.transactionService.saveOrUpdateJobHistory(jobHistory.get());
+    public void changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus) {
+        Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        jobQueue.get().setJobStatus(jobStatus);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
 
     /**
      * This method use the add the end date of running job
-     * @param jobHistoryId
+     * @param jobQueueId
      * @param endTime
      * */
-    public void changeJobHistoryEndDate(Long jobHistoryId, LocalDateTime endTime) {
-        Optional<JobHistory> jobHistory = this.transactionService.findJobHistoryByJobHistoryId(jobHistoryId);
-        jobHistory.get().setEndTime(endTime);
-        jobHistory.get().setJobStatusMessage(String.format("Job %s now complete.", jobHistory.get().getJobId()));
-        this.transactionService.saveOrUpdateJobHistory(jobHistory.get());
+    public void changeJobQueueEndDate(Long jobQueueId, LocalDateTime endTime) {
+        Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        jobQueue.get().setEndTime(endTime);
+        jobQueue.get().setJobStatusMessage(String.format("Job %s now complete.", jobQueue.get().getJobId()));
+        this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
 
     /**
@@ -65,36 +65,35 @@ public class BulkAction {
      * @param lastJobRun
      * */
     public void changeJobLastJobRun(Long jobId, LocalDateTime lastJobRun) {
-        Optional<Job> job = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
-        job.get().setLastJobRun(lastJobRun);
-        this.transactionService.saveOrUpdateJob(job.get());
+        Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
+        sourceJob.get().setLastJobRun(lastJobRun);
+        this.transactionService.saveOrUpdateJob(sourceJob.get());
     }
 
     /**
-     * This method use to add the job into the job-history in the queue state
-     * the schedule pick the job from the job-history and push into the queue
+     * This method use to add the job into the job-queue in the queue state
+     * the schedule pick the job from the job-queue and push into the queue
      * @param jobId
      * @param scheduledTime
-     * @return JobHistoryDto
+     * @return JobQueueDto
      * */
-    public JobHistory createJobHistory(Long jobId, LocalDateTime scheduledTime) {
-        JobHistory jobHistory = new JobHistory();
-        jobHistory.setStartTime(scheduledTime);
-        jobHistory.setJobStatus(JobStatus.Queue);
-        jobHistory.setJobId(jobId);
-        jobHistory.setJobStatusMessage(String.format("Job %s now in the queue.", jobId));
-        this.transactionService.saveOrUpdateJobHistory(jobHistory);
-        return jobHistory;
+    public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime) {
+        JobQueue jobQueue = new JobQueue();
+        jobQueue.setStartTime(scheduledTime);
+        jobQueue.setJobStatus(JobStatus.Queue);
+        jobQueue.setJobId(jobId);
+        jobQueue.setJobStatusMessage(String.format("Job %s now in the queue.", jobId));
+        this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        return jobQueue;
     }
 
     /**
      * this method use to add the current job logs into the audit logs table
-     * @param jobId
-     * @param jobHistoryId
+     * @param jobQueueId
      * @param logsDetail
      * */
-    public void saveJobAuditLogs(Long jobId, Long jobHistoryId, String logsDetail) {
-        this.transactionService.saveJobAuditLogs(jobId, jobHistoryId, logsDetail);
+    public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
+        this.transactionService.saveJobAuditLogs(jobQueueId, logsDetail);
     }
 
     /**
@@ -132,8 +131,8 @@ public class BulkAction {
      * This method use to change the partial-complete status into complete status
      * */
     public void checkJobStatus() {
-        for (Job job: this.transactionService.findJobByJobRunningStatus()) {
-            this.changeJobStatus(job.getJobId(), JobStatus.Completed);
+        for (SourceJob sourceJob : this.transactionService.findJobByJobRunningStatus()) {
+            this.changeJobStatus(sourceJob.getJobId(), JobStatus.Completed);
         }
     }
 

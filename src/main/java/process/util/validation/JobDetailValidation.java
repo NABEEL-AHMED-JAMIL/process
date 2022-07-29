@@ -27,7 +27,6 @@ public class JobDetailValidation {
 
     // detail for advance validation
     private List<String> frequencyDetail = ProcessTimeUtil.frequency;
-    private Set<String> triggerDetails = ProcessTimeUtil.triggerDetail;
     private Map<String, List<?>> frequencyDetailByTime = ProcessTimeUtil.frequencyDetail;
     // use to split the time
     private String split = ":";
@@ -37,7 +36,7 @@ public class JobDetailValidation {
     private String dateFormat = "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$";
 
     private String jobName;
-    private String triggerDetail;
+    private Long taskId;
     private String startDate;
     private String endDate;
     private String startTime;
@@ -54,11 +53,11 @@ public class JobDetailValidation {
         this.jobName = jobName;
     }
 
-    public String getTriggerDetail() {
-        return triggerDetail;
+    public Long getTaskId() {
+        return taskId;
     }
-    public void setTriggerDetail(String triggerDetail) {
-        this.triggerDetail = triggerDetail;
+    public void setTaskId(Long taskId) {
+        this.taskId = taskId;
     }
 
     public String getStartDate() {
@@ -106,15 +105,15 @@ public class JobDetailValidation {
     /**
      * This isValidJobDetail use to validate the
      * job detail of the job valid return true
-     * if non valid return false
+     * if non-valid return false
      * @return boolean true|false
      * */
     public boolean isValidJobDetail() {
         if (this.isNull(this.jobName)) {
             this.errorMsg = "JobName should not be empty at row %s.";
             return false;
-        } else if (this.isNull(this.triggerDetail)) {
-            this.errorMsg = "TriggerDetail should not be empty at row %s.";
+        } else if (this.isNull(this.taskId)) {
+            this.errorMsg = "TaskId should not be empty at row %s.";
             return false;
         } else if (this.isNull(this.startDate)) {
             this.errorMsg = "StartDate should not be empty at row %s.";
@@ -124,9 +123,6 @@ public class JobDetailValidation {
             return false;
         } else if (this.isNull(this.frequency)) {
             this.errorMsg = "Frequency should not be empty at row %s.";
-            return false;
-        } else if (this.isValidTriggerDetail()) {
-            this.errorMsg = "Invalid TriggerDetail at row %s.";
             return false;
         } else if (this.isValidPattern(this.startDate, this.dateFormat)) {
             this.errorMsg = "Invalid StartDate at row %s.";
@@ -158,9 +154,9 @@ public class JobDetailValidation {
     private boolean isValidDetail() {
         try {
             if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency).stream()
-                    .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
+                .filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.errorMsg = String.format("Recurrence not valid its should be %s",
-                        this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
+                    this.frequencyDetailByTime.get(this.frequency)) + " at row %s.";
                 return false;
             }
             if (this.frequency.equals(Frequency.Mint.name()) || this.frequency.equals(Frequency.Hr.name())
@@ -187,11 +183,12 @@ public class JobDetailValidation {
     }
 
     /**
-     * Validation the trigger detail
+     * Check the filed detail valid or not
+     * @param filed
      * @return boolean true|false
      * */
-    private boolean isValidTriggerDetail() {
-        return !this.triggerDetails.contains(this.triggerDetail) ? true : false;
+    private static boolean isNull(Long filed) {
+        return filed == null ? true : false;
     }
 
     /**
@@ -225,7 +222,7 @@ public class JobDetailValidation {
      * */
     private boolean dateTimeValidation(boolean isWeekdayCheck, boolean isMonthlyCheck) {
         // Check Start Date,End Date,Start Time
-        // 1st check the start-date its should not be the yesterday date
+        // 1st check the start-date it's should not be the yesterday date
         LocalDate userInputStartDate = LocalDate.parse(this.startDate);
         logger.info("User StartDate Valid " + userInputStartDate);
         // check the current date with the given time with zone
@@ -233,7 +230,7 @@ public class JobDetailValidation {
         logger.info("System Date With Time Zone " + todayDateWithTimeZone);
         // 2021-03-13 == 2021-03-13 || 2021-03-13 > 2021-03-12
         if (userInputStartDate.isEqual(todayDateWithTimeZone) || userInputStartDate.isAfter(todayDateWithTimeZone)) {
-            // 2nd check the end-date its should not be the yesterday
+            // 2nd check the end-date it's should not be the yesterday
             if (!isNull(this.endDate)) {
                 LocalDate userInputEndDate = LocalDate.parse(this.endDate);
                 logger.info("User End Date Valid " + userInputEndDate);

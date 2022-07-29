@@ -14,6 +14,7 @@ public class ResponseDto {
     private String status;
     private String message;
     private Object data;
+    private Object paging;
 
     public ResponseDto() { }
 
@@ -31,6 +32,14 @@ public class ResponseDto {
         this.status = status;
         this.message = message;
         this.data = data;
+    }
+
+    public ResponseDto(String status, String message,
+        Object data, Object paging) {
+        this.status = status;
+        this.message = message;
+        this.data = data;
+        this.paging = paging;
     }
 
     public String getStatus() {
@@ -52,6 +61,14 @@ public class ResponseDto {
     }
     public void setData(Object data) {
         this.data = data;
+    }
+
+    public Object getPaging() {
+        return paging;
+    }
+
+    public void setPaging(Object paging) {
+        this.paging = paging;
     }
 
     @Override

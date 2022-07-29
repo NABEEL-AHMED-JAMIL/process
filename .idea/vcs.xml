@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="VcsDirectoryMappings">
-    <mapping directory="$PROJECT_DIR$/../common" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../model" vcs="Git" />
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/barco-web" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/src/main/resources/barco-web" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/src/main/resources/frontend/barco-web" vcs="Git" />
   </component>
 </project>

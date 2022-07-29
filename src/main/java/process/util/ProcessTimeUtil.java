@@ -9,7 +9,7 @@ import java.util.*;
 
 /**
  * @author Nabeel Ahmed
- * This class use to handle the all time realted procss
+ * This class use to handle the all-time realted procss
  */
 @Component
 public class ProcessTimeUtil {
@@ -17,7 +17,6 @@ public class ProcessTimeUtil {
     private Logger logger = LoggerFactory.getLogger(ProcessTimeUtil.class);
 
     public static List<String> frequency = new ArrayList<>();
-    public static Set<String> triggerDetail = new HashSet<>();
     public static Map<String, List<?>> frequencyDetail = new HashMap<>();
 
     static {
@@ -32,9 +31,6 @@ public class ProcessTimeUtil {
         frequencyDetail.put("Daily", getDaily());
         frequencyDetail.put("Weekly", getWeekly());
         frequencyDetail.put("Monthly", getMonthly());
-        // --------------------- //
-        triggerDetail.add("process.engine.task.HelloWorldTask");
-        triggerDetail.add("process.engine.task.StockPriceReportTask");
     }
 
     /**
@@ -68,8 +64,8 @@ public class ProcessTimeUtil {
      * */
     private static List getDaily() {
         List<Integer> daily = new ArrayList<>();
-        daily.add(1);  daily.add(2);  daily.add(3);
-        daily.add(4);  daily.add(5);  daily.add(6);
+        daily.add(1); daily.add(2); daily.add(3);
+        daily.add(4); daily.add(5); daily.add(6);
         return daily;
     }
 
@@ -98,19 +94,19 @@ public class ProcessTimeUtil {
      * @return List getMonthly
      * */
     private static List getMonthly() {
-        List<Integer> days = new ArrayList<>();
-        days.add(1);  days.add(2);  days.add(3);
-        days.add(4);  days.add(5);  days.add(6);
-        days.add(7);  days.add(8);  days.add(9);
-        days.add(10); days.add(11); days.add(12);
-        days.add(13); days.add(14); days.add(15);
-        days.add(16); days.add(17); days.add(18);
-        days.add(19); days.add(20); days.add(21);
-        days.add(22); days.add(23); days.add(24);
-        days.add(25); days.add(26); days.add(27);
-        days.add(28); days.add(29); days.add(30);
-        days.add(31);
-        return days;
+        List<Integer> month = new ArrayList<>();
+        month.add(1);  month.add(2);  month.add(3);
+        month.add(4);  month.add(5);  month.add(6);
+        month.add(7);  month.add(8);  month.add(9);
+        month.add(10); month.add(11); month.add(12);
+        month.add(13); month.add(14); month.add(15);
+        month.add(16); month.add(17); month.add(18);
+        month.add(19); month.add(20); month.add(21);
+        month.add(22); month.add(23); month.add(24);
+        month.add(25); month.add(26); month.add(27);
+        month.add(28); month.add(29); month.add(30);
+        month.add(31);
+        return month;
     }
 
     /**
@@ -121,7 +117,9 @@ public class ProcessTimeUtil {
      * */
     public static LocalDateTime getRecurrenceTime(LocalDate date, String startTime) {
         String timeSplit[] = startTime.split(":");
-        return date.atStartOfDay().plusHours(Integer.valueOf(timeSplit[0])).plusMinutes(Integer.valueOf(timeSplit[1]));
+        return date.atStartOfDay()
+            .plusHours(Integer.valueOf(timeSplit[0]))
+            .plusMinutes(Integer.valueOf(timeSplit[1]));
     }
 
 }
