@@ -10,7 +10,7 @@ import process.model.enums.Status;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TaskDetailDto {
+public class SourceTaskDto {
 
     private Long taskDetailId;
     private String taskName;
@@ -19,7 +19,7 @@ public class TaskDetailDto {
     private SourceTaskTypeDto sourceTaskType;
     private Long totalLinksJobs;
 
-    public TaskDetailDto() {}
+    public SourceTaskDto() {}
 
     public Long getTaskDetailId() {
         return taskDetailId;

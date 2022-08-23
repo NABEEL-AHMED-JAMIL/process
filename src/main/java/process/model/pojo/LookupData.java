@@ -7,6 +7,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.Set;
 
 /**
  * This LookupData use store the all scheduler detail
@@ -50,6 +51,13 @@ public class LookupData {
         nullable = false)
     private Timestamp dateCreated;
 
+    @ManyToOne
+    @JoinColumn(name = "parentLookupId")
+    protected LookupData parent;
+
+    @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
+    protected Set<LookupData> children;
+
     public LookupData() { }
 
     @PrePersist
@@ -91,6 +99,22 @@ public class LookupData {
     }
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public LookupData getParent() {
+        return parent;
+    }
+
+    public void setParent(LookupData parent) {
+        this.parent = parent;
+    }
+
+    public Set<LookupData> getChildren() {
+        return children;
+    }
+
+    public void setChildren(Set<LookupData> children) {
+        this.children = children;
     }
 
     @Override

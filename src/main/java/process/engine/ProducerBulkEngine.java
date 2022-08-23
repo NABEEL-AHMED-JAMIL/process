@@ -149,10 +149,10 @@ public class ProducerBulkEngine {
      * @exception Exception
      * */
     private void pushMessageToQueue(SourceJob sourceJob, JobQueue jobQueue) {
-        TaskDetail taskDetail = sourceJob.getTaskDetail();
-        if (taskDetail.getSourceTaskType() != null) {
+        SourceTask sourceTask = sourceJob.getTaskDetail();
+        if (sourceTask.getSourceTaskType() != null) {
             try {
-                SourceTaskType sourceTaskType = taskDetail.getSourceTaskType();
+                SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
                 String queueTopicPartition = sourceTaskType.getQueueTopicPartition();
                 Matcher matcher = pattern.matcher(queueTopicPartition);
                 Boolean resultRegex = matcher.matches();
@@ -167,7 +167,7 @@ public class ProducerBulkEngine {
                      * */
                     Map<String, Object> payload = new HashMap<>();
                     payload.put(ProcessUtil.JOB_QUEUE, jobQueue);
-                    payload.put(ProcessUtil.TASK_DETAIL, taskDetail);
+                    payload.put(ProcessUtil.TASK_DETAIL, sourceTask);
                     if (partition.contains(ProcessUtil.START)) {
                         /**
                          * Kafka will manage self to send the data to partition's

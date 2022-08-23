@@ -55,7 +55,7 @@ public class SourceJob {
     // which class or method trigger
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "task_detail_id")
-    private TaskDetail taskDetail;
+    private SourceTask sourceTask;
 
     // status of job (active or disable or delete)
     @Column(name = "job_status",
@@ -109,12 +109,12 @@ public class SourceJob {
         this.jobName = jobName;
     }
 
-    public TaskDetail getTaskDetail() {
-        return taskDetail;
+    public SourceTask getTaskDetail() {
+        return sourceTask;
     }
 
-    public void setTaskDetail(TaskDetail taskDetail) {
-        this.taskDetail = taskDetail;
+    public void setTaskDetail(SourceTask sourceTask) {
+        this.sourceTask = sourceTask;
     }
 
     public Status getJobStatus() {

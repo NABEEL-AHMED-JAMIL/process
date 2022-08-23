@@ -11,10 +11,10 @@ import process.model.enums.Status;
 import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTaskType;
-import process.model.pojo.TaskDetail;
+import process.model.pojo.SourceTask;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
-import process.model.repository.TaskDetailRepository;
+import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
 import java.util.ArrayList;
@@ -35,7 +35,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     @Autowired
     private SchedulerRepository schedulerRepository;
     @Autowired
-    private TaskDetailRepository taskDetailRepository;
+    private SourceTaskRepository sourceTaskRepository;
 
     @Override
     public ResponseDto addSourceJob(SourceJobDto tempSourceJob) throws Exception {
@@ -49,7 +49,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         // validation for scheduler list -> if any missing then
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobName(tempSourceJob.getJobName());
-        sourceJob.setTaskDetail(this.taskDetailRepository
+        sourceJob.setTaskDetail(this.sourceTaskRepository
             .findById(tempSourceJob.getTaskDetail().getTaskDetailId()).get());
         sourceJob.setJobStatus(Status.Active);
         sourceJob.setExecution(tempSourceJob.getExecution());
@@ -91,7 +91,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(tempSourceJob.getJobId());
         if (sourceJob.isPresent()) {
             sourceJob.get().setJobName(tempSourceJob.getJobName());
-            sourceJob.get().setTaskDetail(this.taskDetailRepository
+            sourceJob.get().setTaskDetail(this.sourceTaskRepository
                 .findById(tempSourceJob.getTaskDetail().getTaskDetailId()).get());
             if (!isNull(tempSourceJob.getJobStatus())) {
                 sourceJob.get().setJobStatus(tempSourceJob.getJobStatus());
@@ -142,22 +142,22 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             sourceJobDto.setPriority(sourceJob.get().getPriority());
             sourceJobDto.setExecution(sourceJob.get().getExecution());
             if (sourceJob.get().getTaskDetail() != null) {
-                TaskDetail taskDetail = sourceJob.get().getTaskDetail();
-                TaskDetailDto taskDetailDto = new TaskDetailDto();
-                taskDetailDto.setTaskDetailId(taskDetail.getTaskDetailId());
-                taskDetailDto.setTaskName(taskDetail.getTaskName());
-                taskDetailDto.setTaskStatus(taskDetail.getTaskStatus());
-                taskDetailDto.setTaskPayload(taskDetail.getTaskPayload());
-                if (taskDetail.getSourceTaskType() != null) {
-                    SourceTaskType sourceTaskType = taskDetail.getSourceTaskType();
+                SourceTask sourceTask = sourceJob.get().getTaskDetail();
+                SourceTaskDto sourceTaskDto = new SourceTaskDto();
+                sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
+                sourceTaskDto.setTaskName(sourceTask.getTaskName());
+                sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
+                sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
+                if (sourceTask.getSourceTaskType() != null) {
+                    SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
                     sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
                     sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
                     sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
                     sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
-                    taskDetailDto.setSourceTaskType(sourceTaskTypeDto);
+                    sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
                 }
-                sourceJobDto.setTaskDetail(taskDetailDto);
+                sourceJobDto.setTaskDetail(sourceTaskDto);
             }
             Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(jobDetailId);
             if (scheduler.isPresent()) {
@@ -191,14 +191,14 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             sourceJobDto.setJobRunningStatus(sourceJob.getJobRunningStatus());
             sourceJobDto.setLastJobRun(sourceJob.getLastJobRun());
             if (sourceJob.getTaskDetail() != null) {
-                TaskDetail taskDetail = sourceJob.getTaskDetail();
-                TaskDetailDto taskDetailDto = new TaskDetailDto();
-                taskDetailDto.setTaskDetailId(taskDetail.getTaskDetailId());
-                taskDetailDto.setTaskName(taskDetail.getTaskName());
-                taskDetailDto.setTaskStatus(taskDetail.getTaskStatus());
-                taskDetailDto.setTaskPayload(taskDetail.getTaskPayload());
-                if (taskDetail.getSourceTaskType() != null) {
-                    SourceTaskType sourceTaskType = taskDetail.getSourceTaskType();
+                SourceTask sourceTask = sourceJob.getTaskDetail();
+                SourceTaskDto sourceTaskDto = new SourceTaskDto();
+                sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
+                sourceTaskDto.setTaskName(sourceTask.getTaskName());
+                sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
+                sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
+                if (sourceTask.getSourceTaskType() != null) {
+                    SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
                     sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
                     sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
@@ -206,9 +206,9 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                     sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
                     sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
                     sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
-                    taskDetailDto.setSourceTaskType(sourceTaskTypeDto);
+                    sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
                 }
-                sourceJobDto.setTaskDetail(taskDetailDto);
+                sourceJobDto.setTaskDetail(sourceTaskDto);
             }
             Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.getJobId());
             if (scheduler.isPresent()) {

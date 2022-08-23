@@ -1,8 +1,8 @@
 package process.engine.async.properties;
 
+import com.google.gson.Gson;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.google.gson.Gson;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 

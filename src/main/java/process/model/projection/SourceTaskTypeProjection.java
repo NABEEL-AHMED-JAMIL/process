@@ -23,4 +23,8 @@ public interface SourceTaskTypeProjection {
 
     public Long getTotalTaskLink();
 
+    public boolean getSchemaRegister();
+
+    public String getSchemaPayload();
+
 }

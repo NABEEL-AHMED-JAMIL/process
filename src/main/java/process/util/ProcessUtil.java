@@ -29,7 +29,7 @@ public class ProcessUtil {
     public static String JOB_ADD = "Job-Add";
 
     public static String[] HEADER_FILED_BATCH_FILE = new String[] {
-        "Job Name", "Trigger Detail Id", "Start Date", "End Date",
+        "Job Name", "Task Detail Id", "Start Date", "End Date",
         "Start Time", "Frequency", "Recurrence"
     };
 
@@ -40,7 +40,7 @@ public class ProcessUtil {
     }
 
     public static boolean isNull(Object payload) {
-        return payload == null ? true : false;
+        return payload == null || payload == "" ? true : false;
     }
 
 

@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
-import process.model.dto.XmlMakerRequest;
+import process.model.dto.ConfigurationMakerRequest;
 import process.model.service.SettingApiService;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
@@ -32,6 +32,7 @@ public class SettingRestApi {
     private XmlOutTagInfoUtil xmlOutTagInfoUtil;
 
     /**
+     * Integration Status :- done
      * Api use to fetch the app setting
      * (task-type|lookup_data)
      * @return ResponseEntity<?> appSetting
@@ -41,14 +42,15 @@ public class SettingRestApi {
         try {
             return new ResponseEntity<>(this.settingApiService.appSetting(), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while appSetting ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while appSetting ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
-     * method use to add the sourceTaskType
+     * Integration Status :- done
+     * Api use to add the sourceTaskType
      * @param tempSourceTaskType
      * @return ResponseEntity<?> addSourceTaskType
      * */
@@ -57,14 +59,15 @@ public class SettingRestApi {
         try {
             return new ResponseEntity<>(this.settingApiService.addSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while addSourceTaskType ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while addSourceTaskType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
-     * method use to update the sourceTaskType
+     * Integration Status :- done
+     * Api use to update the sourceTaskType
      * @param tempSourceTaskType
      * @return ResponseEntity<?> updateSourceTaskType
      * */
@@ -73,14 +76,15 @@ public class SettingRestApi {
         try {
             return new ResponseEntity<>(this.settingApiService.updateSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while updateSourceTaskType ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while updateSourceTaskType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
-     * method use to delete the sourceTaskType
+     * Integration Status :- done
+     * Api use to delete the sourceTaskType
      * @param sourceTaskTypeId
      * @return ResponseEntity<?> deleteSourceTaskType
      * */
@@ -89,14 +93,15 @@ public class SettingRestApi {
         try {
             return new ResponseEntity<>(this.settingApiService.deleteSourceTaskType(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while deleteSourceTaskType ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while deleteSourceTaskType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
-     * method use to add the lookup data
+     * Integration Status :- done
+     * Api use to add the lookup data
      * @param tempLookupData
      * @return ResponseEntity<?> addLookupData
      * */
@@ -105,14 +110,15 @@ public class SettingRestApi {
         try {
             return new ResponseEntity<>(this.settingApiService.addLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while addLookupData ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while addLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
-     * method use to update the lookup data
+     * Integration Status :- done
+     * Api use to update the lookup data
      * @param tempLookupData
      * @return ResponseEntity<?> updateLookupData
      * */
@@ -121,25 +127,52 @@ public class SettingRestApi {
         try {
             return new ResponseEntity<>(this.settingApiService.updateLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
-    // create the configuration for task
+    /**
+     * Integration Status :- done
+     * Api use to create the xml setting for source task
+     * @param xlmMakerRequest
+     * @return ResponseEntity<?> xmlCreateChecker
+     * */
     @RequestMapping(path = "xmlCreateChecker",  method = RequestMethod.POST)
-    public ResponseEntity<?> xmlCreateChecker(@RequestBody XmlMakerRequest xmlMakerRequest) {
+    public ResponseEntity<?> xmlCreateChecker(@RequestBody ConfigurationMakerRequest xlmMakerRequest) {
         try {
-            if(xmlMakerRequest.getTagsInfo() != null) {
+            if(xlmMakerRequest.getXmlTagsInfo() != null) {
                 return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
-                    this.xmlOutTagInfoUtil.makeXml(xmlMakerRequest)), HttpStatus.OK);
+                    this.xmlOutTagInfoUtil.makeXml(xlmMakerRequest)), HttpStatus.OK);
             } else {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Wrong Input"), HttpStatus.OK);
             }
         } catch (Exception ex) {
-            logger.error("isValidXmlOrUrl -- Error occurred ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while xmlCreateChecker ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Api use to create the json setting for source task
+     * @param jsonMakerRequest
+     * @return ResponseEntity<?> jsonCreateChecker
+     * */
+    @RequestMapping(path = "jsonCreateChecker",  method = RequestMethod.POST)
+    public ResponseEntity<?> jsonCreateChecker(@RequestBody ConfigurationMakerRequest jsonMakerRequest) {
+        try {
+            if(jsonMakerRequest.getJsonTagsInfo() != null) {
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
+                    this.xmlOutTagInfoUtil.makeXml(jsonMakerRequest)), HttpStatus.OK);
+            } else {
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                "Wrong Input"), HttpStatus.OK);
+            }
+        } catch (Exception ex) {
+            logger.error("An error occurred while jsonCreateChecker ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
