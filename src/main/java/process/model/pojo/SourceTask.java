@@ -7,15 +7,17 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "task_detail")
+@Table(name = "source_task")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TaskDetail {
+public class SourceTask {
 
     @GenericGenerator(
         name = "taskDetailSequenceGenerator",
@@ -48,7 +50,10 @@ public class TaskDetail {
     @JoinColumn(name = "source_task_type_id")
     private SourceTaskType sourceTaskType;
 
-    public TaskDetail() {}
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
+
+    public SourceTask() {}
 
     public Long getTaskDetailId() {
         return taskDetailId;
@@ -88,6 +93,14 @@ public class TaskDetail {
 
     public void setSourceTaskType(SourceTaskType sourceTaskType) {
         this.sourceTaskType = sourceTaskType;
+    }
+
+    public List<SourceTaskPayload> getSourceTaskPayload() {
+        return sourceTaskPayload;
+    }
+
+    public void setSourceTaskPayload(List<SourceTaskPayload> sourceTaskPayload) {
+        this.sourceTaskPayload = sourceTaskPayload;
     }
 
     @Override

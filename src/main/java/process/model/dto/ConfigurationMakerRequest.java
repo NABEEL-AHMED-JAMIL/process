@@ -3,7 +3,6 @@ package process.model.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-
 import java.util.List;
 
 /**
@@ -11,45 +10,27 @@ import java.util.List;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class XmlMakerRequest {
+public class ConfigurationMakerRequest {
 
-    private String taskName;
-    private String sourceTaskTypeId;
-    private List<TagInfo> tagsInfo;
+    private List<TagInfo> xmlTagsInfo;
+    private List<TagInfo> jsonTagsInfo;
 
-    public XmlMakerRequest() {}
+    public ConfigurationMakerRequest() {}
 
-
-
-    public XmlMakerRequest(String taskName, String sourceTaskTypeId,
-        List<TagInfo> tagsInfo) {
-        this.taskName = taskName;
-        this.sourceTaskTypeId = sourceTaskTypeId;
-        this.tagsInfo = tagsInfo;
+    public List<TagInfo> getXmlTagsInfo() {
+        return xmlTagsInfo;
     }
 
-    public String getTaskName() {
-        return taskName;
+    public void setXmlTagsInfo(List<TagInfo> xmlTagsInfo) {
+        this.xmlTagsInfo = xmlTagsInfo;
     }
 
-    public void setTaskName(String taskName) {
-        this.taskName = taskName;
+    public List<TagInfo> getJsonTagsInfo() {
+        return jsonTagsInfo;
     }
 
-    public String getSourceTaskTypeId() {
-        return sourceTaskTypeId;
-    }
-
-    public void setSourceTaskTypeId(String sourceTaskTypeId) {
-        this.sourceTaskTypeId = sourceTaskTypeId;
-    }
-
-    public List<TagInfo> getTagsInfo() {
-        return tagsInfo;
-    }
-
-    public void setTagsInfo(List<TagInfo> tagsInfo) {
-        this.tagsInfo = tagsInfo;
+    public void setJsonTagsInfo(List<TagInfo> jsonTagsInfo) {
+        this.jsonTagsInfo = jsonTagsInfo;
     }
 
     public static class TagInfo {

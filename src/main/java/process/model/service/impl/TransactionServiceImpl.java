@@ -34,7 +34,7 @@ public class TransactionServiceImpl {
     @Autowired
     private JobAuditLogRepository jobAuditLogRepository;
     @Autowired
-    private TaskDetailRepository taskDetailRepository;
+    private SourceTaskRepository sourceTaskRepository;
 
     /**
      * The method use to save the logs for job
@@ -157,12 +157,12 @@ public class TransactionServiceImpl {
         return this.sourceJobRepository.findById(sourceJobId);
     }
 
-    public Optional<TaskDetail> findTaskDetailById(Long taskDetailId) {
-        return this.taskDetailRepository.findById(taskDetailId);
+    public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId) {
+        return this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(taskDetailId, Status.Active);
     }
 
-    public List<Long> findAllTaskDetail() {
-        return this.taskDetailRepository.findAllTaskDetail();
+    public List<Long> findAllSourceTask() {
+        return this.sourceTaskRepository.findAllSourceTask();
     }
 
 }

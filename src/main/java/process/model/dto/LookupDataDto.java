@@ -3,7 +3,13 @@ package process.model.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import process.model.pojo.LookupData;
+
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.OneToMany;
 import java.sql.Timestamp;
+import java.util.Set;
 
 /**
  * @author Nabeel Ahmed
@@ -17,6 +23,10 @@ public class LookupDataDto {
     private String lookupType;
     private String description;
     private Timestamp dateCreated;
+
+    protected LookupDataDto parent;
+
+    protected Set<LookupDataDto> children;
 
     public LookupDataDto() {}
 
@@ -58,6 +68,22 @@ public class LookupDataDto {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public LookupDataDto getParent() {
+        return parent;
+    }
+
+    public void setParent(LookupDataDto parent) {
+        this.parent = parent;
+    }
+
+    public Set<LookupDataDto> getChildren() {
+        return children;
+    }
+
+    public void setChildren(Set<LookupDataDto> children) {
+        this.children = children;
     }
 
     @Override

@@ -18,10 +18,6 @@ public interface SourceJobApiService {
 
     public ResponseDto listSourceJob() throws Exception;
 
-    /**
-     * note: this api call ever 1 mint from the ui by using the timer and update the below detail on the table
-     * jobId, jobStatus, Next Flight, Last Run, R-Status
-     * */
     public ResponseDto fetchRunningJobEvent(SourceJobDto tempSourceJob) throws Exception;
 
     public ResponseDto downloadListSourceJob(Long appUserId, String startDate, String endDate,

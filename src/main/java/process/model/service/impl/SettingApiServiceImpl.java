@@ -13,9 +13,9 @@ import process.model.pojo.SourceTaskType;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.service.SettingApiService;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+
+import java.util.*;
+
 import static process.util.ProcessUtil.*;
 
 /**
@@ -24,7 +24,7 @@ import static process.util.ProcessUtil.*;
 @Service
 public class SettingApiServiceImpl implements SettingApiService {
 
-    private Logger logger = LoggerFactory.getLogger(BulkApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(SourceJobBulkApiServiceImpl.class);
 
     private final String LOOKUP_DATA = "lookupDatas";
     private final String SOURCE_TASK_TYPE = "sourceTaskTaypes";
@@ -37,7 +37,18 @@ public class SettingApiServiceImpl implements SettingApiService {
     @Override
     public ResponseDto appSetting() throws Exception {
         Map<String, Object> appSettingDetail = new HashMap<>();
-        appSettingDetail.put(LOOKUP_DATA, this.lookupDataRepository.findAll());
+        List<LookupDataDto> lookupDataList = new ArrayList<>();
+        for (LookupData lookup: this.lookupDataRepository.findAll()) {
+            LookupDataDto lookupDataDto = new LookupDataDto();
+            this.fillLookupDateDto(lookup, lookupDataDto);
+            if (!isNull(lookup.getParent())) {
+                LookupDataDto lookupDataDto2 = new LookupDataDto();
+                this.fillLookupDateDto(lookup.getParent(), lookupDataDto2);
+                lookupDataDto.setParent(lookupDataDto2);
+            }
+            lookupDataList.add(lookupDataDto);
+        }
+        appSettingDetail.put(LOOKUP_DATA, lookupDataList);
         appSettingDetail.put(SOURCE_TASK_TYPE, this.sourceTaskTypeRepository.fetchAllSourceTaskType());
         return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
     }
@@ -55,6 +66,9 @@ public class SettingApiServiceImpl implements SettingApiService {
         sourceTaskType.setServiceName(tempSourceTaskType.getServiceName());
         sourceTaskType.setDescription(tempSourceTaskType.getDescription());
         sourceTaskType.setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
+        sourceTaskType.setSchemaPayload(tempSourceTaskType.getSchemaPayload());
+        sourceTaskType.setSchemaRegister(isNull(tempSourceTaskType.getSchemaPayload()) ? false: true);
+        sourceTaskType.setStatus(Status.Active);
         this.sourceTaskTypeRepository.save(sourceTaskType);
         return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.", sourceTaskType.getSourceTaskTypeId()));
     }
@@ -73,15 +87,20 @@ public class SettingApiServiceImpl implements SettingApiService {
             sourceTaskType.get().setServiceName(tempSourceTaskType.getServiceName());
             sourceTaskType.get().setDescription(tempSourceTaskType.getDescription());
             sourceTaskType.get().setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
+            sourceTaskType.get().setSchemaPayload(tempSourceTaskType.getSchemaPayload());
+            sourceTaskType.get().setSchemaRegister(isNull(tempSourceTaskType.getSchemaPayload()) ? false: true);
+            /**
+             * Ph-2 change
+             * Note :- if the queue delete then all the link-source task delete +
+             * all the source job stop and job status into delete state
+             * */
             if (!isNull(tempSourceTaskType.getStatus())) {
                 sourceTaskType.get().setStatus(tempSourceTaskType.getStatus());
             }
             this.sourceTaskTypeRepository.save(sourceTaskType.get());
-            return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.",
-                tempSourceTaskType.getSourceTaskTypeId()));
+            return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.", tempSourceTaskType.getSourceTaskTypeId()));
         }
-        return new ResponseDto(ERROR, String.format("SourceTaskType not found with %s.",
-            tempSourceTaskType.getSourceTaskTypeId()));
+        return new ResponseDto(ERROR, String.format("SourceTaskType not found with %s.", tempSourceTaskType.getSourceTaskTypeId()));
     }
 
     @Override
@@ -90,11 +109,6 @@ public class SettingApiServiceImpl implements SettingApiService {
             return new ResponseDto(ERROR, "SourceTaskType sourceTaskTypeId missing.");
         }
         /**
-         * if (isNull(sourceTaskTypeId)) {
-         *    return new ResponseDto(ERROR, "SourceTaskType sourceTaskTypeId missing.");
-         * } else if (this.sourceTaskTypeRepository.getLinkTaskCountBySourceTaskType(sourceTaskTypeId) > 0) {
-         *    return new ResponseDto(ERROR, "SourceTaskType link with tasks can't delete.");
-         * }
          * Ph-2 change
          * Note :- if the queue delete then all the link-source task delete +
          * all the source job stop and job status into delete state
@@ -120,6 +134,12 @@ public class SettingApiServiceImpl implements SettingApiService {
         if (!isNull(tempLookupData.getDescription())) {
             lookupData.setDescription(tempLookupData.getDescription());
         }
+        if (!isNull(tempLookupData.getParent())) {
+            Optional<LookupData> parentLookupData = this.lookupDataRepository.findById(tempLookupData.getLookupId());
+            if (parentLookupData.isPresent()) {
+                lookupData.setParent(parentLookupData.get());
+            }
+        }
         this.lookupDataRepository.save(lookupData);
         return new ResponseDto(SUCCESS, String.format("LookupData save with %d.", lookupData.getLookupId()));
     }
@@ -140,9 +160,26 @@ public class SettingApiServiceImpl implements SettingApiService {
             if (!isNull(tempLookupData.getDescription())) {
                 lookupData.get().setDescription(tempLookupData.getDescription());
             }
+            if (isNull(tempLookupData.getParent())) {
+                lookupData.get().setParent(null);
+            } else {
+                Optional<LookupData> parentLookupData = this.lookupDataRepository
+                    .findById(tempLookupData.getLookupId());
+                if (parentLookupData.isPresent()) {
+                    lookupData.get().setParent(parentLookupData.get());
+                }
+            }
             this.lookupDataRepository.save(lookupData.get());
             return new ResponseDto(SUCCESS, String.format("LookupData update with %d.", tempLookupData.getLookupId()));
         }
         return new ResponseDto(ERROR, String.format("LookupData not found with %d.", tempLookupData.getLookupId()));
+    }
+
+    private void fillLookupDateDto(LookupData lookupData, LookupDataDto lookupDataDto) {
+        lookupDataDto.setLookupId(lookupData.getLookupId());
+        lookupDataDto.setLookupValue(lookupData.getLookupValue());
+        lookupDataDto.setLookupType(lookupData.getLookupType());
+        lookupDataDto.setDescription(lookupData.getDescription());
+        lookupDataDto.setDateCreated(lookupData.getDateCreated());
     }
 }

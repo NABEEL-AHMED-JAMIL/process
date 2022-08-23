@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import process.model.dto.XmlMakerRequest;
+import process.model.dto.ConfigurationMakerRequest;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import javax.annotation.PostConstruct;
@@ -48,13 +48,13 @@ public class XmlOutTagInfoUtil {
         logger.info("============Xml Factory End============");
     }
 
-    public String makeXml(XmlMakerRequest xmlMakerRequest) throws Exception {
+    public String makeXml(ConfigurationMakerRequest xmlMakerRequest) throws Exception {
         logger.info("Process For Xml Create Start");
         String xml = null;
-        if(xmlMakerRequest.getTagsInfo() != null) {
+        if(xmlMakerRequest.getXmlTagsInfo() != null) {
             Document xmlDoc = this.getBuilder().newDocument();
             boolean isParent = true;
-            for(XmlMakerRequest.TagInfo tagInfo: xmlMakerRequest.getTagsInfo()) {
+            for(ConfigurationMakerRequest.TagInfo tagInfo: xmlMakerRequest.getXmlTagsInfo()) {
                 String tagKey = tagInfo.getTagKey();
                 String tagParent = tagInfo.getTagParent();
                 String tagValue = tagInfo.getTagValue();

@@ -59,6 +59,10 @@ public class SourceJobRestApi {
         }
     }
 
+    /**
+     * note: this api call ever 1 mint from the ui by using the timer and update the below detail on the table
+     * jobId, jobStatus, Next Flight, Last Run, R-Status
+     * */
     @RequestMapping(value = "/fetchRunningJobEvent", method = RequestMethod.POST)
     public ResponseEntity<?> fetchRunningJobEvent(@RequestBody SourceJobDto tempSourceJob) {
         try {

@@ -20,7 +20,7 @@ public class SourceJobDto {
 
     private Long jobId;
     private String jobName;
-    private TaskDetailDto taskDetail;
+    private SourceTaskDto taskDetail;
     private Status jobStatus;
     private JobStatus jobRunningStatus;
     private LocalDateTime lastJobRun;
@@ -50,11 +50,11 @@ public class SourceJobDto {
         this.jobName = jobName;
     }
 
-    public TaskDetailDto getTaskDetail() {
+    public SourceTaskDto getTaskDetail() {
         return taskDetail;
     }
 
-    public void setTaskDetail(TaskDetailDto taskDetail) {
+    public void setTaskDetail(SourceTaskDto taskDetail) {
         this.taskDetail = taskDetail;
     }
 
