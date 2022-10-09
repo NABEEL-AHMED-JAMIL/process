@@ -3,7 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import process.model.dto.*;
@@ -54,6 +54,9 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         sourceJob.setJobStatus(Status.Active);
         sourceJob.setExecution(tempSourceJob.getExecution());
         sourceJob.setPriority(tempSourceJob.getPriority());
+        sourceJob.setCompleteJob(tempSourceJob.isCompleteJob());
+        sourceJob.setFailJob(tempSourceJob.isFailJob());
+        sourceJob.setSkipJob(tempSourceJob.isSkipJob());
         this.sourceJobRepository.saveAndFlush(sourceJob);
         if (tempSourceJob.getSchedulers() != null && tempSourceJob.getSchedulers().size() > 0) {
             tempSourceJob.getSchedulers().stream()
@@ -91,8 +94,14 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(tempSourceJob.getJobId());
         if (sourceJob.isPresent()) {
             sourceJob.get().setJobName(tempSourceJob.getJobName());
-            sourceJob.get().setTaskDetail(this.sourceTaskRepository
-                .findById(tempSourceJob.getTaskDetail().getTaskDetailId()).get());
+            // check source active then allow to link
+            Optional<SourceTask> sourceTask = this.sourceTaskRepository
+                .findById(tempSourceJob.getTaskDetail().getTaskDetailId());
+            if (sourceTask.isPresent() && sourceTask.get().getTaskStatus().equals(Status.Active)) {
+                sourceJob.get().setTaskDetail(sourceTask.get());
+            } else {
+                return new ResponseDto(ERROR, "Selected sourceTask not active.");
+            }
             if (!isNull(tempSourceJob.getJobStatus())) {
                 sourceJob.get().setJobStatus(tempSourceJob.getJobStatus());
             }
@@ -102,11 +111,15 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             if (!isNull(tempSourceJob.getPriority())) {
                 sourceJob.get().setPriority(tempSourceJob.getPriority());
             }
+            sourceJob.get().setCompleteJob(tempSourceJob.isCompleteJob());
+            sourceJob.get().setFailJob(tempSourceJob.isFailJob());
+            sourceJob.get().setSkipJob(tempSourceJob.isSkipJob());
             this.sourceJobRepository.saveAndFlush(sourceJob.get());
             if (!isNull(tempSourceJob.getSchedulers()) && tempSourceJob.getSchedulers().size() > 0) {
                 tempSourceJob.getSchedulers().stream()
                     .forEach(schedulerDto -> {
-                        Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(tempSourceJob.getJobId());
+                        Optional<Scheduler> scheduler = this.schedulerRepository
+                            .findSchedulerByJobId(tempSourceJob.getJobId());
                         if (scheduler.isPresent()) {
                             scheduler.get().setStartDate(schedulerDto.getStartDate());
                             if (!StringUtils.isEmpty(schedulerDto.getEndDate())) {
@@ -130,6 +143,31 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     }
 
     @Override
+    public ResponseDto deleteSourceJob(SourceJobDto tempSourceJob) throws Exception {
+        if (isNull(tempSourceJob.getJobId())) {
+            return new ResponseDto(ERROR, "SourceJob jobId missing.");
+        }
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(tempSourceJob.getJobId());
+        if (sourceJob.isPresent()) {
+            sourceJob.get().setJobStatus(Status.Delete);
+            this.sourceJobRepository.save(sourceJob.get());
+            return new ResponseDto(SUCCESS, String.format("SourceJob successfully update with %d.",
+                tempSourceJob.getJobId()));
+        }
+        return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", tempSourceJob.getJobId()));
+    }
+
+    @Override
+    public ResponseDto runSourceJob(SourceJobDto tempSourceJob) throws Exception {
+        return null;
+    }
+
+    @Override
+    public ResponseDto skipNextSourceJob(SourceJobDto tempSourceJob) throws Exception {
+        return null;
+    }
+
+    @Override
     public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobDetailId) {
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobDetailId);
         if (sourceJob.isPresent()) {
@@ -141,6 +179,9 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             sourceJobDto.setDateCreated(sourceJob.get().getDateCreated());
             sourceJobDto.setPriority(sourceJob.get().getPriority());
             sourceJobDto.setExecution(sourceJob.get().getExecution());
+            sourceJobDto.setCompleteJob(sourceJob.get().isCompleteJob());
+            sourceJobDto.setFailJob(sourceJob.get().isFailJob());
+            sourceJobDto.setSkipJob(sourceJob.get().isSkipJob());
             if (sourceJob.get().getTaskDetail() != null) {
                 SourceTask sourceTask = sourceJob.get().getTaskDetail();
                 SourceTaskDto sourceTaskDto = new SourceTaskDto();
@@ -179,7 +220,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     @Override
     public ResponseDto listSourceJob() throws Exception {
         List<SourceJobDto> sourceJobDtoList = new ArrayList<>();
-        this.sourceJobRepository.findAll()
+        this.sourceJobRepository.findAll(Sort.by(Sort.Direction.ASC, "jobId"))
         .stream().forEach(sourceJob -> {
             SourceJobDto sourceJobDto = new SourceJobDto();
             sourceJobDto.setJobId(sourceJob.getJobId());
@@ -233,9 +274,4 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             this.sourceJobRepository.fetchRunningJobEvent(tempSourceJob.getJobIds()));
     }
 
-    @Override
-    public ResponseDto downloadListSourceJob(Long appUserId, String startDate, String endDate,
-         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
-        return null;
-    }
 }

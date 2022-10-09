@@ -48,22 +48,47 @@ public class DashboardRestApi {
     }
 
     @RequestMapping(value = "/weeklyRunningJobStatistics", method = RequestMethod.GET)
-    public ResponseEntity<?> weeklyRunningJobStatistics(@RequestParam(name = "startDate", required = true) String startDate,
-            @RequestParam(name = "endDate", required = true) String endDate) {
+    public ResponseEntity<?> weeklyRunningJobStatistics(@RequestParam(name = "startDate") String startDate,
+        @RequestParam(name = "endDate") String endDate) {
         try {
             return new ResponseEntity<>(this.dashboardApiService.weeklyRunningJobStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while weeklyRunningJobStatistics ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while weeklyJobRunningStatistics ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @RequestMapping(value = "/weeklyHrsRunningJobStatistics", method = RequestMethod.GET)
+    public ResponseEntity<?> weeklyHrsRunningJobStatistics(@RequestParam(name = "startDate") String startDate,
+        @RequestParam(name = "endDate") String endDate) {
+        try {
+            return new ResponseEntity<>(this.dashboardApiService.weeklyHrsRunningJobStatistics(startDate, endDate), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while weeklyHrsRunningJobStatistics ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @RequestMapping(value = "/weeklyHrRunningStatisticsDimension", method = RequestMethod.GET)
+    public ResponseEntity<?> weeklyHrRunningStatisticsDimension(@RequestParam(name = "targetDate") String targetDate,
+        @RequestParam(name = "targetHr") Long targetHr) {
+        try {
+            return new ResponseEntity<>(this.dashboardApiService.weeklyHrRunningStatisticsDimension(targetDate, targetHr), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while weeklyHrRunningStatisticsDimension ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     @RequestMapping(value = "/viewRunningJobDateByTargetClickJobStatistics", method = RequestMethod.GET)
-    public ResponseEntity<?> viewRunningJobDateByTargetClickJobStatistics(String startDate, String endDate, String targetClick) {
+    public ResponseEntity<?> viewRunningJobDateByTargetClickJobStatistics(@RequestParam(name = "targetDate") String targetDate,
+        @RequestParam(name = "targetHr") Long targetHr) {
         try {
-            return new ResponseEntity<>(this.dashboardApiService.viewRunningJobDateByTargetClickJobStatistics(startDate,
-                endDate, targetClick), HttpStatus.OK);
+            return new ResponseEntity<>(this.dashboardApiService
+                .viewRunningJobDateByTargetClickJobStatistics(targetDate, targetHr), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while viewRunningJobDateByTargetClickJobStatistics ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,

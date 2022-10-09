@@ -33,6 +33,12 @@ public class ProcessUtil {
         "Start Time", "Frequency", "Recurrence"
     };
 
+    public static String[] HEADER_FILED_BATCH_DOWNLOAD_FILE = new String[] {
+        "Job Name", "Task", "Execution", "Status", "Created Date",
+        "Start Date", "End Date", "Time", "Last Run", "Next Flight",
+        "R-Status", "Email job complete", "Email job fail", "Email job skip"
+    };
+
     public static String typeIdHeader(Headers headers) {
         return StreamSupport.stream(headers.spliterator(), false)
             .filter(header -> header.key().equals("__TypeId__"))

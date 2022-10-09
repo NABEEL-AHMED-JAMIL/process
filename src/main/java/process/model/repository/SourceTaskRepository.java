@@ -1,11 +1,13 @@
 package process.model.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import process.model.enums.Status;
 import process.model.pojo.SourceTask;
 import process.model.projection.SourceTaskProjection;
+import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,7 +17,7 @@ import java.util.Optional;
 @Repository
 public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
 
-    @Query(value = "select task_detail_id, st.task_name from source_task",
+    @Query(value = "select task_detail_id, task_name from source_task where task_status = 'Active'",
         nativeQuery = true)
     public List<Long> findAllSourceTask();
 
@@ -32,5 +34,10 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
     @Query(value = "select task_detail_id as taskDetailId, task_name as taskName, task_status as taskStatus" +
         " from source_task where source_task_type_id = ?1", nativeQuery = true)
     public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId);
+
+    @Modifying
+    @Transactional
+    @Query(value = "update source_task set task_status = ?2 where source_task_type_id = ?1", nativeQuery = true)
+    public int statusChangeSourceTaskLinkWithSourceTaskType(Long sourceTaskTypeId, String status);
 
 }

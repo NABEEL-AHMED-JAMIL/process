@@ -241,11 +241,11 @@ public class SourceTaskRestApi {
                 return new ResponseEntity<>(this.sourceTaskApiService.uploadSourceTask(fileUploadDto), HttpStatus.OK);
             }
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "File not found for process."), HttpStatus.BAD_REQUEST);
+            "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadSourceTask ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

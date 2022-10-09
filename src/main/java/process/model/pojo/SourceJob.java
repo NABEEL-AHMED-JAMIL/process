@@ -53,7 +53,7 @@ public class SourceJob {
     private String jobName;
 
     // which class or method trigger
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "task_detail_id")
     private SourceTask sourceTask;
 
@@ -85,6 +85,15 @@ public class SourceJob {
     @Column(name = "data_created",
          nullable = false)
     private Timestamp dateCreated;
+
+    @Column(name = "complete_job")
+    private boolean completeJob;
+
+    @Column(name = "fail_job")
+    private boolean failJob;
+
+    @Column(name = "skip_job")
+    private boolean skipJob;
 
     public SourceJob() {}
 
@@ -163,6 +172,30 @@ public class SourceJob {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public boolean isCompleteJob() {
+        return completeJob;
+    }
+
+    public void setCompleteJob(boolean completeJob) {
+        this.completeJob = completeJob;
+    }
+
+    public boolean isFailJob() {
+        return failJob;
+    }
+
+    public void setFailJob(boolean failJob) {
+        this.failJob = failJob;
+    }
+
+    public boolean isSkipJob() {
+        return skipJob;
+    }
+
+    public void setSkipJob(boolean skipJob) {
+        this.skipJob = skipJob;
     }
 
     @Override

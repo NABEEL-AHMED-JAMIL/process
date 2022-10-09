@@ -17,9 +17,7 @@ public class SourceTaskTypeDto {
     private String description;
     private String queueTopicPartition;
     private Status status;
-
     private boolean isSchemaRegister;
-
     private String schemaPayload;
 
     public SourceTaskTypeDto() {

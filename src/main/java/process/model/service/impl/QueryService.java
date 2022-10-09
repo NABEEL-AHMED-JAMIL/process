@@ -1,7 +1,6 @@
 package process.model.service.impl;
 
 import com.google.gson.Gson;
-import org.apache.kafka.common.protocol.types.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,9 +48,18 @@ public class QueryService {
 
     /**
      * Query:- query help to fetch the source task
+     * @param isCount
+     * @param appUserId
+     * @param startDate
+     * @param endDate
+     * @param columnName
+     * @param order
+     * @param searchTextDto
+     * @return string
      * */
-    public String listSourceTaskQuery(boolean isCount, Long appUserId, String startDate, String endDate,
-        String columnName, String order, SearchTextDto searchTextDto) {
+    public String listSourceTaskQuery(boolean isCount, Long appUserId,
+        String startDate, String endDate, String columnName, String order,
+        SearchTextDto searchTextDto) {
         String selectPortion = "";
         if (isCount) {
             selectPortion = "select count(*) as result ";
@@ -97,9 +105,15 @@ public class QueryService {
         return query;
     }
 
+    /**
+     * method use to fetch the jobs count link wit source task
+     * @param taskDetailId
+     * @return string
+     * */
     public String countAllLinkJobsWithSourceTaskQuery(Long taskDetailId) {
         String selectPortion = "select count(sj.job_id) ";
-        String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
+        String query = selectPortion + "from source_task st\n" +
+            "inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
         if (taskDetailId != null) {
             query += String.format("where st.task_detail_id = %d ", taskDetailId);
         }
@@ -108,18 +122,20 @@ public class QueryService {
 
     /**
      * Query:- query help to fetch the jobs link with task
-     * job_running_status
-     * job_status
-     * last_job_run
-     * priority
+     * @param isCount
+     * @param taskDetailId
+     * @param startDate
+     * @param endDate
+     * @param searchTextDto
+     * @return string
      * */
-    public String fetchAllLinkJobsWithSourceTaskQuery(boolean isCount, Long taskDetailId, String startDate,
-        String endDate, SearchTextDto searchTextDto) {
+    public String fetchAllLinkJobsWithSourceTaskQuery(boolean isCount, Long taskDetailId,
+        String startDate, String endDate, SearchTextDto searchTextDto) {
         String selectPortion = "";
         if (isCount) {
             selectPortion = "select count(*) as result ";
         } else {
-            selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, sj.last_job_run, sj.priority, sj.data_created ";
+            selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, CAST(sj.last_job_run AS varchar), sj.priority, CAST(sj.data_created AS varchar) ";
         }
         String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
         query += "where st.task_status in ('Delete', 'Inactive', 'Active') ";
@@ -149,20 +165,90 @@ public class QueryService {
         return query;
     }
 
+    /**
+     * method use to fetch the job status statistics
+     * @return string
+     * */
     public String jobStatusStatistics() {
-        return "select job_status, count(job_id) as total_count from source_job\n" +
-            "group by job_status";
+        return "select job_status, count(job_id) as total_count from source_job group by job_status";
     }
 
+    /**
+     * method use to fetch the job running statistics
+     * @return string
+     * */
     public String jobRunningStatistics() {
-        return "select job_running_status, count(job_id) as total_count from source_job\n" +
+        return "select job_running_status, count(job_id) as total_count\n" +
+            "from source_job\n" +
             "where job_running_status in ('Running', 'Failed', 'Completed')\n" +
             "group by job_running_status";
     }
 
-    // last 7 day only
-    public String weeklyRunningJobStatistics() {
-        return "";
+    /**
+     * method use to fetch the job running statistics
+     * @param startDate
+     * @param endDate
+     * @return string
+     * */
+    public String weeklyRunningJobStatistics(String startDate, String endDate) {
+        return String.format("select weekData.daycode, count(*) from (\n" +
+            "select job_queue_id, extract(dow from cast(date_created as date)) as daycode,\n" +
+            "cast(date_created as date)\n" +
+            "from job_queue where date(date_created) between '%s' and '%s') as weekData\n" +
+            "group by weekData.daycode", startDate, endDate);
+    }
+
+    /**
+     * method use to fetch the job running statistics
+     * @param startDate
+     * @param endDate
+     * @return string
+     * */
+    public String weeklyHrsRunningJobStatistics(String startDate, String endDate) {
+        return String.format("select weekData.daycode, weekData.hr, weekData.date, count(*)\n" +
+            "from (select job_queue_id, extract(dow from cast(date_created as date)) as daycode,\n" +
+            "cast(date_created as date) as date, cast(date_created as time) as time, \n" +
+            "extract(hour from cast(date_created as time)) as hr\n" +
+            "from job_queue where date(date_created) between '%s' and '%s') as weekData\n" +
+            "group by weekData.daycode, weekData.hr, weekData.date", startDate, endDate);
+    }
+
+    /**
+     * method use to fetch the view running job statistics
+     * @param targetDate
+     * @param targetHr
+     * @return string
+     * */
+    public String weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) {
+        return String.format("select job_queue.job_id, source_job.job_name,\n" +
+            "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
+            "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
+            "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
+            "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
+            "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
+            "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
+            "count (*) as total\n" +
+            "from job_queue\n" +
+            "inner join source_job on source_job.job_id = job_queue.job_id\n" +
+            "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d\n" +
+            "group by job_queue.job_id, source_job.job_name\n" +
+            "order by job_queue.job_id desc\n", targetDate, targetHr);
+    }
+
+    /**
+     * method use to fetch the view running  job statistics
+     * @param targetDate
+     * @param targetHr
+     * @return string
+     * */
+    public String viewRunningJobDateByTargetClickJobStatistics(String targetDate, Long targetHr) {
+        return String.format("select sjb.job_name, jbq.job_queue_id, jbq.date_created, CAST(jbq.end_time AS varchar),\n" +
+            "jbq.job_id, jbq.job_status, jbq.job_status_message, CAST(jbq.start_time AS varchar), CAST(jbq.skip_time AS varchar)\n" +
+            "from source_job as sjb\n" +
+            "inner join job_queue as jbq on jbq.job_id = sjb.job_id\n" +
+            "where date(jbq.date_created) = '%s' and extract(hour from cast(jbq.date_created as time)) = %d\n" +
+            "order by date_created asc",
+            targetDate, targetHr);
     }
 
     @Override

@@ -4,6 +4,8 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.LookupData;
 
+import java.util.List;
+
 /**
  * @author Nabeel Ahmed
  */
@@ -16,4 +18,8 @@ public interface LookupDataRepository extends CrudRepository<LookupData, Long> {
      * @return LookupData
      * */
     public LookupData findByLookupType(String lookupType);
+
+    public List<LookupData> findByParentLookupId(Long parentId);
+
+    public List<LookupData> findByParentLookupIdIsNull();
 }

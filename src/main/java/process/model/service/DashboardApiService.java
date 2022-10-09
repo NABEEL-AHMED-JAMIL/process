@@ -13,6 +13,10 @@ public interface DashboardApiService {
 
     public ResponseDto weeklyRunningJobStatistics(String startDate, String endDate) throws Exception;
 
-    public ResponseDto viewRunningJobDateByTargetClickJobStatistics(String startDate, String endDate, String targetClick) throws Exception;
+    public ResponseDto weeklyHrsRunningJobStatistics(String startDate, String endDate) throws Exception;
+
+    public ResponseDto weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) throws Exception;
+
+    public ResponseDto viewRunningJobDateByTargetClickJobStatistics(String targetDate, Long targetHr) throws Exception;
 
 }
