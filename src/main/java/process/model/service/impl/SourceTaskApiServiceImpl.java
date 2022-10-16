@@ -12,9 +12,11 @@ import process.model.dto.*;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
+import process.model.pojo.SourceTaskPayload;
 import process.model.pojo.SourceTaskType;
 import process.model.pojo.SourceTask;
 import process.model.projection.SourceTaskProjection;
+import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceTaskApiService;
@@ -24,11 +26,13 @@ import process.util.validation.SourceTaskValidation;
 import java.io.ByteArrayOutputStream;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.ERROR;
 
@@ -40,10 +44,14 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
 
     private Logger logger = LoggerFactory.getLogger(SourceTaskApiServiceImpl.class);
 
+    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     @Autowired
     private BulkExcel bulkExcel;
     @Autowired
     private QueryService queryService;
+    @Autowired
+    private SourceJobRepository sourceJobRepository;
     @Autowired
     private SourceTaskRepository sourceTaskRepository;
     @Autowired
@@ -51,10 +59,12 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
 
     private final String ListSourceTask = "ListSourceTask";
     private final String SOURCE_TASK_HEADER[] = {
-        "Task Id", "Task Name", "Task Payload", "Task Status", "ServiceName", "QueueTopicPartition"
+        "Task Id", "Task Name", "Task Payload",
+        "Task Status", "ServiceName", "QueueTopicPartition"
     };
-
-    private final String UPLOAD_SOURCE_TASK_HEADER[] = { "TaskTypeId", "Task Name", "Task Payload" };
+    private final String UPLOAD_SOURCE_TASK_HEADER[] = {
+        "TaskTypeId", "Task Name", "Task Payload"
+    };
 
     @Override
     public ResponseDto addSourceTask(SourceTaskDto tempSourceTask) throws Exception {
@@ -77,6 +87,18 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         sourceTask.setTaskPayload(tempSourceTask.getTaskPayload());
         sourceTask.setTaskStatus(Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
+        if (!isNull(tempSourceTask.getXmlTagsInfo())) {
+            List<SourceTaskPayload> sourceTaskPayloads = new ArrayList<>();
+            sourceTaskPayloads = tempSourceTask.getXmlTagsInfo()
+            .stream().map(tagInfo -> {
+                SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
+                sourceTaskPayload.setTagKey(tagInfo.getTagKey());
+                sourceTaskPayload.setTagParent(tagInfo.getTagParent());
+                sourceTaskPayload.setTagValue(tagInfo.getTagValue());
+                return sourceTaskPayload;
+            }).collect(Collectors.toList());
+            sourceTask.setSourceTaskPayload(sourceTaskPayloads);
+        }
         this.sourceTaskRepository.save(sourceTask);
         return new ResponseDto(SUCCESS, String.format("SourceTask successfully save with %d.", sourceTask.getTaskDetailId()));
     }
@@ -97,7 +119,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findSourceTaskTypeBySourceTaskTypeIdAndStatus(
             tempSourceTask.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
         if (!sourceTaskType.isPresent()) {
-            return new ResponseDto(ERROR, "Provided sourceTaskTypeId not found.");
+            return new ResponseDto(ERROR, "Active the linked sourceTaskType.");
         }
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(tempSourceTask.getTaskDetailId());
         if (sourceTask.isPresent()) {
@@ -110,19 +132,36 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             if (!isNull(tempSourceTask.getSourceTaskType())) {
                 sourceTask.get().setSourceTaskType(sourceTaskType.get());
             }
-            /**
-             * Ph-2 change
-             * Note :- if the queue delete then all the link-source task delete +
-             * all the source job stop and job status into delete state
-             * */
+            if (!isNull(tempSourceTask.getXmlTagsInfo())) {
+                List<SourceTaskPayload> sourceTaskPayloads = new ArrayList<>();
+                sourceTaskPayloads = tempSourceTask.getXmlTagsInfo()
+                .stream().map(tagInfo -> {
+                    SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
+                    sourceTaskPayload.setTagKey(tagInfo.getTagKey());
+                    sourceTaskPayload.setTagParent(tagInfo.getTagParent());
+                    sourceTaskPayload.setTagValue(tagInfo.getTagValue());
+                    return sourceTaskPayload;
+                }).collect(Collectors.toList());
+                sourceTask.get().setSourceTaskPayload(sourceTaskPayloads);
+            }
             if (!isNull(tempSourceTask.getTaskStatus())) {
+                /**
+                 * if (tempSourceTask.getTaskStatus().equals(Status.Active)) {
+                 *    this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(
+                 *      tempSourceTask.getTaskDetailId(), Status.Active.name());
+                 * } else {
+                 *    this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(
+                 *      tempSourceTask.getTaskDetailId(), Status.Inactive.name());
+                 * }
+                 * */
                 sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
             }
             this.sourceTaskRepository.save(sourceTask.get());
-            return new ResponseDto(SUCCESS, String.format(
-                "SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
+            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.",
+                tempSourceTask.getTaskDetailId()));
         }
-        return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", tempSourceTask.getTaskDetailId()));
+        return new ResponseDto(ERROR, String.format("SourceTask not found with %d.",
+            tempSourceTask.getTaskDetailId()));
     }
 
     @Override
@@ -131,17 +170,16 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             return new ResponseDto(ERROR, "SourceTask taskDetailId missing.");
         }
         /**
-         * Ph-2 change
-         * Note :- if the queue delete then all the link-source task delete +
-         * all the source job stop and job status into delete state
+         * Note :- if the source task delete then delete all the source job link with source task
+         * Use case :- if the source task type delete then only 'inactive or delete perform'
          * */
-        Optional<SourceTask> sourceTask = this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(
-            tempSourceTask.getTaskDetailId(), Status.Active);
+        Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(tempSourceTask.getTaskDetailId());
         if (sourceTask.isPresent()) {
             if (!isNull(tempSourceTask.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(Status.Delete);
             }
             this.sourceTaskRepository.save(sourceTask.get());
+            this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(tempSourceTask.getTaskDetailId(), Status.Delete.name());
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
         }
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", tempSourceTask.getTaskDetailId()));
@@ -151,9 +189,8 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
     public ResponseDto listSourceTask(Long appUserId, String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
         ResponseDto responseDto = null;
-        Object countQueryResult = this.queryService.executeQueryForSingleResult(
-            this.queryService.listSourceTaskQuery(true, appUserId, startDate, endDate,
-            columnName, order, searchTextDto));
+        Object countQueryResult = this.queryService.executeQueryForSingleResult(this.queryService.listSourceTaskQuery(
+            true, appUserId, startDate, endDate, columnName, order, searchTextDto));
         if (!isNull(countQueryResult)) {
             /* fetch Record According to Pagination*/
             List<Object[]> result = this.queryService.executeQuery(
@@ -261,7 +298,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                     index++;
                     if (!isNull(obj[index])) {
-                        sourceJobDto.setLastJobRun(LocalDateTime.parse(String.valueOf(obj[index])));
+                        sourceJobDto.setLastJobRun(LocalDateTime.parse(String.valueOf(obj[index]), formatter));
                     }
                     index++;
                     if (!isNull(obj[index])) {

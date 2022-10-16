@@ -72,6 +72,26 @@ public class ConfigurationMakerRequest {
         }
 
         @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            TagInfo tagInfo = (TagInfo) o;
+
+            if (!tagKey.equals(tagInfo.tagKey)) return false;
+            if (!tagParent.equals(tagInfo.tagParent)) return false;
+            return tagValue.equals(tagInfo.tagValue);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = tagKey.hashCode();
+            result = 31 * result + tagParent.hashCode();
+            result = 31 * result + tagValue.hashCode();
+            return result;
+        }
+
+        @Override
         public String toString() { return new Gson().toJson(this); }
     }
 

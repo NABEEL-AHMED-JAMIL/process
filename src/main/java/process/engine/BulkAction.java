@@ -31,7 +31,7 @@ public class BulkAction {
      * @param jobStatus
      * */
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
-        Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
+        Optional<SourceJob> sourceJob = this.transactionService.findByJobId(jobId);
         sourceJob.get().setJobRunningStatus(jobStatus);
         this.transactionService.saveOrUpdateJob(sourceJob.get());
     }
@@ -77,12 +77,17 @@ public class BulkAction {
      * @param scheduledTime
      * @return JobQueueDto
      * */
-    public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime) {
+    public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime,
+        JobStatus jobStatus, String message, Boolean isSkip) {
         JobQueue jobQueue = new JobQueue();
-        jobQueue.setStartTime(scheduledTime);
-        jobQueue.setJobStatus(JobStatus.Queue);
+        if (isSkip) {
+            jobQueue.setSkipTime(scheduledTime);
+        } else {
+            jobQueue.setStartTime(scheduledTime);
+        }
+        jobQueue.setJobStatus(jobStatus);
         jobQueue.setJobId(jobId);
-        jobQueue.setJobStatusMessage(String.format("Job %s now in the queue.", jobId));
+        jobQueue.setJobStatusMessage(String.format(message, jobId));
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
         return jobQueue;
     }
@@ -97,20 +102,33 @@ public class BulkAction {
     }
 
     /**
+     * this method use to get the count of job which is inQueue
+     * @param jobId
+     * */
+    public Integer getCountForInQueueJobByJobId(Long jobId) {
+        return this.transactionService.getCountForInQueueJobByJobId(jobId);
+    }
+
+    /**
      * this method use to update the scheduler next running time
      * @param scheduler
      * */
     public void updateNextScheduler(Scheduler scheduler) {
         LocalDateTime nextJobRun = null;
-        if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !this.isNull(scheduler.getRecurrence())) {
+        if (scheduler.getFrequency().equals(Frequency.Mint.name())
+            && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !this.isNull(scheduler.getRecurrence())) {
+        } else if (scheduler.getFrequency().equals(Frequency.Hr.name())
+            && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !this.isNull(scheduler.getRecurrence())) {
+        } else if (scheduler.getFrequency().equals(Frequency.Daily.name())
+            && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !this.isNull(scheduler.getRecurrence())) {
+        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name())
+            && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !this.isNull(scheduler.getRecurrence())) {
+        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name())
+            && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.valueOf(scheduler.getRecurrence()));
         }
         if (scheduler.getEndDate() != null) {
@@ -118,21 +136,10 @@ public class BulkAction {
             if (nextJobRun != null && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
                 scheduler.setRecurrenceTime(nextJobRun);
                 this.transactionService.saveOrUpdateScheduler(scheduler);
-            } else {
-                this.changeJobStatus(scheduler.getJobId(), JobStatus.PartialComplete);
             }
         } else if (nextJobRun != null) {
             scheduler.setRecurrenceTime(nextJobRun);
             this.transactionService.saveOrUpdateScheduler(scheduler);
-        }
-    }
-
-    /**
-     * This method use to change the partial-complete status into complete status
-     * */
-    public void checkJobStatus() {
-        for (SourceJob sourceJob : this.transactionService.findJobByJobRunningStatus()) {
-            this.changeJobStatus(sourceJob.getJobId(), JobStatus.Completed);
         }
     }
 

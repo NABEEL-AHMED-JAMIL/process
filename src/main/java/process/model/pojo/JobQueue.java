@@ -50,6 +50,10 @@ public class JobQueue {
         columnDefinition = "TIMESTAMP")
     private LocalDateTime endTime;
 
+    @Column(name = "skip_time",
+        columnDefinition = "TIMESTAMP")
+    private LocalDateTime skipTime;
+
     @Column(name = "job_status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -93,6 +97,14 @@ public class JobQueue {
     }
     public void setEndTime(LocalDateTime endTime) {
         this.endTime = endTime;
+    }
+
+    public LocalDateTime getSkipTime() {
+        return skipTime;
+    }
+
+    public void setSkipTime(LocalDateTime skipTime) {
+        this.skipTime = skipTime;
     }
 
     public JobStatus getJobStatus() {

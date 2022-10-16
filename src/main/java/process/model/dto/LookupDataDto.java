@@ -3,11 +3,6 @@ package process.model.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import process.model.pojo.LookupData;
-
-import javax.persistence.JoinColumn;
-import javax.persistence.ManyToOne;
-import javax.persistence.OneToMany;
 import java.sql.Timestamp;
 import java.util.Set;
 
@@ -23,9 +18,8 @@ public class LookupDataDto {
     private String lookupType;
     private String description;
     private Timestamp dateCreated;
-
+    private Long parentLookupId;
     protected LookupDataDto parent;
-
     protected Set<LookupDataDto> children;
 
     public LookupDataDto() {}
@@ -68,6 +62,14 @@ public class LookupDataDto {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Long getParentLookupId() {
+        return parentLookupId;
+    }
+
+    public void setParentLookupId(Long parentLookupId) {
+        this.parentLookupId = parentLookupId;
     }
 
     public LookupDataDto getParent() {

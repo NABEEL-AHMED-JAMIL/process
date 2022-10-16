@@ -46,11 +46,11 @@ public class SourceTask {
         columnDefinition = "text")
     private String taskPayload;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "source_task_type_id")
     private SourceTaskType sourceTaskType;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(cascade = CascadeType.ALL)
     private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
 
     public SourceTask() {}

@@ -15,16 +15,19 @@ import process.model.enums.Execution;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.pojo.Scheduler;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceJobRepository;
 import process.model.service.SourceJobBulkApiService;
 import process.util.ProcessTimeUtil;
 import process.util.excel.BulkExcel;
 import process.util.validation.JobDetailValidation;
-
 import java.io.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import static process.util.ProcessUtil.*;
+import static process.util.ProcessUtil.isNull;
 
 /**
  * @author Nabeel Ahmed
@@ -37,15 +40,21 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
     // env-filed
     @Value("${storage.efsFileDire}")
     private String tempFileStoreDirectory;
-
+    private final String SourceJob = "SourceJob";
     @Autowired
     private BulkExcel bulkExcel;
     @Autowired
     private TransactionServiceImpl transactionService;
+    @Autowired
+    private SourceJobRepository sourceJobRepository;
+    @Autowired
+    private SchedulerRepository schedulerRepository;
 
     private String[] getHEADER_FILED_BATCH_FILE() {
         return HEADER_FILED_BATCH_FILE;
     }
+
+    private String[] getHEADER_FILED_BATCH_DOWNLOAD_FILE() { return HEADER_FILED_BATCH_DOWNLOAD_FILE; }
 
     /**
      * The method used to download the template file for batch scheduler
@@ -92,7 +101,53 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
      */
     @Override
     public ByteArrayOutputStream downloadListSourceJob() throws Exception {
-        return null;
+        List<SourceJob> sourceJobs = this.sourceJobRepository.findAll();
+        XSSFWorkbook workbook = new XSSFWorkbook();
+        this.bulkExcel.setWb(workbook);
+        XSSFSheet xssfSheet = workbook.createSheet(SourceJob);
+        this.bulkExcel.setSheet(xssfSheet);
+        AtomicInteger rowCount = new AtomicInteger();
+        this.bulkExcel.fillBulkHeader(rowCount.get(), this.getHEADER_FILED_BATCH_DOWNLOAD_FILE());
+        sourceJobs.forEach(sourceJob -> {
+            rowCount.getAndIncrement();
+            List<String> dataCellValue = new ArrayList<>();
+            dataCellValue.add(!isNull(sourceJob.getJobName()) ? String.valueOf(sourceJob.getJobName()) : "");
+            dataCellValue.add(String.format("%d [%s]", sourceJob.getTaskDetail().getTaskDetailId(),
+                sourceJob.getTaskDetail().getTaskName()));
+            dataCellValue.add(String.valueOf(sourceJob.getExecution()));
+            dataCellValue.add(String.valueOf(sourceJob.getJobStatus()));
+            dataCellValue.add(String.valueOf(sourceJob.getDateCreated()));
+            // check the scheduler
+            Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.getJobId());
+            if (scheduler.isPresent()) {
+                dataCellValue.add(String.valueOf(scheduler.get().getStartDate()));
+                dataCellValue.add(!isNull(scheduler.get().getEndDate()) ?
+                    String.valueOf(scheduler.get().getEndDate()): "");
+                dataCellValue.add(!isNull(String.valueOf(scheduler.get().getStartTime())) ?
+                    String.valueOf(scheduler.get().getStartTime()) : "");
+            } else {
+                dataCellValue.add("");
+                dataCellValue.add("");
+                dataCellValue.add("");
+            }
+            dataCellValue.add(!isNull(sourceJob.getLastJobRun()) ?
+                String.valueOf(sourceJob.getLastJobRun()) : "");
+            if (scheduler.isPresent()) {
+                dataCellValue.add(!isNull(scheduler.get().getRecurrenceTime()) ?
+                    String.valueOf(scheduler.get().getRecurrenceTime()) : "");
+            } else {
+                dataCellValue.add("");
+            }
+            dataCellValue.add(!isNull(sourceJob.getJobRunningStatus()) ?
+                String.valueOf(sourceJob.getJobRunningStatus()) : "");
+            dataCellValue.add(sourceJob.isCompleteJob() ? "Yes": "No");
+            dataCellValue.add(sourceJob.isFailJob() ? "Yes" : "No");
+            dataCellValue.add(sourceJob.isSkipJob() ? "Yes" : "No");
+            this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
+        });
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        workbook.write(outputStream);
+        return outputStream;
     }
 
     /**
@@ -127,13 +182,10 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
             Row currentRow = rows.next();
             // header validation check
             if (currentRow.getRowNum() == 0) {
-                if (currentRow.getPhysicalNumberOfCells() != 7) {
-                    return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " heading missing.");
-                }
                 // loop on the header
                 for (int i=0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
                     if (!currentRow.getCell(i).getStringCellValue().equals(this.getHEADER_FILED_BATCH_FILE()[i])) {
-                        return new ResponseDto(ERROR,"File at row " + (currentRow.getRowNum() + 1)
+                        return new ResponseDto(ERROR,"File at row " + (currentRow.getRowNum() + 1) + " "
                             + this.getHEADER_FILED_BATCH_FILE()[i] + " heading missing.");
                     }
                 }
@@ -146,7 +198,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
                     if (i==0) {
                         jobDetailValidation.setJobName(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==1) {
-                        jobDetailValidation.setTaskId(Long.valueOf(this.bulkExcel.getCellDetail(currentRow, i)));
+                        jobDetailValidation.setTaskId(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==2) {
                         jobDetailValidation.setStartDate(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==3) {
@@ -160,9 +212,12 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
                     }
                 }
                 jobDetailValidation.isValidJobDetail();
-                if (!this.transactionService.findByTaskDetailIdAndTaskStatus(jobDetailValidation.getTaskId()).isPresent()) {
-                    jobDetailValidation.setErrorMsg("Delete sourceTask not link with source job at row " +
-                        (currentRow.getRowNum() + 1) + ".\n");
+                if (!isNull(jobDetailValidation.getTaskId())) {
+                    if (!this.transactionService.findByTaskDetailIdAndTaskStatus(
+                        Long.valueOf(jobDetailValidation.getTaskId())).isPresent()) {
+                        jobDetailValidation.setErrorMsg("Delete sourceTask not link with source job at row " +
+                                (currentRow.getRowNum() + 1) + ".\n");
+                    }
                 }
                 if (!isNull(jobDetailValidation.getErrorMsg())) {
                     errors.add(jobDetailValidation.getErrorMsg());
@@ -179,9 +234,12 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
             SourceJob sourceJob = new SourceJob();
             sourceJob.setJobName(jobDetailValidation.getJobName());
             sourceJob.setTaskDetail(this.transactionService.findByTaskDetailIdAndTaskStatus(
-                jobDetailValidation.getTaskId()).get());
+                Long.valueOf(jobDetailValidation.getTaskId())).get());
             sourceJob.setJobStatus(Status.Active);
             sourceJob.setPriority(5);
+            sourceJob.setSkipJob(true);
+            sourceJob.setFailJob(true);
+            sourceJob.setCompleteJob(true);
             sourceJob.setExecution(Execution.Auto);
             this.transactionService.saveOrUpdateJob(sourceJob);
             Scheduler scheduler = new Scheduler();

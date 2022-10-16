@@ -30,8 +30,8 @@ public class KafkaProducerConfig {
     @Value("${tpd.scrapping-topic}")
     private String scrappingTopic;
 
-    @Value("${tpd.extraction-topic}")
-    private String extractionTopic;
+    @Value("${data-analytics-topic}")
+    private String dataAnalyticsTopic;
 
     @Value("${tpd.comparison-topic}")
     private String comparisonTopic;
@@ -73,8 +73,8 @@ public class KafkaProducerConfig {
     }
 
     @Bean
-    public NewTopic extractionTopic() {
-        return new NewTopic(extractionTopic, 2, (short) 1);
+    public NewTopic dataAnalyticsTopic() {
+        return new NewTopic(dataAnalyticsTopic, 2, (short) 1);
     }
 
 }

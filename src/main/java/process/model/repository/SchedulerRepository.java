@@ -22,7 +22,7 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
      * */
     @Query(value = "select scheduler.* from scheduler join source_job on scheduler.job_id=source_job.job_id\n" +
         "where ((?1 BETWEEN start_date AND end_date) OR (start_date <= ?1 AND end_date is null))\n" +
-        "and source_job.job_status = 'Active' and (source_job.job_running_status is null or source_job.job_running_status = 'InFlight')", nativeQuery = true)
+        "and source_job.job_status = 'Active'", nativeQuery = true)
     public List<Scheduler> findAllSchedulerForToday(LocalDate todayDate);
 
     public Optional<Scheduler> findSchedulerByJobId(Long jobId);

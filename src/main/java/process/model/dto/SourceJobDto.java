@@ -29,8 +29,10 @@ public class SourceJobDto {
     private Execution execution;
     private Integer priority;
     private Timestamp dateCreated;
-
     private List<Integer> jobIds;
+    private boolean completeJob;
+    private boolean failJob;
+    private boolean skipJob;
 
     public SourceJobDto() {}
 
@@ -130,8 +132,33 @@ public class SourceJobDto {
         this.jobIds = jobIds;
     }
 
+    public boolean isCompleteJob() {
+        return completeJob;
+    }
+
+    public void setCompleteJob(boolean completeJob) {
+        this.completeJob = completeJob;
+    }
+
+    public boolean isFailJob() {
+        return failJob;
+    }
+
+    public void setFailJob(boolean failJob) {
+        this.failJob = failJob;
+    }
+
+    public boolean isSkipJob() {
+        return skipJob;
+    }
+
+    public void setSkipJob(boolean skipJob) {
+        this.skipJob = skipJob;
+    }
+
     @Override
     public String toString() {
         return new Gson().toJson(this);
     }
+
 }

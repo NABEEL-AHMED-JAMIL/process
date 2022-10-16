@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonRawValue;
-import com.google.gson.Gson;
 import org.springframework.web.multipart.MultipartFile;
+import com.google.gson.Gson;
 import java.util.List;
 
 /**

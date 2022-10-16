@@ -37,7 +37,8 @@ public class LookupData {
     @GeneratedValue(generator = "lookupDataSequenceGenerator")
     private Long lookupId;
 
-    @Column(name = "lookup_value")
+    @Column(name = "lookup_value",
+        columnDefinition = "text")
     private String lookupValue;
 
     @Column(name = "lookup_type",

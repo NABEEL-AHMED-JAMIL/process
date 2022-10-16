@@ -19,10 +19,10 @@ public class SourceTaskValidation {
     private String taskPayload;
     private String errorMsg;
 
-    public SourceTaskValidation() {
-    }
+    public SourceTaskValidation() {}
 
-    public SourceTaskValidation(String sourceTaskTypeId, String taskName, String taskPayload) {
+    public SourceTaskValidation(String sourceTaskTypeId,
+        String taskName, String taskPayload) {
         this.sourceTaskTypeId = sourceTaskTypeId;
         this.taskName = taskName;
         this.taskPayload = taskPayload;

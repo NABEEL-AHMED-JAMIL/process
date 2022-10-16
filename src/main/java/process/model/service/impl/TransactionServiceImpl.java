@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.repository.*;
@@ -22,7 +21,6 @@ public class TransactionServiceImpl {
 
     private Logger logger = LoggerFactory.getLogger(TransactionServiceImpl.class);
 
-    // repo
     @Autowired
     private SourceJobRepository sourceJobRepository;
     @Autowired
@@ -145,14 +143,6 @@ public class TransactionServiceImpl {
         return this.lookupDataRepository.findByLookupType(lookupType);
     }
 
-    /**
-     * This method use to fetch all jobId
-     * @return List<Long>
-     */
-    public List<SourceJob> findJobByJobRunningStatus() {
-        return this.sourceJobRepository.findJobByJobRunningStatus(JobStatus.PartialComplete);
-    }
-
     public Optional<SourceJob> findJobById(Long sourceJobId) {
         return this.sourceJobRepository.findById(sourceJobId);
     }
@@ -163,6 +153,10 @@ public class TransactionServiceImpl {
 
     public List<Long> findAllSourceTask() {
         return this.sourceTaskRepository.findAllSourceTask();
+    }
+
+    public Integer getCountForInQueueJobByJobId(Long jobId) {
+        return this.jobQueueRepository.getCountForInQueueJobByJobId(jobId);
     }
 
 }

@@ -43,8 +43,7 @@ public class BulkExcel {
     public void fillBulkHeader(Integer rowCount, String[] HEADER_FILED_BATCH_FILE) {
         Row header = this.sheet.createRow(rowCount);
         CellStyle style = this.cellHeadingBackgroundColorStyle(IndexedColors.GREY_25_PERCENT.getIndex());
-        int start = 0;
-        int index = 0;
+        int start = 0; int index = 0;
         for (int i=start; i<HEADER_FILED_BATCH_FILE.length; i++) {
             fillHeading(index, header, style, HEADER_FILED_BATCH_FILE[i]);
             index = index+1;
@@ -135,10 +134,10 @@ public class BulkExcel {
     public void fillDropDownValue(XSSFSheet sheet, Integer row, Integer col, String[] dropList) {
         XSSFDataValidationHelper dataValidationHelper = new XSSFDataValidationHelper(sheet);
         XSSFDataValidationConstraint dataValidationConstraint = (XSSFDataValidationConstraint)
-                dataValidationHelper.createExplicitListConstraint(dropList);
+            dataValidationHelper.createExplicitListConstraint(dropList);
         CellRangeAddressList rangeAddressList = new CellRangeAddressList(row, row, col, col);
         XSSFDataValidation dataValidation = (XSSFDataValidation)
-                dataValidationHelper.createValidation(dataValidationConstraint, rangeAddressList);
+            dataValidationHelper.createValidation(dataValidationConstraint, rangeAddressList);
         dataValidation.setShowErrorBox(false);
         sheet.addValidationData(dataValidation);
     }

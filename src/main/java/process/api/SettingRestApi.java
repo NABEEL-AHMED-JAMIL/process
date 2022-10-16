@@ -129,7 +129,40 @@ public class SettingRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Api use to fetch the sub-Lookup by parent lookup id
+     * @param parentLookUpId
+     * @return ResponseEntity<?> fetchSubLookupByParentId
+     * */
+    @RequestMapping(value = "/fetchSubLookupByParentId", method = RequestMethod.GET)
+    public ResponseEntity<?> fetchSubLookupByParentId(@RequestParam Long parentLookUpId) {
+        try {
+            return new ResponseEntity<>(this.settingApiService.fetchSubLookupByParentId(parentLookUpId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchSubLookupByParentId ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Integration Status :- done
+     * Api use to delete the lookup data
+     * @param tempLookupData
+     * @return ResponseEntity<?> deleteLookupData
+     * */
+    @RequestMapping(value = "/deleteLookupData", method = RequestMethod.PUT)
+    public ResponseEntity<?> deleteLookupData(@RequestBody LookupDataDto tempLookupData) {
+        try {
+            return new ResponseEntity<>(this.settingApiService.deleteLookupData(tempLookupData), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while deleteLookupData ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -146,35 +179,12 @@ public class SettingRestApi {
                 return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
                     this.xmlOutTagInfoUtil.makeXml(xlmMakerRequest)), HttpStatus.OK);
             } else {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Wrong Input"), HttpStatus.OK);
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Wrong Input"), HttpStatus.OK);
             }
         } catch (Exception ex) {
             logger.error("An error occurred while xmlCreateChecker ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * Api use to create the json setting for source task
-     * @param jsonMakerRequest
-     * @return ResponseEntity<?> jsonCreateChecker
-     * */
-    @RequestMapping(path = "jsonCreateChecker",  method = RequestMethod.POST)
-    public ResponseEntity<?> jsonCreateChecker(@RequestBody ConfigurationMakerRequest jsonMakerRequest) {
-        try {
-            if(jsonMakerRequest.getJsonTagsInfo() != null) {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
-                    this.xmlOutTagInfoUtil.makeXml(jsonMakerRequest)), HttpStatus.OK);
-            } else {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Wrong Input"), HttpStatus.OK);
-            }
-        } catch (Exception ex) {
-            logger.error("An error occurred while jsonCreateChecker ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.Status;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -17,6 +18,7 @@ public class SourceTaskDto {
     private Status taskStatus;
     private String taskPayload;
     private SourceTaskTypeDto sourceTaskType;
+    private List<ConfigurationMakerRequest.TagInfo> xmlTagsInfo;
     private Long totalLinksJobs;
 
     public SourceTaskDto() {}
@@ -59,6 +61,14 @@ public class SourceTaskDto {
 
     public void setSourceTaskType(SourceTaskTypeDto sourceTaskType) {
         this.sourceTaskType = sourceTaskType;
+    }
+
+    public List<ConfigurationMakerRequest.TagInfo> getXmlTagsInfo() {
+        return xmlTagsInfo;
+    }
+
+    public void setXmlTagsInfo(List<ConfigurationMakerRequest.TagInfo> xmlTagsInfo) {
+        this.xmlTagsInfo = xmlTagsInfo;
     }
 
     public Long getTotalLinksJobs() {
