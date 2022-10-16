@@ -214,7 +214,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
                 jobDetailValidation.isValidJobDetail();
                 if (!isNull(jobDetailValidation.getTaskId())) {
                     if (!this.transactionService.findByTaskDetailIdAndTaskStatus(
-                            Long.valueOf(jobDetailValidation.getTaskId())).isPresent()) {
+                        Long.valueOf(jobDetailValidation.getTaskId())).isPresent()) {
                         jobDetailValidation.setErrorMsg("Delete sourceTask not link with source job at row " +
                                 (currentRow.getRowNum() + 1) + ".\n");
                     }

@@ -70,8 +70,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
-                jobStatusStatistic.add(new JobStatusStatisticDto(
-                    String.valueOf(Double.valueOf(obj[index].toString()).longValue()), Integer.valueOf(obj[++index].toString())));
+                jobStatusStatistic.add(new JobStatusStatisticDto(obj[index].toString().trim(), Integer.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyRunningJobStatistics.", jobStatusStatistic);
         } else {
@@ -90,9 +89,8 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             for(Object[] obj : result) {
                 int index = 0;
                 weeklyJobStatistics.add(new WeeklyJobStatisticsDto(
-                    Double.valueOf(obj[index].toString()).longValue(),
-                    Double.valueOf(obj[++index].toString()).longValue(), obj[++index].toString(),
-                    Double.valueOf(obj[++index].toString()).longValue()));
+                    obj[index].toString().trim(), Double.valueOf(obj[++index].toString()).longValue(),
+                    obj[++index].toString().trim(), Double.valueOf(obj[++index].toString()).longValue()));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrsRunningJobStatistics.", weeklyJobStatistics);
         } else {

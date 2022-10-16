@@ -6,11 +6,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import process.model.dto.MessageQSearchDto;
 import process.model.dto.SearchTextDto;
 import javax.persistence.EntityManager;
 import javax.persistence.Query;
 import javax.transaction.Transactional;
 import java.util.List;
+import java.util.stream.Collectors;
+import static process.util.ProcessUtil.isNull;
 
 /**
  * @author Nabeel Ahmed
@@ -192,7 +195,7 @@ public class QueryService {
      * */
     public String weeklyRunningJobStatistics(String startDate, String endDate) {
         return String.format("select weekData.daycode, count(*) from (\n" +
-            "select job_queue_id, extract(dow from cast(date_created as date)) as daycode,\n" +
+            "select job_queue_id, to_char(cast(date_created as date), 'Dy') as daycode,\n" +
             "cast(date_created as date)\n" +
             "from job_queue where date(date_created) between '%s' and '%s') as weekData\n" +
             "group by weekData.daycode", startDate, endDate);
@@ -206,7 +209,7 @@ public class QueryService {
      * */
     public String weeklyHrsRunningJobStatistics(String startDate, String endDate) {
         return String.format("select weekData.daycode, weekData.hr, weekData.date, count(*)\n" +
-            "from (select job_queue_id, extract(dow from cast(date_created as date)) as daycode,\n" +
+            "from (select job_queue_id, to_char(cast(date_created as date), 'Day') as daycode,\n" +
             "cast(date_created as date) as date, cast(date_created as time) as time, \n" +
             "extract(hour from cast(date_created as time)) as hr\n" +
             "from job_queue where date(date_created) between '%s' and '%s') as weekData\n" +
@@ -251,8 +254,40 @@ public class QueryService {
             targetDate, targetHr);
     }
 
+    public String fetchJobQLog(MessageQSearchDto messageQSearch, boolean isState) {
+        String selectPortion;
+        if (isState) {
+            selectPortion = "select job_status, count(*) as total_count \n";
+        } else {
+            selectPortion = "select * \n";
+        }
+        String query = selectPortion + "from job_queue \n";
+        if (!isState) {
+            query += String.format("where cast(date_created as date) between '%s' and '%s' \n",
+                    messageQSearch.getFromDate(), messageQSearch.getToDate());
+            if (!isNull(messageQSearch.getJobId()) && messageQSearch.getJobId().size() > 0) {
+                String jobId = messageQSearch.getJobId().toString();
+                query += String.format("and job_id in (%s) \n", jobId.substring(1, jobId.length()-1));
+            }
+            if (!isNull(messageQSearch.getJobQId()) && messageQSearch.getJobQId().size() > 0) {
+                String jobQId = messageQSearch.getJobQId().toString();
+                query += String.format("and job_queue_id in (%s) \n", jobQId.substring(1, jobQId.length()-1));
+            }
+            if (!isNull(messageQSearch.getJobStatuses()) && messageQSearch.getJobStatuses().size() > 0) {
+                String jobStatus = messageQSearch.getJobStatuses().stream()
+                        .map(jobStatus1 -> "'" +jobStatus1.toString()+"',").collect(Collectors.joining());
+                query += String.format("and job_status in (%s)", jobStatus.substring(0,jobStatus.length()-1));
+            }
+        }
+        if (isState) {
+            query += "\ngroup by job_status";
+        }
+        return query;
+    }
+
     @Override
     public String toString() {
         return new Gson().toJson(this);
     }
+
 }

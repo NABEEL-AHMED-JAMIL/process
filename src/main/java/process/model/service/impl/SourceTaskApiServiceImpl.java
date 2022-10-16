@@ -59,9 +59,12 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
 
     private final String ListSourceTask = "ListSourceTask";
     private final String SOURCE_TASK_HEADER[] = {
-        "Task Id", "Task Name", "Task Payload", "Task Status", "ServiceName", "QueueTopicPartition"
+        "Task Id", "Task Name", "Task Payload",
+        "Task Status", "ServiceName", "QueueTopicPartition"
     };
-    private final String UPLOAD_SOURCE_TASK_HEADER[] = { "TaskTypeId", "Task Name", "Task Payload" };
+    private final String UPLOAD_SOURCE_TASK_HEADER[] = {
+        "TaskTypeId", "Task Name", "Task Payload"
+    };
 
     @Override
     public ResponseDto addSourceTask(SourceTaskDto tempSourceTask) throws Exception {
@@ -142,13 +145,15 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 sourceTask.get().setSourceTaskPayload(sourceTaskPayloads);
             }
             if (!isNull(tempSourceTask.getTaskStatus())) {
-                if (tempSourceTask.getTaskStatus().equals(Status.Active)) {
-                    this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(
-                        tempSourceTask.getTaskDetailId(), Status.Active.name());
-                } else {
-                    this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(
-                        tempSourceTask.getTaskDetailId(), Status.Inactive.name());
-                }
+                /**
+                 * if (tempSourceTask.getTaskStatus().equals(Status.Active)) {
+                 *    this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(
+                 *      tempSourceTask.getTaskDetailId(), Status.Active.name());
+                 * } else {
+                 *    this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(
+                 *      tempSourceTask.getTaskDetailId(), Status.Inactive.name());
+                 * }
+                 * */
                 sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
             }
             this.sourceTaskRepository.save(sourceTask.get());

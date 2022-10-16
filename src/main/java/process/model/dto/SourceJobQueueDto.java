@@ -6,6 +6,7 @@ import com.google.gson.Gson;
 import process.model.enums.JobStatus;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -23,6 +24,8 @@ public class SourceJobQueueDto {
     private String jobName;
     private String jobStatusMessage;
     private Timestamp dateCreated;
+
+    private List<JobStatusStatisticDto> jobStatusStatistic;
 
     public SourceJobQueueDto() {}
 
@@ -90,6 +93,14 @@ public class SourceJobQueueDto {
     }
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public List<JobStatusStatisticDto> getJobStatusStatistic() {
+        return jobStatusStatistic;
+    }
+
+    public void setJobStatusStatistic(List<JobStatusStatisticDto> jobStatusStatistic) {
+        this.jobStatusStatistic = jobStatusStatistic;
     }
 
     @Override

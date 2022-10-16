@@ -87,12 +87,13 @@ public class SettingApiServiceImpl implements SettingApiService {
         } else if (isNull(tempSourceTaskType.getQueueTopicPartition())) {
             return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition missing.");
         }
-        Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(tempSourceTaskType.getSourceTaskTypeId());
+        Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(
+            tempSourceTaskType.getSourceTaskTypeId());
         if (sourceTaskType.isPresent()) {
             sourceTaskType.get().setServiceName(tempSourceTaskType.getServiceName());
             sourceTaskType.get().setDescription(tempSourceTaskType.getDescription());
-            sourceTaskType.get().setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
             sourceTaskType.get().setSchemaPayload(tempSourceTaskType.getSchemaPayload());
+            sourceTaskType.get().setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
             sourceTaskType.get().setSchemaRegister(isNull(tempSourceTaskType.getSchemaPayload()) ? false: true);
             /**
              * Note :- if the queue delete then
@@ -101,7 +102,7 @@ public class SettingApiServiceImpl implements SettingApiService {
              *  tempSourceTaskType.getSourceTaskTypeId(), tempSourceTaskType.getStatus().name());
              * */
             this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(
-                    tempSourceTaskType.getSourceTaskTypeId(), tempSourceTaskType.getStatus().name());
+                tempSourceTaskType.getSourceTaskTypeId(), tempSourceTaskType.getStatus().name());
             if (!isNull(tempSourceTaskType.getStatus())) {
                 sourceTaskType.get().setStatus(tempSourceTaskType.getStatus());
             }

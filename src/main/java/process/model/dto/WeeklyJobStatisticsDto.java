@@ -11,31 +11,31 @@ import com.google.gson.Gson;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WeeklyJobStatisticsDto {
 
-    private Long dayCode;
+    private String dayCode;
     private Long hr;
     private String date;
     private Long count;
 
     public WeeklyJobStatisticsDto() {}
 
-    public WeeklyJobStatisticsDto(Long dayCode, Long hr, Long count) {
+    public WeeklyJobStatisticsDto(String dayCode, Long hr, Long count) {
         this.dayCode = dayCode;
         this.hr = hr;
         this.count = count;
     }
 
-    public WeeklyJobStatisticsDto(Long dayCode, Long hr, String date, Long count) {
+    public WeeklyJobStatisticsDto(String dayCode, Long hr, String date, Long count) {
         this.dayCode = dayCode;
         this.hr = hr;
         this.date = date;
         this.count = count;
     }
 
-    public Long getDayCode() {
+    public String getDayCode() {
         return dayCode;
     }
 
-    public void setDayCode(Long dayCode) {
+    public void setDayCode(String dayCode) {
         this.dayCode = dayCode;
     }
 

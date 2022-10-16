@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+import process.emailer.EmailMessagesFactory;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
@@ -33,10 +34,16 @@ public class ProducerBulkEngine {
     @Autowired
     private TransactionServiceImpl transactionService;
     @Autowired
+    private EmailMessagesFactory emailMessagesFactory;
+    @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
 
     public ProducerBulkEngine() {
         this.pattern = Pattern.compile(REGEX);
+    }
+
+    public void addManualJobInQueue() {
+
     }
 
     /**
@@ -60,14 +67,16 @@ public class ProducerBulkEngine {
                 schedulerForToday.parallelStream().forEach(scheduler -> {
                     if (this.isScheduled(lastSchedulerRun, now, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
                         // we have to check if job in the queue then send the detail of job as skip with message
+                        JobQueue jobQueue = null;
                         if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
-                            JobQueue jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
+                            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
                                 JobStatus.Skip, "Job %s skip, already in queue.", true);
                             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
                                 String.format("Job %s skip, already in queue.", scheduler.getJobId()));
+                            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Skip);
                         } else {
                             this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
-                            JobQueue jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
+                            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
                                 JobStatus.Queue, "Job %s now in the queue.", false);
                             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
                                 String.format("Job %s now in the queue.", scheduler.getJobId()));
@@ -106,6 +115,7 @@ public class ProducerBulkEngine {
                             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Stop);
                             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
                                 String.format("Job %s stop in the queue due to main job either (delete|inactive).", jobQueue.getJobId()));
+                            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Stop);
                         }
                     } catch (Exception ex) {
                         logger.error("Error In runJobInCurrentTimeSlot " + ExceptionUtil.getRootCauseMessage(ex));
@@ -175,6 +185,7 @@ public class ProducerBulkEngine {
                     this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Stop);
                     this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
                         String.format("Broker not active job %s stop.", jobQueue.getJobId()));
+                    this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Stop);
                 }
             } catch (Exception ex) {
                 logger.error("Error In pushMessageToQueue " + ExceptionUtil.getRootCauseMessage(ex));

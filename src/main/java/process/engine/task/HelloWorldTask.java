@@ -5,6 +5,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
 import process.model.dto.SourceJobQueueDto;
 import process.model.dto.SourceTaskDto;
@@ -12,7 +13,6 @@ import process.model.enums.JobStatus;
 import process.model.parser.LoopXmlParser;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
-
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
@@ -28,9 +28,11 @@ public class HelloWorldTask implements Runnable {
 
     public Logger logger = LogManager.getLogger(HelloWorldTask.class);
 
+    private Map<String, ?> data;
     @Autowired
     private BulkAction bulkAction;
-    private Map<String, ?> data;
+    @Autowired
+    private EmailMessagesFactory emailMessagesFactory;
 
     public HelloWorldTask() { }
 
@@ -61,16 +63,17 @@ public class HelloWorldTask implements Runnable {
             // change the status into the complete status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Completed);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Completed);
-            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-                String.format("Job %s now complete.", jobQueue.getJobId()));
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now complete.", jobQueue.getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
+            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Completed);
         } catch (Exception ex) {
             // change the status into the running status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
-            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-                String.format("Job %s fail due to %s .", jobQueue.getJobId(), ExceptionUtil.getRootCauseMessage(ex)));
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s fail due to %s .",
+                jobQueue.getJobId(), ExceptionUtil.getRootCauseMessage(ex)));
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
+            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Failed);
             logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
         }
     }

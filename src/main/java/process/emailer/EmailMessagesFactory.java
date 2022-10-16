@@ -2,12 +2,19 @@ package process.emailer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import javax.mail.*;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
-import java.util.Properties;
+import process.model.dto.LookupDataDto;
+import process.model.dto.SourceJobQueueDto;
+import process.model.enums.JobStatus;
+import process.model.pojo.JobQueue;
+import process.model.service.impl.LookupDataCacheService;
+import javax.mail.internet.MimeMessage;
+import java.util.HashMap;
+import java.util.Map;
 import static process.util.ProcessUtil.isNull;
 
 /**
@@ -18,80 +25,97 @@ public class EmailMessagesFactory {
 
     private Logger logger = LoggerFactory.getLogger(EmailMessagesFactory.class);
 
-    private final String MAIL_SMTP_HOST = "mail.smtp.host";
-    private final String SMTP_GMAIL_COM = "smtp.gmail.com";
-    private final String MAIL_SMTP_SOCKET_FACTORY_PORT = "mail.smtp.socketFactory.port";
-    private final String MAIL_SMTP_SOCKET_FACTORY_CLASS = "mail.smtp.socketFactory.class";
-    private final String MAIL_PORT = "465";
-    private final String MAIL_SMTP_AUTH = "mail.smtp.auth";
-    private final String MAIL_SAMP_AUTH_TRUE = "true";
-    private final String SSL_SOCKET_FACTORU = "javax.net.ssl.SSLSocketFactory";
-    private final String MAIL_SMTP_PORT = "mail.smtp.port";
-    private final String USER_NAME = "nabeel.amd93@gmail.com";
-    private final String PASSWORD = "B@llistic1";
-    private final String UTF = "text/html; charset=utf-8";
-
+    @Value("${spring.mail.username}")
+    private String sender;
+    @Autowired
+    private JavaMailSender javaMailSender;
     @Autowired
     private VelocityManager velocityManager;
+    @Autowired
+    private LookupDataCacheService lookupDataCacheService;
 
-    private Session getSession() {
-        Session session = Session.getInstance(getProperties(),
-            new Authenticator() {
-                protected PasswordAuthentication getPasswordAuthentication() {
-                    return new PasswordAuthentication(USER_NAME, PASSWORD);
-                }
-            });
-        return session;
+    public synchronized void sendSourceJobEmail(SourceJobQueueDto jobQueue, JobStatus jobStatus) {
+        LookupDataDto lookupDataDto = this.lookupDataCacheService.getChildLookupById(1026L, 1028L);
+        Map<String, Object> metaData = new HashMap<>();
+        metaData.put("job_id", jobQueue.getJobId());
+        metaData.put("event_id", jobQueue.getJobQueueId());
+        metaData.put("time_slot", jobQueue.getStartTime());
+        EmailMessageDto emailMessageDto = new EmailMessageDto();
+        emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
+        if (jobStatus.equals(JobStatus.Stop)) {
+            metaData.put("status", JobStatus.Stop);
+            emailMessageDto.setSubject("Source Job Stop");
+            emailMessageDto.setEmailTemplateName(TemplateType.STOP_JOB);
+        } else if (jobStatus.equals(JobStatus.Skip)) {
+            metaData.put("status", JobStatus.Skip);
+            emailMessageDto.setSubject("Source Job Skip");
+            emailMessageDto.setEmailTemplateName(TemplateType.SKIP_JOB);
+        } else if (jobStatus.equals(JobStatus.Completed)) {
+            metaData.put("status", JobStatus.Completed);
+            emailMessageDto.setSubject("Source Job Completed");
+            emailMessageDto.setEmailTemplateName(TemplateType.COMPLETE_JOB);
+        } else if (jobStatus.equals(JobStatus.Failed)) {
+            metaData.put("status", JobStatus.Failed);
+            emailMessageDto.setSubject("Source Job Failed");
+            emailMessageDto.setEmailTemplateName(TemplateType.FAIL_JOB);
+        }
+        emailMessageDto.setBodyMap(metaData);
+        this.sendSimpleMail(emailMessageDto);
     }
 
-    private Properties getProperties() {
-        Properties props = new Properties();
-        props.put(MAIL_SMTP_HOST, SMTP_GMAIL_COM);
-        props.put(MAIL_SMTP_SOCKET_FACTORY_PORT, MAIL_PORT);
-        props.put(MAIL_SMTP_SOCKET_FACTORY_CLASS, SSL_SOCKET_FACTORU);
-        props.put(MAIL_SMTP_AUTH, MAIL_SAMP_AUTH_TRUE);
-        props.put(MAIL_SMTP_PORT, MAIL_PORT);
-        return props;
+    public synchronized void sendSourceJobEmail(JobQueue jobQueue, JobStatus jobStatus) {
+        LookupDataDto lookupDataDto = this.lookupDataCacheService.getChildLookupById(1026L, 1028L);
+        Map<String, Object> metaData = new HashMap<>();
+        metaData.put("job_id", jobQueue.getJobId());
+        metaData.put("event_id", jobQueue.getJobQueueId());
+        metaData.put("time_slot", jobQueue.getStartTime());
+        EmailMessageDto emailMessageDto = new EmailMessageDto();
+        emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
+        if (jobStatus.equals(JobStatus.Stop)) {
+            metaData.put("status", JobStatus.Stop);
+            emailMessageDto.setSubject("Source Job Stop");
+            emailMessageDto.setEmailTemplateName(TemplateType.STOP_JOB);
+        } else if (jobStatus.equals(JobStatus.Skip)) {
+            metaData.put("status", JobStatus.Skip);
+            emailMessageDto.setSubject("Source Job Skip");
+            emailMessageDto.setEmailTemplateName(TemplateType.SKIP_JOB);
+        } else if (jobStatus.equals(JobStatus.Skip)) {
+            metaData.put("status", JobStatus.Completed);
+            emailMessageDto.setSubject("Source Job Completed");
+            emailMessageDto.setEmailTemplateName(TemplateType.COMPLETE_JOB);
+        } else if (jobStatus.equals(JobStatus.Skip)) {
+            metaData.put("status", JobStatus.Failed);
+            emailMessageDto.setSubject("Source Job Failed");
+            emailMessageDto.setEmailTemplateName(TemplateType.FAIL_JOB);
+        }
+        emailMessageDto.setBodyMap(metaData);
+        this.sendSimpleMail(emailMessageDto);
     }
 
-    /* * * * * * * * * * * * * * * * * * * * *
-     * Note :- if email set not proved then  *
-     * * * * * * * * * * * * * * * * * * * * */
-    public boolean sendMail(EmailMessageDto emailContent) {
+    private String sendSimpleMail(EmailMessageDto emailContent) {
         try {
-            Message message = new MimeMessage(getSession());
-            message.setFrom(new InternetAddress(emailContent.getFromEmail()));
+            MimeMessage mailMessage = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mailMessage, "utf-8");
+            helper.setFrom(sender);
             if(!isNull(emailContent.getRecipients())) {
-                // * * * * * * * * * * *Send to* * * * * * * * *
-                String sendTo = emailContent.getRecipients();
-                logger.info("Send To :- "  + sendTo);
-                // * * * * * * * * * * * * * * * * * * * * * * * *
-                message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(sendTo));
+                helper.setTo(emailContent.getRecipients());
                 if (emailContent.getRecipientsMulti() != null && emailContent.getRecipientsMulti().size() > 0) {
                     // * * * * * * * * *Send cc's* * * * * * * * *
                     String ccSendTo = emailContent.getRecipientsMulti().toString();
                     ccSendTo = ccSendTo.substring(1, ccSendTo.length()-1);
-                    logger.info("Send Cc :- "  + ccSendTo);
-                    // * * * * * * * * * * * * * * * * * * * * * * *
-                    message.setRecipients(Message.RecipientType.CC, InternetAddress.parse(ccSendTo));
+                    helper.setCc(ccSendTo);
                 }
-                message.setSubject(emailContent.getSubject());
-                message.setContent(this.velocityManager.getResponseMessage(
-                    emailContent.getEmailTemplateName(), emailContent.getBodyMap()), UTF);
-                Transport.send(message);
-                logger.info("Email Send Successfully.");
-                return true;
+                helper.setSubject(emailContent.getSubject());
+                helper.setText(this.velocityManager.getResponseMessage(
+                     emailContent.getEmailTemplateName(), emailContent.getBodyMap()), true);
+                this.javaMailSender.send(mailMessage);
+                logger.info("Email Send Successfully Content %s.", emailContent.getBodyMap().toString());
             } else {
-                logger.error("Error :- Sent To Null");
-                return false;
+                logger.error("Error :- Sent To Null Content %s.", emailContent.getBodyMap().toString());
             }
-        } catch (MessagingException ex) {
-            logger.error("Error :- " +  ex + " Use this link to " +
-                "Enable https://myaccount.google.com/u/1/lesssecureapps");
-            return false;
-        }catch (Exception ex) {
-            logger.error("Error :- " +  ex);
-            return false;
+            return "Mail Sent Successfully...";
+        } catch (Exception e) {
+            return "Error while Sending Mail";
         }
     }
 

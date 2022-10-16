@@ -18,7 +18,6 @@ public class LookupDataDto {
     private String lookupType;
     private String description;
     private Timestamp dateCreated;
-
     private Long parentLookupId;
     protected LookupDataDto parent;
     protected Set<LookupDataDto> children;
