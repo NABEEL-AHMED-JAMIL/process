@@ -18,7 +18,7 @@ public interface SourceJobApiService {
 
     public ResponseDto skipNextSourceJob(SourceJobDto tempSourceJob) throws Exception;
 
-    public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobDetailId) throws Exception;
+    public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobId) throws Exception;
 
     public ResponseDto listSourceJob() throws Exception;
 

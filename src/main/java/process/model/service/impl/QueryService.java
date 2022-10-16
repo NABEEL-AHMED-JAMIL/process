@@ -27,6 +27,12 @@ public class QueryService {
     @Autowired
     private EntityManager _em;
 
+    public Object executeQueryForSingleResult(String queryStr) {
+        logger.info("Execute Query :- " + queryStr);
+        Query query = this._em.createNativeQuery(queryStr);
+        return query.getSingleResult();
+    }
+
     public List<Object[]> executeQuery(String queryStr) {
         logger.info("Execute Query :- " + queryStr);
         Query query = this._em.createNativeQuery(queryStr);
@@ -43,12 +49,6 @@ public class QueryService {
         return query.getResultList();
     }
 
-    public Object executeQueryForSingleResult(String queryStr) {
-        logger.info("Execute Query :- " + queryStr);
-        Query query = this._em.createNativeQuery(queryStr);
-        return query.getSingleResult();
-    }
-
     /**
      * Query:- query help to fetch the source task
      * @param isCount
@@ -60,9 +60,8 @@ public class QueryService {
      * @param searchTextDto
      * @return string
      * */
-    public String listSourceTaskQuery(boolean isCount, Long appUserId,
-        String startDate, String endDate, String columnName, String order,
-        SearchTextDto searchTextDto) {
+    public String listSourceTaskQuery(boolean isCount, Long appUserId, String startDate, String endDate, String columnName,
+        String order, SearchTextDto searchTextDto) {
         String selectPortion = "";
         if (isCount) {
             selectPortion = "select count(*) as result ";

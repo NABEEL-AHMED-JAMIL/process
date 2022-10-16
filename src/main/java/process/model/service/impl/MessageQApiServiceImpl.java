@@ -13,9 +13,7 @@ import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQApiService;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
-
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.SUCCESS;
 
@@ -26,8 +24,6 @@ import static process.util.ProcessUtil.SUCCESS;
 public class MessageQApiServiceImpl implements MessageQApiService {
 
     private Logger logger = LoggerFactory.getLogger(MessageQApiServiceImpl.class);
-
-    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Autowired
     private QueryService queryService;

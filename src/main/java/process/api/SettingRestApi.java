@@ -34,8 +34,7 @@ public class SettingRestApi {
     /**
      * Integration Status :- done
      * Api use to fetch the app setting
-     * (task-type|lookup_data)
-     * @return ResponseEntity<?> appSetting
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/appSetting", method = RequestMethod.GET)
     public ResponseEntity<?> appSetting() {
@@ -52,7 +51,7 @@ public class SettingRestApi {
      * Integration Status :- done
      * Api use to add the sourceTaskType
      * @param tempSourceTaskType
-     * @return ResponseEntity<?> addSourceTaskType
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/addSourceTaskType", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTaskType(@RequestBody SourceTaskTypeDto tempSourceTaskType) {
@@ -69,7 +68,7 @@ public class SettingRestApi {
      * Integration Status :- done
      * Api use to update the sourceTaskType
      * @param tempSourceTaskType
-     * @return ResponseEntity<?> updateSourceTaskType
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/updateSourceTaskType", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceTaskType(@RequestBody SourceTaskTypeDto tempSourceTaskType) {

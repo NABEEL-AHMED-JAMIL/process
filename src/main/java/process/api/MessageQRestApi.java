@@ -26,7 +26,12 @@ public class MessageQRestApi {
     @Autowired
     private MessageQApiService messageQApiService;
 
-    // fetch all message queue by create time (default week data)
+    /**
+     * Integration Status :- done
+     * Fetch all message queue by create time (default week data)
+     * @param messageQSearch
+     * @return ResponseEntity
+     * */
     @RequestMapping(value = "/fetchLogs", method = RequestMethod.POST)
     public ResponseEntity<?> fetchLogs(@RequestBody MessageQSearchDto messageQSearch) {
         try {
@@ -34,12 +39,15 @@ public class MessageQRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLogs ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
+     * Integration Status :- done
      * Only the queue job be failed
+     * @param jobQId
+     * @return ResponseEntity
      * */
     @RequestMapping(value = "/failJobLogs", method = RequestMethod.DELETE)
     public ResponseEntity<?> failJobLogs(@RequestParam Long jobQId) {
@@ -48,7 +56,7 @@ public class MessageQRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while failJobLogs ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 }

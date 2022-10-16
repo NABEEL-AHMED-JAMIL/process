@@ -1,6 +1,8 @@
 package process.util;
 
 import org.apache.kafka.common.header.Headers;
+
+import java.time.format.DateTimeFormatter;
 import java.util.stream.StreamSupport;
 
 /**
@@ -8,6 +10,7 @@ import java.util.stream.StreamSupport;
  */
 public class ProcessUtil {
 
+    public static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     public static String START = "*";
     public static String ERROR_MESSAGE = "ERROR";
     public static String SIMPLE_DATE_PATTERN = "yyyy-MM-dd";

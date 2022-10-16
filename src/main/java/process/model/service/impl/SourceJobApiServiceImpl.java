@@ -95,9 +95,9 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         if (sourceJob.isPresent()) {
             sourceJob.get().setJobName(tempSourceJob.getJobName());
             // check source active then allow to link
-            Optional<SourceTask> sourceTask = this.sourceTaskRepository
-                .findById(tempSourceJob.getTaskDetail().getTaskDetailId());
-            if (sourceTask.isPresent() && sourceTask.get().getTaskStatus().equals(Status.Active)) {
+            Optional<SourceTask> sourceTask = this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(
+                tempSourceJob.getTaskDetail().getTaskDetailId(), Status.Active);
+            if (sourceTask.isPresent()) {
                 sourceJob.get().setTaskDetail(sourceTask.get());
             } else {
                 return new ResponseDto(ERROR, "Selected sourceTask not active.");
@@ -118,8 +118,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             if (!isNull(tempSourceJob.getSchedulers()) && tempSourceJob.getSchedulers().size() > 0) {
                 tempSourceJob.getSchedulers().stream()
                     .forEach(schedulerDto -> {
-                        Optional<Scheduler> scheduler = this.schedulerRepository
-                            .findSchedulerByJobId(tempSourceJob.getJobId());
+                        Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(tempSourceJob.getJobId());
                         if (scheduler.isPresent()) {
                             scheduler.get().setStartDate(schedulerDto.getStartDate());
                             if (!StringUtils.isEmpty(schedulerDto.getEndDate())) {
@@ -168,8 +167,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     }
 
     @Override
-    public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobDetailId) {
-        Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobDetailId);
+    public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobId) {
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId);
         if (sourceJob.isPresent()) {
             SourceJobDto sourceJobDto = new SourceJobDto();
             sourceJobDto.setJobId(sourceJob.get().getJobId());
@@ -200,7 +199,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                 }
                 sourceJobDto.setTaskDetail(sourceTaskDto);
             }
-            Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(jobDetailId);
+            Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(jobId);
             if (scheduler.isPresent()) {
                 SchedulerDto schedulerDto = new SchedulerDto();
                 schedulerDto.setSchedulerId(scheduler.get().getSchedulerId());
@@ -212,9 +211,9 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                 schedulerDto.setRecurrenceTime(scheduler.get().getRecurrenceTime());
                 sourceJobDto.setScheduler(schedulerDto);
             }
-            return new ResponseDto(SUCCESS, String.format("SourceJob found with %d.", jobDetailId), sourceJobDto);
+            return new ResponseDto(SUCCESS, String.format("SourceJob found with %d.", jobId), sourceJobDto);
         }
-        return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobDetailId));
+        return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
     }
 
     @Override

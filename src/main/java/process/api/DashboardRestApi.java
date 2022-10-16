@@ -25,6 +25,11 @@ public class DashboardRestApi {
     @Autowired
     private DashboardApiService dashboardApiService;
 
+    /**
+     * Integration Status :- done
+     * Api use to fetch the donat chart statistics
+     * @return ResponseEntity<?>
+     * */
     @RequestMapping(value = "/jobStatusStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> jobStatusStatistics() {
         try {
@@ -36,6 +41,11 @@ public class DashboardRestApi {
         }
     }
 
+    /**
+     * Integration Status :- done
+     * Api use to fetch the circle chart statistics
+     * @return ResponseEntity<?>
+     * */
     @RequestMapping(value = "/jobRunningStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> jobRunningStatistics() {
         try {
@@ -47,6 +57,11 @@ public class DashboardRestApi {
         }
     }
 
+    /**
+     * Integration Status :- done
+     * Api use to fetch the line chart statistics
+     * @return ResponseEntity<?>
+     * */
     @RequestMapping(value = "/weeklyRunningJobStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyRunningJobStatistics(@RequestParam(name = "startDate") String startDate,
         @RequestParam(name = "endDate") String endDate) {
@@ -59,6 +74,11 @@ public class DashboardRestApi {
         }
     }
 
+    /**
+     * Integration Status :- done
+     * Api use to fetch the heat-map chart statistics
+     * @return ResponseEntity<?>
+     * */
     @RequestMapping(value = "/weeklyHrsRunningJobStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrsRunningJobStatistics(@RequestParam(name = "startDate") String startDate,
         @RequestParam(name = "endDate") String endDate) {
@@ -71,6 +91,11 @@ public class DashboardRestApi {
         }
     }
 
+    /**
+     * Integration Status :- done
+     * Api use to fetch the weekly-hr-job dimension statistics
+     * @return ResponseEntity<?>
+     * */
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimension", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrRunningStatisticsDimension(@RequestParam(name = "targetDate") String targetDate,
         @RequestParam(name = "targetHr") Long targetHr) {
@@ -83,12 +108,16 @@ public class DashboardRestApi {
         }
     }
 
+    /**
+     * Integration Status :- pending
+     * Api use to fetch the weekly-hr-job history detail
+     * @return ResponseEntity<?>
+     * */
     @RequestMapping(value = "/viewRunningJobDateByTargetClickJobStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> viewRunningJobDateByTargetClickJobStatistics(@RequestParam(name = "targetDate") String targetDate,
         @RequestParam(name = "targetHr") Long targetHr) {
         try {
-            return new ResponseEntity<>(this.dashboardApiService
-                .viewRunningJobDateByTargetClickJobStatistics(targetDate, targetHr), HttpStatus.OK);
+            return new ResponseEntity<>(this.dashboardApiService.viewRunningJobDateByTargetClickJobStatistics(targetDate, targetHr), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while viewRunningJobDateByTargetClickJobStatistics ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
