@@ -82,7 +82,7 @@ public class SourceJob {
         nullable = false)
     private Integer priority;
 
-    @Column(name = "data_created",
+    @Column(name = "date_created",
          nullable = false)
     private Timestamp dateCreated;
 

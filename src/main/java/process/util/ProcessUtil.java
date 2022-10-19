@@ -1,6 +1,7 @@
 package process.util;
 
 import org.apache.kafka.common.header.Headers;
+import java.time.format.DateTimeFormatter;
 import java.util.stream.StreamSupport;
 
 /**
@@ -8,6 +9,7 @@ import java.util.stream.StreamSupport;
  */
 public class ProcessUtil {
 
+    public static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     public static String START = "*";
     public static String ERROR_MESSAGE = "ERROR";
     public static String SIMPLE_DATE_PATTERN = "yyyy-MM-dd";
@@ -19,6 +21,7 @@ public class ProcessUtil {
     public static String SCHEDULER_LAST_RUN_TIME = "SCHEDULER_LAST_RUN_TIME";
     public static String JOB_QUEUE = "jobQueue";
     public static String TASK_DETAIL = "taskDetail";
+    public static String PRIORITY = "Priority";
 
     // constant-filed
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

@@ -37,7 +37,7 @@ public class LookupDataCacheService {
                 lookupCacheMap.put(lookupData.getLookupId(), getLookupDataDetail(lookupData));
             }
         });
-        logger.info(lookupCacheMap.toString());
+        //logger.info(lookupCacheMap.toString());
         logger.info("***************Cache-Lookup-End********************************");
     }
 
@@ -70,6 +70,5 @@ public class LookupDataCacheService {
             filter(childLookup -> childLookupId.equals(childLookup.getLookupId()))
             .findAny().orElse(null);
     }
-
 
 }

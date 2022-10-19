@@ -38,7 +38,7 @@ public class SourceTaskRestApi {
      * Integration Status :- done
      * Api use to add the source task
      * @param tempSourceTask
-     * @return ResponseEntity<?> addSourceTask
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/addSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTask(@RequestBody SourceTaskDto tempSourceTask) {
@@ -55,7 +55,7 @@ public class SourceTaskRestApi {
      * Integration Status :- done
      * Api use to update the source task
      * @param tempSourceTask
-     * @return ResponseEntity<?> updateSourceTask
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/updateSourceTask", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceTask(@RequestBody SourceTaskDto tempSourceTask) {
@@ -72,7 +72,7 @@ public class SourceTaskRestApi {
      * Integration Status :- done
      * Api use to delete the source task in soft
      * @param tempSourceTask
-     * @return ResponseEntity<?> deleteSourceTask
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/deleteSourceTask", method = RequestMethod.PUT)
     public ResponseEntity<?> deleteSourceTask(@RequestBody SourceTaskDto tempSourceTask) {
@@ -96,7 +96,7 @@ public class SourceTaskRestApi {
      * @param columnName
      * @param order
      * @param searchTextDto
-     * @return ResponseEntity<?> listSourceTask
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/listSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> listSourceTask(
@@ -129,7 +129,7 @@ public class SourceTaskRestApi {
      * @param columnName
      * @param order
      * @param searchTextDto
-     * @return ResponseEntity<?> fetchAllLinkJobsWithSourceTaskId
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/fetchAllLinkJobsWithSourceTaskId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchAllLinkJobsWithSourceTaskId(
@@ -144,8 +144,7 @@ public class SourceTaskRestApi {
         @RequestBody(required = false) SearchTextDto searchTextDto) {
         try {
             return new ResponseEntity<>(this.sourceTaskApiService.fetchAllLinkJobsWithSourceTaskId(appUserId, sourceTaskId,
-                startDate, endDate, columnName, order, PagingUtil.ApplyPaging(columnName, order, page, limit),
-                searchTextDto), HttpStatus.OK);
+                startDate, endDate, columnName, order, PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkJobsWithSourceTaskId ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -156,14 +155,13 @@ public class SourceTaskRestApi {
     /**
      * Integration Status :- done
      * Api use to fetch link task with source task type
-     * @return ResponseEntity<?> fetchAllLinkSourceTaskWithSourceTaskTypeId
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/fetchAllLinkSourceTaskWithSourceTaskTypeId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllLinkSourceTaskWithSourceTaskTypeId(
         @RequestParam(value = "sourceTaskTypeId", required = false) Long sourceTaskTypeId) {
         try {
-            return new ResponseEntity<>(this.sourceTaskApiService
-                .fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskApiService.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkSourceTaskWithSourceTaskTypeId ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -175,7 +173,7 @@ public class SourceTaskRestApi {
      * Integration Status :- done
      * Api use to fetch source task detail with id
      * @param sourceTaskId
-     * @return ResponseEntity<?> fetchSourceTaskWithSourceTaskId
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/fetchSourceTaskWithSourceTaskId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSourceTaskWithSourceTaskId(@RequestParam(value = "sourceTaskId") Long sourceTaskId) {
@@ -184,14 +182,14 @@ public class SourceTaskRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSourceTaskWithSourceTaskId ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
      * Integration Status :- done
      * Api use to download the list source task
-     * @return ResponseEntity<?> downloadListSourceTask
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/downloadListSourceTask", method = RequestMethod.GET)
     public ResponseEntity<?> downloadListSourceTask() {
@@ -211,7 +209,7 @@ public class SourceTaskRestApi {
     /**
      * Integration Status :- done
      * Api use to download the template
-     * @return ResponseEntity<?> downloadSourceTaskTemplate
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/downloadSourceTaskTemplate", method = RequestMethod.GET)
     public ResponseEntity<?> downloadSourceTaskTemplate() {
@@ -232,7 +230,7 @@ public class SourceTaskRestApi {
      * Integration Status :- done
      * Api use to upload the source task
      * @param fileUploadDto
-     * @return ResponseEntity<?> uploadSourceTask
+     * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/uploadSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSourceTask(FileUploadDto fileUploadDto) {

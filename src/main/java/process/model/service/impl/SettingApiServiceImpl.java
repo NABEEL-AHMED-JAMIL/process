@@ -87,8 +87,7 @@ public class SettingApiServiceImpl implements SettingApiService {
         } else if (isNull(tempSourceTaskType.getQueueTopicPartition())) {
             return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition missing.");
         }
-        Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(
-            tempSourceTaskType.getSourceTaskTypeId());
+        Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(tempSourceTaskType.getSourceTaskTypeId());
         if (sourceTaskType.isPresent()) {
             sourceTaskType.get().setServiceName(tempSourceTaskType.getServiceName());
             sourceTaskType.get().setDescription(tempSourceTaskType.getDescription());
@@ -96,13 +95,12 @@ public class SettingApiServiceImpl implements SettingApiService {
             sourceTaskType.get().setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
             sourceTaskType.get().setSchemaRegister(isNull(tempSourceTaskType.getSchemaPayload()) ? false: true);
             /**
-             * Note :- if the queue delete then
-             * all the source job stop and job status into delete state
-             * this.sourceTaskRepository.statusChangeSourceTaskLinkWithSourceTaskType(
-             *  tempSourceTaskType.getSourceTaskTypeId(), tempSourceTaskType.getStatus().name());
+             * Note :- Source Task Type Status Impact on Source Job
+             * like :- if active the source job active
+             * if delete then source job delete
+             * if inactive then source job inactive
              * */
-            this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(
-                tempSourceTaskType.getSourceTaskTypeId(), tempSourceTaskType.getStatus().name());
+            this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(tempSourceTaskType.getSourceTaskTypeId(), tempSourceTaskType.getStatus().name());
             if (!isNull(tempSourceTaskType.getStatus())) {
                 sourceTaskType.get().setStatus(tempSourceTaskType.getStatus());
             }
@@ -118,9 +116,7 @@ public class SettingApiServiceImpl implements SettingApiService {
             return new ResponseDto(ERROR, "SourceTaskType sourceTaskTypeId missing.");
         }
         /**
-         * Note :- if the queue delete then all the link-source task delete +
-         * all the source job stop and job status into delete state
-         * this.sourceTaskRepository.statusChangeSourceTaskLinkWithSourceTaskType(sourceTaskTypeId, Status.Delete.name());
+         * Note :- if the queue delete then all the link-source task delete all the source job stop and job status into delete state
          * */
         this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(sourceTaskTypeId, Status.Delete.name());
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(sourceTaskTypeId);

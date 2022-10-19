@@ -9,7 +9,6 @@ import process.model.enums.JobStatus;
 import process.model.service.DashboardApiService;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import static process.util.ProcessUtil.*;
@@ -22,14 +21,12 @@ public class DashboardApiServiceImpl implements DashboardApiService {
 
     private Logger logger = LoggerFactory.getLogger(DashboardApiServiceImpl.class);
 
-    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
     @Autowired
     private QueryService queryService;
 
     @Override
     public ResponseDto jobStatusStatistics() throws Exception {
-        ResponseDto responseDto = null;
+        ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobStatusStatistics());
         if (!isNull(result) && result.size() > 0) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
@@ -46,7 +43,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
 
     @Override
     public ResponseDto jobRunningStatistics() throws Exception {
-        ResponseDto responseDto = null;
+        ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobRunningStatistics());
         if (!isNull(result) && result.size() > 0) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
@@ -63,9 +60,8 @@ public class DashboardApiServiceImpl implements DashboardApiService {
 
     @Override
     public ResponseDto weeklyRunningJobStatistics(String startDate, String endDate) throws Exception {
-        ResponseDto responseDto = null;
-        List<Object[]> result = this.queryService.executeQuery(
-            this.queryService.weeklyRunningJobStatistics(startDate, endDate));
+        ResponseDto responseDto;
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyRunningJobStatistics(startDate, endDate));
         if (!isNull(result) && result.size() > 0) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
@@ -81,16 +77,15 @@ public class DashboardApiServiceImpl implements DashboardApiService {
 
     @Override
     public ResponseDto weeklyHrsRunningJobStatistics(String startDate, String endDate) throws Exception {
-        ResponseDto responseDto = null;
-        List<Object[]> result = this.queryService.executeQuery(
-            this.queryService.weeklyHrsRunningJobStatistics(startDate, endDate));
+        ResponseDto responseDto;
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrsRunningJobStatistics(startDate, endDate));
         if (!isNull(result) && result.size() > 0) {
             List<WeeklyJobStatisticsDto> weeklyJobStatistics = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
-                weeklyJobStatistics.add(new WeeklyJobStatisticsDto(
-                    obj[index].toString().trim(), Double.valueOf(obj[++index].toString()).longValue(),
-                    obj[++index].toString().trim(), Double.valueOf(obj[++index].toString()).longValue()));
+                weeklyJobStatistics.add(new WeeklyJobStatisticsDto(obj[index].toString().trim(),
+                    Double.valueOf(obj[++index].toString()).longValue(), obj[++index].toString().trim(),
+                    Double.valueOf(obj[++index].toString()).longValue()));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrsRunningJobStatistics.", weeklyJobStatistics);
         } else {
@@ -101,17 +96,16 @@ public class DashboardApiServiceImpl implements DashboardApiService {
 
     @Override
     public ResponseDto weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) throws Exception {
-        ResponseDto responseDto = null;
-        List<Object[]> result = this.queryService.executeQuery(
-            this.queryService.weeklyHrRunningStatisticsDimension(targetDate, targetHr));
+        ResponseDto responseDto;
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimension(targetDate, targetHr));
         if (!isNull(result) && result.size() > 0) {
             List<WeeklyHrJobDimensionStatisticsDto> weeklyJobStatistics = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
-                weeklyJobStatistics.add(new WeeklyHrJobDimensionStatisticsDto(Long.valueOf(obj[index].toString()), obj[++index].toString(),
+                weeklyJobStatistics.add(new WeeklyHrJobDimensionStatisticsDto(
+                    Long.valueOf(obj[index].toString()), obj[++index].toString(), Long.valueOf(obj[++index].toString()),
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString())));
+                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionData.", weeklyJobStatistics);
         } else {
@@ -123,8 +117,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     @Override
     public ResponseDto viewRunningJobDateByTargetClickJobStatistics(String targetDate, Long targetHr) throws Exception {
         ResponseDto responseDto = null;
-        List<Object[]> result = this.queryService.executeQuery(this.queryService
-            .viewRunningJobDateByTargetClickJobStatistics(targetDate, targetHr));
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.viewRunningJobDateByTargetClickJobStatistics(targetDate, targetHr));
         if (!isNull(result) && result.size() > 0) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
             for(Object[] obj : result) {

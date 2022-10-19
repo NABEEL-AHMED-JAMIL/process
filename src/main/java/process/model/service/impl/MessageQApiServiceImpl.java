@@ -13,9 +13,7 @@ import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQApiService;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
-
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.SUCCESS;
 
@@ -26,8 +24,6 @@ import static process.util.ProcessUtil.SUCCESS;
 public class MessageQApiServiceImpl implements MessageQApiService {
 
     private Logger logger = LoggerFactory.getLogger(MessageQApiServiceImpl.class);
-
-    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Autowired
     private QueryService queryService;
@@ -110,7 +106,7 @@ public class MessageQApiServiceImpl implements MessageQApiService {
         if (jobQueue.isPresent()) {
             // sub job status delete
             if (!jobQueue.get().getJobStatus().equals(JobStatus.Queue)) {
-                return new ResponseDto(ERROR, "Only In 'Queue' Job Fail ", jobQId);
+                return new ResponseDto(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
             }
             jobQueue.get().setJobStatus(JobStatus.Failed);
             this.jobQueueRepository.save(jobQueue.get());
@@ -118,7 +114,7 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             Optional<SourceJob> sourceJob = this.jobRepository.findById(jobQueue.get().getJobId());
             sourceJob.get().setJobRunningStatus(JobStatus.Failed);
             this.jobRepository.save(sourceJob.get());
-            return new ResponseDto(SUCCESS, "JobQueue successfully Update ", jobQId);
+            return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");
     }

@@ -26,7 +26,6 @@ import process.util.validation.SourceTaskValidation;
 import java.io.ByteArrayOutputStream;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -43,8 +42,6 @@ import static process.util.ProcessUtil.ERROR;
 public class SourceTaskApiServiceImpl implements SourceTaskApiService {
 
     private Logger logger = LoggerFactory.getLogger(SourceTaskApiServiceImpl.class);
-
-    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Autowired
     private BulkExcel bulkExcel;
@@ -160,8 +157,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.",
                 tempSourceTask.getTaskDetailId()));
         }
-        return new ResponseDto(ERROR, String.format("SourceTask not found with %d.",
-            tempSourceTask.getTaskDetailId()));
+        return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", tempSourceTask.getTaskDetailId()));
     }
 
     @Override
