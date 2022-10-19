@@ -22,10 +22,13 @@ public class AsyncDALTaskExecutor {
      * This method use to add the task in thread pool
      * @param task
      * */
-    public static void addTask(Runnable task) {
+    public static void addTask(Runnable task, Integer priority) {
         try {
             logger.debug("Submitting Task of type : " + task.getClass().getCanonicalName());
-            threadPool.submit(task);
+            Thread runningTask = new Thread(task);
+            // priority set for the task
+            runningTask.setPriority(priority);
+            threadPool.submit(runningTask);
         } catch (RejectedExecutionException ex) {
             logger.error("Failed to submit Task in queue " + ExceptionUtil.getRootCauseMessage(ex));
         }
@@ -44,12 +47,10 @@ public class AsyncDALTaskExecutor {
         threadPool.setRejectedExecutionHandler((Runnable task, ThreadPoolExecutor executor) -> {
             try {
                 logger.error("Task Rejected : " + task.getClass().getCanonicalName());
-                Thread.sleep(100);
+                Thread.sleep(1000); // if the task reject then wait for 1 mint
             } catch (InterruptedException ex) {
                 logger.error("DAL Task Interrupted " + ExceptionUtil.getRootCauseMessage(ex));
             }
-            // if task reject then add same take for execution again
-            executor.execute(task);
         });
         // scheduler use to check how man thread are active and other pool size detail
         (new Timer()).schedule(new TimerTask() {

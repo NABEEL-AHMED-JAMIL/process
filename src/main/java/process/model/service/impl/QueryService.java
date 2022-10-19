@@ -78,11 +78,11 @@ public class QueryService {
         }
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
             if ((startDate != null && !startDate.isEmpty()) && (endDate != null && !endDate.isEmpty())) {
-                query += String.format("and cast(st.data_created as date) between '%s' and '%s' ", startDate, endDate);
+                query += String.format("and cast(st.date_created as date) between '%s' and '%s' ", startDate, endDate);
             } else if (startDate != null && !startDate.isEmpty()) {
-                query += String.format("and cast(st.data_created as date) >= '%s' ", startDate);
+                query += String.format("and cast(st.date_created as date) >= '%s' ", startDate);
             } else if (endDate != null && !endDate.isEmpty()) {
-                query += String.format("and cast(st.data_created as date) <= '%s' ", endDate);
+                query += String.format("and cast(st.date_created as date) <= '%s' ", endDate);
             }
         }
         if (searchTextDto != null && (searchTextDto.getItemName() != null && searchTextDto.getItemValue() != null)) {
@@ -137,7 +137,7 @@ public class QueryService {
         if (isCount) {
             selectPortion = "select count(*) as result ";
         } else {
-            selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, CAST(sj.last_job_run AS varchar), sj.priority, CAST(sj.data_created AS varchar) ";
+            selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, CAST(sj.last_job_run AS varchar), sj.priority, CAST(sj.date_created AS varchar) ";
         }
         String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
         query += "where st.task_status in ('Delete', 'Inactive', 'Active') ";
@@ -146,11 +146,11 @@ public class QueryService {
         }
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
             if ((startDate != null && !startDate.isEmpty()) && (endDate != null && !endDate.isEmpty())) {
-                query += String.format("and cast(sj.data_created as date) between '%s' and '%s' ", startDate, endDate);
+                query += String.format("and cast(sj.date_created as date) between '%s' and '%s' ", startDate, endDate);
             } else if (startDate != null && !startDate.isEmpty()) {
-                query += String.format("and cast(sj.data_created as date) >= '%s' ", startDate);
+                query += String.format("and cast(sj.date_created as date) >= '%s' ", startDate);
             } else if (endDate != null && !endDate.isEmpty()) {
-                query += String.format("and cast(sj.data_created as date) <= '%s' ", endDate);
+                query += String.format("and cast(sj.date_created as date) <= '%s' ", endDate);
             }
         }
         if (searchTextDto != null && (searchTextDto.getItemName() != null && searchTextDto.getItemValue() != null)) {
@@ -160,8 +160,8 @@ public class QueryService {
                 query += "and upper(job_name) like upper('%" + searchTextDto.getItemValue() + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("job_status")) {
                 query += "and cast(sj.job_status as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
-            } else if (searchTextDto.getItemName().equalsIgnoreCase("data_created")) {
-                query += "and cast(sj.data_created as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
+            } else if (searchTextDto.getItemName().equalsIgnoreCase("date_created")) {
+                query += "and cast(sj.date_created as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
             }
         }
         return query;

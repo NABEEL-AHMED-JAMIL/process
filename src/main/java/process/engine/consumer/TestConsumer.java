@@ -33,12 +33,13 @@ public class TestConsumer {
 
     /**
      * Consumer user to handle only test source with all-partition * for test-topic
+     * alter use can use the batch message consumer using the below one KafkaListener
      * */
-    @KafkaListener(topics = "test-topic", clientIdPrefix = "string",
-        groupId = "tpd-process", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "test-topic", clientIdPrefix = "string", groupId = "tpd-process",
+        containerFactory = "kafkaListenerContainerFactory")
     public void testConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
         try {
-            Thread.sleep(10);
+            Thread.sleep(100);
             logger.info("TestConsumer [String] received key {}: Type [{}] | Payload: {} | Record: {}",
                 consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
             JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
@@ -48,11 +49,10 @@ public class TestConsumer {
             taskPayloadInfo.put(ProcessUtil.TASK_DETAIL, new Gson().fromJson(
                 convertedObject.get(ProcessUtil.TASK_DETAIL), SourceTaskDto.class));
             this.helloWorldTask.setData(taskPayloadInfo);
-            this.asyncDALTaskExecutor.addTask(this.helloWorldTask);
+            this.asyncDALTaskExecutor.addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
         } catch (InterruptedException ex) {
             logger.error("Exception in testConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             logger.error("Exception in testConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
         }
     }

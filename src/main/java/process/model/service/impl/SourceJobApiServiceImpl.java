@@ -6,7 +6,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
+import process.model.enums.Execution;
+import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
@@ -17,6 +20,8 @@ import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
+
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +41,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     private SchedulerRepository schedulerRepository;
     @Autowired
     private SourceTaskRepository sourceTaskRepository;
+    @Autowired
+    private ProducerBulkEngine producerBulkEngine;
 
     @Override
     public ResponseDto addSourceJob(SourceJobDto tempSourceJob) throws Exception {
@@ -158,11 +165,35 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
 
     @Override
     public ResponseDto runSourceJob(SourceJobDto tempSourceJob) throws Exception {
-        return null;
+        if (isNull(tempSourceJob.getJobId())) {
+            return new ResponseDto(ERROR, "SourceJob jobId missing.");
+        }
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(tempSourceJob.getJobId(), Status.Active);
+        if (!sourceJob.isPresent()) {
+            return new ResponseDto(ERROR, "SourceJob not found with jobId.");
+        } else if (!isNull(sourceJob.get().getJobRunningStatus()) && (sourceJob.get().getJobRunningStatus().equals(JobStatus.Queue) ||
+            sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
+            return new ResponseDto(ERROR, "SourceJob can't be run if its in ('Queue', 'Running') state.");
+        }
+        this.producerBulkEngine.addManualJobInQueue(sourceJob.get());
+        return new ResponseDto(ERROR, "SourceJob job successfully added into queue.", tempSourceJob);
     }
 
     @Override
     public ResponseDto skipNextSourceJob(SourceJobDto tempSourceJob) throws Exception {
+        if (isNull(tempSourceJob.getJobId())) {
+            return new ResponseDto(ERROR, "SourceJob jobId missing.");
+        }
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(tempSourceJob.getJobId(), Status.Active);
+        if (!sourceJob.isPresent()) {
+            return new ResponseDto(ERROR, "SourceJob not found with jobId.");
+        } else if (!isNull(sourceJob.get().getJobRunningStatus()) && (sourceJob.get().getJobRunningStatus().equals(JobStatus.Queue) ||
+            sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
+            return new ResponseDto(ERROR, "SourceJob can't be run if its in ('Queue', 'Running') state.");
+        } else if (!sourceJob.get().getExecution().equals(Execution.Auto)) {
+            // check is the job type is auto or not
+            return new ResponseDto(ERROR, "SourceJob skip only work with 'auto' source job.");
+        }
         return null;
     }
 

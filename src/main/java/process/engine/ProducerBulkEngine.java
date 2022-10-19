@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import process.emailer.EmailMessagesFactory;
+import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
@@ -42,8 +43,21 @@ public class ProducerBulkEngine {
         this.pattern = Pattern.compile(REGEX);
     }
 
-    public void addManualJobInQueue() {
-
+    /**
+     * Method use to run the job Manual
+     * */
+    public void addManualJobInQueue(SourceJob sourceJob) {
+        if (sourceJob.getExecution().equals(Execution.Manual)) {
+            this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
+            JobQueue jobQueue = this.bulkAction.createJobQueue(sourceJob.getJobId(),
+                LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
+                String.format("Job %s now in the queue.", sourceJob.getJobId()));
+            return;
+        }
+        // pending
+        // check the current time with the scheduler time like (current time b/w start and end) time
+        // send to the queue if this coming into the b/w range
     }
 
     /**
@@ -104,26 +118,22 @@ public class ProducerBulkEngine {
             List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(lookupData.getLookupValue()));
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
-                jobQueues.parallelStream().forEach(jobQueue -> {
+                jobQueues.parallelStream()
+                .forEach(jobQueue -> {
                     Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
                     try {
                         if (sourceJob.isPresent()) {
                             this.pushMessageToQueue(sourceJob.get(), jobQueue);
                         } else {
-                            // email send to the user if the job status is not active & email configure with the job
-                            this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Stop);
-                            this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Stop);
-                            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-                                String.format("Job %s stop in the queue due to main job either (delete|inactive).", jobQueue.getJobId()));
-                            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Stop);
+                            this.changeStatusForLastJob(jobQueue, "Job %s stop in the queue due to main job either (delete|inactive).");
                         }
                     } catch (Exception ex) {
                         logger.error("Error In runJobInCurrentTimeSlot " + ExceptionUtil.getRootCauseMessage(ex));
                     }
                 });
-            } else {
-                logger.info("addJobInQueue --> NO scheduler is set for this timestamp");
+                return;
             }
+            logger.info("addJobInQueue --> NO scheduler is set for this timestamp");
         } catch (Exception ex) {
             logger.error("Error In runJobInCurrentTimeSlot " + ExceptionUtil.getRootCauseMessage(ex));
         }
@@ -171,26 +181,34 @@ public class ProducerBulkEngine {
                         Map<String, Object> payload = new HashMap<>();
                         payload.put(ProcessUtil.JOB_QUEUE, jobQueue);
                         payload.put(ProcessUtil.TASK_DETAIL, sourceTask);
+                        payload.put(ProcessUtil.PRIORITY, sourceJob.getPriority());
                         if (partition.contains(ProcessUtil.START)) {
                             this.kafkaTemplate.send(topic, key, payload.toString());
                         } else {
                             this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString());
                         }
                         logger.info("Payload Send " + payload);
-                    } else {
-                        logger.error("Regex Not match..");
+                        return;
                     }
-                } else {
-                    this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Stop);
-                    this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Stop);
-                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-                        String.format("Broker not active job %s stop.", jobQueue.getJobId()));
-                    this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Stop);
+                    logger.error("Regex Not match..");
+                    this.changeStatusForLastJob(jobQueue,
+                        "Broker configuration wrong job %s stop " + queueTopicPartition);
+                    return;
                 }
+                this.changeStatusForLastJob(jobQueue, "Broker not active job %s stop.");
             } catch (Exception ex) {
                 logger.error("Error In pushMessageToQueue " + ExceptionUtil.getRootCauseMessage(ex));
             }
         }
+    }
+
+    private void changeStatusForLastJob(JobQueue jobQueue, String message) {
+        this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Stop);
+        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Stop);
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(message, jobQueue.getJobId()));
+        this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
+        this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
+        this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Stop);
     }
 
     @Override

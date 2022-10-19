@@ -106,7 +106,7 @@ public class MessageQApiServiceImpl implements MessageQApiService {
         if (jobQueue.isPresent()) {
             // sub job status delete
             if (!jobQueue.get().getJobStatus().equals(JobStatus.Queue)) {
-                return new ResponseDto(ERROR, "Only In 'Queue' Job Fail ", jobQId);
+                return new ResponseDto(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
             }
             jobQueue.get().setJobStatus(JobStatus.Failed);
             this.jobQueueRepository.save(jobQueue.get());
@@ -114,7 +114,7 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             Optional<SourceJob> sourceJob = this.jobRepository.findById(jobQueue.get().getJobId());
             sourceJob.get().setJobRunningStatus(JobStatus.Failed);
             this.jobRepository.save(sourceJob.get());
-            return new ResponseDto(SUCCESS, "JobQueue successfully Update ", jobQId);
+            return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");
     }
