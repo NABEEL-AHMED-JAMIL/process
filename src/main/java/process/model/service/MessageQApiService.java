@@ -11,4 +11,5 @@ public interface MessageQApiService {
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch);
 
     public ResponseDto failJobLogs(Long jobQId);
+
 }

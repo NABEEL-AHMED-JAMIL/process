@@ -17,6 +17,6 @@ public interface DashboardApiService {
 
     public ResponseDto weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) throws Exception;
 
-    public ResponseDto viewRunningJobDateByTargetClickJobStatistics(String targetDate, Long targetHr) throws Exception;
+    public ResponseDto weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) throws Exception;
 
 }

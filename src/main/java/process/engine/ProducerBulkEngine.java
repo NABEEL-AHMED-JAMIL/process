@@ -44,21 +44,29 @@ public class ProducerBulkEngine {
     }
 
     /**
-     * Method use to run the job Manual
+     * Method use to send the job int the queue by user action
+     * @param sourceJob
      * */
     public void addManualJobInQueue(SourceJob sourceJob) {
-        if (sourceJob.getExecution().equals(Execution.Manual)) {
-            this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
-            JobQueue jobQueue = this.bulkAction.createJobQueue(sourceJob.getJobId(),
+        this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
+        JobQueue jobQueue = this.bulkAction.createJobQueue(sourceJob.getJobId(),
                 LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
-            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-                String.format("Job %s now in the queue.", sourceJob.getJobId()));
-            return;
-        }
-        // pending
-        // check the current time with the scheduler time like (current time b/w start and end) time
-        // send to the queue if this coming into the b/w range
+        this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
     }
+
+    /**
+     * Method use to send the job int the queue as skip by user action
+     * @param sourceJob
+     * */
+    public void skipManualJobInQueue(SourceJob sourceJob) {
+        // if the job in the skip state no need update the last run queue
+        JobQueue jobQueue = this.bulkAction.createJobQueue(sourceJob.getJobId(), LocalDateTime.now(),
+            JobStatus.Skip, "Job %s skip, already in queue.", true);
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
+            String.format("Job %s skip, already in queue.", sourceJob.getJobId()));
+    }
+
 
     /**
      * This method use to fetch the detail from the scheduler and match the current running slot
@@ -83,15 +91,17 @@ public class ProducerBulkEngine {
                         // we have to check if job in the queue then send the detail of job as skip with message
                         JobQueue jobQueue = null;
                         if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
+                            // note:- changeJobLastJobRun only for the job which first move from queue -> next process
+                            // if the job in the skip state no need update the last run queue
                             jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
                                 JobStatus.Skip, "Job %s skip, already in queue.", true);
                             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
                                 String.format("Job %s skip, already in queue.", scheduler.getJobId()));
-                            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Skip);
                         } else {
                             this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
                             jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
                                 JobStatus.Queue, "Job %s now in the queue.", false);
+                            this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
                             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
                                 String.format("Job %s now in the queue.", scheduler.getJobId()));
                         }
@@ -99,9 +109,9 @@ public class ProducerBulkEngine {
                         this.bulkAction.updateNextScheduler(scheduler);
                     }
                 });
-            } else {
-                logger.info("addJobInQueue --> NO scheduler is set for this timestamp");
+                return;
             }
+            logger.info("addJobInQueue --> NO scheduler is set for this timestamp");
         } catch (Exception ex) {
             logger.error("Error In addJobInQueue " + ExceptionUtil.getRootCauseMessage(ex));
         }
@@ -139,24 +149,6 @@ public class ProducerBulkEngine {
         }
     }
 
-    /***
-     * This method check either the job is eligible to put into the queue or not
-     * @param lastSchedulerTime -> system scheduler run date
-     * @param currentSchedulerTime -> existing time of the application
-     * @param scheduledTime -> target time for run the scheduler
-     * @return boolean true|false
-     */
-    private boolean isScheduled(LocalDateTime lastSchedulerTime, LocalDateTime currentSchedulerTime,
-        Long jobId, LocalDateTime scheduledTime) {
-        LocalDateTime target = LocalDateTime.of(currentSchedulerTime.toLocalDate(), scheduledTime.toLocalTime());
-        boolean isExist=target.isBefore(currentSchedulerTime) && target.isAfter(lastSchedulerTime);
-        if(isExist) {
-            logger.info("Scheduler -- jobId: " + jobId + " currentTime: " + currentSchedulerTime
-                + " lastSchedulerTime: " + lastSchedulerTime + " scheduledTime: " + scheduledTime);
-        }
-        return isExist;
-    }
-
     /**
      * Method use to push the data into the kafka queue per topic configuration
      * @param sourceJob
@@ -191,8 +183,7 @@ public class ProducerBulkEngine {
                         return;
                     }
                     logger.error("Regex Not match..");
-                    this.changeStatusForLastJob(jobQueue,
-                        "Broker configuration wrong job %s stop " + queueTopicPartition);
+                    this.changeStatusForLastJob(jobQueue, "Broker configuration wrong job %s stop " + queueTopicPartition);
                     return;
                 }
                 this.changeStatusForLastJob(jobQueue, "Broker not active job %s stop.");
@@ -202,13 +193,35 @@ public class ProducerBulkEngine {
         }
     }
 
+    /***
+     * This method check either the job is eligible to put into the queue or not
+     * @param lastSchedulerTime -> system scheduler run date
+     * @param currentSchedulerTime -> existing time of the application
+     * @param scheduledTime -> target time for run the scheduler
+     * @return boolean true|false
+     */
+    private boolean isScheduled(LocalDateTime lastSchedulerTime, LocalDateTime currentSchedulerTime,
+        Long jobId, LocalDateTime scheduledTime) {
+        LocalDateTime target = LocalDateTime.of(currentSchedulerTime.toLocalDate(), scheduledTime.toLocalTime());
+        boolean isExist=target.isBefore(currentSchedulerTime) && target.isAfter(lastSchedulerTime);
+        if(isExist) {
+            logger.info("Scheduler -- jobId: " + jobId + " currentTime: " + currentSchedulerTime +
+            " lastSchedulerTime: " + lastSchedulerTime + " scheduledTime: " + scheduledTime);
+        }
+        return isExist;
+    }
+
+    /**
+     * Method use to set the status of the job into db
+     * @param jobQueue
+     * @param message
+     * @return void
+     * */
     private void changeStatusForLastJob(JobQueue jobQueue, String message) {
-        this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Stop);
-        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Stop);
+        this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
+        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(message, jobQueue.getJobId()));
-        this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
-        this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Stop);
     }
 
     @Override

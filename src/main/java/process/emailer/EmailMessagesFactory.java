@@ -44,11 +44,7 @@ public class EmailMessagesFactory {
             metaData.put("time_slot", jobQueue.getStartTime());
             EmailMessageDto emailMessageDto = new EmailMessageDto();
             emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
-            if (jobStatus.equals(JobStatus.Stop)) {
-                metaData.put("status", JobStatus.Stop);
-                emailMessageDto.setSubject("Source Job Stop");
-                emailMessageDto.setEmailTemplateName(TemplateType.STOP_JOB);
-            } else if (jobStatus.equals(JobStatus.Skip)) {
+            if (jobStatus.equals(JobStatus.Skip)) {
                 metaData.put("status", JobStatus.Skip);
                 emailMessageDto.setSubject("Source Job Skip");
                 emailMessageDto.setEmailTemplateName(TemplateType.SKIP_JOB);
@@ -78,19 +74,15 @@ public class EmailMessagesFactory {
             metaData.put("time_slot", jobQueue.getStartTime());
             EmailMessageDto emailMessageDto = new EmailMessageDto();
             emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
-            if (jobStatus.equals(JobStatus.Stop)) {
-                metaData.put("status", JobStatus.Stop);
-                emailMessageDto.setSubject("Source Job Stop");
-                emailMessageDto.setEmailTemplateName(TemplateType.STOP_JOB);
-            } else if (jobStatus.equals(JobStatus.Skip)) {
+            if (jobStatus.equals(JobStatus.Skip)) {
                 metaData.put("status", JobStatus.Skip);
                 emailMessageDto.setSubject("Source Job Skip");
                 emailMessageDto.setEmailTemplateName(TemplateType.SKIP_JOB);
-            } else if (jobStatus.equals(JobStatus.Skip)) {
+            } else if (jobStatus.equals(JobStatus.Completed)) {
                 metaData.put("status", JobStatus.Completed);
                 emailMessageDto.setSubject("Source Job Completed");
                 emailMessageDto.setEmailTemplateName(TemplateType.COMPLETE_JOB);
-            } else if (jobStatus.equals(JobStatus.Skip)) {
+            } else if (jobStatus.equals(JobStatus.Failed)) {
                 metaData.put("status", JobStatus.Failed);
                 emailMessageDto.setSubject("Source Job Failed");
                 emailMessageDto.setEmailTemplateName(TemplateType.FAIL_JOB);
