@@ -112,8 +112,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
             rowCount.getAndIncrement();
             List<String> dataCellValue = new ArrayList<>();
             dataCellValue.add(!isNull(sourceJob.getJobName()) ? String.valueOf(sourceJob.getJobName()) : "");
-            dataCellValue.add(String.format("%d [%s]", sourceJob.getTaskDetail().getTaskDetailId(),
-                sourceJob.getTaskDetail().getTaskName()));
+            dataCellValue.add(String.format("%d [%s]", sourceJob.getTaskDetail().getTaskDetailId(), sourceJob.getTaskDetail().getTaskName()));
             dataCellValue.add(String.valueOf(sourceJob.getExecution()));
             dataCellValue.add(String.valueOf(sourceJob.getJobStatus()));
             dataCellValue.add(String.valueOf(sourceJob.getDateCreated()));
@@ -121,25 +120,20 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
             Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.getJobId());
             if (scheduler.isPresent()) {
                 dataCellValue.add(String.valueOf(scheduler.get().getStartDate()));
-                dataCellValue.add(!isNull(scheduler.get().getEndDate()) ?
-                    String.valueOf(scheduler.get().getEndDate()): "");
-                dataCellValue.add(!isNull(String.valueOf(scheduler.get().getStartTime())) ?
-                    String.valueOf(scheduler.get().getStartTime()) : "");
+                dataCellValue.add(!isNull(scheduler.get().getEndDate()) ? String.valueOf(scheduler.get().getEndDate()): "");
+                dataCellValue.add(!isNull(String.valueOf(scheduler.get().getStartTime())) ? String.valueOf(scheduler.get().getStartTime()) : "");
             } else {
                 dataCellValue.add("");
                 dataCellValue.add("");
                 dataCellValue.add("");
             }
-            dataCellValue.add(!isNull(sourceJob.getLastJobRun()) ?
-                String.valueOf(sourceJob.getLastJobRun()) : "");
+            dataCellValue.add(!isNull(sourceJob.getLastJobRun()) ? String.valueOf(sourceJob.getLastJobRun()) : "");
             if (scheduler.isPresent()) {
-                dataCellValue.add(!isNull(scheduler.get().getRecurrenceTime()) ?
-                    String.valueOf(scheduler.get().getRecurrenceTime()) : "");
+                dataCellValue.add(!isNull(scheduler.get().getRecurrenceTime()) ? String.valueOf(scheduler.get().getRecurrenceTime()) : "");
             } else {
                 dataCellValue.add("");
             }
-            dataCellValue.add(!isNull(sourceJob.getJobRunningStatus()) ?
-                String.valueOf(sourceJob.getJobRunningStatus()) : "");
+            dataCellValue.add(!isNull(sourceJob.getJobRunningStatus()) ? String.valueOf(sourceJob.getJobRunningStatus()) : "");
             dataCellValue.add(sourceJob.isCompleteJob() ? "Yes": "No");
             dataCellValue.add(sourceJob.isFailJob() ? "Yes" : "No");
             dataCellValue.add(sourceJob.isSkipJob() ? "Yes" : "No");
@@ -215,8 +209,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
                 if (!isNull(jobDetailValidation.getTaskId())) {
                     if (!this.transactionService.findByTaskDetailIdAndTaskStatus(
                         Long.valueOf(jobDetailValidation.getTaskId())).isPresent()) {
-                        jobDetailValidation.setErrorMsg("Delete sourceTask not link with source job at row " +
-                                (currentRow.getRowNum() + 1) + ".\n");
+                        jobDetailValidation.setErrorMsg("Delete sourceTask not link with source job at row " + (currentRow.getRowNum() + 1) + ".\n");
                     }
                 }
                 if (!isNull(jobDetailValidation.getErrorMsg())) {

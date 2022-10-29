@@ -27,7 +27,7 @@ public class WeeklyHrJobDimensionStatisticsDto {
         Long queue, Long running, Long failed, Long completed,
         Long stop, Long skip, Long total) {
         this.jobId = jobId;
-        this.jobName = jobName;
+        this.jobName = jobName.equals("null") ? "Total Count" : jobName;
         this.queue = queue;
         this.running = running;
         this.failed = failed;

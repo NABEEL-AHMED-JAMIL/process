@@ -143,10 +143,6 @@ public class TransactionServiceImpl {
         return this.lookupDataRepository.findByLookupType(lookupType);
     }
 
-    public Optional<SourceJob> findJobById(Long sourceJobId) {
-        return this.sourceJobRepository.findById(sourceJobId);
-    }
-
     public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId) {
         return this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(taskDetailId, Status.Active);
     }

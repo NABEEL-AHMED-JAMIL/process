@@ -49,7 +49,6 @@ public class HelloWorldTask implements Runnable {
         SourceJobQueueDto jobQueue = (SourceJobQueueDto) this.getData().get(ProcessUtil.JOB_QUEUE);
         SourceTaskDto sourceTaskDto = (SourceTaskDto) this.getData().get(ProcessUtil.TASK_DETAIL);
         try {
-            this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Running);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Running);
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the running.", jobQueue.getJobId()));

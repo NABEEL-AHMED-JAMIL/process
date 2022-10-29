@@ -154,8 +154,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
             }
             this.sourceTaskRepository.save(sourceTask.get());
-            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.",
-                tempSourceTask.getTaskDetailId()));
+            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
         }
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", tempSourceTask.getTaskDetailId()));
     }
@@ -184,14 +183,13 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
     @Override
     public ResponseDto listSourceTask(Long appUserId, String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
-        ResponseDto responseDto = null;
+        ResponseDto responseDto;
         Object countQueryResult = this.queryService.executeQueryForSingleResult(this.queryService.listSourceTaskQuery(
-            true, appUserId, startDate, endDate, columnName, order, searchTextDto));
+                true, appUserId, startDate, endDate, columnName, order, searchTextDto));
         if (!isNull(countQueryResult)) {
             /* fetch Record According to Pagination*/
-            List<Object[]> result = this.queryService.executeQuery(
-                this.queryService.listSourceTaskQuery(false, appUserId, startDate, endDate,
-                columnName, order, searchTextDto), paging);
+            List<Object[]> result = this.queryService.executeQuery(this.queryService.listSourceTaskQuery(
+                    false, appUserId, startDate, endDate, columnName, order, searchTextDto), paging);
             if (!isNull(result) && result.size() > 0) {
                 List<SourceTaskDto> sourceTaskDtoList = new ArrayList<>();
                 for(Object[] obj : result) {
@@ -342,18 +340,12 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         sourceTask.forEach(sourceTaskProjection -> {
             rowCount.getAndIncrement();
             List<String> dataCellValue = new ArrayList<>();
-            dataCellValue.add(!isNull(sourceTaskProjection.getTaskDetailId()) ?
-                String.valueOf(sourceTaskProjection.getTaskDetailId()) : "");
-            dataCellValue.add(!isNull(sourceTaskProjection.getTaskName()) ?
-                String.valueOf(sourceTaskProjection.getTaskName()) : "");
-            dataCellValue.add(!isNull(sourceTaskProjection.getTaskPayload()) ?
-                String.valueOf(sourceTaskProjection.getTaskPayload()) : "");
-            dataCellValue.add(!isNull(sourceTaskProjection.getTaskStatus()) ?
-                String.valueOf(sourceTaskProjection.getTaskStatus()) : "");
-            dataCellValue.add(!isNull(sourceTaskProjection.getServiceName()) ?
-                String.valueOf(sourceTaskProjection.getServiceName()) : "");
-            dataCellValue.add(!isNull(sourceTaskProjection.getQueueTopicPartition()) ?
-                String.valueOf(sourceTaskProjection.getQueueTopicPartition()) : "");
+            dataCellValue.add(!isNull(sourceTaskProjection.getTaskDetailId()) ? String.valueOf(sourceTaskProjection.getTaskDetailId()) : "");
+            dataCellValue.add(!isNull(sourceTaskProjection.getTaskName()) ? String.valueOf(sourceTaskProjection.getTaskName()) : "");
+            dataCellValue.add(!isNull(sourceTaskProjection.getTaskPayload()) ? String.valueOf(sourceTaskProjection.getTaskPayload()) : "");
+            dataCellValue.add(!isNull(sourceTaskProjection.getTaskStatus()) ? String.valueOf(sourceTaskProjection.getTaskStatus()) : "");
+            dataCellValue.add(!isNull(sourceTaskProjection.getServiceName()) ? String.valueOf(sourceTaskProjection.getServiceName()) : "");
+            dataCellValue.add(!isNull(sourceTaskProjection.getQueueTopicPartition()) ? String.valueOf(sourceTaskProjection.getQueueTopicPartition()) : "");
             this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
         });
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -426,8 +418,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                 }
                 if (!isNull(sourceTaskValidation.getSourceTaskTypeId())) {
-                    Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository
-                        .findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId()));
+                    Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId()));
                     if (!sourceTaskType.isPresent()) {
                         sourceTaskValidation.setErrorMsg("SourceTaskType not exist at row " + (currentRow.getRowNum() + 1) + ".\n");
                     } else if (sourceTaskType.get().getStatus().equals(Status.Delete)) {
@@ -452,8 +443,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             sourceTask.setTaskName(sourceTaskValidation.getTaskName());
             sourceTask.setTaskPayload(sourceTaskValidation.getTaskPayload());
             sourceTask.setTaskStatus(Status.Active);
-            sourceTask.setSourceTaskType(this.sourceTaskTypeRepository
-                .findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
+            sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
             this.sourceTaskRepository.save(sourceTask);
         });
         return new ResponseDto(SUCCESS, String.format("Total %d Task Save Successfully", sourceTaskValidations.size()));

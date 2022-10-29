@@ -6,11 +6,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
+import process.model.pojo.Scheduler;
+import process.model.pojo.SourceJob;
+import process.model.pojo.SourceTask;
+import process.model.pojo.SourceTaskType;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardApiService;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import static process.util.ProcessUtil.*;
 
 /**
@@ -23,6 +28,10 @@ public class DashboardApiServiceImpl implements DashboardApiService {
 
     @Autowired
     private QueryService queryService;
+    @Autowired
+    private SourceJobRepository sourceJobRepository;
+    @Autowired
+    private SchedulerRepository schedulerRepository;
 
     @Override
     public ResponseDto jobStatusStatistics() throws Exception {
@@ -103,9 +112,11 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             for(Object[] obj : result) {
                 int index = 0;
                 weeklyJobStatistics.add(new WeeklyHrJobDimensionStatisticsDto(
-                    Long.valueOf(obj[index].toString()), obj[++index].toString(), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString())));
+                    obj[index] != null ? Long.valueOf(obj[index].toString()) : null, String.valueOf(obj[++index]),
+                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                    Long.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionData.", weeklyJobStatistics);
         } else {
@@ -115,18 +126,17 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     }
 
     @Override
-    public ResponseDto viewRunningJobDateByTargetClickJobStatistics(String targetDate, Long targetHr) throws Exception {
-        ResponseDto responseDto = null;
-        List<Object[]> result = this.queryService.executeQuery(this.queryService.viewRunningJobDateByTargetClickJobStatistics(targetDate, targetHr));
+    public ResponseDto weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr,
+        String jobStatus, Long jobId) throws Exception {
+        ResponseDto responseDto;
+        Map<String, Object> objectDetail = new HashMap<>();
+        List<Object[]> result = this.queryService.executeQuery(this.queryService
+                .weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
         if (!isNull(result) && result.size() > 0) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
                 SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
-                if (!isNull(obj[index])) {
-                    sourceJobQueueDto.setJobName(String.valueOf(obj[index]));
-                }
-                index++;
                 if (!isNull(obj[index])) {
                     sourceJobQueueDto.setJobQueueId(Long.valueOf(String.valueOf(obj[index])));
                 }
@@ -152,20 +162,67 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                 }
                 index++;
                 if (!isNull(obj[index])) {
-                    sourceJobQueueDto.setStartTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueueDto.setSkipTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 index++;
                 if (!isNull(obj[index])) {
-                    sourceJobQueueDto.setSkipTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueueDto.setStartTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 sourceJobQueues.add(sourceJobQueueDto);
             }
-            responseDto = new ResponseDto(SUCCESS, "Data found for viewRunningJobDateByTargetClickJobStatistics.",
-                sourceJobQueues);
+            objectDetail.put("sourceJobQueues", sourceJobQueues);
+            if (!isNull(jobId)) {
+                Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId);
+                if (sourceJob.isPresent()) {
+                    SourceJobDto sourceJobDto = new SourceJobDto();
+                    sourceJobDto.setJobId(sourceJob.get().getJobId());
+                    sourceJobDto.setJobStatus(sourceJob.get().getJobStatus());
+                    sourceJobDto.setLastJobRun(sourceJob.get().getLastJobRun());
+                    sourceJobDto.setJobName(sourceJob.get().getJobName());
+                    sourceJobDto.setDateCreated(sourceJob.get().getDateCreated());
+                    sourceJobDto.setPriority(sourceJob.get().getPriority());
+                    sourceJobDto.setExecution(sourceJob.get().getExecution());
+                    sourceJobDto.setCompleteJob(sourceJob.get().isCompleteJob());
+                    sourceJobDto.setFailJob(sourceJob.get().isFailJob());
+                    sourceJobDto.setSkipJob(sourceJob.get().isSkipJob());
+                    if (sourceJob.get().getTaskDetail() != null) {
+                        SourceTask sourceTask = sourceJob.get().getTaskDetail();
+                        SourceTaskDto sourceTaskDto = new SourceTaskDto();
+                        sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
+                        sourceTaskDto.setTaskName(sourceTask.getTaskName());
+                        sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
+                        sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
+                        if (sourceTask.getSourceTaskType() != null) {
+                            SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
+                            SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
+                            sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
+                            sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
+                            sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
+                            sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
+                            sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
+                        }
+                        sourceJobDto.setTaskDetail(sourceTaskDto);
+                    }
+                    Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(jobId);
+                    if (scheduler.isPresent()) {
+                        SchedulerDto schedulerDto = new SchedulerDto();
+                        schedulerDto.setSchedulerId(scheduler.get().getSchedulerId());
+                        schedulerDto.setStartDate(scheduler.get().getStartDate());
+                        schedulerDto.setEndDate(scheduler.get().getEndDate());
+                        schedulerDto.setStartTime(scheduler.get().getStartTime());
+                        schedulerDto.setFrequency(scheduler.get().getFrequency());
+                        schedulerDto.setRecurrence(scheduler.get().getRecurrence());
+                        schedulerDto.setRecurrenceTime(scheduler.get().getRecurrenceTime());
+                        sourceJobDto.setScheduler(schedulerDto);
+                    }
+                    objectDetail.put("sourceJob", sourceJobDto);
+                }
+            }
+            responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionDetail.", objectDetail);
         } else {
-            responseDto = new ResponseDto(ERROR, "No Data found for viewRunningJobDateByTargetClickJobStatistics.",
-                new ArrayList<>());
+            responseDto = new ResponseDto(ERROR, "No Data found for weeklyHrRunningStatisticsDimensionDetail.");
         }
         return responseDto;
     }
+
 }

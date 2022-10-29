@@ -4,12 +4,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import process.engine.BulkAction;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
-import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
-import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQApiService;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -26,15 +25,18 @@ public class MessageQApiServiceImpl implements MessageQApiService {
     private Logger logger = LoggerFactory.getLogger(MessageQApiServiceImpl.class);
 
     @Autowired
-    private QueryService queryService;
+    private BulkAction bulkAction;
     @Autowired
-    private SourceJobRepository jobRepository;
+    private QueryService queryService;
     @Autowired
     private JobQueueRepository jobQueueRepository;
 
+    private final String SOURCE_JOB_QUEUES = "sourceJobQueues";
+    private final String JOB_STATUS_STATISTICS = "jobStatusStatistic";
+
     @Override
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch) {
-        ResponseDto responseDto = null;
+        ResponseDto responseDto;
         if (isNull(messageQSearch.getFromDate())) {
             return new ResponseDto(ERROR, "FromDate missing.");
         } else if (isNull(messageQSearch.getToDate())) {
@@ -80,7 +82,7 @@ public class MessageQApiServiceImpl implements MessageQApiService {
                 }
                 sourceJobQueues.add(sourceJobQueue);
             }
-            objectMap.put("sourceJobQueues", sourceJobQueues);
+            objectMap.put(SOURCE_JOB_QUEUES, sourceJobQueues);
             result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, true));
             if (!isNull(result) && result.size() > 0) {
                 List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
@@ -88,7 +90,7 @@ public class MessageQApiServiceImpl implements MessageQApiService {
                     int index = 0;
                     jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
                 }
-                objectMap.put("jobStatusStatistic", jobStatusStatistic);
+                objectMap.put(JOB_STATUS_STATISTICS, jobStatusStatistic);
             }
             responseDto = new ResponseDto(SUCCESS, "MessageQ successfully ", objectMap);
         } else {
@@ -104,16 +106,13 @@ public class MessageQApiServiceImpl implements MessageQApiService {
         }
         Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(jobQId);
         if (jobQueue.isPresent()) {
-            // sub job status delete
             if (!jobQueue.get().getJobStatus().equals(JobStatus.Queue)) {
                 return new ResponseDto(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
             }
-            jobQueue.get().setJobStatus(JobStatus.Failed);
-            this.jobQueueRepository.save(jobQueue.get());
-            // main job status delete
-            Optional<SourceJob> sourceJob = this.jobRepository.findById(jobQueue.get().getJobId());
-            sourceJob.get().setJobRunningStatus(JobStatus.Failed);
-            this.jobRepository.save(sourceJob.get());
+            this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
+            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed);
+            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), String.format("Job %s fail .", jobQueue.get().getJobId()));
+            this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
             return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");

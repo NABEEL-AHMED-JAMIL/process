@@ -108,21 +108,6 @@ public class QueryService {
     }
 
     /**
-     * method use to fetch the jobs count link wit source task
-     * @param taskDetailId
-     * @return string
-     * */
-    public String countAllLinkJobsWithSourceTaskQuery(Long taskDetailId) {
-        String selectPortion = "select count(sj.job_id) ";
-        String query = selectPortion + "from source_task st\n" +
-            "inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
-        if (taskDetailId != null) {
-            query += String.format("where st.task_detail_id = %d ", taskDetailId);
-        }
-        return query;
-    }
-
-    /**
      * Query:- query help to fetch the jobs link with task
      * @param isCount
      * @param taskDetailId
@@ -234,23 +219,34 @@ public class QueryService {
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
             "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d\n" +
             "group by job_queue.job_id, source_job.job_name\n" +
-            "order by job_queue.job_id desc\n", targetDate, targetHr);
+            "union\n" +
+            "select null as job_id, null as job_name,\n" +
+            "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
+            "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
+            "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
+            "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
+            "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
+            "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
+            "count (*) as total\n" +
+            "from job_queue\n" +
+            "inner join source_job on source_job.job_id = job_queue.job_id\n" +
+            "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d\n" +
+            "order by job_id asc\n", targetDate, targetHr, targetDate, targetHr);
     }
 
-    /**
-     * method use to fetch the view running  job statistics
-     * @param targetDate
-     * @param targetHr
-     * @return string
-     * */
-    public String viewRunningJobDateByTargetClickJobStatistics(String targetDate, Long targetHr) {
-        return String.format("select sjb.job_name, jbq.job_queue_id, jbq.date_created, CAST(jbq.end_time AS varchar),\n" +
-            "jbq.job_id, jbq.job_status, jbq.job_status_message, CAST(jbq.start_time AS varchar), CAST(jbq.skip_time AS varchar)\n" +
-            "from source_job as sjb\n" +
-            "inner join job_queue as jbq on jbq.job_id = sjb.job_id\n" +
-            "where date(jbq.date_created) = '%s' and extract(hour from cast(jbq.date_created as time)) = %d\n" +
-            "order by date_created asc",
-            targetDate, targetHr);
+    public String weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) {
+        String query = "select job_queue.*\n" +
+            "from job_queue\n" +
+            "inner join source_job on source_job.job_id = job_queue.job_id\n" +
+            "where\n" +
+            String.format("date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d\n", targetDate, targetHr);
+        if (!isNull(jobId)) {
+            query += String.format("and job_queue.job_id = %d\n", jobId);
+        }
+        if (!isNull(jobStatus)) {
+            query += String.format("and job_queue.job_status = '%s'\n", jobStatus);
+        }
+        return query;
     }
 
     public String fetchJobQLog(MessageQSearchDto messageQSearch, boolean isState) {
@@ -263,7 +259,7 @@ public class QueryService {
         String query = selectPortion + "from job_queue \n";
         if (!isState) {
             query += String.format("where cast(date_created as date) between '%s' and '%s' \n",
-                    messageQSearch.getFromDate(), messageQSearch.getToDate());
+                messageQSearch.getFromDate(), messageQSearch.getToDate());
             if (!isNull(messageQSearch.getJobId()) && messageQSearch.getJobId().size() > 0) {
                 String jobId = messageQSearch.getJobId().toString();
                 query += String.format("and job_id in (%s) \n", jobId.substring(1, jobId.length()-1));
@@ -274,12 +270,15 @@ public class QueryService {
             }
             if (!isNull(messageQSearch.getJobStatuses()) && messageQSearch.getJobStatuses().size() > 0) {
                 String jobStatus = messageQSearch.getJobStatuses().stream()
-                        .map(jobStatus1 -> "'" +jobStatus1.toString()+"',").collect(Collectors.joining());
+                    .map(jobStatus1 -> "'" +jobStatus1.toString()+"',").collect(Collectors.joining());
                 query += String.format("and job_status in (%s)", jobStatus.substring(0,jobStatus.length()-1));
             }
         }
         if (isState) {
             query += "\ngroup by job_status";
+        }
+        if (!isState) {
+            query += "\norder by job_queue_id desc";
         }
         return query;
     }

@@ -20,8 +20,6 @@ import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
-
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -56,8 +54,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         // validation for scheduler list -> if any missing then
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobName(tempSourceJob.getJobName());
-        sourceJob.setTaskDetail(this.sourceTaskRepository
-            .findById(tempSourceJob.getTaskDetail().getTaskDetailId()).get());
+        sourceJob.setTaskDetail(this.sourceTaskRepository.findById(tempSourceJob.getTaskDetail().getTaskDetailId()).get());
         sourceJob.setJobStatus(Status.Active);
         sourceJob.setExecution(tempSourceJob.getExecution());
         sourceJob.setPriority(tempSourceJob.getPriority());
@@ -157,8 +154,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         if (sourceJob.isPresent()) {
             sourceJob.get().setJobStatus(Status.Delete);
             this.sourceJobRepository.save(sourceJob.get());
-            return new ResponseDto(SUCCESS, String.format("SourceJob successfully update with %d.",
-                tempSourceJob.getJobId()));
+            return new ResponseDto(SUCCESS, String.format("SourceJob successfully update with %d.", tempSourceJob.getJobId()));
         }
         return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", tempSourceJob.getJobId()));
     }
@@ -176,7 +172,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             return new ResponseDto(ERROR, "SourceJob can't be run if its in ('Queue', 'Running') state.");
         }
         this.producerBulkEngine.addManualJobInQueue(sourceJob.get());
-        return new ResponseDto(ERROR, "SourceJob job successfully added into queue.", tempSourceJob);
+        sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(tempSourceJob.getJobId(), Status.Active);
+        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.", sourceJob);
     }
 
     @Override
@@ -191,10 +188,9 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
             return new ResponseDto(ERROR, "SourceJob can't be run if its in ('Queue', 'Running') state.");
         } else if (!sourceJob.get().getExecution().equals(Execution.Auto)) {
-            // check is the job type is auto or not
             return new ResponseDto(ERROR, "SourceJob skip only work with 'auto' source job.");
         }
-        return null;
+        return new ResponseDto(ERROR, "SourceJob skip successfully.");
     }
 
     @Override
