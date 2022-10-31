@@ -142,15 +142,6 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 sourceTask.get().setSourceTaskPayload(sourceTaskPayloads);
             }
             if (!isNull(tempSourceTask.getTaskStatus())) {
-                /**
-                 * if (tempSourceTask.getTaskStatus().equals(Status.Active)) {
-                 *    this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(
-                 *      tempSourceTask.getTaskDetailId(), Status.Active.name());
-                 * } else {
-                 *    this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(
-                 *      tempSourceTask.getTaskDetailId(), Status.Inactive.name());
-                 * }
-                 * */
                 sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
             }
             this.sourceTaskRepository.save(sourceTask.get());

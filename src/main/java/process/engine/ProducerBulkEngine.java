@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import process.emailer.EmailMessagesFactory;
-import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
@@ -89,7 +88,7 @@ public class ProducerBulkEngine {
                 schedulerForToday.parallelStream().forEach(scheduler -> {
                     if (this.isScheduled(lastSchedulerRun, now, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
                         // we have to check if job in the queue then send the detail of job as skip with message
-                        JobQueue jobQueue = null;
+                        JobQueue jobQueue;
                         if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
                             // note:- changeJobLastJobRun only for the job which first move from queue -> next process
                             // if the job in the skip state no need update the last run queue

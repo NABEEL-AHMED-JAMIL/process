@@ -57,7 +57,7 @@ public class HelloWorldTask implements Runnable {
             for (int i=loopXmlParser.getStartIndex().intValue(); i<loopXmlParser.getEndIndex(); i++) {
                 logger.info(String.format("Job Id %d with sub job id %d for number count %s",
                     jobQueue.getJobId(), jobQueue.getJobQueueId(), "Number Count " + i));
-                //this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), "Number Count " + i);
+                this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), "Number Count " + i);
             }
             // change the status into the complete status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Completed);

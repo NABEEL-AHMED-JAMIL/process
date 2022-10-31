@@ -18,7 +18,5 @@ public interface LookupDataRepository extends CrudRepository<LookupData, Long> {
      * */
     public LookupData findByLookupType(String lookupType);
 
-    public List<LookupData> findByParentLookupId(Long parentId);
-
     public List<LookupData> findByParentLookupIdIsNull();
 }

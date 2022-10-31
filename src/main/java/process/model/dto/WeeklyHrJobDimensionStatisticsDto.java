@@ -37,6 +37,17 @@ public class WeeklyHrJobDimensionStatisticsDto {
         this.total = total;
     }
 
+    public WeeklyHrJobDimensionStatisticsDto(Long queue, Long running, Long failed,
+        Long completed, Long stop, Long skip, Long total) {
+        this.queue = queue;
+        this.running = running;
+        this.failed = failed;
+        this.completed = completed;
+        this.stop = stop;
+        this.skip = skip;
+        this.total = total;
+    }
+
     public Long getJobId() {
         return jobId;
     }
