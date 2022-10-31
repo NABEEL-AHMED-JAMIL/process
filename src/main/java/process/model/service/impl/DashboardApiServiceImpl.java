@@ -181,9 +181,11 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     sourceJobDto.setJobName(sourceJob.get().getJobName());
                     sourceJobDto.setDateCreated(sourceJob.get().getDateCreated());
                     sourceJobDto.setPriority(sourceJob.get().getPriority());
+                    sourceJobDto.setJobRunningStatus(sourceJob.get().getJobRunningStatus());
                     sourceJobDto.setExecution(sourceJob.get().getExecution());
                     sourceJobDto.setCompleteJob(sourceJob.get().isCompleteJob());
                     sourceJobDto.setFailJob(sourceJob.get().isFailJob());
+                    sourceJobDto.setPdfReportUrl(sourceJob.get().getJobId().toString());
                     sourceJobDto.setSkipJob(sourceJob.get().isSkipJob());
                     if (sourceJob.get().getTaskDetail() != null) {
                         SourceTask sourceTask = sourceJob.get().getTaskDetail();
@@ -216,6 +218,16 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                         sourceJobDto.setScheduler(schedulerDto);
                     }
                     objectDetail.put("sourceJob", sourceJobDto);
+                    // statistics 1026
+                    result = this.queryService.executeQuery(this.queryService.statisticsBySourceJobId(jobId));
+                    for(Object[] obj : result) {
+                        int index = 0;
+                        objectDetail.put("sourceJobStatistics", new WeeklyHrJobDimensionStatisticsDto(
+                            Long.valueOf(obj[index].toString()), Long.valueOf(obj[++index].toString()),
+                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                            Long.valueOf(obj[++index].toString())));
+                    }
                 }
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionDetail.", objectDetail);

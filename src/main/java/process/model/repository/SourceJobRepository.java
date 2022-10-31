@@ -35,13 +35,6 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     public Optional<SourceJob> findByJobNameAndJobStatus(String jobName, Status status);
 
     /**
-     * Method use to get the job by status if present in db
-     * @param jobRunningStatus
-     * @return List<Long>
-     * */
-    public List<SourceJob> findJobByJobRunningStatus(JobStatus jobRunningStatus);
-
-    /**
      * Method use to get the job detail which use to update the view table
      * @param jobIds
      * @return List<SourceJobProjection>

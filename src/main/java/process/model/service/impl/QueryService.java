@@ -234,18 +234,43 @@ public class QueryService {
             "order by job_id asc\n", targetDate, targetHr, targetDate, targetHr);
     }
 
+    /**
+     * method use to fetch the job statistics by id
+     * @param jobId
+     * @return string
+     * */
+    public String statisticsBySourceJobId(Long jobId) {
+        return String.format("select\n" +
+            "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
+            "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
+            "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
+            "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
+            "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
+            "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
+            "count (*) as total\n" +
+            "from job_queue\n" +
+            "inner join source_job on source_job.job_id = job_queue.job_id\n" +
+            "where source_job.job_id = %d", jobId);
+    }
+
     public String weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) {
         String query = "select job_queue.*\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where\n" +
-            String.format("date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d\n", targetDate, targetHr);
+            "where 1=1\n";
+        if (!isNull(targetDate)) {
+            String.format(" and date(job_queue.date_created) = '%s' \n", targetDate);
+        }
+        if (!isNull(targetHr)) {
+            String.format(" and extract(hour from cast(job_queue.date_created as time)) = %d\n", targetHr);
+        }
         if (!isNull(jobId)) {
             query += String.format("and job_queue.job_id = %d\n", jobId);
         }
         if (!isNull(jobStatus)) {
             query += String.format("and job_queue.job_status = '%s'\n", jobStatus);
         }
+        query += "\norder by job_queue.job_queue_id desc";
         return query;
     }
 

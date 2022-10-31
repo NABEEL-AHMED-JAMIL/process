@@ -25,9 +25,4 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "group by source_task_type.source_task_type_id order by source_task_type.source_task_type_id asc", nativeQuery = true)
     public List<SourceTaskTypeProjection> fetchAllSourceTaskType();
 
-    @Query(value = "select count(task_detail.source_task_type_id) as totalTaskLink from source_task_type\n" +
-        "left join task_detail on task_detail.source_task_type_id = source_task_type.source_task_type_id\n" +
-        "where source_task_type.source_task_type_id = ?1", nativeQuery = true)
-    public Long getLinkTaskCountBySourceTaskType(Long sourceTaskTypeId);
-
 }

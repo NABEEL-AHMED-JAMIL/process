@@ -35,9 +35,4 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
         " from source_task where source_task_type_id = ?1", nativeQuery = true)
     public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId);
 
-    @Modifying
-    @Transactional
-    @Query(value = "update source_task set task_status = ?2 where source_task_type_id = ?1", nativeQuery = true)
-    public int statusChangeSourceTaskLinkWithSourceTaskType(Long sourceTaskTypeId, String status);
-
 }
