@@ -131,7 +131,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
         ResponseDto responseDto;
         Map<String, Object> objectDetail = new HashMap<>();
         List<Object[]> result = this.queryService.executeQuery(this.queryService
-                .weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
+            .weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
         if (!isNull(result) && result.size() > 0) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
             for(Object[] obj : result) {

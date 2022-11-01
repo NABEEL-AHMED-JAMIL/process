@@ -174,6 +174,23 @@ public class SourceJobRestApi {
 
     /**
      * Integration Status :- done
+     * Method uses to skip the sourceJob
+     * @param jobQueueId
+     * @return ResponseEntity<?>
+     * */
+    @RequestMapping(value = "/findSourceJobAuditLog", method = RequestMethod.GET)
+    public ResponseEntity<?> findSourceJobAuditLog(@RequestParam Long jobQueueId, @RequestParam Long jobId) {
+        try {
+            return new ResponseEntity<>(this.sourceJobApiService.findSourceJobAuditLog(jobQueueId, jobId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while findSourceJobAuditLog ", ExceptionUtil.getRootCauseMessage(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Integration Status :- done
      * The method used to download the template file for batch scheduler
      * with the list of timezone and frequency or triggerDetail
      * @return ResponseEntity<?>

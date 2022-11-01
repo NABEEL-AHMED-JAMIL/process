@@ -15,14 +15,10 @@ import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTaskType;
 import process.model.pojo.SourceTask;
-import process.model.repository.SchedulerRepository;
-import process.model.repository.SourceJobRepository;
-import process.model.repository.SourceTaskRepository;
+import process.model.repository.*;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import static process.util.ProcessUtil.*;
 
 /**
@@ -39,6 +35,10 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     private SchedulerRepository schedulerRepository;
     @Autowired
     private SourceTaskRepository sourceTaskRepository;
+    @Autowired
+    private JobAuditLogRepository jobAuditLogRepository;
+    @Autowired
+    private JobQueueRepository jobQueueRepository;
     @Autowired
     private ProducerBulkEngine producerBulkEngine;
 
@@ -190,7 +190,19 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         } else if (!sourceJob.get().getExecution().equals(Execution.Auto)) {
             return new ResponseDto(ERROR, "SourceJob skip only work with 'auto' source job.");
         }
-        return new ResponseDto(ERROR, "SourceJob skip successfully.");
+        return new ResponseDto(SUCCESS, "SourceJob skip successfully.");
+    }
+
+    @Override
+    public ResponseDto findSourceJobAuditLog(Long jobQueueId, Long jobId) throws Exception {
+        if (isNull(jobQueueId)) {
+            return new ResponseDto(ERROR, "JobQueueId missing.");
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("auditLogs", this.jobAuditLogRepository.findAllByJobQueueId(jobQueueId));
+        payload.put("sourceJob", this.sourceJobRepository.findById(jobId).get());
+        payload.put("sourceJobQueue", this.jobQueueRepository.findById(jobQueueId).get());
+        return new ResponseDto(SUCCESS, "SourceJob skip successfully.", payload);
     }
 
     @Override
