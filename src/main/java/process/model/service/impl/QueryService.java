@@ -259,10 +259,10 @@ public class QueryService {
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
             "where 1=1\n";
         if (!isNull(targetDate)) {
-            String.format(" and date(job_queue.date_created) = '%s' \n", targetDate);
+            query += String.format(" and date(job_queue.date_created) = '%s' \n", targetDate);
         }
         if (!isNull(targetHr)) {
-            String.format(" and extract(hour from cast(job_queue.date_created as time)) = %d\n", targetHr);
+            query += String.format(" and extract(hour from cast(job_queue.date_created as time)) = %d\n", targetHr);
         }
         if (!isNull(jobId)) {
             query += String.format("and job_queue.job_id = %d\n", jobId);

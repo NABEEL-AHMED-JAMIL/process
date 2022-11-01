@@ -18,6 +18,8 @@ public interface SourceJobApiService {
 
     public ResponseDto skipNextSourceJob(SourceJobDto tempSourceJob) throws Exception;
 
+    public ResponseDto findSourceJobAuditLog(Long jobQueueIdb, Long jobId) throws Exception;
+
     public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobId) throws Exception;
 
     public ResponseDto listSourceJob() throws Exception;
