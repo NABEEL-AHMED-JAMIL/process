@@ -1,5 +1,6 @@
 # Process
-This repo is scheduler engine which is used to handle the sourceJob scheduler. Project is using kafka for real-time stream processing<br>
+This repo is scheduler engine which is used to handle the sourceJob scheduler.<br>
+Project is using kafka for real-time stream processing<br>
 #### This project use to create the scheduler and run base on target time
 `Process have 5 type of scheduler`<br>
 1. Mint (scheduler run mint ex => every 5 mint)
@@ -75,6 +76,86 @@ select * from sourceJob;
 select * from job_queue where job_status = 'Queue';
 select * from lookup_data;
 select * from job_audit_logs where job_id = 1179 order by job_audit_log_id desc;
+
+select job_queue.*
+from job_queue
+inner join source_job on source_job.job_id = job_queue.job_id
+where
+date(job_queue.date_created) = '2022-10-22' and extract(hour from cast(job_queue.date_created as time)) = 18 and
+job_queue.job_id = 1003 and job_queue.job_status = 'Completed';
+
+select job_queue.job_id, source_job.job_name,
+count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,
+count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,
+count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,
+count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,
+count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,
+count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,
+count (*) as total
+from job_queue
+inner join source_job on source_job.job_id = job_queue.job_id
+--where 
+date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d
+group by job_queue.job_id, source_job.job_name
+union
+select "" as job_id, "" as job_name,
+count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,
+count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,
+count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,
+count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,
+count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,
+count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,
+count (*) as total
+from job_queue
+inner join source_job on source_job.job_id = job_queue.job_id
+--where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d
+order by job_id asc;
+
+select sum(temp_tab.queue) as total_queue , sum(temp_tab.running) as total_running,
+sum(temp_tab.failed) as total_failed, sum(temp_tab.completed) as total_completed,
+sum(temp_tab.stop) as total_stop, sum(temp_tab.skip) as total_ski, sum(temp_tab.total) as total
+from (select job_queue.job_id,
+count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,
+count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,
+count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,
+count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,
+count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,
+count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,
+count (*) as total
+from job_queue
+inner join source_job on source_job.job_id = job_queue.job_id
+where date(job_queue.date_created) = '2022-10-12' and extract(hour from cast(job_queue.date_created as time)) = 12
+group by job_queue.job_id
+order by job_queue.job_id desc) as temp_tab;
+
+// add the case
+select  '"' || start_time || '\n' || job_id ||'-' ||job_queue_id || '",'  as job_start_time,
+extract(epoch from (end_time-start_time)) as sec
+from job_queue
+where date(start_time) = '2022-10-12'
+and extract(hour from cast(job_queue.date_created as time)) = 12;
+
+select job_id, job_queue_id, date_created, start_time, end_time, skip_time, job_status
+from job_queue 
+where cast(date_created as date) between '2022-10-14' and '2022-10-21'
+order by job_queue_id desc
+
+select weekData.daycode, weekData.hr, weekData.date, count(*)
+from (
+select job_queue_id, to_char(cast(date_created as date), 'Day') as daycode, 
+cast(date_created as date) as date, cast(date_created as time) as time, 
+extract(hour from cast(date_created as time)) as hr
+from job_queue where date(date_created) between '2022-10-11' and '2022-10-17') as weekData
+group by weekData.daycode, weekData.hr, weekData.date;
+
+select job_status, count(*) as total_count
+from job_queue 
+where cast(date_created as date) between '2022-10-12' and '2022-10-12'
+--and job_id in (1502, 1503) 
+--and job_queue_id in (2738, 2862)
+--and job_status in ('Running','Completed','Failed')
+group by job_status;
+
 ```
 ## Process Endpoint
 List of endpoint with detail of endpoint
@@ -82,26 +163,30 @@ List of endpoint with detail of endpoint
    http://localhost:9098/api/v1/bulk.json/downloadBatchSchedulerTemplateFile
 2. Endpoint use upload batch file <br>
    http://localhost:9098/api/v1/bulk.json/uploadBatchSchedulerFile
-## Images for sample xlsx with data
-New Change in process will add soon
-Will add soon
-
-
+## Video For Screen's
+[![Watch the video](ext-detail/strcture.png)](ext-detail/screen-capture.webm)
 ## UI Job Status
 Below image show the task status color for UI.<br>
 ![alt text](ext-detail/ui-status.png)
-## Process Structure
-1. Below image show the process structure with new enhancement. <br>
-![alt text](ext-detail/Process.png) <br>
+
+[//]: # (## Process Structure)
+[//]: # (1. Below image show the process structure with new enhancement. <br>)
+[//]: # (![alt text]&#40;ext-detail/strcture.png&#41; <br>)
+
 2. Below image show the kafka structure which implement in the project.
 To run the kafka use the below cmd
    1. Start Apache Zookeeper.<br>
+      .\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties (for window) <br>
       ./zookeeper-server-start.sh ../config/zookeeper.properties
    2. Start the Kafka server.<br>
-      ./kafka-server-start.sh ../config/server.properties
-   3. To create the cluster for below detail download and install the 'Kafka Offset Explorer'.
+      ./kafka-server-start.sh ../config/server.properties (for window) <br>
+      .\bin\windows\kafka-server-start.bat .\config\server.properties
+
+
+To start the Kafka server.
+   1. To create the cluster for below detail download and install the 'Kafka Offset Explorer'.
    ![alt text](ext-detail/Topic-Detail.png)
 ## Process DB-UML
-Below image show the detail for Project detail for process. <br>
-![alt text](ext-detail/process_v1.png)
+Below image show the detail for database detail for process. <br>
+![alt text](ext-detail/db%20detail.png)
 
