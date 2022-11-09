@@ -9,6 +9,7 @@ import org.springframework.util.StringUtils;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
 import process.model.enums.Execution;
+import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.Scheduler;
@@ -18,6 +19,8 @@ import process.model.pojo.SourceTask;
 import process.model.repository.*;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
+
+import java.time.LocalDateTime;
 import java.util.*;
 import static process.util.ProcessUtil.*;
 
@@ -54,7 +57,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         // validation for scheduler list -> if any missing then
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobName(tempSourceJob.getJobName());
-        sourceJob.setTaskDetail(this.sourceTaskRepository.findById(tempSourceJob.getTaskDetail().getTaskDetailId()).get());
+        sourceJob.setTaskDetail(this.sourceTaskRepository.findById(
+            tempSourceJob.getTaskDetail().getTaskDetailId()).get());
         sourceJob.setJobStatus(Status.Active);
         sourceJob.setExecution(tempSourceJob.getExecution());
         sourceJob.setPriority(tempSourceJob.getPriority());
@@ -190,7 +194,34 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         } else if (!sourceJob.get().getExecution().equals(Execution.Auto)) {
             return new ResponseDto(ERROR, "SourceJob skip only work with 'auto' source job.");
         }
-        return new ResponseDto(SUCCESS, "SourceJob skip successfully.");
+        Scheduler scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId()).get();
+        LocalDateTime nextJobRun = null;
+        if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !isNull(scheduler.getRecurrence())) {
+            nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.valueOf(scheduler.getRecurrence()));
+        } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !isNull(scheduler.getRecurrence())) {
+            nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.valueOf(scheduler.getRecurrence()));
+        } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !isNull(scheduler.getRecurrence())) {
+            nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.valueOf(scheduler.getRecurrence()));
+        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !isNull(scheduler.getRecurrence())) {
+            nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.valueOf(scheduler.getRecurrence()));
+        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !isNull(scheduler.getRecurrence())) {
+            nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.valueOf(scheduler.getRecurrence()));
+        }
+        if (!isNull(scheduler.getEndDate())) {
+            LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
+            if (!isNull(nextJobRun) && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
+                scheduler.setRecurrenceTime(nextJobRun);
+                this.schedulerRepository.save(scheduler);
+                this.producerBulkEngine.skipManualJobInQueue(sourceJob.get());
+                return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
+            }
+        } else if (!isNull(nextJobRun)) {
+            scheduler.setRecurrenceTime(nextJobRun);
+            this.schedulerRepository.save(scheduler);
+            this.producerBulkEngine.skipManualJobInQueue(sourceJob.get());
+            return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
+        }
+        return new ResponseDto(ERROR, "No more flight skip.");
     }
 
     @Override

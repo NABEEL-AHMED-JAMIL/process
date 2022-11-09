@@ -45,7 +45,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for jobStatusStatistics.", jobStatusStatistic);
         } else {
-            responseDto = new ResponseDto(ERROR, "No Data found for jobStatusStatistics.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found for jobStatusStatistics.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -62,7 +62,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for jobRunningStatistics.", jobStatusStatistic);
         } else {
-            responseDto = new ResponseDto(ERROR, "No Data found for jobRunningStatistics.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found for jobRunningStatistics.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -79,7 +79,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyRunningJobStatistics.", jobStatusStatistic);
         } else {
-            responseDto = new ResponseDto(ERROR, "No Data found for weeklyRunningJobStatistics.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyRunningJobStatistics.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -98,7 +98,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrsRunningJobStatistics.", weeklyJobStatistics);
         } else {
-            responseDto = new ResponseDto(ERROR, "No Data found for weeklyHrsRunningJobStatistics.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyHrsRunningJobStatistics.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -120,7 +120,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionData.", weeklyJobStatistics);
         } else {
-            responseDto = new ResponseDto(ERROR, "No Data found for weeklyHrRunningStatisticsDimensionData.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyHrRunningStatisticsDimensionData.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -232,7 +232,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionDetail.", objectDetail);
         } else {
-            responseDto = new ResponseDto(ERROR, "No Data found for weeklyHrRunningStatisticsDimensionDetail.");
+            responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyHrRunningStatisticsDimensionDetail.");
         }
         return responseDto;
     }
