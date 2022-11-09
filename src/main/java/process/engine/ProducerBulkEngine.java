@@ -61,9 +61,9 @@ public class ProducerBulkEngine {
     public void skipManualJobInQueue(SourceJob sourceJob) {
         // if the job in the skip state no need update the last run queue
         JobQueue jobQueue = this.bulkAction.createJobQueue(sourceJob.getJobId(), LocalDateTime.now(),
-            JobStatus.Skip, "Job %s skip, already in queue.", true);
+            JobStatus.Skip, "Job %s skip, by user action.", true);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-            String.format("Job %s skip, already in queue.", sourceJob.getJobId()));
+            String.format("Job %s skip, by user action.", sourceJob.getJobId()));
     }
 
 

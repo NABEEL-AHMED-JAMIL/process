@@ -115,20 +115,15 @@ public class BulkAction {
      * */
     public void updateNextScheduler(Scheduler scheduler) {
         LocalDateTime nextJobRun = null;
-        if (scheduler.getFrequency().equals(Frequency.Mint.name())
-            && !this.isNull(scheduler.getRecurrence())) {
+        if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Hr.name())
-            && !this.isNull(scheduler.getRecurrence())) {
+        } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Daily.name())
-            && !this.isNull(scheduler.getRecurrence())) {
+        } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name())
-            && !this.isNull(scheduler.getRecurrence())) {
+        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.valueOf(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name())
-            && !this.isNull(scheduler.getRecurrence())) {
+        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !this.isNull(scheduler.getRecurrence())) {
             nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.valueOf(scheduler.getRecurrence()));
         }
         if (scheduler.getEndDate() != null) {
@@ -136,10 +131,13 @@ public class BulkAction {
             if (nextJobRun != null && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
                 scheduler.setRecurrenceTime(nextJobRun);
                 this.transactionService.saveOrUpdateScheduler(scheduler);
+                return;
             }
+            logger.info("No More Nex Job for jobId :- " + scheduler.getJobId());
         } else if (nextJobRun != null) {
             scheduler.setRecurrenceTime(nextJobRun);
             this.transactionService.saveOrUpdateScheduler(scheduler);
+            return;
         }
     }
 

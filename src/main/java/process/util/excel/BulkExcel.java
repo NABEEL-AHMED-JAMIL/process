@@ -142,22 +142,6 @@ public class BulkExcel {
         sheet.addValidationData(dataValidation);
     }
 
-    /**
-     * The fillDropDownValueV2 use to fill the list in the cell
-     * @param sheet
-     * @param row
-     * @param col
-     * @param formulaList
-     */
-    public void fillDropDownValueV2(XSSFSheet sheet, Integer row, Integer col, String formulaList) {
-        //data validations
-        DataValidationHelper dvHelper = sheet.getDataValidationHelper();
-        DataValidationConstraint dvConstraint = dvHelper.createFormulaListConstraint(formulaList);
-        CellRangeAddressList addressList = new CellRangeAddressList(row, row, col, col);
-        DataValidation validation = dvHelper.createValidation(dvConstraint, addressList);
-        sheet.addValidationData(validation);
-    }
-
     @Override
     public String toString() {
         return new Gson().toJson(this);
