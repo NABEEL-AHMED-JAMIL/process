@@ -9,6 +9,7 @@ import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.repository.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -123,6 +124,16 @@ public class TransactionServiceImpl {
      */
     public List<Scheduler> findAllSchedulerForToday(LocalDate todayDate) {
         return this.schedulerRepository.findAllSchedulerForToday(todayDate);
+    }
+
+    /**
+     * The method use to get the scheduler for the current date
+     * @param lastSchedulerRun
+     * @param currentSchedulerTime
+     * @return List<?>
+     */
+    public List<Scheduler> findAllSchedulerForTodayV2(LocalDateTime lastSchedulerRun, LocalDateTime currentSchedulerTime) {
+        return this.schedulerRepository.findAllSchedulerForToday(lastSchedulerRun, currentSchedulerTime);
     }
 
     /**

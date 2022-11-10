@@ -49,7 +49,7 @@ public class ProducerBulkEngine {
     public void addManualJobInQueue(SourceJob sourceJob) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueue(sourceJob.getJobId(),
-                LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+            LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
         this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
     }
@@ -76,17 +76,17 @@ public class ProducerBulkEngine {
     public void addJobInQueue() {
         try {
             logger.info("addJobInQueue --> FETCH Scheduler of current day STARTED ");
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime currentSchedulerTime = LocalDateTime.now();
             LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
             LocalDateTime lastSchedulerRun = LocalDateTime.parse(lookupData.getLookupValue());
             // only the active job will move to the scheduler
-            List<Scheduler> schedulerForToday = this.transactionService.findAllSchedulerForToday(now.toLocalDate());
+            List<Scheduler> schedulerForToday = this.transactionService.findAllSchedulerForTodayV2(lastSchedulerRun, currentSchedulerTime);
             logger.info("addJobInQueue --> FETCHED Scheduler of current day: size {} ", schedulerForToday.size());
-            lookupData.setLookupValue(now.toString());
+            lookupData.setLookupValue(currentSchedulerTime.toString());
             this.transactionService.updateLookupDate(lookupData);
             if (!schedulerForToday.isEmpty()) {
                 schedulerForToday.parallelStream().forEach(scheduler -> {
-                    if (this.isScheduled(lastSchedulerRun, now, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
+                    if (this.isScheduled(lastSchedulerRun, currentSchedulerTime, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
                         // we have to check if job in the queue then send the detail of job as skip with message
                         JobQueue jobQueue;
                         if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
