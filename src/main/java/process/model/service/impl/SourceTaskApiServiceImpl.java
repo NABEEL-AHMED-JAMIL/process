@@ -212,7 +212,15 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                     index++;
                     if (!isNull(obj[index])) {
+                        sourceTaskTypeDto.setSchemaRegister(Boolean.valueOf(obj[index].toString()));
+                    }
+                    index++;
+                    if (!isNull(obj[index])) {
                         sourceTaskTypeDto.setQueueTopicPartition(String.valueOf(obj[index].toString()));
+                    }
+                    index++;
+                    if (!isNull(obj[index])) {
+                        sourceTaskTypeDto.setSchemaPayload(String.valueOf(obj[index].toString()));
                     }
                     index++;
                     if (!isNull(obj[index])) {
@@ -221,14 +229,6 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     index++;
                     if (!isNull(obj[index])) {
                         sourceTaskTypeDto.setStatus(Status.valueOf(obj[index].toString()));
-                    }
-                    index++;
-                    if (!isNull(obj[index])) {
-                        sourceTaskTypeDto.setSchemaRegister(Boolean.valueOf(obj[index].toString()));
-                    }
-                    index++;
-                    if (!isNull(obj[index])) {
-                        sourceTaskTypeDto.setSchemaPayload(String.valueOf(obj[index].toString()));
                     }
                     index++;
                     sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
