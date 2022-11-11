@@ -210,15 +210,15 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         if (!isNull(scheduler.getEndDate())) {
             LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
             if (!isNull(nextJobRun) && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
+                this.producerBulkEngine.skipManualJobInQueue(scheduler);
                 scheduler.setRecurrenceTime(nextJobRun);
                 this.schedulerRepository.save(scheduler);
-                this.producerBulkEngine.skipManualJobInQueue(sourceJob.get());
                 return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
             }
         } else if (!isNull(nextJobRun)) {
+            this.producerBulkEngine.skipManualJobInQueue(scheduler);
             scheduler.setRecurrenceTime(nextJobRun);
             this.schedulerRepository.save(scheduler);
-            this.producerBulkEngine.skipManualJobInQueue(sourceJob.get());
             return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
         }
         return new ResponseDto(ERROR, "No more flight skip.");

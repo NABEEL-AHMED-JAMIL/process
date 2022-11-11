@@ -168,6 +168,18 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                 if (!isNull(obj[index])) {
                     sourceJobQueueDto.setStartTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
+                index++;
+                if (!isNull(obj[index])) {
+                    sourceJobQueueDto.setRunManual(Boolean.valueOf(obj[index].toString()));
+                } else {
+                    sourceJobQueueDto.setRunManual(false);
+                }
+                index++;
+                if (!isNull(obj[index])) {
+                    sourceJobQueueDto.setSkipManual(Boolean.valueOf(obj[index].toString()));
+                } else {
+                    sourceJobQueueDto.setSkipManual(false);
+                }
                 sourceJobQueues.add(sourceJobQueueDto);
             }
             objectDetail.put("sourceJobQueues", sourceJobQueues);

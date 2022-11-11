@@ -48,7 +48,7 @@ public class ProducerBulkEngine {
      * */
     public void addManualJobInQueue(SourceJob sourceJob) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
-        JobQueue jobQueue = this.bulkAction.createJobQueue(sourceJob.getJobId(),
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
             LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
         this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
@@ -56,16 +56,15 @@ public class ProducerBulkEngine {
 
     /**
      * Method use to send the job int the queue as skip by user action
-     * @param sourceJob
+     * @param scheduler
      * */
-    public void skipManualJobInQueue(SourceJob sourceJob) {
+    public void skipManualJobInQueue(Scheduler scheduler) {
         // if the job in the skip state no need update the last run queue
-        JobQueue jobQueue = this.bulkAction.createJobQueue(sourceJob.getJobId(), LocalDateTime.now(),
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(scheduler.getJobId(), scheduler.getRecurrenceTime(),
             JobStatus.Skip, "Job %s skip, by user action.", true);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-            String.format("Job %s skip, by user action.", sourceJob.getJobId()));
+            String.format("Job %s skip, by user action.", scheduler.getJobId()));
     }
-
 
     /**
      * This method use to fetch the detail from the scheduler and match the current running slot

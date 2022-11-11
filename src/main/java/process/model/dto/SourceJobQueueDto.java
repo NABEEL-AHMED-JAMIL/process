@@ -23,6 +23,10 @@ public class SourceJobQueueDto {
     private Long jobId;
     private String jobName;
     private String jobStatusMessage;
+
+    private Boolean skipManual;
+
+    private Boolean runManual;
     private Timestamp dateCreated;
 
     private List<JobStatusStatisticDto> jobStatusStatistic;
@@ -86,6 +90,22 @@ public class SourceJobQueueDto {
     }
     public void setJobStatusMessage(String jobStatusMessage) {
         this.jobStatusMessage = jobStatusMessage;
+    }
+
+    public Boolean isSkipManual() {
+        return skipManual;
+    }
+
+    public void setSkipManual(Boolean skipManual) {
+        this.skipManual = skipManual;
+    }
+
+    public Boolean isRunManual() {
+        return runManual;
+    }
+
+    public void setRunManual(Boolean runManual) {
+        this.runManual = runManual;
     }
 
     public Timestamp getDateCreated() {

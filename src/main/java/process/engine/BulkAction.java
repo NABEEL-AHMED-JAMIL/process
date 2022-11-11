@@ -75,6 +75,9 @@ public class BulkAction {
      * the schedule pick the job from the job-queue and push into the queue
      * @param jobId
      * @param scheduledTime
+     * @param jobStatus
+     * @param message
+     * @param isSkip
      * @return JobQueueDto
      * */
     public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime,
@@ -83,6 +86,33 @@ public class BulkAction {
         if (isSkip) {
             jobQueue.setSkipTime(scheduledTime);
         } else {
+            jobQueue.setStartTime(scheduledTime);
+        }
+        jobQueue.setJobStatus(jobStatus);
+        jobQueue.setJobId(jobId);
+        jobQueue.setJobStatusMessage(String.format(message, jobId));
+        this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        return jobQueue;
+    }
+
+    /**
+     * This method use to add the job into the job-queue in the queue state
+     * the schedule pick the job from the job-queue and push into the queue
+     * @param jobId
+     * @param scheduledTime
+     * @param jobStatus
+     * @param message
+     * @param isSkip
+     * @return JobQueueDto
+     * */
+    public JobQueue createJobQueueV1(Long jobId, LocalDateTime scheduledTime,
+        JobStatus jobStatus, String message, Boolean isSkip) {
+        JobQueue jobQueue = new JobQueue();
+        if (isSkip) {
+            jobQueue.setSkipManual(true);
+            jobQueue.setSkipTime(scheduledTime);
+        } else {
+            jobQueue.setRunManual(true);
             jobQueue.setStartTime(scheduledTime);
         }
         jobQueue.setJobStatus(jobStatus);

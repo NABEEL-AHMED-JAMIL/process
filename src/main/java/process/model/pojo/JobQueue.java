@@ -66,6 +66,12 @@ public class JobQueue {
     @Column(name = "job_status_message")
     private String jobStatusMessage;
 
+    @Column(name = "skip_manual")
+    private Boolean skipManual;
+
+    @Column(name = "run_manual")
+    private Boolean runManual;
+
     @Column(name = "date_created",
         nullable = false)
     private Timestamp dateCreated;
@@ -119,6 +125,22 @@ public class JobQueue {
     }
     public void setJobId(Long jobId) {
         this.jobId = jobId;
+    }
+
+    public boolean isSkipManual() {
+        return skipManual;
+    }
+
+    public void setSkipManual(boolean skipManual) {
+        this.skipManual = skipManual;
+    }
+
+    public Boolean isRunManual() {
+        return runManual;
+    }
+
+    public void setRunManual(Boolean runManual) {
+        this.runManual = runManual;
     }
 
     public String getJobStatusMessage() {
