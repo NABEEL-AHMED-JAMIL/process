@@ -1,3 +1,22 @@
+<table>
+  <tr>
+    <th>Task</th>
+    <th>Status</th>
+  </tr>
+  <tr>
+    <td>Email Configuration</td>
+    <td>Pending</td>
+  </tr>
+    <tr>
+    <td>QR-Code PDF</td>
+    <td>Pending</td>
+  </tr>
+    <tr>
+    <td>OpenId Auth</td>
+    <td>Pending</td>
+  </tr>
+</table>
+
 # Process
 This repo is scheduler engine which is used to handle the sourceJob scheduler.<br>
 Project is using kafka for real-time stream processing<br>
