@@ -59,6 +59,10 @@ public class SourceTaskType {
         columnDefinition = "text")
     private String schemaPayload;
 
+    @Column(name = "user_id",
+        nullable = false)
+    private Long userId;
+
     public SourceTaskType() {}
 
     public SourceTaskType(Long sourceTaskTypeId, String queueTopicPartition) {
@@ -128,6 +132,14 @@ public class SourceTaskType {
 
     public void setSchemaPayload(String schemaPayload) {
         this.schemaPayload = schemaPayload;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     @Override

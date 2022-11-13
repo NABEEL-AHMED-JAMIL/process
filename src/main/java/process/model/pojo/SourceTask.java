@@ -53,6 +53,10 @@ public class SourceTask {
     @OneToMany(cascade = CascadeType.ALL)
     private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
 
+    @Column(name = "user_id",
+        nullable = false)
+    private Long userId;
+
     public SourceTask() {}
 
     public Long getTaskDetailId() {
@@ -101,6 +105,14 @@ public class SourceTask {
 
     public void setSourceTaskPayload(List<SourceTaskPayload> sourceTaskPayload) {
         this.sourceTaskPayload = sourceTaskPayload;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     @Override

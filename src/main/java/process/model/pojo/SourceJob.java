@@ -95,6 +95,10 @@ public class SourceJob {
     @Column(name = "skip_job")
     private boolean skipJob;
 
+    @Column(name = "user_id",
+        nullable = false)
+    private Long userId;
+
     public SourceJob() {}
 
     @PrePersist
@@ -196,6 +200,14 @@ public class SourceJob {
 
     public void setSkipJob(boolean skipJob) {
         this.skipJob = skipJob;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     @Override

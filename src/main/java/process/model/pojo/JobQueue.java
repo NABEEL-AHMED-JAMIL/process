@@ -76,6 +76,10 @@ public class JobQueue {
         nullable = false)
     private Timestamp dateCreated;
 
+    @Column(name = "user_id",
+        nullable = false)
+    private Long userId;
+
     public JobQueue() {}
 
     @PrePersist
@@ -155,6 +159,14 @@ public class JobQueue {
     }
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     @Override
