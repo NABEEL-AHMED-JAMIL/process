@@ -10,6 +10,7 @@ import process.model.dto.SourceTaskTypeDto;
 import process.model.enums.Status;
 import process.model.pojo.LookupData;
 import process.model.pojo.SourceTaskType;
+import process.model.projection.ItemResponse;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
@@ -38,6 +39,17 @@ public class SettingApiServiceImpl implements SettingApiService {
     private SourceTaskRepository sourceTaskRepository;
     @Autowired
     private SourceTaskTypeRepository sourceTaskTypeRepository;
+    @Autowired
+    private QueryService queryService;
+
+    @Override
+    public ResponseDto dynamicQueryResponse(ItemResponse itemResponse) {
+        if (isNull(itemResponse.getQuery())) {
+            return new ResponseDto(ERROR, "Query missing.");
+        }
+        return new ResponseDto(SUCCESS, "Data fetch successfully.",
+            this.queryService.executeQueryResponse(itemResponse.getQuery()));
+    }
 
     @Override
     public ResponseDto appSetting() throws Exception {

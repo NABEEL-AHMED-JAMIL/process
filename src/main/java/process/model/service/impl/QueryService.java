@@ -1,17 +1,19 @@
 package process.model.service.impl;
 
 import com.google.gson.Gson;
+import org.hibernate.query.internal.NativeQueryImpl;
+import org.hibernate.transform.AliasToEntityMapResultTransformer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.SearchTextDto;
-import javax.persistence.EntityManager;
-import javax.persistence.Query;
+import process.model.projection.ItemResponse;
+import javax.persistence.*;
 import javax.transaction.Transactional;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.isNull;
 
@@ -24,7 +26,7 @@ public class QueryService {
 
     private Logger logger = LoggerFactory.getLogger(QueryService.class);
 
-    @Autowired
+    @PersistenceContext
     private EntityManager _em;
 
     public Object executeQueryForSingleResult(String queryStr) {
@@ -47,6 +49,21 @@ public class QueryService {
             query.setMaxResults(paging.getPageSize());
         }
         return query.getResultList();
+    }
+
+    public ItemResponse executeQueryResponse(String queryString) {
+        logger.info("Execute Query :- " + queryString);
+        Query query = this._em.createNativeQuery(queryString);
+        NativeQueryImpl nativeQuery = (NativeQueryImpl) query;
+        nativeQuery.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        List<Map<String,Object>> result = nativeQuery.getResultList();
+        ItemResponse itemResponse=new ItemResponse();
+        if (result != null && result.size() > 0) {
+            itemResponse.setQuery(queryString);
+            itemResponse.setData(result);
+            itemResponse.setColumn(result.get(0).keySet());
+        }
+        return itemResponse;
     }
 
     /**

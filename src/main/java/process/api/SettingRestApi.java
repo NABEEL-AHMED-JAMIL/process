@@ -10,6 +10,7 @@ import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.dto.ConfigurationMakerRequest;
+import process.model.projection.ItemResponse;
 import process.model.service.SettingApiService;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
@@ -30,6 +31,22 @@ public class SettingRestApi {
     private SettingApiService settingApiService;
     @Autowired
     private XmlOutTagInfoUtil xmlOutTagInfoUtil;
+
+    /**
+     * Integration Status :- done
+     * Api use to fetch the app setting
+     * @return ResponseEntity<?>
+     * */
+    @RequestMapping(value = "/dynamicQueryResponse", method = RequestMethod.POST)
+    public ResponseEntity<?> dynamicQueryResponse(@RequestBody ItemResponse itemResponse) {
+        try {
+            return new ResponseEntity<>(this.settingApiService.dynamicQueryResponse(itemResponse), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while appSetting ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
 
     /**
      * Integration Status :- done
