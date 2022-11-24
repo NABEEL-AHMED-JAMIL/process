@@ -12,14 +12,13 @@ import process.model.enums.Execution;
 import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import process.model.pojo.Scheduler;
-import process.model.pojo.SourceJob;
-import process.model.pojo.SourceTaskType;
-import process.model.pojo.SourceTask;
+import process.model.pojo.*;
+import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
 import static process.util.ProcessUtil.*;
@@ -230,9 +229,35 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             return new ResponseDto(ERROR, "JobQueueId missing.");
         }
         Map<String, Object> payload = new HashMap<>();
-        payload.put("auditLogs", this.jobAuditLogRepository.findAllByJobQueueId(jobQueueId));
-        payload.put("sourceJob", this.sourceJobRepository.findById(jobId).get());
-        payload.put("sourceJobQueue", this.jobQueueRepository.findById(jobQueueId).get());
+        payload.put("auditLogs", this.jobAuditLogRepository.findAllByJobQueueIdV1(jobQueueId));
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId);
+        if (sourceJob.isPresent()) {
+            SourceJobDto sourceJobDto = new SourceJobDto();
+            sourceJobDto.setJobId(sourceJob.get().getJobId());
+            sourceJobDto.setJobStatus(sourceJob.get().getJobStatus());
+            sourceJobDto.setLastJobRun(sourceJob.get().getLastJobRun());
+            sourceJobDto.setJobName(sourceJob.get().getJobName());
+            sourceJobDto.setDateCreated(sourceJob.get().getDateCreated());
+            sourceJobDto.setPriority(sourceJob.get().getPriority());
+            sourceJobDto.setExecution(sourceJob.get().getExecution());
+            sourceJobDto.setCompleteJob(sourceJob.get().isCompleteJob());
+            sourceJobDto.setFailJob(sourceJob.get().isFailJob());
+            sourceJobDto.setSkipJob(sourceJob.get().isSkipJob());
+            payload.put("sourceJob", sourceJob);
+        }
+        Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(jobQueueId);
+        if (jobQueue.isPresent()) {
+            SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
+            sourceJobQueueDto.setJobQueueId(jobQueue.get().getJobQueueId());
+            sourceJobQueueDto.setDateCreated(jobQueue.get().getDateCreated());
+            sourceJobQueueDto.setEndTime(jobQueue.get().getEndTime());
+            sourceJobQueueDto.setJobId(jobQueue.get().getJobId());
+            sourceJobQueueDto.setJobStatus(jobQueue.get().getJobStatus());
+            sourceJobQueueDto.setJobStatusMessage(jobQueue.get().getJobStatusMessage());
+            sourceJobQueueDto.setSkipTime(jobQueue.get().getSkipTime());
+            sourceJobQueueDto.setStartTime(jobQueue.get().getStartTime());
+            payload.put("sourceJobQueue", sourceJobQueueDto);
+        }
         return new ResponseDto(SUCCESS, "SourceJob skip successfully.", payload);
     }
 
