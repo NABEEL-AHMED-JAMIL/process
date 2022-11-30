@@ -1,7 +1,17 @@
 package process.util;
 
 import org.apache.kafka.common.header.Headers;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import process.model.pojo.AppUser;
+import process.security.UserPrincipalDetail;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
 
 /**
@@ -48,9 +58,37 @@ public class ProcessUtil {
             .findFirst().map(header -> new String(header.value())).orElse("N/A");
     }
 
+    public static boolean isValidEmail(String emailStr) {
+        Matcher matcher = Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$",
+            Pattern.CASE_INSENSITIVE).matcher(emailStr);
+        if (matcher.find()) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public static String getToken() {
+        return  "etl-" + (long) Math.floor(Math.random() * 9_000_000_000L) + 1_000_000_000L;
+    }
+
+    public static List<SimpleGrantedAuthority> buildSimpleGrantedAuthorities(final Set<String> authorities) {
+        List<SimpleGrantedAuthority> grantedAuthorities = new ArrayList<>();
+        for (String authority : authorities) {
+            grantedAuthorities.add(new SimpleGrantedAuthority(authority));
+        }
+        return grantedAuthorities;
+    }
+
+    public static AppUser getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserPrincipalDetail userPrincipalDetail = (UserPrincipalDetail) authentication.getPrincipal();
+        AppUser appUser = userPrincipalDetail.getAppUser();
+        return appUser;
+    }
+
     public static boolean isNull(Object payload) {
         return payload == null || payload == "" ? true : false;
     }
-
 
 }

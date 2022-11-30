@@ -59,8 +59,7 @@ public class SourceTaskType {
         columnDefinition = "text")
     private String schemaPayload;
 
-    @Column(name = "user_id",
-        nullable = false)
+    @Column(name = "user_id")
     private Long userId;
 
     public SourceTaskType() {}

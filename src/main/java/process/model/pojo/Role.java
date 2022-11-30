@@ -16,7 +16,9 @@ import java.util.Set;
 public class Role implements Serializable {
 
     public static final String USER = "USER";
+    public static final String ADMIN = "ADMIN";
     public static final String ROLE_USER = "ROLE_USER";
+    public static final String ROLE_ADMIN = "ROLE_ADMIN";
 
     @GenericGenerator(
         name = "roleSequenceGenerator",
@@ -35,7 +37,7 @@ public class Role implements Serializable {
     private String name;
 
     @ManyToMany(mappedBy = "roles")
-    private Set<User> users;
+    private Set<AppUser> appUsers;
 
     public Role() {
     }
@@ -60,12 +62,12 @@ public class Role implements Serializable {
         this.name = name;
     }
 
-    public Set<User> getUsers() {
-        return users;
+    public Set<AppUser> getUsers() {
+        return appUsers;
     }
 
-    public void setUsers(Set<User> users) {
-        this.users = users;
+    public void setUsers(Set<AppUser> appUsers) {
+        this.appUsers = appUsers;
     }
 
     @Override

@@ -57,7 +57,7 @@ INSERT INTO source_task_type (source_task_type_id, description, queue_topic_part
 VALUES ('1006', '[only for monitoring]', 'topic=comparison-topic&partitions=[2]', 'Web Comparison');
 
 INSERT INTO source_task_type (source_task_type_id, description, queue_topic_partition, service_name)
-VALUES ('1007', '[user uplaod file xlsx|css and extract the data as per the requirement and reportment (json|xlsx|css|xlsx)]', 'extraction-topic&partitions=[*]', 'Data Extraction');
+VALUES ('1007', '[appUser uplaod file xlsx|css and extract the data as per the requirement and reportment (json|xlsx|css|xlsx)]', 'extraction-topic&partitions=[*]', 'Data Extraction');
 
 INSERT INTO source_task_type (source_task_type_id, description, queue_topic_partition, service_name)
 VALUES ('1008', '[Boots for web base automation]', 'Web Auto Bots', 'Web Auto Bots');

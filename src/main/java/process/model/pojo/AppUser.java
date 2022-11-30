@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import process.model.enums.Status;
 import javax.persistence.*;
 import java.io.Serializable;
 import java.sql.Timestamp;
@@ -15,7 +16,7 @@ import java.util.Set;
 @Table(name = "user")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class User implements Serializable {
+public class AppUser implements Serializable {
 
     @GenericGenerator(
         name = "userSequenceGenerator",
@@ -50,10 +51,14 @@ public class User implements Serializable {
     @Column(name = "modified_date", nullable = false)
     protected Timestamp modifiedDate;
 
-    @Column(name = "password", nullable = false)
+    @Column(name = "password")
     private String password;
 
+    @Column(name = "provider")
     private String provider;
+
+    @Column(name = "status")
+    private Status status;
 
     @JsonIgnore
     @ManyToMany
@@ -62,7 +67,7 @@ public class User implements Serializable {
         inverseJoinColumns = { @JoinColumn(name = "role_id") })
     private Set<Role> roles;
 
-    public User() {
+    public AppUser() {
         this.enabled = false;
     }
 
@@ -144,6 +149,14 @@ public class User implements Serializable {
 
     public void setRoles(Set<Role> roles) {
         this.roles = roles;
+    }
+
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        this.status = status;
     }
 
     @Override

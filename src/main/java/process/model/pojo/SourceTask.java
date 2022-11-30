@@ -53,8 +53,7 @@ public class SourceTask {
     @OneToMany(cascade = CascadeType.ALL)
     private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
 
-    @Column(name = "user_id",
-        nullable = false)
+    @Column(name = "user_id")
     private Long userId;
 
     public SourceTask() {}

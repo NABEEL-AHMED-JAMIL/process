@@ -76,8 +76,7 @@ public class JobQueue {
         nullable = false)
     private Timestamp dateCreated;
 
-    @Column(name = "user_id",
-        nullable = false)
+    @Column(name = "user_id")
     private Long userId;
 
     public JobQueue() {}

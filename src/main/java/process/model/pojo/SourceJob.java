@@ -95,8 +95,7 @@ public class SourceJob {
     @Column(name = "skip_job")
     private boolean skipJob;
 
-    @Column(name = "user_id",
-        nullable = false)
+    @Column(name = "user_id")
     private Long userId;
 
     public SourceJob() {}
