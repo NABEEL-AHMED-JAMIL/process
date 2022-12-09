@@ -9,10 +9,14 @@
   </tr>
     <tr>
     <td>QR-Code PDF</td>
-    <td>Pending</td>
+    <td>Working</td>
   </tr>
     <tr>
     <td>OpenId Auth</td>
+    <td>Pending</td>
+  </tr>
+   <tr>
+    <td>Query-Analytics</td>
     <td>Pending</td>
   </tr>
 </table>
