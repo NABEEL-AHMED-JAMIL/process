@@ -82,6 +82,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         SourceTask sourceTask = new SourceTask();
         sourceTask.setTaskName(tempSourceTask.getTaskName());
         sourceTask.setTaskPayload(tempSourceTask.getTaskPayload());
+        sourceTask.setTaskHomePage(tempSourceTask.getTaskHomePage());
         sourceTask.setTaskStatus(Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
         if (!isNull(tempSourceTask.getXmlTagsInfo())) {
@@ -144,6 +145,9 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             if (!isNull(tempSourceTask.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
             }
+            if (!isNull(tempSourceTask.getTaskHomePage())) {
+                sourceTask.get().setTaskHomePage(tempSourceTask.getTaskHomePage());
+            }
             this.sourceTaskRepository.save(sourceTask.get());
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
         }
@@ -196,6 +200,10 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     index++;
                     if (!isNull(obj[index])) {
                         sourceTaskDto.setTaskPayload(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!isNull(obj[index])) {
+                        sourceTaskDto.setTaskHomePage(String.valueOf(obj[index]));
                     }
                     index++;
                     if (!isNull(obj[index])) {
@@ -434,7 +442,8 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             sourceTask.setTaskName(sourceTaskValidation.getTaskName());
             sourceTask.setTaskPayload(sourceTaskValidation.getTaskPayload());
             sourceTask.setTaskStatus(Status.Active);
-            sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
+            sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(
+                    Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
             this.sourceTaskRepository.save(sourceTask);
         });
         return new ResponseDto(SUCCESS, String.format("Total %d Task Save Successfully", sourceTaskValidations.size()));

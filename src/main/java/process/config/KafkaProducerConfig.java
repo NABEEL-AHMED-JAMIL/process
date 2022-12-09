@@ -26,6 +26,10 @@ public class KafkaProducerConfig {
 
     @Value("${tpd.test-topic}")
     private String testTopic;
+    @Value("${tpd.data-analytics-topic}")
+    private String dataAnalyticsTopic;
+    @Value("${tpd.extraction-topic}")
+    private String extractionTopic;
 
     @Autowired
     private KafkaProperties kafkaProperties;
@@ -51,6 +55,16 @@ public class KafkaProducerConfig {
     @Bean
     public NewTopic testTopic() {
         return new NewTopic(testTopic, 2, (short) 1);
+    }
+
+    @Bean
+    public NewTopic dataAnalyticsTopic() {
+        return new NewTopic(dataAnalyticsTopic, 3, (short) 1);
+    }
+
+    @Bean
+    public NewTopic extractionTopic() {
+        return new NewTopic(extractionTopic, 2, (short) 1);
     }
 
 }

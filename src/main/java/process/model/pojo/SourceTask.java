@@ -41,6 +41,10 @@ public class SourceTask {
     @Enumerated(EnumType.STRING)
     private Status taskStatus;
 
+    @Column(name = "task_home_page",
+        nullable = true)
+    private String taskHomePage;
+
     // save lob data for job detail
     @Column(name = "task_payload",
         columnDefinition = "text")
@@ -77,6 +81,14 @@ public class SourceTask {
 
     public void setTaskStatus(Status taskStatus) {
         this.taskStatus = taskStatus;
+    }
+
+    public String getTaskHomePage() {
+        return taskHomePage;
+    }
+
+    public void setTaskHomePage(String taskHomePage) {
+        this.taskHomePage = taskHomePage;
     }
 
     public String getTaskPayload() {

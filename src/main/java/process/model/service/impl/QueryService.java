@@ -83,7 +83,7 @@ public class QueryService {
         if (isCount) {
             selectPortion = "select count(*) as result ";
         } else {
-            selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, st.task_status, stt.*, count(sj.job_id) as total_link_jobs ";
+            selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, st.task_home_page, st.task_status, stt.*, count(sj.job_id) as total_link_jobs ";
         }
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id ";
         if (!isCount) {

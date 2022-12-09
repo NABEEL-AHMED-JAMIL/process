@@ -76,7 +76,6 @@ public class HelloWorldTask implements Runnable {
             logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
         }
     }
-
     private LoopXmlParser loopXmlParser(String xmlPayload) throws JAXBException {
         JAXBContext jaxbContext = JAXBContext.newInstance(LoopXmlParser.class);
         Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
