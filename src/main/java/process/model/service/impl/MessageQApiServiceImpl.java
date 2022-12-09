@@ -33,6 +33,8 @@ public class MessageQApiServiceImpl implements MessageQApiService {
 
     private final String SOURCE_JOB_QUEUES = "sourceJobQueues";
     private final String JOB_STATUS_STATISTICS = "jobStatusStatistic";
+    private final String AUDIT_LOG = "AUDIT_LOG";
+    private final String QUEUE_DETAIL = "QUEUE_DETAIL";
 
     @Override
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch) {
@@ -118,4 +120,21 @@ public class MessageQApiServiceImpl implements MessageQApiService {
         return new ResponseDto(ERROR, "JobQueue not found");
     }
 
+    @Override
+    public ResponseDto changeJobStatus(QueueMessageStatusDto queueMessageStatus) {
+        if (isNull(queueMessageStatus.getMessageType())) {
+            return new ResponseDto(ERROR, "Message Type required for transaction.");
+        }
+        if (queueMessageStatus.equals(AUDIT_LOG)) {
+            this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());
+        } else if (queueMessageStatus.equals(QUEUE_DETAIL)) {
+            this.bulkAction.changeJobStatus(queueMessageStatus.getJobId(), queueMessageStatus.getJobStatus());
+            this.bulkAction.changeJobQueueStatus(queueMessageStatus.getJobQueueId(), queueMessageStatus.getJobStatus());
+            this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());
+            if (isNull(queueMessageStatus.getEndTime())) {
+                this.bulkAction.changeJobQueueEndDate(queueMessageStatus.getJobQueueId(), queueMessageStatus.getEndTime());
+            }
+        }
+        return new ResponseDto(SUCCESS, "QueueMessage Successfully Update.");
+    }
 }

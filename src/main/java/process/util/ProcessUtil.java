@@ -52,5 +52,4 @@ public class ProcessUtil {
         return payload == null || payload == "" ? true : false;
     }
 
-
 }
