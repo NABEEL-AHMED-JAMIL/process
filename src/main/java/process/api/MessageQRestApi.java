@@ -6,7 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import process.engine.BulkAction;
 import process.model.dto.MessageQSearchDto;
+import process.model.dto.QueueMessageStatusDto;
 import process.model.dto.ResponseDto;
 import process.model.service.MessageQApiService;
 import process.util.ProcessUtil;
@@ -25,6 +27,8 @@ public class MessageQRestApi {
 
     @Autowired
     private MessageQApiService messageQApiService;
+    @Autowired
+    private BulkAction bulkAction;
 
     /**
      * Integration Status :- done
@@ -57,6 +61,17 @@ public class MessageQRestApi {
             logger.error("An error occurred while failJobLogs ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @RequestMapping(value = "/changeJobStatus", method = RequestMethod.PUT)
+    public ResponseEntity<?> changeJobStatus(@RequestBody QueueMessageStatusDto queueMessageStatus) {
+        try {
+            return new ResponseEntity<>(this.messageQApiService.changeJobStatus(queueMessageStatus), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while changeJobStatus ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 }

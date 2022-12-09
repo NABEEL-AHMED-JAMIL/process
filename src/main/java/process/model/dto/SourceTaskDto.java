@@ -16,6 +16,8 @@ public class SourceTaskDto {
     private Long taskDetailId;
     private String taskName;
     private Status taskStatus;
+
+    private String taskHomePage;
     private String taskPayload;
     private SourceTaskTypeDto sourceTaskType;
     private List<ConfigurationMakerRequest.TagInfo> xmlTagsInfo;
@@ -45,6 +47,14 @@ public class SourceTaskDto {
 
     public void setTaskStatus(Status taskStatus) {
         this.taskStatus = taskStatus;
+    }
+
+    public String getTaskHomePage() {
+        return taskHomePage;
+    }
+
+    public void setTaskHomePage(String taskHomePage) {
+        this.taskHomePage = taskHomePage;
     }
 
     public String getTaskPayload() {
