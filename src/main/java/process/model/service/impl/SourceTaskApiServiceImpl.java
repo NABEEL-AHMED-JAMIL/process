@@ -203,6 +203,10 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                     index++;
                     if (!isNull(obj[index])) {
+                        sourceTaskDto.setTaskHomePage(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!isNull(obj[index])) {
                         sourceTaskDto.setTaskStatus(Status.valueOf(String.valueOf(obj[index])));
                     }
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();

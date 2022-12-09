@@ -39,7 +39,7 @@ public class TestConsumer {
         containerFactory = "kafkaListenerContainerFactory")
     public void testConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
         try {
-            Thread.sleep(100);
+            Thread.sleep(1000);
             logger.info("TestConsumer [String] received key {}: Type [{}] | Payload: {} | Record: {}",
                 consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
             JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
