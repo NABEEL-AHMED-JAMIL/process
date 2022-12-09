@@ -40,20 +40,18 @@ public class TestConsumer {
     public void testConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
         try {
             Thread.sleep(1000);
-            logger.info("TestConsumer [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+            logger.info("TestConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
                 consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
             JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
             Map<String, Object> taskPayloadInfo = new HashMap<>();
-            taskPayloadInfo.put(ProcessUtil.JOB_QUEUE, new Gson().fromJson(
-                convertedObject.get(ProcessUtil.JOB_QUEUE),SourceJobQueueDto.class));
-            taskPayloadInfo.put(ProcessUtil.TASK_DETAIL, new Gson().fromJson(
-                convertedObject.get(ProcessUtil.TASK_DETAIL), SourceTaskDto.class));
+            taskPayloadInfo.put(ProcessUtil.JOB_QUEUE, new Gson().fromJson(convertedObject.get(ProcessUtil.JOB_QUEUE),SourceJobQueueDto.class));
+            taskPayloadInfo.put(ProcessUtil.TASK_DETAIL, new Gson().fromJson(convertedObject.get(ProcessUtil.TASK_DETAIL), SourceTaskDto.class));
             this.helloWorldTask.setData(taskPayloadInfo);
             this.asyncDALTaskExecutor.addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
         } catch (InterruptedException ex) {
-            logger.error("Exception in testConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception in TestConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
         } catch (Exception ex) {
-            logger.error("Exception in testConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception in TestConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 

@@ -64,6 +64,12 @@ public class MessageQRestApi {
         }
     }
 
+    /**
+     * Integration Status :- done
+     * Api use to change the status of running job
+     * @param queueMessageStatus
+     * @return ResponseEntity
+     * */
     @RequestMapping(value = "/changeJobStatus", method = RequestMethod.PUT)
     public ResponseEntity<?> changeJobStatus(@RequestBody QueueMessageStatusDto queueMessageStatus) {
         try {
@@ -71,7 +77,7 @@ public class MessageQRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while changeJobStatus ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 }
