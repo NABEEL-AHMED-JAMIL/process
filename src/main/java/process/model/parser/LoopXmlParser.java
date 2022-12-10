@@ -6,6 +6,9 @@ import com.google.gson.Gson;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
+/**
+ * @author Nabeel.amd
+ */
 @XmlRootElement
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)

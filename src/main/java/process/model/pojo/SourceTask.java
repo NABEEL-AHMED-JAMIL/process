@@ -55,7 +55,7 @@ public class SourceTask {
     private SourceTaskType sourceTaskType;
 
     @OneToMany(cascade = CascadeType.ALL)
-    private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
+    private List<SourceTaskPayload> sourceTaskPayload;
 
     public SourceTask() {}
 

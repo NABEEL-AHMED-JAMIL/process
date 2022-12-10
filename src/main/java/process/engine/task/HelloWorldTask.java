@@ -11,6 +11,7 @@ import process.model.dto.SourceJobQueueDto;
 import process.model.dto.SourceTaskDto;
 import process.model.enums.JobStatus;
 import process.model.parser.LoopXmlParser;
+import process.model.service.impl.TransactionServiceImpl;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import javax.xml.bind.JAXBContext;
@@ -31,6 +32,8 @@ public class HelloWorldTask implements Runnable {
     private Map<String, ?> data;
     @Autowired
     private BulkAction bulkAction;
+    @Autowired
+    private TransactionServiceImpl transactionService;
     @Autowired
     private EmailMessagesFactory emailMessagesFactory;
 
@@ -57,29 +60,32 @@ public class HelloWorldTask implements Runnable {
             for (int i=loopXmlParser.getStartIndex().intValue(); i<loopXmlParser.getEndIndex(); i++) {
                 logger.info(String.format("Job Id %d with sub job id %d for number count %s",
                     jobQueue.getJobId(), jobQueue.getJobQueueId(), "Number Count " + i));
-                this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), "Number Count " + i);
             }
             // change the status into the complete status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Completed);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Completed);
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now complete.", jobQueue.getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
-            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Completed);
+            if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isCompleteJob()) {
+                this.emailMessagesFactory.sendSourceJobEmail(jobQueue,JobStatus.Completed);
+            }
         } catch (Exception ex) {
+            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
             // change the status into the running status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s fail due to %s .",
                 jobQueue.getJobId(), ExceptionUtil.getRootCauseMessage(ex)));
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
-            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Failed);
-            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {
+                this.emailMessagesFactory.sendSourceJobEmail(jobQueue,JobStatus.Failed);
+            }
         }
     }
     private LoopXmlParser loopXmlParser(String xmlPayload) throws JAXBException {
         JAXBContext jaxbContext = JAXBContext.newInstance(LoopXmlParser.class);
-        Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
-        LoopXmlParser loopXmlParser = (LoopXmlParser) jaxbUnmarshaller.unmarshal(new StringReader(xmlPayload));
+        Unmarshaller jaxbUnMarshaller = jaxbContext.createUnmarshaller();
+        LoopXmlParser loopXmlParser = (LoopXmlParser) jaxbUnMarshaller.unmarshal(new StringReader(xmlPayload));
         return loopXmlParser;
     }
 

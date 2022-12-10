@@ -18,7 +18,6 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static java.util.Objects.isNull;
-import static process.util.ProcessUtil.getSourceJobQueueDto;
 
 /**
  * @author Nabeel Ahmed
@@ -65,7 +64,9 @@ public class ProducerBulkEngine {
             JobStatus.Skip, "Job %s skip, by user action.", true);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, by user action.", scheduler.getJobId()));
         // if the user fail the job manual need to send the mail
-        this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(jobQueue),JobStatus.Failed);
+        if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isSkipJob()) {
+            this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Skip);
+        }
     }
 
     /**
@@ -91,14 +92,13 @@ public class ProducerBulkEngine {
                         // we have to check if job in the queue then send the detail of job as skip with message
                         JobQueue jobQueue;
                         if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
-                            // note:- changeJobLastJobRun only for the job which first move from queue -> next process
                             // if the job in the skip state no need update the last run queue
                             jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
                                 JobStatus.Skip, "Job %s skip, already in queue.", true);
-                            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-                                String.format("Job %s skip, already in queue.", scheduler.getJobId()));
-                            // if the user fail the job manual need to send the mail
-                            this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(jobQueue),JobStatus.Skip);
+                            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
+                            if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isSkipJob()) {
+                                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Skip);
+                            }
                         } else {
                             this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
                             jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
@@ -137,7 +137,7 @@ public class ProducerBulkEngine {
                         if (sourceJob.isPresent()) {
                             this.pushMessageToQueue(sourceJob.get(), jobQueue);
                         } else {
-                            this.changeStatusForLastJob(jobQueue, "Job %s stop in the queue due to main job either (delete|inactive).");
+                            this.changeStatusForLastJob(jobQueue, "Job %s fail in the queue due to main job either (delete|inactive).");
                         }
                     } catch (Exception ex) {
                         logger.error("Error In runJobInCurrentTimeSlot " + ExceptionUtil.getRootCauseMessage(ex));
@@ -185,11 +185,12 @@ public class ProducerBulkEngine {
                         return;
                     }
                     logger.error("Regex Not match..");
-                    this.changeStatusForLastJob(jobQueue, "Broker configuration wrong job %s stop " + queueTopicPartition);
+                    this.changeStatusForLastJob(jobQueue, "Broker configuration wrong job %s fail " + queueTopicPartition);
                     return;
                 }
-                this.changeStatusForLastJob(jobQueue, "Broker not active job %s stop.");
+                this.changeStatusForLastJob(jobQueue, "Broker not active job %s fail.");
             } catch (Exception ex) {
+                this.changeStatusForLastJob(jobQueue, "Broker not active job %s fail.");
                 logger.error("Error In pushMessageToQueue " + ExceptionUtil.getRootCauseMessage(ex));
             }
         }
@@ -224,6 +225,9 @@ public class ProducerBulkEngine {
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(message, jobQueue.getJobId()));
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
+        if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {
+            this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Failed);
+        }
     }
 
     @Override

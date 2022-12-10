@@ -14,12 +14,9 @@ import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
-import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
-
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
 import static process.util.ProcessUtil.*;

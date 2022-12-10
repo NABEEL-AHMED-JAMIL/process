@@ -6,11 +6,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import process.model.service.impl.LookupDataCacheService;
 import org.springframework.stereotype.Component;
 import process.model.dto.LookupDataDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
-import process.model.service.impl.LookupDataCacheService;
+import process.model.pojo.JobQueue;
+import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import javax.mail.internet.MimeMessage;
 import java.util.HashMap;
@@ -37,7 +39,7 @@ public class EmailMessagesFactory {
 
     public String sendSourceJobEmail(SourceJobQueueDto jobQueue, JobStatus jobStatus) {
         try {
-            LookupDataDto lookupDataDto = this.lookupDataCacheService.getChildLookupById("1026L", "1028L");
+            LookupDataDto lookupDataDto = this.lookupDataCacheService.getParentLookupById(ProcessUtil.EMAIL_RECEIVER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("job_id", jobQueue.getJobId());
             metaData.put("event_id", jobQueue.getJobQueueId());
@@ -67,7 +69,7 @@ public class EmailMessagesFactory {
 
     private String sendSimpleMail(EmailMessageDto emailContent) {
         try {
-            MimeMessage mailMessage = javaMailSender.createMimeMessage();
+            MimeMessage mailMessage = this.javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mailMessage, UTF8);
             helper.setFrom(sender);
             if(!isNull(emailContent.getRecipients())) {
@@ -87,9 +89,18 @@ public class EmailMessagesFactory {
                 logger.error("Error :- Sent To Null Content %s.", emailContent.getBodyMap().toString());
             }
             return "Mail Sent Successfully...";
-        } catch (Exception e) {
+        } catch (Exception ex) {
+            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
         }
+    }
+
+    public static SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
+        SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
+        sourceJobQueueDto.setJobId(jobQueue.getJobId());
+        sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
+        sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
+        return sourceJobQueueDto;
     }
 
 }

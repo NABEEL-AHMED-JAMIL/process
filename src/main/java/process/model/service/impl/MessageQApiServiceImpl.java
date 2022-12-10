@@ -123,8 +123,11 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(),
                 String.format("Job %s fail by manual.", jobQueue.get().getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
-            // if the user fail the job manual need to send the mail
-            this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
+            SourceJob sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId()).get();
+            if (sourceJob.isSkipJob()) {
+                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory
+                    .getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
+            }
             return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");
@@ -147,13 +150,13 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             // if the user configure then send email
             SourceJob sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId()).get();
             if (sourceJob.isSkipJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Skip)) {
-                this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(
+                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(
                     this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             } else if (sourceJob.isCompleteJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Completed)) {
-                this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(
+                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(
                     this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             } else if (sourceJob.isFailJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Failed)) {
-                this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(
+                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(
                     this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             }
         }
