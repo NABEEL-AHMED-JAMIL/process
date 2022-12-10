@@ -5,5 +5,4 @@ package process.model.enums;
  */
 public enum JobStatus {
     Queue, Running, Failed, Completed, Skip;
-    // Stop
 }

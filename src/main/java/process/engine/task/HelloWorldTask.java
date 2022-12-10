@@ -64,7 +64,7 @@ public class HelloWorldTask implements Runnable {
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Completed);
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now complete.", jobQueue.getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
-            //this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Completed); need to fix this issue
+            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Completed);
         } catch (Exception ex) {
             // change the status into the running status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
@@ -72,7 +72,7 @@ public class HelloWorldTask implements Runnable {
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s fail due to %s .",
                 jobQueue.getJobId(), ExceptionUtil.getRootCauseMessage(ex)));
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
-            //this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Failed);
+            this.emailMessagesFactory.sendSourceJobEmail(jobQueue, JobStatus.Failed);
             logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
         }
     }

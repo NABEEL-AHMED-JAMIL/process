@@ -1,6 +1,9 @@
 package process.util;
 
 import org.apache.kafka.common.header.Headers;
+import process.model.dto.SourceJobQueueDto;
+import process.model.pojo.JobQueue;
+
 import java.time.format.DateTimeFormatter;
 import java.util.stream.StreamSupport;
 
@@ -46,6 +49,14 @@ public class ProcessUtil {
         return StreamSupport.stream(headers.spliterator(), false)
             .filter(header -> header.key().equals("__TypeId__"))
             .findFirst().map(header -> new String(header.value())).orElse("N/A");
+    }
+
+    public static SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
+        SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
+        sourceJobQueueDto.setJobId(jobQueue.getJobId());
+        sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
+        sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
+        return sourceJobQueueDto;
     }
 
     public static boolean isNull(Object payload) {

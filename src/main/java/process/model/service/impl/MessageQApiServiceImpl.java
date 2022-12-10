@@ -4,11 +4,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
+import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
+import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQApiService;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -30,6 +33,10 @@ public class MessageQApiServiceImpl implements MessageQApiService {
     private QueryService queryService;
     @Autowired
     private JobQueueRepository jobQueueRepository;
+    @Autowired
+    private SourceJobRepository sourceJobRepository;
+    @Autowired
+    private EmailMessagesFactory emailMessagesFactory;
 
     private final String SOURCE_JOB_QUEUES = "sourceJobQueues";
     private final String JOB_STATUS_STATISTICS = "jobStatusStatistic";
@@ -113,8 +120,11 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             }
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed);
-            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), String.format("Job %s fail .", jobQueue.get().getJobId()));
+            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(),
+                String.format("Job %s fail by manual.", jobQueue.get().getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
+            // if the user fail the job manual need to send the mail
+            this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
             return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");
@@ -134,7 +144,20 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             if (isNull(queueMessageStatus.getEndTime())) {
                 this.bulkAction.changeJobQueueEndDate(queueMessageStatus.getJobQueueId(), queueMessageStatus.getEndTime());
             }
+            // if the user configure then send email
+            SourceJob sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId()).get();
+            if (sourceJob.isSkipJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Skip)) {
+                this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(
+                    this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
+            } else if (sourceJob.isCompleteJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Completed)) {
+                this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(
+                    this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
+            } else if (sourceJob.isFailJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Failed)) {
+                this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(
+                    this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
+            }
         }
         return new ResponseDto(SUCCESS, "QueueMessage Successfully Update.");
     }
+
 }

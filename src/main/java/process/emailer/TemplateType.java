@@ -7,10 +7,9 @@ import com.google.gson.Gson;
  */
 public enum TemplateType {
 
-    COMPLETE_JOB("TEST_TEMPLATE", "templates/complete_job.vm"),
-    FAIL_JOB("TEST_TEMPLATE", "templates/fail_job.vm"),
-    SKIP_JOB("SKIP_JOB", "templates/skip_job.vm"),
-    STOP_JOB("STOP_JOB", "templates/stop_job.vm");
+    COMPLETE_JOB("COMPLETE_JOB", "templates/complete_job.vm"),
+    FAIL_JOB("FAIL_JOB", "templates/fail_job.vm"),
+    SKIP_JOB("SKIP_JOB", "templates/skip_job.vm");
 
     private String templateName;
     private String templatePath;

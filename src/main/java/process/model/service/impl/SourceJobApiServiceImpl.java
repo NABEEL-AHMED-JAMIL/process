@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import process.emailer.EmailMessagesFactory;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
 import process.model.enums.Execution;
@@ -43,6 +44,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     private JobQueueRepository jobQueueRepository;
     @Autowired
     private ProducerBulkEngine producerBulkEngine;
+    @Autowired
+    private EmailMessagesFactory emailMessagesFactory;
 
     @Override
     public ResponseDto addSourceJob(SourceJobDto tempSourceJob) throws Exception {

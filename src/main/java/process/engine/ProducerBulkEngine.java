@@ -18,6 +18,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static java.util.Objects.isNull;
+import static process.util.ProcessUtil.getSourceJobQueueDto;
 
 /**
  * @author Nabeel Ahmed
@@ -62,8 +63,9 @@ public class ProducerBulkEngine {
         // if the job in the skip state no need update the last run queue
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(scheduler.getJobId(), scheduler.getRecurrenceTime(),
             JobStatus.Skip, "Job %s skip, by user action.", true);
-        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
-            String.format("Job %s skip, by user action.", scheduler.getJobId()));
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, by user action.", scheduler.getJobId()));
+        // if the user fail the job manual need to send the mail
+        this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(jobQueue),JobStatus.Failed);
     }
 
     /**
@@ -95,6 +97,8 @@ public class ProducerBulkEngine {
                                 JobStatus.Skip, "Job %s skip, already in queue.", true);
                             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(),
                                 String.format("Job %s skip, already in queue.", scheduler.getJobId()));
+                            // if the user fail the job manual need to send the mail
+                            this.emailMessagesFactory.sendSourceJobEmail(getSourceJobQueueDto(jobQueue),JobStatus.Skip);
                         } else {
                             this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
                             jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(),
