@@ -1,6 +1,8 @@
 package process.util;
 
 import org.apache.kafka.common.header.Headers;
+import process.model.dto.SourceJobQueueDto;
+import process.model.pojo.JobQueue;
 import java.time.format.DateTimeFormatter;
 import java.util.stream.StreamSupport;
 
@@ -22,6 +24,7 @@ public class ProcessUtil {
     public static String JOB_QUEUE = "jobQueue";
     public static String TASK_DETAIL = "taskDetail";
     public static String PRIORITY = "Priority";
+    public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";
 
     // constant-filed
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

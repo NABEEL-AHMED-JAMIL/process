@@ -23,9 +23,7 @@ public class SourceJobQueueDto {
     private Long jobId;
     private String jobName;
     private String jobStatusMessage;
-
     private Boolean skipManual;
-
     private Boolean runManual;
     private Timestamp dateCreated;
 

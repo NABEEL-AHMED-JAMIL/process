@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import process.emailer.EmailMessagesFactory;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
 import process.model.enums.Execution;
@@ -13,12 +14,9 @@ import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
-import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
-
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
 import static process.util.ProcessUtil.*;
@@ -43,6 +41,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     private JobQueueRepository jobQueueRepository;
     @Autowired
     private ProducerBulkEngine producerBulkEngine;
+    @Autowired
+    private EmailMessagesFactory emailMessagesFactory;
 
     @Override
     public ResponseDto addSourceJob(SourceJobDto tempSourceJob) throws Exception {
