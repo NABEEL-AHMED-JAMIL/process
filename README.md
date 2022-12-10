@@ -5,7 +5,7 @@
   </tr>
   <tr>
     <td>Email Configuration</td>
-    <td>Pending</td>
+    <td>Working</td>
   </tr>
     <tr>
     <td>QR-Code PDF</td>
