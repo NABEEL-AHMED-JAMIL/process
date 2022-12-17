@@ -31,10 +31,10 @@ public class LookupDataCacheService {
         logger.info("****************Cache-Lookup-Start***************************");
         Iterable<LookupData> lookupDataList = this.lookupDataRepository.findByParentLookupIdIsNull();
         lookupDataList.forEach(lookupData -> {
-            if (lookupCacheMap.containsKey(lookupData.getLookupType())) {
-                lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
+            if (this.lookupCacheMap.containsKey(lookupData.getLookupType())) {
+                this.lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
             } else {
-                lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
+                this.lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
             }
         });
         //logger.info(lookupCacheMap.toString());
@@ -42,7 +42,7 @@ public class LookupDataCacheService {
     }
 
     private LookupDataDto getLookupDataDetail(LookupData lookupData) {
-        LookupDataDto parentLookupData =new LookupDataDto();
+        LookupDataDto parentLookupData = new LookupDataDto();
         parentLookupData.setLookupId(lookupData.getLookupId());
         parentLookupData.setLookupType(lookupData.getLookupType());
         parentLookupData.setLookupValue(lookupData.getLookupValue());

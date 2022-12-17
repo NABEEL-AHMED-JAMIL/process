@@ -284,6 +284,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                 sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
                 sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
                 sourceTaskDto.setTaskHomePage(sourceTask.getTaskHomePage());
+                sourceTaskDto.setPipelineId(sourceTask.getPipelineId());
                 if (sourceTask.getSourceTaskType() != null) {
                     SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();

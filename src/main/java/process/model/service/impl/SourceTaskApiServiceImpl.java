@@ -83,6 +83,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         sourceTask.setTaskName(tempSourceTask.getTaskName());
         sourceTask.setTaskPayload(tempSourceTask.getTaskPayload());
         sourceTask.setTaskHomePage(tempSourceTask.getTaskHomePage());
+        sourceTask.setPipelineId(tempSourceTask.getPipelineId());
         sourceTask.setTaskStatus(Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
         if (!isNull(tempSourceTask.getXmlTagsInfo())) {
@@ -148,6 +149,9 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             if (!isNull(tempSourceTask.getTaskHomePage())) {
                 sourceTask.get().setTaskHomePage(tempSourceTask.getTaskHomePage());
             }
+            if (!isNull(tempSourceTask.getPipelineId())) {
+                sourceTask.get().setPipelineId(tempSourceTask.getPipelineId());
+            }
             this.sourceTaskRepository.save(sourceTask.get());
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
         }
@@ -204,6 +208,10 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     index++;
                     if (!isNull(obj[index])) {
                         sourceTaskDto.setTaskHomePage(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!isNull(obj[index])) {
+                        sourceTaskDto.setPipelineId(String.valueOf(obj[index]));
                     }
                     index++;
                     if (!isNull(obj[index])) {

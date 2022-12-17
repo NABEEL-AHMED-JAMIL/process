@@ -7,7 +7,6 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -41,9 +40,15 @@ public class SourceTask {
     @Enumerated(EnumType.STRING)
     private Status taskStatus;
 
-    @Column(name = "task_home_page",
-        nullable = true)
+    @Column(name = "task_home_page", nullable = true)
     private String taskHomePage;
+
+    /**
+     * pipeline id use to move the data to the
+     * right path if kafka topic using for multiple pipeline
+     * */
+    @Column(name = "pipeline_id", nullable = true)
+    private String pipelineId;
 
     // save lob data for job detail
     @Column(name = "task_payload",
@@ -89,6 +94,14 @@ public class SourceTask {
 
     public void setTaskHomePage(String taskHomePage) {
         this.taskHomePage = taskHomePage;
+    }
+
+    public String getPipelineId() {
+        return pipelineId;
+    }
+
+    public void setPipelineId(String pipelineId) {
+        this.pipelineId = pipelineId;
     }
 
     public String getTaskPayload() {
