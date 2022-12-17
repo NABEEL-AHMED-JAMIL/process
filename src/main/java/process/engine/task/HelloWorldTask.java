@@ -71,7 +71,7 @@ public class HelloWorldTask implements Runnable {
             }
         } catch (Exception ex) {
             logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
-            // change the status into the running status
+            // change the status into the fail status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s fail due to %s .",
