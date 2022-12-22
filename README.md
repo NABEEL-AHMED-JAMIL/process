@@ -1,18 +1,22 @@
 <table>
   <tr>
     <th>Task</th>
+    <th>Branch</th>
     <th>Status</th>
   </tr>
     <tr>
     <td>QR-Code PDF</td>
+    <td>process-v1</td>
     <td>Working</td>
   </tr>
     <tr>
     <td>OpenId Auth</td>
+     <td>process-auth</td>
     <td>Pending</td>
   </tr>
    <tr>
     <td>Query-Analytics</td>
+    <td>process-v1</td>
     <td>Pending</td>
   </tr>
 </table>
