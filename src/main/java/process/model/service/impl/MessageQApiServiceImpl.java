@@ -138,13 +138,13 @@ public class MessageQApiServiceImpl implements MessageQApiService {
         if (isNull(queueMessageStatus.getMessageType())) {
             return new ResponseDto(ERROR, "Message Type required for transaction.");
         }
-        if (queueMessageStatus.equals(AUDIT_LOG)) {
+        if (queueMessageStatus.getMessageType().equals(AUDIT_LOG)) {
             this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());
-        } else if (queueMessageStatus.equals(QUEUE_DETAIL)) {
+        } else if (queueMessageStatus.getMessageType().equals(QUEUE_DETAIL)) {
             this.bulkAction.changeJobStatus(queueMessageStatus.getJobId(), queueMessageStatus.getJobStatus());
             this.bulkAction.changeJobQueueStatus(queueMessageStatus.getJobQueueId(), queueMessageStatus.getJobStatus());
             this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());
-            if (isNull(queueMessageStatus.getEndTime())) {
+            if (!isNull(queueMessageStatus.getEndTime())) {
                 this.bulkAction.changeJobQueueEndDate(queueMessageStatus.getJobQueueId(), queueMessageStatus.getEndTime());
             }
             // if the user configure then send email
