@@ -36,7 +36,7 @@ public class ProcessUtil {
     };
 
     public static String[] HEADER_FILED_BATCH_DOWNLOAD_FILE = new String[] {
-        "Job Name", "Task", "Execution", "Status", "Created Date",
+        "Job Name", "Task", "Execution", "Priority",  "Status", "Created Date",
         "Start Date", "End Date", "Time", "Last Run", "Next Flight",
         "R-Status", "Email job complete", "Email job fail", "Email job skip"
     };

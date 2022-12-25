@@ -23,4 +23,8 @@ public interface SourceTaskProjection {
 
     public String getServiceName();
 
+    public String getHomePage();
+
+    public String getPipelineTaskId();
+
 }
