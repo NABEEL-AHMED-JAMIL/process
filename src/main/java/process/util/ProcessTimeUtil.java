@@ -16,10 +16,29 @@ public class ProcessTimeUtil {
 
     private Logger logger = LoggerFactory.getLogger(ProcessTimeUtil.class);
 
+    public static List<String> checked = new ArrayList<>();
+    public static List<String> priority = new ArrayList<>();
     public static List<String> frequency = new ArrayList<>();
+
     public static Map<String, List<?>> frequencyDetail = new HashMap<>();
 
     static {
+        // checked
+        checked.add("True");
+        checked.add("False");
+        // --------------------- //
+        priority.add("1");
+        priority.add("2");
+        priority.add("3");
+        priority.add("4");
+        priority.add("5");
+        priority.add("6");
+        priority.add("7");
+        priority.add("8");
+        priority.add("9");
+        priority.add("99");
+        priority.add("100");
+        // ------------------- //
         frequency.add("Mint");
         frequency.add("Hr");
         frequency.add("Daily");

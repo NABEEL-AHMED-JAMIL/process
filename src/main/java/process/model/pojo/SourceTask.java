@@ -7,6 +7,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -59,8 +60,9 @@ public class SourceTask {
     @JoinColumn(name = "source_task_type_id")
     private SourceTaskType sourceTaskType;
 
-    @OneToMany(cascade = CascadeType.ALL)
-    private List<SourceTaskPayload> sourceTaskPayload;
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "payload_id")
+    private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
 
     public SourceTask() {}
 
@@ -125,7 +127,8 @@ public class SourceTask {
     }
 
     public void setSourceTaskPayload(List<SourceTaskPayload> sourceTaskPayload) {
-        this.sourceTaskPayload = sourceTaskPayload;
+        this.sourceTaskPayload.clear();
+        this.sourceTaskPayload.addAll(sourceTaskPayload);
     }
 
     @Override

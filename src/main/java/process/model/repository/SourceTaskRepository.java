@@ -24,7 +24,7 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
     @Query(value = "select st.task_detail_id as taskDetailId, st.task_name as taskName,\n" +
         " st.task_payload  as taskPayload, st.task_status as taskStatus,\n" +
         "stt.queue_topic_partition as queueTopicPartition, stt.service_name as serviceName," +
-        "stt.task_type_status as taskTypeStatus\n" +
+        "stt.task_type_status as taskTypeStatus, st.pipeline_id as pipelineTaskId, st.task_home_page as homePage\n" +
         "from source_task st\n" +
         "inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id", nativeQuery = true)
     public List<SourceTaskProjection> downloadListSourceTask();

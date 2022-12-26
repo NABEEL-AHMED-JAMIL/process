@@ -17,15 +17,20 @@ public class SourceTaskValidation {
     private String sourceTaskTypeId;
     private String taskName;
     private String taskPayload;
+    private String taskHomePage;
+    private String pipelineId;
     private String errorMsg;
 
     public SourceTaskValidation() {}
 
     public SourceTaskValidation(String sourceTaskTypeId,
-        String taskName, String taskPayload) {
+        String taskName, String taskPayload,
+        String pipelineId, String taskHomePage) {
         this.sourceTaskTypeId = sourceTaskTypeId;
         this.taskName = taskName;
         this.taskPayload = taskPayload;
+        this.pipelineId = pipelineId;
+        this.taskHomePage = taskHomePage;
     }
 
     public Integer getRowCounter() {
@@ -58,6 +63,22 @@ public class SourceTaskValidation {
 
     public void setTaskPayload(String taskPayload) {
         this.taskPayload = taskPayload;
+    }
+
+    public String getTaskHomePage() {
+        return taskHomePage;
+    }
+
+    public void setTaskHomePage(String taskHomePage) {
+        this.taskHomePage = taskHomePage;
+    }
+
+    public String getPipelineId() {
+        return pipelineId;
+    }
+
+    public void setPipelineId(String pipelineId) {
+        this.pipelineId = pipelineId;
     }
 
     public String getErrorMsg() {
