@@ -359,6 +359,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                 schedulerDto.setRecurrenceTime(scheduler.get().getRecurrenceTime());
                 sourceJobDto.setScheduler(schedulerDto);
             }
+            sourceJobDto.setTabActive(this.jobQueueRepository.getCountForJobByJobId(
+                sourceJobDto.getJobId()) > 0 ? true : false);
             sourceJobDtoList.add(sourceJobDto);
         });
         return new ResponseDto(SUCCESS, String.format("Fetch Source Jobs."), sourceJobDtoList);
