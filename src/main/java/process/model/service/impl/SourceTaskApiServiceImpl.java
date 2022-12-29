@@ -53,6 +53,8 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
     private SourceTaskRepository sourceTaskRepository;
     @Autowired
     private SourceTaskTypeRepository sourceTaskTypeRepository;
+    @Autowired
+    private LookupDataCacheService lookupDataCacheService;
 
     private final String ListSourceTask = "ListSourceTask";
     private final String SOURCE_TASK_HEADER[] = {
@@ -246,6 +248,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                     index++;
                     sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
+                    index++;
                     if (!isNull(obj[index])) {
                         sourceTaskDto.setTotalLinksJobs(Long.valueOf(obj[index].toString()));
                     }

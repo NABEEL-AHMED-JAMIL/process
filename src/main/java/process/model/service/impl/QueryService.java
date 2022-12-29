@@ -83,13 +83,16 @@ public class QueryService {
         if (isCount) {
             selectPortion = "select count(*) as result ";
         } else {
-            selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, st.task_home_page, st.pipeline_id, st.task_status, stt.*, count(sj.job_id) as total_link_jobs ";
+            selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, " +
+                "(select lookup_type from lookup_data where lookup_value = st.task_home_page limit 1) as task_home_page, " +
+                "(select lookup_type from lookup_data where lookup_value = st.pipeline_id limit 1) as pipeline_id, " +
+                "st.task_status, stt.*, count(sj.job_id) as total_link_jobs";
         }
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id ";
         if (!isCount) {
             query += "left join source_job sj on sj.task_detail_id = st.task_detail_id ";
         }
-        query += "where st.task_status in ('Delete', 'Inactive', 'Active') ";
+        query += "where 1=1 ";
         if (appUserId != null) {
             query += String.format(" and st.created_by_id = %d ", appUserId);
         }

@@ -22,7 +22,8 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "count(source_task.source_task_type_id) as totalTaskLink, source_task_type.is_schema_register as schemaRegister, source_task_type.schema_payload as schemaPayload\n" +
         "from source_task_type\n" +
         "left join source_task on source_task.source_task_type_id = source_task_type.source_task_type_id\n" +
-        "group by source_task_type.source_task_type_id order by source_task_type.source_task_type_id asc", nativeQuery = true)
+        "group by source_task_type.source_task_type_id\n" +
+        "order by source_task_type.source_task_type_id asc", nativeQuery = true)
     public List<SourceTaskTypeProjection> fetchAllSourceTaskType();
 
 }

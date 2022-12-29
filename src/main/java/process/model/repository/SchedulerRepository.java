@@ -21,7 +21,8 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
      * @param todayDate
      * @return List<Scheduler>
      * */
-    @Query(value = "select scheduler.* from scheduler join source_job on scheduler.job_id=source_job.job_id\n" +
+    @Query(value = "select scheduler.* from scheduler\n" +
+        "inner join source_job on scheduler.job_id=source_job.job_id\n" +
         "where ((?1 BETWEEN start_date AND end_date) OR (start_date <= ?1 AND end_date is null))\n" +
         "and source_job.job_status = 'Active'", nativeQuery = true)
     public List<Scheduler> findAllSchedulerForToday(LocalDate todayDate);
@@ -33,7 +34,8 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
      * @param currentSchedulerTime
      * @return List<Scheduler>
      * */
-    @Query(value = "select scheduler.* from scheduler join source_job on scheduler.job_id=source_job.job_id\n" +
+    @Query(value = "select scheduler.* from scheduler\n" +
+        "inner join source_job on scheduler.job_id=source_job.job_id\n" +
         "where scheduler.recurrence_time between ?1 and ?2\n" +
         "and source_job.job_status = 'Active'", nativeQuery = true)
     public List<Scheduler> findAllSchedulerForToday(LocalDateTime lastSchedulerRun, LocalDateTime currentSchedulerTime);
