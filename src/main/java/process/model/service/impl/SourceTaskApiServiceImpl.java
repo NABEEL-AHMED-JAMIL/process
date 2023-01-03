@@ -53,14 +53,17 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
     private SourceTaskRepository sourceTaskRepository;
     @Autowired
     private SourceTaskTypeRepository sourceTaskTypeRepository;
+    @Autowired
+    private LookupDataCacheService lookupDataCacheService;
 
     private final String ListSourceTask = "ListSourceTask";
     private final String SOURCE_TASK_HEADER[] = {
         "Task Id", "Task Name", "Task Payload",
-        "Task Status", "ServiceName", "QueueTopicPartition"
+        "Task Status", "PipelineId", "HomePage",
+        "ServiceName", "QueueTopicPartition",
     };
     private final String UPLOAD_SOURCE_TASK_HEADER[] = {
-        "TaskTypeId", "Task Name", "Task Payload"
+        "TaskTypeId", "Task Name", "Task Payload", "PipelineId", "HomePage"
     };
 
     @Override
@@ -82,19 +85,19 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         SourceTask sourceTask = new SourceTask();
         sourceTask.setTaskName(tempSourceTask.getTaskName());
         sourceTask.setTaskPayload(tempSourceTask.getTaskPayload());
+        sourceTask.setHomePageId(tempSourceTask.getHomePageId());
+        sourceTask.setPipelineId(tempSourceTask.getPipelineId());
         sourceTask.setTaskStatus(Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
         if (!isNull(tempSourceTask.getXmlTagsInfo())) {
-            List<SourceTaskPayload> sourceTaskPayloads = new ArrayList<>();
-            sourceTaskPayloads = tempSourceTask.getXmlTagsInfo()
-            .stream().map(tagInfo -> {
-                SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
-                sourceTaskPayload.setTagKey(tagInfo.getTagKey());
-                sourceTaskPayload.setTagParent(tagInfo.getTagParent());
-                sourceTaskPayload.setTagValue(tagInfo.getTagValue());
-                return sourceTaskPayload;
-            }).collect(Collectors.toList());
-            sourceTask.setSourceTaskPayload(sourceTaskPayloads);
+            sourceTask.setSourceTaskPayload(tempSourceTask.getXmlTagsInfo()
+                .stream().map(tagInfo -> {
+                    SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
+                    sourceTaskPayload.setTagKey(tagInfo.getTagKey());
+                    sourceTaskPayload.setTagParent(tagInfo.getTagParent());
+                    sourceTaskPayload.setTagValue(tagInfo.getTagValue());
+                    return sourceTaskPayload;
+                }).collect(Collectors.toList()));
         }
         this.sourceTaskRepository.save(sourceTask);
         return new ResponseDto(SUCCESS, String.format("SourceTask successfully save with %d.", sourceTask.getTaskDetailId()));
@@ -130,19 +133,24 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 sourceTask.get().setSourceTaskType(sourceTaskType.get());
             }
             if (!isNull(tempSourceTask.getXmlTagsInfo())) {
-                List<SourceTaskPayload> sourceTaskPayloads = new ArrayList<>();
-                sourceTaskPayloads = tempSourceTask.getXmlTagsInfo()
-                .stream().map(tagInfo -> {
-                    SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
-                    sourceTaskPayload.setTagKey(tagInfo.getTagKey());
-                    sourceTaskPayload.setTagParent(tagInfo.getTagParent());
-                    sourceTaskPayload.setTagValue(tagInfo.getTagValue());
-                    return sourceTaskPayload;
-                }).collect(Collectors.toList());
-                sourceTask.get().setSourceTaskPayload(sourceTaskPayloads);
+                sourceTask.get().getSourceTaskPayload().clear();
+                sourceTask.get().setSourceTaskPayload(tempSourceTask.getXmlTagsInfo()
+                    .stream().map(tagInfo -> {
+                        SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
+                        sourceTaskPayload.setTagKey(tagInfo.getTagKey());
+                        sourceTaskPayload.setTagParent(tagInfo.getTagParent());
+                        sourceTaskPayload.setTagValue(tagInfo.getTagValue());
+                        return sourceTaskPayload;
+                    }).collect(Collectors.toList()));
             }
             if (!isNull(tempSourceTask.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
+            }
+            if (!isNull(tempSourceTask.getHomePageId())) {
+                sourceTask.get().setHomePageId(tempSourceTask.getHomePageId());
+            }
+            if (!isNull(tempSourceTask.getPipelineId())) {
+                sourceTask.get().setPipelineId(tempSourceTask.getPipelineId());
             }
             this.sourceTaskRepository.save(sourceTask.get());
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
@@ -199,6 +207,14 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                     index++;
                     if (!isNull(obj[index])) {
+                        sourceTaskDto.setHomePageId(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!isNull(obj[index])) {
+                        sourceTaskDto.setPipelineId(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!isNull(obj[index])) {
                         sourceTaskDto.setTaskStatus(Status.valueOf(String.valueOf(obj[index])));
                     }
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
@@ -232,6 +248,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                     index++;
                     sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
+                    index++;
                     if (!isNull(obj[index])) {
                         sourceTaskDto.setTotalLinksJobs(Long.valueOf(obj[index].toString()));
                     }
@@ -335,6 +352,9 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             dataCellValue.add(!isNull(sourceTaskProjection.getTaskName()) ? String.valueOf(sourceTaskProjection.getTaskName()) : "");
             dataCellValue.add(!isNull(sourceTaskProjection.getTaskPayload()) ? String.valueOf(sourceTaskProjection.getTaskPayload()) : "");
             dataCellValue.add(!isNull(sourceTaskProjection.getTaskStatus()) ? String.valueOf(sourceTaskProjection.getTaskStatus()) : "");
+            // page and pipeline detail
+            dataCellValue.add(!isNull(sourceTaskProjection.getPipelineTaskId()) ? String.valueOf(sourceTaskProjection.getPipelineTaskId()) : "");
+            dataCellValue.add(!isNull(sourceTaskProjection.getHomePage()) ? String.valueOf(sourceTaskProjection.getHomePage()) : "");
             dataCellValue.add(!isNull(sourceTaskProjection.getServiceName()) ? String.valueOf(sourceTaskProjection.getServiceName()) : "");
             dataCellValue.add(!isNull(sourceTaskProjection.getQueueTopicPartition()) ? String.valueOf(sourceTaskProjection.getQueueTopicPartition()) : "");
             this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
@@ -384,7 +404,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             Row currentRow = rows.next();
             // header validation check
             if (currentRow.getRowNum() == 0) {
-                if (currentRow.getPhysicalNumberOfCells() != 3) {
+                if (currentRow.getPhysicalNumberOfCells() != 5) {
                     return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " heading missing.");
                 }
                 // loop on the header
@@ -406,6 +426,10 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                         sourceTaskValidation.setTaskName(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==2) {
                         sourceTaskValidation.setTaskPayload(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==3) {
+                        sourceTaskValidation.setPipelineId(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==4) {
+                        sourceTaskValidation.setHomePageId(this.bulkExcel.getCellDetail(currentRow, i));
                     }
                 }
                 if (!isNull(sourceTaskValidation.getSourceTaskTypeId())) {
@@ -433,8 +457,11 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             SourceTask sourceTask = new SourceTask();
             sourceTask.setTaskName(sourceTaskValidation.getTaskName());
             sourceTask.setTaskPayload(sourceTaskValidation.getTaskPayload());
+            sourceTask.setPipelineId(sourceTaskValidation.getPipelineId());
+            sourceTask.setHomePageId(sourceTaskValidation.getHomePageId());
             sourceTask.setTaskStatus(Status.Active);
-            sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
+            sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(
+                    Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
             this.sourceTaskRepository.save(sourceTask);
         });
         return new ResponseDto(SUCCESS, String.format("Total %d Task Save Successfully", sourceTaskValidations.size()));

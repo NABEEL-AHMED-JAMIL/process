@@ -41,6 +41,17 @@ public class SourceTask {
     @Enumerated(EnumType.STRING)
     private Status taskStatus;
 
+    @Column(name = "home_page_id",
+        nullable = true)
+    private String homePageId;
+
+    /**
+     * pipeline id use to move the data to the
+     * right path if kafka topic using for multiple pipeline
+     * */
+    @Column(name = "pipeline_id", nullable = true)
+    private String pipelineId;
+
     // save lob data for job detail
     @Column(name = "task_payload",
         columnDefinition = "text")
@@ -50,7 +61,8 @@ public class SourceTask {
     @JoinColumn(name = "source_task_type_id")
     private SourceTaskType sourceTaskType;
 
-    @OneToMany(cascade = CascadeType.ALL)
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "payload_id")
     private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
 
     @Column(name = "user_id")
@@ -82,6 +94,22 @@ public class SourceTask {
         this.taskStatus = taskStatus;
     }
 
+    public String getHomePageId() {
+        return homePageId;
+    }
+
+    public void setHomePageId(String homePageId) {
+        this.homePageId = homePageId;
+    }
+
+    public String getPipelineId() {
+        return pipelineId;
+    }
+
+    public void setPipelineId(String pipelineId) {
+        this.pipelineId = pipelineId;
+    }
+
     public String getTaskPayload() {
         return taskPayload;
     }
@@ -103,7 +131,8 @@ public class SourceTask {
     }
 
     public void setSourceTaskPayload(List<SourceTaskPayload> sourceTaskPayload) {
-        this.sourceTaskPayload = sourceTaskPayload;
+        this.sourceTaskPayload.clear();
+        this.sourceTaskPayload.addAll(sourceTaskPayload);
     }
 
     public Long getUserId() {

@@ -46,52 +46,41 @@ public class SourceJob {
     @Column(name = "job_id")
     @GeneratedValue(generator = "sourceJobSequenceGenerator")
     private Long jobId;
-
     // job name should be unique
     @Column(name = "job_name",
        length = 1000, nullable = false)
     private String jobName;
-
     // which class or method trigger
     @ManyToOne
     @JoinColumn(name = "task_detail_id")
     private SourceTask sourceTask;
-
     // status of job (active or disable or delete)
     @Column(name = "job_status",
          nullable = false)
     @Enumerated(EnumType.STRING)
     private Status jobStatus;
-
     // status :- blank,queue,running,fail,complete
     @Column(name = "job_running_status")
     @Enumerated(EnumType.STRING)
     private JobStatus jobRunningStatus;
-
     // describe the last job run
     @Column(name = "last_job_run",
          columnDefinition = "TIMESTAMP")
     private LocalDateTime lastJobRun;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "execution",
         nullable = false)
     private Execution execution;
-
     @Column(name = "priority",
         nullable = false)
     private Integer priority;
-
     @Column(name = "date_created",
          nullable = false)
     private Timestamp dateCreated;
-
     @Column(name = "complete_job")
     private boolean completeJob;
-
     @Column(name = "fail_job")
     private boolean failJob;
-
     @Column(name = "skip_job")
     private boolean skipJob;
 

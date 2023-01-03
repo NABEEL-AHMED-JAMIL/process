@@ -10,6 +10,7 @@ import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.pojo.SourceTaskType;
+import process.model.repository.LookupDataRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardApiService;
@@ -32,6 +33,8 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     private SourceJobRepository sourceJobRepository;
     @Autowired
     private SchedulerRepository schedulerRepository;
+    @Autowired
+    private LookupDataRepository lookupDataRepository;
 
     @Override
     public ResponseDto jobStatusStatistics() throws Exception {
@@ -206,6 +209,14 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                         sourceTaskDto.setTaskName(sourceTask.getTaskName());
                         sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
                         sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
+                        if (!isNull(sourceTask.getHomePageId())) {
+                            sourceTaskDto.setHomePageId(this.lookupDataRepository.findById(
+                                Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue());
+                        }
+                        if (!isNull(sourceTask.getPipelineId())) {
+                            sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(
+                                Long.valueOf(sourceTask.getPipelineId())).get().getLookupValue());
+                        }
                         if (sourceTask.getSourceTaskType() != null) {
                             SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
                             SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();

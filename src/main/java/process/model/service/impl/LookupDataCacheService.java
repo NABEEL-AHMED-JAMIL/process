@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 public class LookupDataCacheService {
 
     private Logger logger = LoggerFactory.getLogger(LookupDataCacheService.class);
-    private Map<Long, LookupDataDto> lookupCacheMap = new HashMap<>();
+    private Map<String, LookupDataDto> lookupCacheMap = new HashMap<>();
 
     @Autowired
     private LookupDataRepository lookupDataRepository;
@@ -31,10 +31,10 @@ public class LookupDataCacheService {
         logger.info("****************Cache-Lookup-Start***************************");
         Iterable<LookupData> lookupDataList = this.lookupDataRepository.findByParentLookupIdIsNull();
         lookupDataList.forEach(lookupData -> {
-            if (lookupCacheMap.containsKey(lookupData.getLookupId())) {
-                lookupCacheMap.put(lookupData.getLookupId(), getLookupDataDetail(lookupData));
+            if (this.lookupCacheMap.containsKey(lookupData.getLookupType())) {
+                this.lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
             } else {
-                lookupCacheMap.put(lookupData.getLookupId(), getLookupDataDetail(lookupData));
+                this.lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
             }
         });
         //logger.info(lookupCacheMap.toString());
@@ -42,7 +42,7 @@ public class LookupDataCacheService {
     }
 
     private LookupDataDto getLookupDataDetail(LookupData lookupData) {
-        LookupDataDto parentLookupData =new LookupDataDto();
+        LookupDataDto parentLookupData = new LookupDataDto();
         parentLookupData.setLookupId(lookupData.getLookupId());
         parentLookupData.setLookupType(lookupData.getLookupType());
         parentLookupData.setLookupValue(lookupData.getLookupValue());
@@ -61,13 +61,13 @@ public class LookupDataCacheService {
         return parentLookupData;
     }
 
-    public LookupDataDto getParentLookupById(Long lookupId) {
-        return this.lookupCacheMap.get(lookupId);
+    public LookupDataDto getParentLookupById(String lookupType) {
+        return this.lookupCacheMap.get(lookupType);
     }
 
-    public LookupDataDto getChildLookupById(Long parentLookupId, Long childLookupId) {
-        return this.getParentLookupById(parentLookupId).getChildren().stream().
-            filter(childLookup -> childLookupId.equals(childLookup.getLookupId()))
+    public LookupDataDto getChildLookupById(String parentLookupType, String childLookupType) {
+        return this.getParentLookupById(parentLookupType).getChildren().stream().
+            filter(childLookup -> childLookupType.equals(childLookup.getLookupId()))
             .findAny().orElse(null);
     }
 

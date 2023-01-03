@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.repository.*;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -80,16 +79,6 @@ public class TransactionServiceImpl {
     }
 
     /**
-     * The method use to get the job by name and job status
-     * @param jobName
-     * @param status
-     * @return Job
-     */
-    public Optional<SourceJob> findByJobNameAndJobStatus(String jobName, Status status) {
-        return this.sourceJobRepository.findByJobNameAndJobStatus(jobName, status);
-    }
-
-    /**
      * The method use to get the job by jobId and job status
      * @param jobId
      * @param status
@@ -115,15 +104,6 @@ public class TransactionServiceImpl {
      */
     public Optional<JobQueue> findJobQueueByJobQueueId(Long jobQueueId) {
         return this.jobQueueRepository.findById(jobQueueId);
-    }
-
-    /**
-     * The method use to get the scheduler for the current date
-     * @param todayDate
-     * @return Scheduler
-     */
-    public List<Scheduler> findAllSchedulerForToday(LocalDate todayDate) {
-        return this.schedulerRepository.findAllSchedulerForToday(todayDate);
     }
 
     /**

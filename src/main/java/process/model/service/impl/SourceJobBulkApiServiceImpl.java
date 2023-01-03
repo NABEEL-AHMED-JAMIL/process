@@ -83,6 +83,11 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
         this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllSourceTask()
             .stream().map(taskId -> String.valueOf(taskId)).toArray(String[]::new));
         this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.stream().toArray(String[]::new));
+        // Priority
+        this.bulkExcel.fillDropDownValue(sheet,1,7, ProcessTimeUtil.priority.stream().toArray(String[]::new));
+        this.bulkExcel.fillDropDownValue(sheet,1,8, ProcessTimeUtil.checked.stream().toArray(String[]::new));
+        this.bulkExcel.fillDropDownValue(sheet,1,9, ProcessTimeUtil.checked.stream().toArray(String[]::new));
+        this.bulkExcel.fillDropDownValue(sheet,1,10, ProcessTimeUtil.checked.stream().toArray(String[]::new));
         wb.write(fileOut);
         fileOut.close();
         wb.close();
@@ -114,6 +119,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
             dataCellValue.add(!isNull(sourceJob.getJobName()) ? String.valueOf(sourceJob.getJobName()) : "");
             dataCellValue.add(String.format("%d [%s]", sourceJob.getTaskDetail().getTaskDetailId(), sourceJob.getTaskDetail().getTaskName()));
             dataCellValue.add(String.valueOf(sourceJob.getExecution()));
+            dataCellValue.add(String.valueOf(sourceJob.getPriority()));
             dataCellValue.add(String.valueOf(sourceJob.getJobStatus()));
             dataCellValue.add(String.valueOf(sourceJob.getDateCreated()));
             // check the scheduler
@@ -134,9 +140,9 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
                 dataCellValue.add("");
             }
             dataCellValue.add(!isNull(sourceJob.getJobRunningStatus()) ? String.valueOf(sourceJob.getJobRunningStatus()) : "");
-            dataCellValue.add(sourceJob.isCompleteJob() ? "Yes": "No");
-            dataCellValue.add(sourceJob.isFailJob() ? "Yes" : "No");
-            dataCellValue.add(sourceJob.isSkipJob() ? "Yes" : "No");
+            dataCellValue.add(sourceJob.isCompleteJob() ? ProcessTimeUtil.checked.get(0): ProcessTimeUtil.checked.get(1));
+            dataCellValue.add(sourceJob.isFailJob() ? ProcessTimeUtil.checked.get(0) : ProcessTimeUtil.checked.get(1));
+            dataCellValue.add(sourceJob.isSkipJob() ? ProcessTimeUtil.checked.get(0) : ProcessTimeUtil.checked.get(1));
             this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
         });
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -158,7 +164,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
         }
         // fill the stream with file into work-book
         XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream());
-        if (workbook == null || workbook.getNumberOfSheets() == 0) {
+        if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(JOB_ADD);
@@ -203,6 +209,14 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
                         jobDetailValidation.setFrequency(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==6) {
                         jobDetailValidation.setRecurrence(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==7) {
+                        jobDetailValidation.setPriority(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==8) {
+                        jobDetailValidation.setEmailJobComplete(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==9) {
+                        jobDetailValidation.setEmailJobFail(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==10) {
+                        jobDetailValidation.setEmailJobSkip(this.bulkExcel.getCellDetail(currentRow, i));
                     }
                 }
                 jobDetailValidation.isValidJobDetail();
@@ -229,10 +243,10 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
             sourceJob.setTaskDetail(this.transactionService.findByTaskDetailIdAndTaskStatus(
                 Long.valueOf(jobDetailValidation.getTaskId())).get());
             sourceJob.setJobStatus(Status.Active);
-            sourceJob.setPriority(5);
-            sourceJob.setSkipJob(true);
-            sourceJob.setFailJob(true);
-            sourceJob.setCompleteJob(true);
+            sourceJob.setPriority(Integer.valueOf(jobDetailValidation.getPriority()));
+            sourceJob.setSkipJob(Boolean.valueOf(jobDetailValidation.getEmailJobSkip()));
+            sourceJob.setFailJob(Boolean.valueOf(jobDetailValidation.getEmailJobFail()));
+            sourceJob.setCompleteJob(Boolean.valueOf(jobDetailValidation.getEmailJobComplete()));
             sourceJob.setExecution(Execution.Auto);
             this.transactionService.saveOrUpdateJob(sourceJob);
             Scheduler scheduler = new Scheduler();

@@ -32,8 +32,7 @@ public class ProcessUtil {
     public static String JOB_QUEUE = "jobQueue";
     public static String TASK_DETAIL = "taskDetail";
     public static String PRIORITY = "Priority";
-
-    // constant-filed
+    public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     public static String REAL_FILE_PATH = "Scheduler.xlsx";
     public static String XLSX_EXTENSION = ".xlsx";
@@ -47,7 +46,7 @@ public class ProcessUtil {
     };
 
     public static String[] HEADER_FILED_BATCH_DOWNLOAD_FILE = new String[] {
-        "Job Name", "Task", "Execution", "Status", "Created Date",
+        "Job Name", "Task", "Execution", "Priority",  "Status", "Created Date",
         "Start Date", "End Date", "Time", "Last Run", "Next Flight",
         "R-Status", "Email job complete", "Email job fail", "Email job skip"
     };

@@ -81,15 +81,18 @@ public class QueryService {
         String order, SearchTextDto searchTextDto) {
         String selectPortion = "";
         if (isCount) {
-            selectPortion = "select count(*) as result ";
+            selectPortion = "select count(*) as result\n";
         } else {
-            selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, st.task_status, stt.*, count(sj.job_id) as total_link_jobs ";
+            selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, ld1.lookup_type as home_page_id, " +
+                "ld2.lookup_type as pipeline_id, st.task_status, stt.*, count(sj.job_id) as total_link_jobs\n";
         }
-        String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id ";
+        String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n";
         if (!isCount) {
-            query += "left join source_job sj on sj.task_detail_id = st.task_detail_id ";
+            query += "left join source_job sj on sj.task_detail_id = st.task_detail_id\n";
+            query += "left join lookup_data ld1 on cast(ld1.lookup_id as varchar(10)) = st.home_page_id\n";
+            query += "left join lookup_data ld2 on cast(ld2.lookup_id as varchar(10)) = st.pipeline_id\n";
         }
-        query += "where st.task_status in ('Delete', 'Inactive', 'Active') ";
+        query += "where 1=1 ";
         if (appUserId != null) {
             query += String.format(" and st.created_by_id = %d ", appUserId);
         }
@@ -116,7 +119,7 @@ public class QueryService {
             }
         }
         if (!isCount) {
-            query += "group by st.task_detail_id, stt.source_task_type_id ";
+            query += "\ngroup by st.task_detail_id, stt.source_task_type_id, ld1.lookup_id, ld2.lookup_id\n";
             if (order != null && columnName != null) {
                 query += String.format("order by %s %s ", columnName, order);
             }

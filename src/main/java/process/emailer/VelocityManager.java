@@ -39,7 +39,7 @@ public class VelocityManager {
     public VelocityManager() { }
 
     public String getResponseMessage(TemplateType templateType, Map<String, Object> object) {
-        String responseMessage = null;
+        String responseMessage;
         this.setWriter(new StringWriter());
         this.setContext(new VelocityContext());
         //logger.info("Request Content :- " + object);

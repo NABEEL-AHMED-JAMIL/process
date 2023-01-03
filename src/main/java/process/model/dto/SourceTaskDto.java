@@ -16,6 +16,8 @@ public class SourceTaskDto {
     private Long taskDetailId;
     private String taskName;
     private Status taskStatus;
+    private String homePageId;
+    private String pipelineId;
     private String taskPayload;
     private SourceTaskTypeDto sourceTaskType;
     private List<ConfigurationMakerRequest.TagInfo> xmlTagsInfo;
@@ -45,6 +47,22 @@ public class SourceTaskDto {
 
     public void setTaskStatus(Status taskStatus) {
         this.taskStatus = taskStatus;
+    }
+
+    public String getHomePageId() {
+        return homePageId;
+    }
+
+    public void setHomePageId(String homePageId) {
+        this.homePageId = homePageId;
+    }
+
+    public String getPipelineId() {
+        return pipelineId;
+    }
+
+    public void setPipelineId(String pipelineId) {
+        this.pipelineId = pipelineId;
     }
 
     public String getTaskPayload() {

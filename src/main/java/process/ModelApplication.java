@@ -49,10 +49,10 @@ public class ModelApplication {
         // default system timezone for application
         TimeZone.setDefault(TimeZone.getTimeZone(ProcessUtil.QATAR_TIME_ZONE));
         LocalDateTime now = LocalDateTime.now();
-        LookupData obj = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
-        if (obj != null) {
-            obj.setLookupValue(now.toString());
-            this.transactionService.updateLookupDate(obj);
+        LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
+        if (!ProcessUtil.isNull(lookupData)) {
+            lookupData.setLookupValue(now.toString());
+            this.transactionService.updateLookupDate(lookupData);
         }
     }
 }

@@ -244,8 +244,8 @@ public class SourceJobRestApi {
             if (fileObject.getFile() != null) {
                 return new ResponseEntity<>(this.sourceJobBulkApiService.uploadSourceJob(fileObject), HttpStatus.OK);
             }
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "File not found for process."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "File not found for process."),
+                HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,

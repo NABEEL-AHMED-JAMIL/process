@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import process.emailer.EmailMessagesFactory;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
 import process.model.enums.Execution;
@@ -13,12 +14,9 @@ import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
-import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
-
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
 import static process.util.ProcessUtil.*;
@@ -42,7 +40,11 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     @Autowired
     private JobQueueRepository jobQueueRepository;
     @Autowired
+    private LookupDataRepository lookupDataRepository;
+    @Autowired
     private ProducerBulkEngine producerBulkEngine;
+    @Autowired
+    private EmailMessagesFactory emailMessagesFactory;
 
     @Override
     public ResponseDto addSourceJob(SourceJobDto tempSourceJob) throws Exception {
@@ -283,6 +285,14 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                 sourceTaskDto.setTaskName(sourceTask.getTaskName());
                 sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
                 sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
+                if (!isNull(sourceTask.getHomePageId())) {
+                    sourceTaskDto.setHomePageId(this.lookupDataRepository.findById(
+                        Long.valueOf(sourceTask.getHomePageId())).get().getLookupType());
+                }
+                if (!isNull(sourceTask.getPipelineId())) {
+                    sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(
+                        Long.valueOf(sourceTask.getPipelineId())).get().getLookupType());
+                }
                 if (sourceTask.getSourceTaskType() != null) {
                     SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
@@ -357,6 +367,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                 schedulerDto.setRecurrenceTime(scheduler.get().getRecurrenceTime());
                 sourceJobDto.setScheduler(schedulerDto);
             }
+            sourceJobDto.setTabActive(this.jobQueueRepository.getCountForJobByJobId(
+                sourceJobDto.getJobId()) > 0 ? true : false);
             sourceJobDtoList.add(sourceJobDto);
         });
         return new ResponseDto(SUCCESS, String.format("Fetch Source Jobs."), sourceJobDtoList);
