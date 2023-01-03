@@ -16,7 +16,7 @@ public class SourceTaskDto {
     private Long taskDetailId;
     private String taskName;
     private Status taskStatus;
-    private String taskHomePage;
+    private String homePageId;
     private String pipelineId;
     private String taskPayload;
     private SourceTaskTypeDto sourceTaskType;
@@ -49,12 +49,12 @@ public class SourceTaskDto {
         this.taskStatus = taskStatus;
     }
 
-    public String getTaskHomePage() {
-        return taskHomePage;
+    public String getHomePageId() {
+        return homePageId;
     }
 
-    public void setTaskHomePage(String taskHomePage) {
-        this.taskHomePage = taskHomePage;
+    public void setHomePageId(String homePageId) {
+        this.homePageId = homePageId;
     }
 
     public String getPipelineId() {

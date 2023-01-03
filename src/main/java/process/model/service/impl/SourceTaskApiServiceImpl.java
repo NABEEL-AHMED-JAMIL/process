@@ -85,7 +85,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         SourceTask sourceTask = new SourceTask();
         sourceTask.setTaskName(tempSourceTask.getTaskName());
         sourceTask.setTaskPayload(tempSourceTask.getTaskPayload());
-        sourceTask.setTaskHomePage(tempSourceTask.getTaskHomePage());
+        sourceTask.setHomePageId(tempSourceTask.getHomePageId());
         sourceTask.setPipelineId(tempSourceTask.getPipelineId());
         sourceTask.setTaskStatus(Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
@@ -146,8 +146,8 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             if (!isNull(tempSourceTask.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
             }
-            if (!isNull(tempSourceTask.getTaskHomePage())) {
-                sourceTask.get().setTaskHomePage(tempSourceTask.getTaskHomePage());
+            if (!isNull(tempSourceTask.getHomePageId())) {
+                sourceTask.get().setHomePageId(tempSourceTask.getHomePageId());
             }
             if (!isNull(tempSourceTask.getPipelineId())) {
                 sourceTask.get().setPipelineId(tempSourceTask.getPipelineId());
@@ -207,7 +207,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                     index++;
                     if (!isNull(obj[index])) {
-                        sourceTaskDto.setTaskHomePage(String.valueOf(obj[index]));
+                        sourceTaskDto.setHomePageId(String.valueOf(obj[index]));
                     }
                     index++;
                     if (!isNull(obj[index])) {
@@ -429,7 +429,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     } else if (i==3) {
                         sourceTaskValidation.setPipelineId(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==4) {
-                        sourceTaskValidation.setTaskHomePage(this.bulkExcel.getCellDetail(currentRow, i));
+                        sourceTaskValidation.setHomePageId(this.bulkExcel.getCellDetail(currentRow, i));
                     }
                 }
                 if (!isNull(sourceTaskValidation.getSourceTaskTypeId())) {
@@ -458,7 +458,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             sourceTask.setTaskName(sourceTaskValidation.getTaskName());
             sourceTask.setTaskPayload(sourceTaskValidation.getTaskPayload());
             sourceTask.setPipelineId(sourceTaskValidation.getPipelineId());
-            sourceTask.setTaskHomePage(sourceTaskValidation.getTaskHomePage());
+            sourceTask.setHomePageId(sourceTaskValidation.getHomePageId());
             sourceTask.setTaskStatus(Status.Active);
             sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(
                     Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
