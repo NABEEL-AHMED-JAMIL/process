@@ -41,8 +41,9 @@ public class SourceTask {
     @Enumerated(EnumType.STRING)
     private Status taskStatus;
 
-    @Column(name = "task_home_page", nullable = true)
-    private String taskHomePage;
+    @Column(name = "home_page_id",
+        nullable = true)
+    private String homePageId;
 
     /**
      * pipeline id use to move the data to the
@@ -90,12 +91,12 @@ public class SourceTask {
         this.taskStatus = taskStatus;
     }
 
-    public String getTaskHomePage() {
-        return taskHomePage;
+    public String getHomePageId() {
+        return homePageId;
     }
 
-    public void setTaskHomePage(String taskHomePage) {
-        this.taskHomePage = taskHomePage;
+    public void setHomePageId(String homePageId) {
+        this.homePageId = homePageId;
     }
 
     public String getPipelineId() {

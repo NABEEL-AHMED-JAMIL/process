@@ -125,7 +125,7 @@ public class XmlOutTagInfoUtil {
     }
 
     private void addTagValue(Document xmlDoc, Element child, String tagValue) {
-        if(tagValue != null && !tagValue.equals(BLANK)) {
+        if(!ProcessUtil.isNull(tagValue)) {
             child.appendChild(xmlDoc.createTextNode(tagValue));
         } else {
             child.appendChild(xmlDoc.createTextNode(SPACE));

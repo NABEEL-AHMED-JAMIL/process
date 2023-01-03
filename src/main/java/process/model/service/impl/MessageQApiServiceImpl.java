@@ -27,6 +27,11 @@ public class MessageQApiServiceImpl implements MessageQApiService {
 
     private Logger logger = LoggerFactory.getLogger(MessageQApiServiceImpl.class);
 
+    private final String SOURCE_JOB_QUEUES = "sourceJobQueues";
+    private final String JOB_STATUS_STATISTICS = "jobStatusStatistic";
+    private final String AUDIT_LOG = "AUDIT_LOG";
+    private final String QUEUE_DETAIL = "QUEUE_DETAIL";
+
     @Autowired
     private BulkAction bulkAction;
     @Autowired
@@ -38,11 +43,6 @@ public class MessageQApiServiceImpl implements MessageQApiService {
     @Autowired
     private EmailMessagesFactory emailMessagesFactory;
 
-    private final String SOURCE_JOB_QUEUES = "sourceJobQueues";
-    private final String JOB_STATUS_STATISTICS = "jobStatusStatistic";
-    private final String AUDIT_LOG = "AUDIT_LOG";
-    private final String QUEUE_DETAIL = "QUEUE_DETAIL";
-
     @Override
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch) {
         ResponseDto responseDto;
@@ -52,7 +52,8 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             return new ResponseDto(ERROR, "ToDate missing.");
         }
         Map<String, Object> objectMap = new HashMap<>();
-        List<Object[]> result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, false));
+        List<Object[]> result = this.queryService.executeQuery(
+            this.queryService.fetchJobQLog(messageQSearch, false));
         if (!isNull(result) && result.size() > 0) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
             for(Object[] obj : result) {
@@ -67,7 +68,8 @@ public class MessageQApiServiceImpl implements MessageQApiService {
                 }
                 index++;
                 if (!isNull(obj[index])) {
-                    sourceJobQueue.setEndTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueue.setEndTime(LocalDateTime.parse(
+                        String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 index++;
                 if (!isNull(obj[index])) {
@@ -83,11 +85,13 @@ public class MessageQApiServiceImpl implements MessageQApiService {
                 }
                 index++;
                 if (!isNull(obj[index])) {
-                    sourceJobQueue.setSkipTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueue.setSkipTime(LocalDateTime.parse(
+                        String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 index++;
                 if (!isNull(obj[index])) {
-                    sourceJobQueue.setStartTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueue.setStartTime(LocalDateTime.parse(
+                        String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 sourceJobQueues.add(sourceJobQueue);
             }
@@ -97,7 +101,8 @@ public class MessageQApiServiceImpl implements MessageQApiService {
                 List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
                 for(Object[] obj : result) {
                     int index = 0;
-                    jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
+                    jobStatusStatistic.add(new JobStatusStatisticDto(
+                        String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
                 }
                 objectMap.put(JOB_STATUS_STATISTICS, jobStatusStatistic);
             }

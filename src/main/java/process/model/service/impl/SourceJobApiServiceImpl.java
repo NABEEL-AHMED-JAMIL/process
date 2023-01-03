@@ -40,6 +40,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     @Autowired
     private JobQueueRepository jobQueueRepository;
     @Autowired
+    private LookupDataRepository lookupDataRepository;
+    @Autowired
     private ProducerBulkEngine producerBulkEngine;
     @Autowired
     private EmailMessagesFactory emailMessagesFactory;
@@ -283,8 +285,14 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                 sourceTaskDto.setTaskName(sourceTask.getTaskName());
                 sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
                 sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
-                sourceTaskDto.setTaskHomePage(sourceTask.getTaskHomePage());
-                sourceTaskDto.setPipelineId(sourceTask.getPipelineId());
+                if (!isNull(sourceTask.getHomePageId())) {
+                    sourceTaskDto.setHomePageId(this.lookupDataRepository.findById(
+                        Long.valueOf(sourceTask.getHomePageId())).get().getLookupType());
+                }
+                if (!isNull(sourceTask.getPipelineId())) {
+                    sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(
+                        Long.valueOf(sourceTask.getPipelineId())).get().getLookupType());
+                }
                 if (sourceTask.getSourceTaskType() != null) {
                     SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();

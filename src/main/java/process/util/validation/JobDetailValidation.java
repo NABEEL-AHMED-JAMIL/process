@@ -241,15 +241,6 @@ public class JobDetailValidation {
     }
 
     /**
-     * Check the filed detail valid or not
-     * @param filed
-     * @return boolean true|false
-     * */
-    private static boolean isNull(Long filed) {
-        return filed == null ? true : false;
-    }
-
-    /**
      * Validation the frequency
      * @return boolean true|false
      * */
