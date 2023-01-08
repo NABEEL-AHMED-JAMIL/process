@@ -210,8 +210,14 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                         sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
                         sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
                         if (!isNull(sourceTask.getHomePageId())) {
-                            sourceTaskDto.setHomePageId(this.lookupDataRepository.findById(
-                                Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue());
+                            String homePage = this.lookupDataRepository.findById(
+                                    Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue();
+                            homePage = homePage.replace("{jobId}", String.valueOf(sourceJobDto.getJobId()));
+                            homePage = homePage.replace("{taskId}", String.valueOf(sourceTaskDto.getTaskDetailId()));
+                            if (!isNull(sourceTask.getPipelineId())) {
+                                homePage = homePage.replace("{pipeline}", sourceTask.getPipelineId());
+                            }
+                            sourceTaskDto.setHomePageId(homePage);
                         }
                         if (!isNull(sourceTask.getPipelineId())) {
                             sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(

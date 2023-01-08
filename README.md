@@ -3,14 +3,6 @@
     <th>Task</th>
     <th>Status</th>
   </tr>
-  <tr>
-    <td>Email Configuration</td>
-    <td>Pending</td>
-  </tr>
-    <tr>
-    <td>QR-Code PDF</td>
-    <td>Pending</td>
-  </tr>
     <tr>
     <td>OpenId Auth</td>
     <td>Pending</td>
