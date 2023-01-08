@@ -33,8 +33,9 @@ public class ConfigurationMakerRequest {
         this.jsonTagsInfo = jsonTagsInfo;
     }
 
-    public static class TagInfo {
+    public static class TagInfo implements Comparable<TagInfo> {
 
+        private Long taskPayloadId;
         private String tagKey;
         private String tagParent;
         private String tagValue;
@@ -45,6 +46,21 @@ public class ConfigurationMakerRequest {
             this.tagKey = tagKey;
             this.tagParent = tagParent;
             this.tagValue = tagValue;
+        }
+
+        public TagInfo(Long taskPayloadId, String tagKey, String tagParent, String tagValue) {
+            this.taskPayloadId = taskPayloadId;
+            this.tagKey = tagKey;
+            this.tagParent = tagParent;
+            this.tagValue = tagValue;
+        }
+
+        public Long getTaskPayloadId() {
+            return taskPayloadId;
+        }
+
+        public void setTaskPayloadId(Long taskPayloadId) {
+            this.taskPayloadId = taskPayloadId;
         }
 
         public String getTagKey() {
@@ -89,6 +105,17 @@ public class ConfigurationMakerRequest {
             result = 31 * result + tagParent.hashCode();
             result = 31 * result + tagValue.hashCode();
             return result;
+        }
+
+        @Override
+        public int compareTo(TagInfo o) {
+            if(taskPayloadId==o.taskPayloadId) {
+                return 0;
+            } else if(taskPayloadId>o.taskPayloadId) {
+                return 1;
+            } else {
+                return -1;
+            }
         }
 
         @Override

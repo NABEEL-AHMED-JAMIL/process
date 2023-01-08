@@ -26,10 +26,7 @@ import process.util.validation.SourceTaskValidation;
 import java.io.ByteArrayOutputStream;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
@@ -325,7 +322,34 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId) {
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskId);
         if (sourceTask.isPresent()) {
-            return new ResponseDto(SUCCESS, String.format("SourceTask found with %d.", sourceTaskId), sourceTask);
+            SourceTaskDto sourceTaskDto = new SourceTaskDto();
+            sourceTaskDto.setTaskDetailId(sourceTask.get().getTaskDetailId());
+            sourceTaskDto.setTaskName(sourceTask.get().getTaskName());
+            sourceTaskDto.setTaskStatus(sourceTask.get().getTaskStatus());
+            sourceTaskDto.setHomePageId(sourceTask.get().getHomePageId());
+            sourceTaskDto.setPipelineId(sourceTask.get().getPipelineId());
+            sourceTaskDto.setTaskPayload(sourceTask.get().getTaskPayload());
+            SourceTaskType sourceTaskType = sourceTask.get().getSourceTaskType();
+            SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
+            sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
+            sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
+            sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
+            sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
+            sourceTaskTypeDto.setStatus(sourceTaskType.getStatus());
+            sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
+            sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
+            sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
+            if (!isNull(sourceTask.get().getSourceTaskPayload())) {
+                sourceTaskDto.setXmlTagsInfo(
+                    sourceTask.get().getSourceTaskPayload().stream().map(sourceTaskPayload -> {
+                        ConfigurationMakerRequest.TagInfo xlm = new ConfigurationMakerRequest.TagInfo(
+                            sourceTaskPayload.getTaskPayloadId(), sourceTaskPayload.getTagKey(),
+                            sourceTaskPayload.getTagParent(), sourceTaskPayload.getTagValue());
+                        return xlm;
+                    }).collect(Collectors.toList()));
+            }
+            Collections.sort(sourceTaskDto.getXmlTagsInfo());
+            return new ResponseDto(SUCCESS, String.format("SourceTask found with %d.", sourceTaskId), sourceTaskDto);
         }
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskId));
     }
