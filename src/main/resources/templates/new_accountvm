@@ -1,0 +1,21 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Please Confirm your QUORUM Account.</title>
+</head>
+<body alink="#0d965f" link="#0d965f" text="#000000" vlink="#0d965f">
+    <div style="width:800px;margin:0 auto;">
+        <div style="width:100%;background:#212529;height:70px;">
+            <h1 style="font-family:Arial, Helvetica, sans-serif;font-size:20px;font-weight:normal;color:#fff;text-align:center;padding:25px 0;">Thank You For Registering!</h1>
+        </div>
+        <div style="border:1px solid #333;padding:30px 15px;font-family:Arial, Helvetica, sans-serif;">
+            <p style="font-size:18px;color:#6d6e71;text-align:center;">Welcome to the</p>
+            <h1 style="font-size:18px;color:#6d6e71;text-align:center;"><img src="$request.get("icon")" /></h1>
+            <p style="font-size:13px;text-align:center;font-weight:bold;">Dear $request.get("fullName"),</p>
+            <p style="font-size:13px;text-align:center;">Thank you for registering in Real Estate Platform.</p>
+            <p style="font-size:13px;text-align:center;">The Real Estate Platform Support Team.</p>
+        </div>
+    </div>
+</body>
+</html>
