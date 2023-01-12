@@ -24,7 +24,7 @@ public class AsyncDALTaskExecutor {
      * */
     public static void addTask(Runnable task, Integer priority) {
         try {
-            logger.debug("Submitting Task of type : " + task.getClass().getCanonicalName());
+            logger.info("Submitting Task of type : " + task.getClass().getCanonicalName());
             Thread runningTask = new Thread(task);
             // priority set for the task
             runningTask.setPriority(priority);

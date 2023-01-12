@@ -27,7 +27,7 @@ public class ProcessCron {
     /**
      * This addJobInQueue method run every 1 minutes
      * */
-    @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
+    @Scheduled(fixedDelay = 20 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     public void addJobInQueue() {
         logger.info("++++++++++++++++++++++++Start-AddJobInQueue++++++++++++++++++++++++++++++++");
         this.producerBulkEngine.addJobInQueue();

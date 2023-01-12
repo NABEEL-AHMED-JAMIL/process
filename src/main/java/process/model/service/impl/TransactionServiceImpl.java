@@ -125,6 +125,15 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findAllJobForTodayWithLimit(limit);
     }
 
+
+    /**
+     * Method use to update the job queue
+     * @param jobQueue
+     * */
+    public void updateJobQueue(JobQueue jobQueue) {
+        this.jobQueueRepository.save(jobQueue);
+    }
+
     /**
      * The method use to fine the lookup-data
      * @param lookupType

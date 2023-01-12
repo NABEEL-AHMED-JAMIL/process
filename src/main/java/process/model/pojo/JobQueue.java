@@ -76,6 +76,9 @@ public class JobQueue {
         nullable = false)
     private Timestamp dateCreated;
 
+    @Column(name = "job_send")
+    private boolean jobSend;
+
     public JobQueue() {}
 
     @PrePersist
@@ -155,6 +158,14 @@ public class JobQueue {
     }
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public boolean isJobSend() {
+        return jobSend;
+    }
+
+    public void setJobSend(boolean jobSend) {
+        this.jobSend = jobSend;
     }
 
     @Override

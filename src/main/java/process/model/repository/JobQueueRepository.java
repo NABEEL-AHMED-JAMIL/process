@@ -17,7 +17,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
      * @param limit
      * @return List<JobQueue>
      * */
-    @Query(value = "select job_queue.* from job_queue where job_status = 'Queue' limit ?1 ", nativeQuery = true)
+    @Query(value = "select job_queue.* from job_queue where job_status = 'Queue' and job_send = false limit ?1 ", nativeQuery = true)
     public List<JobQueue> findAllJobForTodayWithLimit(Long limit);
 
     /**
