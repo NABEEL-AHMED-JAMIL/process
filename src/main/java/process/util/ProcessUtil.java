@@ -41,8 +41,9 @@ public class ProcessUtil {
     public static String JOB_ADD = "Job-Add";
 
     public static String[] HEADER_FILED_BATCH_FILE = new String[] {
-        "Job Name", "Task Detail Id", "Start Date", "End Date",
-        "Start Time", "Frequency", "Recurrence"
+        "Job Name", "Task Detail Id", "Start Date", "End Date", "Start Time",
+        "Frequency", "Recurrence", "Priority", "Email Job Complete",
+        "Email Job Fail", "Email Job Skip"
     };
 
     public static String[] HEADER_FILED_BATCH_DOWNLOAD_FILE = new String[] {

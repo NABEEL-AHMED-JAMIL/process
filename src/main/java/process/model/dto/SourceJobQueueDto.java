@@ -21,6 +21,8 @@ public class SourceJobQueueDto {
     private LocalDateTime skipTime;
     private JobStatus jobStatus;
     private Long jobId;
+
+    private boolean jobSend;
     private String jobName;
     private String jobStatusMessage;
     private Boolean skipManual;
@@ -73,6 +75,22 @@ public class SourceJobQueueDto {
     }
     public void setJobId(Long jobId) {
         this.jobId = jobId;
+    }
+
+    public boolean isJobSend() {
+        return jobSend;
+    }
+
+    public void setJobSend(boolean jobSend) {
+        this.jobSend = jobSend;
+    }
+
+    public Boolean getSkipManual() {
+        return skipManual;
+    }
+
+    public Boolean getRunManual() {
+        return runManual;
     }
 
     public String getJobName() {

@@ -5,7 +5,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
+import org.springframework.util.concurrent.ListenableFuture;
+import org.springframework.util.concurrent.ListenableFutureCallback;
 import process.emailer.EmailMessagesFactory;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -130,10 +133,10 @@ public class ProducerBulkEngine {
             List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(lookupData.getLookupValue()));
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
-                jobQueues.parallelStream()
-                .forEach(jobQueue -> {
+                jobQueues.parallelStream().forEach(jobQueue -> {
                     Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
                     try {
+                        Thread.sleep(200);
                         if (sourceJob.isPresent()) {
                             this.pushMessageToQueue(sourceJob.get(), jobQueue);
                         } else {
@@ -176,12 +179,30 @@ public class ProducerBulkEngine {
                         payload.put(ProcessUtil.JOB_QUEUE, jobQueue);
                         payload.put(ProcessUtil.TASK_DETAIL, sourceTask);
                         payload.put(ProcessUtil.PRIORITY, sourceJob.getPriority());
+                        ListenableFuture<SendResult<String, String>> future = null;
                         if (partition.contains(ProcessUtil.START)) {
-                            this.kafkaTemplate.send(topic, key, payload.toString());
+                            future = this.kafkaTemplate.send(topic, key, payload.toString());
                         } else {
-                            this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString());
+                            future = this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString());
                         }
-                        logger.info("Payload Send " + payload);
+                        future.addCallback(new ListenableFutureCallback<SendResult<String, String>>() {
+                            @Override
+                            public void onSuccess(SendResult<String, String> result) {
+                                logger.info("Sent message=[" + payload + "] with " + "offset=[" + result.getRecordMetadata().offset() + "]");
+                                synchronized (this) {
+                                    jobQueue.setJobSend(true);
+                                    transactionService.updateJobQueue(jobQueue);
+                                }
+                            }
+                            @Override
+                            public void onFailure(Throwable ex) {
+                                logger.info("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
+                                synchronized (this) {
+                                    jobQueue.setJobSend(false);
+                                    transactionService.updateJobQueue(jobQueue);
+                                }
+                            }
+                        });
                         return;
                     }
                     logger.error("Regex Not match..");

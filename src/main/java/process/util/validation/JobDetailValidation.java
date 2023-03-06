@@ -3,6 +3,8 @@ package process.util.validation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.WordUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import process.model.enums.Frequency;
@@ -176,6 +178,9 @@ public class JobDetailValidation {
         if (this.isNull(this.frequency)) {
             this.setErrorMsg(String.format("Frequency should not be empty at row %s.<br>", rowCounter));
         }
+        if (this.isNull(this.priority)) {
+            this.setErrorMsg(String.format("Priority should not be empty at row %s.<br>", rowCounter));
+        }
         if (this.isValidPattern(this.startDate, this.dateFormat)) {
             this.setErrorMsg(String.format("Invalid StartDate at row %s.<br>", rowCounter));
         }
@@ -188,20 +193,17 @@ public class JobDetailValidation {
         if (!this.isNull(this.endDate) && this.isValidPattern(this.endDate, this.dateFormat)) {
             this.setErrorMsg(String.format("Invalid EndDate at row %s.<br>", rowCounter));
         }
-        if (this.isNull(this.priority)) {
-            this.setErrorMsg(String.format("Priority should not be empty at row %s.<br>", rowCounter));
-        }
         if (this.isValidPriority()) {
-            this.setErrorMsg(String.format("Priority not valid its should be %s at row %s.", this.priorityDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("Priority not valid its should be %s at row %s.<br>", this.priorityDetail.toString(), rowCounter));
         }
         if (!this.isNull(this.emailJobComplete)  && this.isValidChecked(this.emailJobComplete)) {
-            this.setErrorMsg(String.format("EmailJobComplete not valid its should be %s at row %s.", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("EmailJobComplete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
         if (!this.isNull(this.emailJobFail)  && this.isValidChecked(this.emailJobFail)) {
-            this.setErrorMsg(String.format("EmailJobFail Complete not valid its should be %s at row %s.", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("EmailJobFail Complete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
         if (!this.isNull(this.emailJobSkip)  && this.isValidChecked(this.emailJobSkip)) {
-            this.setErrorMsg(String.format("EmailJobSkip Complete not valid its should be %s at row %s.", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("EmailJobSkip Complete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
         this.isValidDetail();
     }
@@ -262,7 +264,7 @@ public class JobDetailValidation {
      * @return boolean true|false
      * */
     private boolean isValidChecked(String checkDetail) {
-        return !this.checkedDetail.contains(checkDetail) ? true : false;
+        return !this.checkedDetail.contains(StringUtils.capitalize(checkDetail.toLowerCase())) ? true : false;
     }
 
     /**

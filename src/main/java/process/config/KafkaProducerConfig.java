@@ -24,12 +24,15 @@ public class KafkaProducerConfig {
 
     public Logger logger = LogManager.getLogger(KafkaProducerConfig.class);
 
+    /**
+     * @Value("${tpd.data-analytics-topic}")
+     * private String dataAnalyticsTopic;
+     * */
     @Value("${tpd.test-topic}")
     private String testTopic;
-    @Value("${tpd.data-analytics-topic}")
-    private String dataAnalyticsTopic;
-    @Value("${tpd.extraction-topic}")
-    private String extractionTopic;
+
+    @Value("${tpd.scrapping-topic}")
+    private String scrappingTopic;
 
     @Autowired
     private KafkaProperties kafkaProperties;
@@ -39,6 +42,8 @@ public class KafkaProducerConfig {
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildProducerProperties());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        props.put(ProducerConfig.RETRIES_CONFIG, 0);
         return props;
     }
 
@@ -52,19 +57,13 @@ public class KafkaProducerConfig {
         return new KafkaTemplate<>(producerFactory());
     }
 
-    @Bean
     public NewTopic testTopic() {
         return new NewTopic(testTopic, 2, (short) 1);
     }
 
     @Bean
-    public NewTopic dataAnalyticsTopic() {
-        return new NewTopic(dataAnalyticsTopic, 3, (short) 1);
-    }
-
-    @Bean
-    public NewTopic extractionTopic() {
-        return new NewTopic(extractionTopic, 2, (short) 1);
+    public NewTopic scrappingTopic() {
+        return new NewTopic(scrappingTopic, 2, (short) 1);
     }
 
 }

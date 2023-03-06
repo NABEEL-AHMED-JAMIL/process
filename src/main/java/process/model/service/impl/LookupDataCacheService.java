@@ -66,9 +66,16 @@ public class LookupDataCacheService {
     }
 
     public LookupDataDto getChildLookupById(String parentLookupType, String childLookupType) {
-        return this.getParentLookupById(parentLookupType).getChildren().stream().
-            filter(childLookup -> childLookupType.equals(childLookup.getLookupId()))
+        return this.getParentLookupById(parentLookupType).getChildren().stream()
+            .filter(childLookup -> childLookupType.equals(childLookup.getLookupId()))
             .findAny().orElse(null);
     }
 
+    public Map<String, LookupDataDto> getLookupCacheMap() {
+        return lookupCacheMap;
+    }
+
+    public void setLookupCacheMap(Map<String, LookupDataDto> lookupCacheMap) {
+        this.lookupCacheMap = lookupCacheMap;
+    }
 }

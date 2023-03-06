@@ -40,6 +40,8 @@ public class SettingApiServiceImpl implements SettingApiService {
     @Autowired
     private SourceTaskTypeRepository sourceTaskTypeRepository;
     @Autowired
+    private LookupDataCacheService lookupDataCacheService;
+    @Autowired
     private QueryService queryService;
 
     @Override
@@ -213,6 +215,12 @@ public class SettingApiServiceImpl implements SettingApiService {
             return new ResponseDto(SUCCESS, "Data fetch successfully.", appSettingDetail);
         }
         return new ResponseDto(ERROR, String.format("LookupData not found with %d.", parentLookUpId));
+    }
+
+    @Override
+    public ResponseDto fetchAllLookup() throws Exception {
+        return new ResponseDto(SUCCESS, "Data fetch successfully.",
+            this.lookupDataCacheService.getLookupCacheMap());
     }
 
     @Override

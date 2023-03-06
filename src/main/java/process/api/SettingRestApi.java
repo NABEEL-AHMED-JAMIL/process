@@ -42,9 +42,9 @@ public class SettingRestApi {
         try {
             return new ResponseEntity<>(this.settingApiService.dynamicQueryResponse(itemResponse), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while appSetting ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while dynamicQueryResponse ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -146,6 +146,21 @@ public class SettingRestApi {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Api use to fetch the lookup detail
+     * @return ResponseEntity<?> fetchAllLookup
+     * */
+    @RequestMapping(value = "/fetchAllLookup", method = RequestMethod.GET)
+    public ResponseEntity<?> fetchAllLookup() {
+        try {
+            return new ResponseEntity<>(this.settingApiService.fetchAllLookup(), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchAllLookup ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

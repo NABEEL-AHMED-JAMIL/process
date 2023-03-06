@@ -78,6 +78,8 @@ public class JobQueue {
 
     @Column(name = "user_id")
     private Long userId;
+    @Column(name = "job_send")
+    private boolean jobSend;
 
     public JobQueue() {}
 
@@ -166,6 +168,14 @@ public class JobQueue {
 
     public void setUserId(Long userId) {
         this.userId = userId;
+    }
+
+    public boolean isJobSend() {
+        return jobSend;
+    }
+
+    public void setJobSend(boolean jobSend) {
+        this.jobSend = jobSend;
     }
 
     @Override

@@ -26,6 +26,8 @@ public interface SettingApiService {
 
     public ResponseDto fetchSubLookupByParentId(Long parentLookUpId) throws Exception;
 
+    public ResponseDto fetchAllLookup() throws Exception;
+
     public ResponseDto deleteLookupData(LookupDataDto tempLookupData) throws Exception;
 
 }
