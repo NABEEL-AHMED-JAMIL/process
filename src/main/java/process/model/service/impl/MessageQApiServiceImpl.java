@@ -77,11 +77,23 @@ public class MessageQApiServiceImpl implements MessageQApiService {
                 }
                 index++;
                 if (!isNull(obj[index])) {
+                    sourceJobQueue.setJobSend(Boolean.valueOf(obj[index].toString()));
+                }
+                index++;
+                if (!isNull(obj[index])) {
                     sourceJobQueue.setJobStatus(JobStatus.valueOf(String.valueOf(obj[index])));
                 }
                 index++;
                 if (!isNull(obj[index])) {
                     sourceJobQueue.setJobStatusMessage(String.valueOf(obj[index]));
+                }
+                index++;
+                if (!isNull(obj[index])) {
+                    sourceJobQueue.setRunManual(Boolean.valueOf(obj[index].toString()));
+                }
+                index++;
+                if (!isNull(obj[index])) {
+                    sourceJobQueue.setSkipManual(Boolean.valueOf(obj[index].toString()));
                 }
                 index++;
                 if (!isNull(obj[index])) {

@@ -243,7 +243,6 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     if (!isNull(obj[index])) {
                         sourceTaskTypeDto.setStatus(Status.valueOf(obj[index].toString()));
                     }
-                    index++;
                     sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
                     index++;
                     if (!isNull(obj[index])) {
