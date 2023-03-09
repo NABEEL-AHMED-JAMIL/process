@@ -80,5 +80,5 @@ public class SchedulerRestApi {
                 "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
-
+ 
 }
