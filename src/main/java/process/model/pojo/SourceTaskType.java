@@ -6,7 +6,9 @@ import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
+import process.model.enums.TaskType;
 import javax.persistence.*;
+import java.util.Set;
 
 /**
  * @author Nabeel Ahmed
@@ -39,40 +41,41 @@ public class SourceTaskType {
          nullable = false)
     private String description;
 
-    /**
-     * filed help to send the source job to the right queue
-     * */
-    @Column(name = "queue_topic_partition",
-         nullable = false)
-    private String queueTopicPartition;
+    @Enumerated(EnumType.ORDINAL)
+    @Column(name = "task_type", nullable = false,
+        updatable = false)
+    private TaskType taskType;
 
-    // status of job (active or disable or delete)
+    @OneToOne(mappedBy = "sourceTaskType",
+        cascade = CascadeType.ALL)
+    @PrimaryKeyJoinColumn
+    private ApiTaskType apiTaskType;
+
+    @OneToOne(mappedBy = "sourceTaskType",
+        cascade = CascadeType.ALL)
+    @PrimaryKeyJoinColumn
+    private KafkaTaskType kafkaTaskType;
+
     @Column(name = "task_type_status",
-        nullable = false)
-    @Enumerated(EnumType.STRING)
+            nullable = false)
+    @Enumerated(EnumType.ORDINAL)
     private Status status;
 
-    @Column(name = "is_schema_register")
-    private boolean isSchemaRegister;
+    /**default source task type for testing
+     * Test Loop
+     * if any other*/
+    @Column(name = "is_default",
+        nullable = false)
+    private Boolean isDefault;
 
-    @Column(name = "schema_payload",
-        columnDefinition = "text")
-    private String schemaPayload;
+    @ManyToOne
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
+
+    @OneToMany(mappedBy="sourceTaskType")
+    private Set<STTForm> sttFormSet;
 
     public SourceTaskType() {}
-
-    public SourceTaskType(Long sourceTaskTypeId, String queueTopicPartition) {
-        this.sourceTaskTypeId = sourceTaskTypeId;
-        this.queueTopicPartition = queueTopicPartition;
-    }
-
-    public SourceTaskType(Long sourceTaskTypeId, String serviceName,
-        String description, String queueTopicPartition) {
-        this.sourceTaskTypeId = sourceTaskTypeId;
-        this.serviceName = serviceName;
-        this.description = description;
-        this.queueTopicPartition = queueTopicPartition;
-    }
 
     public Long getSourceTaskTypeId() {
         return sourceTaskTypeId;
@@ -98,12 +101,28 @@ public class SourceTaskType {
         this.description = description;
     }
 
-    public String getQueueTopicPartition() {
-        return queueTopicPartition;
+    public TaskType getTaskType() {
+        return taskType;
     }
 
-    public void setQueueTopicPartition(String queueTopicPartition) {
-        this.queueTopicPartition = queueTopicPartition;
+    public void setTaskType(TaskType taskType) {
+        this.taskType = taskType;
+    }
+
+    public ApiTaskType getApiTaskType() {
+        return apiTaskType;
+    }
+
+    public void setApiTaskType(ApiTaskType apiTaskType) {
+        this.apiTaskType = apiTaskType;
+    }
+
+    public KafkaTaskType getKafkaTaskType() {
+        return kafkaTaskType;
+    }
+
+    public void setKafkaTaskType(KafkaTaskType kafkaTaskType) {
+        this.kafkaTaskType = kafkaTaskType;
     }
 
     public Status getStatus() {
@@ -114,20 +133,28 @@ public class SourceTaskType {
         this.status = status;
     }
 
-    public boolean isSchemaRegister() {
-        return isSchemaRegister;
+    public Boolean isDefault() {
+        return isDefault;
     }
 
-    public void setSchemaRegister(boolean schemaRegister) {
-        isSchemaRegister = schemaRegister;
+    public void setDefault(Boolean aDefault) {
+        isDefault = aDefault;
     }
 
-    public String getSchemaPayload() {
-        return schemaPayload;
+    public AppUser getAppUser() {
+        return appUser;
     }
 
-    public void setSchemaPayload(String schemaPayload) {
-        this.schemaPayload = schemaPayload;
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
+    }
+
+    public Set<STTForm> getSttFormSet() {
+        return sttFormSet;
+    }
+
+    public void setSttFormSet(Set<STTForm> sttFormSet) {
+        this.sttFormSet = sttFormSet;
     }
 
     @Override
