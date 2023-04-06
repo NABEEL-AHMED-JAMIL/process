@@ -26,8 +26,6 @@ import process.service.AppUserService;
 import process.service.LookupDataCacheService;
 import process.util.CommonUtil;
 import process.util.ProcessUtil;
-
-import java.sql.Timestamp;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -121,7 +119,27 @@ public class AppUserServiceImpl implements AppUserService {
     @Override
     public AppResponse updateAppUserProfile(UpdateUserProfileRequest
         updateUserProfileRequest) throws Exception {
-        return null;
+        logger.info("Request updateAppUserProfile :- " + updateUserProfileRequest);
+        if (ProcessUtil.isNull(updateUserProfileRequest.getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "Username missing.");
+        } else if (ProcessUtil.isNull(updateUserProfileRequest.getFirstName())) {
+            return new AppResponse(ProcessUtil.ERROR, "FirstName missing.");
+        } else if (ProcessUtil.isNull(updateUserProfileRequest.getLastName())) {
+            return new AppResponse(ProcessUtil.ERROR, "LastName missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            updateUserProfileRequest.getUsername(), Status.Active);
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
+        }
+        appUser.get().setFirstName(updateUserProfileRequest.getFirstName());
+        appUser.get().setLastName(updateUserProfileRequest.getLastName());
+        this.appUserRepository.save(appUser.get());
+        if (this.emailMessagesFactory.sendUpdateAppUserProfile(updateUserProfileRequest)) {
+            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Profile Update.", updateUserProfileRequest);
+        }
+        return new AppResponse(ProcessUtil.ERROR,"Account updated," +
+            "Email not send contact with support.", updateUserProfileRequest);
     }
 
     /**
@@ -132,7 +150,30 @@ public class AppUserServiceImpl implements AppUserService {
     @Override
     public AppResponse updateAppUserPassword(UpdateUserProfileRequest
         updateUserProfileRequest) throws Exception {
-        return null;
+        logger.info("Request updateAppUserPassword :- " + updateUserProfileRequest);
+        if (ProcessUtil.isNull(updateUserProfileRequest.getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "Username missing.");
+        } else if (ProcessUtil.isNull(updateUserProfileRequest.getOldPassword())) {
+            return new AppResponse(ProcessUtil.ERROR, "OldPassword missing.");
+        } else if (ProcessUtil.isNull(updateUserProfileRequest.getNewPassword())) {
+            return new AppResponse(ProcessUtil.ERROR, "NewPassword missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            updateUserProfileRequest.getUsername(), Status.Active);
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
+        }
+        if (!this.passwordEncoder.matches(updateUserProfileRequest.getOldPassword(),
+            appUser.get().getPassword())) {
+            return new AppResponse(ProcessUtil.ERROR, "Old password not match.");
+        }
+        appUser.get().setPassword(this.passwordEncoder.encode(updateUserProfileRequest.getNewPassword()));
+        this.appUserRepository.save(appUser.get());
+        if (this.emailMessagesFactory.sendUpdateAppUserPassword(updateUserProfileRequest)) {
+            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Profile Update.", updateUserProfileRequest);
+        }
+        return new AppResponse(ProcessUtil.ERROR,"Account updated, " +
+            "Email not send contact with support.", updateUserProfileRequest);
     }
 
     /**
@@ -143,7 +184,47 @@ public class AppUserServiceImpl implements AppUserService {
     @Override
     public AppResponse updateAppUserTimeZone(UpdateUserProfileRequest
         updateUserProfileRequest) throws Exception {
-        return null;
+        logger.info("Request updateAppUserTimeZone :- " + updateUserProfileRequest);
+        if (ProcessUtil.isNull(updateUserProfileRequest.getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "Username missing.");
+        } else if (ProcessUtil.isNull(updateUserProfileRequest.getTimeZone())) {
+            return new AppResponse(ProcessUtil.ERROR, "TimeZone missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            updateUserProfileRequest.getUsername(), Status.Active);
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
+        }
+        appUser.get().setTimeZone(updateUserProfileRequest.getTimeZone());
+        this.appUserRepository.save(appUser.get());
+        if (this.emailMessagesFactory.sendUpdateAppUserTimeZone(updateUserProfileRequest)) {
+            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Timezone Update.", updateUserProfileRequest);
+        }
+        return new AppResponse(ProcessUtil.ERROR,"Account updated, " +
+            "Email not send contact with support.", updateUserProfileRequest);
+    }
+
+    @Override
+    public AppResponse closeAppUserAccount(UpdateUserProfileRequest updateUserProfileRequest) throws Exception {
+        logger.info("Request closeAppUserAccount :- " + updateUserProfileRequest);
+        if (ProcessUtil.isNull(updateUserProfileRequest.getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "Username missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            updateUserProfileRequest.getUsername(), Status.Active);
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
+        }
+        appUser.get().setStatus(Status.Delete);
+        /**
+         * Will update rest of the code
+         * */
+        this.appUserRepository.save(appUser.get());
+        if (this.emailMessagesFactory.sendCloseAppUserAccount(updateUserProfileRequest)) {
+            return new AppResponse(ProcessUtil.SUCCESS,"AppUser close.", updateUserProfileRequest);
+        }
+        return new AppResponse(ProcessUtil.ERROR,"Account close, " +
+            "Email not send contact with support.", updateUserProfileRequest);
     }
 
     /**
@@ -207,7 +288,7 @@ public class AppUserServiceImpl implements AppUserService {
         lookupDataResponse = this.lookupDataCacheService.getChildLookupById(
             CommonUtil.LookupDetail.SCHEDULER_TIMEZONE, CommonUtil.LookupDetail.ASIA_QATAR);
         if (!ProcessUtil.isNull(lookupDataResponse)) {
-            adminUser.setTimeZone(lookupDataResponse.getLookupId());
+            adminUser.setTimeZone(lookupDataResponse.getLookupValue());
             signUpRequest.setTimeZone(lookupDataResponse.getLookupValue());
         }
         // register user role default as admin role

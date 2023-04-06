@@ -83,4 +83,5 @@ public class LookupDataRequest {
     public String toString() {
         return new Gson().toJson(this);
     }
+
 }

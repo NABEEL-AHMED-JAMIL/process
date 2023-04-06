@@ -16,6 +16,8 @@ public interface AppUserService {
 
     public AppResponse updateAppUserTimeZone(UpdateUserProfileRequest updateUserProfileRequest) throws Exception;
 
+    public AppResponse closeAppUserAccount(UpdateUserProfileRequest updateUserProfileRequest) throws Exception;
+
     public AppResponse signInAppUser(LoginRequest loginRequest) throws Exception;
 
     public AppResponse signupAppUser(SignupRequest signupRequest) throws Exception;

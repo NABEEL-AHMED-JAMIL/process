@@ -17,7 +17,7 @@ public class AppUserResponse {
     private Long appUserId;
     private String firstName;
     private String lastName;
-    private Long timeZone;
+    private String timeZone;
     private String username;
     private String email;
     private Set<RoleResponse> roleResponse;
@@ -51,11 +51,11 @@ public class AppUserResponse {
         this.lastName = lastName;
     }
 
-    public Long getTimeZone() {
+    public String getTimeZone() {
         return timeZone;
     }
 
-    public void setTimeZone(Long timeZone) {
+    public void setTimeZone(String timeZone) {
         this.timeZone = timeZone;
     }
 

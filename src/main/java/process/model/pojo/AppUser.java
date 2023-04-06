@@ -38,7 +38,7 @@ public class AppUser {
 
     @Column(name = "time_zone_id",
             nullable = false)
-    private Long timeZone;
+    private String timeZone;
     @Column(name = "username",
             nullable=false)
     private String username;
@@ -116,11 +116,11 @@ public class AppUser {
         this.lastName = lastName;
     }
 
-    public Long getTimeZone() {
+    public String getTimeZone() {
         return timeZone;
     }
 
-    public void setTimeZone(Long timeZone) {
+    public void setTimeZone(String timeZone) {
         this.timeZone = timeZone;
     }
 

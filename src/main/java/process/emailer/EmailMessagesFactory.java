@@ -9,10 +9,12 @@ import org.springframework.stereotype.Component;
 import process.payload.request.ForgotPasswordRequest;
 import process.payload.request.PasswordResetRequest;
 import process.payload.request.SignupRequest;
+import process.payload.request.UpdateUserProfileRequest;
 import process.payload.response.LookupDataResponse;
 import process.security.jwt.JwtUtils;
 import process.service.LookupDataCacheService;
 import process.util.CommonUtil.*;
+import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import javax.mail.internet.MimeMessage;
 import java.util.HashMap;
@@ -111,6 +113,113 @@ public class EmailMessagesFactory {
             emailMessageRequest.setRecipients(passwordResetRequest.getEmail());
             emailMessageRequest.setSubject("Password Updated");
             emailMessageRequest.setEmailTemplateName(TemplateType.RESET_PASS);
+            emailMessageRequest.setBodyMap(metaData);
+            logger.info("Email Send Status :- " + this.sendSimpleMail(emailMessageRequest));
+            return true;
+        } catch (Exception ex) {
+            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            return false;
+        }
+    }
+
+    /**
+     * sendUpdateAppUserProfile method use to send update profile email
+     * @param updateUserProfileRequest
+     * */
+    public boolean sendUpdateAppUserProfile(UpdateUserProfileRequest updateUserProfileRequest) {
+        try {
+            LookupDataResponse senderEmail = this.lookupDataCacheService
+                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+            Map<String, Object> metaData = new HashMap<>();
+            metaData.put("username", updateUserProfileRequest.getUsername());
+            metaData.put("firstName", updateUserProfileRequest.getFirstName());
+            metaData.put("lastName", updateUserProfileRequest.getLastName());
+            // email object
+            EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
+            emailMessageRequest.setFromEmail(senderEmail.getLookupValue());
+            emailMessageRequest.setRecipients(updateUserProfileRequest.getEmail());
+            emailMessageRequest.setSubject("Profile Updated");
+            emailMessageRequest.setEmailTemplateName(TemplateType.UPDATE_ACCOUNT_PROFILE);
+            emailMessageRequest.setBodyMap(metaData);
+            logger.info("Email Send Status :- " + this.sendSimpleMail(emailMessageRequest));
+            return true;
+        } catch (Exception ex) {
+            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            return false;
+        }
+    }
+
+    /**
+     * sendUpdateAppUserPassword method use to send reset password confirm email
+     * @param updateUserProfileRequest
+     * */
+    public boolean sendUpdateAppUserPassword(UpdateUserProfileRequest updateUserProfileRequest) {
+        try {
+            LookupDataResponse senderEmail = this.lookupDataCacheService
+                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+            Map<String, Object> metaData = new HashMap<>();
+            metaData.put("username", updateUserProfileRequest.getUsername());
+            // email object
+            EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
+            emailMessageRequest.setFromEmail(senderEmail.getLookupValue());
+            emailMessageRequest.setRecipients(updateUserProfileRequest.getEmail());
+            emailMessageRequest.setSubject("Password Updated");
+            emailMessageRequest.setEmailTemplateName(TemplateType.RESET_PASS);
+            emailMessageRequest.setBodyMap(metaData);
+            logger.info("Email Send Status :- " + this.sendSimpleMail(emailMessageRequest));
+            return true;
+        } catch (Exception ex) {
+            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            return false;
+        }
+    }
+
+    /**
+     * sendUpdateAppUserTimeZone method use to send update timezone email
+     * @param updateUserProfileRequest
+     * */
+    public boolean sendUpdateAppUserTimeZone(UpdateUserProfileRequest updateUserProfileRequest) {
+        try {
+            LookupDataResponse senderEmail = this.lookupDataCacheService
+                    .getParentLookupById(LookupDetail.EMAIL_SENDER);
+            Map<String, Object> metaData = new HashMap<>();
+            metaData.put("username", updateUserProfileRequest.getUsername());
+            if (!ProcessUtil.isNull(updateUserProfileRequest.getTimeZone())) {
+                LookupDataResponse timeZoneLookup = this.lookupDataCacheService
+                    .getChildLookupById(LookupDetail.SCHEDULER_TIMEZONE,
+                    updateUserProfileRequest.getTimeZone());
+                metaData.put("timeZone", timeZoneLookup.getLookupValue());
+            }
+            // email object
+            EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
+            emailMessageRequest.setFromEmail(senderEmail.getLookupValue());
+            emailMessageRequest.setRecipients(updateUserProfileRequest.getEmail());
+            emailMessageRequest.setSubject("TimeZone Updated");
+            emailMessageRequest.setEmailTemplateName(TemplateType.CHANGE_ACCOUNT_TIMEZONE);
+            emailMessageRequest.setBodyMap(metaData);
+            logger.info("Email Send Status :- " + this.sendSimpleMail(emailMessageRequest));
+            return true;
+        } catch (Exception ex) {
+            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            return false;
+        }
+    }
+
+    /**
+     * sendCloseAppUserAccount method use to send close account email
+     * @param updateUserProfileRequest
+     * */
+    public boolean sendCloseAppUserAccount(UpdateUserProfileRequest updateUserProfileRequest) {
+        try {
+            LookupDataResponse senderEmail = this.lookupDataCacheService
+                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+            Map<String, Object> metaData = new HashMap<>();
+            // email object
+            EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
+            emailMessageRequest.setFromEmail(senderEmail.getLookupValue());
+            emailMessageRequest.setRecipients(updateUserProfileRequest.getEmail());
+            emailMessageRequest.setSubject("Account Close");
+            emailMessageRequest.setEmailTemplateName(TemplateType.CLOSE_ACCOUNT);
             emailMessageRequest.setBodyMap(metaData);
             logger.info("Email Send Status :- " + this.sendSimpleMail(emailMessageRequest));
             return true;

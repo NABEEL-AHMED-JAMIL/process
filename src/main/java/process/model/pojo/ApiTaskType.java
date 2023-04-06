@@ -39,6 +39,9 @@ public class ApiTaskType {
     @Enumerated(EnumType.ORDINAL)
     private HttpMethod httpMethod;
 
+    @Column(name = "api_security_id")
+    private String  apiSecurityId;
+
     @OneToOne
     @MapsId
     @JoinColumn(name = "source_task_type_id")
@@ -73,6 +76,14 @@ public class ApiTaskType {
 
     public void setHttpMethod(HttpMethod httpMethod) {
         this.httpMethod = httpMethod;
+    }
+
+    public String getApiSecurityId() {
+        return apiSecurityId;
+    }
+
+    public void setApiSecurityId(String apiSecurityId) {
+        this.apiSecurityId = apiSecurityId;
     }
 
     public SourceTaskType getSourceTaskType() {

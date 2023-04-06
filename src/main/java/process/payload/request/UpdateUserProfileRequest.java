@@ -16,6 +16,7 @@ public class UpdateUserProfileRequest {
     private String firstName;
     private String lastName;
     private String username;
+    private String email;
     private String oldPassword;
     private String newPassword;
     private String timeZone;
@@ -53,6 +54,14 @@ public class UpdateUserProfileRequest {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public String getOldPassword() {

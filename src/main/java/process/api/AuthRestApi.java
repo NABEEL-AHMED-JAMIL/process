@@ -103,6 +103,7 @@ public class AuthRestApi {
     }
 
     /**
+     * api-status :- done
      * @apiName :- authClamByRefreshToken
      * @apiNote :- Api use to get refreshToken for appUser
      * @param tokenRefreshRequest
@@ -120,6 +121,7 @@ public class AuthRestApi {
     }
 
     /**
+     * api-status :- done
      * @apiName :- logoutAppUser
      * @apiNote :- Api use to delete refreshToken for appUser
      * @param tokenRefreshRequest
