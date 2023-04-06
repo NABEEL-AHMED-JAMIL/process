@@ -6,9 +6,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import process.model.dto.ConfigurationMakerRequest;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import process.payload.request.ConfigurationMakerRequest;
 import javax.annotation.PostConstruct;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -58,7 +58,7 @@ public class XmlOutTagInfoUtil {
                 String tagKey = tagInfo.getTagKey();
                 String tagParent = tagInfo.getTagParent();
                 String tagValue = tagInfo.getTagValue();
-                org.w3c.dom.Element child;
+                Element child;
                 // for first node
                 if(isParent) {
                     // first time it's consider as root

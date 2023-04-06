@@ -37,13 +37,12 @@ public class LookupData {
     @GeneratedValue(generator = "lookupDataSequenceGenerator")
     private Long lookupId;
 
+    @Column(name = "lookup_type", unique = true)
+    private String lookupType;
+
     @Column(name = "lookup_value",
         columnDefinition = "text")
     private String lookupValue;
-
-    @Column(name = "lookup_type",
-        unique = true)
-    private String lookupType;
 
     @Column(name = "description")
     private String description;
@@ -53,11 +52,16 @@ public class LookupData {
     private Timestamp dateCreated;
 
     @ManyToOne
-    @JoinColumn(name = "parentLookupId")
-    protected LookupData parent;
+    @JoinColumn(name = "parent_lookup_id")
+    protected LookupData parentLookup;
 
-    @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
-    protected Set<LookupData> children;
+    @OneToMany(mappedBy = "parentLookup",
+        fetch = FetchType.LAZY)
+    protected Set<LookupData> lookupChildren;
+
+    @ManyToOne
+    @JoinColumn(name="app_user_id", nullable=false)
+    private AppUser appUser;
 
     public LookupData() { }
 
@@ -69,8 +73,17 @@ public class LookupData {
     public Long getLookupId() {
         return lookupId;
     }
+
     public void setLookupId(Long lookupId) {
         this.lookupId = lookupId;
+    }
+
+    public String getLookupType() {
+        return lookupType;
+    }
+
+    public void setLookupType(String lookupType) {
+        this.lookupType = lookupType;
     }
 
     public String getLookupValue() {
@@ -81,16 +94,10 @@ public class LookupData {
         this.lookupValue = lookupValue;
     }
 
-    public String getLookupType() {
-        return lookupType;
-    }
-    public void setLookupType(String lookupType) {
-        this.lookupType = lookupType;
-    }
-
     public String getDescription() {
         return description;
     }
+
     public void setDescription(String description) {
         this.description = description;
     }
@@ -98,24 +105,33 @@ public class LookupData {
     public Timestamp getDateCreated() {
         return dateCreated;
     }
+
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
     }
 
-    public LookupData getParent() {
-        return parent;
+    public LookupData getParentLookup() {
+        return parentLookup;
     }
 
-    public void setParent(LookupData parent) {
-        this.parent = parent;
+    public void setParentLookup(LookupData parentLookup) {
+        this.parentLookup = parentLookup;
     }
 
-    public Set<LookupData> getChildren() {
-        return children;
+    public Set<LookupData> getLookupChildren() {
+        return lookupChildren;
     }
 
-    public void setChildren(Set<LookupData> children) {
-        this.children = children;
+    public void setLookupChildren(Set<LookupData> lookupChildren) {
+        this.lookupChildren = lookupChildren;
+    }
+
+    public AppUser getAppUser() {
+        return appUser;
+    }
+
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
     }
 
     @Override

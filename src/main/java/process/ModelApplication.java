@@ -2,17 +2,10 @@ package process;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.TimeZone;
-import java.time.LocalDateTime;
-import process.util.ProcessUtil;
-import process.model.pojo.LookupData;
-import javax.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import process.model.service.impl.TransactionServiceImpl;
 
 /**
  * @author Nabeel Ahmed
@@ -23,9 +16,6 @@ import process.model.service.impl.TransactionServiceImpl;
 public class ModelApplication {
 
     private Logger logger = LoggerFactory.getLogger(ModelApplication.class);
-
-    @Autowired
-    private TransactionServiceImpl transactionService;
 
     /**
      * Method run the application
@@ -39,19 +29,4 @@ public class ModelApplication {
         }
     }
 
-    /**
-     * Method run on the start to set the time
-     * zone for application Karachi
-     * */
-    @PostConstruct
-    public void started() {
-        // default system timezone for application
-        TimeZone.setDefault(TimeZone.getTimeZone(ProcessUtil.QATAR_TIME_ZONE));
-        LocalDateTime now = LocalDateTime.now();
-        LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
-        if (!ProcessUtil.isNull(lookupData)) {
-            lookupData.setLookupValue(now.toString());
-            this.transactionService.updateLookupDate(lookupData);
-        }
-    }
 }

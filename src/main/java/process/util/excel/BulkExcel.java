@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * @author Nabeel Ahmed
  */
 @Component
-public class BulkExcel {
+public class BulkExcel implements ExcelUtil {
 
     private Logger logger = LogManager.getLogger(BulkExcel.class);
 
