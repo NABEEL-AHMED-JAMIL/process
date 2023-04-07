@@ -7,6 +7,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
+import java.sql.Timestamp;
 import java.util.Set;
 
 /**
@@ -35,6 +36,9 @@ public class STTSection {
     @Column(name = "stts_name")
     private String sttSName;
 
+    @Column(name = "description", nullable = false)
+    private String description;
+
     @Column(name = "stts_order")
     private Long sttSOrder;
 
@@ -48,6 +52,10 @@ public class STTSection {
 
     @OneToMany(mappedBy="sstSttSection")
     private Set<STTControl> sttControlSet;
+
+    @Column(name = "date_created",
+            nullable = false)
+    private Timestamp dateCreated;
 
     public STTSection() {
     }
@@ -74,6 +82,14 @@ public class STTSection {
 
     public void setSttSName(String sttSName) {
         this.sttSName = sttSName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public Long getSttSOrder() {
@@ -106,6 +122,14 @@ public class STTSection {
 
     public void setSttControlSet(Set<STTControl> sttControlSet) {
         this.sttControlSet = sttControlSet;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     @Override

@@ -7,6 +7,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
+import java.sql.Timestamp;
 import java.util.Set;
 
 /**
@@ -32,8 +33,11 @@ public class STTForm {
     @GeneratedValue(generator = "sttFormSequenceGenerator")
     private Long sttFId;
 
-    @Column(name = "sttf_name")
+    @Column(name = "sttf_name", nullable = false)
     private String sttFName;
+
+    @Column(name = "description", nullable = false)
+    private String description;
 
     // status of job (active or disable or delete)
     @Column(name = "sttf_status",nullable = false)
@@ -46,6 +50,10 @@ public class STTForm {
 
     @OneToMany(mappedBy="sstForm")
     private Set<STTSection> sttSectionSet;
+
+    @Column(name = "date_created",
+            nullable = false)
+    private Timestamp dateCreated;
 
     public STTForm() {
     }
@@ -64,6 +72,14 @@ public class STTForm {
 
     public void setSttFName(String sttFName) {
         this.sttFName = sttFName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public Status getStatus() {
@@ -88,6 +104,14 @@ public class STTForm {
 
     public void setSttSectionSet(Set<STTSection> sttSectionSet) {
         this.sttSectionSet = sttSectionSet;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     @Override

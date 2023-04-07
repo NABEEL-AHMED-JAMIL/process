@@ -8,6 +8,7 @@ import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import process.model.enums.TaskType;
 import javax.persistence.*;
+import java.sql.Timestamp;
 import java.util.Set;
 
 /**
@@ -74,6 +75,10 @@ public class SourceTaskType {
 
     @OneToMany(mappedBy="sourceTaskType")
     private Set<STTForm> sttFormSet;
+
+    @Column(name = "date_created",
+            nullable = false)
+    private Timestamp dateCreated;
 
     public SourceTaskType() {}
 
@@ -155,6 +160,14 @@ public class SourceTaskType {
 
     public void setSttFormSet(Set<STTForm> sttFormSet) {
         this.sttFormSet = sttFormSet;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     @Override

@@ -5,37 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="d72000d1-6c13-4efd-b837-0f31e50e0ca8" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/util/excel/BulkExcel.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/util/excel/ExcelUtil.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/util/validation/LookupValidation.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/resources/LookupTemplate.xlsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/resources/templates/change_account_timezone.vm" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/resources/templates/close_account.vm" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/resources/templates/update_account_profile.vm" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/AppUserRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/AppUserRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/AuthRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/AuthRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/LookupDataRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/LookupDataRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/config/SwaggerConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/config/SwaggerConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/config/WebSecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/config/WebSecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/emailer/EmailMessagesFactory.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/emailer/EmailMessagesFactory.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/emailer/TemplateType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/emailer/TemplateType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/enums/TaskType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/enums/TaskType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/ApiTaskType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/ApiTaskType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/AppUser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/AppUser.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/repository/LookupDataRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/repository/LookupDataRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/request/LookupDataRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/LookupDataRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/request/UpdateUserProfileRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/UpdateUserProfileRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/AppUserResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/AppUserResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/AppUserService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/service/AppUserService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTControl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTControl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTForm.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTForm.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTSection.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTSection.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/SourceTaskType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/SourceTaskType.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/service/LookupDataCacheService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/service/LookupDataCacheService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/AppUserServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/service/imp/AppUserServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/LookupDataCacheServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/service/imp/LookupDataCacheServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/CommonUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/CommonUtil.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/ProcessUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/ProcessUtil.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/XmlOutTagInfoUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/XmlOutTagInfoUtil.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-stage.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-stage.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -75,14 +50,14 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "last_opened_file_path": "D:/Project/process/src/main/java/process/util",
-    "settings.editor.selected.configurable": "preferences.lookFeel"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/Project/process/src/main/java/process/util&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\Project\process\src\main\java\process\util" />

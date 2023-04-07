@@ -7,6 +7,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
+import java.sql.Timestamp;
 
 /**
  * @author Nabeel Ahmed
@@ -37,6 +38,15 @@ public class STTControl {
     @Column(name = "control_name", nullable=false)
     private String controlName;
 
+    @Column(name = "filed_title", nullable = false)
+    private String filedTitle;
+
+    @Column(name = "filed_name", nullable = false)
+    private String filedName;
+
+    @Column(name = "description", nullable = false)
+    private String description;
+
     @Column(name = "place_holder")
     private String placeHolder;
 
@@ -62,6 +72,9 @@ public class STTControl {
     @Column(name = "mandatory")
     private boolean mandatory;
 
+    @Column(name = "pattern")
+    private String pattern;
+
     @Column(name = "sttc_status",nullable = false)
     @Enumerated(EnumType.STRING)
     private Status status;
@@ -72,6 +85,10 @@ public class STTControl {
     @ManyToOne
     @JoinColumn(name = "stts_id")
     private STTSection sstSttSection;
+
+    @Column(name = "date_created",
+            nullable = false)
+    private Timestamp dateCreated;
 
     public STTControl() {
     }
@@ -98,6 +115,30 @@ public class STTControl {
 
     public void setControlName(String controlName) {
         this.controlName = controlName;
+    }
+
+    public String getFiledTitle() {
+        return filedTitle;
+    }
+
+    public void setFiledTitle(String filedTitle) {
+        this.filedTitle = filedTitle;
+    }
+
+    public String getFiledName() {
+        return filedName;
+    }
+
+    public void setFiledName(String filedName) {
+        this.filedName = filedName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public String getPlaceHolder() {
@@ -164,6 +205,14 @@ public class STTControl {
         this.mandatory = mandatory;
     }
 
+    public String getPattern() {
+        return pattern;
+    }
+
+    public void setPattern(String pattern) {
+        this.pattern = pattern;
+    }
+
     public Status getStatus() {
         return status;
     }
@@ -186,6 +235,14 @@ public class STTControl {
 
     public void setSstSttSection(STTSection sstSttSection) {
         this.sstSttSection = sstSttSection;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     @Override
