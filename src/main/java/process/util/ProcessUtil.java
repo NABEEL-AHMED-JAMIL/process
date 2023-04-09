@@ -73,4 +73,8 @@ public class ProcessUtil {
         return result;
     }
 
+    public static void main(String[] args) {
+        ProcessUtil.timeZoneUtil();
+    }
+
 }

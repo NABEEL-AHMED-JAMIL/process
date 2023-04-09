@@ -51,17 +51,21 @@ public class AppUser {
             nullable=false)
     private String password;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(cascade = {
+        CascadeType.PERSIST, CascadeType.MERGE
+    }, fetch = FetchType.LAZY)
     @JoinTable(	name = "app_user_roles",
         joinColumns = @JoinColumn(name = "app_user_id"),
         inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> appUserRoles = new HashSet<>();
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(	name = "app_user_source_tt",
+    @ManyToMany(cascade = {
+        CascadeType.PERSIST, CascadeType.MERGE
+    }, fetch = FetchType.LAZY)
+    @JoinTable(	name = "app_user_stt",
         joinColumns = @JoinColumn(name = "app_user_id"),
-        inverseJoinColumns = @JoinColumn(name = "source_task_type_id"))
-    private Set<SourceTaskType> appUserSourceTaskTypeSet = new HashSet<>();
+        inverseJoinColumns = @JoinColumn(name = "stt_id"))
+    private Set<SourceTaskType> appUserSourceTaskTypes = new HashSet<>();
 
     @ManyToOne
     @JoinColumn(name = "parent_user_id")
@@ -70,12 +74,6 @@ public class AppUser {
     @OneToMany(mappedBy = "parentAppUser",
         fetch = FetchType.LAZY)
     protected Set<AppUser> appUserChildren;
-
-    @OneToMany(mappedBy="appUser")
-    private Set<LookupData> lookupDataSet;
-
-    @OneToMany(mappedBy="appUser")
-    private Set<SourceTaskType> sourceTaskTypeSet;
 
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.ORDINAL)
@@ -164,12 +162,12 @@ public class AppUser {
         this.parentAppUser = parentAppUser;
     }
 
-    public Set<SourceTaskType> getAppUserSourceTaskTypeSet() {
-        return appUserSourceTaskTypeSet;
+    public Set<SourceTaskType> getAppUserSourceTaskTypes() {
+        return appUserSourceTaskTypes;
     }
 
-    public void setAppUserSourceTaskTypeSet(Set<SourceTaskType> appUserSourceTaskTypeSet) {
-        this.appUserSourceTaskTypeSet = appUserSourceTaskTypeSet;
+    public void setAppUserSourceTaskTypes(Set<SourceTaskType> appUserSourceTaskTypes) {
+        this.appUserSourceTaskTypes = appUserSourceTaskTypes;
     }
 
     public Set<AppUser> getAppUserChildren() {
@@ -178,22 +176,6 @@ public class AppUser {
 
     public void setAppUserChildren(Set<AppUser> appUserChildren) {
         this.appUserChildren = appUserChildren;
-    }
-
-    public Set<LookupData> getLookupDataSet() {
-        return lookupDataSet;
-    }
-
-    public void setLookupDataSet(Set<LookupData> lookupDataSet) {
-        this.lookupDataSet = lookupDataSet;
-    }
-
-    public Set<SourceTaskType> getSourceTaskTypeSet() {
-        return sourceTaskTypeSet;
-    }
-
-    public void setSourceTaskTypeSet(Set<SourceTaskType> sourceTaskTypeSet) {
-        this.sourceTaskTypeSet = sourceTaskTypeSet;
     }
 
     public Status getStatus() {

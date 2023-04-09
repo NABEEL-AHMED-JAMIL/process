@@ -102,7 +102,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     }
 
     /**
-     * Method use to add new filed into cache
+     * Method use to add new filed into db & cache
      * @param lookupDataRequest
      * @return AppResponse
      * */
@@ -146,7 +146,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
 
 
     /**
-     * Method use to update new filed into cache
+     * Method use to update new filed into db & cache
      * @param lookupDataRequest
      * @return AppResponse
      * */
@@ -317,6 +317,10 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             "LookupData delete with %d.", lookupDataRequest.getLookupId()));
     }
 
+    /**
+     * Method use to download lookup template
+     * @return ByteArrayOutputStream
+     * */
     @Override
     public ByteArrayOutputStream downloadLookupTemplateFile() throws Exception {
         String basePath = this.tempStoreDirectory + File.separator;
@@ -347,6 +351,11 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         return byteArrayOutputStream;
     }
 
+    /**
+     * Method use to download lookup file with content
+     * @param lookupDataRequest
+     * @return ByteArrayOutputStream
+     * */
     @Override
     public ByteArrayOutputStream downloadLookup(LookupDataRequest lookupDataRequest) throws Exception {
         logger.info("Request deleteLookupData :- " + lookupDataRequest);
@@ -390,6 +399,11 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         return outputStream;
     }
 
+    /**
+     * Method use to upload lookup file with content
+     * @param fileObject
+     * @return ByteArrayOutputStream
+     * */
     @Override
     public AppResponse uploadLookup(FileUploadRequest fileObject) throws Exception {
         logger.info("Request for bulk uploading file!");

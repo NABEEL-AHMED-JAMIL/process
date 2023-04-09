@@ -9,6 +9,8 @@ import process.model.enums.Status;
 import process.model.enums.TaskType;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -47,15 +49,11 @@ public class SourceTaskType {
         updatable = false)
     private TaskType taskType;
 
-    @OneToOne(mappedBy = "sourceTaskType",
-        cascade = CascadeType.ALL)
-    @PrimaryKeyJoinColumn
-    private ApiTaskType apiTaskType;
+    @OneToMany(mappedBy = "sourceTaskType")
+    private List<ApiTaskType> apiTaskType;
 
-    @OneToOne(mappedBy = "sourceTaskType",
-        cascade = CascadeType.ALL)
-    @PrimaryKeyJoinColumn
-    private KafkaTaskType kafkaTaskType;
+    @OneToMany(mappedBy = "sourceTaskType")
+    private List<KafkaTaskType> kafkaTaskType;
 
     @Column(name = "task_type_status",
             nullable = false)
@@ -73,14 +71,24 @@ public class SourceTaskType {
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
 
-    @OneToMany(mappedBy="sourceTaskType")
-    private Set<STTForm> sttFormSet;
+    @ManyToMany(cascade = {
+        CascadeType.PERSIST, CascadeType.MERGE
+    }, fetch = FetchType.LAZY)
+    @JoinTable(	name = "app_user_sttf",
+        joinColumns = @JoinColumn(name = "stt_id"),
+        inverseJoinColumns = @JoinColumn(name = "sttf_id"))
+    private Set<STTForm> appUserSTTForms = new HashSet<>();
 
     @Column(name = "date_created",
-            nullable = false)
+        nullable = false)
     private Timestamp dateCreated;
 
     public SourceTaskType() {}
+
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
+    }
 
     public Long getSourceTaskTypeId() {
         return sourceTaskTypeId;
@@ -114,19 +122,19 @@ public class SourceTaskType {
         this.taskType = taskType;
     }
 
-    public ApiTaskType getApiTaskType() {
+    public List<ApiTaskType> getApiTaskType() {
         return apiTaskType;
     }
 
-    public void setApiTaskType(ApiTaskType apiTaskType) {
+    public void setApiTaskType(List<ApiTaskType> apiTaskType) {
         this.apiTaskType = apiTaskType;
     }
 
-    public KafkaTaskType getKafkaTaskType() {
+    public List<KafkaTaskType> getKafkaTaskType() {
         return kafkaTaskType;
     }
 
-    public void setKafkaTaskType(KafkaTaskType kafkaTaskType) {
+    public void setKafkaTaskType(List<KafkaTaskType> kafkaTaskType) {
         this.kafkaTaskType = kafkaTaskType;
     }
 
@@ -154,20 +162,20 @@ public class SourceTaskType {
         this.appUser = appUser;
     }
 
-    public Set<STTForm> getSttFormSet() {
-        return sttFormSet;
-    }
-
-    public void setSttFormSet(Set<STTForm> sttFormSet) {
-        this.sttFormSet = sttFormSet;
-    }
-
     public Timestamp getDateCreated() {
         return dateCreated;
     }
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Set<STTForm> getAppUserSTTForms() {
+        return appUserSTTForms;
+    }
+
+    public void setAppUserSTTForms(Set<STTForm> appUserSTTForms) {
+        this.appUserSTTForms = appUserSTTForms;
     }
 
     @Override

@@ -8,6 +8,8 @@ import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * @author Nabeel Ahmed
@@ -72,23 +74,30 @@ public class STTControl {
     @Column(name = "mandatory")
     private boolean mandatory;
 
+    @Column(name = "is_default",
+        columnDefinition = "boolean default false")
+    private Boolean isDefault;
+
     @Column(name = "pattern")
     private String pattern;
 
     @Column(name = "sttc_status",nullable = false)
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.ORDINAL)
     private Status status;
+
+    @ManyToOne
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
 
     @Column(name = "filed_new_line")
     private boolean filedNewLine;
 
-    @ManyToOne
-    @JoinColumn(name = "stts_id")
-    private STTSection sstSttSection;
-
     @Column(name = "date_created",
             nullable = false)
     private Timestamp dateCreated;
+
+    @ManyToMany(mappedBy = "appUserSTTControls")
+    private Set<STTSection> sttSections = new LinkedHashSet<>();
 
     public STTControl() {
     }
@@ -213,12 +222,28 @@ public class STTControl {
         this.pattern = pattern;
     }
 
+    public Boolean getDefault() {
+        return isDefault;
+    }
+
+    public void setDefault(Boolean aDefault) {
+        isDefault = aDefault;
+    }
+
     public Status getStatus() {
         return status;
     }
 
     public void setStatus(Status status) {
         this.status = status;
+    }
+
+    public AppUser getAppUser() {
+        return appUser;
+    }
+
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
     }
 
     public boolean isFiledNewLine() {
@@ -229,20 +254,20 @@ public class STTControl {
         this.filedNewLine = filedNewLine;
     }
 
-    public STTSection getSstSttSection() {
-        return sstSttSection;
-    }
-
-    public void setSstSttSection(STTSection sstSttSection) {
-        this.sstSttSection = sstSttSection;
-    }
-
     public Timestamp getDateCreated() {
         return dateCreated;
     }
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Set<STTSection> getSttSections() {
+        return sttSections;
+    }
+
+    public void setSttSections(Set<STTSection> sttSections) {
+        this.sttSections = sttSections;
     }
 
     @Override

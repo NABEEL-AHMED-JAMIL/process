@@ -8,6 +8,8 @@ import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -41,18 +43,30 @@ public class STTForm {
 
     // status of job (active or disable or delete)
     @Column(name = "sttf_status",nullable = false)
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.ORDINAL)
     private Status status;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_task_type_id")
-    private SourceTaskType sourceTaskType;
+    @Column(name = "is_default",
+        columnDefinition = "boolean default false")
+    private Boolean isDefault;
 
-    @OneToMany(mappedBy="sstForm")
-    private Set<STTSection> sttSectionSet;
+    @ManyToOne
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
+
+    @ManyToMany(mappedBy = "appUserSTTForms")
+    private Set<SourceTaskType> sourceTaskTypes = new LinkedHashSet<>();
+
+    @ManyToMany(cascade = {
+        CascadeType.PERSIST, CascadeType.MERGE
+    }, fetch = FetchType.LAZY)
+    @JoinTable(	name = "app_user_stts",
+        joinColumns = @JoinColumn(name = "sttf_id"),
+        inverseJoinColumns = @JoinColumn(name = "stts_id"))
+    private Set<STTSection> appUserSTTSections = new HashSet<>();
 
     @Column(name = "date_created",
-            nullable = false)
+        nullable = false)
     private Timestamp dateCreated;
 
     public STTForm() {
@@ -90,20 +104,36 @@ public class STTForm {
         this.status = status;
     }
 
-    public SourceTaskType getSourceTaskType() {
-        return sourceTaskType;
+    public Boolean getDefault() {
+        return isDefault;
     }
 
-    public void setSourceTaskType(SourceTaskType sourceTaskType) {
-        this.sourceTaskType = sourceTaskType;
+    public void setDefault(Boolean aDefault) {
+        isDefault = aDefault;
     }
 
-    public Set<STTSection> getSttSectionSet() {
-        return sttSectionSet;
+    public AppUser getAppUser() {
+        return appUser;
     }
 
-    public void setSttSectionSet(Set<STTSection> sttSectionSet) {
-        this.sttSectionSet = sttSectionSet;
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
+    }
+
+    public Set<SourceTaskType> getSourceTaskTypes() {
+        return sourceTaskTypes;
+    }
+
+    public void setSourceTaskTypes(Set<SourceTaskType> sourceTaskTypes) {
+        this.sourceTaskTypes = sourceTaskTypes;
+    }
+
+    public Set<STTSection> getAppUserSTTSections() {
+        return appUserSTTSections;
+    }
+
+    public void setAppUserSTTSections(Set<STTSection> appUserSTTSections) {
+        this.appUserSTTSections = appUserSTTSections;
     }
 
     public Timestamp getDateCreated() {

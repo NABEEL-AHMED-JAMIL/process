@@ -60,7 +60,8 @@ public class LookupData {
     protected Set<LookupData> lookupChildren;
 
     @ManyToOne
-    @JoinColumn(name="app_user_id", nullable=false)
+    @JoinColumn(name="app_user_id",
+        nullable=false)
     private AppUser appUser;
 
     public LookupData() { }

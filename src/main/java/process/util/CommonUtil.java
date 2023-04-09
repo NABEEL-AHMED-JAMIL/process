@@ -19,6 +19,7 @@ public interface CommonUtil {
         public static String ASIA_KARACHI = "ASIA_KARACHI";
         public static String AMERICA_NEW_YORK = "AMERICA_NEW_YORK";
         public static String SUPER_ADMIN = "SUPER_ADMIN";
+        public static String URL_VALIDATOR = "URL_VALIDATOR";
 
     }
 }

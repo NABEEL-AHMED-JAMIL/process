@@ -41,9 +41,8 @@ public class KafkaTaskType {
     @Column(name = "topic_pattern", nullable = false)
     private String topicPattern;
 
-    @OneToOne
-    @MapsId
-    @JoinColumn(name = "source_task_type_id")
+    @ManyToOne(fetch=FetchType.LAZY)
+    @JoinColumn(name="source_task_type_id")
     private SourceTaskType sourceTaskType;
 
     @Column(name = "kafka_tt_status", nullable = false)

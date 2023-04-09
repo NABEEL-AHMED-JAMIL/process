@@ -74,7 +74,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -129,7 +129,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLookupByLookupType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

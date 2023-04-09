@@ -8,6 +8,8 @@ import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -43,29 +45,33 @@ public class STTSection {
     private Long sttSOrder;
 
     @Column(name = "stts_status",nullable = false)
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.ORDINAL)
     private Status status;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sttf_id")
-    private STTForm sstForm;
+    @Column(name = "is_default",
+        columnDefinition = "boolean default false")
+    private Boolean isDefault;
 
-    @OneToMany(mappedBy="sstSttSection")
-    private Set<STTControl> sttControlSet;
+    @ManyToOne
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
+
+    @ManyToMany(mappedBy = "appUserSTTSections")
+    private Set<STTForm> sttForms = new LinkedHashSet<>();
+
+    @ManyToMany(cascade = {
+        CascadeType.PERSIST, CascadeType.MERGE
+    }, fetch = FetchType.LAZY)
+    @JoinTable(	name = "app_user_sttc",
+        joinColumns = @JoinColumn(name = "stts_id"),
+        inverseJoinColumns = @JoinColumn(name = "sttc_id"))
+    private Set<STTControl> appUserSTTControls = new HashSet<>();
 
     @Column(name = "date_created",
             nullable = false)
     private Timestamp dateCreated;
 
     public STTSection() {
-    }
-
-    public STTSection(String sttSName, Long sttSOrder,
-        Status status, STTForm sstForm) {
-        this.sttSName = sttSName;
-        this.sttSOrder = sttSOrder;
-        this.status = status;
-        this.sstForm = sstForm;
     }
 
     public Long getSttSId() {
@@ -108,20 +114,36 @@ public class STTSection {
         this.status = status;
     }
 
-    public STTForm getSstForm() {
-        return sstForm;
+    public AppUser getAppUser() {
+        return appUser;
     }
 
-    public void setSstForm(STTForm sstForm) {
-        this.sstForm = sstForm;
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
     }
 
-    public Set<STTControl> getSttControlSet() {
-        return sttControlSet;
+    public Boolean getDefault() {
+        return isDefault;
     }
 
-    public void setSttControlSet(Set<STTControl> sttControlSet) {
-        this.sttControlSet = sttControlSet;
+    public void setDefault(Boolean aDefault) {
+        isDefault = aDefault;
+    }
+
+    public Set<STTForm> getSttForms() {
+        return sttForms;
+    }
+
+    public void setSttForms(Set<STTForm> sttForms) {
+        this.sttForms = sttForms;
+    }
+
+    public Set<STTControl> getAppUserSTTControls() {
+        return appUserSTTControls;
+    }
+
+    public void setAppUserSTTControls(Set<STTControl> appUserSTTControls) {
+        this.appUserSTTControls = appUserSTTControls;
     }
 
     public Timestamp getDateCreated() {

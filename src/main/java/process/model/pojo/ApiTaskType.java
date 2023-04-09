@@ -39,12 +39,13 @@ public class ApiTaskType {
     @Enumerated(EnumType.ORDINAL)
     private HttpMethod httpMethod;
 
-    @Column(name = "api_security_id")
-    private String  apiSecurityId;
+    @Column(name = "api_secid_mlu")
+    private String apiSecurityIdMlu;
+    @Column(name = "api_secid_slu")
+    private String apiSecurityIdSlu;
 
-    @OneToOne
-    @MapsId
-    @JoinColumn(name = "source_task_type_id")
+    @ManyToOne(fetch=FetchType.LAZY)
+    @JoinColumn(name="source_task_type_id")
     private SourceTaskType sourceTaskType;
 
     @Column(name = "app_tt_status", nullable = false)
@@ -78,12 +79,20 @@ public class ApiTaskType {
         this.httpMethod = httpMethod;
     }
 
-    public String getApiSecurityId() {
-        return apiSecurityId;
+    public String getApiSecurityIdMlu() {
+        return apiSecurityIdMlu;
     }
 
-    public void setApiSecurityId(String apiSecurityId) {
-        this.apiSecurityId = apiSecurityId;
+    public void setApiSecurityIdMlu(String apiSecurityIdMlu) {
+        this.apiSecurityIdMlu = apiSecurityIdMlu;
+    }
+
+    public String getApiSecurityIdSlu() {
+        return apiSecurityIdSlu;
+    }
+
+    public void setApiSecurityIdSlu(String apiSecurityIdSlu) {
+        this.apiSecurityIdSlu = apiSecurityIdSlu;
     }
 
     public SourceTaskType getSourceTaskType() {
