@@ -52,6 +52,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- editSTT
+     * @apiNote :- Api use to update stt
+     * @param sttRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/editSTT", method = RequestMethod.POST)
     public ResponseEntity<?> editSTT(@RequestBody STTRequest sttRequest) {

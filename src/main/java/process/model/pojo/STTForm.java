@@ -72,6 +72,11 @@ public class STTForm {
     public STTForm() {
     }
 
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
+    }
+
     public Long getSttFId() {
         return sttFId;
     }

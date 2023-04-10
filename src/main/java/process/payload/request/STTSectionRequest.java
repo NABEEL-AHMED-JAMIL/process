@@ -13,11 +13,12 @@ import process.model.enums.Status;
 public class STTSectionRequest {
 
     private Long sttsId;
-    private String sttsName;
-    private String description;
+    private String sttsName; // yes
+    private String description; // yes
     private Status status;
-    private Long sttsOrder;
-    private ParseRequest accessUserDetail;
+    private Long sttsOrder;  // yes
+    private ParseRequest accessUserDetail; // yes
+    private boolean isDefault;
 
     public STTSectionRequest() {
     }
@@ -68,6 +69,14 @@ public class STTSectionRequest {
 
     public void setAccessUserDetail(ParseRequest accessUserDetail) {
         this.accessUserDetail = accessUserDetail;
+    }
+
+    public boolean isDefault() {
+        return isDefault;
+    }
+
+    public void setDefault(boolean aDefault) {
+        isDefault = aDefault;
     }
 
     @Override

@@ -9,58 +9,58 @@ import process.payload.response.AppResponse;
  */
 public interface SourceTaskTypeService {
 
-    public AppResponse addSTT(STTRequest sttRequest);
+    public AppResponse addSTT(STTRequest sttRequest) throws Exception;
 
-    public AppResponse editSTT(STTRequest sttRequest);
+    public AppResponse editSTT(STTRequest sttRequest) throws Exception;
 
-    public AppResponse deleteSTT(STTRequest sttRequest);
+    public AppResponse deleteSTT(STTRequest sttRequest) throws Exception;
 
-    public AppResponse viewSTT();
+    public AppResponse viewSTT() throws Exception;
 
-    public AppResponse fetchSTT();
+    public AppResponse fetchSTT() throws Exception;
 
-    public AppResponse downloadSTTTree();
+    public AppResponse downloadSTTTree() throws Exception;
 
-    public AppResponse linkSTTWithFrom();
+    public AppResponse linkSTTWithFrom() throws Exception;
 
     // STTF
-    public AppResponse addSTTF(STTFormRequest sttFormRequest);
+    public AppResponse addSTTF(STTFormRequest sttFormRequest) throws Exception;
 
-    public AppResponse editSTTF(STTFormRequest sttFormRequest);
+    public AppResponse editSTTF(STTFormRequest sttFormRequest) throws Exception;
 
-    public AppResponse deleteSTTF(STTFormRequest sttFormRequest);
+    public AppResponse deleteSTTF(STTFormRequest sttFormRequest) throws Exception;
 
-    public AppResponse viewSTTF();
+    public AppResponse viewSTTF() throws Exception;
 
-    public AppResponse fetchSTTF();
+    public AppResponse fetchSTTF() throws Exception;
 
-    public AppResponse downloadSTTFTree();
+    public AppResponse downloadSTTFTree() throws Exception;
 
-    public AppResponse linkSTTFWithFrom();
+    public AppResponse linkSTTFWithFrom() throws Exception;
 
     // STTS
-    public AppResponse addSTTS(STTSectionRequest sttSectionRequest);
+    public AppResponse addSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
-    public AppResponse editSTTS(STTSectionRequest sttSectionRequest);
+    public AppResponse editSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
-    public AppResponse deleteSTTS(STTSectionRequest sttSectionRequest);
+    public AppResponse deleteSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
-    public AppResponse viewSTTS();
+    public AppResponse viewSTTS() throws Exception;
 
-    public AppResponse fetchSTTS();
+    public AppResponse fetchSTTS() throws Exception;
 
-    public AppResponse downloadSTTSTree();
+    public AppResponse downloadSTTSTree() throws Exception;
 
-    public AppResponse linkSTTSWithFrom();
+    public AppResponse linkSTTSWithFrom() throws Exception;
 
     // STTC
-    public AppResponse addSTTC(STTControl sttControl);
+    public AppResponse addSTTC(STTControl sttControl) throws Exception;
 
-    public AppResponse editSTTC(STTControl sttControl);
+    public AppResponse editSTTC(STTControl sttControl) throws Exception;
 
-    public AppResponse deleteSTTC(STTControl sttControl);
+    public AppResponse deleteSTTC(STTControl sttControl) throws Exception;
 
-    public AppResponse fetchSTTC();
+    public AppResponse fetchSTTC() throws Exception;
 
     public AppResponse downloadSTTCTree();
 

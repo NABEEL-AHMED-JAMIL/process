@@ -74,6 +74,11 @@ public class STTSection {
     public STTSection() {
     }
 
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
+    }
+
     public Long getSttSId() {
         return sttSId;
     }

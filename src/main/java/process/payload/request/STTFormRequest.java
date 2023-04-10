@@ -12,10 +12,11 @@ import process.model.enums.Status;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTFormRequest {
     private Long sttfId;
-    private String sttfName;
-    private String description;
+    private String sttfName; // yes
+    private String description; // yes
     private Status status;
-    private ParseRequest accessUserDetail;
+    private boolean isDefault;
+    private ParseRequest accessUserDetail; // yes
 
     public STTFormRequest() {
     }
@@ -50,6 +51,14 @@ public class STTFormRequest {
 
     public void setStatus(Status status) {
         this.status = status;
+    }
+
+    public boolean isDefault() {
+        return isDefault;
+    }
+
+    public void setDefault(boolean aDefault) {
+        isDefault = aDefault;
     }
 
     public ParseRequest getAccessUserDetail() {
