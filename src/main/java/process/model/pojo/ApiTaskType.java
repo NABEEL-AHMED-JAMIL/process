@@ -6,7 +6,6 @@ import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import org.springframework.http.HttpMethod;
-import process.model.enums.Status;
 import javax.persistence.*;
 
 /**
@@ -36,21 +35,17 @@ public class ApiTaskType {
     private String apiUrl;
 
     @Column(name = "http_method", nullable = false)
-    @Enumerated(EnumType.ORDINAL)
     private HttpMethod httpMethod;
 
-    @Column(name = "api_secid_mlu")
-    private String apiSecurityIdMlu;
-    @Column(name = "api_secid_slu")
-    private String apiSecurityIdSlu;
+    @Column(name = "api_sec_lk_value")
+    private String apiSecurityLkValue;
 
     @ManyToOne(fetch=FetchType.LAZY)
-    @JoinColumn(name="source_task_type_id")
-    private SourceTaskType sourceTaskType;
+    @JoinColumn(name="stt_id")
+    private STT stt;
 
-    @Column(name = "app_tt_status", nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    @Column(name = "status", nullable = false)
+    private Long status;
 
     public ApiTaskType() {
     }
@@ -79,35 +74,27 @@ public class ApiTaskType {
         this.httpMethod = httpMethod;
     }
 
-    public String getApiSecurityIdMlu() {
-        return apiSecurityIdMlu;
+    public String getApiSecurityLkValue() {
+        return apiSecurityLkValue;
     }
 
-    public void setApiSecurityIdMlu(String apiSecurityIdMlu) {
-        this.apiSecurityIdMlu = apiSecurityIdMlu;
+    public void setApiSecurityLkValue(String apiSecurityLkValue) {
+        this.apiSecurityLkValue = apiSecurityLkValue;
     }
 
-    public String getApiSecurityIdSlu() {
-        return apiSecurityIdSlu;
+    public STT getStt() {
+        return stt;
     }
 
-    public void setApiSecurityIdSlu(String apiSecurityIdSlu) {
-        this.apiSecurityIdSlu = apiSecurityIdSlu;
+    public void setStt(STT stt) {
+        this.stt = stt;
     }
 
-    public SourceTaskType getSourceTaskType() {
-        return sourceTaskType;
-    }
-
-    public void setSourceTaskType(SourceTaskType sourceTaskType) {
-        this.sourceTaskType = sourceTaskType;
-    }
-
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

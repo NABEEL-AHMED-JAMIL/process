@@ -5,8 +5,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
-import process.model.enums.TaskType;
 import javax.persistence.*;
 import java.sql.Timestamp;
 import java.util.HashSet;
@@ -17,10 +15,10 @@ import java.util.Set;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "source_task_type")
+@Table(name = "stt")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceTaskType {
+public class STT {
 
     @GenericGenerator(
         name = "sourceTaskTypeSequenceGenerator",
@@ -32,9 +30,9 @@ public class SourceTaskType {
         }
     )
     @Id
-    @Column(name="source_task_type_id", unique=true, nullable=false)
+    @Column(name="stt_id", unique=true, nullable=false)
     @GeneratedValue(generator = "sourceTaskTypeSequenceGenerator")
-    private Long sourceTaskTypeId;
+    private Long sttId;
 
     @Column(name = "service_name",
         nullable = false)
@@ -44,21 +42,18 @@ public class SourceTaskType {
          nullable = false)
     private String description;
 
-    @Enumerated(EnumType.ORDINAL)
-    @Column(name = "task_type", nullable = false,
-        updatable = false)
-    private TaskType taskType;
+    @Column(name = "task_type",
+        nullable = false, updatable = false)
+    private Long taskType;
 
-    @OneToMany(mappedBy = "sourceTaskType")
+    @OneToMany(mappedBy = "stt")
     private List<ApiTaskType> apiTaskType;
 
-    @OneToMany(mappedBy = "sourceTaskType")
+    @OneToMany(mappedBy = "stt")
     private List<KafkaTaskType> kafkaTaskType;
 
-    @Column(name = "task_type_status",
-            nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    @Column(name = "status", nullable = false)
+    private Long status;
 
     /**default source task type for testing
      * Test Loop
@@ -83,19 +78,19 @@ public class SourceTaskType {
         nullable = false)
     private Timestamp dateCreated;
 
-    public SourceTaskType() {}
+    public STT() {}
 
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
-    public Long getSourceTaskTypeId() {
-        return sourceTaskTypeId;
+    public Long getSttId() {
+        return sttId;
     }
 
-    public void setSourceTaskTypeId(Long sourceTaskTypeId) {
-        this.sourceTaskTypeId = sourceTaskTypeId;
+    public void setSttId(Long sttId) {
+        this.sttId = sttId;
     }
 
     public String getServiceName() {
@@ -114,11 +109,11 @@ public class SourceTaskType {
         this.description = description;
     }
 
-    public TaskType getTaskType() {
+    public Long getTaskType() {
         return taskType;
     }
 
-    public void setTaskType(TaskType taskType) {
+    public void setTaskType(Long taskType) {
         this.taskType = taskType;
     }
 
@@ -138,11 +133,11 @@ public class SourceTaskType {
         this.kafkaTaskType = kafkaTaskType;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

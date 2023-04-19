@@ -11,7 +11,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import process.emailer.EmailMessagesFactory;
 import process.model.enums.ERole;
-import process.model.enums.Status;
 import process.model.pojo.AppUser;
 import process.model.pojo.RefreshToken;
 import process.model.pojo.Role;
@@ -24,8 +23,10 @@ import process.security.service.RefreshTokenService;
 import process.security.service.UserDetailsImpl;
 import process.service.AppUserService;
 import process.service.LookupDataCacheService;
-import process.util.CommonUtil;
+import process.util.lookuputil.LookupDetailUtil;
 import process.util.ProcessUtil;
+import process.util.lookuputil.Status;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -69,7 +70,7 @@ public class AppUserServiceImpl implements AppUserService {
         if (ProcessUtil.isNull(username)) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(username, Status.Active);
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(username, Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
@@ -128,7 +129,7 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "LastName missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.Active);
+            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
@@ -159,7 +160,7 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "NewPassword missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.Active);
+            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
@@ -191,7 +192,7 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "TimeZone missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.Active);
+            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
@@ -211,11 +212,11 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.Active);
+            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
-        appUser.get().setStatus(Status.Delete);
+        appUser.get().setStatus(Status.DELETE.getLookupValue());
         /**
          * Will update rest of the code
          * */
@@ -276,24 +277,24 @@ public class AppUserServiceImpl implements AppUserService {
         adminUser.setUsername(signUpRequest.getUsername());
         adminUser.setPassword(this.passwordEncoder.encode(signUpRequest.getPassword()));
         // by default active user no need extra action
-        adminUser.setStatus(Status.Active);
+        adminUser.setStatus(Status.ACTIVE.getLookupValue());
         // set the parent user which is master admin
         LookupDataResponse lookupDataResponse = this.lookupDataCacheService
-            .getParentLookupById(CommonUtil.LookupDetail.SUPER_ADMIN);
+            .getParentLookupById(LookupDetailUtil.SUPER_ADMIN);
         Optional<AppUser> superAdmin = this.appUserRepository.
-            findByUsernameAndStatus(lookupDataResponse.getLookupValue(), Status.Active);
+            findByUsernameAndStatus(lookupDataResponse.getLookupValue(), Status.ACTIVE.getLookupValue());
         if (superAdmin.isPresent()) {
             adminUser.setParentAppUser(superAdmin.get());
         }
         lookupDataResponse = this.lookupDataCacheService.getChildLookupById(
-            CommonUtil.LookupDetail.SCHEDULER_TIMEZONE, CommonUtil.LookupDetail.ASIA_QATAR);
+            LookupDetailUtil.SCHEDULER_TIMEZONE, LookupDetailUtil.ASIA_QATAR);
         if (!ProcessUtil.isNull(lookupDataResponse)) {
             adminUser.setTimeZone(lookupDataResponse.getLookupValue());
             signUpRequest.setTimeZone(lookupDataResponse.getLookupValue());
         }
         // register user role default as admin role
         Optional<Role> adminRole = this.roleRepository.findByRoleNameAndStatus(
-            ERole.ROLE_ADMIN.name(), Status.Active);
+            ERole.ROLE_ADMIN.name(), Status.ACTIVE.getLookupValue());
         if (adminRole.isPresent()) {
             Set<Role> roleSet = new HashSet<>();
             roleSet.add(adminRole.get());
@@ -322,7 +323,7 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "Email missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByEmailAndStatus(
-            forgotPasswordRequest.getEmail(), Status.Active);
+            forgotPasswordRequest.getEmail(), Status.ACTIVE.getLookupValue());
         if (appUser.isPresent()) {
             forgotPasswordRequest.setUsername(appUser.get().getUsername());
             forgotPasswordRequest.setAppUserId(appUser.get().getAppUserId());
@@ -348,7 +349,7 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "New password missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByEmailAndStatus(
-            passwordResetRequest.getEmail(), Status.Active);
+            passwordResetRequest.getEmail(), Status.ACTIVE.getLookupValue());
         if (appUser.isPresent()) {
             appUser.get().setPassword(this.passwordEncoder.encode(passwordResetRequest.getNewPassword()));
             this.appUserRepository.save(appUser.get());

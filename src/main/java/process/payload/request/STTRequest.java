@@ -3,8 +3,6 @@ package process.payload.request;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import process.model.enums.Status;
-import process.model.enums.TaskType;
 
 /**
  * @author Nabeel Ahmed
@@ -16,10 +14,10 @@ public class STTRequest {
     private Long sttId;
     private String description; // yes
     private String serviceName; // yes
-    private Status status;
-    private TaskType taskType; // yes
+    private Long status;
+    private Long taskType; // yes
     private ParseRequest accessUserDetail; // yes
-    private boolean isDefault;
+    private boolean defaultStt;
     private KafkaTaskTypeRequest kafkaTaskType; // base on task type
     private ApiTaskTypeRequest apiTaskType; // base on task type
 
@@ -50,19 +48,19 @@ public class STTRequest {
         this.serviceName = serviceName;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
-    public TaskType getTaskType() {
+    public Long getTaskType() {
         return taskType;
     }
 
-    public void setTaskType(TaskType taskType) {
+    public void setTaskType(Long taskType) {
         this.taskType = taskType;
     }
 
@@ -74,12 +72,12 @@ public class STTRequest {
         this.accessUserDetail = accessUserDetail;
     }
 
-    public boolean isDefault() {
-        return isDefault;
+    public boolean isDefaultStt() {
+        return defaultStt;
     }
 
-    public void setDefault(boolean aDefault) {
-        isDefault = aDefault;
+    public void setDefaultStt(boolean defaultStt) {
+        this.defaultStt = defaultStt;
     }
 
     public KafkaTaskTypeRequest getKafkaTaskType() {

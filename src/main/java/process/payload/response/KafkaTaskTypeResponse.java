@@ -1,4 +1,4 @@
-package process.payload.request;
+package process.payload.response;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -9,14 +9,14 @@ import com.google.gson.Gson;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class KafkaTaskTypeRequest {
+public class KafkaTaskTypeResponse {
 
     private Long kafkaTTId;
     private Integer numPartitions; // yes
     private String topicName; // yes
     private String topicPattern; // yes
 
-    public KafkaTaskTypeRequest() {
+    public KafkaTaskTypeResponse() {
     }
 
     public Long getKafkaTTId() {

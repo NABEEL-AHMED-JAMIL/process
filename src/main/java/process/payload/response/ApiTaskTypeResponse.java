@@ -1,24 +1,24 @@
-package process.payload.request;
+package process.payload.response;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.springframework.http.HttpMethod;
+import process.util.lookuputil.GLookup;
 
 /**
  * @author Nabeel Ahmed
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class ApiTaskTypeRequest {
+public class ApiTaskTypeResponse {
 
     private Long apiTaskTypeId;
     private String apiUrl; // yes
-    private HttpMethod httpMethod; // yes
-    // ref to lookup id
+    private GLookup httpMethod; // yes
     private String apiSecurityLkValue;
 
-    public ApiTaskTypeRequest() {
+    public ApiTaskTypeResponse() {
     }
 
     public Long getApiTaskTypeId() {
@@ -37,11 +37,11 @@ public class ApiTaskTypeRequest {
         this.apiUrl = apiUrl;
     }
 
-    public HttpMethod getHttpMethod() {
+    public GLookup getHttpMethod() {
         return httpMethod;
     }
 
-    public void setHttpMethod(HttpMethod httpMethod) {
+    public void setHttpMethod(GLookup httpMethod) {
         this.httpMethod = httpMethod;
     }
 

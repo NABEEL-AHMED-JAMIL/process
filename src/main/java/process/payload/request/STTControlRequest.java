@@ -1,9 +1,8 @@
 package process.payload.request;
 
 import com.google.gson.Gson;
-import process.model.enums.Status;
 
-public class SttControlRequest {
+public class STTControlRequest {
 
     private Long sttcId;
     private String controlName;
@@ -20,11 +19,11 @@ public class SttControlRequest {
     private String pattern;
     private String place_holder;
     private Boolean separateLine;
-    private Status status;
+    private Long status;
     private Long  sttcOrder;
     private ParseRequest accessUserDetail;
 
-    public SttControlRequest() {
+    public STTControlRequest() {
     }
 
     public Long getSttcId() {
@@ -147,11 +146,11 @@ public class SttControlRequest {
         this.separateLine = separateLine;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

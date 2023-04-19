@@ -3,7 +3,6 @@ package process.payload.request;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import process.model.enums.Status;
 
 /**
  * @author Nabeel Ahmed
@@ -14,8 +13,8 @@ public class STTFormRequest {
     private Long sttfId;
     private String sttfName; // yes
     private String description; // yes
-    private Status status;
-    private boolean isDefault;
+    private Long status;
+    private boolean defaultSttf;
     private ParseRequest accessUserDetail; // yes
 
     public STTFormRequest() {
@@ -45,20 +44,20 @@ public class STTFormRequest {
         this.description = description;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
-    public boolean isDefault() {
-        return isDefault;
+    public boolean isDefaultSttf() {
+        return defaultSttf;
     }
 
-    public void setDefault(boolean aDefault) {
-        isDefault = aDefault;
+    public void setDefaultSttf(boolean defaultSttf) {
+        this.defaultSttf = defaultSttf;
     }
 
     public ParseRequest getAccessUserDetail() {

@@ -2,7 +2,7 @@ package process.model.pojo;
 
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
-import process.model.enums.Status;
+
 import javax.persistence.*;
 import java.sql.Timestamp;
 import java.util.HashSet;
@@ -65,7 +65,7 @@ public class AppUser {
     @JoinTable(	name = "app_user_stt",
         joinColumns = @JoinColumn(name = "app_user_id"),
         inverseJoinColumns = @JoinColumn(name = "stt_id"))
-    private Set<SourceTaskType> appUserSourceTaskTypes = new HashSet<>();
+    private Set<STT> appUserSTTS = new HashSet<>();
 
     @ManyToOne
     @JoinColumn(name = "parent_user_id")
@@ -76,8 +76,7 @@ public class AppUser {
     protected Set<AppUser> appUserChildren;
 
     @Column(name = "status", nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    private Long status;
 
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
@@ -162,12 +161,16 @@ public class AppUser {
         this.parentAppUser = parentAppUser;
     }
 
-    public Set<SourceTaskType> getAppUserSourceTaskTypes() {
-        return appUserSourceTaskTypes;
+    public Set<STT> getAppUserSourceTaskTypes() {
+        return appUserSTTS;
     }
 
-    public void setAppUserSourceTaskTypes(Set<SourceTaskType> appUserSourceTaskTypes) {
-        this.appUserSourceTaskTypes = appUserSourceTaskTypes;
+    public void setAppUserSourceTaskTypes(Set<STT> appUserSTTS) {
+        this.appUserSTTS = appUserSTTS;
+    }
+
+    public void addAppUserSourceTaskTypes(STT stt) {
+        this.appUserSTTS.add(stt);
     }
 
     public Set<AppUser> getAppUserChildren() {
@@ -178,11 +181,11 @@ public class AppUser {
         this.appUserChildren = appUserChildren;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

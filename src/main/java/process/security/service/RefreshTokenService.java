@@ -3,13 +3,14 @@ package process.security.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import process.model.enums.Status;
 import process.model.pojo.RefreshToken;
 import process.model.repository.AppUserRepository;
 import process.model.repository.RefreshTokenRepository;
 import process.payload.request.TokenRefreshRequest;
 import process.payload.response.AppResponse;
 import process.util.ProcessUtil;
+import process.util.lookuputil.Status;
+
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,7 +34,7 @@ public class RefreshTokenService {
      * @return Optional<RefreshToken>
      * */
     public Optional<RefreshToken> findByToken(String token) {
-        return this.refreshTokenRepository.findByTokenAndStatus(token, Status.Active);
+        return this.refreshTokenRepository.findByTokenAndStatus(token, Status.ACTIVE.getLookupValue());
     }
 
     /**
@@ -46,7 +47,7 @@ public class RefreshTokenService {
         refreshToken.setAppUser(this.appUserRepository.findById(userId).get());
         refreshToken.setExpiryDate(Instant.now().plusMillis(this.refreshTokenDurationMs));
         refreshToken.setToken(UUID.randomUUID().toString());
-        refreshToken.setStatus(Status.Active);
+        refreshToken.setStatus(Status.ACTIVE.getLookupValue());
         refreshToken = this.refreshTokenRepository.save(refreshToken);
         return refreshToken;
     }
@@ -58,7 +59,7 @@ public class RefreshTokenService {
      * */
     public AppResponse verifyExpiration(RefreshToken token) {
         if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
-            token.setStatus(Status.Delete);
+            token.setStatus(Status.DELETE.getLookupValue());
             this.refreshTokenRepository.save(token);
             return new AppResponse(ProcessUtil.ERROR, "Refresh token was expired." +
                 "Please make a new signing request" ,token);
@@ -74,7 +75,7 @@ public class RefreshTokenService {
     public AppResponse deleteRefreshToken(TokenRefreshRequest tokenRefreshRequest) {
         Optional<RefreshToken> refreshToken = this.findByToken(tokenRefreshRequest.getRefreshToken());
         if (refreshToken.isPresent()) {
-            refreshToken.get().setStatus(Status.Delete);
+            refreshToken.get().setStatus(Status.DELETE.getLookupValue());
             this.refreshTokenRepository.save(refreshToken.get());
         }
         return new AppResponse(ProcessUtil.SUCCESS, "Token delete." ,tokenRefreshRequest);

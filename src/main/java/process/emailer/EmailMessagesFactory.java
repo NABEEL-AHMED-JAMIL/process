@@ -13,7 +13,7 @@ import process.payload.request.UpdateUserProfileRequest;
 import process.payload.response.LookupDataResponse;
 import process.security.jwt.JwtUtils;
 import process.service.LookupDataCacheService;
-import process.util.CommonUtil.*;
+import process.util.lookuputil.LookupDetailUtil;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import javax.mail.internet.MimeMessage;
@@ -47,7 +47,7 @@ public class EmailMessagesFactory {
     public boolean sendRegisterUser(SignupRequest signUpRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", signUpRequest.getUsername());
             metaData.put("password", signUpRequest.getPassword());
@@ -75,9 +75,9 @@ public class EmailMessagesFactory {
     public boolean sendForgotPassword(ForgotPasswordRequest forgotPasswordRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             LookupDataResponse resetPasswordLink = this.lookupDataCacheService
-                .getParentLookupById(LookupDetail.RESET_PASSWORD_LINK);
+                .getParentLookupById(LookupDetailUtil.RESET_PASSWORD_LINK);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", forgotPasswordRequest.getUsername());
             metaData.put("forgotPasswordPageUrl", resetPasswordLink.getLookupValue()+"?token="+
@@ -104,7 +104,7 @@ public class EmailMessagesFactory {
     public boolean sendResetPassword(PasswordResetRequest passwordResetRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", passwordResetRequest.getUsername());
             // email object
@@ -129,7 +129,7 @@ public class EmailMessagesFactory {
     public boolean sendUpdateAppUserProfile(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", updateUserProfileRequest.getUsername());
             metaData.put("firstName", updateUserProfileRequest.getFirstName());
@@ -156,7 +156,7 @@ public class EmailMessagesFactory {
     public boolean sendUpdateAppUserPassword(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", updateUserProfileRequest.getUsername());
             // email object
@@ -181,12 +181,12 @@ public class EmailMessagesFactory {
     public boolean sendUpdateAppUserTimeZone(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                    .getParentLookupById(LookupDetail.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", updateUserProfileRequest.getUsername());
             if (!ProcessUtil.isNull(updateUserProfileRequest.getTimeZone())) {
                 LookupDataResponse timeZoneLookup = this.lookupDataCacheService
-                    .getChildLookupById(LookupDetail.SCHEDULER_TIMEZONE,
+                    .getChildLookupById(LookupDetailUtil.SCHEDULER_TIMEZONE,
                     updateUserProfileRequest.getTimeZone());
                 metaData.put("timeZone", timeZoneLookup.getLookupValue());
             }
@@ -212,7 +212,7 @@ public class EmailMessagesFactory {
     public boolean sendCloseAppUserAccount(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetail.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             // email object
             EmailMessageRequest emailMessageRequest = new EmailMessageRequest();

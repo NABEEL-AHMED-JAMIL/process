@@ -15,6 +15,11 @@ public interface LookupDataRepository extends CrudRepository<LookupData, Long> {
 
     public Optional<LookupData> findByLookupType(String lookupType);
 
+    @Query(value = "select ld.*\n" +
+        "from lookup_data ld\n" +
+        "where ld.lookup_id = ?", nativeQuery = true)
+    public Optional<LookupData> findByParentLookupId(Long parentLookupId);
+
     public List<LookupData> findByParentLookupIsNull();
 
     @Query(value = "select ld.*, au.app_user_id, au.username\n" +

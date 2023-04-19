@@ -3,7 +3,7 @@ package process.payload.response;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import process.model.enums.Status;
+
 import java.sql.Timestamp;
 import java.util.Set;
 
@@ -22,7 +22,7 @@ public class AppUserResponse {
     private String email;
     private Set<RoleResponse> roleResponse;
     protected AppUserResponse parentAppUser;
-    private Status status;
+    private Long status;
     private Timestamp dateCreated;
 
     public AppUserResponse() {}
@@ -91,11 +91,11 @@ public class AppUserResponse {
         this.parentAppUser = parentAppUser;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

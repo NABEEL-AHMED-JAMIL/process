@@ -3,7 +3,6 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import process.model.enums.Status;
 
 import javax.persistence.*;
 import java.time.Instant;
@@ -31,9 +30,8 @@ public class RefreshToken {
     @Column(nullable = false)
     private Instant expiryDate;
 
-    @Column(name = "token_status", nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    @Column(name = "status", nullable = false)
+    private Long status;
 
     public RefreshToken() {}
 
@@ -69,11 +67,11 @@ public class RefreshToken {
         this.expiryDate = expiryDate;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
+
 import javax.persistence.*;
 import java.sql.Timestamp;
 import java.util.LinkedHashSet;
@@ -81,9 +81,8 @@ public class STTControl {
     @Column(name = "pattern")
     private String pattern;
 
-    @Column(name = "sttc_status",nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    @Column(name = "status",nullable = false)
+    private Long status;
 
     @ManyToOne
     @JoinColumn(name="app_user_id")
@@ -230,11 +229,11 @@ public class STTControl {
         isDefault = aDefault;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

@@ -3,7 +3,6 @@ package process.payload.request;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import process.model.enums.Status;
 
 /**
  * @author Nabeel Ahmed
@@ -15,10 +14,10 @@ public class STTSectionRequest {
     private Long sttsId;
     private String sttsName; // yes
     private String description; // yes
-    private Status status;
+    private Long status;
     private Long sttsOrder;  // yes
     private ParseRequest accessUserDetail; // yes
-    private boolean isDefault;
+    private boolean defaultStts;
 
     public STTSectionRequest() {
     }
@@ -47,11 +46,11 @@ public class STTSectionRequest {
         this.description = description;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
@@ -71,12 +70,12 @@ public class STTSectionRequest {
         this.accessUserDetail = accessUserDetail;
     }
 
-    public boolean isDefault() {
-        return isDefault;
+    public boolean isDefaultStts() {
+        return defaultStts;
     }
 
-    public void setDefault(boolean aDefault) {
-        isDefault = aDefault;
+    public void setDefaultStts(boolean defaultStts) {
+        this.defaultStts = defaultStts;
     }
 
     @Override

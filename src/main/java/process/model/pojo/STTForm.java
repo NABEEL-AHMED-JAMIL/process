@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
+
 import javax.persistence.*;
 import java.sql.Timestamp;
 import java.util.HashSet;
@@ -42,9 +42,8 @@ public class STTForm {
     private String description;
 
     // status of job (active or disable or delete)
-    @Column(name = "sttf_status",nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    @Column(name = "status",nullable = false)
+    private Long status;
 
     @Column(name = "is_default",
         columnDefinition = "boolean default false")
@@ -55,7 +54,7 @@ public class STTForm {
     private AppUser appUser;
 
     @ManyToMany(mappedBy = "appUserSTTForms")
-    private Set<SourceTaskType> sourceTaskTypes = new LinkedHashSet<>();
+    private Set<STT> STTS = new LinkedHashSet<>();
 
     @ManyToMany(cascade = {
         CascadeType.PERSIST, CascadeType.MERGE
@@ -101,15 +100,15 @@ public class STTForm {
         this.description = description;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
-    public Boolean getDefault() {
+    public Boolean isDefault() {
         return isDefault;
     }
 
@@ -125,12 +124,12 @@ public class STTForm {
         this.appUser = appUser;
     }
 
-    public Set<SourceTaskType> getSourceTaskTypes() {
-        return sourceTaskTypes;
+    public Set<STT> getSourceTaskTypes() {
+        return STTS;
     }
 
-    public void setSourceTaskTypes(Set<SourceTaskType> sourceTaskTypes) {
-        this.sourceTaskTypes = sourceTaskTypes;
+    public void setSourceTaskTypes(Set<STT> STTS) {
+        this.STTS = STTS;
     }
 
     public Set<STTSection> getAppUserSTTSections() {

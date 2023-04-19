@@ -17,7 +17,9 @@ public interface SourceTaskTypeService {
 
     public AppResponse viewSTT() throws Exception;
 
-    public AppResponse fetchSTT() throws Exception;
+    public AppResponse fetchSTTBySttId(STTRequest sttRequest) throws Exception;
+
+    public AppResponse fetchSTT(STTRequest sttRequest) throws Exception;
 
     public AppResponse downloadSTTTree() throws Exception;
 
@@ -32,7 +34,9 @@ public interface SourceTaskTypeService {
 
     public AppResponse viewSTTF() throws Exception;
 
-    public AppResponse fetchSTTF() throws Exception;
+    public AppResponse fetchSTTFBySttfId(STTFormRequest sttFormRequest) throws Exception;
+
+    public AppResponse fetchSTTF(STTFormRequest sttFormRequest) throws Exception;
 
     public AppResponse downloadSTTFTree() throws Exception;
 

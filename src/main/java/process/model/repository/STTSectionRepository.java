@@ -18,5 +18,5 @@ public interface STTSectionRepository extends CrudRepository<STTSection, Long> {
         "from stt_section stts\n" +
         "join app_users au on au.app_user_id  = stts.app_user_id  \n" +
         "where stts.stts_id = ?1 and au.username = ?2 ", nativeQuery = true)
-    public Optional<STTSection> findBySttSIdAndAppUserUsername(Long sttFId, String username);
+    public Optional<STTSection> findBySttSIdAndAppUserUsername(Long sttsId, String username);
 }

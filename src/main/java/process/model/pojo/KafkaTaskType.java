@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
+
 import javax.persistence.*;
 
 /**
@@ -42,12 +42,11 @@ public class KafkaTaskType {
     private String topicPattern;
 
     @ManyToOne(fetch=FetchType.LAZY)
-    @JoinColumn(name="source_task_type_id")
-    private SourceTaskType sourceTaskType;
+    @JoinColumn(name="stt_id")
+    private STT stt;
 
-    @Column(name = "kafka_tt_status", nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    @Column(name = "status", nullable = false)
+    private Long status;
 
     public KafkaTaskType() {
     }
@@ -84,19 +83,19 @@ public class KafkaTaskType {
         this.topicPattern = topicPattern;
     }
 
-    public SourceTaskType getSourceTaskType() {
-        return sourceTaskType;
+    public STT getStt() {
+        return stt;
     }
 
-    public void setSourceTaskType(SourceTaskType sourceTaskType) {
-        this.sourceTaskType = sourceTaskType;
+    public void setStt(STT stt) {
+        this.stt = stt;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

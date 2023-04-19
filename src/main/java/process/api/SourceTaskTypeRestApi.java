@@ -36,7 +36,7 @@ public class SourceTaskTypeRestApi {
     /**
      * api-status :- done
      * @apiName :- addSTT
-     * @apiNote :- Api use to create stt
+     * @apiNote :- Api use to create stt (source task type)
      * @param sttRequest
      * @return ResponseEntity<?>
      * */
@@ -55,7 +55,7 @@ public class SourceTaskTypeRestApi {
     /**
      * api-status :- done
      * @apiName :- editSTT
-     * @apiNote :- Api use to update stt
+     * @apiNote :- Api use to update stt (source task type)
      * @param sttRequest
      * @return ResponseEntity<?>
      * */
@@ -94,11 +94,24 @@ public class SourceTaskTypeRestApi {
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
+
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
+    @RequestMapping(value = "/fetchSTTBySttId", method = RequestMethod.POST)
+    public ResponseEntity<?> fetchSTTBySttId(@RequestBody STTRequest sttRequest) {
+        try {
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTBySttId(sttRequest), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchSTT ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTT", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchSTT() {
+    public ResponseEntity<?> fetchSTT(@RequestBody STTRequest sttRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTT(sttRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTT ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
@@ -178,11 +191,24 @@ public class SourceTaskTypeRestApi {
         "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
+
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
+    @RequestMapping(value = "/fetchSTTFBySttfId", method = RequestMethod.POST)
+    public ResponseEntity<?> fetchSTTFBySttfId(@RequestBody STTFormRequest sttFormRequest) {
+        try {
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTFBySttfId(sttFormRequest), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchSTTFBySttfId ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
+                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTF", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchSTTF() {
+    public ResponseEntity<?> fetchSTTF(@RequestBody STTFormRequest sttFormRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTF(sttFormRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTF ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
 import java.util.HashSet;
@@ -44,9 +43,8 @@ public class STTSection {
     @Column(name = "stts_order")
     private Long sttSOrder;
 
-    @Column(name = "stts_status",nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    @Column(name = "status",nullable = false)
+    private Long status;
 
     @Column(name = "is_default",
         columnDefinition = "boolean default false")
@@ -60,15 +58,14 @@ public class STTSection {
     private Set<STTForm> sttForms = new LinkedHashSet<>();
 
     @ManyToMany(cascade = {
-        CascadeType.PERSIST, CascadeType.MERGE
+       CascadeType.PERSIST, CascadeType.MERGE
     }, fetch = FetchType.LAZY)
     @JoinTable(	name = "app_user_sttc",
         joinColumns = @JoinColumn(name = "stts_id"),
         inverseJoinColumns = @JoinColumn(name = "sttc_id"))
     private Set<STTControl> appUserSTTControls = new HashSet<>();
 
-    @Column(name = "date_created",
-            nullable = false)
+    @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
     public STTSection() {
@@ -111,11 +108,11 @@ public class STTSection {
         this.sttSOrder = sttSOrder;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
