@@ -303,6 +303,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- fetchSTTSBySttsId
+     * @apiNote :- Api use to fetch stts by id(source task type section)
+     * @param sttSectionRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTSBySttsId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTSBySttsId(@RequestBody STTSectionRequest sttSectionRequest) {
@@ -311,10 +318,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTSBySttsId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- fetchSTTS
+     * @apiNote :- Api use to fetch stts
+     * @param sttSectionRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTS", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTS(@RequestBody STTSectionRequest sttSectionRequest) {
@@ -324,18 +338,6 @@ public class SourceTaskTypeRestApi {
             logger.error("An error occurred while fetchSTTS ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
         "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/downloadSTTSTree", method = RequestMethod.POST)
-    public ResponseEntity<?> downloadSTTSTree() {
-        try {
-            return null;
-        } catch (Exception ex) {
-            logger.error("An error occurred while downloadSTTSTree ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -352,7 +354,6 @@ public class SourceTaskTypeRestApi {
     }
 
     // STTC
-
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/addSTTC", method = RequestMethod.POST)
     public ResponseEntity<?> addSTTC(@RequestBody STTControlRequest sttControlRequest) {
@@ -390,24 +391,24 @@ public class SourceTaskTypeRestApi {
     }
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/fetchSTTC", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchSTTC() {
+    @RequestMapping(value = "/fetchSTTCBySttcId", method = RequestMethod.POST)
+    public ResponseEntity<?> fetchSTTCBySttcId(@RequestBody STTControlRequest sttControlRequest) {
         try {
             return null;
         } catch (Exception ex) {
-            logger.error("An error occurred while fetchSTTC ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while fetchSTTCBySttcId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/downloadSTTCTree", method = RequestMethod.POST)
-    public ResponseEntity<?> downloadSTTCTree() {
+    @RequestMapping(value = "/fetchSTTC", method = RequestMethod.POST)
+    public ResponseEntity<?> fetchSTTC(@RequestBody STTControlRequest sttControlRequest) {
         try {
             return null;
         } catch (Exception ex) {
-            logger.error("An error occurred while downloadSTTCTree ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while fetchSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
         "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }

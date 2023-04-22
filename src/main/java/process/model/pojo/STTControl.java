@@ -69,9 +69,6 @@ public class STTControl {
     @Column(name = "filed_lk_value")
     private String filedLkValue;
 
-    @Column(name = "separate_line")
-    private Boolean separateLine;
-
     @Column(name = "mandatory")
     private Boolean mandatory;
 
@@ -88,9 +85,6 @@ public class STTControl {
     @ManyToOne
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
-
-    @Column(name = "filed_new_line")
-    private boolean filedNewLine;
 
     @Column(name = "date_created",
             nullable = false)
@@ -203,14 +197,6 @@ public class STTControl {
         this.filedLkValue = filedLkValue;
     }
 
-    public Boolean getSeparateLine() {
-        return separateLine;
-    }
-
-    public void setSeparateLine(Boolean separateLine) {
-        this.separateLine = separateLine;
-    }
-
     public Boolean getMandatory() {
         return mandatory;
     }
@@ -249,14 +235,6 @@ public class STTControl {
 
     public void setAppUser(AppUser appUser) {
         this.appUser = appUser;
-    }
-
-    public boolean isFiledNewLine() {
-        return filedNewLine;
-    }
-
-    public void setFiledNewLine(boolean filedNewLine) {
-        this.filedNewLine = filedNewLine;
     }
 
     public Timestamp getDateCreated() {

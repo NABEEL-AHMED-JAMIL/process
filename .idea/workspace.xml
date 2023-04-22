@@ -5,58 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="d72000d1-6c13-4efd-b837-0f31e50e0ca8" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/AppUserSTT.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/AppUserSTTC.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/AppUserSTTF.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/AppUserSTTS.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/projection/STTCProjection.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/projection/STTLProjection.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/projection/STTSProjection.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/repository/AppUserSTTRepository.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTControlResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTSectionResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/FormControlType.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/AppUserRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/AppUserRestApi.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/api/SourceTaskTypeRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/SourceTaskTypeRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/AppUser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/AppUser.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/RefreshToken.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/RefreshToken.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/Role.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/Role.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/STT.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/STT.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTControl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTControl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTForm.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTForm.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTSection.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/STTSection.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/projection/SttProjection.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/projection/STTProjection.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/projection/SttfProjection.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/projection/STTFProjection.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/repository/KafkaTaskTypeRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/repository/KafkaTaskTypeRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/repository/STTFormRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/repository/STTFormRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/repository/STTRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/repository/STTRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/repository/STTSectionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/repository/STTSectionRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/request/ForgotPasswordRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/ForgotPasswordRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/request/PasswordResetRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/PasswordResetRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/request/QueryRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/QueryRequest.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/request/STTControlRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/STTControlRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/request/STTFormRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/STTFormRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/request/TokenRefreshRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/TokenRefreshRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/AppUserResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/AppUserResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/RoleResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/RoleResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/SttListResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTListResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/SttResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/SttcListResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTControlListResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/SttfListResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTFormListResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/SttfResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTFormResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/SttsListResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTSectionListResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/AppUserService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/service/AppUserService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/STTControlListResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTControlListResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/process/payload/response/STTControlResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/STTControlResponse.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/service/SourceTaskTypeService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/service/SourceTaskTypeService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/AppUserServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/service/imp/AppUserServiceImpl.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/SourceTaskTypeServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/service/imp/SourceTaskTypeServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/XmlOutTagInfoUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/XmlOutTagInfoUtil.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/IsDefault.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/IsDefault.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/RequestMethod.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/RequestMethod.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/Status.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/Status.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/TaskType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/lookuputil/TaskType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/validation/LookupValidation.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/validation/LookupValidation.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/LookupTemplate.xlsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/LookupTemplate.xlsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

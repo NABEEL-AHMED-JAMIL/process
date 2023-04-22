@@ -14,21 +14,19 @@ public class STTControlRequest {
     private Long sttCId;
     private Long sttCOrder;
     private String sttCName;
-    private String description;
     private String filedType;
     private String filedTitle;
     private String filedName;
+    private String description;
     private String placeHolder;
-    private Long filedWidth;
+    private Long filedWidth; // 1-12
     private Long minLength;
     private Long maxLength;
     private Long filedLookUp;
-    private boolean separateLine;
     private boolean mandatory;
     private boolean defaultSttC;
     private String pattern;
     private Long status;
-    private boolean filedNewLine;
     private ParseRequest accessUserDetail;
 
     public STTControlRequest() {
@@ -130,14 +128,6 @@ public class STTControlRequest {
         this.filedLookUp = filedLookUp;
     }
 
-    public boolean isSeparateLine() {
-        return separateLine;
-    }
-
-    public void setSeparateLine(boolean separateLine) {
-        this.separateLine = separateLine;
-    }
-
     public boolean isMandatory() {
         return mandatory;
     }
@@ -168,14 +158,6 @@ public class STTControlRequest {
 
     public void setStatus(Long status) {
         this.status = status;
-    }
-
-    public boolean isFiledNewLine() {
-        return filedNewLine;
-    }
-
-    public void setFiledNewLine(boolean filedNewLine) {
-        this.filedNewLine = filedNewLine;
     }
 
     public ParseRequest getAccessUserDetail() {

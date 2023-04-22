@@ -59,8 +59,6 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTC() throws Exception;
 
-    public AppResponse downloadSTTCTree();
-
     public AppResponse linkSTTCWithFrom();
 
     public AppResponse downloadSTTCommonTemplateFile();

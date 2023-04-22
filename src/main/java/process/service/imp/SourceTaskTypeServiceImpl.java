@@ -744,11 +744,6 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse downloadSTTCTree() {
-        return null;
-    }
-
-    @Override
     public AppResponse linkSTTCWithFrom() {
         return null;
     }
