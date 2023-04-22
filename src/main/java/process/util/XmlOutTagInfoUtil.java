@@ -54,7 +54,8 @@ public class XmlOutTagInfoUtil {
         if(xmlMakerRequest.getXmlTagsInfo() != null) {
             Document xmlDoc = this.getBuilder().newDocument();
             boolean isParent = true;
-            for(ConfigurationMakerRequest.TagInfo tagInfo: xmlMakerRequest.getXmlTagsInfo()) {
+            for(ConfigurationMakerRequest.TagInfo tagInfo:
+                xmlMakerRequest.getXmlTagsInfo()) {
                 String tagKey = tagInfo.getTagKey();
                 String tagParent = tagInfo.getTagParent();
                 String tagValue = tagInfo.getTagValue();

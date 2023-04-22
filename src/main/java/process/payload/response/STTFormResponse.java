@@ -10,7 +10,7 @@ import process.util.lookuputil.GLookup;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SttfResponse {
+public class STTFormResponse {
 
     private Long sttFId;
     private String sttFName;
@@ -18,7 +18,7 @@ public class SttfResponse {
     private GLookup status;
     private GLookup defaultSttf;
 
-    public SttfResponse() {
+    public STTFormResponse() {
     }
 
     public Long getSttFId() {

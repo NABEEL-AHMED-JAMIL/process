@@ -18,6 +18,8 @@ public interface AppUserService {
 
     public AppResponse closeAppUserAccount(UpdateUserProfileRequest updateUserProfileRequest) throws Exception;
 
+    public AppResponse getSubAppUserAccount(String username) throws Exception;
+
     public AppResponse signInAppUser(LoginRequest loginRequest) throws Exception;
 
     public AppResponse signupAppUser(SignupRequest signupRequest) throws Exception;

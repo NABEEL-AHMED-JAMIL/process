@@ -78,7 +78,7 @@ public class LookupValidation {
     public void isValidLookup() {
         if (this.isNull(this.lookupType)) {
             this.setErrorMsg(String.format("LookupType should not be empty at row %s.<br>", rowCounter));
-        } else if (!this.lookupValue.matches(this.REGEX)) {
+        } else if (!this.lookupType.matches(this.REGEX)) {
             this.setErrorMsg(String.format("LookupType should not be non space latter at row %s.<br>", rowCounter));
         }
         if (this.isNull(this.lookupValue)) {

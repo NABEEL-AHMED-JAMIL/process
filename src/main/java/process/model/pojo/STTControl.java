@@ -5,11 +5,10 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-
 import javax.persistence.*;
 import java.sql.Timestamp;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -34,36 +33,32 @@ public class STTControl {
     @GeneratedValue(generator = "sttControlSequenceGenerator")
     private Long sttCId;
 
-    @Column(name = "sttc_order")
-    private Long sttCOrder;
-
-    @Column(name = "control_name", nullable=false)
-    private String controlName;
-
-    @Column(name = "filed_title", nullable = false)
-    private String filedTitle;
-
-    @Column(name = "filed_name", nullable = false)
-    private String filedName;
+    @Column(name = "sttc_name", nullable=false)
+    private String sttCName;
 
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "place_holder")
-    private String placeHolder;
+    @Column(name = "sttc_order")
+    private Long sttCOrder;
 
     // select,multiple select, need the lookup value
     @Column(name = "filed_type")
     private String filedType;
 
-    @Column(name = "filed_look_up")
-    private Long filedLookUp;
+    // label name
+    @Column(name = "filed_title", nullable = false)
+    private String filedTitle;
+
+    // filed name not be space
+    @Column(name = "filed_name", nullable = false)
+    private String filedName;
+
+    @Column(name = "place_holder")
+    private String placeHolder;
 
     @Column(name = "filed_width")
     private Long filedWidth;
-
-    @Column(name = "separate_line")
-    private boolean separateLine;
 
     @Column(name = "min_length")
     private Long minLength;
@@ -71,8 +66,14 @@ public class STTControl {
     @Column(name = "max_length")
     private Long maxLength;
 
+    @Column(name = "filed_lk_value")
+    private String filedLkValue;
+
+    @Column(name = "separate_line")
+    private Boolean separateLine;
+
     @Column(name = "mandatory")
-    private boolean mandatory;
+    private Boolean mandatory;
 
     @Column(name = "is_default",
         columnDefinition = "boolean default false")
@@ -95,10 +96,15 @@ public class STTControl {
             nullable = false)
     private Timestamp dateCreated;
 
-    @ManyToMany(mappedBy = "appUserSTTControls")
-    private Set<STTSection> sttSections = new LinkedHashSet<>();
+    @OneToMany(mappedBy="sttc")
+    private List<AppUserSTTC> appUserSTTC = new ArrayList<>();
 
     public STTControl() {
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
     public Long getSttCId() {
@@ -109,6 +115,22 @@ public class STTControl {
         this.sttCId = sttCId;
     }
 
+    public String getSttCName() {
+        return sttCName;
+    }
+
+    public void setSttCName(String sttCName) {
+        this.sttCName = sttCName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
     public Long getSttCOrder() {
         return sttCOrder;
     }
@@ -117,12 +139,12 @@ public class STTControl {
         this.sttCOrder = sttCOrder;
     }
 
-    public String getControlName() {
-        return controlName;
+    public String getFiledType() {
+        return filedType;
     }
 
-    public void setControlName(String controlName) {
-        this.controlName = controlName;
+    public void setFiledType(String filedType) {
+        this.filedType = filedType;
     }
 
     public String getFiledTitle() {
@@ -141,14 +163,6 @@ public class STTControl {
         this.filedName = filedName;
     }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
     public String getPlaceHolder() {
         return placeHolder;
     }
@@ -157,36 +171,12 @@ public class STTControl {
         this.placeHolder = placeHolder;
     }
 
-    public String getFiledType() {
-        return filedType;
-    }
-
-    public void setFiledType(String filedType) {
-        this.filedType = filedType;
-    }
-
-    public Long getFiledLookUp() {
-        return filedLookUp;
-    }
-
-    public void setFiledLookUp(Long filedLookUp) {
-        this.filedLookUp = filedLookUp;
-    }
-
     public Long getFiledWidth() {
         return filedWidth;
     }
 
     public void setFiledWidth(Long filedWidth) {
         this.filedWidth = filedWidth;
-    }
-
-    public boolean isSeparateLine() {
-        return separateLine;
-    }
-
-    public void setSeparateLine(boolean separateLine) {
-        this.separateLine = separateLine;
     }
 
     public Long getMinLength() {
@@ -205,20 +195,28 @@ public class STTControl {
         this.maxLength = maxLength;
     }
 
-    public boolean isMandatory() {
+    public String getFiledLkValue() {
+        return filedLkValue;
+    }
+
+    public void setFiledLkValue(String filedLkValue) {
+        this.filedLkValue = filedLkValue;
+    }
+
+    public Boolean getSeparateLine() {
+        return separateLine;
+    }
+
+    public void setSeparateLine(Boolean separateLine) {
+        this.separateLine = separateLine;
+    }
+
+    public Boolean getMandatory() {
         return mandatory;
     }
 
-    public void setMandatory(boolean mandatory) {
+    public void setMandatory(Boolean mandatory) {
         this.mandatory = mandatory;
-    }
-
-    public String getPattern() {
-        return pattern;
-    }
-
-    public void setPattern(String pattern) {
-        this.pattern = pattern;
     }
 
     public Boolean getDefault() {
@@ -227,6 +225,14 @@ public class STTControl {
 
     public void setDefault(Boolean aDefault) {
         isDefault = aDefault;
+    }
+
+    public String getPattern() {
+        return pattern;
+    }
+
+    public void setPattern(String pattern) {
+        this.pattern = pattern;
     }
 
     public Long getStatus() {
@@ -261,12 +267,12 @@ public class STTControl {
         this.dateCreated = dateCreated;
     }
 
-    public Set<STTSection> getSttSections() {
-        return sttSections;
+    public List<AppUserSTTC> getAppUserSTTC() {
+        return appUserSTTC;
     }
 
-    public void setSttSections(Set<STTSection> sttSections) {
-        this.sttSections = sttSections;
+    public void setAppUserSTTC(List<AppUserSTTC> appUserSTTC) {
+        this.appUserSTTC = appUserSTTC;
     }
 
     @Override

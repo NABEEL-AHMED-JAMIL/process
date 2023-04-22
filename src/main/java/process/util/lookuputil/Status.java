@@ -30,7 +30,8 @@ public enum Status {
         } else if (lookupValue == 2l) {
             status = DELETE;
         }
-        return new GLookup(status.lookupType, status.lookupValue, status.description);
+        return new GLookup(status.lookupType,
+        status.lookupValue, status.description);
     }
 
     public String getLookupType() {

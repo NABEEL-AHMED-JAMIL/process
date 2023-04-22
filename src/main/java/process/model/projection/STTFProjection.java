@@ -5,7 +5,7 @@ import java.sql.Timestamp;
 /**
  * @author Nabeel Ahmed
  */
-public interface SttfProjection {
+public interface STTFProjection {
 
     public Long getSttFId();
     public String getSttFName();

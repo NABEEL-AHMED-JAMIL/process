@@ -8,7 +8,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import process.model.pojo.STTControl;
 import process.payload.request.*;
 import process.payload.response.AppResponse;
 import process.service.SourceTaskTypeService;
@@ -48,7 +47,7 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addSTT ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -67,10 +66,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while editSTT ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- deleteSTT
+     * @apiNote :- Api use to delete stt (source task type)
+     * @param sttRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/deleteSTT", method = RequestMethod.POST)
     public ResponseEntity<?> deleteSTT(@RequestBody STTRequest sttRequest) {
@@ -79,22 +85,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSTT ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/viewSTT", method = RequestMethod.POST)
-    public ResponseEntity<?> viewSTT() {
-        try {
-            return null;
-        } catch (Exception ex) {
-            logger.error("An error occurred while viewSTT ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
+    /**
+     * api-status :- done
+     * @apiName :- fetchSTTBySttId
+     * @apiNote :- Api use to fetch stt by stt id(source task type)
+     * @param sttRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTBySttId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTBySttId(@RequestBody STTRequest sttRequest) {
@@ -103,10 +104,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTT ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- fetchSTT
+     * @apiNote :- Api use to fetch stt(source task type)
+     * @param sttRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTT", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTT(@RequestBody STTRequest sttRequest) {
@@ -115,35 +123,29 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTT ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/downloadSTTTree", method = RequestMethod.POST)
-    public ResponseEntity<?> downloadSTTTree() {
+    @RequestMapping(value = "/linkSTTWithAppUser", method = RequestMethod.POST)
+    public ResponseEntity<?> linkSTTWithAppUser(@RequestBody STTRequest sttRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.linkSTTWithAppUser(sttRequest), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while downloadSTTTree ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while linkSTTWithAppUser ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/linkSTTWithFrom", method = RequestMethod.POST)
-    public ResponseEntity<?> linkSTTWithFrom() {
-        try {
-            return null;
-        } catch (Exception ex) {
-            logger.error("An error occurred while linkSTTWithFrom ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    // STTF
+    /**
+     * api-status :- done
+     * @apiName :- addSTTF
+     * @apiNote :- Api use to add sttf(source task type form)
+     * @param sttFormRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/addSTTF", method = RequestMethod.POST)
     public ResponseEntity<?> addSTTF(@RequestBody STTFormRequest sttFormRequest) {
@@ -152,10 +154,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addSTTF ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- editSTTF
+     * @apiNote :- Api use to edit sttf(source task type form)
+     * @param sttFormRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/editSTTF", method = RequestMethod.POST)
     public ResponseEntity<?> editSTTF(@RequestBody STTFormRequest sttFormRequest) {
@@ -164,10 +173,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while editSTTF ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- deleteSTTF
+     * @apiNote :- Api use to delete sttf(source task type form)
+     * @param sttFormRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/deleteSTTF", method = RequestMethod.POST)
     public ResponseEntity<?> deleteSTTF(@RequestBody STTFormRequest sttFormRequest) {
@@ -176,22 +192,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSTTF ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/viewSTTF", method = RequestMethod.POST)
-    public ResponseEntity<?> viewSTTF() {
-        try {
-            return null;
-        } catch (Exception ex) {
-            logger.error("An error occurred while viewSTTF ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
+    /**
+     * api-status :- done
+     * @apiName :- fetchSTTFBySttfId
+     * @apiNote :- Api use to fetch sttf with sttf id(source task type form)
+     * @param sttFormRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTFBySttfId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTFBySttfId(@RequestBody STTFormRequest sttFormRequest) {
@@ -200,10 +211,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTFBySttfId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                 "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- fetchSTTF
+     * @apiNote :- Api use to fetch sttf(source task type form)
+     * @param sttFormRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTF", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTF(@RequestBody STTFormRequest sttFormRequest) {
@@ -212,35 +230,29 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTF ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/downloadSTTFTree", method = RequestMethod.POST)
-    public ResponseEntity<?> downloadSTTFTree() {
-        try {
-            return null;
-        } catch (Exception ex) {
-            logger.error("An error occurred while downloadSTTFTree ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/linkSTTFWithFrom", method = RequestMethod.POST)
-    public ResponseEntity<?> linkSTTFWithFrom() {
+    public ResponseEntity<?> linkSTTFWithFrom(@RequestBody STTFormRequest sttFormRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.linkSTTFWithFrom(sttFormRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while linkSTTFWithFrom ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
-    // STTS
+    /**
+     * api-status :- done
+     * @apiName :- addSTTS
+     * @apiNote :- Api use to add stts(source task type section)
+     * @param sttSectionRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/addSTTS", method = RequestMethod.POST)
     public ResponseEntity<?> addSTTS(@RequestBody STTSectionRequest sttSectionRequest) {
@@ -249,10 +261,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addSTTS ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- editSTTS
+     * @apiNote :- Api use to edit stts(source task type section)
+     * @param sttSectionRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/editSTTS", method = RequestMethod.POST)
     public ResponseEntity<?> editSTTS(@RequestBody STTSectionRequest sttSectionRequest) {
@@ -261,10 +280,17 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while editSTTS ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- editSTTS
+     * @apiNote :- Api use to delete stts(source task type section)
+     * @param sttSectionRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/deleteSTTS", method = RequestMethod.POST)
     public ResponseEntity<?> deleteSTTS(@RequestBody STTSectionRequest sttSectionRequest) {
@@ -273,26 +299,27 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSTTS ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/viewSTTS", method = RequestMethod.POST)
-    public ResponseEntity<?> viewSTTS() {
+    @RequestMapping(value = "/fetchSTTSBySttsId", method = RequestMethod.POST)
+    public ResponseEntity<?> fetchSTTSBySttsId(@RequestBody STTSectionRequest sttSectionRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTSBySttsId(sttSectionRequest), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while viewSTTS ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while fetchSTTSBySttsId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
+
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTS", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchSTTS() {
+    public ResponseEntity<?> fetchSTTS(@RequestBody STTSectionRequest sttSectionRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTS(sttSectionRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTS ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
@@ -328,9 +355,9 @@ public class SourceTaskTypeRestApi {
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/addSTTC", method = RequestMethod.POST)
-    public ResponseEntity<?> addSTTC(@RequestBody STTControl sttControl) {
+    public ResponseEntity<?> addSTTC(@RequestBody STTControlRequest sttControlRequest) {
         try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.addSTTC(sttControl), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskTypeService.addSTTC(sttControlRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
@@ -340,9 +367,9 @@ public class SourceTaskTypeRestApi {
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/editSTTC", method = RequestMethod.POST)
-    public ResponseEntity<?> editSTTC(@RequestBody STTControl sttControl) {
+    public ResponseEntity<?> editSTTC(@RequestBody STTControlRequest sttControlRequest) {
         try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.editSTTC(sttControl), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskTypeService.editSTTC(sttControlRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while editSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
@@ -352,9 +379,9 @@ public class SourceTaskTypeRestApi {
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/deleteSTTC", method = RequestMethod.POST)
-    public ResponseEntity<?> deleteSTTC(@RequestBody STTControl sttControl) {
+    public ResponseEntity<?> deleteSTTC(@RequestBody STTControlRequest sttControlRequest) {
         try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.deleteSTTC(sttControl), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskTypeService.deleteSTTC(sttControlRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,

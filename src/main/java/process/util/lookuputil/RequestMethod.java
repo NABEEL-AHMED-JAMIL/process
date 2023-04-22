@@ -13,7 +13,6 @@ public enum RequestMethod {
     PUT("PUT", 3l, "PUT"),
     PATCH("PATCH", 4l, "PATCH");
 
-
     private String lookupType;
     private Long lookupValue;
     private String description;
@@ -37,7 +36,8 @@ public enum RequestMethod {
         } else if (lookupValue == 4) {
             requestMethod = PATCH;
         }
-        return new GLookup(requestMethod.lookupType, requestMethod.lookupValue, requestMethod.description);
+        return new GLookup(requestMethod.lookupType,
+            requestMethod.lookupValue, requestMethod.description);
     }
 
     public String getLookupType() {

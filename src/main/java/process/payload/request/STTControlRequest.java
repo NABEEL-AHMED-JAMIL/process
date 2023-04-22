@@ -1,45 +1,61 @@
 package process.payload.request;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 
+/**
+ * @author Nabeel Ahmed
+ */
+@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTControlRequest {
 
-    private Long sttcId;
-    private String controlName;
+    private Long sttCId;
+    private Long sttCOrder;
+    private String sttCName;
     private String description;
-    private String filedLookUpId;
-    private String filedName;
-    private String filedNewLine;
-    private String filedTitle;
     private String filedType;
-    private String filedWidth;
-    private Boolean mandatory;
-    private Long maxLength;
+    private String filedTitle;
+    private String filedName;
+    private String placeHolder;
+    private Long filedWidth;
     private Long minLength;
+    private Long maxLength;
+    private Long filedLookUp;
+    private boolean separateLine;
+    private boolean mandatory;
+    private boolean defaultSttC;
     private String pattern;
-    private String place_holder;
-    private Boolean separateLine;
     private Long status;
-    private Long  sttcOrder;
+    private boolean filedNewLine;
     private ParseRequest accessUserDetail;
 
     public STTControlRequest() {
     }
 
-    public Long getSttcId() {
-        return sttcId;
+    public Long getSttCId() {
+        return sttCId;
     }
 
-    public void setSttcId(Long sttcId) {
-        this.sttcId = sttcId;
+    public void setSttCId(Long sttCId) {
+        this.sttCId = sttCId;
     }
 
-    public String getControlName() {
-        return controlName;
+    public Long getSttCOrder() {
+        return sttCOrder;
     }
 
-    public void setControlName(String controlName) {
-        this.controlName = controlName;
+    public void setSttCOrder(Long sttCOrder) {
+        this.sttCOrder = sttCOrder;
+    }
+
+    public String getSttCName() {
+        return sttCName;
+    }
+
+    public void setSttCName(String sttCName) {
+        this.sttCName = sttCName;
     }
 
     public String getDescription() {
@@ -50,28 +66,12 @@ public class STTControlRequest {
         this.description = description;
     }
 
-    public String getFiledLookUpId() {
-        return filedLookUpId;
+    public String getFiledType() {
+        return filedType;
     }
 
-    public void setFiledLookUpId(String filedLookUpId) {
-        this.filedLookUpId = filedLookUpId;
-    }
-
-    public String getFiledName() {
-        return filedName;
-    }
-
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
-    }
-
-    public String getFiledNewLine() {
-        return filedNewLine;
-    }
-
-    public void setFiledNewLine(String filedNewLine) {
-        this.filedNewLine = filedNewLine;
+    public void setFiledType(String filedType) {
+        this.filedType = filedType;
     }
 
     public String getFiledTitle() {
@@ -82,36 +82,28 @@ public class STTControlRequest {
         this.filedTitle = filedTitle;
     }
 
-    public String getFiledType() {
-        return filedType;
+    public String getFiledName() {
+        return filedName;
     }
 
-    public void setFiledType(String filedType) {
-        this.filedType = filedType;
+    public void setFiledName(String filedName) {
+        this.filedName = filedName;
     }
 
-    public String getFiledWidth() {
+    public String getPlaceHolder() {
+        return placeHolder;
+    }
+
+    public void setPlaceHolder(String placeHolder) {
+        this.placeHolder = placeHolder;
+    }
+
+    public Long getFiledWidth() {
         return filedWidth;
     }
 
-    public void setFiledWidth(String filedWidth) {
+    public void setFiledWidth(Long filedWidth) {
         this.filedWidth = filedWidth;
-    }
-
-    public Boolean getMandatory() {
-        return mandatory;
-    }
-
-    public void setMandatory(Boolean mandatory) {
-        this.mandatory = mandatory;
-    }
-
-    public Long getMaxLength() {
-        return maxLength;
-    }
-
-    public void setMaxLength(Long maxLength) {
-        this.maxLength = maxLength;
     }
 
     public Long getMinLength() {
@@ -122,28 +114,52 @@ public class STTControlRequest {
         this.minLength = minLength;
     }
 
+    public Long getMaxLength() {
+        return maxLength;
+    }
+
+    public void setMaxLength(Long maxLength) {
+        this.maxLength = maxLength;
+    }
+
+    public Long getFiledLookUp() {
+        return filedLookUp;
+    }
+
+    public void setFiledLookUp(Long filedLookUp) {
+        this.filedLookUp = filedLookUp;
+    }
+
+    public boolean isSeparateLine() {
+        return separateLine;
+    }
+
+    public void setSeparateLine(boolean separateLine) {
+        this.separateLine = separateLine;
+    }
+
+    public boolean isMandatory() {
+        return mandatory;
+    }
+
+    public void setMandatory(boolean mandatory) {
+        this.mandatory = mandatory;
+    }
+
+    public boolean isDefaultSttC() {
+        return defaultSttC;
+    }
+
+    public void setDefaultSttC(boolean defaultSttC) {
+        this.defaultSttC = defaultSttC;
+    }
+
     public String getPattern() {
         return pattern;
     }
 
     public void setPattern(String pattern) {
         this.pattern = pattern;
-    }
-
-    public String getPlace_holder() {
-        return place_holder;
-    }
-
-    public void setPlace_holder(String place_holder) {
-        this.place_holder = place_holder;
-    }
-
-    public Boolean getSeparateLine() {
-        return separateLine;
-    }
-
-    public void setSeparateLine(Boolean separateLine) {
-        this.separateLine = separateLine;
     }
 
     public Long getStatus() {
@@ -154,12 +170,12 @@ public class STTControlRequest {
         this.status = status;
     }
 
-    public Long getSttcOrder() {
-        return sttcOrder;
+    public boolean isFiledNewLine() {
+        return filedNewLine;
     }
 
-    public void setSttcOrder(Long sttcOrder) {
-        this.sttcOrder = sttcOrder;
+    public void setFiledNewLine(boolean filedNewLine) {
+        this.filedNewLine = filedNewLine;
     }
 
     public ParseRequest getAccessUserDetail() {

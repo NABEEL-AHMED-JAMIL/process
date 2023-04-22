@@ -10,6 +10,7 @@ import com.google.gson.Gson;
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ForgotPasswordRequest {
+
     private String email;
     // vm detail
     private Long appUserId;

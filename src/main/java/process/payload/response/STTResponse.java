@@ -10,7 +10,7 @@ import process.util.lookuputil.GLookup;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SttResponse {
+public class STTResponse {
 
     private Long sttId;
     private String serviceName;
@@ -21,7 +21,7 @@ public class SttResponse {
     private KafkaTaskTypeResponse kafkaTaskType;
     private ApiTaskTypeResponse apiTaskType;
 
-    public SttResponse() {
+    public STTResponse() {
     }
 
     public Long getSttId() {

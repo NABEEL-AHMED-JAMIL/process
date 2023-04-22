@@ -1,12 +1,13 @@
 package process.model.pojo;
 
 import com.google.gson.Gson;
-import org.hibernate.annotations.GenericGenerator;
-
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import org.hibernate.annotations.GenericGenerator;
 
 @Entity
 @Table(	name = "app_users",
@@ -59,13 +60,17 @@ public class AppUser {
         inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> appUserRoles = new HashSet<>();
 
-    @ManyToMany(cascade = {
-        CascadeType.PERSIST, CascadeType.MERGE
-    }, fetch = FetchType.LAZY)
-    @JoinTable(	name = "app_user_stt",
-        joinColumns = @JoinColumn(name = "app_user_id"),
-        inverseJoinColumns = @JoinColumn(name = "stt_id"))
-    private Set<STT> appUserSTTS = new HashSet<>();
+    @OneToMany(mappedBy="appUser")
+    private List<AppUserSTT> appUserSTT = new ArrayList<>();
+
+    @OneToMany(mappedBy="appUser")
+    private List<AppUserSTTF> appUserSTTF = new ArrayList<>();
+
+    @OneToMany(mappedBy="appUser")
+    private List<AppUserSTTS> appUserSTTS = new ArrayList<>();
+
+    @OneToMany(mappedBy="appUser")
+    private List<AppUserSTTC> appUserSTTC = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name = "parent_user_id")
@@ -153,24 +158,44 @@ public class AppUser {
         this.appUserRoles = appUserRoles;
     }
 
+    public List<AppUserSTT> getAppUserSTT() {
+        return appUserSTT;
+    }
+
+    public void setAppUserSTT(List<AppUserSTT> appUserSTT) {
+        this.appUserSTT = appUserSTT;
+    }
+
+    public List<AppUserSTTF> getAppUserSTTF() {
+        return appUserSTTF;
+    }
+
+    public void setAppUserSTTF(List<AppUserSTTF> appUserSTTF) {
+        this.appUserSTTF = appUserSTTF;
+    }
+
+    public List<AppUserSTTS> getAppUserSTTS() {
+        return appUserSTTS;
+    }
+
+    public void setAppUserSTTS(List<AppUserSTTS> appUserSTTS) {
+        this.appUserSTTS = appUserSTTS;
+    }
+
+    public List<AppUserSTTC> getAppUserSTTC() {
+        return appUserSTTC;
+    }
+
+    public void setAppUserSTTC(List<AppUserSTTC> appUserSTTC) {
+        this.appUserSTTC = appUserSTTC;
+    }
+
     public AppUser getParentAppUser() {
         return parentAppUser;
     }
 
     public void setParentAppUser(AppUser parentAppUser) {
         this.parentAppUser = parentAppUser;
-    }
-
-    public Set<STT> getAppUserSourceTaskTypes() {
-        return appUserSTTS;
-    }
-
-    public void setAppUserSourceTaskTypes(Set<STT> appUserSTTS) {
-        this.appUserSTTS = appUserSTTS;
-    }
-
-    public void addAppUserSourceTaskTypes(STT stt) {
-        this.appUserSTTS.add(stt);
     }
 
     public Set<AppUser> getAppUserChildren() {

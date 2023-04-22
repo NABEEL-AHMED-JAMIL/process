@@ -8,8 +8,8 @@ import com.google.gson.Gson;
 public enum TaskType {
 
     API("API", 0l, "Api"),
-    AWS_SQS("AWS_SQS", 1l, "Aws SQS"),
-    WEB_SOCKET("WEB_SOCKET", 2l, "Web Socket"),
+    AWS_SQS("AWS_SQS", 1l, "SQS"),
+    WEB_SOCKET("WEB_SOCKET", 2l, "WS"),
     KAFKA("KAFKA", 3l, "Kafka");
 
     private String lookupType;
@@ -57,7 +57,8 @@ public enum TaskType {
         } else if (lookupValue == 3l) {
             taskType = KAFKA;
         }
-        return new GLookup(taskType.lookupType, taskType.lookupValue, taskType.description);
+        return new GLookup(taskType.lookupType,
+            taskType.lookupValue, taskType.description);
     }
 
     @Override

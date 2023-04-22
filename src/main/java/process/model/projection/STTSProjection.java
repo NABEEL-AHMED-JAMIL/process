@@ -5,17 +5,17 @@ import java.sql.Timestamp;
 /**
  * @author Nabeel Ahmed
  */
-public interface SttProjection {
+public interface STTSProjection {
 
-    public Long getSttId();
-    public String getServiceName();
+    public Long getSttSId();
+    public String getSttSName();
     public String getDescription();
-    public Long getTaskType();
+    public Long getSttSOrder();
     public Long getStatus();
-    public boolean getSttDefault();
+    public Boolean getSttSDefault();
     public Timestamp getDateCreated();
-    public Long getTotalUser();
-    public Long getTotalTask();
+    public Long getTotalSTT();
     public Long getTotalForm();
+    public Long getTotalControl();
 
 }

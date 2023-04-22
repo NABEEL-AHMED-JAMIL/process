@@ -1,6 +1,5 @@
 package process.service;
 
-import process.model.pojo.STTControl;
 import process.payload.request.*;
 import process.payload.response.AppResponse;
 
@@ -9,60 +8,54 @@ import process.payload.response.AppResponse;
  */
 public interface SourceTaskTypeService {
 
+    // done
     public AppResponse addSTT(STTRequest sttRequest) throws Exception;
 
+    // done
     public AppResponse editSTT(STTRequest sttRequest) throws Exception;
 
+    // done
     public AppResponse deleteSTT(STTRequest sttRequest) throws Exception;
 
-    public AppResponse viewSTT() throws Exception;
-
+    // done
     public AppResponse fetchSTTBySttId(STTRequest sttRequest) throws Exception;
 
+    // done
     public AppResponse fetchSTT(STTRequest sttRequest) throws Exception;
 
-    public AppResponse downloadSTTTree() throws Exception;
+    public AppResponse linkSTTWithAppUser(STTRequest sttRequest) throws Exception;
 
-    public AppResponse linkSTTWithFrom() throws Exception;
-
-    // STTF
+    // done
     public AppResponse addSTTF(STTFormRequest sttFormRequest) throws Exception;
 
+    // done
     public AppResponse editSTTF(STTFormRequest sttFormRequest) throws Exception;
 
     public AppResponse deleteSTTF(STTFormRequest sttFormRequest) throws Exception;
-
-    public AppResponse viewSTTF() throws Exception;
 
     public AppResponse fetchSTTFBySttfId(STTFormRequest sttFormRequest) throws Exception;
 
     public AppResponse fetchSTTF(STTFormRequest sttFormRequest) throws Exception;
 
-    public AppResponse downloadSTTFTree() throws Exception;
+    public AppResponse linkSTTFWithFrom(STTFormRequest sttFormRequest) throws Exception;
 
-    public AppResponse linkSTTFWithFrom() throws Exception;
-
-    // STTS
     public AppResponse addSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
     public AppResponse editSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
     public AppResponse deleteSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
-    public AppResponse viewSTTS() throws Exception;
+    public AppResponse fetchSTTSBySttsId(STTSectionRequest sttSectionRequest) throws Exception;
 
-    public AppResponse fetchSTTS() throws Exception;
-
-    public AppResponse downloadSTTSTree() throws Exception;
+    public AppResponse fetchSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
     public AppResponse linkSTTSWithFrom() throws Exception;
 
-    // STTC
-    public AppResponse addSTTC(STTControl sttControl) throws Exception;
+    public AppResponse addSTTC(STTControlRequest sttControlRequest) throws Exception;
 
-    public AppResponse editSTTC(STTControl sttControl) throws Exception;
+    public AppResponse editSTTC(STTControlRequest sttControlRequest) throws Exception;
 
-    public AppResponse deleteSTTC(STTControl sttControl) throws Exception;
+    public AppResponse deleteSTTC(STTControlRequest sttControlRequest) throws Exception;
 
     public AppResponse fetchSTTC() throws Exception;
 
@@ -70,7 +63,6 @@ public interface SourceTaskTypeService {
 
     public AppResponse linkSTTCWithFrom();
 
-    // bath
     public AppResponse downloadSTTCommonTemplateFile();
 
     public AppResponse downloadSTTCommon();

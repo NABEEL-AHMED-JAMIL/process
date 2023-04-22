@@ -10,6 +10,7 @@ import com.google.gson.Gson;
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTFormRequest {
+
     private Long sttfId;
     private String sttfName; // yes
     private String description; // yes

@@ -11,7 +11,7 @@ import java.sql.Timestamp;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SttfListResponse {
+public class STTFormListResponse {
 
     private Long sttFId;
     private String sttFName;
@@ -23,7 +23,7 @@ public class SttfListResponse {
     private Long totalSection = 0l;
     private Long totalControl = 0l;
 
-    public SttfListResponse() {
+    public STTFormListResponse() {
     }
 
     public Long getSttFId() {

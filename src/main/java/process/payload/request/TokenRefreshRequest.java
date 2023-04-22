@@ -10,6 +10,7 @@ import com.google.gson.Gson;
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TokenRefreshRequest {
+
     private String refreshToken;
 
     public TokenRefreshRequest() {

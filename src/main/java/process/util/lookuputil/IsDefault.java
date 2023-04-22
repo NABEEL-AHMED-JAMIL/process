@@ -44,14 +44,15 @@ public enum IsDefault {
         this.description = description;
     }
 
-    public static GLookup getDefaultByValue(boolean lookupValue) {
+    public static GLookup getDefaultByValue(Boolean lookupValue) {
         IsDefault aDefault = null;
          if (!lookupValue) {
             aDefault = NO_DEFAULT;
         } else if (lookupValue) {
              aDefault = YES_DEFAULT;
          }
-        return new GLookup(aDefault.lookupType, aDefault.lookupValue, aDefault.description);
+        return new GLookup(aDefault.lookupType, aDefault.lookupValue,
+            aDefault.description);
     }
 
 

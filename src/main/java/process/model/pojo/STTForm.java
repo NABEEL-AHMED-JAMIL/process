@@ -5,12 +5,11 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-
 import javax.persistence.*;
 import java.sql.Timestamp;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
+
 
 /**
  * @author Nabeel Ahmed
@@ -49,23 +48,14 @@ public class STTForm {
         columnDefinition = "boolean default false")
     private Boolean isDefault;
 
+    @OneToMany(mappedBy="sttf")
+    private List<AppUserSTTF> appUserSTTF = new ArrayList<>();
+
     @ManyToOne
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
 
-    @ManyToMany(mappedBy = "appUserSTTForms")
-    private Set<STT> STTS = new LinkedHashSet<>();
-
-    @ManyToMany(cascade = {
-        CascadeType.PERSIST, CascadeType.MERGE
-    }, fetch = FetchType.LAZY)
-    @JoinTable(	name = "app_user_stts",
-        joinColumns = @JoinColumn(name = "sttf_id"),
-        inverseJoinColumns = @JoinColumn(name = "stts_id"))
-    private Set<STTSection> appUserSTTSections = new HashSet<>();
-
-    @Column(name = "date_created",
-        nullable = false)
+    @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
     public STTForm() {
@@ -108,12 +98,20 @@ public class STTForm {
         this.status = status;
     }
 
-    public Boolean isDefault() {
+    public Boolean getDefault() {
         return isDefault;
     }
 
     public void setDefault(Boolean aDefault) {
         isDefault = aDefault;
+    }
+
+    public List<AppUserSTTF> getAppUserSTTF() {
+        return appUserSTTF;
+    }
+
+    public void setAppUserSTTF(List<AppUserSTTF> appUserSTTF) {
+        this.appUserSTTF = appUserSTTF;
     }
 
     public AppUser getAppUser() {
@@ -122,22 +120,6 @@ public class STTForm {
 
     public void setAppUser(AppUser appUser) {
         this.appUser = appUser;
-    }
-
-    public Set<STT> getSourceTaskTypes() {
-        return STTS;
-    }
-
-    public void setSourceTaskTypes(Set<STT> STTS) {
-        this.STTS = STTS;
-    }
-
-    public Set<STTSection> getAppUserSTTSections() {
-        return appUserSTTSections;
-    }
-
-    public void setAppUserSTTSections(Set<STTSection> appUserSTTSections) {
-        this.appUserSTTSections = appUserSTTSections;
     }
 
     public Timestamp getDateCreated() {

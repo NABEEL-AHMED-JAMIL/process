@@ -3,6 +3,7 @@ package process.payload.response;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import process.util.lookuputil.GLookup;
 
 import java.sql.Timestamp;
 
@@ -15,7 +16,7 @@ public class RoleResponse {
 
     private Long roleId;
     private String roleName;
-    private Long status;
+    private GLookup status;
     private Timestamp dateCreated;
 
     public RoleResponse() {
@@ -37,11 +38,11 @@ public class RoleResponse {
         this.roleName = roleName;
     }
 
-    public Long getStatus() {
+    public GLookup getStatus() {
         return status;
     }
 
-    public void setStatus(Long status) {
+    public void setStatus(GLookup status) {
         this.status = status;
     }
 

@@ -3,7 +3,7 @@ package process.payload.response;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-
+import process.util.lookuputil.GLookup;
 import java.sql.Timestamp;
 
 /**
@@ -11,20 +11,18 @@ import java.sql.Timestamp;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SttsListResponse {
+public class STTSectionResponse {
 
     private Long sttSId;
     private String sttSName;
     private String description;
     private Long sttSOrder;
-    private Long status;
-    private Boolean isDefault;
+    private GLookup status;
+    private GLookup defaultStts;
     private Timestamp dateCreated;
-    private Long totalForm = 0l;
-    private Long totalSTT = 0l;
-    private Long totalControl = 0l;
 
-    public SttsListResponse() {}
+    public STTSectionResponse() {
+    }
 
     public Long getSttSId() {
         return sttSId;
@@ -58,20 +56,20 @@ public class SttsListResponse {
         this.sttSOrder = sttSOrder;
     }
 
-    public Long getStatus() {
+    public GLookup getStatus() {
         return status;
     }
 
-    public void setStatus(Long status) {
+    public void setStatus(GLookup status) {
         this.status = status;
     }
 
-    public Boolean getDefault() {
-        return isDefault;
+    public GLookup getDefaultStts() {
+        return defaultStts;
     }
 
-    public void setDefault(Boolean aDefault) {
-        isDefault = aDefault;
+    public void setDefaultStts(GLookup defaultStts) {
+        this.defaultStts = defaultStts;
     }
 
     public Timestamp getDateCreated() {
@@ -80,30 +78,6 @@ public class SttsListResponse {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
-    }
-
-    public Long getTotalForm() {
-        return totalForm;
-    }
-
-    public void setTotalForm(Long totalForm) {
-        this.totalForm = totalForm;
-    }
-
-    public Long getTotalSTT() {
-        return totalSTT;
-    }
-
-    public void setTotalSTT(Long totalSTT) {
-        this.totalSTT = totalSTT;
-    }
-
-    public Long getTotalControl() {
-        return totalControl;
-    }
-
-    public void setTotalControl(Long totalControl) {
-        this.totalControl = totalControl;
     }
 
     @Override

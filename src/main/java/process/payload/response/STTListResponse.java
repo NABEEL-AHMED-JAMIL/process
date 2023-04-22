@@ -4,8 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.util.lookuputil.GLookup;
-import process.util.lookuputil.TaskType;
-
 import java.sql.Timestamp;
 
 /**
@@ -13,7 +11,7 @@ import java.sql.Timestamp;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SttListResponse {
+public class STTListResponse {
 
     private Long sttId;
     private String serviceName;
@@ -26,7 +24,7 @@ public class SttListResponse {
     private Long totalTask = 0l;
     private Long totalForm = 0l;
 
-    public SttListResponse() {
+    public STTListResponse() {
     }
 
     public Long getSttId() {

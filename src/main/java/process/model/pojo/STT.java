@@ -7,9 +7,8 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 /**
  * @author Nabeel Ahmed
@@ -34,23 +33,20 @@ public class STT {
     @GeneratedValue(generator = "sourceTaskTypeSequenceGenerator")
     private Long sttId;
 
-    @Column(name = "service_name",
-        nullable = false)
+    @Column(name = "service_name", nullable = false)
     private String serviceName;
 
-    @Column(name = "description",
-         nullable = false)
+    @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "task_type",
-        nullable = false, updatable = false)
+    @Column(name = "task_type", nullable = false, updatable = false)
     private Long taskType;
 
     @OneToMany(mappedBy = "stt")
-    private List<ApiTaskType> apiTaskType;
+    private List<ApiTaskType> apiTaskType = new ArrayList<>();
 
     @OneToMany(mappedBy = "stt")
-    private List<KafkaTaskType> kafkaTaskType;
+    private List<KafkaTaskType> kafkaTaskType = new ArrayList<>();
 
     @Column(name = "status", nullable = false)
     private Long status;
@@ -58,24 +54,17 @@ public class STT {
     /**default source task type for testing
      * Test Loop
      * if any other*/
-    @Column(name = "is_default",
-        nullable = false)
+    @Column(name = "is_default", nullable = false)
     private Boolean isDefault;
+
+    @OneToMany(mappedBy="stt")
+    private List<AppUserSTT> appUserSTT = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
 
-    @ManyToMany(cascade = {
-        CascadeType.PERSIST, CascadeType.MERGE
-    }, fetch = FetchType.LAZY)
-    @JoinTable(	name = "app_user_sttf",
-        joinColumns = @JoinColumn(name = "stt_id"),
-        inverseJoinColumns = @JoinColumn(name = "sttf_id"))
-    private Set<STTForm> appUserSTTForms = new HashSet<>();
-
-    @Column(name = "date_created",
-        nullable = false)
+    @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
     public STT() {}
@@ -141,12 +130,20 @@ public class STT {
         this.status = status;
     }
 
-    public Boolean isDefault() {
+    public Boolean getDefault() {
         return isDefault;
     }
 
     public void setDefault(Boolean aDefault) {
         isDefault = aDefault;
+    }
+
+    public List<AppUserSTT> getAppUserSTT() {
+        return appUserSTT;
+    }
+
+    public void setAppUserSTT(List<AppUserSTT> appUserSTT) {
+        this.appUserSTT = appUserSTT;
     }
 
     public AppUser getAppUser() {
@@ -163,14 +160,6 @@ public class STT {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
-    }
-
-    public Set<STTForm> getAppUserSTTForms() {
-        return appUserSTTForms;
-    }
-
-    public void setAppUserSTTForms(Set<STTForm> appUserSTTForms) {
-        this.appUserSTTForms = appUserSTTForms;
     }
 
     @Override

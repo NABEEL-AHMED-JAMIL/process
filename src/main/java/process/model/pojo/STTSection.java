@@ -7,9 +7,8 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -50,20 +49,12 @@ public class STTSection {
         columnDefinition = "boolean default false")
     private Boolean isDefault;
 
+    @OneToMany(mappedBy="stts")
+    private List<AppUserSTTS> appUserSTTS = new ArrayList<>();
+
     @ManyToOne
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
-
-    @ManyToMany(mappedBy = "appUserSTTSections")
-    private Set<STTForm> sttForms = new LinkedHashSet<>();
-
-    @ManyToMany(cascade = {
-       CascadeType.PERSIST, CascadeType.MERGE
-    }, fetch = FetchType.LAZY)
-    @JoinTable(	name = "app_user_sttc",
-        joinColumns = @JoinColumn(name = "stts_id"),
-        inverseJoinColumns = @JoinColumn(name = "sttc_id"))
-    private Set<STTControl> appUserSTTControls = new HashSet<>();
 
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
@@ -116,14 +107,6 @@ public class STTSection {
         this.status = status;
     }
 
-    public AppUser getAppUser() {
-        return appUser;
-    }
-
-    public void setAppUser(AppUser appUser) {
-        this.appUser = appUser;
-    }
-
     public Boolean getDefault() {
         return isDefault;
     }
@@ -132,20 +115,20 @@ public class STTSection {
         isDefault = aDefault;
     }
 
-    public Set<STTForm> getSttForms() {
-        return sttForms;
+    public List<AppUserSTTS> getAppUserSTTS() {
+        return appUserSTTS;
     }
 
-    public void setSttForms(Set<STTForm> sttForms) {
-        this.sttForms = sttForms;
+    public void setAppUserSTTS(List<AppUserSTTS> appUserSTTS) {
+        this.appUserSTTS = appUserSTTS;
     }
 
-    public Set<STTControl> getAppUserSTTControls() {
-        return appUserSTTControls;
+    public AppUser getAppUser() {
+        return appUser;
     }
 
-    public void setAppUserSTTControls(Set<STTControl> appUserSTTControls) {
-        this.appUserSTTControls = appUserSTTControls;
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
     }
 
     public Timestamp getDateCreated() {
