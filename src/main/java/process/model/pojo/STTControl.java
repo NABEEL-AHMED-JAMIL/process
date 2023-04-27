@@ -86,8 +86,7 @@ public class STTControl {
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
 
-    @Column(name = "date_created",
-            nullable = false)
+    @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
     @OneToMany(mappedBy="sttc")

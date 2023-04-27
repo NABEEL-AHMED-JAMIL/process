@@ -8,27 +8,20 @@ import process.payload.response.AppResponse;
  */
 public interface SourceTaskTypeService {
 
-    // done
     public AppResponse addSTT(STTRequest sttRequest) throws Exception;
 
-    // done
     public AppResponse editSTT(STTRequest sttRequest) throws Exception;
 
-    // done
     public AppResponse deleteSTT(STTRequest sttRequest) throws Exception;
 
-    // done
     public AppResponse fetchSTTBySttId(STTRequest sttRequest) throws Exception;
 
-    // done
     public AppResponse fetchSTT(STTRequest sttRequest) throws Exception;
 
     public AppResponse linkSTTWithAppUser(STTRequest sttRequest) throws Exception;
 
-    // done
     public AppResponse addSTTF(STTFormRequest sttFormRequest) throws Exception;
 
-    // done
     public AppResponse editSTTF(STTFormRequest sttFormRequest) throws Exception;
 
     public AppResponse deleteSTTF(STTFormRequest sttFormRequest) throws Exception;
@@ -49,7 +42,7 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
-    public AppResponse linkSTTSWithFrom() throws Exception;
+    public AppResponse linkSTTSWithFrom(STTSectionRequest sttSectionRequest) throws Exception;
 
     public AppResponse addSTTC(STTControlRequest sttControlRequest) throws Exception;
 
@@ -57,9 +50,11 @@ public interface SourceTaskTypeService {
 
     public AppResponse deleteSTTC(STTControlRequest sttControlRequest) throws Exception;
 
-    public AppResponse fetchSTTC() throws Exception;
+    public AppResponse fetchSTTCBySttcId(STTControlRequest sttControlRequest) throws Exception;
 
-    public AppResponse linkSTTCWithFrom();
+    public AppResponse fetchSTTC(STTControlRequest sttControlRequest) throws Exception;
+
+    public AppResponse linkSTTCWithFrom(STTControlRequest sttControlRequest);
 
     public AppResponse downloadSTTCommonTemplateFile();
 

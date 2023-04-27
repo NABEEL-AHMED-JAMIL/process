@@ -18,7 +18,7 @@ public class STTListResponse {
     private String description;
     private GLookup status;
     private GLookup taskType;
-    private boolean isDefault;
+    private GLookup sttDefault;
     private Timestamp dateCreated;
     private Long totalUser = 0l;
     private Long totalTask = 0l;
@@ -67,12 +67,12 @@ public class STTListResponse {
         this.taskType = taskType;
     }
 
-    public boolean isDefault() {
-        return isDefault;
+    public GLookup getSttDefault() {
+        return sttDefault;
     }
 
-    public void setDefault(boolean aDefault) {
-        isDefault = aDefault;
+    public void setSttDefault(GLookup sttDefault) {
+        this.sttDefault = sttDefault;
     }
 
     public Timestamp getDateCreated() {

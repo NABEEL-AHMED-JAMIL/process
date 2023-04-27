@@ -18,7 +18,7 @@ public class STTSectionListResponse {
     private String description;
     private Long sttSOrder;
     private GLookup status;
-    private boolean isDefault;
+    private GLookup sttsDefault;
     private Timestamp dateCreated;
     private Long totalSTT = 0l;
     private Long totalForm = 0l;
@@ -66,12 +66,12 @@ public class STTSectionListResponse {
         this.status = status;
     }
 
-    public Boolean getDefault() {
-        return isDefault;
+    public GLookup getSttsDefault() {
+        return sttsDefault;
     }
 
-    public void setDefault(Boolean aDefault) {
-        isDefault = aDefault;
+    public void setSttsDefault(GLookup sttsDefault) {
+        this.sttsDefault = sttsDefault;
     }
 
     public Timestamp getDateCreated() {

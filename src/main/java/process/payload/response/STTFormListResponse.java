@@ -17,7 +17,7 @@ public class STTFormListResponse {
     private String sttFName;
     private String description;
     private GLookup status;
-    private boolean isDefault;
+    private GLookup sttfDefault;
     private Timestamp dateCreated;
     private Long totalStt = 0l;
     private Long totalSection = 0l;
@@ -58,12 +58,12 @@ public class STTFormListResponse {
         this.status = status;
     }
 
-    public boolean getDefault() {
-        return isDefault;
+    public GLookup getSttfDefault() {
+        return sttfDefault;
     }
 
-    public void setDefault(boolean aDefault) {
-        isDefault = aDefault;
+    public void setSttfDefault(GLookup sttfDefault) {
+        this.sttfDefault = sttfDefault;
     }
 
     public Timestamp getDateCreated() {

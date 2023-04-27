@@ -48,17 +48,16 @@ public enum TaskType {
 
     public static GLookup getTaskTypeByValue(Long lookupValue) {
         TaskType taskType = null;
-        if (lookupValue == 0l) {
+        if (lookupValue.equals(API.getLookupValue())) {
             taskType = API;
-        } else if (lookupValue == 1l) {
+        } else if (lookupValue.equals(AWS_SQS.getLookupValue())) {
             taskType = AWS_SQS;
-        } else if (lookupValue == 2l) {
+        } else if (lookupValue.equals(WEB_SOCKET.getLookupValue())) {
             taskType = WEB_SOCKET;
-        } else if (lookupValue == 3l) {
+        } else if (lookupValue.equals(KAFKA.getLookupValue())) {
             taskType = KAFKA;
         }
-        return new GLookup(taskType.lookupType,
-            taskType.lookupValue, taskType.description);
+        return new GLookup(taskType.lookupType, taskType.lookupValue, taskType.description);
     }
 
     @Override

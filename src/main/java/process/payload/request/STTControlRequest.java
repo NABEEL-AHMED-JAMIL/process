@@ -3,6 +3,7 @@ package process.payload.request;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import process.util.lookuputil.GLookup;
 
 /**
  * @author Nabeel Ahmed
@@ -12,19 +13,19 @@ import com.google.gson.Gson;
 public class STTControlRequest {
 
     private Long sttCId;
-    private Long sttCOrder;
-    private String sttCName;
-    private String filedType;
-    private String filedTitle;
-    private String filedName;
-    private String description;
+    private Long sttCOrder; // yes
+    private String sttCName; // yes
+    private String filedType; // yes
+    private String filedTitle; // yes
+    private String filedName; // yes
+    private String description; // yes
     private String placeHolder;
-    private Long filedWidth; // 1-12
-    private Long minLength;
-    private Long maxLength;
-    private Long filedLookUp;
-    private boolean mandatory;
-    private boolean defaultSttC;
+    private Long filedWidth; // 1-12 yes
+    private Long minLength; // 1
+    private Long maxLength; // not -1
+    private String filedLookUp;
+    private boolean mandatory; // yes
+    private boolean defaultSttC; // yes
     private String pattern;
     private Long status;
     private ParseRequest accessUserDetail;
@@ -120,11 +121,11 @@ public class STTControlRequest {
         this.maxLength = maxLength;
     }
 
-    public Long getFiledLookUp() {
+    public String getFiledLookUp() {
         return filedLookUp;
     }
 
-    public void setFiledLookUp(Long filedLookUp) {
+    public void setFiledLookUp(String filedLookUp) {
         this.filedLookUp = filedLookUp;
     }
 

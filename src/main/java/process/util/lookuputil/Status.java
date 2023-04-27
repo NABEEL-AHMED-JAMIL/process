@@ -23,15 +23,14 @@ public enum Status {
 
     public static GLookup getStatusByValue(Long lookupValue) {
         Status status = null;
-        if (lookupValue == 0l) {
+        if (lookupValue.equals(INACTIVE.lookupValue)) {
             status = INACTIVE;
-        } else if (lookupValue == 1l) {
+        } else if (lookupValue.equals(ACTIVE.lookupValue)) {
             status = ACTIVE;
-        } else if (lookupValue == 2l) {
+        } else if (lookupValue.equals(DELETE.lookupValue)) {
             status = DELETE;
         }
-        return new GLookup(status.lookupType,
-        status.lookupValue, status.description);
+        return new GLookup(status.lookupType, status.lookupValue, status.description);
     }
 
     public String getLookupType() {

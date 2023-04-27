@@ -41,6 +41,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     private STTFormRepository sttFormRepository;
     @Autowired
     private STTSectionRepository sttSectionRepository;
+    @Autowired
+    private STTControlRepository sttControlRepository;
 
     /**
      * Method use to add STT value in kafka|api etc.
@@ -308,7 +310,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             ApiTaskTypeResponse apiTaskTypeResponse = new ApiTaskTypeResponse();
             apiTaskTypeResponse.setApiTaskTypeId(apiTaskType.getApiTaskTypeId());
             apiTaskTypeResponse.setApiUrl(apiTaskType.getApiUrl());
-            apiTaskTypeResponse.setHttpMethod(RequestMethod.getRequestMethodByValue(apiTaskType.getHttpMethod().ordinal()));
+            apiTaskTypeResponse.setHttpMethod(RequestMethod.getRequestMethodByValue(
+                Long.valueOf(apiTaskType.getHttpMethod().ordinal())));
             apiTaskTypeResponse.setApiSecurityLkValue(apiTaskType.getApiSecurityLkValue());
             sttResponse.setApiTaskType(apiTaskTypeResponse);
         }
@@ -341,7 +344,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sttResponse.setDescription(sttProjection.getDescription());
             sttResponse.setStatus(Status.getStatusByValue(sttProjection.getStatus()));
             sttResponse.setTaskType(TaskType.getTaskTypeByValue(sttProjection.getTaskType()));
-            sttResponse.setDefault(sttProjection.getSttDefault());
+            sttResponse.setSttDefault(IsDefault.getDefaultByValue(sttProjection.getSttDefault()));
             sttResponse.setDateCreated(sttProjection.getDateCreated());
             sttResponse.setTotalUser(sttProjection.getTotalUser());
             sttResponse.setTotalTask(sttProjection.getTotalTask());
@@ -519,7 +522,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 sttfResponse.setSttFName(sttfProjection.getSttFName());
                 sttfResponse.setDescription(sttfProjection.getDescription());
                 sttfResponse.setStatus(Status.getStatusByValue(sttfProjection.getStatus()));
-                sttfResponse.setDefault(sttfProjection.getSttFDefault());
+                sttfResponse.setSttfDefault(IsDefault.getDefaultByValue(sttfProjection.getSttFDefault()));
                 sttfResponse.setDateCreated(sttfProjection.getDateCreated());
                 sttfResponse.setTotalStt(sttfResponse.getTotalStt());
                 sttfResponse.setTotalSection(sttfResponse.getTotalSection());
@@ -672,15 +675,15 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!sttSection.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Stts not found.");
         }
-        STTSectionResponse STTSectionResponse = new STTSectionResponse();
-        STTSectionResponse.setSttSId(sttSection.get().getSttSId());
-        STTSectionResponse.setSttSName(sttSection.get().getSttSName());
-        STTSectionResponse.setDescription(sttSection.get().getDescription());
-        STTSectionResponse.setSttSOrder(sttSection.get().getSttSOrder());
-        STTSectionResponse.setStatus(Status.getStatusByValue(sttSection.get().getStatus()));
-        STTSectionResponse.setDefaultStts(IsDefault.getDefaultByValue(sttSection.get().getDefault()));
+        STTSectionResponse sttSectionResponse = new STTSectionResponse();
+        sttSectionResponse.setSttSId(sttSection.get().getSttSId());
+        sttSectionResponse.setSttSName(sttSection.get().getSttSName());
+        sttSectionResponse.setDescription(sttSection.get().getDescription());
+        sttSectionResponse.setSttSOrder(sttSection.get().getSttSOrder());
+        sttSectionResponse.setStatus(Status.getStatusByValue(sttSection.get().getStatus()));
+        sttSectionResponse.setDefaultStts(IsDefault.getDefaultByValue(sttSection.get().getDefault()));
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
-            "Data fetch successfully with %d.", sttSectionRequest.getSttsId()), STTSectionResponse);
+            "Data fetch successfully with %d.", sttSectionRequest.getSttsId()), sttSectionResponse);
     }
 
     /**
@@ -708,7 +711,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 sttsResponse.setDescription(sttsProjection.getDescription());
                 sttsResponse.setSttSOrder(sttsProjection.getSttSOrder());
                 sttsResponse.setStatus(Status.getStatusByValue(sttsProjection.getStatus()));
-                sttsResponse.setDefault(sttsProjection.getSttSDefault());
+                sttsResponse.setSttsDefault(IsDefault.getDefaultByValue(sttsProjection.getSttSDefault()));
                 sttsResponse.setDateCreated(sttsProjection.getDateCreated());
                 sttsResponse.setTotalSTT(sttsProjection.getTotalSTT());
                 sttsResponse.setTotalForm(sttsProjection.getTotalForm());
@@ -719,32 +722,224 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse linkSTTSWithFrom() {
+    public AppResponse linkSTTSWithFrom(STTSectionRequest sttSectionRequest) {
+        logger.info("Request linkSTTSWithFrom :- " + sttSectionRequest);
+        if (isNull(sttSectionRequest.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
+        }
         return null;
     }
 
     @Override
-    public AppResponse addSTTC(STTControlRequest sttControl) {
-        return null;
+    public AppResponse addSTTC(STTControlRequest sttControlRequest) {
+        logger.info("Request addSTTC :- " + sttControlRequest);
+        if (isNull(sttControlRequest.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
+        } else if (isNull(sttControlRequest.getFiledType())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc filedType missing.");
+        } else if (isNull(sttControlRequest.getSttCName())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc sttCName missing.");
+        } else if (isNull(sttControlRequest.getSttCOrder())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc sttCOrder missing.");
+        } else if (isNull(sttControlRequest.getDescription())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc description missing.");
+        } else if (isNull(sttControlRequest.getFiledName())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc filedName missing.");
+        } else if (isNull(sttControlRequest.getFiledTitle())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc filedTitle missing.");
+        } else if (isNull(sttControlRequest.getFiledWidth())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc filedWidth missing.");
+        } else if (isNull(sttControlRequest.isMandatory())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc mandatory missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            sttControlRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
+        }
+        STTControl sttControl = new STTControl();
+        sttControl.setSttCOrder(sttControlRequest.getSttCOrder());
+        sttControl.setSttCName(sttControlRequest.getSttCName());
+        sttControl.setFiledType(sttControlRequest.getFiledType());
+        sttControl.setFiledTitle(sttControlRequest.getFiledTitle());
+        sttControl.setFiledName(sttControlRequest.getFiledName());
+        sttControl.setDescription(sttControlRequest.getDescription());
+        sttControl.setPlaceHolder(sttControlRequest.getPlaceHolder());
+        sttControl.setFiledWidth(sttControlRequest.getFiledWidth());
+        sttControl.setMinLength(sttControlRequest.getMinLength());
+        sttControl.setMaxLength(sttControlRequest.getMaxLength());
+        sttControl.setFiledLkValue(sttControlRequest.getFiledLookUp());
+        sttControl.setMandatory(sttControlRequest.isMandatory());
+        sttControl.setDefault(IsDefault.NO_DEFAULT.getLookupValue());
+        sttControl.setPattern(sttControlRequest.getPattern());
+        sttControl.setStatus(Status.ACTIVE.getLookupValue());
+        sttControl.setAppUser(appUser.get());
+        this.sttControlRepository.save(sttControl);
+        sttControlRequest.setSttCId(sttControl.getSttCId());
+        return new AppResponse(ProcessUtil.SUCCESS, String.format(
+            "Sttc added with %d.", sttControlRequest.getSttCId()));
     }
 
     @Override
-    public AppResponse editSTTC(STTControlRequest sttControl) {
-        return null;
+    public AppResponse editSTTC(STTControlRequest sttControlRequest) {
+        logger.info("Request editSTTC :- " + sttControlRequest);
+        if (isNull(sttControlRequest.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
+        } else if (isNull(sttControlRequest.getSttCId())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc id missing.");
+        } else if (isNull(sttControlRequest.getFiledType())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc filedType missing.");
+        } else if (isNull(sttControlRequest.getSttCName())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc sttCName missing.");
+        } else if (isNull(sttControlRequest.getSttCOrder())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc sttCOrder missing.");
+        } else if (isNull(sttControlRequest.getDescription())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc description missing.");
+        } else if (isNull(sttControlRequest.getFiledName())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc filedName missing.");
+        } else if (isNull(sttControlRequest.getFiledTitle())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc filedTitle missing.");
+        } else if (isNull(sttControlRequest.getFiledWidth())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc filedWidth missing.");
+        } else if (isNull(sttControlRequest.isMandatory())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc mandatory missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+                sttControlRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
+        }
+        Optional<STTControl> sttControl = this.sttControlRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
+            sttControlRequest.getSttCId(), sttControlRequest.getAccessUserDetail().getUsername(),
+            Status.DELETE.getLookupValue());
+        if (!sttControl.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc not found.");
+        }
+        sttControl.get().setSttCOrder(sttControlRequest.getSttCOrder());
+        sttControl.get().setSttCName(sttControlRequest.getSttCName());
+        sttControl.get().setFiledType(sttControlRequest.getFiledType());
+        sttControl.get().setFiledTitle(sttControlRequest.getFiledTitle());
+        sttControl.get().setFiledName(sttControlRequest.getFiledName());
+        sttControl.get().setDescription(sttControlRequest.getDescription());
+        sttControl.get().setPlaceHolder(sttControlRequest.getPlaceHolder());
+        sttControl.get().setFiledWidth(sttControlRequest.getFiledWidth());
+        sttControl.get().setMinLength(sttControlRequest.getMinLength());
+        sttControl.get().setMaxLength(sttControlRequest.getMaxLength());
+        sttControl.get().setFiledLkValue(sttControlRequest.getFiledLookUp());
+        sttControl.get().setMandatory(sttControlRequest.isMandatory());
+        sttControl.get().setDefault(sttControlRequest.isDefaultSttC());
+        sttControl.get().setPattern(sttControlRequest.getPattern());
+        sttControl.get().setStatus(sttControlRequest.getStatus());
+        sttControl.get().setAppUser(appUser.get());
+        this.sttControlRepository.save(sttControl.get());
+        return new AppResponse(ProcessUtil.SUCCESS, String.format(
+            "Sttc added with %d.", sttControlRequest.getSttCId()));
     }
 
     @Override
-    public AppResponse deleteSTTC(STTControlRequest sttControl) {
-        return null;
+    public AppResponse deleteSTTC(STTControlRequest sttControlRequest) {
+        logger.info("Request deleteSTTC :- " + sttControlRequest);
+        if (isNull(sttControlRequest.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+                sttControlRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
+        } else if (ProcessUtil.isNull(sttControlRequest.getSttCId())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc id missing.");
+        }
+        Optional<STTControl> sttSection = this.sttControlRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
+            sttControlRequest.getSttCId(), sttControlRequest.getAccessUserDetail().getUsername(),
+                Status.DELETE.getLookupValue());
+        if (!sttSection.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc not found.");
+        }
+        sttSection.get().setStatus(Status.DELETE.getLookupValue());
+        sttSection.get().setAppUserSTTC(sttSection.get().getAppUserSTTC()
+            .stream().map(appUserSTTC -> {
+                appUserSTTC.setStatus(Status.DELETE.getLookupValue());
+                return appUserSTTC;
+            }).collect(Collectors.toList()));
+        this.sttControlRepository.save(sttSection.get());
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("STTC deleted with %d.", sttControlRequest.getSttCId()));
     }
 
     @Override
-    public AppResponse fetchSTTC() {
-        return null;
+    public AppResponse fetchSTTCBySttcId(STTControlRequest sttControlRequest) throws Exception {
+        logger.info("Request fetchSTTCBySttcId :- " + sttControlRequest);
+        if (isNull(sttControlRequest.getSttCId())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc sttcid missing.");
+        } else if (isNull(sttControlRequest.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            sttControlRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
+        }
+        Optional<STTControl> sttSection = this.sttControlRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
+            sttControlRequest.getSttCId(), sttControlRequest.getAccessUserDetail().getUsername(),
+            Status.DELETE.getLookupValue());
+        if (!sttSection.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttc not found.");
+        }
+        STTControlResponse sttControlResponse = new STTControlResponse();
+        sttControlResponse.setSttCId(sttSection.get().getSttCId());
+        sttControlResponse.setSttCOrder(sttSection.get().getSttCOrder());
+        sttControlResponse.setSttCName(sttSection.get().getSttCName());
+        sttControlResponse.setDescription(sttSection.get().getDescription());
+        sttControlResponse.setFiledType(FormControlType.getFormControlTypeByValue(sttSection.get().getFiledType()));
+        sttControlResponse.setFiledTitle(sttSection.get().getFiledTitle());
+        sttControlResponse.setFiledName(sttSection.get().getFiledName());
+        sttControlResponse.setPlaceHolder(sttSection.get().getPlaceHolder());
+        sttControlResponse.setFiledWidth(sttSection.get().getFiledWidth());
+        sttControlResponse.setMinLength(sttSection.get().getMinLength());
+        sttControlResponse.setMaxLength(sttSection.get().getMaxLength());
+        sttControlResponse.setFiledLookUp(sttSection.get().getFiledLkValue());
+        sttControlResponse.setMandatory(IsDefault.getDefaultByValue(sttSection.get().getMandatory()));
+        sttControlResponse.setDefaultSttc(IsDefault.getDefaultByValue(sttSection.get().getDefault()));
+        sttControlResponse.setPattern(sttSection.get().getPattern());
+        sttControlResponse.setStatus(Status.getStatusByValue(sttSection.get().getStatus()));
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("Data fetch successfully with %d.",
+            sttControlRequest.getSttCId()), sttControlResponse);
     }
 
     @Override
-    public AppResponse linkSTTCWithFrom() {
+    public AppResponse fetchSTTC(STTControlRequest sttControl) {
+        logger.info("Request fetchSTTC :- " + sttControl);
+        if (isNull(sttControl.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            sttControl.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
+        }
+        List<STTControlListResponse> result = this.sttControlRepository.findByAppUserUsernameAndNotInStatus(
+            appUser.get().getUsername(), Status.DELETE.getLookupValue())
+            .stream().map(sttcProjection -> {
+                STTControlListResponse sttControlListResponse = new STTControlListResponse();
+                sttControlListResponse.setSttCId(sttcProjection.getSttCId());
+                sttControlListResponse.setSttCOrder(sttcProjection.getSttCOrder());
+                sttControlListResponse.setSttCName(sttcProjection.getSttCName());
+                sttControlListResponse.setFiledName(sttcProjection.getFiledName());
+                sttControlListResponse.setFiledType(FormControlType.getFormControlTypeByValue(sttcProjection.getFiledType()));
+                sttControlListResponse.setStatus(Status.getStatusByValue(sttcProjection.getStatus()));
+                sttControlListResponse.setMandatory(IsDefault.getDefaultByValue(sttcProjection.getMandatory()));
+                sttControlListResponse.setSttcDefault(IsDefault.getDefaultByValue(sttcProjection.getSTTCDefault()));
+                sttControlListResponse.setDateCreated(sttcProjection.getDateCreated());
+                sttControlListResponse.setTotalStt(sttcProjection.getTotalStt());
+                sttControlListResponse.setTotalForm(sttcProjection.getTotalForm());
+                sttControlListResponse.setTotalSection(sttcProjection.getTotalSection());
+                return sttControlListResponse;
+        }).collect(Collectors.toList());
+        return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
+    }
+
+    @Override
+    public AppResponse linkSTTCWithFrom(STTControlRequest sttControl) {
+        logger.info("Request linkSTTCWithFrom :- " + sttControl);
         return null;
     }
 

@@ -23,21 +23,20 @@ public enum RequestMethod {
         this.description = description;
     }
 
-    public static GLookup getRequestMethodByValue(Integer lookupValue) {
+    public static GLookup getRequestMethodByValue(Long lookupValue) {
         RequestMethod requestMethod = null;
-        if (lookupValue == 0) {
+        if (lookupValue.equals(GET.getLookupValue())) {
             requestMethod = GET;
-        } else if (lookupValue == 1) {
+        } else if (lookupValue.equals(HEAD.getLookupValue())) {
             requestMethod = HEAD;
-        } else if (lookupValue == 2) {
+        } else if (lookupValue.equals(POST.getLookupValue())) {
             requestMethod = POST;
-        } else if (lookupValue == 3) {
+        } else if (lookupValue.equals(PUT.getLookupValue())) {
             requestMethod = PUT;
-        } else if (lookupValue == 4) {
+        } else if (lookupValue.equals(PATCH.getLookupValue())) {
             requestMethod = PATCH;
         }
-        return new GLookup(requestMethod.lookupType,
-            requestMethod.lookupValue, requestMethod.description);
+        return new GLookup(requestMethod.lookupType, requestMethod.lookupValue, requestMethod.description);
     }
 
     public String getLookupType() {

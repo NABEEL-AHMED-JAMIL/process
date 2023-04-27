@@ -17,11 +17,11 @@ public class STTControlListResponse {
     private Long sttCOrder;
     private String sttCName;
     private String filedName;
-    private String filedType;
+    private GLookup filedType;
     private String description;
-    private boolean mandatory;
+    private GLookup mandatory;
     private GLookup status;
-    private boolean isDefault;
+    private GLookup sttcDefault;
     private Timestamp dateCreated;
     private Long totalStt;
     private Long totalForm;
@@ -61,11 +61,11 @@ public class STTControlListResponse {
         this.filedName = filedName;
     }
 
-    public String getFiledType() {
+    public GLookup getFiledType() {
         return filedType;
     }
 
-    public void setFiledType(String filedType) {
+    public void setFiledType(GLookup filedType) {
         this.filedType = filedType;
     }
 
@@ -77,12 +77,16 @@ public class STTControlListResponse {
         this.description = description;
     }
 
-    public boolean isMandatory() {
+    public GLookup isMandatory() {
         return mandatory;
     }
 
-    public void setMandatory(boolean mandatory) {
+    public void setMandatory(GLookup mandatory) {
         this.mandatory = mandatory;
+    }
+
+    public GLookup getMandatory() {
+        return mandatory;
     }
 
     public GLookup getStatus() {
@@ -93,12 +97,12 @@ public class STTControlListResponse {
         this.status = status;
     }
 
-    public boolean isDefault() {
-        return isDefault;
+    public GLookup getSttcDefault() {
+        return sttcDefault;
     }
 
-    public void setDefault(boolean aDefault) {
-        isDefault = aDefault;
+    public void setSttcDefault(GLookup sttcDefault) {
+        this.sttcDefault = sttcDefault;
     }
 
     public Timestamp getDateCreated() {

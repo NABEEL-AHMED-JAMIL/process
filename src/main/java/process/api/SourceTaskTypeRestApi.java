@@ -343,9 +343,9 @@ public class SourceTaskTypeRestApi {
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/linkSTTSWithFrom", method = RequestMethod.POST)
-    public ResponseEntity<?> linkSTTSWithFrom() {
+    public ResponseEntity<?> linkSTTSWithFrom(@RequestBody STTSectionRequest sttSectionRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.linkSTTSWithFrom(sttSectionRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while linkSTTSWithFrom ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
@@ -394,7 +394,7 @@ public class SourceTaskTypeRestApi {
     @RequestMapping(value = "/fetchSTTCBySttcId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTCBySttcId(@RequestBody STTControlRequest sttControlRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTCBySttcId(sttControlRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTCBySttcId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
@@ -406,7 +406,7 @@ public class SourceTaskTypeRestApi {
     @RequestMapping(value = "/fetchSTTC", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTC(@RequestBody STTControlRequest sttControlRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTC(sttControlRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
@@ -416,9 +416,9 @@ public class SourceTaskTypeRestApi {
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/linkSTTCWithFrom", method = RequestMethod.POST)
-    public ResponseEntity<?> linkSTTCWithFrom() {
+    public ResponseEntity<?> linkSTTCWithFrom(@RequestBody STTControlRequest sttControlRequest) {
         try {
-            return null;
+            return new ResponseEntity<>(this.sourceTaskTypeService.linkSTTCWithFrom(sttControlRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while linkSTTCWithFrom ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
