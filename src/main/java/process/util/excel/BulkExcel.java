@@ -24,6 +24,7 @@ public class BulkExcel implements ExcelUtil {
     public XSSFWorkbook getWb() {
         return wb;
     }
+
     public void setWb(XSSFWorkbook wb) {
         this.wb = wb;
     }
@@ -31,6 +32,7 @@ public class BulkExcel implements ExcelUtil {
     public XSSFSheet getSheet() {
         return sheet;
     }
+
     public void setSheet(XSSFSheet sheet) {
         this.sheet = sheet;
     }

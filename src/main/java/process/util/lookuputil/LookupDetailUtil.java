@@ -5,8 +5,8 @@ package process.util.lookuputil;
  */
 public interface LookupDetailUtil {
 
-    public static String LOOKUP_UPLOAD_LIMIT = "LOOKUP_UPLOAD_LIMIT";
-    public static String LOOKUP_DOWNLOAD_LIMIT = "LOOKUP_DOWNLOAD_LIMIT";
+    public static String UPLOAD_LIMIT = "UPLOAD_LIMIT";
+    public static String DOWNLOAD_LIMIT = "DOWNLOAD_LIMIT";
     public static String QUEUE_FETCH_LIMIT = "QUEUE_FETCH_LIMIT";
     public static String SCHEDULER_LAST_RUN_TIME = "SCHEDULER_LAST_RUN_TIME";
     public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";

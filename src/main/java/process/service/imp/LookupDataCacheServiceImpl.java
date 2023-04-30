@@ -326,7 +326,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     public ByteArrayOutputStream downloadLookupTemplateFile() throws Exception {
         String basePath = this.tempStoreDirectory + File.separator;
         ClassLoader cl = this.getClass().getClassLoader();
-        InputStream inputStream = cl.getResourceAsStream(this.bulkExcel.LOOKUP_TEMPLATE);
+        InputStream inputStream = cl.getResourceAsStream(this.bulkExcel.BATCH);
         String fileUploadPath = basePath + System.currentTimeMillis() + this.bulkExcel.XLSX_EXTENSION;
         FileOutputStream fileOut = new FileOutputStream(fileUploadPath);
         IOUtils.copy(inputStream, fileOut);
@@ -378,8 +378,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             if (!parentLookup.isPresent()) {
                 throw new Exception("ParentLookup not found");
             }
-            lookupDataList = parentLookup.get().getLookupChildren()
-                .stream().collect(Collectors.toList());
+            lookupDataList = parentLookup.get().getLookupChildren().stream().collect(Collectors.toList());
         }
         XSSFWorkbook workbook = new XSSFWorkbook();
         this.bulkExcel.setWb(workbook);
@@ -422,7 +421,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             return new AppResponse(ProcessUtil.ERROR, "You can upload only .xlsx extension file.");
         }
         // fill the stream with file into work-book
-        Optional<LookupData> lookupFileLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.LOOKUP_UPLOAD_LIMIT);
+        Optional<LookupData> fileLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
         XSSFWorkbook workbook = new XSSFWorkbook(fileObject.getFile().getInputStream());
         if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new AppResponse(ProcessUtil.ERROR,  "You uploaded empty file.");
@@ -432,9 +431,8 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             return new AppResponse(ProcessUtil.ERROR, "Sheet not found with (Job-Add)");
         } else if (sheet.getLastRowNum() < 1) {
             return new AppResponse(ProcessUtil.ERROR,  "You can't upload empty file.");
-        } else if(sheet.getLastRowNum() > Long.valueOf(lookupFileLimit.get().getLookupValue())) {
-            return new AppResponse(ProcessUtil.ERROR, String.format("File support %s rows at a time.",
-                lookupFileLimit.get().getLookupValue()));
+        } else if(sheet.getLastRowNum() > Long.valueOf(fileLimit.get().getLookupValue())) {
+            return new AppResponse(ProcessUtil.ERROR, String.format("File support %s rows at a time.", fileLimit.get().getLookupValue()));
         }
         List<LookupValidation> lookupValidations = new ArrayList<>();
         List<String> errors = new ArrayList<>();

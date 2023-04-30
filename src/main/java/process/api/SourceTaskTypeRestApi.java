@@ -337,7 +337,7 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTS ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -349,7 +349,7 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while linkSTTSWithFrom ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -362,7 +362,7 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -374,7 +374,7 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while editSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -386,7 +386,7 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -410,7 +410,7 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -422,40 +422,41 @@ public class SourceTaskTypeRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while linkSTTCWithFrom ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     // bath
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/downloadSTTCommonTemplateFile", method = RequestMethod.GET)
-    public ResponseEntity<?> downloadSTTCommonTemplateFile() {
+    @RequestMapping(value = "/downloadSTTCommonTemplateFile", method = RequestMethod.POST)
+    public ResponseEntity<?> downloadSTTCommonTemplateFile(@RequestBody STTFileUploadRequest sttFileUReq) {
         try {
             HttpHeaders headers = new HttpHeaders();
             DateFormat dateFormat = new SimpleDateFormat(ProcessUtil.SIMPLE_DATE_PATTERN);
             String fileName = "BatchSTTDownload-"+dateFormat.format(new Date())+"-"+ UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(null);
+            return ResponseEntity.ok().headers(headers).body(
+                this.sourceTaskTypeService.downloadSTTCommonTemplateFile(sttFileUReq).toByteArray());
         } catch (Exception ex) {
-            logger.error("An error occurred while downloadSTTCommonTemplateFile xlsx file", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while downloadSTTCommonTemplateFile xlsx file",
+                ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
+                "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/downloadSTTCommon", method = RequestMethod.POST)
-    public ResponseEntity<?> downloadSTTCommon(@RequestBody LookupDataRequest tempLookupData) {
+    public ResponseEntity<?> downloadSTTCommon(@RequestBody STTFileUploadRequest sttFileUReq) {
         try {
             HttpHeaders headers = new HttpHeaders();
             DateFormat dateFormat = new SimpleDateFormat(ProcessUtil.SIMPLE_DATE_PATTERN);
             String fileName = "BatchLookupDownload-"+dateFormat.format(new Date())+"-"+ UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(null);
+            return ResponseEntity.ok().headers(headers).body(this.sourceTaskTypeService.downloadSTTCommon(sttFileUReq).toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadSTTCommon ", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, ex.getMessage()), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -463,15 +464,15 @@ public class SourceTaskTypeRestApi {
     @RequestMapping(value = "/uploadSTTCommon", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSTTCommon(FileUploadRequest fileObject) {
         try {
-            if (fileObject.getFile() != null) {
-                return new ResponseEntity<>(null, HttpStatus.OK);
+            if (!ProcessUtil.isNull(fileObject.getFile())) {
+                return new ResponseEntity<>(this.sourceTaskTypeService.uploadSTTCommon(fileObject), HttpStatus.OK);
             }
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "File not found for process."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "File not found for process."),
+                HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadSTTCommon ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
+                "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 

@@ -1,8 +1,14 @@
 package process.service.imp;
 
+import com.google.gson.Gson;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import process.model.pojo.*;
 import process.model.repository.*;
@@ -11,9 +17,16 @@ import process.payload.response.*;
 import process.service.LookupDataCacheService;
 import process.service.SourceTaskTypeService;
 import process.util.ProcessUtil;
+import process.util.excel.BulkExcel;
 import process.util.lookuputil.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.isNull;
 
@@ -25,6 +38,10 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
 
     private Logger logger = LoggerFactory.getLogger(SourceTaskTypeServiceImpl.class);
 
+    @Value("${storage.efsFileDire}")
+    private String tempStoreDirectory;
+    @Autowired
+    private BulkExcel bulkExcel;
     @Autowired
     private AppUserRepository appUserRepository;
     @Autowired
@@ -50,7 +67,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse addSTT(STTRequest sttRequest) {
+    public AppResponse addSTT(STTRequest sttRequest) throws Exception {
         logger.info("Request addSTT :- " + sttRequest);
         if (isNull(sttRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -129,7 +146,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse editSTT(STTRequest sttRequest) {
+    public AppResponse editSTT(STTRequest sttRequest) throws Exception {
         logger.info("Request editSTT :- " + sttRequest);
         if (isNull(sttRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -228,7 +245,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse deleteSTT(STTRequest sttRequest) {
+    public AppResponse deleteSTT(STTRequest sttRequest) throws Exception {
         logger.info("Request deleteSTT :- " + sttRequest);
         if (isNull(sttRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -325,7 +342,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse fetchSTT(STTRequest sttRequest) {
+    public AppResponse fetchSTT(STTRequest sttRequest) throws Exception {
         logger.info("Request fetchSTT :- " + sttRequest);
         if (isNull(sttRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -355,7 +372,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse linkSTTWithAppUser(STTRequest sttRequest) {
+    public AppResponse linkSTTWithAppUser(STTRequest sttRequest) throws Exception {
         return null;
     }
 
@@ -365,7 +382,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse addSTTF(STTFormRequest sttFormRequest) {
+    public AppResponse addSTTF(STTFormRequest sttFormRequest) throws Exception {
         logger.info("Request addSTTF :- " + sttFormRequest);
         if (isNull(sttFormRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -395,7 +412,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse editSTTF(STTFormRequest sttFormRequest) {
+    public AppResponse editSTTF(STTFormRequest sttFormRequest) throws Exception {
         logger.info("Request editSTTF :- " + sttFormRequest);
         if (isNull(sttFormRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -435,7 +452,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse deleteSTTF(STTFormRequest sttFormRequest) {
+    public AppResponse deleteSTTF(STTFormRequest sttFormRequest) throws Exception {
         logger.info("Request deleteSTTF :- " + sttFormRequest);
         if (isNull(sttFormRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -504,7 +521,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse fetchSTTF(STTFormRequest sttFormRequest) {
+    public AppResponse fetchSTTF(STTFormRequest sttFormRequest) throws Exception {
         logger.info("Request fetchSTTF :- " + sttFormRequest);
         if (isNull(sttFormRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -533,7 +550,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse linkSTTFWithFrom(STTFormRequest sttFormRequest) {
+    public AppResponse linkSTTFWithFrom(STTFormRequest sttFormRequest) throws Exception {
         return null;
     }
 
@@ -543,7 +560,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse addSTTS(STTSectionRequest sttSectionRequest) {
+    public AppResponse addSTTS(STTSectionRequest sttSectionRequest) throws Exception {
         logger.info("Request addSTTS :- " + sttSectionRequest);
         if (isNull(sttSectionRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -578,7 +595,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse editSTTS(STTSectionRequest sttSectionRequest) {
+    public AppResponse editSTTS(STTSectionRequest sttSectionRequest) throws Exception {
         logger.info("Request editSTTS :- " + sttSectionRequest);
         if (isNull(sttSectionRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -622,7 +639,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse deleteSTTS(STTSectionRequest sttSectionRequest) {
+    public AppResponse deleteSTTS(STTSectionRequest sttSectionRequest) throws Exception {
         logger.info("Request deleteSTTS :- " + sttSectionRequest);
         if (isNull(sttSectionRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -692,7 +709,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
      * @return AppResponse
      * */
     @Override
-    public AppResponse fetchSTTS(STTSectionRequest sttSectionRequest) {
+    public AppResponse fetchSTTS(STTSectionRequest sttSectionRequest) throws Exception {
         logger.info("Request fetchSTTS :- " + sttSectionRequest);
         if (isNull(sttSectionRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -722,7 +739,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse linkSTTSWithFrom(STTSectionRequest sttSectionRequest) {
+    public AppResponse linkSTTSWithFrom(STTSectionRequest sttSectionRequest) throws Exception {
         logger.info("Request linkSTTSWithFrom :- " + sttSectionRequest);
         if (isNull(sttSectionRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -731,7 +748,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse addSTTC(STTControlRequest sttControlRequest) {
+    public AppResponse addSTTC(STTControlRequest sttControlRequest) throws Exception {
         logger.info("Request addSTTC :- " + sttControlRequest);
         if (isNull(sttControlRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -781,7 +798,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse editSTTC(STTControlRequest sttControlRequest) {
+    public AppResponse editSTTC(STTControlRequest sttControlRequest) throws Exception {
         logger.info("Request editSTTC :- " + sttControlRequest);
         if (isNull(sttControlRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -837,7 +854,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse deleteSTTC(STTControlRequest sttControlRequest) {
+    public AppResponse deleteSTTC(STTControlRequest sttControlRequest) throws Exception {
         logger.info("Request deleteSTTC :- " + sttControlRequest);
         if (isNull(sttControlRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -862,7 +879,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 return appUserSTTC;
             }).collect(Collectors.toList()));
         this.sttControlRepository.save(sttSection.get());
-        return new AppResponse(ProcessUtil.SUCCESS, String.format("STTC deleted with %d.", sttControlRequest.getSttCId()));
+        return new AppResponse(ProcessUtil.SUCCESS, String.format(
+            "STTC deleted with %d.", sttControlRequest.getSttCId()));
     }
 
     @Override
@@ -906,7 +924,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse fetchSTTC(STTControlRequest sttControl) {
+    public AppResponse fetchSTTC(STTControlRequest sttControl) throws Exception {
         logger.info("Request fetchSTTC :- " + sttControl);
         if (isNull(sttControl.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
@@ -938,24 +956,114 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     }
 
     @Override
-    public AppResponse linkSTTCWithFrom(STTControlRequest sttControl) {
+    public AppResponse linkSTTCWithFrom(STTControlRequest sttControl) throws Exception {
         logger.info("Request linkSTTCWithFrom :- " + sttControl);
         return null;
     }
 
     @Override
-    public AppResponse downloadSTTCommonTemplateFile() {
-        return null;
+    public ByteArrayOutputStream downloadSTTCommonTemplateFile(STTFileUploadRequest sttFileUReq) throws Exception {
+        logger.info("Request downloadSTTCommonTemplateFile :- " + sttFileUReq);
+        if (isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
+            throw new Exception("AppUser username missing.");
+        } else if (ProcessUtil.isNull(sttFileUReq.getDownloadType())) {
+            throw new Exception("Download type missing.");
+        }
+        String basePath = this.tempStoreDirectory + File.separator;
+        ClassLoader cl = this.getClass().getClassLoader();
+        InputStream inputStream = cl.getResourceAsStream(this.bulkExcel.BATCH);
+        String fileUploadPath = basePath + System.currentTimeMillis() + this.bulkExcel.XLSX_EXTENSION;
+        FileOutputStream fileOut = new FileOutputStream(fileUploadPath);
+        IOUtils.copy(inputStream, fileOut);
+        // after copy the stream into file close
+        if (inputStream != null) {
+            inputStream.close();
+        }
+        // 2nd insert data to newly copied file. So that template couldn't be changed.
+        XSSFWorkbook workbook = new XSSFWorkbook(new File(fileUploadPath));
+        this.bulkExcel.setWb(workbook);
+        String sheetName = null;
+        String[] header = null;
+        if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT)) {
+            sheetName = this.bulkExcel.STT;
+            header = this.bulkExcel.STT_HEADER_FILED_BATCH_FILE;
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_FORM)) {
+            sheetName = this.bulkExcel.STT_FORM;
+            header = this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE;
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
+            sheetName = this.bulkExcel.STT_SECTION;
+            header = this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE;
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
+            sheetName = this.bulkExcel.STT_CONTROL;
+            header = this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE;
+        }
+        XSSFSheet sheet = workbook.getSheet(sheetName);
+        this.bulkExcel.setSheet(sheet);
+        this.bulkExcel.fillBulkHeader(0, header);
+        workbook.write(fileOut);
+        fileOut.close();
+        workbook.close();
+        File file = new File(fileUploadPath);
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        byteArrayOutputStream.write(FileUtils.readFileToByteArray(file));
+        file.delete();
+        return byteArrayOutputStream;
     }
 
     @Override
-    public AppResponse downloadSTTCommon() {
-        return null;
+    public ByteArrayOutputStream downloadSTTCommon(STTFileUploadRequest sttFileUReq) throws Exception {
+        logger.info("Request downloadSTTCommon :- " + sttFileUReq);
+        if (isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
+            throw new Exception("AppUser username missing.");
+        } else if (ProcessUtil.isNull(sttFileUReq.getDownloadType())) {
+            throw new Exception("Download type missing.");
+        }
+        XSSFWorkbook workbook = new XSSFWorkbook();
+        this.bulkExcel.setWb(workbook);
+        String sheetName = null;
+        String[] header = null;
+        if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT)) {
+            sheetName = this.bulkExcel.STT;
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_FORM)) {
+            sheetName = this.bulkExcel.STT_FORM;
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
+            sheetName = this.bulkExcel.STT_SECTION;
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
+            sheetName = this.bulkExcel.STT_CONTROL;
+        }
+        XSSFSheet xssfSheet = workbook.createSheet(sheetName);
+        this.bulkExcel.setSheet(xssfSheet);
+        AtomicInteger rowCount = new AtomicInteger();
+        this.bulkExcel.fillBulkHeader(rowCount.get(), header);
+        // fill data
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        workbook.write(outputStream);
+        return outputStream;
     }
 
     @Override
-    public AppResponse uploadSTTCommon(FileUploadRequest fileObject) {
-        return null;
+    public AppResponse uploadSTTCommon(FileUploadRequest fileObject) throws Exception {
+        logger.info("Request uploadSTTCommon :- " + fileObject);
+        if (ProcessUtil.isNull(fileObject.getData())) {
+            return new AppResponse(ProcessUtil.ERROR, "Date not found");
+        }
+        Gson gson = new Gson();
+        STTFileUploadRequest sttFileUploadRequest = gson.fromJson((String) fileObject.getData(), STTFileUploadRequest.class);
+        if (isNull(sttFileUploadRequest.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
+        } else if (ProcessUtil.isNull(sttFileUploadRequest.getUploadType())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
+        }
+        if (sttFileUploadRequest.getUploadType().equals("STT")) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
+        } else if (sttFileUploadRequest.getUploadType().equals("STTF")) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
+        } else if (sttFileUploadRequest.getUploadType().equals("STTS")) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
+        } else if (sttFileUploadRequest.getUploadType().equals("STTC")) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
+        }
+        return new AppResponse(ProcessUtil.ERROR, "Wrong upload type define.");
     }
 
 }

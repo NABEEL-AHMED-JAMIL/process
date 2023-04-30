@@ -2,6 +2,7 @@ package process.service;
 
 import process.payload.request.*;
 import process.payload.response.AppResponse;
+import java.io.ByteArrayOutputStream;
 
 /**
  * @author Nabeel Ahmed
@@ -54,12 +55,12 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTC(STTControlRequest sttControlRequest) throws Exception;
 
-    public AppResponse linkSTTCWithFrom(STTControlRequest sttControlRequest);
+    public AppResponse linkSTTCWithFrom(STTControlRequest sttControlRequest) throws Exception;
 
-    public AppResponse downloadSTTCommonTemplateFile();
+    public ByteArrayOutputStream downloadSTTCommonTemplateFile(STTFileUploadRequest sttFileUReq) throws Exception;
 
-    public AppResponse downloadSTTCommon();
+    public ByteArrayOutputStream downloadSTTCommon(STTFileUploadRequest sttFileUReq) throws Exception;
 
-    public AppResponse uploadSTTCommon(FileUploadRequest fileObject);
+    public AppResponse uploadSTTCommon(FileUploadRequest fileObject) throws Exception;
 
 }
