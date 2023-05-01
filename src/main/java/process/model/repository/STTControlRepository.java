@@ -30,4 +30,10 @@ public interface STTControlRepository extends CrudRepository<STTControl, Long> {
         "where au.username = ?1 and sc.status != ?2\n" +
         "order by sc.sttc_id desc\n", nativeQuery = true)
     public List<STTCProjection> findByAppUserUsernameAndNotInStatus(String username, Long status);
+
+    @Query(value = "select sttc.*\n" +
+        "from stt_control sttc\n" +
+        "inner join app_users au on au.app_user_id  = sttc.app_user_id  \n" +
+        "where au.username = ?1 and sttc.status != ?2", nativeQuery = true)
+    public List<STTControl> findSttControlByAppUserUsernameAndNotInStatus(String username, Long status);
 }

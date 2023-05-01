@@ -26,7 +26,7 @@ public interface STTRepository extends CrudRepository<STT, Long> {
         "from stt stt\n" +
         "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
         "where stt.stt_id = ?1 and au.username = ?2 and stt.status != ?3", nativeQuery = true)
-    public Optional<STT> findBySttIdAndAppUserUsernameAndNotInSttStatus(Long sourceTaskTypeId, String username, Long status);
+    public Optional<STT> findBySttIdAndAppUserUsernameAndNotInSttStatus(Long sttId, String username, Long status);
 
     @Query(value = "select stt.stt_id as sttId, stt.service_name as serviceName,\n" +
         "stt.description as description, stt.task_type as taskType,\n" +
@@ -48,6 +48,12 @@ public interface STTRepository extends CrudRepository<STT, Long> {
         "where au.username = ?1 and stt.status != ?2\n" +
         "group by stt.stt_id\n" +
         "order by stt.stt_id desc\n", nativeQuery = true)
-    public List<STTProjection> findByAppUserUsernameAndNotInSttStatus(String username, Long status);
+    public List<STTProjection> findByAppUserUsernameAndNotInStatus(String username, Long status);
+
+    @Query(value = "select stt.*\n" +
+        "from stt stt\n" +
+        "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
+        "where au.username = ?1 and stt.status != ?2", nativeQuery = true)
+    public List<STT> findSttByAppUserUsernameAndNotInStatus(String username, Long status);
 
 }

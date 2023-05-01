@@ -1,10 +1,13 @@
 package process.util.excel;
 
+import org.apache.kafka.common.protocol.types.Field;
+
 /**
  * @author Nabeel Ahmed
  */
 public interface ExcelUtil {
 
+    public static String BLANK_VAL = "";
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     public static String LOOKUP = "LookupTemplate";
     public static String STT = "SourceTaskType";

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import process.model.pojo.*;
+import process.model.projection.STTProjection;
 import process.model.repository.*;
 import process.payload.request.*;
 import process.payload.response.*;
@@ -53,14 +54,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Autowired
     private STTRepository sttRepository;
     @Autowired
+    private STTFormRepository sttfRepository;
+    @Autowired
+    private STTSectionRepository sttsRepository;
+    @Autowired
+    private STTControlRepository sttcRepository;
+    @Autowired
     private AppUserSTTRepository appUserSTTRepository;
-    @Autowired
-    private STTFormRepository sttFormRepository;
-    @Autowired
-    private STTSectionRepository sttSectionRepository;
-    @Autowired
-    private STTControlRepository sttControlRepository;
-
     /**
      * Method use to add STT value in kafka|api etc.
      * @param sttRequest
@@ -352,7 +352,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        List<STTListResponse> result = this.sttRepository.findByAppUserUsernameAndNotInSttStatus(
+        List<STTListResponse> result = this.sttRepository.findByAppUserUsernameAndNotInStatus(
             appUser.get().getUsername(), Status.DELETE.getLookupValue())
         .stream().map(sttProjection -> {
             STTListResponse sttResponse = new STTListResponse();
@@ -402,7 +402,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttForm.setDefault(sttFormRequest.isDefaultSttf());
         sttForm.setStatus(Status.ACTIVE.getLookupValue());
         sttForm.setAppUser(appUser.get());
-        sttForm = this.sttFormRepository.save(sttForm);
+        sttForm = this.sttfRepository.save(sttForm);
         return new AppResponse(ProcessUtil.SUCCESS, String.format("Sttf save with %d.", sttForm.getSttFId()));
     }
 
@@ -428,7 +428,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         } else if (ProcessUtil.isNull(sttFormRequest.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf description missing.");
         }
-        Optional<STTForm> sttForm = this.sttFormRepository.findBySttFIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTForm> sttForm = this.sttfRepository.findBySttFIdAndAppUserUsernameAndNotInStatus(
             sttFormRequest.getSttfId(), sttFormRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
         if (!sttForm.isPresent()) {
@@ -446,7 +446,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                     return appUserSTTF;
             }).collect(Collectors.toList()));
         }
-        this.sttFormRepository.save(sttForm.get());
+        this.sttfRepository.save(sttForm.get());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
              "Sttf updated with %d.", sttFormRequest.getSttfId()));
     }
@@ -464,7 +464,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         } else if (ProcessUtil.isNull(sttFormRequest.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf id missing.");
         }
-        Optional<STTForm> sttForm = this.sttFormRepository.findBySttFIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTForm> sttForm = this.sttfRepository.findBySttFIdAndAppUserUsernameAndNotInStatus(
             sttFormRequest.getSttfId(), sttFormRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
         if (!sttForm.isPresent()) {
@@ -476,7 +476,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 appUserSTTF.setStatus(Status.DELETE.getLookupValue());
                 return appUserSTTF;
             }).collect(Collectors.toList()));
-        this.sttFormRepository.save(sttForm.get());
+        this.sttfRepository.save(sttForm.get());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
             "STTF deleted with %d.", sttFormRequest.getSttfId()));
     }
@@ -499,7 +499,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        Optional<STTForm> sttForm = this.sttFormRepository.findBySttFIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTForm> sttForm = this.sttfRepository.findBySttFIdAndAppUserUsernameAndNotInStatus(
             sttFormRequest.getSttfId(), sttFormRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
         if (!sttForm.isPresent()) {
@@ -531,7 +531,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        List<STTFormListResponse> result = this.sttFormRepository.findByAppUserUsernameAndNotInStatus(
+        List<STTFormListResponse> result = this.sttfRepository.findByAppUserUsernameAndNotInStatus(
             appUser.get().getUsername(), Status.DELETE.getLookupValue())
             .stream().map(sttfProjection -> {
                 STTFormListResponse sttfResponse = new STTFormListResponse();
@@ -583,7 +583,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttSection.setDefault(sttSectionRequest.isDefaultStts());
         sttSection.setStatus(Status.ACTIVE.getLookupValue());
         sttSection.setAppUser(appUser.get());
-        sttSection = this.sttSectionRepository.save(sttSection);
+        this.sttsRepository.save(sttSection);
         sttSectionRequest.setSttsId(sttSection.getSttSId());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
             "Stts added with %d.", sttSectionRequest.getSttsId()));
@@ -613,7 +613,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         } else if (ProcessUtil.isNull(sttSectionRequest.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Stts description missing.");
         }
-        Optional<STTSection> sttSection = this.sttSectionRepository.findBySttSIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTSection> sttSection = this.sttsRepository.findBySttSIdAndAppUserUsernameAndNotInStatus(
             sttSectionRequest.getSttsId(), sttSectionRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
         if (!sttSection.isPresent()) {
@@ -633,7 +633,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 return appUserSTTS;
             }).collect(Collectors.toList()));
         }
-        this.sttSectionRepository.save(sttSection.get());
+        this.sttsRepository.save(sttSection.get());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
              "Stts update with %d.", sttSectionRequest.getSttsId()));
     }
@@ -651,7 +651,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         } else if (ProcessUtil.isNull(sttSectionRequest.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf id missing.");
         }
-        Optional<STTSection> sttSection = this.sttSectionRepository.findBySttSIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTSection> sttSection = this.sttsRepository.findBySttSIdAndAppUserUsernameAndNotInStatus(
             sttSectionRequest.getSttsId(), sttSectionRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
         if (!sttSection.isPresent()) {
@@ -663,9 +663,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 appUserSTTF.setStatus(Status.DELETE.getLookupValue());
                 return appUserSTTF;
             }).collect(Collectors.toList()));
-        this.sttSectionRepository.save(sttSection.get());
+        this.sttsRepository.save(sttSection.get());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
-            "STTS deleted with %d.", sttSectionRequest.getSttsId()));
+             "STTS deleted with %d.", sttSectionRequest.getSttsId()));
     }
 
     /**
@@ -686,7 +686,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        Optional<STTSection> sttSection = this.sttSectionRepository.findBySttSIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTSection> sttSection = this.sttsRepository.findBySttSIdAndAppUserUsernameAndNotInStatus(
             sttSectionRequest.getSttsId(), sttSectionRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
         if (!sttSection.isPresent()) {
@@ -719,7 +719,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        List<STTSectionListResponse> result = this.sttSectionRepository.findByAppUserUsernameAndNotInStatus(
+        List<STTSectionListResponse> result = this.sttsRepository.findByAppUserUsernameAndNotInStatus(
             appUser.get().getUsername(), Status.DELETE.getLookupValue())
             .stream().map(sttsProjection -> {
                 STTSectionListResponse sttsResponse = new STTSectionListResponse();
@@ -791,7 +791,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttControl.setPattern(sttControlRequest.getPattern());
         sttControl.setStatus(Status.ACTIVE.getLookupValue());
         sttControl.setAppUser(appUser.get());
-        this.sttControlRepository.save(sttControl);
+        this.sttcRepository.save(sttControl);
         sttControlRequest.setSttCId(sttControl.getSttCId());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
             "Sttc added with %d.", sttControlRequest.getSttCId()));
@@ -826,7 +826,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        Optional<STTControl> sttControl = this.sttControlRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTControl> sttControl = this.sttcRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
             sttControlRequest.getSttCId(), sttControlRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
         if (!sttControl.isPresent()) {
@@ -848,7 +848,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttControl.get().setPattern(sttControlRequest.getPattern());
         sttControl.get().setStatus(sttControlRequest.getStatus());
         sttControl.get().setAppUser(appUser.get());
-        this.sttControlRepository.save(sttControl.get());
+        this.sttcRepository.save(sttControl.get());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
             "Sttc added with %d.", sttControlRequest.getSttCId()));
     }
@@ -866,7 +866,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         } else if (ProcessUtil.isNull(sttControlRequest.getSttCId())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttc id missing.");
         }
-        Optional<STTControl> sttSection = this.sttControlRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTControl> sttSection = this.sttcRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
             sttControlRequest.getSttCId(), sttControlRequest.getAccessUserDetail().getUsername(),
                 Status.DELETE.getLookupValue());
         if (!sttSection.isPresent()) {
@@ -878,7 +878,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 appUserSTTC.setStatus(Status.DELETE.getLookupValue());
                 return appUserSTTC;
             }).collect(Collectors.toList()));
-        this.sttControlRepository.save(sttSection.get());
+        this.sttcRepository.save(sttSection.get());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
             "STTC deleted with %d.", sttControlRequest.getSttCId()));
     }
@@ -896,7 +896,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        Optional<STTControl> sttSection = this.sttControlRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTControl> sttSection = this.sttcRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
             sttControlRequest.getSttCId(), sttControlRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
         if (!sttSection.isPresent()) {
@@ -934,7 +934,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        List<STTControlListResponse> result = this.sttControlRepository.findByAppUserUsernameAndNotInStatus(
+        List<STTControlListResponse> result = this.sttcRepository.findByAppUserUsernameAndNotInStatus(
             appUser.get().getUsername(), Status.DELETE.getLookupValue())
             .stream().map(sttcProjection -> {
                 STTControlListResponse sttControlListResponse = new STTControlListResponse();
@@ -976,7 +976,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         FileOutputStream fileOut = new FileOutputStream(fileUploadPath);
         IOUtils.copy(inputStream, fileOut);
         // after copy the stream into file close
-        if (inputStream != null) {
+        if (!ProcessUtil.isNull(inputStream)) {
             inputStream.close();
         }
         // 2nd insert data to newly copied file. So that template couldn't be changed.
@@ -1024,18 +1024,88 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         String[] header = null;
         if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT)) {
             sheetName = this.bulkExcel.STT;
+            header = this.bulkExcel.STT_HEADER_FILED_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_FORM)) {
             sheetName = this.bulkExcel.STT_FORM;
+            header = this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
             sheetName = this.bulkExcel.STT_SECTION;
+            header = this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
             sheetName = this.bulkExcel.STT_CONTROL;
+            header = this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE;
         }
         XSSFSheet xssfSheet = workbook.createSheet(sheetName);
         this.bulkExcel.setSheet(xssfSheet);
         AtomicInteger rowCount = new AtomicInteger();
         this.bulkExcel.fillBulkHeader(rowCount.get(), header);
         // fill data
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            sttFileUReq.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            throw new Exception("AppUser not found");
+        }
+        if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT)) {
+            this.sttRepository.findSttByAppUserUsernameAndNotInStatus(
+                appUser.get().getUsername(), Status.DELETE.getLookupValue())
+            .forEach(stt -> {
+                rowCount.getAndIncrement();
+                List<String> dataCellValue = new ArrayList<>();
+                dataCellValue.add(stt.getServiceName());
+                dataCellValue.add(stt.getDescription());
+                dataCellValue.add(IsDefault.getDefaultByValue(stt.getDefault()).getDescription());
+                dataCellValue.add(TaskType.getTaskTypeByValue(stt.getTaskType()).getDescription());
+                // only kafka support for this version 2.0
+                dataCellValue.add(stt.getKafkaTaskType().get(0).getTopicName());
+                dataCellValue.add(stt.getKafkaTaskType().get(0).getNumPartitions().toString());
+                this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
+            });
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_FORM)) {
+            this.sttfRepository.findByAppUserUsernameAndNotInStatus(
+                appUser.get().getUsername(), Status.DELETE.getLookupValue())
+            .forEach(sttf -> {
+                rowCount.getAndIncrement();
+                List<String> dataCellValue = new ArrayList<>();
+                dataCellValue.add(sttf.getSttFName());
+                dataCellValue.add(sttf.getDescription());
+                dataCellValue.add(IsDefault.getDefaultByValue(sttf.getSttFDefault()).getDescription());
+                this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
+            });
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
+            this.sttsRepository.findByAppUserUsernameAndNotInStatus(
+                appUser.get().getUsername(), Status.DELETE.getLookupValue())
+            .forEach(stts -> {
+                rowCount.getAndIncrement();
+                List<String> dataCellValue = new ArrayList<>();
+                dataCellValue.add(stts.getSttSOrder().toString());
+                dataCellValue.add(stts.getSttSName());
+                dataCellValue.add(stts.getDescription());
+                dataCellValue.add(IsDefault.getDefaultByValue(stts.getSttSDefault()).getDescription());
+                this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
+            });
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
+            this.sttcRepository.findSttControlByAppUserUsernameAndNotInStatus(
+                appUser.get().getUsername(), Status.DELETE.getLookupValue())
+            .forEach(sttc -> {
+                rowCount.getAndIncrement();
+                List<String> dataCellValue = new ArrayList<>();
+                dataCellValue.add(sttc.getSttCOrder().toString());
+                dataCellValue.add(sttc.getSttCName());
+                dataCellValue.add(sttc.getFiledName());
+                dataCellValue.add(sttc.getFiledTitle());
+                dataCellValue.add(!ProcessUtil.isNull(sttc.getFiledWidth()) ?
+                    sttc.getFiledWidth().toString(): this.bulkExcel.BLANK_VAL);
+                dataCellValue.add(sttc.getPlaceHolder());
+                dataCellValue.add(sttc.getPattern());
+                dataCellValue.add(sttc.getFiledType());
+                dataCellValue.add(!ProcessUtil.isNull(sttc.getMinLength()) ?
+                    sttc.getMinLength().toString(): this.bulkExcel.BLANK_VAL);
+                dataCellValue.add(!ProcessUtil.isNull(sttc.getMaxLength()) ?
+                    sttc.getMaxLength().toString(): this.bulkExcel.BLANK_VAL);
+                dataCellValue.add(IsDefault.getDefaultByValue(sttc.getMandatory()).getDescription());
+                this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
+            });
+        }
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         workbook.write(outputStream);
         return outputStream;
@@ -1048,20 +1118,16 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "Date not found");
         }
         Gson gson = new Gson();
-        STTFileUploadRequest sttFileUploadRequest = gson.fromJson((String) fileObject.getData(), STTFileUploadRequest.class);
-        if (isNull(sttFileUploadRequest.getAccessUserDetail().getUsername())) {
+        STTFileUploadRequest sttFileUReq = gson.fromJson((String) fileObject.getData(), STTFileUploadRequest.class);
+        if (isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
-        } else if (ProcessUtil.isNull(sttFileUploadRequest.getUploadType())) {
+        } else if (ProcessUtil.isNull(sttFileUReq.getUploadType())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
         }
-        if (sttFileUploadRequest.getUploadType().equals("STT")) {
-            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
-        } else if (sttFileUploadRequest.getUploadType().equals("STTF")) {
-            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
-        } else if (sttFileUploadRequest.getUploadType().equals("STTS")) {
-            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
-        } else if (sttFileUploadRequest.getUploadType().equals("STTC")) {
-            return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
+        if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT)) {
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_FORM)) {
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
+        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
         }
         return new AppResponse(ProcessUtil.ERROR, "Wrong upload type define.");
     }
