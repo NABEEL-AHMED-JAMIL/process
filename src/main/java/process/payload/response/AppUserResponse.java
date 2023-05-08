@@ -3,8 +3,10 @@ package process.payload.response;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import process.model.enums.Status;
+import process.util.lookuputil.GLookup;
+
 import java.sql.Timestamp;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -22,8 +24,9 @@ public class AppUserResponse {
     private String email;
     private Set<RoleResponse> roleResponse;
     protected AppUserResponse parentAppUser;
-    private Status status;
+    private GLookup status;
     private Timestamp dateCreated;
+    private List<AppUserResponse> subAppUser;
 
     public AppUserResponse() {}
 
@@ -91,11 +94,11 @@ public class AppUserResponse {
         this.parentAppUser = parentAppUser;
     }
 
-    public Status getStatus() {
+    public GLookup getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(GLookup status) {
         this.status = status;
     }
 
@@ -105,6 +108,14 @@ public class AppUserResponse {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public List<AppUserResponse> getSubAppUser() {
+        return subAppUser;
+    }
+
+    public void setSubAppUser(List<AppUserResponse> subAppUser) {
+        this.subAppUser = subAppUser;
     }
 
     @Override

@@ -11,7 +11,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import process.emailer.EmailMessagesFactory;
 import process.model.enums.ERole;
-import process.model.enums.Status;
 import process.model.pojo.AppUser;
 import process.model.pojo.RefreshToken;
 import process.model.pojo.Role;
@@ -24,8 +23,10 @@ import process.security.service.RefreshTokenService;
 import process.security.service.UserDetailsImpl;
 import process.service.AppUserService;
 import process.service.LookupDataCacheService;
-import process.util.CommonUtil;
+import process.util.lookuputil.LookupDetailUtil;
 import process.util.ProcessUtil;
+import process.util.lookuputil.Status;
+import javax.transaction.Transactional;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +38,7 @@ import java.util.stream.Collectors;
  * @author Nabeel Ahmed
  */
 @Service
+@Transactional
 public class AppUserServiceImpl implements AppUserService {
 
     private Logger logger = LoggerFactory.getLogger(AppUserServiceImpl.class);
@@ -69,42 +71,26 @@ public class AppUserServiceImpl implements AppUserService {
         if (ProcessUtil.isNull(username)) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(username, Status.Active);
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(username, Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
         AppUser appUserDetail = appUser.get();
-        AppUserResponse appUserResponse = new AppUserResponse();
-        appUserResponse.setAppUserId(appUserDetail.getAppUserId());
-        appUserResponse.setFirstName(appUserDetail.getFirstName());
-        appUserResponse.setLastName(appUserDetail.getLastName());
-        appUserResponse.setTimeZone(appUserDetail.getTimeZone());
-        appUserResponse.setUsername(appUserDetail.getUsername());
-        appUserResponse.setEmail(appUserDetail.getEmail());
-        appUserResponse.setStatus(appUserDetail.getStatus());
-        appUserResponse.setDateCreated(appUserDetail.getDateCreated());
+        AppUserResponse appUserResponse = this.getAppUserDetail(appUserDetail);
         if (!appUserDetail.getAppUserRoles().isEmpty()) {
             appUserResponse.setRoleResponse(
                 appUserDetail.getAppUserRoles().stream().map(role -> {
                     RoleResponse roleResponse = new RoleResponse();
                     roleResponse.setRoleId(role.getRoleId());
                     roleResponse.setRoleName(role.getRoleName());
-                    roleResponse.setStatus(role.getStatus());
+                    roleResponse.setStatus(Status.getStatusByValue(role.getStatus()));
                     roleResponse.setDateCreated(role.getDateCreated());
                     return roleResponse;
             }).collect(Collectors.toSet()));
         }
         if (!ProcessUtil.isNull(appUserDetail.getParentAppUser())) {
             appUserDetail = appUserDetail.getParentAppUser();
-            AppUserResponse parentAppUserResponse = new AppUserResponse();
-            parentAppUserResponse.setAppUserId(appUserDetail.getAppUserId());
-            parentAppUserResponse.setFirstName(appUserDetail.getFirstName());
-            parentAppUserResponse.setLastName(appUserDetail.getLastName());
-            parentAppUserResponse.setTimeZone(appUserDetail.getTimeZone());
-            parentAppUserResponse.setUsername(appUserDetail.getUsername());
-            parentAppUserResponse.setEmail(appUserDetail.getEmail());
-            parentAppUserResponse.setStatus(appUserDetail.getStatus());
-            parentAppUserResponse.setDateCreated(appUserDetail.getDateCreated());
+            AppUserResponse parentAppUserResponse = this.getAppUserDetail(appUserDetail);
             appUserResponse.setParentAppUser(parentAppUserResponse);
         }
         return new AppResponse(ProcessUtil.SUCCESS, "User detail.", appUserResponse);
@@ -128,7 +114,7 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "LastName missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.Active);
+            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
@@ -136,9 +122,9 @@ public class AppUserServiceImpl implements AppUserService {
         appUser.get().setLastName(updateUserProfileRequest.getLastName());
         this.appUserRepository.save(appUser.get());
         if (this.emailMessagesFactory.sendUpdateAppUserProfile(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Profile Update.", updateUserProfileRequest);
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", updateUserProfileRequest);
         }
-        return new AppResponse(ProcessUtil.ERROR,"Account updated," +
+        return new AppResponse(ProcessUtil.ERROR, "Account updated," +
             "Email not send contact with support.", updateUserProfileRequest);
     }
 
@@ -159,7 +145,7 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "NewPassword missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.Active);
+            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
@@ -170,9 +156,9 @@ public class AppUserServiceImpl implements AppUserService {
         appUser.get().setPassword(this.passwordEncoder.encode(updateUserProfileRequest.getNewPassword()));
         this.appUserRepository.save(appUser.get());
         if (this.emailMessagesFactory.sendUpdateAppUserPassword(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Profile Update.", updateUserProfileRequest);
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", updateUserProfileRequest);
         }
-        return new AppResponse(ProcessUtil.ERROR,"Account updated, " +
+        return new AppResponse(ProcessUtil.ERROR, "Account updated, " +
             "Email not send contact with support.", updateUserProfileRequest);
     }
 
@@ -191,16 +177,16 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "TimeZone missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.Active);
+            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
         appUser.get().setTimeZone(updateUserProfileRequest.getTimeZone());
         this.appUserRepository.save(appUser.get());
         if (this.emailMessagesFactory.sendUpdateAppUserTimeZone(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Timezone Update.", updateUserProfileRequest);
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Timezone Update.", updateUserProfileRequest);
         }
-        return new AppResponse(ProcessUtil.ERROR,"Account updated, " +
+        return new AppResponse(ProcessUtil.ERROR, "Account updated, " +
             "Email not send contact with support.", updateUserProfileRequest);
     }
 
@@ -211,20 +197,46 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.Active);
+            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
-        appUser.get().setStatus(Status.Delete);
+        appUser.get().setStatus(Status.DELETE.getLookupValue());
         /**
          * Will update rest of the code
          * */
         this.appUserRepository.save(appUser.get());
         if (this.emailMessagesFactory.sendCloseAppUserAccount(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS,"AppUser close.", updateUserProfileRequest);
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser close.", updateUserProfileRequest);
         }
-        return new AppResponse(ProcessUtil.ERROR,"Account close, " +
+        return new AppResponse(ProcessUtil.ERROR, "Account close, " +
             "Email not send contact with support.", updateUserProfileRequest);
+    }
+
+    /**
+     * Method use to get sub appUser account
+     * @param username
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse getSubAppUserAccount(String username) throws Exception {
+        logger.info("Request getSubAppUserAccount :- " + username);
+        if (ProcessUtil.isNull(username)) {
+            return new AppResponse(ProcessUtil.ERROR, "Username missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            username, Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
+        }
+        AppUserResponse appUserResponse = this.getAppUserDetail(appUser.get());
+        appUserResponse.setSubAppUser(
+            appUser.get().getAppUserChildren().stream().filter(appUser1 -> {
+                return appUser1.getStatus() != Status.DELETE.getLookupValue();
+            }).map(appUser1 -> {
+                return this.getAppUserDetail(appUser1);
+            }).collect(Collectors.toList()));
+        return new AppResponse(ProcessUtil.SUCCESS, "AppUser Sub Account.", appUserResponse);
     }
 
     /**
@@ -276,24 +288,24 @@ public class AppUserServiceImpl implements AppUserService {
         adminUser.setUsername(signUpRequest.getUsername());
         adminUser.setPassword(this.passwordEncoder.encode(signUpRequest.getPassword()));
         // by default active user no need extra action
-        adminUser.setStatus(Status.Active);
+        adminUser.setStatus(Status.ACTIVE.getLookupValue());
         // set the parent user which is master admin
         LookupDataResponse lookupDataResponse = this.lookupDataCacheService
-            .getParentLookupById(CommonUtil.LookupDetail.SUPER_ADMIN);
+            .getParentLookupById(LookupDetailUtil.SUPER_ADMIN);
         Optional<AppUser> superAdmin = this.appUserRepository.
-            findByUsernameAndStatus(lookupDataResponse.getLookupValue(), Status.Active);
+            findByUsernameAndStatus(lookupDataResponse.getLookupValue(), Status.ACTIVE.getLookupValue());
         if (superAdmin.isPresent()) {
             adminUser.setParentAppUser(superAdmin.get());
         }
         lookupDataResponse = this.lookupDataCacheService.getChildLookupById(
-            CommonUtil.LookupDetail.SCHEDULER_TIMEZONE, CommonUtil.LookupDetail.ASIA_QATAR);
+            LookupDetailUtil.SCHEDULER_TIMEZONE, LookupDetailUtil.ASIA_QATAR);
         if (!ProcessUtil.isNull(lookupDataResponse)) {
             adminUser.setTimeZone(lookupDataResponse.getLookupValue());
             signUpRequest.setTimeZone(lookupDataResponse.getLookupValue());
         }
         // register user role default as admin role
         Optional<Role> adminRole = this.roleRepository.findByRoleNameAndStatus(
-            ERole.ROLE_ADMIN.name(), Status.Active);
+            ERole.ROLE_ADMIN.name(), Status.ACTIVE.getLookupValue());
         if (adminRole.isPresent()) {
             Set<Role> roleSet = new HashSet<>();
             roleSet.add(adminRole.get());
@@ -322,12 +334,12 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "Email missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByEmailAndStatus(
-            forgotPasswordRequest.getEmail(), Status.Active);
+            forgotPasswordRequest.getEmail(), Status.ACTIVE.getLookupValue());
         if (appUser.isPresent()) {
             forgotPasswordRequest.setUsername(appUser.get().getUsername());
             forgotPasswordRequest.setAppUserId(appUser.get().getAppUserId());
             if (this.emailMessagesFactory.sendForgotPassword(forgotPasswordRequest)) {
-                return new AppResponse(ProcessUtil.SUCCESS,"Email send successfully");
+                return new AppResponse(ProcessUtil.SUCCESS, "Email send successfully");
             }
             return new AppResponse(ProcessUtil.ERROR,"Email not send contact with support.");
         }
@@ -348,12 +360,12 @@ public class AppUserServiceImpl implements AppUserService {
             return new AppResponse(ProcessUtil.ERROR, "New password missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByEmailAndStatus(
-            passwordResetRequest.getEmail(), Status.Active);
+            passwordResetRequest.getEmail(), Status.ACTIVE.getLookupValue());
         if (appUser.isPresent()) {
             appUser.get().setPassword(this.passwordEncoder.encode(passwordResetRequest.getNewPassword()));
             this.appUserRepository.save(appUser.get());
             if (this.emailMessagesFactory.sendResetPassword(passwordResetRequest)) {
-                return new AppResponse(ProcessUtil.SUCCESS,"Email send successfully.");
+                return new AppResponse(ProcessUtil.SUCCESS, "Email send successfully.");
             }
             return new AppResponse(ProcessUtil.ERROR,"Email not send contact with support.");
         }
@@ -387,6 +399,19 @@ public class AppUserServiceImpl implements AppUserService {
     @Override
     public AppResponse logoutAppUser(TokenRefreshRequest tokenRefreshRequest) throws Exception {
         return this.refreshTokenService.deleteRefreshToken(tokenRefreshRequest);
+    }
+
+    private AppUserResponse getAppUserDetail(AppUser appUser) {
+        AppUserResponse appUserResponse = new AppUserResponse();
+        appUserResponse.setAppUserId(appUser.getAppUserId());
+        appUserResponse.setFirstName(appUser.getFirstName());
+        appUserResponse.setLastName(appUser.getLastName());
+        appUserResponse.setTimeZone(appUser.getTimeZone());
+        appUserResponse.setUsername(appUser.getUsername());
+        appUserResponse.setEmail(appUser.getEmail());
+        appUserResponse.setStatus(Status.getStatusByValue(appUser.getStatus()));
+        appUserResponse.setDateCreated(appUser.getDateCreated());
+        return appUserResponse;
     }
 
 }

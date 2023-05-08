@@ -5,9 +5,11 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
 import javax.persistence.*;
-import java.util.Set;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
 
 /**
  * @author Nabeel Ahmed
@@ -32,22 +34,36 @@ public class STTForm {
     @GeneratedValue(generator = "sttFormSequenceGenerator")
     private Long sttFId;
 
-    @Column(name = "sttf_name")
+    @Column(name = "sttf_name", nullable = false)
     private String sttFName;
 
+    @Column(name = "description", nullable = false)
+    private String description;
+
     // status of job (active or disable or delete)
-    @Column(name = "sttf_status",nullable = false)
-    @Enumerated(EnumType.STRING)
-    private Status status;
+    @Column(name = "status",nullable = false)
+    private Long status;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_task_type_id")
-    private SourceTaskType sourceTaskType;
+    @Column(name = "is_default",
+        columnDefinition = "boolean default false")
+    private Boolean isDefault;
 
-    @OneToMany(mappedBy="sstForm")
-    private Set<STTSection> sttSectionSet;
+    @OneToMany(mappedBy="sttf")
+    private List<AppUserSTTF> appUserSTTF = new ArrayList<>();
+
+    @ManyToOne
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
+
+    @Column(name = "date_created", nullable = false)
+    private Timestamp dateCreated;
 
     public STTForm() {
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
     public Long getSttFId() {
@@ -66,28 +82,52 @@ public class STTForm {
         this.sttFName = sttFName;
     }
 
-    public Status getStatus() {
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
-    public SourceTaskType getSourceTaskType() {
-        return sourceTaskType;
+    public Boolean getDefault() {
+        return isDefault;
     }
 
-    public void setSourceTaskType(SourceTaskType sourceTaskType) {
-        this.sourceTaskType = sourceTaskType;
+    public void setDefault(Boolean aDefault) {
+        isDefault = aDefault;
     }
 
-    public Set<STTSection> getSttSectionSet() {
-        return sttSectionSet;
+    public List<AppUserSTTF> getAppUserSTTF() {
+        return appUserSTTF;
     }
 
-    public void setSttSectionSet(Set<STTSection> sttSectionSet) {
-        this.sttSectionSet = sttSectionSet;
+    public void setAppUserSTTF(List<AppUserSTTF> appUserSTTF) {
+        this.appUserSTTF = appUserSTTF;
+    }
+
+    public AppUser getAppUser() {
+        return appUser;
+    }
+
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     @Override

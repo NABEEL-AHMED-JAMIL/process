@@ -51,16 +51,17 @@ public class XmlOutTagInfoUtil {
     public String makeXml(ConfigurationMakerRequest xmlMakerRequest) throws Exception {
         logger.info("Process For Xml Create Start");
         String xml = null;
-        if(xmlMakerRequest.getXmlTagsInfo() != null) {
+        if (xmlMakerRequest.getXmlTagsInfo() != null) {
             Document xmlDoc = this.getBuilder().newDocument();
             boolean isParent = true;
-            for(ConfigurationMakerRequest.TagInfo tagInfo: xmlMakerRequest.getXmlTagsInfo()) {
+            for (ConfigurationMakerRequest.TagInfo tagInfo:
+                xmlMakerRequest.getXmlTagsInfo()) {
                 String tagKey = tagInfo.getTagKey();
                 String tagParent = tagInfo.getTagParent();
                 String tagValue = tagInfo.getTagValue();
                 Element child;
                 // for first node
-                if(isParent) {
+                if (isParent) {
                     // first time it's consider as root
                     child = xmlDoc.createElementNS(BLANK, tagKey);
                     addTagValue(xmlDoc, child, tagValue);
@@ -68,13 +69,13 @@ public class XmlOutTagInfoUtil {
                     isParent = false;
                 } else {
                     // if parent not define then skip this one
-                    if(tagParent != null && !tagParent.equals(BLANK)) {
+                    if (tagParent != null && !tagParent.equals(BLANK)) {
                         // first check if parent exist get the old parent else create the new once
                         NodeList nodeList = xmlDoc.getElementsByTagName(tagParent);
-                        if(nodeList != null && nodeList.getLength() > 0) {
+                        if (nodeList != null && nodeList.getLength() > 0) {
                             // old tag which append value
                             Node node = nodeList.item(nodeList.getLength()-1);
-                            if(node != null && (tagKey != null && !tagKey.equals(BLANK))) {
+                            if (node != null && (tagKey != null && !tagKey.equals(BLANK))) {
                                 child = xmlDoc.createElement(tagKey);
                                 addTagValue(xmlDoc, child, tagValue);
                                 node.appendChild(child);
@@ -82,7 +83,7 @@ public class XmlOutTagInfoUtil {
                         } else {
                             // main second level child
                             Element parent = xmlDoc.createElement(tagParent);
-                            if(tagKey != null && !tagKey.equals(BLANK)) {
+                            if (tagKey != null && !tagKey.equals(BLANK)) {
                                 child = xmlDoc.createElement(tagKey);
                                 addTagValue(xmlDoc, child, tagValue);
                                 parent.appendChild(child);
@@ -125,7 +126,7 @@ public class XmlOutTagInfoUtil {
     }
 
     private void addTagValue(Document xmlDoc, Element child, String tagValue) {
-        if(!ProcessUtil.isNull(tagValue)) {
+        if (!ProcessUtil.isNull(tagValue)) {
             child.appendChild(xmlDoc.createTextNode(tagValue));
         } else {
             child.appendChild(xmlDoc.createTextNode(SPACE));

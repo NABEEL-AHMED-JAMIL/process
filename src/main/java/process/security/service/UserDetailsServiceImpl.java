@@ -7,10 +7,11 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-import process.model.enums.Status;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import org.springframework.transaction.annotation.Transactional;
+import process.model.repository.LookupDataRepository;
+import process.util.lookuputil.Status;
 
 /**
  * @author Nabeel Ahmed
@@ -22,6 +23,8 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     @Autowired
     private AppUserRepository appUserRepository;
+    @Autowired
+    private LookupDataRepository lookupDataRepository;
 
     /**
      * loadUserByUsername method provide the auth user detail
@@ -31,7 +34,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AppUser appUser = appUserRepository.findByUsernameAndStatus(username, Status.Active)
+        AppUser appUser = appUserRepository.findByUsernameAndStatus(username, Status.ACTIVE.getLookupValue())
             .orElseThrow(() -> new UsernameNotFoundException("User Not Found with username: " + username));
         return UserDetailsImpl.build(appUser);
     }

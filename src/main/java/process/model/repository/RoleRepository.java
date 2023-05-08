@@ -2,7 +2,6 @@ package process.model.repository;
 
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
-import process.model.enums.Status;
 import process.model.pojo.Role;
 import java.util.Optional;
 
@@ -12,5 +11,5 @@ import java.util.Optional;
 @Repository
 public interface RoleRepository extends CrudRepository<Role, Long> {
 
-    public Optional<Role> findByRoleNameAndStatus(String roleName, Status status);
+    public Optional<Role> findByRoleNameAndStatus(String roleName, Long status);
 }

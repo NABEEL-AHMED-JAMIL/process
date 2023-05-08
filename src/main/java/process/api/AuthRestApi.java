@@ -40,11 +40,11 @@ public class AuthRestApi {
             return new ResponseEntity<>(this.appUserService.signInAppUser(loginRequest), HttpStatus.OK);
         }catch (BadCredentialsException ex) {
             logger.error("An error occurred while signInAppUser ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,"BadCredentials."), HttpStatus.OK);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "BadCredentials."), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while signInAppUser ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -62,7 +62,7 @@ public class AuthRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while signupAppUser ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -80,7 +80,7 @@ public class AuthRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while forgotPassword ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -98,7 +98,7 @@ public class AuthRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while resetPassword ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -116,7 +116,7 @@ public class AuthRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while authClamByRefreshToken ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -134,7 +134,7 @@ public class AuthRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while deleteRefreshToken ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

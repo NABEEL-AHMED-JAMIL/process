@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
@@ -37,8 +36,7 @@ public class Role {
     private String roleName;
 
     @Column(name = "status", nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    private Long status;
 
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
@@ -66,11 +64,11 @@ public class Role {
         this.roleName = roleName;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 

@@ -58,7 +58,7 @@ public class SettingRestApi {
     @RequestMapping(path = "xmlCreateChecker",  method = RequestMethod.POST)
     public ResponseEntity<?> xmlCreateChecker(@RequestBody ConfigurationMakerRequest xlmMakerRequest) {
         try {
-            if(xlmMakerRequest.getXmlTagsInfo() != null) {
+            if (xlmMakerRequest.getXmlTagsInfo() != null) {
                 return new ResponseEntity<>(new AppResponse(ProcessUtil.SUCCESS,
                     this.xmlOutTagInfoUtil.makeXml(xlmMakerRequest)), HttpStatus.OK);
             } else {

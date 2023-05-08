@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.payload.request.UpdateUserProfileRequest;
 import process.payload.response.AppResponse;
@@ -36,10 +37,10 @@ public class AppUserRestApi {
     @RequestMapping(value = "/tokenVerify", method = RequestMethod.GET)
     public ResponseEntity<?> tokenVerify() {
         try {
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.SUCCESS,"Token valid."), HttpStatus.OK);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.SUCCESS, "Token valid."), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while tokenVerify ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,"Token not valid."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "Token not valid."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -57,7 +58,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while getAppUserProfile ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -75,7 +76,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateAppUserProfile ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -93,7 +94,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateAppUserPassword ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -111,7 +112,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateAppUserTimeZone ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -129,7 +130,26 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while closeAppUserAccount ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * api-status :- done
+     * @apiName :- getSubAppUserAccount
+     * @apiNote :- Api use to get sub appUser account
+     * @param username
+     * @return ResponseEntity<?>
+     * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
+    @RequestMapping(value = "/getSubAppUserAccount", method = RequestMethod.GET)
+    public ResponseEntity<?> getSubAppUserAccount(@RequestParam String username) {
+        try {
+            return new ResponseEntity<>(this.appUserService.getSubAppUserAccount(username), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while getSubAppUserAccount ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

@@ -5,19 +5,19 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
-import process.model.enums.TaskType;
 import javax.persistence.*;
-import java.util.Set;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "source_task_type")
+@Table(name = "stt")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceTaskType {
+public class STT {
 
     @GenericGenerator(
         name = "sourceTaskTypeSequenceGenerator",
@@ -29,60 +29,57 @@ public class SourceTaskType {
         }
     )
     @Id
-    @Column(name="source_task_type_id", unique=true, nullable=false)
+    @Column(name="stt_id", unique=true, nullable=false)
     @GeneratedValue(generator = "sourceTaskTypeSequenceGenerator")
-    private Long sourceTaskTypeId;
+    private Long sttId;
 
-    @Column(name = "service_name",
-        nullable = false)
+    @Column(name = "service_name", nullable = false)
     private String serviceName;
 
-    @Column(name = "description",
-         nullable = false)
+    @Column(name = "description", nullable = false)
     private String description;
 
-    @Enumerated(EnumType.ORDINAL)
-    @Column(name = "task_type", nullable = false,
-        updatable = false)
-    private TaskType taskType;
+    @Column(name = "task_type", nullable = false, updatable = false)
+    private Long taskType;
 
-    @OneToOne(mappedBy = "sourceTaskType",
-        cascade = CascadeType.ALL)
-    @PrimaryKeyJoinColumn
-    private ApiTaskType apiTaskType;
+    @OneToMany(mappedBy = "stt")
+    private List<ApiTaskType> apiTaskType = new ArrayList<>();
 
-    @OneToOne(mappedBy = "sourceTaskType",
-        cascade = CascadeType.ALL)
-    @PrimaryKeyJoinColumn
-    private KafkaTaskType kafkaTaskType;
+    @OneToMany(mappedBy = "stt")
+    private List<KafkaTaskType> kafkaTaskType = new ArrayList<>();
 
-    @Column(name = "task_type_status",
-            nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    @Column(name = "status", nullable = false)
+    private Long status;
 
     /**default source task type for testing
      * Test Loop
      * if any other*/
-    @Column(name = "is_default",
-        nullable = false)
+    @Column(name = "is_default", nullable = false)
     private Boolean isDefault;
+
+    @OneToMany(mappedBy="stt")
+    private List<AppUserSTT> appUserSTT = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
 
-    @OneToMany(mappedBy="sourceTaskType")
-    private Set<STTForm> sttFormSet;
+    @Column(name = "date_created", nullable = false)
+    private Timestamp dateCreated;
 
-    public SourceTaskType() {}
+    public STT() {}
 
-    public Long getSourceTaskTypeId() {
-        return sourceTaskTypeId;
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
-    public void setSourceTaskTypeId(Long sourceTaskTypeId) {
-        this.sourceTaskTypeId = sourceTaskTypeId;
+    public Long getSttId() {
+        return sttId;
+    }
+
+    public void setSttId(Long sttId) {
+        this.sttId = sttId;
     }
 
     public String getServiceName() {
@@ -101,44 +98,52 @@ public class SourceTaskType {
         this.description = description;
     }
 
-    public TaskType getTaskType() {
+    public Long getTaskType() {
         return taskType;
     }
 
-    public void setTaskType(TaskType taskType) {
+    public void setTaskType(Long taskType) {
         this.taskType = taskType;
     }
 
-    public ApiTaskType getApiTaskType() {
+    public List<ApiTaskType> getApiTaskType() {
         return apiTaskType;
     }
 
-    public void setApiTaskType(ApiTaskType apiTaskType) {
+    public void setApiTaskType(List<ApiTaskType> apiTaskType) {
         this.apiTaskType = apiTaskType;
     }
 
-    public KafkaTaskType getKafkaTaskType() {
+    public List<KafkaTaskType> getKafkaTaskType() {
         return kafkaTaskType;
     }
 
-    public void setKafkaTaskType(KafkaTaskType kafkaTaskType) {
+    public void setKafkaTaskType(List<KafkaTaskType> kafkaTaskType) {
         this.kafkaTaskType = kafkaTaskType;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
-    public Boolean isDefault() {
+    public Boolean getDefault() {
         return isDefault;
     }
 
     public void setDefault(Boolean aDefault) {
         isDefault = aDefault;
+    }
+
+    public List<AppUserSTT> getAppUserSTT() {
+        return appUserSTT;
+    }
+
+    public void setAppUserSTT(List<AppUserSTT> appUserSTT) {
+        this.appUserSTT = appUserSTT;
     }
 
     public AppUser getAppUser() {
@@ -149,12 +154,12 @@ public class SourceTaskType {
         this.appUser = appUser;
     }
 
-    public Set<STTForm> getSttFormSet() {
-        return sttFormSet;
+    public Timestamp getDateCreated() {
+        return dateCreated;
     }
 
-    public void setSttFormSet(Set<STTForm> sttFormSet) {
-        this.sttFormSet = sttFormSet;
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     @Override

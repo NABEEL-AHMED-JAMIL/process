@@ -18,6 +18,7 @@ public class LookupDataRequest {
     private String description;
     private Timestamp dateCreated;
     private Long parentLookupId;
+    private boolean validate;
     private ParseRequest accessUserDetail;
 
     public LookupDataRequest() {
@@ -69,6 +70,14 @@ public class LookupDataRequest {
 
     public void setParentLookupId(Long parentLookupId) {
         this.parentLookupId = parentLookupId;
+    }
+
+    public boolean isValidate() {
+        return validate;
+    }
+
+    public void setValidate(boolean validate) {
+        this.validate = validate;
     }
 
     public ParseRequest getAccessUserDetail() {

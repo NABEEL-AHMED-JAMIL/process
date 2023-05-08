@@ -7,12 +7,14 @@ import org.springframework.stereotype.Service;
 import process.payload.request.QueryRequest;
 import process.payload.response.AppResponse;
 import process.service.SettingApiService;
+import javax.transaction.Transactional;
 import static process.util.ProcessUtil.*;
 
 /**
  * @author Nabeel Ahmed
  */
 @Service
+@Transactional
 public class SettingApiServiceImpl implements SettingApiService {
 
     private Logger logger = LoggerFactory.getLogger(SettingApiServiceImpl.class);

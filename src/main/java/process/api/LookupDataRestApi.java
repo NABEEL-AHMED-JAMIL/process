@@ -74,7 +74,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -129,7 +129,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLookupByLookupType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -159,7 +159,7 @@ public class LookupDataRestApi {
      * @return ResponseEntity<?> downloadLookupTemplateFile
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/downloadSourceJobTemplateFile", method = RequestMethod.GET)
+    @RequestMapping(value = "/downloadLookupTemplateFile", method = RequestMethod.GET)
     public ResponseEntity<?> downloadLookupTemplateFile() {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -209,11 +209,10 @@ public class LookupDataRestApi {
     @RequestMapping(value = "/uploadLookup", method = RequestMethod.POST)
     public ResponseEntity<?> uploadLookup(FileUploadRequest fileObject) {
         try {
-            if (fileObject.getFile() != null) {
+            if (!ProcessUtil.isNull(fileObject.getFile())) {
                 return new ResponseEntity<>(this.lookupDataCacheService.uploadLookup(fileObject), HttpStatus.OK);
             }
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "File not found for process."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadLookup ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,

@@ -5,8 +5,10 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
 import javax.persistence.*;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -31,27 +33,32 @@ public class STTControl {
     @GeneratedValue(generator = "sttControlSequenceGenerator")
     private Long sttCId;
 
+    @Column(name = "sttc_name", nullable=false)
+    private String sttCName;
+
+    @Column(name = "description", nullable = false)
+    private String description;
+
     @Column(name = "sttc_order")
     private Long sttCOrder;
-
-    @Column(name = "control_name", nullable=false)
-    private String controlName;
-
-    @Column(name = "place_holder")
-    private String placeHolder;
 
     // select,multiple select, need the lookup value
     @Column(name = "filed_type")
     private String filedType;
 
-    @Column(name = "filed_look_up")
-    private Long filedLookUp;
+    // label name
+    @Column(name = "filed_title", nullable = false)
+    private String filedTitle;
+
+    // filed name not be space
+    @Column(name = "filed_name", nullable = false)
+    private String filedName;
+
+    @Column(name = "place_holder")
+    private String placeHolder;
 
     @Column(name = "filed_width")
     private Long filedWidth;
-
-    @Column(name = "separate_line")
-    private boolean separateLine;
 
     @Column(name = "min_length")
     private Long minLength;
@@ -59,21 +66,38 @@ public class STTControl {
     @Column(name = "max_length")
     private Long maxLength;
 
+    @Column(name = "filed_lk_value")
+    private String filedLkValue;
+
     @Column(name = "mandatory")
-    private boolean mandatory;
+    private Boolean mandatory;
 
-    @Column(name = "sttc_status",nullable = false)
-    @Enumerated(EnumType.STRING)
-    private Status status;
+    @Column(name = "is_default",
+        columnDefinition = "boolean default false")
+    private Boolean isDefault;
 
-    @Column(name = "filed_new_line")
-    private boolean filedNewLine;
+    @Column(name = "pattern")
+    private String pattern;
+
+    @Column(name = "status",nullable = false)
+    private Long status;
 
     @ManyToOne
-    @JoinColumn(name = "stts_id")
-    private STTSection sstSttSection;
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
+
+    @Column(name = "date_created", nullable = false)
+    private Timestamp dateCreated;
+
+    @OneToMany(mappedBy="sttc")
+    private List<AppUserSTTC> appUserSTTC = new ArrayList<>();
 
     public STTControl() {
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
     public Long getSttCId() {
@@ -84,28 +108,28 @@ public class STTControl {
         this.sttCId = sttCId;
     }
 
+    public String getSttCName() {
+        return sttCName;
+    }
+
+    public void setSttCName(String sttCName) {
+        this.sttCName = sttCName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
     public Long getSttCOrder() {
         return sttCOrder;
     }
 
     public void setSttCOrder(Long sttCOrder) {
         this.sttCOrder = sttCOrder;
-    }
-
-    public String getControlName() {
-        return controlName;
-    }
-
-    public void setControlName(String controlName) {
-        this.controlName = controlName;
-    }
-
-    public String getPlaceHolder() {
-        return placeHolder;
-    }
-
-    public void setPlaceHolder(String placeHolder) {
-        this.placeHolder = placeHolder;
     }
 
     public String getFiledType() {
@@ -116,12 +140,28 @@ public class STTControl {
         this.filedType = filedType;
     }
 
-    public Long getFiledLookUp() {
-        return filedLookUp;
+    public String getFiledTitle() {
+        return filedTitle;
     }
 
-    public void setFiledLookUp(Long filedLookUp) {
-        this.filedLookUp = filedLookUp;
+    public void setFiledTitle(String filedTitle) {
+        this.filedTitle = filedTitle;
+    }
+
+    public String getFiledName() {
+        return filedName;
+    }
+
+    public void setFiledName(String filedName) {
+        this.filedName = filedName;
+    }
+
+    public String getPlaceHolder() {
+        return placeHolder;
+    }
+
+    public void setPlaceHolder(String placeHolder) {
+        this.placeHolder = placeHolder;
     }
 
     public Long getFiledWidth() {
@@ -130,14 +170,6 @@ public class STTControl {
 
     public void setFiledWidth(Long filedWidth) {
         this.filedWidth = filedWidth;
-    }
-
-    public boolean isSeparateLine() {
-        return separateLine;
-    }
-
-    public void setSeparateLine(boolean separateLine) {
-        this.separateLine = separateLine;
     }
 
     public Long getMinLength() {
@@ -156,36 +188,68 @@ public class STTControl {
         this.maxLength = maxLength;
     }
 
-    public boolean isMandatory() {
+    public String getFiledLkValue() {
+        return filedLkValue;
+    }
+
+    public void setFiledLkValue(String filedLkValue) {
+        this.filedLkValue = filedLkValue;
+    }
+
+    public Boolean getMandatory() {
         return mandatory;
     }
 
-    public void setMandatory(boolean mandatory) {
+    public void setMandatory(Boolean mandatory) {
         this.mandatory = mandatory;
     }
 
-    public Status getStatus() {
+    public Boolean getDefault() {
+        return isDefault;
+    }
+
+    public void setDefault(Boolean aDefault) {
+        isDefault = aDefault;
+    }
+
+    public String getPattern() {
+        return pattern;
+    }
+
+    public void setPattern(String pattern) {
+        this.pattern = pattern;
+    }
+
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
-    public boolean isFiledNewLine() {
-        return filedNewLine;
+    public AppUser getAppUser() {
+        return appUser;
     }
 
-    public void setFiledNewLine(boolean filedNewLine) {
-        this.filedNewLine = filedNewLine;
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
     }
 
-    public STTSection getSstSttSection() {
-        return sstSttSection;
+    public Timestamp getDateCreated() {
+        return dateCreated;
     }
 
-    public void setSstSttSection(STTSection sstSttSection) {
-        this.sstSttSection = sstSttSection;
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
+    }
+
+    public List<AppUserSTTC> getAppUserSTTC() {
+        return appUserSTTC;
+    }
+
+    public void setAppUserSTTC(List<AppUserSTTC> appUserSTTC) {
+        this.appUserSTTC = appUserSTTC;
     }
 
     @Override

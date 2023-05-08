@@ -4,7 +4,6 @@ import process.payload.request.FileUploadRequest;
 import process.payload.request.LookupDataRequest;
 import process.payload.response.AppResponse;
 import process.payload.response.LookupDataResponse;
-
 import java.io.ByteArrayOutputStream;
 
 /**

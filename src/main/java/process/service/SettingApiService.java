@@ -1,6 +1,5 @@
 package process.service;
 
-
 import process.payload.request.QueryRequest;
 import process.payload.response.AppResponse;
 

@@ -5,9 +5,10 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
 import javax.persistence.*;
-import java.util.Set;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -35,29 +36,35 @@ public class STTSection {
     @Column(name = "stts_name")
     private String sttSName;
 
+    @Column(name = "description", nullable = false)
+    private String description;
+
     @Column(name = "stts_order")
     private Long sttSOrder;
 
-    @Column(name = "stts_status",nullable = false)
-    @Enumerated(EnumType.STRING)
-    private Status status;
+    @Column(name = "status",nullable = false)
+    private Long status;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sttf_id")
-    private STTForm sstForm;
+    @Column(name = "is_default",
+        columnDefinition = "boolean default false")
+    private Boolean isDefault;
 
-    @OneToMany(mappedBy="sstSttSection")
-    private Set<STTControl> sttControlSet;
+    @OneToMany(mappedBy="stts")
+    private List<AppUserSTTS> appUserSTTS = new ArrayList<>();
+
+    @ManyToOne
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
+
+    @Column(name = "date_created", nullable = false)
+    private Timestamp dateCreated;
 
     public STTSection() {
     }
 
-    public STTSection(String sttSName, Long sttSOrder,
-        Status status, STTForm sstForm) {
-        this.sttSName = sttSName;
-        this.sttSOrder = sttSOrder;
-        this.status = status;
-        this.sstForm = sstForm;
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
     public Long getSttSId() {
@@ -76,6 +83,14 @@ public class STTSection {
         this.sttSName = sttSName;
     }
 
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
     public Long getSttSOrder() {
         return sttSOrder;
     }
@@ -84,28 +99,44 @@ public class STTSection {
         this.sttSOrder = sttSOrder;
     }
 
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
-    public STTForm getSstForm() {
-        return sstForm;
+    public Boolean getDefault() {
+        return isDefault;
     }
 
-    public void setSstForm(STTForm sstForm) {
-        this.sstForm = sstForm;
+    public void setDefault(Boolean aDefault) {
+        isDefault = aDefault;
     }
 
-    public Set<STTControl> getSttControlSet() {
-        return sttControlSet;
+    public List<AppUserSTTS> getAppUserSTTS() {
+        return appUserSTTS;
     }
 
-    public void setSttControlSet(Set<STTControl> sttControlSet) {
-        this.sttControlSet = sttControlSet;
+    public void setAppUserSTTS(List<AppUserSTTS> appUserSTTS) {
+        this.appUserSTTS = appUserSTTS;
+    }
+
+    public AppUser getAppUser() {
+        return appUser;
+    }
+
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     @Override

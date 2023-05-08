@@ -1,12 +1,13 @@
 package process.model.pojo;
 
 import com.google.gson.Gson;
-import org.hibernate.annotations.GenericGenerator;
-import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import org.hibernate.annotations.GenericGenerator;
 
 @Entity
 @Table(	name = "app_users",
@@ -51,17 +52,25 @@ public class AppUser {
             nullable=false)
     private String password;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(cascade = {
+        CascadeType.PERSIST, CascadeType.MERGE
+    }, fetch = FetchType.LAZY)
     @JoinTable(	name = "app_user_roles",
         joinColumns = @JoinColumn(name = "app_user_id"),
         inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> appUserRoles = new HashSet<>();
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(	name = "app_user_source_tt",
-        joinColumns = @JoinColumn(name = "app_user_id"),
-        inverseJoinColumns = @JoinColumn(name = "source_task_type_id"))
-    private Set<SourceTaskType> appUserSourceTaskTypeSet = new HashSet<>();
+    @OneToMany(mappedBy="appUser")
+    private List<AppUserSTT> appUserSTT = new ArrayList<>();
+
+    @OneToMany(mappedBy="appUser")
+    private List<AppUserSTTF> appUserSTTF = new ArrayList<>();
+
+    @OneToMany(mappedBy="appUser")
+    private List<AppUserSTTS> appUserSTTS = new ArrayList<>();
+
+    @OneToMany(mappedBy="appUser")
+    private List<AppUserSTTC> appUserSTTC = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name = "parent_user_id")
@@ -71,15 +80,8 @@ public class AppUser {
         fetch = FetchType.LAZY)
     protected Set<AppUser> appUserChildren;
 
-    @OneToMany(mappedBy="appUser")
-    private Set<LookupData> lookupDataSet;
-
-    @OneToMany(mappedBy="appUser")
-    private Set<SourceTaskType> sourceTaskTypeSet;
-
     @Column(name = "status", nullable = false)
-    @Enumerated(EnumType.ORDINAL)
-    private Status status;
+    private Long status;
 
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
@@ -156,20 +158,44 @@ public class AppUser {
         this.appUserRoles = appUserRoles;
     }
 
+    public List<AppUserSTT> getAppUserSTT() {
+        return appUserSTT;
+    }
+
+    public void setAppUserSTT(List<AppUserSTT> appUserSTT) {
+        this.appUserSTT = appUserSTT;
+    }
+
+    public List<AppUserSTTF> getAppUserSTTF() {
+        return appUserSTTF;
+    }
+
+    public void setAppUserSTTF(List<AppUserSTTF> appUserSTTF) {
+        this.appUserSTTF = appUserSTTF;
+    }
+
+    public List<AppUserSTTS> getAppUserSTTS() {
+        return appUserSTTS;
+    }
+
+    public void setAppUserSTTS(List<AppUserSTTS> appUserSTTS) {
+        this.appUserSTTS = appUserSTTS;
+    }
+
+    public List<AppUserSTTC> getAppUserSTTC() {
+        return appUserSTTC;
+    }
+
+    public void setAppUserSTTC(List<AppUserSTTC> appUserSTTC) {
+        this.appUserSTTC = appUserSTTC;
+    }
+
     public AppUser getParentAppUser() {
         return parentAppUser;
     }
 
     public void setParentAppUser(AppUser parentAppUser) {
         this.parentAppUser = parentAppUser;
-    }
-
-    public Set<SourceTaskType> getAppUserSourceTaskTypeSet() {
-        return appUserSourceTaskTypeSet;
-    }
-
-    public void setAppUserSourceTaskTypeSet(Set<SourceTaskType> appUserSourceTaskTypeSet) {
-        this.appUserSourceTaskTypeSet = appUserSourceTaskTypeSet;
     }
 
     public Set<AppUser> getAppUserChildren() {
@@ -180,27 +206,11 @@ public class AppUser {
         this.appUserChildren = appUserChildren;
     }
 
-    public Set<LookupData> getLookupDataSet() {
-        return lookupDataSet;
-    }
-
-    public void setLookupDataSet(Set<LookupData> lookupDataSet) {
-        this.lookupDataSet = lookupDataSet;
-    }
-
-    public Set<SourceTaskType> getSourceTaskTypeSet() {
-        return sourceTaskTypeSet;
-    }
-
-    public void setSourceTaskTypeSet(Set<SourceTaskType> sourceTaskTypeSet) {
-        this.sourceTaskTypeSet = sourceTaskTypeSet;
-    }
-
-    public Status getStatus() {
+    public Long getStatus() {
         return status;
     }
 
-    public void setStatus(Status status) {
+    public void setStatus(Long status) {
         this.status = status;
     }
 
