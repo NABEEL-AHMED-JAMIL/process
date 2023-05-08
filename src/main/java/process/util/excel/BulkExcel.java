@@ -59,7 +59,7 @@ public class BulkExcel implements ExcelUtil {
      * */
     public void fillBulkBody(List<String> data, Integer rowCount) {
         Row body = this.sheet.createRow(rowCount);
-        for(int i=0; i<data.size(); i++) {
+        for (int i=0; i<data.size(); i++) {
             this.fillCellValue(i, body, data.get(i));
         }
     }

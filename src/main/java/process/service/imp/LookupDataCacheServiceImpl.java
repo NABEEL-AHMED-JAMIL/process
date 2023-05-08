@@ -219,7 +219,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
                 }
             }
             appSettingDetail.put(SUB_LOOKUP_DATA, lookupDataResponses);
-            return new AppResponse(ProcessUtil.SUCCESS,"Data fetch successfully.", appSettingDetail);
+            return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully.", appSettingDetail);
         }
         return new AppResponse(ProcessUtil.ERROR, String.format("LookupData not found with %s.", lookupDataRequest));
     }
@@ -259,7 +259,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
                 }
             }
             appSettingDetail.put(SUB_LOOKUP_DATA, lookupDataResponses);
-            return new AppResponse(ProcessUtil.SUCCESS,"Data fetch successfully.", appSettingDetail);
+            return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully.", appSettingDetail);
         }
         return new AppResponse(ProcessUtil.ERROR, String.format("LookupData not found with %s.", lookupDataRequest));
     }
@@ -290,7 +290,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
                 lookupDataResponses.add(lookupDataResponse);
             }
         }
-        return new AppResponse(ProcessUtil.SUCCESS,"Data fetch successfully.", lookupDataResponses);
+        return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully.", lookupDataResponses);
     }
 
     /**
@@ -421,18 +421,18 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             return new AppResponse(ProcessUtil.ERROR, "You can upload only .xlsx extension file.");
         }
         // fill the stream with file into work-book
-        Optional<LookupData> fileLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
+        Optional<LookupData> uploadLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
         XSSFWorkbook workbook = new XSSFWorkbook(fileObject.getFile().getInputStream());
         if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new AppResponse(ProcessUtil.ERROR,  "You uploaded empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(this.bulkExcel.LOOKUP);
-        if(isNull(sheet)) {
-            return new AppResponse(ProcessUtil.ERROR, "Sheet not found with (Job-Add)");
+        if (isNull(sheet)) {
+            return new AppResponse(ProcessUtil.ERROR, "Sheet not found with (LookupTemplate)");
         } else if (sheet.getLastRowNum() < 1) {
             return new AppResponse(ProcessUtil.ERROR,  "You can't upload empty file.");
-        } else if(sheet.getLastRowNum() > Long.valueOf(fileLimit.get().getLookupValue())) {
-            return new AppResponse(ProcessUtil.ERROR, String.format("File support %s rows at a time.", fileLimit.get().getLookupValue()));
+        } else if (sheet.getLastRowNum() > Long.valueOf(uploadLimit.get().getLookupValue())) {
+            return new AppResponse(ProcessUtil.ERROR, String.format("File support %s rows at a time.", uploadLimit.get().getLookupValue()));
         }
         List<LookupValidation> lookupValidations = new ArrayList<>();
         List<String> errors = new ArrayList<>();
@@ -494,7 +494,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             lookupData.setAppUser(appUser.get());
             this.addNewLookupData(this.lookupDataRepository.save(lookupData));
         });
-        return new AppResponse(ProcessUtil.SUCCESS,"Data save successfully.");
+        return new AppResponse(ProcessUtil.SUCCESS, "Data save successfully.");
     }
 
     private void fillLookupDateDto(LookupData lookupData, LookupDataResponse lookupDataResponse) {

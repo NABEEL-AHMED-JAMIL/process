@@ -37,10 +37,10 @@ public class AppUserRestApi {
     @RequestMapping(value = "/tokenVerify", method = RequestMethod.GET)
     public ResponseEntity<?> tokenVerify() {
         try {
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.SUCCESS,"Token valid."), HttpStatus.OK);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.SUCCESS, "Token valid."), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while tokenVerify ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,"Token not valid."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "Token not valid."), HttpStatus.BAD_REQUEST);
         }
     }
 

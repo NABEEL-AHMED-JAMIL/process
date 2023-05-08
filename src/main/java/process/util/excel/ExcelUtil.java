@@ -1,6 +1,5 @@
 package process.util.excel;
 
-import org.apache.kafka.common.protocol.types.Field;
 
 /**
  * @author Nabeel Ahmed
@@ -31,7 +30,13 @@ public interface ExcelUtil {
     public static String[] STTC_HEADER_FILED_BATCH_FILE = new String[] {
         "CONTROL_ORDER", "CONTROL_NAME", "FILED_NAME", "FILED_TITLE",
         "FILED_WIDTH", "PLACEHOLDER", "PATTERN", "FILED_TYPE",
-        "MIN_LENGTH", "MIX_LENGTH", "REQUIRED"
+        "MIN_LENGTH", "MAX_LENGTH", "REQUIRED"
+    };
+
+    public static String[] STTC_HEADER_FILED_BATCH_FILE_V1 = new String[] {
+        "CONTROL_ORDER", "CONTROL_NAME", "DESCRIPTION", "FILED_NAME", "FILED_TITLE",
+        "FILED_WIDTH", "PLACEHOLDER", "PATTERN", "FILED_TYPE",
+        "MIN_LENGTH", "MAX_LENGTH", "REQUIRED"
     };
     public static String XLSX_EXTENSION = ".xlsx";
 }

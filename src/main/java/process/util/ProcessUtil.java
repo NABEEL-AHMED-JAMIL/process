@@ -25,7 +25,7 @@ public class ProcessUtil {
 
     public static void timeZoneUtil() {
         String[]ids = TimeZone.getAvailableIDs();
-        for(String id:ids) {
+        for (String id:ids) {
             logger.info(displayTimeZone(TimeZone.getTimeZone(id)));
         }
         logger.info("Total TimeZone ID " + ids.length);

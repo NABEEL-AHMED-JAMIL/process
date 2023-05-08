@@ -109,9 +109,9 @@ public class ConfigurationMakerRequest {
 
         @Override
         public int compareTo(TagInfo o) {
-            if(taskPayloadId==o.taskPayloadId) {
+            if (taskPayloadId==o.taskPayloadId) {
                 return 0;
-            } else if(taskPayloadId>o.taskPayloadId) {
+            } else if (taskPayloadId>o.taskPayloadId) {
                 return 1;
             } else {
                 return -1;

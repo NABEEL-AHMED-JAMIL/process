@@ -238,7 +238,7 @@ public class EmailMessagesFactory {
             MimeMessage mailMessage = this.javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mailMessage, UTF8);
             helper.setFrom(emailContent.getFromEmail());
-            if(!isNull(emailContent.getRecipients())) {
+            if (!isNull(emailContent.getRecipients())) {
                 helper.setTo(emailContent.getRecipients());
                 if (emailContent.getRecipientsMulti() != null && emailContent.getRecipientsMulti().size() > 0) {
                     // * * * * * * * * *Send cc's* * * * * * * * *

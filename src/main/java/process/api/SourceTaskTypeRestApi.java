@@ -286,7 +286,7 @@ public class SourceTaskTypeRestApi {
 
     /**
      * api-status :- done
-     * @apiName :- editSTTS
+     * @apiName :- deleteSTTS
      * @apiNote :- Api use to delete stts(source task type section)
      * @param sttSectionRequest
      * @return ResponseEntity<?>
@@ -353,7 +353,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
-    // STTC
+    /**
+     * api-status :- done
+     * @apiName :- addSTTC
+     * @apiNote :- Api use to add sttc(source task type control)
+     * @param sttControlRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/addSTTC", method = RequestMethod.POST)
     public ResponseEntity<?> addSTTC(@RequestBody STTControlRequest sttControlRequest) {
@@ -366,6 +372,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- editSTTC
+     * @apiNote :- Api use to edit sttc(source task type control)
+     * @param sttControlRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/editSTTC", method = RequestMethod.POST)
     public ResponseEntity<?> editSTTC(@RequestBody STTControlRequest sttControlRequest) {
@@ -378,6 +391,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- deleteSTTC
+     * @apiNote :- Api use to delete sttc(source task type control)
+     * @param sttControlRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/deleteSTTC", method = RequestMethod.POST)
     public ResponseEntity<?> deleteSTTC(@RequestBody STTControlRequest sttControlRequest) {
@@ -390,6 +410,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- fetchSTTCBySttcId
+     * @apiNote :- Api use to fetch sttc(source task type control) by sttc id
+     * @param sttControlRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTCBySttcId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTCBySttcId(@RequestBody STTControlRequest sttControlRequest) {
@@ -402,6 +429,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- fetchSTTC
+     * @apiNote :- Api use to fetch sttc(source task type control)
+     * @param sttControlRequest
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSTTC", method = RequestMethod.POST)
     public ResponseEntity<?> fetchSTTC(@RequestBody STTControlRequest sttControlRequest) {
@@ -426,7 +460,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
-    // bath
+    /**
+     * api-status :- done
+     * @apiName :- downloadSTTCommonTemplateFile
+     * @apiNote :- Api use to download sttc template file
+     * @param sttFileUReq
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/downloadSTTCommonTemplateFile", method = RequestMethod.POST)
     public ResponseEntity<?> downloadSTTCommonTemplateFile(@RequestBody STTFileUploadRequest sttFileUReq) {
@@ -438,13 +478,19 @@ public class SourceTaskTypeRestApi {
             return ResponseEntity.ok().headers(headers).body(
                 this.sourceTaskTypeService.downloadSTTCommonTemplateFile(sttFileUReq).toByteArray());
         } catch (Exception ex) {
-            logger.error("An error occurred while downloadSTTCommonTemplateFile xlsx file",
-                ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while downloadSTTCommonTemplateFile xlsx file", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
                 "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- downloadSTTCommon
+     * @apiNote :- Api use to download stt* all file
+     * @param sttFileUReq
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/downloadSTTCommon", method = RequestMethod.POST)
     public ResponseEntity<?> downloadSTTCommon(@RequestBody STTFileUploadRequest sttFileUReq) {
@@ -460,6 +506,13 @@ public class SourceTaskTypeRestApi {
         }
     }
 
+    /**
+     * api-status :- done
+     * @apiName :- uploadSTTCommon
+     * @apiNote :- Api use to upload
+     * @param fileObject
+     * @return ResponseEntity<?>
+     * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/uploadSTTCommon", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSTTCommon(FileUploadRequest fileObject) {
@@ -467,8 +520,8 @@ public class SourceTaskTypeRestApi {
             if (!ProcessUtil.isNull(fileObject.getFile())) {
                 return new ResponseEntity<>(this.sourceTaskTypeService.uploadSTTCommon(fileObject), HttpStatus.OK);
             }
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "File not found for process."),
-                HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
+                "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadSTTCommon ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,

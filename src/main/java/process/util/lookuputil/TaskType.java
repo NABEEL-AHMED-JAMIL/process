@@ -60,6 +60,20 @@ public enum TaskType {
         return new GLookup(taskType.lookupType, taskType.lookupValue, taskType.description);
     }
 
+    public static GLookup getTaskTypeByDescription(String description) {
+        TaskType taskType = null;
+        if (description.equals(API.getDescription())) {
+            taskType = API;
+        } else if (description.equals(AWS_SQS.getDescription())) {
+            taskType = AWS_SQS;
+        } else if (description.equals(WEB_SOCKET.getDescription())) {
+            taskType = WEB_SOCKET;
+        } else if (description.equals(KAFKA.getDescription())) {
+            taskType = KAFKA;
+        }
+        return new GLookup(taskType.lookupType, taskType.lookupValue, taskType.description);
+    }
+
     @Override
     public String toString() {
         return new Gson().toJson(this);

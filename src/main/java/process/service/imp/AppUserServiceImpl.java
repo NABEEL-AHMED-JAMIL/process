@@ -26,6 +26,7 @@ import process.service.LookupDataCacheService;
 import process.util.lookuputil.LookupDetailUtil;
 import process.util.ProcessUtil;
 import process.util.lookuputil.Status;
+import javax.transaction.Transactional;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +38,7 @@ import java.util.stream.Collectors;
  * @author Nabeel Ahmed
  */
 @Service
+@Transactional
 public class AppUserServiceImpl implements AppUserService {
 
     private Logger logger = LoggerFactory.getLogger(AppUserServiceImpl.class);
@@ -120,9 +122,9 @@ public class AppUserServiceImpl implements AppUserService {
         appUser.get().setLastName(updateUserProfileRequest.getLastName());
         this.appUserRepository.save(appUser.get());
         if (this.emailMessagesFactory.sendUpdateAppUserProfile(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Profile Update.", updateUserProfileRequest);
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", updateUserProfileRequest);
         }
-        return new AppResponse(ProcessUtil.ERROR,"Account updated," +
+        return new AppResponse(ProcessUtil.ERROR, "Account updated," +
             "Email not send contact with support.", updateUserProfileRequest);
     }
 
@@ -154,9 +156,9 @@ public class AppUserServiceImpl implements AppUserService {
         appUser.get().setPassword(this.passwordEncoder.encode(updateUserProfileRequest.getNewPassword()));
         this.appUserRepository.save(appUser.get());
         if (this.emailMessagesFactory.sendUpdateAppUserPassword(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Profile Update.", updateUserProfileRequest);
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", updateUserProfileRequest);
         }
-        return new AppResponse(ProcessUtil.ERROR,"Account updated, " +
+        return new AppResponse(ProcessUtil.ERROR, "Account updated, " +
             "Email not send contact with support.", updateUserProfileRequest);
     }
 
@@ -182,9 +184,9 @@ public class AppUserServiceImpl implements AppUserService {
         appUser.get().setTimeZone(updateUserProfileRequest.getTimeZone());
         this.appUserRepository.save(appUser.get());
         if (this.emailMessagesFactory.sendUpdateAppUserTimeZone(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS,"AppUser Timezone Update.", updateUserProfileRequest);
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Timezone Update.", updateUserProfileRequest);
         }
-        return new AppResponse(ProcessUtil.ERROR,"Account updated, " +
+        return new AppResponse(ProcessUtil.ERROR, "Account updated, " +
             "Email not send contact with support.", updateUserProfileRequest);
     }
 
@@ -207,7 +209,7 @@ public class AppUserServiceImpl implements AppUserService {
         if (this.emailMessagesFactory.sendCloseAppUserAccount(updateUserProfileRequest)) {
             return new AppResponse(ProcessUtil.SUCCESS, "AppUser close.", updateUserProfileRequest);
         }
-        return new AppResponse(ProcessUtil.ERROR,"Account close, " +
+        return new AppResponse(ProcessUtil.ERROR, "Account close, " +
             "Email not send contact with support.", updateUserProfileRequest);
     }
 
@@ -337,7 +339,7 @@ public class AppUserServiceImpl implements AppUserService {
             forgotPasswordRequest.setUsername(appUser.get().getUsername());
             forgotPasswordRequest.setAppUserId(appUser.get().getAppUserId());
             if (this.emailMessagesFactory.sendForgotPassword(forgotPasswordRequest)) {
-                return new AppResponse(ProcessUtil.SUCCESS,"Email send successfully");
+                return new AppResponse(ProcessUtil.SUCCESS, "Email send successfully");
             }
             return new AppResponse(ProcessUtil.ERROR,"Email not send contact with support.");
         }
@@ -363,7 +365,7 @@ public class AppUserServiceImpl implements AppUserService {
             appUser.get().setPassword(this.passwordEncoder.encode(passwordResetRequest.getNewPassword()));
             this.appUserRepository.save(appUser.get());
             if (this.emailMessagesFactory.sendResetPassword(passwordResetRequest)) {
-                return new AppResponse(ProcessUtil.SUCCESS,"Email send successfully.");
+                return new AppResponse(ProcessUtil.SUCCESS, "Email send successfully.");
             }
             return new AppResponse(ProcessUtil.ERROR,"Email not send contact with support.");
         }

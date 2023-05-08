@@ -51,10 +51,18 @@ public enum IsDefault {
         } else if (lookupValue) {
              aDefault = YES_DEFAULT;
          }
-        return new GLookup(aDefault.lookupType, aDefault.lookupValue,
-            aDefault.description);
+        return new GLookup(aDefault.lookupType, aDefault.lookupValue, aDefault.description);
     }
 
+    public static GLookup getDefaultByDescription(String description) {
+        IsDefault aDefault = null;
+        if (description.equals(NO_DEFAULT.getDescription())) {
+            aDefault = NO_DEFAULT;
+        } else if (description.equals(YES_DEFAULT.getDescription())) {
+            aDefault = YES_DEFAULT;
+        }
+        return new GLookup(aDefault.lookupType, aDefault.lookupValue, aDefault.description);
+    }
 
     @Override
     public String toString() {

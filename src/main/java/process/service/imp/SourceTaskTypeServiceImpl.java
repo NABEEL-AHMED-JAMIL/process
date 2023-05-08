@@ -3,6 +3,7 @@ package process.service.imp;
 import com.google.gson.Gson;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import process.model.pojo.*;
-import process.model.projection.STTProjection;
 import process.model.repository.*;
 import process.payload.request.*;
 import process.payload.response.*;
@@ -20,11 +20,14 @@ import process.service.SourceTaskTypeService;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
 import process.util.lookuputil.*;
+import process.util.validation.*;
+import javax.transaction.Transactional;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,6 +38,7 @@ import static process.util.ProcessUtil.isNull;
  * @author Nabeel Ahmed
  */
 @Service
+@Transactional
 public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
 
     private Logger logger = LoggerFactory.getLogger(SourceTaskTypeServiceImpl.class);
@@ -61,6 +65,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     private STTControlRepository sttcRepository;
     @Autowired
     private AppUserSTTRepository appUserSTTRepository;
+    @Autowired
+    private LookupDataRepository lookupDataRepository;
+
     /**
      * Method use to add STT value in kafka|api etc.
      * @param sttRequest
@@ -137,6 +144,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             kafkaTaskType.setStt(stt);
             this.kafkaTaskTypeRepository.save(kafkaTaskType);
         }
+        AppUserSTT appUserSTT = new AppUserSTT();
+        appUserSTT.setStt(stt);
+        appUserSTT.setStatus(Status.ACTIVE.getLookupValue());
+        appUserSTT.setAppUser(appUser.get());
+        this.appUserSTTRepository.save(appUserSTT);
         return new AppResponse(ProcessUtil.SUCCESS, String.format("STT save with %d.", stt.getSttId()));
     }
 
@@ -176,6 +188,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sttRequest.getSttId(), sttRequest.getAccessUserDetail().getUsername(), Status.DELETE.getLookupValue());
         if (!sourceTaskType.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Stt not found.");
+        } else if (!sourceTaskType.get().getTaskType().equals(sttRequest.getTaskType())) {
+            return new AppResponse(ProcessUtil.ERROR, "Stt taskType cannot change to different taskType.");
         }
         sourceTaskType.get().setServiceName(sttRequest.getServiceName());
         sourceTaskType.get().setDescription(sttRequest.getDescription());
@@ -183,16 +197,12 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sourceTaskType.get().setDefault(sttRequest.isDefaultStt());
         if (!ProcessUtil.isNull(sttRequest.getStatus())) {
             sourceTaskType.get().setStatus(sttRequest.getStatus());
-            // update the status of the app user stt
+            // update the status of the app user stt it will update all the link user stt
             sourceTaskType.get().setAppUserSTT(sourceTaskType.get().getAppUserSTT()
                 .stream().map(appUserSTT -> {
                     appUserSTT.setStatus(sttRequest.getStatus());
                     return appUserSTT;
             }).collect(Collectors.toList()));
-        }
-        // if TaskType change not allow to update stt
-        if (!sourceTaskType.get().getTaskType().equals(sttRequest.getTaskType())) {
-            return new AppResponse(ProcessUtil.ERROR, "Stt taskType cannot change to different taskType.");
         }
         if (sttRequest.getTaskType().equals(TaskType.AWS_SQS.getLookupValue()) ||
             sttRequest.getTaskType().equals(TaskType.API.getLookupValue()) ||
@@ -403,7 +413,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttForm.setStatus(Status.ACTIVE.getLookupValue());
         sttForm.setAppUser(appUser.get());
         sttForm = this.sttfRepository.save(sttForm);
-        return new AppResponse(ProcessUtil.SUCCESS, String.format("Sttf save with %d.", sttForm.getSttFId()));
+        return new AppResponse(ProcessUtil.SUCCESS,
+            String.format("Sttf save with %d.", sttForm.getSttFId()));
     }
 
     /**
@@ -451,6 +462,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
              "Sttf updated with %d.", sttFormRequest.getSttfId()));
     }
 
+    /**
+     * Method use to delete STTF value
+     * @param sttFormRequest
+     * @return AppResponse
+     * */
     @Override
     public AppResponse deleteSTTF(STTFormRequest sttFormRequest) throws Exception {
         logger.info("Request deleteSTTF :- " + sttFormRequest);
@@ -638,6 +654,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
              "Stts update with %d.", sttSectionRequest.getSttsId()));
     }
 
+    /**
+     * Method use to delete STTS value
+     * @param sttSectionRequest
+     * @return AppResponse
+     * */
     @Override
     public AppResponse deleteSTTS(STTSectionRequest sttSectionRequest) throws Exception {
         logger.info("Request deleteSTTS :- " + sttSectionRequest);
@@ -747,6 +768,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return null;
     }
 
+    /**
+     * Method use to add STTC value
+     * @param sttControlRequest
+     * @return AppResponse
+     * */
     @Override
     public AppResponse addSTTC(STTControlRequest sttControlRequest) throws Exception {
         logger.info("Request addSTTC :- " + sttControlRequest);
@@ -793,10 +819,14 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttControl.setAppUser(appUser.get());
         this.sttcRepository.save(sttControl);
         sttControlRequest.setSttCId(sttControl.getSttCId());
-        return new AppResponse(ProcessUtil.SUCCESS, String.format(
-            "Sttc added with %d.", sttControlRequest.getSttCId()));
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("Sttc added with %d.", sttControlRequest.getSttCId()));
     }
 
+    /**
+     * Method use to edit STTC value
+     * @param sttControlRequest
+     * @return AppResponse
+     * */
     @Override
     public AppResponse editSTTC(STTControlRequest sttControlRequest) throws Exception {
         logger.info("Request editSTTC :- " + sttControlRequest);
@@ -849,10 +879,14 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttControl.get().setStatus(sttControlRequest.getStatus());
         sttControl.get().setAppUser(appUser.get());
         this.sttcRepository.save(sttControl.get());
-        return new AppResponse(ProcessUtil.SUCCESS, String.format(
-            "Sttc added with %d.", sttControlRequest.getSttCId()));
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("Sttc updated with %d.", sttControlRequest.getSttCId()));
     }
 
+    /**
+     * Method use to delete STTC value
+     * @param sttControlRequest
+     * @return AppResponse
+     * */
     @Override
     public AppResponse deleteSTTC(STTControlRequest sttControlRequest) throws Exception {
         logger.info("Request deleteSTTC :- " + sttControlRequest);
@@ -860,29 +894,34 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-                sttControlRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            sttControlRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         } else if (ProcessUtil.isNull(sttControlRequest.getSttCId())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttc id missing.");
         }
-        Optional<STTControl> sttSection = this.sttcRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTControl> sttControl = this.sttcRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
             sttControlRequest.getSttCId(), sttControlRequest.getAccessUserDetail().getUsername(),
                 Status.DELETE.getLookupValue());
-        if (!sttSection.isPresent()) {
+        if (!sttControl.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Sttc not found.");
         }
-        sttSection.get().setStatus(Status.DELETE.getLookupValue());
-        sttSection.get().setAppUserSTTC(sttSection.get().getAppUserSTTC()
+        sttControl.get().setStatus(Status.DELETE.getLookupValue());
+        sttControl.get().setAppUserSTTC(sttControl.get().getAppUserSTTC()
             .stream().map(appUserSTTC -> {
                 appUserSTTC.setStatus(Status.DELETE.getLookupValue());
                 return appUserSTTC;
             }).collect(Collectors.toList()));
-        this.sttcRepository.save(sttSection.get());
+        this.sttcRepository.save(sttControl.get());
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
             "STTC deleted with %d.", sttControlRequest.getSttCId()));
     }
 
+    /**
+     * Method use to fetch STTC value by sttc id
+     * @param sttControlRequest
+     * @return AppResponse
+     * */
     @Override
     public AppResponse fetchSTTCBySttcId(STTControlRequest sttControlRequest) throws Exception {
         logger.info("Request fetchSTTCBySttcId :- " + sttControlRequest);
@@ -896,33 +935,38 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        Optional<STTControl> sttSection = this.sttcRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
+        Optional<STTControl> sttControl = this.sttcRepository.findBySttCIdAndAppUserUsernameAndNotInStatus(
             sttControlRequest.getSttCId(), sttControlRequest.getAccessUserDetail().getUsername(),
             Status.DELETE.getLookupValue());
-        if (!sttSection.isPresent()) {
+        if (!sttControl.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Sttc not found.");
         }
         STTControlResponse sttControlResponse = new STTControlResponse();
-        sttControlResponse.setSttCId(sttSection.get().getSttCId());
-        sttControlResponse.setSttCOrder(sttSection.get().getSttCOrder());
-        sttControlResponse.setSttCName(sttSection.get().getSttCName());
-        sttControlResponse.setDescription(sttSection.get().getDescription());
-        sttControlResponse.setFiledType(FormControlType.getFormControlTypeByValue(sttSection.get().getFiledType()));
-        sttControlResponse.setFiledTitle(sttSection.get().getFiledTitle());
-        sttControlResponse.setFiledName(sttSection.get().getFiledName());
-        sttControlResponse.setPlaceHolder(sttSection.get().getPlaceHolder());
-        sttControlResponse.setFiledWidth(sttSection.get().getFiledWidth());
-        sttControlResponse.setMinLength(sttSection.get().getMinLength());
-        sttControlResponse.setMaxLength(sttSection.get().getMaxLength());
-        sttControlResponse.setFiledLookUp(sttSection.get().getFiledLkValue());
-        sttControlResponse.setMandatory(IsDefault.getDefaultByValue(sttSection.get().getMandatory()));
-        sttControlResponse.setDefaultSttc(IsDefault.getDefaultByValue(sttSection.get().getDefault()));
-        sttControlResponse.setPattern(sttSection.get().getPattern());
-        sttControlResponse.setStatus(Status.getStatusByValue(sttSection.get().getStatus()));
+        sttControlResponse.setSttCId(sttControl.get().getSttCId());
+        sttControlResponse.setSttCOrder(sttControl.get().getSttCOrder());
+        sttControlResponse.setSttCName(sttControl.get().getSttCName());
+        sttControlResponse.setDescription(sttControl.get().getDescription());
+        sttControlResponse.setFiledType(FormControlType.getFormControlTypeByValue(sttControl.get().getFiledType()));
+        sttControlResponse.setFiledTitle(sttControl.get().getFiledTitle());
+        sttControlResponse.setFiledName(sttControl.get().getFiledName());
+        sttControlResponse.setPlaceHolder(sttControl.get().getPlaceHolder());
+        sttControlResponse.setFiledWidth(sttControl.get().getFiledWidth());
+        sttControlResponse.setMinLength(sttControl.get().getMinLength());
+        sttControlResponse.setMaxLength(sttControl.get().getMaxLength());
+        sttControlResponse.setFiledLookUp(sttControl.get().getFiledLkValue());
+        sttControlResponse.setMandatory(IsDefault.getDefaultByValue(sttControl.get().getMandatory()));
+        sttControlResponse.setDefaultSttc(IsDefault.getDefaultByValue(sttControl.get().getDefault()));
+        sttControlResponse.setPattern(sttControl.get().getPattern());
+        sttControlResponse.setStatus(Status.getStatusByValue(sttControl.get().getStatus()));
         return new AppResponse(ProcessUtil.SUCCESS, String.format("Data fetch successfully with %d.",
             sttControlRequest.getSttCId()), sttControlResponse);
     }
 
+    /**
+     * Method use to fetch STTC value
+     * @param sttControl
+     * @return AppResponse
+     * */
     @Override
     public AppResponse fetchSTTC(STTControlRequest sttControl) throws Exception {
         logger.info("Request fetchSTTC :- " + sttControl);
@@ -961,6 +1005,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return null;
     }
 
+    /**
+     * Method use to download stt* template file
+     * @param sttFileUReq
+     * @return AppResponse
+     * */
     @Override
     public ByteArrayOutputStream downloadSTTCommonTemplateFile(STTFileUploadRequest sttFileUReq) throws Exception {
         logger.info("Request downloadSTTCommonTemplateFile :- " + sttFileUReq);
@@ -1010,6 +1059,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return byteArrayOutputStream;
     }
 
+    /**
+     * Method use to download stt* file with data
+     * @param sttFileUReq
+     * @return AppResponse
+     * */
     @Override
     public ByteArrayOutputStream downloadSTTCommon(STTFileUploadRequest sttFileUReq) throws Exception {
         logger.info("Request downloadSTTCommon :- " + sttFileUReq);
@@ -1111,6 +1165,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return outputStream;
     }
 
+    /**
+     * Method use to upload stt* file with data
+     * @param fileObject
+     * @return AppResponse
+     * */
     @Override
     public AppResponse uploadSTTCommon(FileUploadRequest fileObject) throws Exception {
         logger.info("Request uploadSTTCommon :- " + fileObject);
@@ -1118,18 +1177,315 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "Date not found");
         }
         Gson gson = new Gson();
-        STTFileUploadRequest sttFileUReq = gson.fromJson((String) fileObject.getData(), STTFileUploadRequest.class);
+        STTFileUploadRequest sttFileUReq = gson.fromJson((String)
+            fileObject.getData(), STTFileUploadRequest.class);
         if (isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         } else if (ProcessUtil.isNull(sttFileUReq.getUploadType())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
+        } else if (!fileObject.getFile().getContentType().equalsIgnoreCase(this.bulkExcel.SHEET_NAME)) {
+            logger.info("File Type " + fileObject.getFile().getContentType());
+            return new AppResponse(ProcessUtil.ERROR, "You can upload only .xlsx extension file.");
         }
-        if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT)) {
-        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_FORM)) {
-        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
-        } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            sttFileUReq.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
+        }
+        Optional<LookupData> uploadLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
+        XSSFWorkbook workbook = new XSSFWorkbook(fileObject.getFile().getInputStream());
+        if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
+            return new AppResponse(ProcessUtil.ERROR,  "You uploaded empty file.");
+        }
+        XSSFSheet sheet = null;
+        if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT) ||
+            sttFileUReq.getUploadType().equals(this.bulkExcel.STT_FORM) ||
+            sttFileUReq.getUploadType().equals(this.bulkExcel.STT_SECTION) ||
+            sttFileUReq.getUploadType().equals(this.bulkExcel.STT_CONTROL)) {
+            sheet = workbook.getSheet(sttFileUReq.getUploadType());
+        }
+        // target sheet upload limit validation
+        if (isNull(sheet)) {
+            return new AppResponse(ProcessUtil.ERROR, String.format("Sheet not found with (%s)",
+                sttFileUReq.getUploadType()));
+        } else if (sheet.getLastRowNum() < 1) {
+            return new AppResponse(ProcessUtil.ERROR,  "You can't upload empty file.");
+        } else if (sheet.getLastRowNum() > Long.valueOf(uploadLimit.get().getLookupValue())) {
+            return new AppResponse(ProcessUtil.ERROR, String.format("File support %s rows at a time.",
+                uploadLimit.get().getLookupValue()));
+        }
+        if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT)) {
+            logger.info("Upload File Type %s", sttFileUReq.getUploadType());
+            return this.uploadSTT(sheet, appUser.get());
+        } else if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT_FORM)) {
+            logger.info("Upload File Type %s", sttFileUReq.getUploadType());
+            return this.uploadSTTForm(sheet, appUser.get());
+        } else if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT_SECTION)) {
+            logger.info("Upload File Type %s", sttFileUReq.getUploadType());
+            return this.uploadSTTSection(sheet, appUser.get());
+        } else if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT_CONTROL)) {
+            logger.info("Upload File Type %s", sttFileUReq.getUploadType());
+            return this.uploadSTTControl(sheet, appUser.get());
         }
         return new AppResponse(ProcessUtil.ERROR, "Wrong upload type define.");
+    }
+
+    private AppResponse uploadSTT(XSSFSheet sheet, AppUser appUser) throws Exception {
+        List<STTValidation> sttValidations = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        Iterator<Row> rows = sheet.iterator();
+        while (rows.hasNext()) {
+            Row currentRow = rows.next();
+            if (currentRow.getRowNum() == 0) {
+                for (int i=0; i < this.bulkExcel.STT_HEADER_FILED_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STT_HEADER_FILED_BATCH_FILE[i])) {
+                        return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
+                            this.bulkExcel.STT_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                    }
+                }
+            } else if (currentRow.getRowNum() > 0) {
+                STTValidation sttValidation = new STTValidation();
+                sttValidation.setRowCounter(currentRow.getRowNum()+1);
+                for (int i=0; i < this.bulkExcel.STT_HEADER_FILED_BATCH_FILE.length; i++) {
+                    int index = 0;
+                    if (i == index) {
+                        sttValidation.setServiceName(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttValidation.setDescription(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttValidation.setDefaultSTT(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttValidation.setTaskType(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttValidation.setTopicName(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttValidation.setPartitions(this.bulkExcel.getCellDetail(currentRow, i));
+                    }
+                }
+                sttValidation.isValidSTT();
+                if (!isNull(sttValidation.getErrorMsg())) {
+                    errors.add(sttValidation.getErrorMsg());
+                    continue;
+                }
+                sttValidations.add(sttValidation);
+            }
+        }
+        if (errors.size() > 0) {
+            return new AppResponse(ProcessUtil.ERROR,
+                String.format("Total %d STT invalid.", errors.size()), errors);
+        }
+        sttValidations.forEach(sttValidation -> {
+            STT stt = new STT();
+            stt.setServiceName(sttValidation.getServiceName());
+            stt.setDescription(sttValidation.getDescription());
+            stt.setTaskType(Long.valueOf(TaskType.getTaskTypeByDescription(
+                sttValidation.getDescription()).getLookupValue().toString()));
+            stt.setDefault(Boolean.valueOf(IsDefault.getDefaultByDescription(
+                sttValidation.getDefaultSTT()).getLookupValue().toString()));
+            stt.setStatus(Status.ACTIVE.getLookupValue());
+            if (stt.getTaskType().equals(TaskType.KAFKA.getLookupValue())) {
+                KafkaTaskType kafkaTaskType = new KafkaTaskType();
+                kafkaTaskType.setNumPartitions(Integer.valueOf(sttValidation.getPartitions()));
+                kafkaTaskType.setTopicName(sttValidation.getTopicName());
+                kafkaTaskType.setTopicPattern(sttValidation.getTopicPattern());
+                kafkaTaskType.setStatus(Status.ACTIVE.getLookupValue());
+                stt.setAppUser(appUser);
+                stt = this.sttRepository.save(stt);
+                kafkaTaskType.setStt(stt);
+                this.kafkaTaskTypeRepository.save(kafkaTaskType);
+            }
+            AppUserSTT appUserSTT = new AppUserSTT();
+            appUserSTT.setStt(stt);
+            appUserSTT.setStatus(Status.ACTIVE.getLookupValue());
+            appUserSTT.setAppUser(appUser);
+            this.appUserSTTRepository.save(appUserSTT);
+        });
+        return new AppResponse(ProcessUtil.SUCCESS, "Data save successfully.");
+    }
+
+    private AppResponse uploadSTTForm(XSSFSheet sheet, AppUser appUser) throws Exception {
+        List<STTFValidation> sttfValidations = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        Iterator<Row> rows = sheet.iterator();
+        while (rows.hasNext()) {
+            Row currentRow = rows.next();
+            if (currentRow.getRowNum() == 0) {
+                for (int i=0; i < this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE[i])) {
+                        return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
+                            this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                    }
+                }
+            } else if (currentRow.getRowNum() > 0) {
+                STTFValidation sttfValidation = new STTFValidation();
+                sttfValidation.setRowCounter(currentRow.getRowNum()+1);
+                for (int i=0; i < this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE.length; i++) {
+                    int index = 0;
+                    if (i == index) {
+                        sttfValidation.setFormName(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttfValidation.setDescription(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttfValidation.setDefaultSTTF(this.bulkExcel.getCellDetail(currentRow, i));
+                    }
+                }
+                sttfValidation.isValidSTTF();
+                if (!isNull(sttfValidation.getErrorMsg())) {
+                    errors.add(sttfValidation.getErrorMsg());
+                    continue;
+                }
+                sttfValidations.add(sttfValidation);
+            }
+        }
+        if (errors.size() > 0) {
+            return new AppResponse(ProcessUtil.ERROR,
+                String.format("Total %d STTF invalid.", errors.size()), errors);
+        }
+        sttfValidations.forEach(sttfValidation -> {
+            STTForm sttForm = new STTForm();
+            sttForm.setSttFName(sttfValidation.getFormName());
+            sttForm.setDescription(sttfValidation.getDescription());
+            sttForm.setDefault(Boolean.valueOf(IsDefault.getDefaultByDescription(
+                sttfValidation.getDefaultSTTF()).getLookupValue().toString()));
+            sttForm.setStatus(Status.ACTIVE.getLookupValue());
+            sttForm.setAppUser(appUser);
+            this.sttfRepository.save(sttForm);
+        });
+        return new AppResponse(ProcessUtil.SUCCESS, "Data save successfully.");
+    }
+
+    private AppResponse uploadSTTSection(XSSFSheet sheet, AppUser appUser) throws Exception {
+        List<STTSValidation> sttsValidations = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        Iterator<Row> rows = sheet.iterator();
+        while (rows.hasNext()) {
+            Row currentRow = rows.next();
+            if (currentRow.getRowNum() == 0) {
+                for (int i=0; i < this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE[i])) {
+                        return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
+                            this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                    }
+                }
+            } else if (currentRow.getRowNum() > 0) {
+                STTSValidation sttsValidation = new STTSValidation();
+                sttsValidation.setRowCounter(currentRow.getRowNum()+1);
+                for (int i=0; i < this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE.length; i++) {
+                    int index = 0;
+                    if (i == index) {
+                        sttsValidation.setSectionOrder(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttsValidation.setSectionName(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttsValidation.setDescription(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttsValidation.setDefaultSTTS(this.bulkExcel.getCellDetail(currentRow, i));
+                    }
+                }
+                sttsValidation.isValidSTTS();
+                if (!isNull(sttsValidation.getErrorMsg())) {
+                    errors.add(sttsValidation.getErrorMsg());
+                    continue;
+                }
+                sttsValidations.add(sttsValidation);
+            }
+        }
+        if (errors.size() > 0) {
+            return new AppResponse(ProcessUtil.ERROR,
+                String.format("Total %d STTS invalid.", errors.size()), errors);
+        }
+        sttsValidations.forEach(sttsValidation -> {
+            STTSection sttSection = new STTSection();
+            sttSection.setSttSOrder(Long.valueOf(sttsValidation.getSectionOrder()));
+            sttSection.setSttSName(sttsValidation.getSectionName());
+            sttSection.setDescription(sttsValidation.getDescription());
+            sttSection.setDefault(Boolean.valueOf(IsDefault.getDefaultByDescription(
+                sttsValidation.getDefaultSTTS()).getLookupValue().toString()));
+            sttSection.setStatus(Status.ACTIVE.getLookupValue());
+            sttSection.setAppUser(appUser);
+            this.sttsRepository.save(sttSection);
+        });
+        return new AppResponse(ProcessUtil.SUCCESS, "Data save successfully.");
+    }
+
+    private AppResponse uploadSTTControl(XSSFSheet sheet, AppUser appUser) throws Exception {
+        List<STTCValidation> sttcValidations = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        Iterator<Row> rows = sheet.iterator();
+        while (rows.hasNext()) {
+            Row currentRow = rows.next();
+            if (currentRow.getRowNum() == 0) {
+                for (int i=0; i < this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE_V1.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE_V1[i])) {
+                        return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
+                            this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE_V1[i] + " heading missing.");
+                    }
+                }
+            } else if (currentRow.getRowNum() > 0) {
+                STTCValidation sttcValidation = new STTCValidation();
+                sttcValidation.setRowCounter(currentRow.getRowNum()+1);
+                for (int i=0; i < this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE_V1.length; i++) {
+                    int index = 0;
+                    if (i == index) {
+                        sttcValidation.setControlOrder(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setControlName(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setDescription(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setFiledName(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setFiledTitle(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setFiledWidth(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setPlaceHolder(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setPattern(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setFiledType(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setMinLength(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setMaxLength(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttcValidation.setRequired(this.bulkExcel.getCellDetail(currentRow, i));
+                    }
+                }
+                sttcValidation.isValidSTTC();
+                if (!isNull(sttcValidation.getErrorMsg())) {
+                    errors.add(sttcValidation.getErrorMsg());
+                    continue;
+                }
+                sttcValidations.add(sttcValidation);
+            }
+        }
+        if (errors.size() > 0) {
+            return new AppResponse(ProcessUtil.ERROR,
+                String.format("Total %d STTC invalid.", errors.size()), errors);
+        }
+        sttcValidations.forEach(sttcValidation -> {
+            STTControl sttControl = new STTControl();
+            sttControl.setSttCOrder(Long.valueOf(sttcValidation.getControlOrder()));
+            sttControl.setSttCName(sttcValidation.getControlName());
+            sttControl.setDescription(sttcValidation.getDescription());
+            sttControl.setFiledType(sttcValidation.getFiledType());
+            sttControl.setFiledTitle(sttcValidation.getFiledTitle());
+            sttControl.setFiledName(sttcValidation.getFiledName());
+            sttControl.setPlaceHolder(sttcValidation.getPlaceHolder());
+            sttControl.setFiledWidth(Long.valueOf(sttcValidation.getFiledWidth()));
+            sttControl.setMinLength(Long.valueOf(sttcValidation.getMinLength()));
+            sttControl.setMaxLength(Long.valueOf(sttcValidation.getMaxLength()));
+            sttControl.setFiledLkValue(sttcValidation.getFiledLkValue()); // if have
+            sttControl.setMandatory(Boolean.valueOf(IsDefault.getDefaultByDescription(
+                sttcValidation.getRequired()).getLookupValue().toString()));
+            sttControl.setDefault(IsDefault.NO_DEFAULT.getLookupValue());
+            sttControl.setPattern(sttcValidation.getPattern());
+            sttControl.setStatus(Status.ACTIVE.getLookupValue());
+            sttControl.setAppUser(appUser);
+            this.sttcRepository.save(sttControl);
+        });
+        return new AppResponse(ProcessUtil.SUCCESS, "Data save successfully.");
     }
 
 }
