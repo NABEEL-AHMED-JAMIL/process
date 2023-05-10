@@ -3,6 +3,9 @@ package process.util.validation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import process.util.ProcessUtil;
+import process.util.lookuputil.IsDefault;
+import java.util.regex.Pattern;
 
 /**
  * @author Nabeel Ahmed
@@ -10,6 +13,8 @@ import com.google.gson.Gson;
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTSValidation {
+
+    private Pattern pattern = Pattern.compile("^[0-9]+$");
 
     private Integer rowCounter = 0;
     private String errorMsg;
@@ -71,16 +76,25 @@ public class STTSValidation {
     }
 
     public void isValidSTTS() {
-        if (this.isNull(this.lookupType)) {
-            this.setErrorMsg(String.format("LookupType should not be empty at row %s.<br>", rowCounter));
-        } else if (!this.lookupType.matches(this.REGEX)) {
-            this.setErrorMsg(String.format("LookupType should not be non space latter at row %s.<br>", rowCounter));
-        }
-        if (this.isNull(this.lookupValue)) {
-            this.setErrorMsg(String.format("LookupValue should not be empty at row %s.<br>", rowCounter));
-        }
-        if (this.isNull(this.description)) {
-            this.setErrorMsg(String.format("Description should not be empty at row %s.<br>", rowCounter));
+        try {
+            if (this.isNull(this.sectionOrder)) {
+                this.setErrorMsg(String.format("SectionOrder should not be empty at row %s.<br>", rowCounter));
+            } else if (!this.pattern.matcher(sectionOrder).matches()) {
+                this.setErrorMsg(String.format("SectionOrder type not correct at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.sectionName)) {
+                this.setErrorMsg(String.format("SectionName should not be empty at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.description)) {
+                this.setErrorMsg(String.format("Description should not be empty at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.defaultSTTS)) {
+                this.setErrorMsg(String.format("Default should not be empty at row %s.<br>", rowCounter));
+            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.defaultSTTS))) {
+                this.setErrorMsg(String.format("Default type not correct at row %s.<br>", rowCounter));
+            }
+        } catch (Exception ex) {
+            this.setErrorMsg(String.format(ex.getLocalizedMessage() + " at row %s.<br>", rowCounter));
         }
     }
 

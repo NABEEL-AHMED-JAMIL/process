@@ -3,6 +3,8 @@ package process.util.validation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import process.util.ProcessUtil;
+import process.util.lookuputil.IsDefault;
 
 /**
  * @author Nabeel Ahmed
@@ -61,16 +63,20 @@ public class STTFValidation {
     }
 
     public void isValidSTTF() {
-        if (this.isNull(this.lookupType)) {
-            this.setErrorMsg(String.format("LookupType should not be empty at row %s.<br>", rowCounter));
-        } else if (!this.lookupType.matches(this.REGEX)) {
-            this.setErrorMsg(String.format("LookupType should not be non space latter at row %s.<br>", rowCounter));
-        }
-        if (this.isNull(this.lookupValue)) {
-            this.setErrorMsg(String.format("LookupValue should not be empty at row %s.<br>", rowCounter));
-        }
-        if (this.isNull(this.description)) {
-            this.setErrorMsg(String.format("Description should not be empty at row %s.<br>", rowCounter));
+        try {
+            if (this.isNull(this.formName)) {
+                this.setErrorMsg(String.format("FormName should not be empty at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.description)) {
+                this.setErrorMsg(String.format("Description should not be empty at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.defaultSTTF)) {
+                this.setErrorMsg(String.format("Default should not be empty at row %s.<br>", rowCounter));
+            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.defaultSTTF))) {
+                this.setErrorMsg(String.format("Default type not correct at row %s.<br>", rowCounter));
+            }
+        } catch (Exception ex) {
+            this.setErrorMsg(String.format(ex.getLocalizedMessage() + " at row %s.<br>", rowCounter));
         }
     }
 
