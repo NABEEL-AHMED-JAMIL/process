@@ -406,11 +406,14 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "Sttf sttfName missing.");
         } else if (ProcessUtil.isNull(sttFormRequest.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf description missing.");
+        } else if (ProcessUtil.isNull(sttFormRequest.getFormType())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttf formType missing.");
         }
         STTForm sttForm = new STTForm();
         sttForm.setSttFName(sttFormRequest.getSttfName());
         sttForm.setDescription(sttFormRequest.getDescription());
         sttForm.setDefault(sttFormRequest.isDefaultSttf());
+        sttForm.setFormType(sttFormRequest.getFormType());
         sttForm.setStatus(Status.ACTIVE.getLookupValue());
         sttForm.setAppUser(appUser.get());
         sttForm = this.sttfRepository.save(sttForm);
@@ -439,6 +442,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "Sttf sttfName missing.");
         } else if (ProcessUtil.isNull(sttFormRequest.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf description missing.");
+        } else if (ProcessUtil.isNull(sttFormRequest.getFormType())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttf formType missing.");
         }
         Optional<STTForm> sttForm = this.sttfRepository.findBySttFIdAndAppUserUsernameAndNotInStatus(
             sttFormRequest.getSttfId(), sttFormRequest.getAccessUserDetail().getUsername(),
@@ -449,6 +454,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttForm.get().setSttFName(sttFormRequest.getSttfName());
         sttForm.get().setDescription(sttFormRequest.getDescription());
         sttForm.get().setDefault(sttFormRequest.isDefaultSttf());
+        sttForm.get().setFormType(sttFormRequest.getFormType());
         if (!ProcessUtil.isNull(sttFormRequest.getStatus())) {
             sttForm.get().setStatus(sttFormRequest.getStatus());
             // update the status of the app user stt
@@ -522,14 +528,15 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!sttForm.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf not found.");
         }
-        STTFormResponse STTFormResponse = new STTFormResponse();
-        STTFormResponse.setSttFId(sttForm.get().getSttFId());
-        STTFormResponse.setSttFName(sttForm.get().getSttFName());
-        STTFormResponse.setDescription(sttForm.get().getDescription());
-        STTFormResponse.setStatus(Status.getStatusByValue(sttForm.get().getStatus()));
-        STTFormResponse.setDefaultSttf(IsDefault.getDefaultByValue(sttForm.get().getDefault()));
+        STTFormResponse sttFormResponse = new STTFormResponse();
+        sttFormResponse.setSttFId(sttForm.get().getSttFId());
+        sttFormResponse.setSttFName(sttForm.get().getSttFName());
+        sttFormResponse.setDescription(sttForm.get().getDescription());
+        sttFormResponse.setStatus(Status.getStatusByValue(sttForm.get().getStatus()));
+        sttFormResponse.setFormType(FormType.getFormTypeByValue(sttForm.get().getFormType()));
+        sttFormResponse.setDefaultSttf(IsDefault.getDefaultByValue(sttForm.get().getDefault()));
         return new AppResponse(ProcessUtil.SUCCESS, String.format("Data fetch successfully with %d.",
-            sttFormRequest.getSttfId()), STTFormResponse);
+            sttFormRequest.getSttfId()), sttFormResponse);
     }
 
     /**
@@ -556,6 +563,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 sttfResponse.setSttFName(sttfProjection.getSttFName());
                 sttfResponse.setDescription(sttfProjection.getDescription());
                 sttfResponse.setStatus(Status.getStatusByValue(sttfProjection.getStatus()));
+                sttfResponse.setFormType(FormType.getFormTypeByValue(sttfProjection.getFormType()));
                 sttfResponse.setSttfDefault(IsDefault.getDefaultByValue(sttfProjection.getSttFDefault()));
                 sttfResponse.setDateCreated(sttfProjection.getDateCreated());
                 sttfResponse.setTotalStt(sttfResponse.getTotalStt());
@@ -1138,6 +1146,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 dataCellValue.add(sttf.getDescription());
                 dataCellValue.add(IsDefault.getDefaultByValue(
                     sttf.getSttFDefault()).getDescription());
+                dataCellValue.add(FormType.getFormTypeByValue(
+                    sttf.getFormType()).getDescription());
                 this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
             });
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
@@ -1343,6 +1353,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                         sttfValidation.setDescription(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
                         sttfValidation.setDefaultSTTF(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttfValidation.setFormType(this.bulkExcel.getCellDetail(currentRow, i));
                     }
                 }
                 sttfValidation.isValidSTTF();
@@ -1363,6 +1375,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sttForm.setDescription(sttfValidation.getDescription());
             sttForm.setDefault(Boolean.valueOf(IsDefault.getDefaultByDescription(
                 sttfValidation.getDefaultSTTF()).getLookupValue().toString()));
+            sttForm.setFormType(Long.valueOf(FormType.getFormTypeByDescription(
+                sttfValidation.getFormType()).getLookupValue().toString()));
             sttForm.setStatus(Status.ACTIVE.getLookupValue());
             sttForm.setAppUser(appUser);
             this.sttfRepository.save(sttForm);

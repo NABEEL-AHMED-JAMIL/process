@@ -29,7 +29,7 @@ public interface STTFormRepository extends CrudRepository<STTForm, Long> {
     public Optional<STTForm> findBySttFIdAndAppUserUsernameAndNotInStatus(Long sttfId, String username, Long status);
 
     @Query(value = "select sf.sttf_id  as sttFId, sf.sttf_name as sttFName,\n" +
-        "sf.description as description, sf.status as status,\n" +
+        "sf.description as description, sf.status as status, sf.form_type as formType,\n" +
         "case when sf.is_default then true else false end as sttFDefault,\n" +
         "sf.date_created as dateCreated, '0' as totalUser,\n" +
         "'0' as totalTask, '0' as totalForm\n" +

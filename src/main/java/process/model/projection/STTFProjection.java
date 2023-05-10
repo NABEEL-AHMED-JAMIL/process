@@ -11,6 +11,7 @@ public interface STTFProjection {
     public String getSttFName();
     public String getDescription();
     public Long getStatus();
+    public Long getFormType();
     public Boolean getSttFDefault();
     public Timestamp getDateCreated();
     public Long getTotalStt();

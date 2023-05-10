@@ -28,7 +28,6 @@ public enum FormControlType {
     SELECT("SELECT", "select", "Select"),
     MULTI_SELECT("MULTI_SELECT", "multi-select", "Multi Select");
 
-
     private String lookupType;
     private String lookupValue;
     private String description;

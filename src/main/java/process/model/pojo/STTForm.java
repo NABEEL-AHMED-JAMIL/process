@@ -48,6 +48,9 @@ public class STTForm {
         columnDefinition = "boolean default false")
     private Boolean isDefault;
 
+    @Column(name = "form_type", nullable = false)
+    private Long formType;
+
     @OneToMany(mappedBy="sttf")
     private List<AppUserSTTF> appUserSTTF = new ArrayList<>();
 
@@ -104,6 +107,14 @@ public class STTForm {
 
     public void setDefault(Boolean aDefault) {
         isDefault = aDefault;
+    }
+
+    public Long getFormType() {
+        return formType;
+    }
+
+    public void setFormType(Long formType) {
+        this.formType = formType;
     }
 
     public List<AppUserSTTF> getAppUserSTTF() {
