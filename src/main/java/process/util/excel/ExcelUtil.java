@@ -22,18 +22,12 @@ public interface ExcelUtil {
         "TOPIC_NAME", "PARTITIONS"
     };
     public static String[] STTF_HEADER_FILED_BATCH_FILE = new String[] {
-        "FORM_NAME", "DESCRIPTION", "DEFAULT"
+        "FORM_NAME", "DESCRIPTION", "DEFAULT", "FORM_TYPE"
     };
     public static String[] STTS_HEADER_FILED_BATCH_FILE = new String[] {
         "SECTION_ORDER", "SECTION_NAME", "DESCRIPTION", "DEFAULT"
     };
     public static String[] STTC_HEADER_FILED_BATCH_FILE = new String[] {
-        "CONTROL_ORDER", "CONTROL_NAME", "FILED_NAME", "FILED_TITLE",
-        "FILED_WIDTH", "PLACEHOLDER", "PATTERN", "FILED_TYPE",
-        "MIN_LENGTH", "MAX_LENGTH", "REQUIRED"
-    };
-
-    public static String[] STTC_HEADER_FILED_BATCH_FILE_V1 = new String[] {
         "CONTROL_ORDER", "CONTROL_NAME", "DESCRIPTION", "FILED_NAME", "FILED_TITLE",
         "FILED_WIDTH", "PLACEHOLDER", "PATTERN", "FILED_TYPE",
         "MIN_LENGTH", "MAX_LENGTH", "REQUIRED"

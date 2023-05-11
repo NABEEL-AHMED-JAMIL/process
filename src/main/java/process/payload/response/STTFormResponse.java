@@ -16,6 +16,7 @@ public class STTFormResponse {
     private String sttFName;
     private String description;
     private GLookup status;
+    private GLookup formType;
     private GLookup defaultSttf;
 
     public STTFormResponse() {
@@ -51,6 +52,14 @@ public class STTFormResponse {
 
     public void setStatus(GLookup status) {
         this.status = status;
+    }
+
+    public GLookup getFormType() {
+        return formType;
+    }
+
+    public void setFormType(GLookup formType) {
+        this.formType = formType;
     }
 
     public GLookup getDefaultSttf() {

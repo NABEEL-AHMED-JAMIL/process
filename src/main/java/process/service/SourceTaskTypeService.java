@@ -19,7 +19,17 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTT(STTRequest sttRequest) throws Exception;
 
-    public AppResponse linkSTTWithAppUser(STTRequest sttRequest) throws Exception;
+    public AppResponse addSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception;
+
+    public AppResponse deleteSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception;
+
+    public AppResponse fetchSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception;
+
+    public AppResponse addSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception;
+
+    public AppResponse deleteSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception;
+
+    public AppResponse fetchSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception;
 
     public AppResponse addSTTF(STTFormRequest sttFormRequest) throws Exception;
 
@@ -31,7 +41,17 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTF(STTFormRequest sttFormRequest) throws Exception;
 
-    public AppResponse linkSTTFWithFrom(STTFormRequest sttFormRequest) throws Exception;
+    public AppResponse addSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception;
+
+    public AppResponse deleteSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception;
+
+    public AppResponse fetchSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception;
+
+    public AppResponse addSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception;
+
+    public AppResponse deleteSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception;
+
+    public AppResponse fetchSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception;
 
     public AppResponse addSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
@@ -43,7 +63,17 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
-    public AppResponse linkSTTSWithFrom(STTSectionRequest sttSectionRequest) throws Exception;
+    public AppResponse addSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception;
+
+    public AppResponse deleteSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception;
+
+    public AppResponse fetchSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception;
+
+    public AppResponse addSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception;
+
+    public AppResponse deleteSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception;
+
+    public AppResponse fetchSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception;
 
     public AppResponse addSTTC(STTControlRequest sttControlRequest) throws Exception;
 
@@ -55,7 +85,11 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTC(STTControlRequest sttControlRequest) throws Exception;
 
-    public AppResponse linkSTTCWithFrom(STTControlRequest sttControlRequest) throws Exception;
+    public AppResponse addSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception;
+
+    public AppResponse deleteSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception;
+
+    public AppResponse fetchSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception;
 
     public ByteArrayOutputStream downloadSTTCommonTemplateFile(STTFileUploadRequest sttFileUReq) throws Exception;
 

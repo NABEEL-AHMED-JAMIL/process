@@ -15,6 +15,7 @@ public class STTFormRequest {
     private String sttfName; // yes
     private String description; // yes
     private Long status;
+    private Long formType;
     private boolean defaultSttf;
     private ParseRequest accessUserDetail; // yes
 
@@ -51,6 +52,14 @@ public class STTFormRequest {
 
     public void setStatus(Long status) {
         this.status = status;
+    }
+
+    public Long getFormType() {
+        return formType;
+    }
+
+    public void setFormType(Long formType) {
+        this.formType = formType;
     }
 
     public boolean isDefaultSttf() {

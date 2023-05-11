@@ -3,6 +3,10 @@ package process.util.validation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import process.util.ProcessUtil;
+import process.util.lookuputil.FormControlType;
+import process.util.lookuputil.IsDefault;
+import java.util.regex.Pattern;
 
 /**
  * @author Nabeel Ahmed
@@ -10,6 +14,8 @@ import com.google.gson.Gson;
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTCValidation {
+
+    private Pattern patternRegx = Pattern.compile("^[0-9]+$");
 
     private Integer rowCounter = 0;
     private String errorMsg;
@@ -150,18 +156,42 @@ public class STTCValidation {
         this.required = required;
     }
 
-
     public void isValidSTTC() {
-        if (this.isNull(this.lookupType)) {
-            this.setErrorMsg(String.format("LookupType should not be empty at row %s.<br>", rowCounter));
-        } else if (!this.lookupType.matches(this.REGEX)) {
-            this.setErrorMsg(String.format("LookupType should not be non space latter at row %s.<br>", rowCounter));
-        }
-        if (this.isNull(this.lookupValue)) {
-            this.setErrorMsg(String.format("LookupValue should not be empty at row %s.<br>", rowCounter));
-        }
-        if (this.isNull(this.description)) {
-            this.setErrorMsg(String.format("Description should not be empty at row %s.<br>", rowCounter));
+        try {
+            if (this.isNull(this.controlOrder)) {
+                this.setErrorMsg(String.format("ControlOrder should not be empty at row %s.<br>", rowCounter));
+            } else if (!this.patternRegx.matcher(controlOrder).matches()) {
+                this.setErrorMsg(String.format("ControlOrder type not correct at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.controlName)) {
+                this.setErrorMsg(String.format("ControlName should not be empty at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.description)) {
+                this.setErrorMsg(String.format("Description should not be empty at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.filedName)) {
+                this.setErrorMsg(String.format("FiledName should not be empty at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.filedTitle)) {
+                this.setErrorMsg(String.format("FiledTitle should not be empty at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.filedWidth)) {
+                this.setErrorMsg(String.format("FiledWidth should not be empty at row %s.<br>", rowCounter));
+            } else if (!this.patternRegx.matcher(filedWidth).matches()) {
+                this.setErrorMsg(String.format("FiledWidth type not correct at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.filedType)) {
+                this.setErrorMsg(String.format("FiledType should not be empty at row %s.<br>", rowCounter));
+            } else if (ProcessUtil.isNull(FormControlType.getFormControlTypeByDescription(this.filedType))) {
+                this.setErrorMsg(String.format("FiledType type not correct at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.required)) {
+                this.setErrorMsg(String.format("Required should not be empty at row %s.<br>", rowCounter));
+            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.required))) {
+                this.setErrorMsg(String.format("Required type not correct at row %s.<br>", rowCounter));
+            }
+        } catch (Exception ex) {
+            this.setErrorMsg(String.format(ex.getLocalizedMessage() + " at row %s.<br>", rowCounter));
         }
     }
 

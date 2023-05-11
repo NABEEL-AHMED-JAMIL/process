@@ -149,7 +149,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         appUserSTT.setStatus(Status.ACTIVE.getLookupValue());
         appUserSTT.setAppUser(appUser.get());
         this.appUserSTTRepository.save(appUserSTT);
-        return new AppResponse(ProcessUtil.SUCCESS, String.format("STT save with %d.", stt.getSttId()));
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("STT save with %d.",
+            stt.getSttId()));
     }
 
     /**
@@ -381,8 +382,69 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
     }
 
+    /**
+     * Method use to STT Link User
+     * @param sttLinkUserRequest
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse linkSTTWithAppUser(STTRequest sttRequest) throws Exception {
+    public AppResponse addSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception {
+        logger.info("Request addSTTLinkUser :- " + sttLinkUserRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STT Link User
+     * @param sttLinkUserRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception {
+        logger.info("Request deleteSTTLinkUser :- " + sttLinkUserRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch all STT Link User
+     * @param sttLinkUserRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception {
+        logger.info("Request fetchSTTLinkUser :- " + sttLinkUserRequest);
+        return null;
+    }
+
+    /**
+     * Method use to STT Link STTF
+     * @param sttLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse addSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception {
+        logger.info("Request addSTTLinkSTTF :- " + sttLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STT Link STTF
+     * @param sttLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception {
+        logger.info("Request deleteSTTLinkSTTF :- " + sttLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STT Link STTF
+     * @param sttLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception {
+        logger.info("Request fetchSTTLinkSTTF :- " + sttLinkSTTFRequest);
         return null;
     }
 
@@ -405,11 +467,14 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "Sttf sttfName missing.");
         } else if (ProcessUtil.isNull(sttFormRequest.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf description missing.");
+        } else if (ProcessUtil.isNull(sttFormRequest.getFormType())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttf formType missing.");
         }
         STTForm sttForm = new STTForm();
         sttForm.setSttFName(sttFormRequest.getSttfName());
         sttForm.setDescription(sttFormRequest.getDescription());
         sttForm.setDefault(sttFormRequest.isDefaultSttf());
+        sttForm.setFormType(sttFormRequest.getFormType());
         sttForm.setStatus(Status.ACTIVE.getLookupValue());
         sttForm.setAppUser(appUser.get());
         sttForm = this.sttfRepository.save(sttForm);
@@ -438,6 +503,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "Sttf sttfName missing.");
         } else if (ProcessUtil.isNull(sttFormRequest.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf description missing.");
+        } else if (ProcessUtil.isNull(sttFormRequest.getFormType())) {
+            return new AppResponse(ProcessUtil.ERROR, "Sttf formType missing.");
         }
         Optional<STTForm> sttForm = this.sttfRepository.findBySttFIdAndAppUserUsernameAndNotInStatus(
             sttFormRequest.getSttfId(), sttFormRequest.getAccessUserDetail().getUsername(),
@@ -448,6 +515,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttForm.get().setSttFName(sttFormRequest.getSttfName());
         sttForm.get().setDescription(sttFormRequest.getDescription());
         sttForm.get().setDefault(sttFormRequest.isDefaultSttf());
+        sttForm.get().setFormType(sttFormRequest.getFormType());
         if (!ProcessUtil.isNull(sttFormRequest.getStatus())) {
             sttForm.get().setStatus(sttFormRequest.getStatus());
             // update the status of the app user stt
@@ -521,14 +589,15 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!sttForm.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Sttf not found.");
         }
-        STTFormResponse STTFormResponse = new STTFormResponse();
-        STTFormResponse.setSttFId(sttForm.get().getSttFId());
-        STTFormResponse.setSttFName(sttForm.get().getSttFName());
-        STTFormResponse.setDescription(sttForm.get().getDescription());
-        STTFormResponse.setStatus(Status.getStatusByValue(sttForm.get().getStatus()));
-        STTFormResponse.setDefaultSttf(IsDefault.getDefaultByValue(sttForm.get().getDefault()));
+        STTFormResponse sttFormResponse = new STTFormResponse();
+        sttFormResponse.setSttFId(sttForm.get().getSttFId());
+        sttFormResponse.setSttFName(sttForm.get().getSttFName());
+        sttFormResponse.setDescription(sttForm.get().getDescription());
+        sttFormResponse.setStatus(Status.getStatusByValue(sttForm.get().getStatus()));
+        sttFormResponse.setFormType(FormType.getFormTypeByValue(sttForm.get().getFormType()));
+        sttFormResponse.setDefaultSttf(IsDefault.getDefaultByValue(sttForm.get().getDefault()));
         return new AppResponse(ProcessUtil.SUCCESS, String.format("Data fetch successfully with %d.",
-            sttFormRequest.getSttfId()), STTFormResponse);
+            sttFormRequest.getSttfId()), sttFormResponse);
     }
 
     /**
@@ -555,6 +624,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 sttfResponse.setSttFName(sttfProjection.getSttFName());
                 sttfResponse.setDescription(sttfProjection.getDescription());
                 sttfResponse.setStatus(Status.getStatusByValue(sttfProjection.getStatus()));
+                sttfResponse.setFormType(FormType.getFormTypeByValue(sttfProjection.getFormType()));
                 sttfResponse.setSttfDefault(IsDefault.getDefaultByValue(sttfProjection.getSttFDefault()));
                 sttfResponse.setDateCreated(sttfProjection.getDateCreated());
                 sttfResponse.setTotalStt(sttfResponse.getTotalStt());
@@ -565,8 +635,69 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
     }
 
+    /**
+     * Method use to STTF Link STT
+     * @param sttfLinkSTTRequest
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse linkSTTFWithFrom(STTFormRequest sttFormRequest) throws Exception {
+    public AppResponse addSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception {
+        logger.info("Request addSTTFLinkSTT :- " + sttfLinkSTTRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTF Link STT
+     * @param sttfLinkSTTRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception {
+        logger.info("Request deleteSTTFLinkSTT :- " + sttfLinkSTTRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTF Link STT
+     * @param sttfLinkSTTRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception {
+        logger.info("Request fetchSTTFLinkSTT :- " + sttfLinkSTTRequest);
+        return null;
+    }
+
+    /**
+     * Method use to STTF Link STTS
+     * @param sttfLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse addSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception {
+        logger.info("Request addSTTFLinkSTTS :- " + sttfLinkSTTSRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTF Link STTS
+     * @param sttfLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception {
+        logger.info("Request deleteSTTFLinkSTTS :- " + sttfLinkSTTSRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTF Link STTS
+     * @param sttfLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception {
+        logger.info("Request fetchSTTFLinkSTTS :- " + sttfLinkSTTSRequest);
         return null;
     }
 
@@ -759,12 +890,69 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
     }
 
+    /**
+     * Method use to STTS Link STTF
+     * @param sttsLinkSTTFRequest
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse linkSTTSWithFrom(STTSectionRequest sttSectionRequest) throws Exception {
-        logger.info("Request linkSTTSWithFrom :- " + sttSectionRequest);
-        if (isNull(sttSectionRequest.getAccessUserDetail().getUsername())) {
-            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
-        }
+    public AppResponse addSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception {
+        logger.info("Request addSTTSLinkSTTF :- " + sttsLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTS Link STTF
+     * @param sttsLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception {
+        logger.info("Request deleteSTTSLinkSTTF :- " + sttsLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTS Link STTF
+     * @param sttsLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception {
+        logger.info("Request fetchSTTSLinkSTTF :- " + sttsLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to STTS Link STTC
+     * @param sttsLinkSTTCRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse addSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception {
+        logger.info("Request addSTTSLinkSTTC :- " + sttsLinkSTTCRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTS Link STTC
+     * @param sttsLinkSTTCRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception {
+        logger.info("Request deleteSTTSLinkSTTC :- " + sttsLinkSTTCRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTS Link STTC
+     * @param sttsLinkSTTCRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception {
+        logger.info("Request fetchSTTSLinkSTTC :- " + sttsLinkSTTCRequest);
         return null;
     }
 
@@ -811,7 +999,12 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttControl.setFiledWidth(sttControlRequest.getFiledWidth());
         sttControl.setMinLength(sttControlRequest.getMinLength());
         sttControl.setMaxLength(sttControlRequest.getMaxLength());
-        sttControl.setFiledLkValue(sttControlRequest.getFiledLookUp());
+        if (FormControlType.RADIO.getLookupValue().equals(sttControlRequest.getFiledType()) ||
+            FormControlType.CHECKBOX.getLookupValue().equals(sttControlRequest.getFiledType()) ||
+            FormControlType.SELECT.getLookupValue().equals(sttControlRequest.getFiledType()) ||
+            FormControlType.MULTI_SELECT.getLookupValue().equals(sttControlRequest.getFiledType())) {
+            sttControl.setFiledLkValue(sttControlRequest.getFiledLookUp());
+        }
         sttControl.setMandatory(sttControlRequest.isMandatory());
         sttControl.setDefault(IsDefault.NO_DEFAULT.getLookupValue());
         sttControl.setPattern(sttControlRequest.getPattern());
@@ -862,6 +1055,12 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!sttControl.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Sttc not found.");
         }
+        if (FormControlType.RADIO.getLookupValue().equals(sttControlRequest.getFiledType()) ||
+            FormControlType.CHECKBOX.getLookupValue().equals(sttControlRequest.getFiledType()) ||
+            FormControlType.SELECT.getLookupValue().equals(sttControlRequest.getFiledType()) ||
+            FormControlType.MULTI_SELECT.getLookupValue().equals(sttControlRequest.getFiledType())) {
+            sttControl.get().setFiledLkValue(sttControlRequest.getFiledLookUp());
+        }
         sttControl.get().setSttCOrder(sttControlRequest.getSttCOrder());
         sttControl.get().setSttCName(sttControlRequest.getSttCName());
         sttControl.get().setFiledType(sttControlRequest.getFiledType());
@@ -872,14 +1071,14 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttControl.get().setFiledWidth(sttControlRequest.getFiledWidth());
         sttControl.get().setMinLength(sttControlRequest.getMinLength());
         sttControl.get().setMaxLength(sttControlRequest.getMaxLength());
-        sttControl.get().setFiledLkValue(sttControlRequest.getFiledLookUp());
         sttControl.get().setMandatory(sttControlRequest.isMandatory());
         sttControl.get().setDefault(sttControlRequest.isDefaultSttC());
         sttControl.get().setPattern(sttControlRequest.getPattern());
         sttControl.get().setStatus(sttControlRequest.getStatus());
         sttControl.get().setAppUser(appUser.get());
         this.sttcRepository.save(sttControl.get());
-        return new AppResponse(ProcessUtil.SUCCESS, String.format("Sttc updated with %d.", sttControlRequest.getSttCId()));
+        return new AppResponse(ProcessUtil.SUCCESS, String.format(
+            "Sttc updated with %d.", sttControlRequest.getSttCId()));
     }
 
     /**
@@ -999,9 +1198,36 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
     }
 
+    /**
+     * Method use to STTC Link STTS
+     * @param sttcLinkSTTSRequest
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse linkSTTCWithFrom(STTControlRequest sttControl) throws Exception {
-        logger.info("Request linkSTTCWithFrom :- " + sttControl);
+    public AppResponse addSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception {
+        logger.info("Request addSTTCLinkSTTS :- " + sttcLinkSTTSRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTC Link STTS
+     * @param sttcLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception {
+        logger.info("Request deleteSTTCLinkSTTS :- " + sttcLinkSTTSRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTC Link STTS
+     * @param sttcLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception {
+        logger.info("Request fetchSTTCLinkSTTS :- " + sttcLinkSTTSRequest);
         return null;
     }
 
@@ -1107,8 +1333,10 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 List<String> dataCellValue = new ArrayList<>();
                 dataCellValue.add(stt.getServiceName());
                 dataCellValue.add(stt.getDescription());
-                dataCellValue.add(IsDefault.getDefaultByValue(stt.getDefault()).getDescription());
-                dataCellValue.add(TaskType.getTaskTypeByValue(stt.getTaskType()).getDescription());
+                dataCellValue.add(IsDefault.getDefaultByValue(
+                    stt.getDefault()).getDescription());
+                dataCellValue.add(TaskType.getTaskTypeByValue(
+                    stt.getTaskType()).getDescription());
                 // only kafka support for this version 2.0
                 dataCellValue.add(stt.getKafkaTaskType().get(0).getTopicName());
                 dataCellValue.add(stt.getKafkaTaskType().get(0).getNumPartitions().toString());
@@ -1122,7 +1350,10 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 List<String> dataCellValue = new ArrayList<>();
                 dataCellValue.add(sttf.getSttFName());
                 dataCellValue.add(sttf.getDescription());
-                dataCellValue.add(IsDefault.getDefaultByValue(sttf.getSttFDefault()).getDescription());
+                dataCellValue.add(IsDefault.getDefaultByValue(
+                    sttf.getSttFDefault()).getDescription());
+                dataCellValue.add(FormType.getFormTypeByValue(
+                    sttf.getFormType()).getDescription());
                 this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
             });
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
@@ -1134,7 +1365,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 dataCellValue.add(stts.getSttSOrder().toString());
                 dataCellValue.add(stts.getSttSName());
                 dataCellValue.add(stts.getDescription());
-                dataCellValue.add(IsDefault.getDefaultByValue(stts.getSttSDefault()).getDescription());
+                dataCellValue.add(IsDefault.getDefaultByValue(
+                    stts.getSttSDefault()).getDescription());
                 this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
             });
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
@@ -1145,18 +1377,21 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 List<String> dataCellValue = new ArrayList<>();
                 dataCellValue.add(sttc.getSttCOrder().toString());
                 dataCellValue.add(sttc.getSttCName());
+                dataCellValue.add(sttc.getDescription());
                 dataCellValue.add(sttc.getFiledName());
                 dataCellValue.add(sttc.getFiledTitle());
                 dataCellValue.add(!ProcessUtil.isNull(sttc.getFiledWidth()) ?
                     sttc.getFiledWidth().toString(): this.bulkExcel.BLANK_VAL);
                 dataCellValue.add(sttc.getPlaceHolder());
                 dataCellValue.add(sttc.getPattern());
-                dataCellValue.add(sttc.getFiledType());
+                dataCellValue.add(FormControlType.getFormControlTypeByValue(
+                    sttc.getFiledType()).getDescription());
                 dataCellValue.add(!ProcessUtil.isNull(sttc.getMinLength()) ?
                     sttc.getMinLength().toString(): this.bulkExcel.BLANK_VAL);
                 dataCellValue.add(!ProcessUtil.isNull(sttc.getMaxLength()) ?
                     sttc.getMaxLength().toString(): this.bulkExcel.BLANK_VAL);
-                dataCellValue.add(IsDefault.getDefaultByValue(sttc.getMandatory()).getDescription());
+                dataCellValue.add(IsDefault.getDefaultByValue(
+                    sttc.getMandatory()).getDescription());
                 this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
             });
         }
@@ -1173,7 +1408,10 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse uploadSTTCommon(FileUploadRequest fileObject) throws Exception {
         logger.info("Request uploadSTTCommon :- " + fileObject);
-        if (ProcessUtil.isNull(fileObject.getData())) {
+         if (!fileObject.getFile().getContentType().equalsIgnoreCase(this.bulkExcel.SHEET_NAME)) {
+            logger.info("File Type " + fileObject.getFile().getContentType());
+            return new AppResponse(ProcessUtil.ERROR, "You can upload only .xlsx extension file.");
+        } else if (ProcessUtil.isNull(fileObject.getData())) {
             return new AppResponse(ProcessUtil.ERROR, "Date not found");
         }
         Gson gson = new Gson();
@@ -1183,9 +1421,6 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         } else if (ProcessUtil.isNull(sttFileUReq.getUploadType())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser upload type missing.");
-        } else if (!fileObject.getFile().getContentType().equalsIgnoreCase(this.bulkExcel.SHEET_NAME)) {
-            logger.info("File Type " + fileObject.getFile().getContentType());
-            return new AppResponse(ProcessUtil.ERROR, "You can upload only .xlsx extension file.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
             sttFileUReq.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
@@ -1209,22 +1444,19 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, String.format("Sheet not found with (%s)",
                 sttFileUReq.getUploadType()));
         } else if (sheet.getLastRowNum() < 1) {
-            return new AppResponse(ProcessUtil.ERROR,  "You can't upload empty file.");
+            return new AppResponse(ProcessUtil.ERROR, "You can't upload empty file.");
         } else if (sheet.getLastRowNum() > Long.valueOf(uploadLimit.get().getLookupValue())) {
             return new AppResponse(ProcessUtil.ERROR, String.format("File support %s rows at a time.",
                 uploadLimit.get().getLookupValue()));
         }
+        logger.info(String.format("Upload File Type %s", sttFileUReq.getUploadType()));
         if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT)) {
-            logger.info("Upload File Type %s", sttFileUReq.getUploadType());
             return this.uploadSTT(sheet, appUser.get());
         } else if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT_FORM)) {
-            logger.info("Upload File Type %s", sttFileUReq.getUploadType());
             return this.uploadSTTForm(sheet, appUser.get());
         } else if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT_SECTION)) {
-            logger.info("Upload File Type %s", sttFileUReq.getUploadType());
             return this.uploadSTTSection(sheet, appUser.get());
         } else if (sttFileUReq.getUploadType().equals(this.bulkExcel.STT_CONTROL)) {
-            logger.info("Upload File Type %s", sttFileUReq.getUploadType());
             return this.uploadSTTControl(sheet, appUser.get());
         }
         return new AppResponse(ProcessUtil.ERROR, "Wrong upload type define.");
@@ -1279,7 +1511,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             stt.setServiceName(sttValidation.getServiceName());
             stt.setDescription(sttValidation.getDescription());
             stt.setTaskType(Long.valueOf(TaskType.getTaskTypeByDescription(
-                sttValidation.getDescription()).getLookupValue().toString()));
+                sttValidation.getTaskType()).getLookupValue().toString()));
             stt.setDefault(Boolean.valueOf(IsDefault.getDefaultByDescription(
                 sttValidation.getDefaultSTT()).getLookupValue().toString()));
             stt.setStatus(Status.ACTIVE.getLookupValue());
@@ -1327,6 +1559,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                         sttfValidation.setDescription(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
                         sttfValidation.setDefaultSTTF(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i == ++index) {
+                        sttfValidation.setFormType(this.bulkExcel.getCellDetail(currentRow, i));
                     }
                 }
                 sttfValidation.isValidSTTF();
@@ -1347,6 +1581,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sttForm.setDescription(sttfValidation.getDescription());
             sttForm.setDefault(Boolean.valueOf(IsDefault.getDefaultByDescription(
                 sttfValidation.getDefaultSTTF()).getLookupValue().toString()));
+            sttForm.setFormType(Long.valueOf(FormType.getFormTypeByDescription(
+                sttfValidation.getFormType()).getLookupValue().toString()));
             sttForm.setStatus(Status.ACTIVE.getLookupValue());
             sttForm.setAppUser(appUser);
             this.sttfRepository.save(sttForm);
@@ -1415,16 +1651,16 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         while (rows.hasNext()) {
             Row currentRow = rows.next();
             if (currentRow.getRowNum() == 0) {
-                for (int i=0; i < this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE_V1.length; i++) {
-                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE_V1[i])) {
+                for (int i=0; i < this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE[i])) {
                         return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
-                            this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE_V1[i] + " heading missing.");
+                            this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 STTCValidation sttcValidation = new STTCValidation();
                 sttcValidation.setRowCounter(currentRow.getRowNum()+1);
-                for (int i=0; i < this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE_V1.length; i++) {
+                for (int i=0; i < this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE.length; i++) {
                     int index = 0;
                     if (i == index) {
                         sttcValidation.setControlOrder(this.bulkExcel.getCellDetail(currentRow, i));
@@ -1469,14 +1705,26 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sttControl.setSttCOrder(Long.valueOf(sttcValidation.getControlOrder()));
             sttControl.setSttCName(sttcValidation.getControlName());
             sttControl.setDescription(sttcValidation.getDescription());
-            sttControl.setFiledType(sttcValidation.getFiledType());
+            sttControl.setFiledType(FormControlType.getFormControlTypeByDescription(
+                sttcValidation.getFiledType()).getLookupValue().toString());
             sttControl.setFiledTitle(sttcValidation.getFiledTitle());
             sttControl.setFiledName(sttcValidation.getFiledName());
             sttControl.setPlaceHolder(sttcValidation.getPlaceHolder());
-            sttControl.setFiledWidth(Long.valueOf(sttcValidation.getFiledWidth()));
-            sttControl.setMinLength(Long.valueOf(sttcValidation.getMinLength()));
-            sttControl.setMaxLength(Long.valueOf(sttcValidation.getMaxLength()));
-            sttControl.setFiledLkValue(sttcValidation.getFiledLkValue()); // if have
+            if (!ProcessUtil.isNull(sttcValidation.getFiledWidth())) {
+                sttControl.setFiledWidth(Long.valueOf(sttcValidation.getFiledWidth()));
+            }
+            if (!ProcessUtil.isNull(sttcValidation.getMinLength())) {
+                sttControl.setMinLength(Long.valueOf(sttcValidation.getMinLength()));
+            }
+            if (!ProcessUtil.isNull(sttcValidation.getMaxLength())) {
+                sttControl.setMaxLength(Long.valueOf(sttcValidation.getMaxLength()));
+            }
+            if (FormControlType.RADIO.getLookupValue().equals(sttcValidation.getFiledType()) ||
+                FormControlType.CHECKBOX.getLookupValue().equals(sttcValidation.getFiledType()) ||
+                FormControlType.SELECT.getLookupValue().equals(sttcValidation.getFiledType()) ||
+                FormControlType.MULTI_SELECT.getLookupValue().equals(sttcValidation.getFiledType())) {
+                sttControl.setFiledLkValue(sttcValidation.getFiledLkValue());
+            }
             sttControl.setMandatory(Boolean.valueOf(IsDefault.getDefaultByDescription(
                 sttcValidation.getRequired()).getLookupValue().toString()));
             sttControl.setDefault(IsDefault.NO_DEFAULT.getLookupValue());
