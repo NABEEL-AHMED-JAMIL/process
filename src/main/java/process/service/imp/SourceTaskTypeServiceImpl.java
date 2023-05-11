@@ -382,8 +382,69 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
     }
 
+    /**
+     * Method use to STT Link User
+     * @param sttLinkUserRequest
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse linkSTTWithAppUser(STTRequest sttRequest) throws Exception {
+    public AppResponse addSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception {
+        logger.info("Request addSTTLinkUser :- " + sttLinkUserRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STT Link User
+     * @param sttLinkUserRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception {
+        logger.info("Request deleteSTTLinkUser :- " + sttLinkUserRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch all STT Link User
+     * @param sttLinkUserRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception {
+        logger.info("Request fetchSTTLinkUser :- " + sttLinkUserRequest);
+        return null;
+    }
+
+    /**
+     * Method use to STT Link STTF
+     * @param sttLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse addSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception {
+        logger.info("Request addSTTLinkSTTF :- " + sttLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STT Link STTF
+     * @param sttLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception {
+        logger.info("Request deleteSTTLinkSTTF :- " + sttLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STT Link STTF
+     * @param sttLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception {
+        logger.info("Request fetchSTTLinkSTTF :- " + sttLinkSTTFRequest);
         return null;
     }
 
@@ -574,8 +635,69 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
     }
 
+    /**
+     * Method use to STTF Link STT
+     * @param sttfLinkSTTRequest
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse linkSTTFWithFrom(STTFormRequest sttFormRequest) throws Exception {
+    public AppResponse addSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception {
+        logger.info("Request addSTTFLinkSTT :- " + sttfLinkSTTRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTF Link STT
+     * @param sttfLinkSTTRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception {
+        logger.info("Request deleteSTTFLinkSTT :- " + sttfLinkSTTRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTF Link STT
+     * @param sttfLinkSTTRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception {
+        logger.info("Request fetchSTTFLinkSTT :- " + sttfLinkSTTRequest);
+        return null;
+    }
+
+    /**
+     * Method use to STTF Link STTS
+     * @param sttfLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse addSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception {
+        logger.info("Request addSTTFLinkSTTS :- " + sttfLinkSTTSRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTF Link STTS
+     * @param sttfLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception {
+        logger.info("Request deleteSTTFLinkSTTS :- " + sttfLinkSTTSRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTF Link STTS
+     * @param sttfLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception {
+        logger.info("Request fetchSTTFLinkSTTS :- " + sttfLinkSTTSRequest);
         return null;
     }
 
@@ -768,12 +890,69 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
     }
 
+    /**
+     * Method use to STTS Link STTF
+     * @param sttsLinkSTTFRequest
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse linkSTTSWithFrom(STTSectionRequest sttSectionRequest) throws Exception {
-        logger.info("Request linkSTTSWithFrom :- " + sttSectionRequest);
-        if (isNull(sttSectionRequest.getAccessUserDetail().getUsername())) {
-            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
-        }
+    public AppResponse addSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception {
+        logger.info("Request addSTTSLinkSTTF :- " + sttsLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTS Link STTF
+     * @param sttsLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception {
+        logger.info("Request deleteSTTSLinkSTTF :- " + sttsLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTS Link STTF
+     * @param sttsLinkSTTFRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception {
+        logger.info("Request fetchSTTSLinkSTTF :- " + sttsLinkSTTFRequest);
+        return null;
+    }
+
+    /**
+     * Method use to STTS Link STTC
+     * @param sttsLinkSTTCRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse addSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception {
+        logger.info("Request addSTTSLinkSTTC :- " + sttsLinkSTTCRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTS Link STTC
+     * @param sttsLinkSTTCRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception {
+        logger.info("Request deleteSTTSLinkSTTC :- " + sttsLinkSTTCRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTS Link STTC
+     * @param sttsLinkSTTCRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception {
+        logger.info("Request fetchSTTSLinkSTTC :- " + sttsLinkSTTCRequest);
         return null;
     }
 
@@ -1019,9 +1198,36 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
     }
 
+    /**
+     * Method use to STTC Link STTS
+     * @param sttcLinkSTTSRequest
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse linkSTTCWithFrom(STTControlRequest sttControl) throws Exception {
-        logger.info("Request linkSTTCWithFrom :- " + sttControl);
+    public AppResponse addSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception {
+        logger.info("Request addSTTCLinkSTTS :- " + sttcLinkSTTSRequest);
+        return null;
+    }
+
+    /**
+     * Method use to delete STTC Link STTS
+     * @param sttcLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse deleteSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception {
+        logger.info("Request deleteSTTCLinkSTTS :- " + sttcLinkSTTSRequest);
+        return null;
+    }
+
+    /**
+     * Method use to fetch STTC Link STTS
+     * @param sttcLinkSTTSRequest
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception {
+        logger.info("Request fetchSTTCLinkSTTS :- " + sttcLinkSTTSRequest);
         return null;
     }
 
