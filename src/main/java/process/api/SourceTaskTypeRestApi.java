@@ -186,63 +186,6 @@ public class SourceTaskTypeRestApi {
 
     /**
      * api-status :- done
-     * @apiName :- addSTTLinkSTTF
-     * @apiNote :- Api use to link stt with sttf
-     * @param sttLinkSTTFRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/addSTTLinkSTTF", method = RequestMethod.POST)
-    public ResponseEntity<?> addSTTLinkSTTF(@RequestBody STTLinkSTTFRequest sttLinkSTTFRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.addSTTLinkSTTF(sttLinkSTTFRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while addSTTLinkSTTF ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
-     * @apiName :- deleteSTTLinkSTTF
-     * @apiNote :- Api use to de-link stt with sttf
-     * @param sttLinkSTTFRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/deleteSTTLinkSTTF", method = RequestMethod.POST)
-    public ResponseEntity<?> deleteSTTLinkSTTF(@RequestBody STTLinkSTTFRequest sttLinkSTTFRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.deleteSTTLinkSTTF(sttLinkSTTFRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while deleteSTTLinkSTTF ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
-     * @apiName :- fetchSTTLinkSTTF
-     * @apiNote :- Api use to fetch link stt with sttf
-     * @param sttLinkSTTFRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/fetchSTTLinkSTTF", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchSTTLinkSTTF(@RequestBody STTLinkSTTFRequest sttLinkSTTFRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTLinkSTTF(sttLinkSTTFRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while fetchSTTLinkSTTF ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
      * @apiName :- addSTTF
      * @apiNote :- Api use to add sttf(source task type form)
      * @param sttFormRequest
@@ -395,63 +338,6 @@ public class SourceTaskTypeRestApi {
 
     /**
      * api-status :- done
-     * @apiName :- addSTTFLinkSTTS
-     * @apiNote :- Api use to link sttf with stts
-     * @param sttfLinkSTTSRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/addSTTFLinkSTTS", method = RequestMethod.POST)
-    public ResponseEntity<?> addSTTFLinkSTTS(@RequestBody STTFLinkSTTSRequest sttfLinkSTTSRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.addSTTFLinkSTTS(sttfLinkSTTSRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while addSTTFLinkSTTS ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
-     * @apiName :- deleteSTTFLinkSTTS
-     * @apiNote :- Api use to de-link sttf with stts
-     * @param sttfLinkSTTSRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/deleteSTTFLinkSTTS", method = RequestMethod.POST)
-    public ResponseEntity<?> deleteSTTFLinkSTTS(@RequestBody STTFLinkSTTSRequest sttfLinkSTTSRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.deleteSTTFLinkSTTS(sttfLinkSTTSRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while deleteSTTFLinkSTTS ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
-     * @apiName :- fetchSTTFLinkSTTS
-     * @apiNote :- Api use to fetch link sttf with stts
-     * @param sttfLinkSTTSRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/fetchSTTFLinkSTTS", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchSTTFLinkSTTS(@RequestBody STTFLinkSTTSRequest sttfLinkSTTSRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTFLinkSTTS(sttfLinkSTTSRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while fetchSTTFLinkSTTS ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
      * @apiName :- addSTTS
      * @apiNote :- Api use to add stts(source task type section)
      * @param sttSectionRequest
@@ -597,63 +483,6 @@ public class SourceTaskTypeRestApi {
             return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTSLinkSTTF(sttsLinkSTTFRequest), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSTTSLinkSTTF ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
-     * @apiName :- addSTTSLinkSTTC
-     * @apiNote :- Api use to link stts with sttc
-     * @param sttsLinkSTTCRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/addSTTSLinkSTTC", method = RequestMethod.POST)
-    public ResponseEntity<?> addSTTSLinkSTTC(@RequestBody STTSLinkSTTCRequest sttsLinkSTTCRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.addSTTSLinkSTTC(sttsLinkSTTCRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while addSTTSLinkSTTC ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
-     * @apiName :- deleteSTTSLinkSTTC
-     * @apiNote :- Api use to de-link stts with sttc
-     * @param sttsLinkSTTCRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/deleteSTTSLinkSTTC", method = RequestMethod.POST)
-    public ResponseEntity<?> deleteSTTSLinkSTTC(@RequestBody STTSLinkSTTCRequest sttsLinkSTTCRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.deleteSTTSLinkSTTC(sttsLinkSTTCRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while deleteSTTSLinkSTTC ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * api-status :- done
-     * @apiName :- fetchSTTSLinkSTTC
-     * @apiNote :- Api use to fetch link stts with sttc
-     * @param sttsLinkSTTCRequest
-     * @return ResponseEntity<?>
-     * */
-    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
-    @RequestMapping(value = "/fetchSTTSLinkSTTC", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchSTTSLinkSTTC(@RequestBody STTSLinkSTTCRequest sttsLinkSTTCRequest) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTSLinkSTTC(sttsLinkSTTCRequest), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while fetchSTTSLinkSTTC ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
                 "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }

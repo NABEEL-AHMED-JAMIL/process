@@ -25,12 +25,6 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception;
 
-    public AppResponse addSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception;
-
-    public AppResponse deleteSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception;
-
-    public AppResponse fetchSTTLinkSTTF(STTLinkSTTFRequest sttLinkSTTFRequest) throws Exception;
-
     public AppResponse addSTTF(STTFormRequest sttFormRequest) throws Exception;
 
     public AppResponse editSTTF(STTFormRequest sttFormRequest) throws Exception;
@@ -47,12 +41,6 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception;
 
-    public AppResponse addSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception;
-
-    public AppResponse deleteSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception;
-
-    public AppResponse fetchSTTFLinkSTTS(STTFLinkSTTSRequest sttfLinkSTTSRequest) throws Exception;
-
     public AppResponse addSTTS(STTSectionRequest sttSectionRequest) throws Exception;
 
     public AppResponse editSTTS(STTSectionRequest sttSectionRequest) throws Exception;
@@ -68,12 +56,6 @@ public interface SourceTaskTypeService {
     public AppResponse deleteSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception;
 
     public AppResponse fetchSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception;
-
-    public AppResponse addSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception;
-
-    public AppResponse deleteSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception;
-
-    public AppResponse fetchSTTSLinkSTTC(STTSLinkSTTCRequest sttsLinkSTTCRequest) throws Exception;
 
     public AppResponse addSTTC(STTControlRequest sttControlRequest) throws Exception;
 

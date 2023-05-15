@@ -18,7 +18,7 @@ public interface STTFLinkSTTRepository extends CrudRepository<STTFLinkSTT, Long>
     public Long countBySttIdAndNotInStatus(Long sttId, Long status);
 
     @Query(value = "SELECT count(sttfLinkSTT.auSttfId) FROM STTFLinkSTT sttfLinkSTT " +
-            "WHERE sttfLinkSTT.sttf.sttfId = ?1 AND sttfLinkSTT.status != ?2")
+        "WHERE sttfLinkSTT.sttf.sttfId = ?1 AND sttfLinkSTT.status != ?2")
     public Long countBySttfIdAndNotInStatus(Long sttfId, Long status);
 
     @Query(value = "SELECT sttfLinkSTT FROM STTFLinkSTT sttfLinkSTT WHERE sttfLinkSTT.stt.sttId = ?1 " +
@@ -32,11 +32,7 @@ public interface STTFLinkSTTRepository extends CrudRepository<STTFLinkSTT, Long>
             Long auSttId, Long sttId, Long appUserId, Long sttfId, Long status);
 
     @Query(value = "SELECT sttfLinkSTT FROM STTFLinkSTT sttfLinkSTT " +
-        "WHERE sttfLinkSTT.stt.sttId = ?1 AND sttfLinkSTT.appUser.appUserId = ?2 AND sttfLinkSTT.status != ?3")
-    public List<STTFLinkSTT> findBySttIdAndAppUserIdAndStatusNotIn(Long sttId, Long appUserId, Long status);
-
-    @Query(value = "SELECT sttfLinkSTT FROM STTFLinkSTT sttfLinkSTT " +
-            "WHERE sttfLinkSTT.sttf.sttfId = ?1 AND sttfLinkSTT.status != ?2")
+        "WHERE sttfLinkSTT.sttf.sttfId = ?1 AND sttfLinkSTT.status != ?2")
     public List<STTFLinkSTT> findBySttfIdAndStatusNotIn(Long sttfId, Long status);
 
 }
