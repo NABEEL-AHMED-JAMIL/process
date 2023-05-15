@@ -6,46 +6,41 @@ import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import javax.persistence.*;
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "app_user_sttf")
+@Table(name = "sttc_link_stts")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class AppUserSTTF {
+public class STTCLinkSTTS {
 
     @GenericGenerator(
-        name = "auSttfSequenceGenerator",
+        name = "auSttcSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @org.hibernate.annotations.Parameter(name = "sequence_name", value = "au_sttf_Seq"),
+            @org.hibernate.annotations.Parameter(name = "sequence_name", value = "au_sttc_Seq"),
             @org.hibernate.annotations.Parameter(name = "initial_value", value = "1000"),
             @org.hibernate.annotations.Parameter(name = "increment_size", value = "1")
         }
     )
     @Id
-    @Column(name = "au_sttf_id")
-    @GeneratedValue(generator = "auSttfSequenceGenerator")
-    private Long auSttfId;
+    @Column(name = "au_sttc_id")
+    @GeneratedValue(generator = "auSttcSequenceGenerator")
+    private Long auSttcId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "sttf_id", nullable = false)
-    private STTForm sttf;
+    @JoinColumn(name = "sttc_id", nullable = false)
+    private STTControl sttc;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "app_user_id", nullable = false)
     private AppUser appUser;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "stt_id", nullable = false)
-    private STT stt;
-
-    @OneToMany(mappedBy="sttf")
-    private List<AppUserSTTS> appUserSTTS = new ArrayList<>();
+    @JoinColumn(name = "stts_id", nullable = false)
+    private STTSection stts;
 
     @Column(name = "status", nullable = false)
     private Long status;
@@ -53,7 +48,7 @@ public class AppUserSTTF {
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
-    public AppUserSTTF() {
+    public STTCLinkSTTS() {
     }
 
     @PrePersist
@@ -61,20 +56,20 @@ public class AppUserSTTF {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
-    public Long getAuSttfId() {
-        return auSttfId;
+    public Long getAuSttcId() {
+        return auSttcId;
     }
 
-    public void setAuSttfId(Long auSttfId) {
-        this.auSttfId = auSttfId;
+    public void setAuSttcId(Long auSttcId) {
+        this.auSttcId = auSttcId;
     }
 
-    public STTForm getSttf() {
-        return sttf;
+    public STTControl getSttc() {
+        return sttc;
     }
 
-    public void setSttf(STTForm sttf) {
-        this.sttf = sttf;
+    public void setSttc(STTControl sttc) {
+        this.sttc = sttc;
     }
 
     public AppUser getAppUser() {
@@ -85,20 +80,12 @@ public class AppUserSTTF {
         this.appUser = appUser;
     }
 
-    public STT getStt() {
-        return stt;
+    public STTSection getStts() {
+        return stts;
     }
 
-    public void setStt(STT stt) {
-        this.stt = stt;
-    }
-
-    public List<AppUserSTTS> getAppUserSTTS() {
-        return appUserSTTS;
-    }
-
-    public void setAppUserSTTS(List<AppUserSTTS> appUserSTTS) {
-        this.appUserSTTS = appUserSTTS;
+    public void setStts(STTSection stts) {
+        this.stts = stts;
     }
 
     public Long getStatus() {
@@ -121,4 +108,5 @@ public class AppUserSTTF {
     public String toString() {
         return new Gson().toJson(this);
     }
+
 }

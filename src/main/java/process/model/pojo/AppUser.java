@@ -9,6 +9,10 @@ import java.util.List;
 import java.util.Set;
 import org.hibernate.annotations.GenericGenerator;
 
+
+/**
+ * @author Nabeel Ahmed
+ */
 @Entity
 @Table(	name = "app_users",
 uniqueConstraints = {
@@ -37,19 +41,16 @@ public class AppUser {
     @Column(name = "last_name")
     private String lastName;
 
-    @Column(name = "time_zone_id",
-            nullable = false)
+    @Column(name = "time_zone_id", nullable = false)
     private String timeZone;
-    @Column(name = "username",
-            nullable=false)
+
+    @Column(name = "username", nullable=false)
     private String username;
 
-    @Column(name = "email",
-            nullable=false)
+    @Column(name = "email", nullable=false)
     private String email;
 
-    @Column(name = "password",
-            nullable=false)
+    @Column(name = "password", nullable=false)
     private String password;
 
     @ManyToMany(cascade = {
@@ -64,20 +65,19 @@ public class AppUser {
     private List<AppUserSTT> appUserSTT = new ArrayList<>();
 
     @OneToMany(mappedBy="appUser")
-    private List<AppUserSTTF> appUserSTTF = new ArrayList<>();
+    private List<STTFLinkSTT> sttfLink = new ArrayList<>();
 
     @OneToMany(mappedBy="appUser")
-    private List<AppUserSTTS> appUserSTTS = new ArrayList<>();
+    private List<STTSLinkSTTF> sttsLink = new ArrayList<>();
 
     @OneToMany(mappedBy="appUser")
-    private List<AppUserSTTC> appUserSTTC = new ArrayList<>();
+    private List<STTCLinkSTTS> sttcLink = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name = "parent_user_id")
     protected AppUser parentAppUser;
 
-    @OneToMany(mappedBy = "parentAppUser",
-        fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "parentAppUser", fetch = FetchType.LAZY)
     protected Set<AppUser> appUserChildren;
 
     @Column(name = "status", nullable = false)
@@ -86,8 +86,7 @@ public class AppUser {
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
-    public AppUser() {
-    }
+    public AppUser() {}
 
     @PrePersist
     protected void onCreate() {
@@ -166,28 +165,28 @@ public class AppUser {
         this.appUserSTT = appUserSTT;
     }
 
-    public List<AppUserSTTF> getAppUserSTTF() {
-        return appUserSTTF;
+    public List<STTFLinkSTT> getSttfLink() {
+        return sttfLink;
     }
 
-    public void setAppUserSTTF(List<AppUserSTTF> appUserSTTF) {
-        this.appUserSTTF = appUserSTTF;
+    public void setSttfLink(List<STTFLinkSTT> sttfLink) {
+        this.sttfLink = sttfLink;
     }
 
-    public List<AppUserSTTS> getAppUserSTTS() {
-        return appUserSTTS;
+    public List<STTSLinkSTTF> getSttsLink() {
+        return sttsLink;
     }
 
-    public void setAppUserSTTS(List<AppUserSTTS> appUserSTTS) {
-        this.appUserSTTS = appUserSTTS;
+    public void setSttsLink(List<STTSLinkSTTF> sttsLink) {
+        this.sttsLink = sttsLink;
     }
 
-    public List<AppUserSTTC> getAppUserSTTC() {
-        return appUserSTTC;
+    public List<STTCLinkSTTS> getSttcLink() {
+        return sttcLink;
     }
 
-    public void setAppUserSTTC(List<AppUserSTTC> appUserSTTC) {
-        this.appUserSTTC = appUserSTTC;
+    public void setSttcLink(List<STTCLinkSTTS> sttcLink) {
+        this.sttcLink = sttcLink;
     }
 
     public AppUser getParentAppUser() {

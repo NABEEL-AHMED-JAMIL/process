@@ -14,10 +14,10 @@ import java.util.List;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "app_user_stts")
+@Table(name = "stts_link_sttf")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class AppUserSTTS {
+public class STTSLinkSTTF {
 
     @GenericGenerator(
         name = "auSttsSequenceGenerator",
@@ -46,7 +46,7 @@ public class AppUserSTTS {
     private STTForm sttf;
 
     @OneToMany(mappedBy="stts")
-    private List<AppUserSTTC> appUserSTTC = new ArrayList<>();
+    private List<STTCLinkSTTS> sttcLink = new ArrayList<>();
 
     @Column(name = "status", nullable = false)
     private Long status;
@@ -54,7 +54,7 @@ public class AppUserSTTS {
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
-    public AppUserSTTS() {
+    public STTSLinkSTTF() {
     }
 
     @PrePersist
@@ -94,12 +94,12 @@ public class AppUserSTTS {
         this.sttf = sttf;
     }
 
-    public List<AppUserSTTC> getAppUserSTTC() {
-        return appUserSTTC;
+    public List<STTCLinkSTTS> getSttcLink() {
+        return sttcLink;
     }
 
-    public void setAppUserSTTC(List<AppUserSTTC> appUserSTTC) {
-        this.appUserSTTC = appUserSTTC;
+    public void setSttcLink(List<STTCLinkSTTS> sttcLink) {
+        this.sttcLink = sttcLink;
     }
 
     public Long getStatus() {

@@ -20,13 +20,13 @@ public interface STTRepository extends CrudRepository<STT, Long> {
         "from stt stt\n" +
         "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
         "where stt.stt_id = ?1 and au.username = ?2", nativeQuery = true)
-    public Optional<STT> findBySttIdAndAppUserUsername(Long sourceTaskTypeId, String username);
+    public Optional<STT> findBySttIdAndAppUser(Long sourceTaskTypeId, String username);
 
     @Query(value = "select stt.*\n" +
         "from stt stt\n" +
         "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
         "where stt.stt_id = ?1 and au.username = ?2 and stt.status != ?3", nativeQuery = true)
-    public Optional<STT> findBySttIdAndAppUserUsernameAndNotInSttStatus(Long sttId, String username, Long status);
+    public Optional<STT> findBySttIdAndAppUserAndSttStatusNotIn(Long sttId, String username, Long status);
 
     @Query(value = "select stt.stt_id as sttId, stt.service_name as serviceName,\n" +
         "stt.description as description, stt.task_type as taskType,\n" +
@@ -37,23 +37,22 @@ public interface STTRepository extends CrudRepository<STT, Long> {
         "from stt stt\n" +
         "inner join app_users au on au.app_user_id  = stt.app_user_id\n" +
         "where au.username = ?1 order by stt.stt_id desc\n ", nativeQuery = true)
-    public List<STTProjection> findByAppUserUsername(String username);
+    public List<STTProjection> findByAppUser(String username);
 
     @Query(value = "select stt.stt_id as sttId, stt.service_name as serviceName, stt.description as description,\n" +
         "stt.task_type as taskType, stt.status as status, case when stt.is_default then true else false  end as sttDefault,\n" +
-        "stt.date_created as dateCreated, count(aus.stt_id)  as totalUser, '0' as totalTask, '0' as totalForm\n" +
+        "stt.date_created as dateCreated\n" +
         "from stt stt\n" +
         "inner join app_users au on au.app_user_id  = stt.app_user_id\n" +
-        "left join app_user_stt aus ON aus.stt_id = stt.stt_id\n" +
         "where au.username = ?1 and stt.status != ?2\n" +
         "group by stt.stt_id\n" +
         "order by stt.stt_id desc\n", nativeQuery = true)
-    public List<STTProjection> findByAppUserUsernameAndNotInStatus(String username, Long status);
+    public List<STTProjection> findByAppUserAndStatusNotIn(String username, Long status);
 
     @Query(value = "select stt.*\n" +
         "from stt stt\n" +
         "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
         "where au.username = ?1 and stt.status != ?2", nativeQuery = true)
-    public List<STT> findSttByAppUserUsernameAndNotInStatus(String username, Long status);
+    public List<STT> findSttByAppUserAndStatusNotIn(String username, Long status);
 
 }

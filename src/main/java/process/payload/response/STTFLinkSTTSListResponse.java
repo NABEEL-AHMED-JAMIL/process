@@ -11,17 +11,52 @@ import java.sql.Timestamp;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class STTSectionResponse {
+public class STTFLinkSTTSListResponse {
 
+    private Long sttfLinkSttsId;
+    private Long appUserid;
+    private String username;
+    private String email;
     private Long sttsId;
     private String sttsName;
-    private String description;
     private Long sttsOrder;
+    private GLookup sttsDefault;
     private GLookup status;
-    private GLookup defaultStts;
     private Timestamp dateCreated;
 
-    public STTSectionResponse() {
+    public STTFLinkSTTSListResponse() {
+    }
+
+    public Long getSttfLinkSttsId() {
+        return sttfLinkSttsId;
+    }
+
+    public void setSttfLinkSttsId(Long sttfLinkSttsId) {
+        this.sttfLinkSttsId = sttfLinkSttsId;
+    }
+
+    public Long getAppUserid() {
+        return appUserid;
+    }
+
+    public void setAppUserid(Long appUserid) {
+        this.appUserid = appUserid;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public Long getSttsId() {
@@ -40,14 +75,6 @@ public class STTSectionResponse {
         this.sttsName = sttsName;
     }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
     public Long getSttsOrder() {
         return sttsOrder;
     }
@@ -56,20 +83,20 @@ public class STTSectionResponse {
         this.sttsOrder = sttsOrder;
     }
 
+    public GLookup getSttsDefault() {
+        return sttsDefault;
+    }
+
+    public void setSttsDefault(GLookup sttsDefault) {
+        this.sttsDefault = sttsDefault;
+    }
+
     public GLookup getStatus() {
         return status;
     }
 
     public void setStatus(GLookup status) {
         this.status = status;
-    }
-
-    public GLookup getDefaultStts() {
-        return defaultStts;
-    }
-
-    public void setDefaultStts(GLookup defaultStts) {
-        this.defaultStts = defaultStts;
     }
 
     public Timestamp getDateCreated() {

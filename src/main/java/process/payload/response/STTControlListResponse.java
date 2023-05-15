@@ -13,9 +13,9 @@ import java.sql.Timestamp;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTControlListResponse {
 
-    private Long sttCId;
-    private Long sttCOrder;
-    private String sttCName;
+    private Long sttcId;
+    private Long sttcOrder;
+    private String sttcName;
     private String filedName;
     private GLookup filedType;
     private String description;
@@ -29,28 +29,28 @@ public class STTControlListResponse {
 
     public STTControlListResponse() {}
 
-    public Long getSttCId() {
-        return sttCId;
+    public Long getSttcId() {
+        return sttcId;
     }
 
-    public void setSttCId(Long sttCId) {
-        this.sttCId = sttCId;
+    public void setSttcId(Long sttcId) {
+        this.sttcId = sttcId;
     }
 
-    public Long getSttCOrder() {
-        return sttCOrder;
+    public Long getSttcOrder() {
+        return sttcOrder;
     }
 
-    public void setSttCOrder(Long sttCOrder) {
-        this.sttCOrder = sttCOrder;
+    public void setSttcOrder(Long sttcOrder) {
+        this.sttcOrder = sttcOrder;
     }
 
-    public String getSttCName() {
-        return sttCName;
+    public String getSttcName() {
+        return sttcName;
     }
 
-    public void setSttCName(String sttCName) {
-        this.sttCName = sttCName;
+    public void setSttcName(String sttcName) {
+        this.sttcName = sttcName;
     }
 
     public String getFiledName() {

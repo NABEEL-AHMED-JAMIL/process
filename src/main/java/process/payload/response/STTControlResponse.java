@@ -12,9 +12,9 @@ import process.util.lookuputil.GLookup;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTControlResponse {
 
-    private Long sttCId;
-    private Long sttCOrder;
-    private String sttCName;
+    private Long sttcId;
+    private Long sttcOrder;
+    private String sttcName;
     private String description;
     private GLookup filedType;
     private String filedTitle;
@@ -32,28 +32,28 @@ public class STTControlResponse {
     public STTControlResponse() {
     }
 
-    public Long getSttCId() {
-        return sttCId;
+    public Long getSttcId() {
+        return sttcId;
     }
 
-    public void setSttCId(Long sttCId) {
-        this.sttCId = sttCId;
+    public void setSttcId(Long sttcId) {
+        this.sttcId = sttcId;
     }
 
-    public Long getSttCOrder() {
-        return sttCOrder;
+    public Long getSttcOrder() {
+        return sttcOrder;
     }
 
-    public void setSttCOrder(Long sttCOrder) {
-        this.sttCOrder = sttCOrder;
+    public void setSttcOrder(Long sttcOrder) {
+        this.sttcOrder = sttcOrder;
     }
 
-    public String getSttCName() {
-        return sttCName;
+    public String getSttcName() {
+        return sttcName;
     }
 
-    public void setSttCName(String sttCName) {
-        this.sttCName = sttCName;
+    public void setSttcName(String sttcName) {
+        this.sttcName = sttcName;
     }
 
     public String getDescription() {

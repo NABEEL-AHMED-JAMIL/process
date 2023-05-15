@@ -16,8 +16,8 @@ public class STTSectionRequest {
     private String description; // yes
     private Long status;
     private Long sttsOrder;  // yes
-    private ParseRequest accessUserDetail; // yes
     private boolean defaultStts;
+    private ParseRequest accessUserDetail; // yes
 
     public STTSectionRequest() {
     }

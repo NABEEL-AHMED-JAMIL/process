@@ -31,16 +31,16 @@ public class STTSection {
     @Id
     @Column(name="stts_id", unique=true, nullable=false)
     @GeneratedValue(generator = "sttSectionSequenceGenerator")
-    private Long sttSId;
+    private Long sttsId;
 
     @Column(name = "stts_name")
-    private String sttSName;
+    private String sttsName;
 
     @Column(name = "description", nullable = false)
     private String description;
 
     @Column(name = "stts_order")
-    private Long sttSOrder;
+    private Long sttsOrder;
 
     @Column(name = "status",nullable = false)
     private Long status;
@@ -50,7 +50,7 @@ public class STTSection {
     private Boolean isDefault;
 
     @OneToMany(mappedBy="stts")
-    private List<AppUserSTTS> appUserSTTS = new ArrayList<>();
+    private List<STTSLinkSTTF> sttsLink = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name="app_user_id")
@@ -59,28 +59,27 @@ public class STTSection {
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
-    public STTSection() {
-    }
+    public STTSection() {}
 
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
-    public Long getSttSId() {
-        return sttSId;
+    public Long getSttsId() {
+        return sttsId;
     }
 
-    public void setSttSId(Long sttSId) {
-        this.sttSId = sttSId;
+    public void setSttsId(Long sttsId) {
+        this.sttsId = sttsId;
     }
 
-    public String getSttSName() {
-        return sttSName;
+    public String getSttsName() {
+        return sttsName;
     }
 
-    public void setSttSName(String sttSName) {
-        this.sttSName = sttSName;
+    public void setSttsName(String sttsName) {
+        this.sttsName = sttsName;
     }
 
     public String getDescription() {
@@ -91,12 +90,12 @@ public class STTSection {
         this.description = description;
     }
 
-    public Long getSttSOrder() {
-        return sttSOrder;
+    public Long getSttsOrder() {
+        return sttsOrder;
     }
 
-    public void setSttSOrder(Long sttSOrder) {
-        this.sttSOrder = sttSOrder;
+    public void setSttsOrder(Long sttsOrder) {
+        this.sttsOrder = sttsOrder;
     }
 
     public Long getStatus() {
@@ -115,12 +114,12 @@ public class STTSection {
         isDefault = aDefault;
     }
 
-    public List<AppUserSTTS> getAppUserSTTS() {
-        return appUserSTTS;
+    public List<STTSLinkSTTF> getSttsLink() {
+        return sttsLink;
     }
 
-    public void setAppUserSTTS(List<AppUserSTTS> appUserSTTS) {
-        this.appUserSTTS = appUserSTTS;
+    public void setSttsLink(List<STTSLinkSTTF> sttsLink) {
+        this.sttsLink = sttsLink;
     }
 
     public AppUser getAppUser() {

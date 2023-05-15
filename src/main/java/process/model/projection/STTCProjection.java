@@ -7,13 +7,13 @@ import java.sql.Timestamp;
  */
 public interface STTCProjection {
 
-    public Long getSttCId();
-    public Long getSttCOrder();
-    public String getSttCName();
+    public Long getSttcId();
+    public Long getSttcOrder();
+    public String getSttcName();
     public String getFiledName();
     public String getFiledType();
     public Long getStatus();
-    public Boolean getSTTCDefault();
+    public Boolean getSttcDefault();
     public Boolean getMandatory();
     public Timestamp getDateCreated();
     public Long getTotalStt();

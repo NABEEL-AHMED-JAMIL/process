@@ -31,16 +31,16 @@ public class STTControl {
     @Id
     @Column(name="sttc_id", unique=true, nullable=false)
     @GeneratedValue(generator = "sttControlSequenceGenerator")
-    private Long sttCId;
+    private Long sttcId;
 
     @Column(name = "sttc_name", nullable=false)
-    private String sttCName;
+    private String sttcName;
 
     @Column(name = "description", nullable = false)
     private String description;
 
     @Column(name = "sttc_order")
-    private Long sttCOrder;
+    private Long sttcOrder;
 
     // select,multiple select, need the lookup value
     @Column(name = "filed_type")
@@ -90,7 +90,7 @@ public class STTControl {
     private Timestamp dateCreated;
 
     @OneToMany(mappedBy="sttc")
-    private List<AppUserSTTC> appUserSTTC = new ArrayList<>();
+    private List<STTCLinkSTTS> sttcLink = new ArrayList<>();
 
     public STTControl() {
     }
@@ -100,20 +100,20 @@ public class STTControl {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
-    public Long getSttCId() {
-        return sttCId;
+    public Long getSttcId() {
+        return sttcId;
     }
 
-    public void setSttCId(Long sttCId) {
-        this.sttCId = sttCId;
+    public void setSttcId(Long sttcId) {
+        this.sttcId = sttcId;
     }
 
-    public String getSttCName() {
-        return sttCName;
+    public String getSttcName() {
+        return sttcName;
     }
 
-    public void setSttCName(String sttCName) {
-        this.sttCName = sttCName;
+    public void setSttcName(String sttcName) {
+        this.sttcName = sttcName;
     }
 
     public String getDescription() {
@@ -124,12 +124,12 @@ public class STTControl {
         this.description = description;
     }
 
-    public Long getSttCOrder() {
-        return sttCOrder;
+    public Long getSttcOrder() {
+        return sttcOrder;
     }
 
-    public void setSttCOrder(Long sttCOrder) {
-        this.sttCOrder = sttCOrder;
+    public void setSttcOrder(Long sttcOrder) {
+        this.sttcOrder = sttcOrder;
     }
 
     public String getFiledType() {
@@ -244,12 +244,12 @@ public class STTControl {
         this.dateCreated = dateCreated;
     }
 
-    public List<AppUserSTTC> getAppUserSTTC() {
-        return appUserSTTC;
+    public List<STTCLinkSTTS> getSttcLink() {
+        return sttcLink;
     }
 
-    public void setAppUserSTTC(List<AppUserSTTC> appUserSTTC) {
-        this.appUserSTTC = appUserSTTC;
+    public void setSttcLink(List<STTCLinkSTTS> sttcLink) {
+        this.sttcLink = sttcLink;
     }
 
     @Override

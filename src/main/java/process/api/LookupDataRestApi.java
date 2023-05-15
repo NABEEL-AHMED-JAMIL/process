@@ -55,7 +55,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -74,7 +74,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -111,7 +111,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSubLookupByParentId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -129,7 +129,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLookupByLookupType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -148,7 +148,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while deleteLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -172,7 +172,7 @@ public class LookupDataRestApi {
             logger.error("An error occurred while downloadLookupTemplateFile xlsx file",
                 ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
+                "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -195,7 +195,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while downloadLookup ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -216,7 +216,7 @@ public class LookupDataRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while uploadLookup ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-        "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
+                "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 

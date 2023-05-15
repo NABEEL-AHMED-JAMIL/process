@@ -14,8 +14,5 @@ public interface STTProjection {
     public Long getStatus();
     public Boolean getSttDefault();
     public Timestamp getDateCreated();
-    public Long getTotalUser();
-    public Long getTotalTask();
-    public Long getTotalForm();
 
 }

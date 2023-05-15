@@ -12,8 +12,8 @@ import process.util.lookuputil.GLookup;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTFormResponse {
 
-    private Long sttFId;
-    private String sttFName;
+    private Long sttfId;
+    private String sttfName;
     private String description;
     private GLookup status;
     private GLookup formType;
@@ -22,20 +22,20 @@ public class STTFormResponse {
     public STTFormResponse() {
     }
 
-    public Long getSttFId() {
-        return sttFId;
+    public Long getSttfId() {
+        return sttfId;
     }
 
-    public void setSttFId(Long sttFId) {
-        this.sttFId = sttFId;
+    public void setSttfId(Long sttfId) {
+        this.sttfId = sttfId;
     }
 
-    public String getSttFName() {
-        return sttFName;
+    public String getSttfName() {
+        return sttfName;
     }
 
-    public void setSttFName(String sttFName) {
-        this.sttFName = sttFName;
+    public void setSttfName(String sttfName) {
+        this.sttfName = sttfName;
     }
 
     public String getDescription() {
