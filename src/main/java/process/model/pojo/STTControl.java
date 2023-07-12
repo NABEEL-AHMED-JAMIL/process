@@ -72,6 +72,10 @@ public class STTControl {
     @Column(name = "mandatory")
     private Boolean mandatory;
 
+    @Column(name = "disabled",
+        columnDefinition = "boolean default false")
+    private Boolean disabled;
+
     @Column(name = "is_default",
         columnDefinition = "boolean default false")
     private Boolean isDefault;
@@ -79,7 +83,7 @@ public class STTControl {
     @Column(name = "pattern")
     private String pattern;
 
-    @Column(name = "status",nullable = false)
+    @Column(name = "status", nullable = false)
     private Long status;
 
     @ManyToOne
@@ -202,6 +206,14 @@ public class STTControl {
 
     public void setMandatory(Boolean mandatory) {
         this.mandatory = mandatory;
+    }
+
+    public Boolean getDisabled() {
+        return disabled;
+    }
+
+    public void setDisabled(Boolean disabled) {
+        this.disabled = disabled;
     }
 
     public Boolean getDefault() {

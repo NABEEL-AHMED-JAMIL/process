@@ -1,8 +1,14 @@
 package process.service;
 
+import process.model.pojo.LookupData;
 import process.payload.request.*;
 import process.payload.response.AppResponse;
+import process.util.ProcessUtil;
+import process.util.lookuputil.GLookup;
+import process.util.lookuputil.LookupDetailUtil;
+
 import java.io.ByteArrayOutputStream;
+import java.util.Optional;
 
 /**
  * @author Nabeel Ahmed
@@ -78,5 +84,25 @@ public interface SourceTaskTypeService {
     public ByteArrayOutputStream downloadSTTCommon(STTFileUploadRequest sttFileUReq) throws Exception;
 
     public AppResponse uploadSTTCommon(FileUploadRequest fileObject) throws Exception;
+
+    public default GLookup getDBLoopUp(Long lookupValue, Optional<LookupData> lookupData) {
+        if (lookupData.isPresent()) {
+            lookupData = lookupData.get().getLookupChildren()
+                .stream().filter(lookupData1 -> lookupData1.getLookupValue()
+                .equals(String.valueOf(lookupValue)))
+                .findFirst();
+            return GLookup.getGLookupByValue(lookupData.get().getLookupType(),
+                lookupData.get().getLookupValue(), lookupData.get().getDescription());
+        }
+        return null;
+    }
+
+    public default GLookup getDBLoopUp(Optional<LookupData> lookupData) {
+        if (lookupData.isPresent()) {
+            return GLookup.getGLookupByValue(lookupData.get().getLookupType(),
+                lookupData.get().getLookupValue(), lookupData.get().getDescription());
+        }
+        return null;
+    }
 
 }

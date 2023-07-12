@@ -41,6 +41,11 @@ public class GLookup {
         this.description = description;
     }
 
+    public static GLookup getGLookupByValue(String lookupType,
+         Object lookupValue, String description) {
+        return new GLookup(lookupType, lookupValue, description);
+    }
+
     @Override
     public String toString() {
         return new Gson().toJson(this);

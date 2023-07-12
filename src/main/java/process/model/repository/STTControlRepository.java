@@ -5,6 +5,8 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.STTControl;
 import process.model.projection.STTCProjection;
+
+import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,13 +14,14 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  */
 @Repository
+@Transactional
 public interface STTControlRepository extends CrudRepository<STTControl, Long> {
 
     @Query(value = "select sttc.*\n" +
         "from stt_control sttc\n" +
         "inner join app_users au on au.app_user_id  = sttc.app_user_id  \n" +
         "where sttc.sttc_id = ?1 and au.username = ?2 and sttc.status != ?3", nativeQuery = true)
-    public Optional<STTControl> findBySttCIdAndAppUserUsernameAndNotInStatus(Long sttcId, String username, Long status);
+    public Optional<STTControl> findBySttcIdAndAppUserUsernameAndStatusNotIn(Long sttcId, String username, Long status);
 
     @Query(value = "select sc.sttc_id as sttcId, sc.sttc_order as sttcOrder, sc.sttc_name as sttcName,\n" +
         "sc.filed_name as filedName, sc.filed_type as filedType, sc.status as status, \n" +
@@ -29,11 +32,11 @@ public interface STTControlRepository extends CrudRepository<STTControl, Long> {
         "join app_users au on au.app_user_id  = sc.app_user_id \n" +
         "where au.username = ?1 and sc.status != ?2\n" +
         "order by sc.sttc_id desc\n", nativeQuery = true)
-    public List<STTCProjection> findByAppUserUsernameAndNotInStatus(String username, Long status);
+    public List<STTCProjection> findByAppUserUsernameAndStatusNotIn(String username, Long status);
 
     @Query(value = "select sttc.*\n" +
         "from stt_control sttc\n" +
         "inner join app_users au on au.app_user_id  = sttc.app_user_id  \n" +
         "where au.username = ?1 and sttc.status != ?2", nativeQuery = true)
-    public List<STTControl> findSttControlByAppUserUsernameAndNotInStatus(String username, Long status);
+    public List<STTControl> findSttControlByAppUserUsernameAndStatusNotIn(String username, Long status);
 }

@@ -16,6 +16,9 @@ public class STTRequest {
     private String serviceName; // yes
     private Long status;
     private Long taskType; // yes
+    private String homePage;
+    private String serviceId;
+    private Long credentialId;
     private ParseRequest accessUserDetail; // yes
     private boolean defaultStt;
     private KafkaTaskTypeRequest kafkaTaskType; // base on task type
@@ -62,6 +65,30 @@ public class STTRequest {
 
     public void setTaskType(Long taskType) {
         this.taskType = taskType;
+    }
+
+    public String getHomePage() {
+        return homePage;
+    }
+
+    public void setHomePage(String homePage) {
+        this.homePage = homePage;
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
+    }
+
+    public Long getCredentialId() {
+        return credentialId;
+    }
+
+    public void setCredentialId(Long credentialId) {
+        this.credentialId = credentialId;
     }
 
     public ParseRequest getAccessUserDetail() {

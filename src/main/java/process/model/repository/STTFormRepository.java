@@ -26,7 +26,7 @@ public interface STTFormRepository extends CrudRepository<STTForm, Long> {
         "from stt_form sttf\n" +
         "inner join app_users au on au.app_user_id  = sttf.app_user_id  \n" +
         "where sttf.sttf_id = ?1 and au.username = ?2 and sttf.status != ?3", nativeQuery = true)
-    public Optional<STTForm> findBySttfIdAndAppUserAndSttfStatusNotIn(Long sttfId, String username, Long status);
+    public Optional<STTForm> findBySttfIdAndAppUserAndStatusNotIn(Long sttfId, String username, Long status);
 
     @Query(value = "select sf.sttf_id  as sttfId, sf.sttf_name as sttfName,\n" +
         "sf.description as description, sf.status as status, sf.form_type as formType,\n" +
@@ -35,6 +35,6 @@ public interface STTFormRepository extends CrudRepository<STTForm, Long> {
         "inner join app_users au on au.app_user_id  = sf.app_user_id\n" +
         "where au.username = ?1 and sf.status != ?2\n" +
         "order by sf.sttf_id desc\n", nativeQuery = true)
-    public List<STTFProjection> findByAppUserAndSttfStatusNotIn(String username, Long status);
+    public List<STTFProjection> findByAppUserAndStatusNotIn(String username, Long status);
 
 }

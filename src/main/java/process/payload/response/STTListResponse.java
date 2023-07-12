@@ -19,6 +19,9 @@ public class STTListResponse {
     private GLookup status;
     private GLookup taskType;
     private GLookup sttDefault;
+    private GLookup homePage;
+    private String serviceId;
+    private CredentialResponse credential;
     private Timestamp dateCreated;
     private Long totalUser = 0l;
     private Long totalTask = 0l;
@@ -73,6 +76,30 @@ public class STTListResponse {
 
     public void setSttDefault(GLookup sttDefault) {
         this.sttDefault = sttDefault;
+    }
+
+    public GLookup getHomePage() {
+        return homePage;
+    }
+
+    public void setHomePage(GLookup homePage) {
+        this.homePage = homePage;
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
+    }
+
+    public CredentialResponse getCredential() {
+        return credential;
+    }
+
+    public void setCredential(CredentialResponse credential) {
+        this.credential = credential;
     }
 
     public Timestamp getDateCreated() {

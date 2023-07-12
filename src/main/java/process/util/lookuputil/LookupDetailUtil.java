@@ -18,4 +18,5 @@ public interface LookupDetailUtil {
     public static String AMERICA_NEW_YORK = "AMERICA_NEW_YORK";
     public static String SUPER_ADMIN = "SUPER_ADMIN";
     public static String URL_VALIDATOR = "URL_VALIDATOR";
+    public static String HOME_PAGE = "HOME_PAGE";
 }

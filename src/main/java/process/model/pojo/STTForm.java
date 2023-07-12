@@ -41,7 +41,7 @@ public class STTForm {
     private String description;
 
     // status of job (active or disable or delete)
-    @Column(name = "status",nullable = false)
+    @Column(name = "status", nullable = false)
     private Long status;
 
     @Column(name = "is_default",

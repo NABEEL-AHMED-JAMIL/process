@@ -25,7 +25,8 @@ public class STTControlResponse {
     private Long maxLength;
     private String filedLookUp;
     private GLookup mandatory;
-    private GLookup defaultSttc;
+    private GLookup sttcDefault;
+    private GLookup sttcDisabled;
     private String pattern;
     private GLookup status;
 
@@ -136,12 +137,20 @@ public class STTControlResponse {
         this.mandatory = mandatory;
     }
 
-    public GLookup getDefaultSttc() {
-        return defaultSttc;
+    public GLookup getSttcDefault() {
+        return sttcDefault;
     }
 
-    public void setDefaultSttc(GLookup defaultSttc) {
-        this.defaultSttc = defaultSttc;
+    public void setSttcDefault(GLookup sttcDefault) {
+        this.sttcDefault = sttcDefault;
+    }
+
+    public GLookup getSttcDisabled() {
+        return sttcDisabled;
+    }
+
+    public void setSttcDisabled(GLookup sttcDisabled) {
+        this.sttcDisabled = sttcDisabled;
     }
 
     public String getPattern() {

@@ -14,6 +14,7 @@ public interface AppUserService {
 
     public AppResponse updateAppUserPassword(UpdateUserProfileRequest updateUserProfileRequest) throws Exception;
 
+    @Deprecated
     public AppResponse updateAppUserTimeZone(UpdateUserProfileRequest updateUserProfileRequest) throws Exception;
 
     public AppResponse closeAppUserAccount(UpdateUserProfileRequest updateUserProfileRequest) throws Exception;

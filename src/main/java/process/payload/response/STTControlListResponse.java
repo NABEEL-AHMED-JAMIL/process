@@ -22,6 +22,7 @@ public class STTControlListResponse {
     private GLookup mandatory;
     private GLookup status;
     private GLookup sttcDefault;
+    private GLookup sttcDisabled;
     private Timestamp dateCreated;
     private Long totalStt;
     private Long totalForm;
@@ -103,6 +104,14 @@ public class STTControlListResponse {
 
     public void setSttcDefault(GLookup sttcDefault) {
         this.sttcDefault = sttcDefault;
+    }
+
+    public GLookup getSttcDisabled() {
+        return sttcDisabled;
+    }
+
+    public void setSttcDisabled(GLookup sttcDisabled) {
+        this.sttcDisabled = sttcDisabled;
     }
 
     public Timestamp getDateCreated() {

@@ -14,5 +14,8 @@ public interface STTProjection {
     public Long getStatus();
     public Boolean getSttDefault();
     public Timestamp getDateCreated();
+    public String getServiceId();
+    public String getHomePage();
+    public String getCredentialName();
 
 }

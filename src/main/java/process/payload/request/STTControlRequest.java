@@ -3,7 +3,6 @@ package process.payload.request;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import process.util.lookuputil.GLookup;
 
 /**
  * @author Nabeel Ahmed
@@ -25,7 +24,8 @@ public class STTControlRequest {
     private Long maxLength; // not -1
     private String filedLookUp;
     private boolean mandatory; // yes
-    private boolean defaultSttC; // yes
+    private boolean sttcDisabled;
+    private boolean sttcDefault; // yes
     private String pattern;
     private Long status;
     private ParseRequest accessUserDetail;
@@ -137,12 +137,20 @@ public class STTControlRequest {
         this.mandatory = mandatory;
     }
 
-    public boolean isDefaultSttC() {
-        return defaultSttC;
+    public boolean isSttcDisabled() {
+        return sttcDisabled;
     }
 
-    public void setDefaultSttC(boolean defaultSttC) {
-        this.defaultSttC = defaultSttC;
+    public void setSttcDisabled(boolean sttcDisabled) {
+        this.sttcDisabled = sttcDisabled;
+    }
+
+    public boolean isSttcDefault() {
+        return sttcDefault;
+    }
+
+    public void setSttcDefault(boolean sttcDefault) {
+        this.sttcDefault = sttcDefault;
     }
 
     public String getPattern() {

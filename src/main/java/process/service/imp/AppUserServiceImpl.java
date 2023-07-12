@@ -71,7 +71,8 @@ public class AppUserServiceImpl implements AppUserService {
         if (ProcessUtil.isNull(username)) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(username, Status.ACTIVE.getLookupValue());
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            username, Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
@@ -79,7 +80,8 @@ public class AppUserServiceImpl implements AppUserService {
         AppUserResponse appUserResponse = this.getAppUserDetail(appUserDetail);
         if (!appUserDetail.getAppUserRoles().isEmpty()) {
             appUserResponse.setRoleResponse(
-                appUserDetail.getAppUserRoles().stream().map(role -> {
+                appUserDetail.getAppUserRoles()
+                .stream().map(role -> {
                     RoleResponse roleResponse = new RoleResponse();
                     roleResponse.setRoleId(role.getRoleId());
                     roleResponse.setRoleName(role.getRoleName());
@@ -153,7 +155,8 @@ public class AppUserServiceImpl implements AppUserService {
             appUser.get().getPassword())) {
             return new AppResponse(ProcessUtil.ERROR, "Old password not match.");
         }
-        appUser.get().setPassword(this.passwordEncoder.encode(updateUserProfileRequest.getNewPassword()));
+        appUser.get().setPassword(this.passwordEncoder
+            .encode(updateUserProfileRequest.getNewPassword()));
         this.appUserRepository.save(appUser.get());
         if (this.emailMessagesFactory.sendUpdateAppUserPassword(updateUserProfileRequest)) {
             return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", updateUserProfileRequest);
@@ -168,6 +171,7 @@ public class AppUserServiceImpl implements AppUserService {
      * @return AppResponse
      * */
     @Override
+    @Deprecated
     public AppResponse updateAppUserTimeZone(UpdateUserProfileRequest
         updateUserProfileRequest) throws Exception {
         logger.info("Request updateAppUserTimeZone :- " + updateUserProfileRequest);
@@ -305,7 +309,7 @@ public class AppUserServiceImpl implements AppUserService {
         }
         // register user role default as admin role
         Optional<Role> adminRole = this.roleRepository.findByRoleNameAndStatus(
-            ERole.ROLE_ADMIN.name(), Status.ACTIVE.getLookupValue());
+            ERole.ROLE_USER.name(), Status.ACTIVE.getLookupValue());
         if (adminRole.isPresent()) {
             Set<Role> roleSet = new HashSet<>();
             roleSet.add(adminRole.get());
@@ -314,9 +318,8 @@ public class AppUserServiceImpl implements AppUserService {
         // saving process
         adminUser = this.appUserRepository.save(adminUser);
         signUpRequest.setRole(adminUser.getAppUserRoles().stream()
-            .filter(role -> role.getRoleName().equals(ERole.ROLE_ADMIN.name()))
+            .filter(role -> role.getRoleName().equals(ERole.ROLE_USER.name()))
             .findAny().get().getRoleName());
-        // send the email to created user (pending)
         this.emailMessagesFactory.sendRegisterUser(signUpRequest);
         return new AppResponse(ProcessUtil.SUCCESS, String.format(
             "User successfully register %s.", adminUser.getUsername()));
@@ -385,7 +388,8 @@ public class AppUserServiceImpl implements AppUserService {
             .map(appResponse -> {
                 if (appResponse.getStatus().equals(ProcessUtil.SUCCESS)) {
                     RefreshToken refreshToken = (RefreshToken) appResponse.getData();
-                    requestRefreshToken.set(this.jwtUtils.generateTokenFromUsername(refreshToken.getAppUser().getUsername()));
+                    requestRefreshToken.set(this.jwtUtils.generateTokenFromUsername(
+                        refreshToken.getAppUser().getUsername()));
                 }
                 return new AppResponse(appResponse.getStatus(), appResponse.getMessage(), requestRefreshToken);
             }).orElse(new AppResponse(ProcessUtil.ERROR, "Token not found", requestRefreshToken));
@@ -411,7 +415,17 @@ public class AppUserServiceImpl implements AppUserService {
         appUserResponse.setEmail(appUser.getEmail());
         appUserResponse.setStatus(Status.getStatusByValue(appUser.getStatus()));
         appUserResponse.setDateCreated(appUser.getDateCreated());
+        appUserResponse.setRoleResponse(appUser.getAppUserRoles().stream()
+            .map(role -> getRoleResponse(role)).collect(Collectors.toSet()));
         return appUserResponse;
+    }
+
+    private RoleResponse getRoleResponse(Role role) {
+        RoleResponse roleResponse = new RoleResponse();
+        roleResponse.setRoleId(role.getRoleId());
+        roleResponse.setRoleName(role.getRoleName());
+        roleResponse.setStatus(Status.getStatusByValue(role.getStatus()));
+        return roleResponse;
     }
 
 }

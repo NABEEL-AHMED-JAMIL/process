@@ -1,5 +1,6 @@
 package process.model.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
@@ -41,11 +42,12 @@ public interface STTRepository extends CrudRepository<STT, Long> {
 
     @Query(value = "select stt.stt_id as sttId, stt.service_name as serviceName, stt.description as description,\n" +
         "stt.task_type as taskType, stt.status as status, case when stt.is_default then true else false  end as sttDefault,\n" +
-        "stt.date_created as dateCreated\n" +
+        "stt.date_created as dateCreated, stt.service_id as serviceId, stt.home_page as homePage, crd.credential_name as credentialName\n" +
         "from stt stt\n" +
         "inner join app_users au on au.app_user_id  = stt.app_user_id\n" +
+        "left join credential crd on crd.credential_id = stt.credential_id\n" +
         "where au.username = ?1 and stt.status != ?2\n" +
-        "group by stt.stt_id\n" +
+        "group by stt.stt_id, crd.credential_name\n" +
         "order by stt.stt_id desc\n", nativeQuery = true)
     public List<STTProjection> findByAppUserAndStatusNotIn(String username, Long status);
 
@@ -54,5 +56,9 @@ public interface STTRepository extends CrudRepository<STT, Long> {
         "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
         "where au.username = ?1 and stt.status != ?2", nativeQuery = true)
     public List<STT> findSttByAppUserAndStatusNotIn(String username, Long status);
+
+    @Modifying
+    @Query(value = "update stt set credential_id = null where credential_id = ?1 and status != ?2 ", nativeQuery = true)
+    public void unLinkCredentialWithSttByCredentialId(Long credentialId, Long status);
 
 }

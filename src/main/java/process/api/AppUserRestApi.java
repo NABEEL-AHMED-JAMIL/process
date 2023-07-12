@@ -51,6 +51,7 @@ public class AppUserRestApi {
      * @param username
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN') or hasRole('USER')")
     @RequestMapping(value = "/getAppUserProfile", method = RequestMethod.GET)
     public ResponseEntity<?> getAppUserProfile(@RequestParam String username) {
         try {
@@ -69,6 +70,7 @@ public class AppUserRestApi {
      * @param updateUserProfileRequest
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN') or hasRole('USER')")
     @RequestMapping(value = "/updateAppUserProfile", method = RequestMethod.POST)
     public ResponseEntity<?> updateAppUserProfile(@RequestBody UpdateUserProfileRequest updateUserProfileRequest) {
         try {
@@ -87,6 +89,7 @@ public class AppUserRestApi {
      * @param updateUserProfileRequest
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN') or hasRole('USER')")
     @RequestMapping(value = "/updateAppUserPassword", method = RequestMethod.POST)
     public ResponseEntity<?> updateAppUserPassword(@RequestBody UpdateUserProfileRequest updateUserProfileRequest) {
         try {
@@ -105,6 +108,7 @@ public class AppUserRestApi {
      * @param updateUserProfileRequest
      * @return ResponseEntity<?>
      * */
+    @Deprecated
     @RequestMapping(value = "/updateAppUserTimeZone", method = RequestMethod.POST)
     public ResponseEntity<?> updateAppUserTimeZone(@RequestBody UpdateUserProfileRequest updateUserProfileRequest) {
         try {
@@ -123,6 +127,7 @@ public class AppUserRestApi {
      * @param updateUserProfileRequest
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/closeAppUserAccount", method = RequestMethod.POST)
     public ResponseEntity<?> closeAppUserAccount(@RequestBody UpdateUserProfileRequest updateUserProfileRequest) {
         try {
