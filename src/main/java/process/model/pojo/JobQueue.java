@@ -97,6 +97,7 @@ public class JobQueue {
     public LocalDateTime getStartTime() {
         return startTime;
     }
+
     public void setStartTime(LocalDateTime startTime) {
         this.startTime = startTime;
     }
@@ -104,6 +105,7 @@ public class JobQueue {
     public LocalDateTime getEndTime() {
         return endTime;
     }
+
     public void setEndTime(LocalDateTime endTime) {
         this.endTime = endTime;
     }
@@ -119,6 +121,7 @@ public class JobQueue {
     public JobStatus getJobStatus() {
         return jobStatus;
     }
+
     public void setJobStatus(JobStatus jobStatus) {
         this.jobStatus = jobStatus;
     }
@@ -126,19 +129,28 @@ public class JobQueue {
     public Long getJobId() {
         return jobId;
     }
+
     public void setJobId(Long jobId) {
         this.jobId = jobId;
     }
 
-    public boolean isSkipManual() {
+    public String getJobStatusMessage() {
+        return jobStatusMessage;
+    }
+
+    public void setJobStatusMessage(String jobStatusMessage) {
+        this.jobStatusMessage = jobStatusMessage;
+    }
+
+    public Boolean getSkipManual() {
         return skipManual;
     }
 
-    public void setSkipManual(boolean skipManual) {
+    public void setSkipManual(Boolean skipManual) {
         this.skipManual = skipManual;
     }
 
-    public Boolean isRunManual() {
+    public Boolean getRunManual() {
         return runManual;
     }
 
@@ -146,16 +158,10 @@ public class JobQueue {
         this.runManual = runManual;
     }
 
-    public String getJobStatusMessage() {
-        return jobStatusMessage;
-    }
-    public void setJobStatusMessage(String jobStatusMessage) {
-        this.jobStatusMessage = jobStatusMessage;
-    }
-
     public Timestamp getDateCreated() {
         return dateCreated;
     }
+
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
     }

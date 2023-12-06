@@ -13,6 +13,8 @@ public interface MessageQApiService {
 
     public ResponseDto failJobLogs(Long jobQId);
 
+    public ResponseDto interruptJobLogs(Long jobQId);
+
     public ResponseDto changeJobStatus(QueueMessageStatusDto queueMessageStatus);
 
 }

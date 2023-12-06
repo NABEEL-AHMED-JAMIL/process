@@ -119,7 +119,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString())));
+                    Long.valueOf(obj[++index].toString()),Long.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionData.", weeklyJobStatistics);
         } else {
@@ -248,7 +248,6 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                         sourceJobDto.setScheduler(schedulerDto);
                     }
                     objectDetail.put("sourceJob", sourceJobDto);
-                    // statistics 1026
                     result = this.queryService.executeQuery(this.queryService.statisticsBySourceJobId(jobId));
                     for(Object[] obj : result) {
                         int index = 0;
@@ -256,7 +255,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                             Long.valueOf(obj[index].toString()), Long.valueOf(obj[++index].toString()),
                             Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
                             Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                            Long.valueOf(obj[++index].toString())));
+                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString())));
                     }
                 }
             }

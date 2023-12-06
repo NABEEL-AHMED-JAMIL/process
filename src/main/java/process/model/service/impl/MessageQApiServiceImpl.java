@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
+import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
@@ -42,6 +43,8 @@ public class MessageQApiServiceImpl implements MessageQApiService {
     private SourceJobRepository sourceJobRepository;
     @Autowired
     private EmailMessagesFactory emailMessagesFactory;
+    @Autowired
+    private AsyncDALTaskExecutor asyncDALTaskExecutor;
 
     @Override
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch) {
@@ -145,6 +148,26 @@ public class MessageQApiServiceImpl implements MessageQApiService {
                 this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory
                     .getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
             }
+            return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
+        }
+        return new ResponseDto(ERROR, "JobQueue not found");
+    }
+
+    @Override
+    public ResponseDto interruptJobLogs(Long jobQId) {
+        if (isNull(jobQId)) {
+            return new ResponseDto(ERROR, "JobQId missing.");
+        }
+        Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(jobQId);
+        if (jobQueue.isPresent()) {
+            if (!jobQueue.get().getJobStatus().equals(JobStatus.Running)) {
+                return new ResponseDto(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
+            }
+            this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
+            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt);
+            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(),
+                String.format("Job %s interrupted.", jobQueue.get().getJobId()));
+            this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
             return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");

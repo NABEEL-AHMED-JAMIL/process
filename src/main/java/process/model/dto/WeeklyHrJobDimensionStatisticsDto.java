@@ -19,13 +19,14 @@ public class WeeklyHrJobDimensionStatisticsDto {
     private Long completed;
     private Long stop;
     private Long skip;
+    private Long interrupt;
     private Long total;
 
     public WeeklyHrJobDimensionStatisticsDto() {}
 
     public WeeklyHrJobDimensionStatisticsDto(Long jobId, String jobName,
         Long queue, Long running, Long failed, Long completed,
-        Long stop, Long skip, Long total) {
+        Long stop, Long skip, Long interrupt, Long total) {
         this.jobId = jobId;
         this.jobName = jobName.equals("null") ? "Total Count" : jobName;
         this.queue = queue;
@@ -34,17 +35,19 @@ public class WeeklyHrJobDimensionStatisticsDto {
         this.completed = completed;
         this.stop = stop;
         this.skip = skip;
+        this.interrupt = interrupt;
         this.total = total;
     }
 
     public WeeklyHrJobDimensionStatisticsDto(Long queue, Long running, Long failed,
-        Long completed, Long stop, Long skip, Long total) {
+        Long completed, Long stop, Long skip, Long interrupt, Long total) {
         this.queue = queue;
         this.running = running;
         this.failed = failed;
         this.completed = completed;
         this.stop = stop;
         this.skip = skip;
+        this.interrupt = interrupt;
         this.total = total;
     }
 
@@ -110,6 +113,14 @@ public class WeeklyHrJobDimensionStatisticsDto {
 
     public void setSkip(Long skip) {
         this.skip = skip;
+    }
+
+    public Long getInterrupt() {
+        return interrupt;
+    }
+
+    public void setInterrupt(Long interrupt) {
+        this.interrupt = interrupt;
     }
 
     public Long getTotal() {

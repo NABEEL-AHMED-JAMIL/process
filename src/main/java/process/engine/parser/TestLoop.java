@@ -11,9 +11,7 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement
 public class TestLoop {
 
-    @XmlElement
     private Integer start;
-    @XmlElement
     private Integer end;
 
     public TestLoop() {

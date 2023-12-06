@@ -1,7 +1,6 @@
 package process.engine;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,12 +15,8 @@ import process.model.projection.SourceJobProjection;
 import process.model.service.impl.TransactionServiceImpl;
 import process.socket.service.NotificationService;
 import process.util.ProcessUtil;
-
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * @author Nabeel Ahmed

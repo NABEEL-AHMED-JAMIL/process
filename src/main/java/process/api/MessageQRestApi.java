@@ -66,6 +66,23 @@ public class MessageQRestApi {
 
     /**
      * Integration Status :- done
+     * Only the queue job be interrupted
+     * @param jobQId
+     * @return ResponseEntity
+     * */
+    @RequestMapping(value = "/interruptJobLogs", method = RequestMethod.DELETE)
+    public ResponseEntity<?> interruptJobLogs(@RequestParam Long jobQId) {
+        try {
+            return new ResponseEntity<>(this.messageQApiService.interruptJobLogs(jobQId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while interruptJobLogs ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Integration Status :- done
      * Api use to change the status of running job
      * @param queueMessageStatus
      * @return ResponseEntity

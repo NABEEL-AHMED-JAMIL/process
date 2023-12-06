@@ -21,7 +21,6 @@ public class SourceJobQueueDto {
     private LocalDateTime skipTime;
     private JobStatus jobStatus;
     private Long jobId;
-
     private boolean jobSend;
     private String jobName;
     private String jobStatusMessage;

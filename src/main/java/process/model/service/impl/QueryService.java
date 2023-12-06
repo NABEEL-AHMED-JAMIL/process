@@ -234,6 +234,7 @@ public class QueryService {
             "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
             "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
             "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
+            "count (case when job_queue.job_status = 'Interrupt' then job_queue.job_id end) as Interrupt,\n"+
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
@@ -247,6 +248,7 @@ public class QueryService {
             "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
             "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
             "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
+            "count (case when job_queue.job_status = 'Interrupt' then job_queue.job_id end) as Interrupt,\n"+
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
@@ -267,6 +269,7 @@ public class QueryService {
             "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
             "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
             "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
+            "count (case when job_queue.job_status = 'Interrupt' then job_queue.job_id end) as Interrupt,\n"+
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
