@@ -1,5 +1,7 @@
 package process.engine;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,8 +12,15 @@ import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
+import process.model.projection.SourceJobProjection;
 import process.model.service.impl.TransactionServiceImpl;
+import process.socket.service.NotificationService;
+import process.util.ProcessUtil;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -24,6 +33,8 @@ public class BulkAction {
 
     @Autowired
     private TransactionServiceImpl transactionService;
+    @Autowired
+    private NotificationService notificationService;
 
     /**
      * This method use the change the status of main job
@@ -169,6 +180,39 @@ public class BulkAction {
             this.transactionService.saveOrUpdateScheduler(scheduler);
             return;
         }
+    }
+
+    /**
+     * This method use the change the status of main job
+     * @param jobId
+     * @param transactionId
+     * */
+    public void sendJobStatusNotification(Integer jobId, String transactionId) {
+        List<Integer> jobIds = new ArrayList<>();
+        jobIds.add(jobId);
+        List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(jobIds);
+        if (!sourceJob.isEmpty()) {
+            this.notificationService.sendNotificationToSpecificUser(this.getSourceJobDetail(sourceJob.get(0)), transactionId);
+        }
+    }
+
+    /**
+     * Method use to get the source job detail
+     * @param sourceJobProjection
+     * @return String
+     * */
+    private String getSourceJobDetail(SourceJobProjection sourceJobProjection) {
+        HashMap<String, Object> jsonObject = new HashMap<>();
+        jsonObject.put("jobId",sourceJobProjection.getJobId());
+        jsonObject.put("jobStatus",sourceJobProjection.getJobStatus());
+        jsonObject.put("jobRunningStatus",sourceJobProjection.getJobRunningStatus());
+        jsonObject.put("lastJobRun",sourceJobProjection.getLastJobRun().toString());
+        if (!ProcessUtil.isNull(sourceJobProjection.getRecurrenceTime())) {
+            jsonObject.put("recurrenceTime",sourceJobProjection.getRecurrenceTime().toString());
+        }
+        jsonObject.put("execution",sourceJobProjection.getExecution());
+        Gson gson = new Gson();
+        return gson.toJson(jsonObject);
     }
 
     private static boolean isNull(String filed) {

@@ -7,7 +7,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
 import process.model.pojo.*;
+import process.model.projection.SourceJobProjection;
 import process.model.repository.*;
+
+import java.lang.reflect.Array;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -143,16 +146,33 @@ public class TransactionServiceImpl {
         return this.lookupDataRepository.findByLookupType(lookupType);
     }
 
+    /**
+     * Method use to fetch task detail by task status
+     * @return Optional<SourceTask>
+     */
     public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId) {
         return this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(taskDetailId, Status.Active);
     }
 
+    /**
+     * Method use to fetch all source task
+     * @return List<Long>
+     */
     public List<Long> findAllSourceTask() {
         return this.sourceTaskRepository.findAllSourceTask();
     }
 
     public Integer getCountForInQueueJobByJobId(Long jobId) {
         return this.jobQueueRepository.getCountForInQueueJobByJobId(jobId);
+    }
+
+    /**
+     * The method use to get the job by id
+     * @param jobIds
+     * @return List<SourceJobProjection>
+     */
+    public List<SourceJobProjection> fetchRunningJobEvent(List<Integer> jobIds) {
+        return this.sourceJobRepository.fetchRunningJobEvent(jobIds);
     }
 
 }

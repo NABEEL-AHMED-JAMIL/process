@@ -37,6 +37,12 @@ public class EmailMessagesFactory {
     @Autowired
     private LookupDataCacheService lookupDataCacheService;
 
+    /**
+     * method using to send the mail
+     * @param jobQueue
+     * @param jobStatus
+     * @return String
+     * */
     public String sendSourceJobEmail(SourceJobQueueDto jobQueue, JobStatus jobStatus) {
         try {
             LookupDataDto lookupDataDto = this.lookupDataCacheService.getParentLookupById(ProcessUtil.EMAIL_RECEIVER);
@@ -67,6 +73,11 @@ public class EmailMessagesFactory {
         }
     }
 
+    /**
+     * method using to send the mail
+     * @param emailContent
+     * @return String
+     * */
     private String sendSimpleMail(EmailMessageDto emailContent) {
         try {
             MimeMessage mailMessage = this.javaMailSender.createMimeMessage();
@@ -84,9 +95,9 @@ public class EmailMessagesFactory {
                 helper.setText(this.velocityManager.getResponseMessage(
                     emailContent.getEmailTemplateName(), emailContent.getBodyMap()), true);
                 this.javaMailSender.send(mailMessage);
-                logger.info("Email Send Successfully Content %s.", emailContent.getBodyMap().toString());
+                logger.info(String.format("Email Send Successfully Content %s .", emailContent.getBodyMap().toString()));
             } else {
-                logger.error("Error :- Sent To Null Content %s.", emailContent.getBodyMap().toString());
+                logger.error(String.format("Error :- Sent To Null Content %s .", emailContent.getBodyMap().toString()));
             }
             return "Mail Sent Successfully...";
         } catch (Exception ex) {
@@ -95,11 +106,20 @@ public class EmailMessagesFactory {
         }
     }
 
+    /**
+     * method use convert job queue to job dto
+     * @param jobQueue
+     * @return SourceJobQueueDto
+     * */
     public static SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
         SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
         sourceJobQueueDto.setJobId(jobQueue.getJobId());
         sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
-        sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
+        if (jobQueue.getJobStatus().equals(JobStatus.Skip)) {
+            sourceJobQueueDto.setStartTime(jobQueue.getSkipTime());
+        } else {
+            sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
+        }
         return sourceJobQueueDto;
     }
 

@@ -13,6 +13,7 @@ import process.emailer.EmailMessagesFactory;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
+import process.model.service.impl.LookupDataCacheService;
 import process.model.service.impl.TransactionServiceImpl;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
@@ -40,6 +41,8 @@ public class ProducerBulkEngine {
     private EmailMessagesFactory emailMessagesFactory;
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
+    @Autowired
+    private LookupDataCacheService lookupDataCacheService;
 
     public ProducerBulkEngine() {
         this.pattern = Pattern.compile(REGEX);
@@ -55,6 +58,8 @@ public class ProducerBulkEngine {
             LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
         this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
+        this.bulkAction.sendJobStatusNotification(sourceJob.getJobId().intValue(),
+                this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
     }
 
     /**
@@ -67,6 +72,8 @@ public class ProducerBulkEngine {
             JobStatus.Skip, "Job %s skip, by user action.", true);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, by user action.", scheduler.getJobId()));
         // if the user fail the job manual need to send the mail
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
+            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isSkipJob()) {
             this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Skip);
         }
@@ -112,6 +119,8 @@ public class ProducerBulkEngine {
                         }
                         // update the next run in scheduler
                         this.bulkAction.updateNextScheduler(scheduler);
+                        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
+                            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
                     }
                 });
                 return;
@@ -246,6 +255,8 @@ public class ProducerBulkEngine {
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(message, jobQueue.getJobId()));
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
+            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {
             this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Failed);
         }

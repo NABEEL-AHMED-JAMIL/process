@@ -23,6 +23,7 @@ public class ProcessUtil {
     public static String TASK_DETAIL = "taskDetail";
     public static String PRIORITY = "Priority";
     public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";
+    public static String TRANSACTION_ID = "TRANSACTION_ID";
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     public static String REAL_FILE_PATH = "Scheduler.xlsx";
     public static String XLSX_EXTENSION = ".xlsx";
