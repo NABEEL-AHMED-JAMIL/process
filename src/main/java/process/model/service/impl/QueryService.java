@@ -142,7 +142,7 @@ public class QueryService {
         if (isCount) {
             selectPortion = "select count(*) as result ";
         } else {
-            selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, CAST(sj.last_job_run AS varchar), sj.priority, CAST(sj.date_created AS varchar) ";
+            selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, cast(sj.last_job_run AS varchar), sj.priority, cast(sj.date_created AS varchar) ";
         }
         String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
         query += "where st.task_status in ('Delete', 'Inactive', 'Active') ";
@@ -187,7 +187,7 @@ public class QueryService {
     public String jobRunningStatistics() {
         return "select job_running_status, count(job_id) as total_count\n" +
             "from source_job\n" +
-            "where job_running_status in ('Running', 'Failed', 'Completed')\n" +
+            "where job_running_status in ('Start', 'Running', 'Failed', 'Completed')\n" +
             "group by job_running_status";
     }
 
@@ -229,6 +229,7 @@ public class QueryService {
     public String weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) {
         return String.format("select job_queue.job_id, source_job.job_name,\n" +
             "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
+            "count (case when job_queue.job_status = 'Start' then job_queue.job_id end) as Start,\n" +
             "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
             "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
             "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
@@ -243,6 +244,7 @@ public class QueryService {
             "union\n" +
             "select null as job_id, null as job_name,\n" +
             "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
+            "count (case when job_queue.job_status = 'Start' then job_queue.job_id end) as Start,\n" +
             "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
             "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
             "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
@@ -264,6 +266,7 @@ public class QueryService {
     public String statisticsBySourceJobId(Long jobId) {
         return String.format("select\n" +
             "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
+            "count (case when job_queue.job_status = 'Start' then job_queue.job_id end) as Start,\n" +
             "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
             "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
             "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
@@ -277,10 +280,8 @@ public class QueryService {
     }
 
     public String weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) {
-        String query = "select job_queue.*\n" +
-            "from job_queue\n" +
-            "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where 1=1\n";
+        String query = "select job_queue.* from job_queue\n" +
+            "inner join source_job on source_job.job_id = job_queue.job_id where 1=1\n";
         if (!isNull(targetDate)) {
             query += String.format(" and date(job_queue.date_created) = '%s' \n", targetDate);
         }

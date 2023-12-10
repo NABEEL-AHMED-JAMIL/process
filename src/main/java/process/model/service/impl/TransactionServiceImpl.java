@@ -9,8 +9,6 @@ import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.projection.SourceJobProjection;
 import process.model.repository.*;
-
-import java.lang.reflect.Array;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;

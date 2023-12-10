@@ -25,7 +25,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
      * @param jobId
      * @return int
      * */
-    @Query(value = "select count(*) from job_queue where job_id = ?1 and job_status in ('Queue', 'Running')", nativeQuery = true)
+    @Query(value = "select count(*) from job_queue where job_id = ?1 and job_status in ('Queue', 'Start', 'Running')", nativeQuery = true)
     public int getCountForInQueueJobByJobId(Long jobId);
 
     /**

@@ -33,7 +33,7 @@ public class NotificationService {
         if (!ProcessUtil.isNull(this.globalProperties.getSessionId(transactionId))) {
             String sendTo = this.globalProperties.getSessionId(transactionId)+"-"+transactionId;
             this.messagingTemplate.convertAndSendToUser(sendTo, REPLAY, message);
-            logger.info("Send To " + sendTo);
+            logger.info("Session exist, Sending To " + sendTo);
         } else {
             logger.info("No session exist with transactionId " + transactionId);
         }

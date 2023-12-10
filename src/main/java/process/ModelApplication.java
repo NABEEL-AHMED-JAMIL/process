@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
+import org.springframework.beans.factory.annotation.Value;
 import process.util.ProcessUtil;
 import process.model.pojo.LookupData;
 import javax.annotation.PostConstruct;
@@ -24,9 +25,10 @@ public class ModelApplication {
 
     private Logger logger = LoggerFactory.getLogger(ModelApplication.class);
 
+    @Value("${storage.efsFileDire}")
+    private String efsFileDire;
     @Autowired
     private TransactionServiceImpl transactionService;
-
     /**
      * Method run the application
      * @param args

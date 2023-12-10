@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 public class LookupDataCacheService {
 
     private Logger logger = LoggerFactory.getLogger(LookupDataCacheService.class);
+
     private Map<String, LookupDataDto> lookupCacheMap = new HashMap<>();
 
     @Autowired

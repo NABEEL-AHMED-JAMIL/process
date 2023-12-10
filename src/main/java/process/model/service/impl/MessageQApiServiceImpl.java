@@ -160,9 +160,6 @@ public class MessageQApiServiceImpl implements MessageQApiService {
         }
         Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(jobQId);
         if (jobQueue.isPresent()) {
-            if (!jobQueue.get().getJobStatus().equals(JobStatus.Running)) {
-                return new ResponseDto(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
-            }
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(),

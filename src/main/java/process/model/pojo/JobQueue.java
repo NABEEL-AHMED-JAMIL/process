@@ -63,7 +63,7 @@ public class JobQueue {
         nullable = false)
     private Long jobId;
 
-    @Column(name = "job_status_message")
+    @Column(name = "job_status_message", length = 2500)
     private String jobStatusMessage;
 
     @Column(name = "skip_manual")

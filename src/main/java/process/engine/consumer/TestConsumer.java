@@ -9,10 +9,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
+import process.engine.BulkAction;
 import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.engine.task.TestLoopTask;
 import process.model.dto.SourceJobQueueDto;
 import process.model.dto.SourceTaskDto;
+import process.model.enums.JobStatus;
 import process.model.service.impl.LookupDataCacheService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
@@ -33,6 +35,8 @@ public class TestConsumer {
     private LookupDataCacheService lookupDataCacheService;
     @Autowired
     private AsyncDALTaskExecutor asyncDALTaskExecutor;
+    @Autowired
+    private BulkAction bulkAction;
 
     /**
      * Consumer user to handle only test source with all-partition * for test-topic
@@ -47,7 +51,11 @@ public class TestConsumer {
                 consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
             JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
             Map<String, Object> taskPayloadInfo = new HashMap<>();
-            taskPayloadInfo.put(ProcessUtil.JOB_QUEUE, new Gson().fromJson(convertedObject.get(ProcessUtil.JOB_QUEUE), SourceJobQueueDto.class));
+            SourceJobQueueDto sourceJobQueueDto = new Gson().fromJson(convertedObject.get(ProcessUtil.JOB_QUEUE), SourceJobQueueDto.class);
+            this.bulkAction.changeJobStatus(sourceJobQueueDto.getJobId(), JobStatus.Start);
+            this.bulkAction.sendJobStatusNotification(sourceJobQueueDto.getJobId().intValue(),
+                this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+            taskPayloadInfo.put(ProcessUtil.JOB_QUEUE, sourceJobQueueDto);
             taskPayloadInfo.put(ProcessUtil.TASK_DETAIL, new Gson().fromJson(convertedObject.get(ProcessUtil.TASK_DETAIL), SourceTaskDto.class));
             taskPayloadInfo.put(ProcessUtil.TRANSACTION_ID, this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
             this.helloWorldTask.setData(taskPayloadInfo);

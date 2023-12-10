@@ -190,7 +190,7 @@ To run the kafka use the below cmd
       .\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties (for window) <br>
       ./zookeeper-server-start.sh ../config/zookeeper.properties
    2. Start the Kafka server.<br>
-      ./kafka-server-start.sh ../config/server.properties (for window) <br>
+      .\bin\windows\kafka-server-start.bat .\config\server.properties (for window) <br>
       .\bin\windows\kafka-server-start.bat .\config\server.properties
 
 

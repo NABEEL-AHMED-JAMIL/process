@@ -200,7 +200,11 @@ public class ProducerBulkEngine {
                                 logger.info("Sent message=[" + payload + "] with " + "offset=[" + result.getRecordMetadata().offset() + "]");
                                 synchronized (this) {
                                     jobQueue.setJobSend(true);
+                                    jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + result.getRecordMetadata().offset() + "]");
+                                    jobQueue.setJobStatus(JobStatus.Start);
                                     transactionService.updateJobQueue(jobQueue);
+                                    bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s send message=[%s] with offset=[%s]",
+                                        sourceJob.getJobId(), payload, result.getRecordMetadata().offset()));
                                 }
                             }
                             @Override
@@ -208,7 +212,10 @@ public class ProducerBulkEngine {
                                 logger.info("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
                                 synchronized (this) {
                                     jobQueue.setJobSend(false);
+                                    jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
                                     transactionService.updateJobQueue(jobQueue);
+                                    bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
+                                        "Job %s unable to send message=[%s] due to : %s", sourceJob.getJobId(), payload, ex.getMessage()));
                                 }
                             }
                         });

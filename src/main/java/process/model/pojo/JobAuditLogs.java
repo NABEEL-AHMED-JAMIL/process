@@ -40,7 +40,7 @@ public class JobAuditLogs {
     private Long jobQueueId;
 
     @Column(name = "log_detail",
-        nullable = false)
+        nullable = false, length = 2500)
     private String logsDetail;
 
     @Column(name = "date_created",

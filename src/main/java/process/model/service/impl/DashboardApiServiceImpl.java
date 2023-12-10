@@ -116,10 +116,9 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                 int index = 0;
                 weeklyJobStatistics.add(new WeeklyHrJobDimensionStatisticsDto(
                     obj[index] != null ? Long.valueOf(obj[index].toString()) : null, String.valueOf(obj[++index]),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString()),Long.valueOf(obj[++index].toString())));
+                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),Long.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionData.", weeklyJobStatistics);
         } else {
@@ -252,10 +251,9 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     for(Object[] obj : result) {
                         int index = 0;
                         objectDetail.put("sourceJobStatistics", new WeeklyHrJobDimensionStatisticsDto(
-                            Long.valueOf(obj[index].toString()), Long.valueOf(obj[++index].toString()),
-                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString())));
+                            Long.valueOf(obj[index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString())));
                     }
                 }
             }
