@@ -143,12 +143,8 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             if (!isNull(tempSourceTask.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
             }
-            if (!isNull(tempSourceTask.getHomePageId())) {
-                sourceTask.get().setHomePageId(tempSourceTask.getHomePageId());
-            }
-            if (!isNull(tempSourceTask.getPipelineId())) {
-                sourceTask.get().setPipelineId(tempSourceTask.getPipelineId());
-            }
+            sourceTask.get().setHomePageId(tempSourceTask.getHomePageId());
+            sourceTask.get().setPipelineId(tempSourceTask.getPipelineId());
             this.sourceTaskRepository.save(sourceTask.get());
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
         }
