@@ -18,7 +18,9 @@ import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
 import java.util.Map;
 
-
+/**
+ * @author Nabeel Ahmed
+ */
 @Component
 public class TestLoopTask implements Runnable {
 
@@ -50,7 +52,7 @@ public class TestLoopTask implements Runnable {
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Running);
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the running.", jobQueue.getJobId()));
             this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(), (String)this.getData().get(ProcessUtil.TRANSACTION_ID));
-            TestLoop testLoop = xmlOutTagInfoUtil.convertXMLToObject(sourceTaskDto.getTaskPayload(), TestLoop.class);
+            TestLoop testLoop = this.xmlOutTagInfoUtil.convertXMLToObject(sourceTaskDto.getTaskPayload(), TestLoop.class);
             // process for the current job.....
             for (int i=testLoop.getStart(); i<testLoop.getEnd(); i++) {
                 logger.info(String.format("Job Id %d with sub job id %d for number count %s",

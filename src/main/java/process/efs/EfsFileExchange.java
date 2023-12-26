@@ -12,7 +12,7 @@ import java.io.*;
  * @author Nabeel Ahmed
  */
 @Component
-public class EfsFileExchange {
+public class EfsFileExchange extends FileHashing {
 
     private Logger logger = LogManager.getLogger(EfsFileExchange.class);
 

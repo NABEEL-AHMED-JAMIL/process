@@ -31,6 +31,9 @@ public class KafkaProducerConfig {
     @Value("${tpd.test-topic}")
     private String testTopic;
 
+    @Value("${tpd.truck-topic}")
+    private String trucksTopic;
+
     @Value("${tpd.scrapping-topic}")
     private String scrappingTopic;
 
@@ -57,13 +60,19 @@ public class KafkaProducerConfig {
         return new KafkaTemplate<>(producerFactory());
     }
 
+    @Bean
     public NewTopic testTopic() {
-        return new NewTopic(testTopic, 2, (short) 1);
+        return new NewTopic(this.testTopic, 2, (short) 1);
+    }
+
+    @Bean
+    public NewTopic trucksTopic() {
+        return new NewTopic(this.trucksTopic, 2, (short) 2);
     }
 
     @Bean
     public NewTopic scrappingTopic() {
-        return new NewTopic(scrappingTopic, 2, (short) 1);
+        return new NewTopic(this.scrappingTopic, 2, (short) 1);
     }
 
 }
