@@ -35,6 +35,7 @@ public class SourceJobDto {
     private boolean skipJob;
     private String pdfReportUrl;
     private boolean tabActive;
+    private String homePageUr;
 
     public SourceJobDto() {}
 
@@ -172,6 +173,14 @@ public class SourceJobDto {
 
     public void setTabActive(boolean tabActive) {
         this.tabActive = tabActive;
+    }
+
+    public String getHomePageUr() {
+        return homePageUr;
+    }
+
+    public void setHomePageUr(String homePageUr) {
+        this.homePageUr = homePageUr;
     }
 
     @Override

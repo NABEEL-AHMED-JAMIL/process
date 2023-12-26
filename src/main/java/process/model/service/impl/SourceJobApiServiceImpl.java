@@ -17,6 +17,8 @@ import process.model.pojo.*;
 import process.model.repository.*;
 import process.model.service.SourceJobApiService;
 import process.util.ProcessTimeUtil;
+import process.util.ProcessUtil;
+
 import java.time.LocalDateTime;
 import java.util.*;
 import static process.util.ProcessUtil.*;
@@ -67,7 +69,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         sourceJob.setFailJob(tempSourceJob.isFailJob());
         sourceJob.setSkipJob(tempSourceJob.isSkipJob());
         this.sourceJobRepository.saveAndFlush(sourceJob);
-        if (tempSourceJob.getSchedulers() != null && tempSourceJob.getSchedulers().size() > 0) {
+        if (!ProcessUtil.isNull(tempSourceJob.getSchedulers()) && tempSourceJob.getSchedulers().size() > 0) {
             tempSourceJob.getSchedulers().stream()
                 .forEach(schedulerDto -> {
                     Scheduler scheduler = new Scheduler();
@@ -293,28 +295,14 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                     sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(
                         Long.valueOf(sourceTask.getPipelineId())).get().getLookupType());
                 }
-                if (sourceTask.getSourceTaskType() != null) {
-                    SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
-                    SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
-                    sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
-                    sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
-                    sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
-                    sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
-                    sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
+                if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
+                    sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask.getSourceTaskType()));
                 }
                 sourceJobDto.setTaskDetail(sourceTaskDto);
             }
             Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(jobId);
             if (scheduler.isPresent()) {
-                SchedulerDto schedulerDto = new SchedulerDto();
-                schedulerDto.setSchedulerId(scheduler.get().getSchedulerId());
-                schedulerDto.setStartDate(scheduler.get().getStartDate());
-                schedulerDto.setEndDate(scheduler.get().getEndDate());
-                schedulerDto.setStartTime(scheduler.get().getStartTime());
-                schedulerDto.setFrequency(scheduler.get().getFrequency());
-                schedulerDto.setRecurrence(scheduler.get().getRecurrence());
-                schedulerDto.setRecurrenceTime(scheduler.get().getRecurrenceTime());
-                sourceJobDto.setScheduler(schedulerDto);
+                sourceJobDto.setScheduler(this.getSchedulerDto(scheduler.get()));
             }
             return new ResponseDto(SUCCESS, String.format("SourceJob found with %d.", jobId), sourceJobDto);
         }
@@ -326,49 +314,24 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         List<SourceJobDto> sourceJobDtoList = new ArrayList<>();
         this.sourceJobRepository.findAll(Sort.by(Sort.Direction.ASC, "jobId"))
         .stream().forEach(sourceJob -> {
-            SourceJobDto sourceJobDto = new SourceJobDto();
-            sourceJobDto.setJobId(sourceJob.getJobId());
-            sourceJobDto.setJobStatus(sourceJob.getJobStatus());
-            sourceJobDto.setJobName(sourceJob.getJobName());
-            sourceJobDto.setDateCreated(sourceJob.getDateCreated());
-            sourceJobDto.setPriority(sourceJob.getPriority());
-            sourceJobDto.setExecution(sourceJob.getExecution());
-            sourceJobDto.setJobRunningStatus(sourceJob.getJobRunningStatus());
-            sourceJobDto.setLastJobRun(sourceJob.getLastJobRun());
-            if (sourceJob.getTaskDetail() != null) {
+            SourceJobDto sourceJobDto = this.getSourceJobDto(sourceJob);
+            if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
                 SourceTask sourceTask = sourceJob.getTaskDetail();
-                SourceTaskDto sourceTaskDto = new SourceTaskDto();
-                sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
-                sourceTaskDto.setTaskName(sourceTask.getTaskName());
-                sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
-                sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
-                if (sourceTask.getSourceTaskType() != null) {
-                    SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
-                    SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
-                    sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
-                    sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
-                    sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
-                    sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
-                    sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
-                    sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
-                    sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
+                SourceTaskDto sourceTaskDto = this.getSourceTaskDto(sourceTask);
+                if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
+                    sourceJobDto.setHomePageUr(this.lookupDataRepository.findById(
+                        Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue());
+                }
+                if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
+                    sourceTaskDto.setSourceTaskType(this.getSourceTaskTypeDto(sourceTask.getSourceTaskType()));
                 }
                 sourceJobDto.setTaskDetail(sourceTaskDto);
             }
             Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.getJobId());
             if (scheduler.isPresent()) {
-                SchedulerDto schedulerDto = new SchedulerDto();
-                schedulerDto.setSchedulerId(scheduler.get().getSchedulerId());
-                schedulerDto.setStartDate(scheduler.get().getStartDate());
-                schedulerDto.setEndDate(scheduler.get().getEndDate());
-                schedulerDto.setStartTime(scheduler.get().getStartTime());
-                schedulerDto.setFrequency(scheduler.get().getFrequency());
-                schedulerDto.setRecurrence(scheduler.get().getRecurrence());
-                schedulerDto.setRecurrenceTime(scheduler.get().getRecurrenceTime());
-                sourceJobDto.setScheduler(schedulerDto);
+                sourceJobDto.setScheduler(this.getSchedulerDto(scheduler.get()));
             }
-            sourceJobDto.setTabActive(this.jobQueueRepository.getCountForJobByJobId(
-                sourceJobDto.getJobId()) > 0 ? true : false);
+            sourceJobDto.setTabActive(this.jobQueueRepository.getCountForJobByJobId(sourceJobDto.getJobId()) > 0 ? true : false);
             sourceJobDtoList.add(sourceJobDto);
         });
         return new ResponseDto(SUCCESS, String.format("Fetch Source Jobs."), sourceJobDtoList);
@@ -378,6 +341,72 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     public ResponseDto fetchRunningJobEvent(SourceJobDto tempSourceJob) throws Exception {
         return new ResponseDto(SUCCESS, String.format("Fetch Source Jobs."),
             this.sourceJobRepository.fetchRunningJobEvent(tempSourceJob.getJobIds()));
+    }
+
+    /**
+     * Method use to convert the source job to soruce job dto
+     * @param sourceJob
+     * @return SourceJobDto
+     * */
+    private SourceJobDto getSourceJobDto(SourceJob sourceJob) {
+        SourceJobDto sourceJobDto = new SourceJobDto();
+        sourceJobDto.setJobId(sourceJob.getJobId());
+        sourceJobDto.setJobStatus(sourceJob.getJobStatus());
+        sourceJobDto.setJobName(sourceJob.getJobName());
+        sourceJobDto.setDateCreated(sourceJob.getDateCreated());
+        sourceJobDto.setPriority(sourceJob.getPriority());
+        sourceJobDto.setExecution(sourceJob.getExecution());
+        sourceJobDto.setJobRunningStatus(sourceJob.getJobRunningStatus());
+        return sourceJobDto;
+    }
+
+    /**
+     * Method use to convert source task to source task dto
+     * @param sourceTask
+     * @return SourceTaskDto
+     * */
+    private SourceTaskDto getSourceTaskDto(SourceTask sourceTask) {
+        SourceTaskDto sourceTaskDto = new SourceTaskDto();
+        sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
+        sourceTaskDto.setTaskName(sourceTask.getTaskName());
+        sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
+        sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
+        sourceTaskDto.setHomePageId(sourceTask.getHomePageId());
+        sourceTaskDto.setPipelineId(sourceTask.getPipelineId());
+        return sourceTaskDto;
+    }
+
+    /**
+     * Method use to convert scheduler to scheduler dto
+     * @param scheduler
+     * @return SchedulerDto
+     * */
+    private SchedulerDto getSchedulerDto(Scheduler scheduler) {
+        SchedulerDto schedulerDto = new SchedulerDto();
+        schedulerDto.setSchedulerId(scheduler.getSchedulerId());
+        schedulerDto.setStartDate(scheduler.getStartDate());
+        schedulerDto.setEndDate(scheduler.getEndDate());
+        schedulerDto.setStartTime(scheduler.getStartTime());
+        schedulerDto.setFrequency(scheduler.getFrequency());
+        schedulerDto.setRecurrence(scheduler.getRecurrence());
+        schedulerDto.setRecurrenceTime(scheduler.getRecurrenceTime());
+        return schedulerDto;
+    }
+
+    /**
+     * Method use to convert sourceTaskType to sourceTaskType dto
+     * @param sourceTaskType
+     * @return SourceTaskTypeDto
+     * */
+    private SourceTaskTypeDto getSourceTaskTypeDto(SourceTaskType sourceTaskType) {
+        SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
+        sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
+        sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
+        sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
+        sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
+        sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
+        sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
+        return sourceTaskTypeDto;
     }
 
 }
