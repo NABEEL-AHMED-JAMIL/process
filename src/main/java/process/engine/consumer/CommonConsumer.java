@@ -64,7 +64,7 @@ public class CommonConsumer {
         SourceJobQueueDto sourceJobQueueDto = new Gson().fromJson(payload.get(ProcessUtil.JOB_QUEUE), SourceJobQueueDto.class);
         this.getBulkAction().changeJobStatus(sourceJobQueueDto.getJobId(), JobStatus.Start);
         this.getBulkAction().sendJobStatusNotification(sourceJobQueueDto.getJobId().intValue(),
-                this.getLookupDataCacheService().getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+            this.getLookupDataCacheService().getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
         Map<String, Object> taskPayloadInfo = new HashMap<>();
         taskPayloadInfo.put(ProcessUtil.JOB_QUEUE, sourceJobQueueDto);
         taskPayloadInfo.put(ProcessUtil.TASK_DETAIL, new Gson().fromJson(payload.get(ProcessUtil.TASK_DETAIL), SourceTaskDto.class));

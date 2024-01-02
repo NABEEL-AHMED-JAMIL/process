@@ -18,6 +18,7 @@ public class ProcessCron {
     public Logger logger = LogManager.getLogger(ProcessCron.class);
 
     public static final int SCHEDULER_CRON_TIME_IN_ONE_MINUTES=1;
+    public static final int SCHEDULER_CRON_TIME_IN_THIRTY_SECOND=30;
     public static final int SCHEDULER_CRON_TIME_IN_TWO_MINUTES=2;
     public static final int SCHEDULER_CRON_TIME_IN_ONE_HOUR=60;
 
@@ -35,9 +36,9 @@ public class ProcessCron {
     }
 
     /**
-     * This runJob method run every 1 minutes and put the job into the running state
+     * This runJob method run every 30 SECOND and put the job into the running state
      * */
-    @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
+    @Scheduled(fixedDelay = ProcessCron.SCHEDULER_CRON_TIME_IN_THIRTY_SECOND * 1000)
     public void runJob() {
         logger.info("************************Start-RunJob********************************");
         this.producerBulkEngine.runJobInCurrentTimeSlot();
