@@ -16,6 +16,7 @@ public class STTFLinkSTTRequest {
     private Long sttId;
     private Long sttfId;
     private Long appUserId;
+    private Long sttfOrder;
     private ParseRequest accessUserDetail; // yes
 
     public STTFLinkSTTRequest() {}
@@ -50,6 +51,14 @@ public class STTFLinkSTTRequest {
 
     public void setAppUserId(Long appUserId) {
         this.appUserId = appUserId;
+    }
+
+    public Long getSttfOrder() {
+        return sttfOrder;
+    }
+
+    public void setSttfOrder(Long sttfOrder) {
+        this.sttfOrder = sttfOrder;
     }
 
     public ParseRequest getAccessUserDetail() {

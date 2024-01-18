@@ -1,8 +1,15 @@
 package process.service.imp;
 
+import com.google.gson.Gson;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -12,9 +19,11 @@ import org.springframework.stereotype.Service;
 import process.emailer.EmailMessagesFactory;
 import process.model.enums.ERole;
 import process.model.pojo.AppUser;
+import process.model.pojo.LookupData;
 import process.model.pojo.RefreshToken;
 import process.model.pojo.Role;
 import process.model.repository.AppUserRepository;
+import process.model.repository.LookupDataRepository;
 import process.model.repository.RoleRepository;
 import process.payload.request.*;
 import process.payload.response.*;
@@ -23,16 +32,21 @@ import process.security.service.RefreshTokenService;
 import process.security.service.UserDetailsImpl;
 import process.service.AppUserService;
 import process.service.LookupDataCacheService;
+import process.util.excel.BulkExcel;
 import process.util.lookuputil.LookupDetailUtil;
 import process.util.ProcessUtil;
 import process.util.lookuputil.Status;
+import process.util.validation.AppUserValidation;
 import javax.transaction.Transactional;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import static process.util.ProcessUtil.isNull;
 
 /**
  * @author Nabeel Ahmed
@@ -43,6 +57,10 @@ public class AppUserServiceImpl implements AppUserService {
 
     private Logger logger = LoggerFactory.getLogger(AppUserServiceImpl.class);
 
+    @Value("${storage.efsFileDire}")
+    private String tempStoreDirectory;
+    @Autowired
+    private BulkExcel bulkExcel;
     @Autowired
     private JwtUtils jwtUtils;
     @Autowired
@@ -51,6 +69,8 @@ public class AppUserServiceImpl implements AppUserService {
     private RoleRepository roleRepository;
     @Autowired
     private AppUserRepository appUserRepository;
+    @Autowired
+    private LookupDataRepository lookupDataRepository;
     @Autowired
     private RefreshTokenService refreshTokenService;
     @Autowired
@@ -71,29 +91,20 @@ public class AppUserServiceImpl implements AppUserService {
         if (ProcessUtil.isNull(username)) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            username, Status.ACTIVE.getLookupValue());
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(username, Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
         AppUser appUserDetail = appUser.get();
         AppUserResponse appUserResponse = this.getAppUserDetail(appUserDetail);
         if (!appUserDetail.getAppUserRoles().isEmpty()) {
-            appUserResponse.setRoleResponse(
-                appUserDetail.getAppUserRoles()
+            appUserResponse.setRoleResponse(appUserDetail.getAppUserRoles()
                 .stream().map(role -> {
-                    RoleResponse roleResponse = new RoleResponse();
-                    roleResponse.setRoleId(role.getRoleId());
-                    roleResponse.setRoleName(role.getRoleName());
-                    roleResponse.setStatus(Status.getStatusByValue(role.getStatus()));
-                    roleResponse.setDateCreated(role.getDateCreated());
-                    return roleResponse;
-            }).collect(Collectors.toSet()));
+                    return this.getRoleResponse(role);
+                }).collect(Collectors.toSet()));
         }
         if (!ProcessUtil.isNull(appUserDetail.getParentAppUser())) {
-            appUserDetail = appUserDetail.getParentAppUser();
-            AppUserResponse parentAppUserResponse = this.getAppUserDetail(appUserDetail);
-            appUserResponse.setParentAppUser(parentAppUserResponse);
+            appUserResponse.setParentAppUser(this.getAppUserDetail(appUserDetail.getParentAppUser()));
         }
         return new AppResponse(ProcessUtil.SUCCESS, "User detail.", appUserResponse);
     }
@@ -101,120 +112,118 @@ public class AppUserServiceImpl implements AppUserService {
 
     /**
      * Method use to update the user detail
-     * @param updateUserProfileRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse updateAppUserProfile(UpdateUserProfileRequest
-        updateUserProfileRequest) throws Exception {
-        logger.info("Request updateAppUserProfile :- " + updateUserProfileRequest);
-        if (ProcessUtil.isNull(updateUserProfileRequest.getUsername())) {
+    public AppResponse updateAppUserProfile(UpdateUserProfileRequest payload) throws Exception {
+        logger.info("Request updateAppUserProfile :- " + payload);
+        if (ProcessUtil.isNull(payload.getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (ProcessUtil.isNull(updateUserProfileRequest.getFirstName())) {
+        } else if (ProcessUtil.isNull(payload.getFirstName())) {
             return new AppResponse(ProcessUtil.ERROR, "FirstName missing.");
-        } else if (ProcessUtil.isNull(updateUserProfileRequest.getLastName())) {
+        } else if (ProcessUtil.isNull(payload.getLastName())) {
             return new AppResponse(ProcessUtil.ERROR, "LastName missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(payload.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
-        appUser.get().setFirstName(updateUserProfileRequest.getFirstName());
-        appUser.get().setLastName(updateUserProfileRequest.getLastName());
+        appUser.get().setFirstName(payload.getFirstName());
+        appUser.get().setLastName(payload.getLastName());
         this.appUserRepository.save(appUser.get());
-        if (this.emailMessagesFactory.sendUpdateAppUserProfile(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", updateUserProfileRequest);
+        if (this.emailMessagesFactory.sendUpdateAppUserProfile(payload)) {
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", payload);
         }
-        return new AppResponse(ProcessUtil.ERROR, "Account updated," +
-            "Email not send contact with support.", updateUserProfileRequest);
+        return new AppResponse(ProcessUtil.ERROR, "Account updated, Email not send contact with support.", payload);
     }
 
     /**
      * Method use to update the app user password
-     * @param updateUserProfileRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse updateAppUserPassword(UpdateUserProfileRequest
-        updateUserProfileRequest) throws Exception {
-        logger.info("Request updateAppUserPassword :- " + updateUserProfileRequest);
-        if (ProcessUtil.isNull(updateUserProfileRequest.getUsername())) {
+    public AppResponse updateAppUserPassword(UpdateUserProfileRequest payload) throws Exception {
+        logger.info("Request updateAppUserPassword :- " + payload);
+        if (ProcessUtil.isNull(payload.getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (ProcessUtil.isNull(updateUserProfileRequest.getOldPassword())) {
+        } else if (ProcessUtil.isNull(payload.getOldPassword())) {
             return new AppResponse(ProcessUtil.ERROR, "OldPassword missing.");
-        } else if (ProcessUtil.isNull(updateUserProfileRequest.getNewPassword())) {
+        } else if (ProcessUtil.isNull(payload.getNewPassword())) {
             return new AppResponse(ProcessUtil.ERROR, "NewPassword missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(payload.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
-        if (!this.passwordEncoder.matches(updateUserProfileRequest.getOldPassword(),
-            appUser.get().getPassword())) {
+        if (!this.passwordEncoder.matches(payload.getOldPassword(), appUser.get().getPassword())) {
             return new AppResponse(ProcessUtil.ERROR, "Old password not match.");
         }
-        appUser.get().setPassword(this.passwordEncoder
-            .encode(updateUserProfileRequest.getNewPassword()));
+        appUser.get().setPassword(this.passwordEncoder.encode(payload.getNewPassword()));
         this.appUserRepository.save(appUser.get());
-        if (this.emailMessagesFactory.sendUpdateAppUserPassword(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", updateUserProfileRequest);
+        if (this.emailMessagesFactory.sendUpdateAppUserPassword(payload)) {
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Profile Update.", payload);
         }
-        return new AppResponse(ProcessUtil.ERROR, "Account updated, " +
-            "Email not send contact with support.", updateUserProfileRequest);
+        return new AppResponse(ProcessUtil.ERROR, "Account updated, Email not send contact with support.", payload);
     }
 
     /**
      * Method use to update the app user timezone
-     * @param updateUserProfileRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    @Deprecated
-    public AppResponse updateAppUserTimeZone(UpdateUserProfileRequest
-        updateUserProfileRequest) throws Exception {
-        logger.info("Request updateAppUserTimeZone :- " + updateUserProfileRequest);
-        if (ProcessUtil.isNull(updateUserProfileRequest.getUsername())) {
+    public AppResponse updateAppUserTimeZone(UpdateUserProfileRequest payload) throws Exception {
+        logger.info("Request updateAppUserTimeZone :- " + payload);
+        if (ProcessUtil.isNull(payload.getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (ProcessUtil.isNull(updateUserProfileRequest.getTimeZone())) {
+        } else if (ProcessUtil.isNull(payload.getTimeZone())) {
             return new AppResponse(ProcessUtil.ERROR, "TimeZone missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(payload.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
-        appUser.get().setTimeZone(updateUserProfileRequest.getTimeZone());
+        appUser.get().setTimeZone(payload.getTimeZone());
         this.appUserRepository.save(appUser.get());
-        if (this.emailMessagesFactory.sendUpdateAppUserTimeZone(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Timezone Update.", updateUserProfileRequest);
+        if (this.emailMessagesFactory.sendUpdateAppUserTimeZone(payload)) {
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser Timezone Update.", payload);
         }
-        return new AppResponse(ProcessUtil.ERROR, "Account updated, " +
-            "Email not send contact with support.", updateUserProfileRequest);
+        return new AppResponse(ProcessUtil.ERROR, "Account updated, Email not send contact with support.", payload);
     }
 
+    /**
+     * Method use to close appuser account
+     * @param payload
+     * @return AppResponse
+     * */
     @Override
-    public AppResponse closeAppUserAccount(UpdateUserProfileRequest updateUserProfileRequest) throws Exception {
-        logger.info("Request closeAppUserAccount :- " + updateUserProfileRequest);
-        if (ProcessUtil.isNull(updateUserProfileRequest.getUsername())) {
+    public AppResponse closeAppUserAccount(UpdateUserProfileRequest payload) throws Exception {
+        logger.info("Request closeAppUserAccount :- " + payload);
+        if (ProcessUtil.isNull(payload.getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            updateUserProfileRequest.getUsername(), Status.ACTIVE.getLookupValue());
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(payload.getUsername(), Status.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
         appUser.get().setStatus(Status.DELETE.getLookupValue());
         /**
          * Will update rest of the code
+         * close all child
+         * close all jobs
+         * close all task
          * */
+        appUser.get().getAppUserChildren().stream().map(subAppUser -> {
+            subAppUser.setStatus(Status.DELETE.getLookupValue());
+            return subAppUser;
+        }).collect(Collectors.toSet());
         this.appUserRepository.save(appUser.get());
-        if (this.emailMessagesFactory.sendCloseAppUserAccount(updateUserProfileRequest)) {
-            return new AppResponse(ProcessUtil.SUCCESS, "AppUser close.", updateUserProfileRequest);
+        if (this.emailMessagesFactory.sendCloseAppUserAccount(payload)) {
+            return new AppResponse(ProcessUtil.SUCCESS, "AppUser close.", payload);
         }
-        return new AppResponse(ProcessUtil.ERROR, "Account close, " +
-            "Email not send contact with support.", updateUserProfileRequest);
+        return new AppResponse(ProcessUtil.ERROR, "Account close, Email not send contact with support.", payload);
     }
 
     /**
@@ -244,104 +253,297 @@ public class AppUserServiceImpl implements AppUserService {
     }
 
     /**
+     * Method use to download template for appuser
+     * @return ByteArrayOutputStream
+     * */
+    @Override
+    public ByteArrayOutputStream downloadAppUserTemplateFile() throws Exception {
+        String basePath = this.tempStoreDirectory + File.separator;
+        ClassLoader cl = this.getClass().getClassLoader();
+        InputStream inputStream = cl.getResourceAsStream(this.bulkExcel.BATCH);
+        String fileUploadPath = basePath + System.currentTimeMillis() + this.bulkExcel.XLSX_EXTENSION;
+        FileOutputStream fileOut = new FileOutputStream(fileUploadPath);
+        IOUtils.copy(inputStream, fileOut);
+        // after copy the stream into file close
+        if (inputStream != null) {
+            inputStream.close();
+        }
+        // 2nd insert data to newly copied file. So that template couldn't be changed.
+        XSSFWorkbook workbook = new XSSFWorkbook(new File(fileUploadPath));
+        this.bulkExcel.setWb(workbook);
+        XSSFSheet sheet = workbook.createSheet(this.bulkExcel.APP_USER);
+        this.bulkExcel.setSheet(sheet);
+        this.bulkExcel.fillBulkHeader(0, this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE);
+        // Priority
+        workbook.write(fileOut);
+        fileOut.close();
+        workbook.close();
+        // read the file
+        File file = new File(fileUploadPath);
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        byteArrayOutputStream.write(FileUtils.readFileToByteArray(file));
+        file.delete();
+        return byteArrayOutputStream;
+    }
+
+    /**
+     * Method use to download appUser
+     * @param payload
+     * @return ByteArrayOutputStream
+     * */
+    @Override
+    public ByteArrayOutputStream downloadAppUser(SignupRequest payload) throws Exception {
+        logger.info("Request downloadAppUser :- " + payload);
+        if (isNull(payload.getAccessUserDetail().getUsername())) {
+            throw new Exception("AppUser username missing");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            payload.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            throw new Exception("AppUser not found");
+        }
+        XSSFWorkbook workbook = new XSSFWorkbook();
+        this.bulkExcel.setWb(workbook);
+        XSSFSheet xssfSheet = workbook.createSheet(this.bulkExcel.APP_USER);
+        this.bulkExcel.setSheet(xssfSheet);
+        AtomicInteger rowCount = new AtomicInteger();
+        this.bulkExcel.fillBulkHeader(rowCount.get(), new String[] {
+            "FIRSTNAME", "LASTNAME", "TIMEZONE", "USERNAME", "EMAIL"
+        });
+        appUser.get().getAppUserChildren().stream()
+            .filter(tempAppUser -> !tempAppUser.getStatus().equals(Status.DELETE.getLookupValue()))
+            .forEach(tempAppUser -> {
+                rowCount.getAndIncrement();
+                List<String> dataCellValue = new ArrayList<>();
+                dataCellValue.add(tempAppUser.getFirstName());
+                dataCellValue.add(tempAppUser.getLastName());
+                dataCellValue.add(tempAppUser.getTimeZone());
+                dataCellValue.add(tempAppUser.getUsername());
+                dataCellValue.add(tempAppUser.getEmail());
+                this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
+        });
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        workbook.write(outputStream);
+        return outputStream;
+    }
+
+    /**
+     * Method use to upload appUser
+     * @param payload
+     * @return ByteArrayOutputStream
+     * */
+    @Override
+    public AppResponse uploadAppUser(FileUploadRequest payload) throws Exception {
+        logger.info("Request for bulk uploading file!");
+        Gson gson = new Gson();
+        SignupRequest signupRequest = gson.fromJson((String) payload.getData(), SignupRequest.class);
+        if (isNull(signupRequest.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            signupRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
+        } else if (!payload.getFile().getContentType().equalsIgnoreCase(this.bulkExcel.SHEET_NAME)) {
+            logger.info("File Type " + payload.getFile().getContentType());
+            return new AppResponse(ProcessUtil.ERROR, "You can upload only .xlsx extension file.");
+        }
+        // fill the stream with file into work-book
+        Optional<LookupData> uploadLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
+        XSSFWorkbook workbook = new XSSFWorkbook(payload.getFile().getInputStream());
+        if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
+            return new AppResponse(ProcessUtil.ERROR,  "You uploaded empty file.");
+        }
+        XSSFSheet sheet = workbook.getSheet(this.bulkExcel.APP_USER);
+        if (isNull(sheet)) {
+            return new AppResponse(ProcessUtil.ERROR, "Sheet not found with (LookupTemplate)");
+        } else if (sheet.getLastRowNum() < 1) {
+            return new AppResponse(ProcessUtil.ERROR,  "You can't upload empty file.");
+        } else if (sheet.getLastRowNum() > Long.valueOf(uploadLimit.get().getLookupValue())) {
+            return new AppResponse(ProcessUtil.ERROR, String.format("File support %s rows at a time.", uploadLimit.get().getLookupValue()));
+        }
+        List<AppUserValidation> appUserValidations = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        Iterator<Row> rows = sheet.iterator();
+        while (rows.hasNext()) {
+            Row currentRow = rows.next();
+            if (currentRow.getRowNum() == 0) {
+                for (int i=0; i < this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE[i])) {
+                        return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
+                            this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                    }
+                }
+            } else if (currentRow.getRowNum() > 0) {
+                AppUserValidation appUserValidation = new AppUserValidation();
+                appUserValidation.setRowCounter(currentRow.getRowNum()+1);
+                for (int i=0; i < this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE.length; i++) {
+                    if (i==0) {
+                        appUserValidation.setFirstName(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==1) {
+                        appUserValidation.setLastName(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==2) {
+                        appUserValidation.setTimeZone(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==3) {
+                        appUserValidation.setUsername(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==4) {
+                        appUserValidation.setEmail(this.bulkExcel.getCellDetail(currentRow, i));
+                    } else if (i==5) {
+                        appUserValidation.setPassword(this.bulkExcel.getCellDetail(currentRow, i));
+                    }
+                }
+                appUserValidation.isValidLookup();
+                Optional<LookupData> isAlreadyExistLookup = this.lookupDataRepository.findByLookupType(appUserValidation.getTimeZone());
+                if (!isAlreadyExistLookup.isPresent()) {
+                    appUserValidation.setErrorMsg(String.format("TimeZone %s not found at row %s.<br>",
+                        appUserValidation.getTimeZone(), appUserValidation.getRowCounter()));
+                }
+                if (this.appUserRepository.existsByUsername(appUserValidation.getUsername())) {
+                    appUserValidation.setErrorMsg(String.format("Username %s is already taken at row %s.<br>",
+                        appUserValidation.getUsername(), appUserValidation.getRowCounter()));
+                }
+                if (this.appUserRepository.existsByEmail(appUserValidation.getEmail())) {
+                    appUserValidation.setErrorMsg(String.format("Email %s is already taken at row %s.<br>",
+                        appUserValidation.getUsername(), appUserValidation.getRowCounter()));
+                }
+                if (!isNull(appUserValidation.getErrorMsg())) {
+                    errors.add(appUserValidation.getErrorMsg());
+                    continue;
+                }
+                appUserValidations.add(appUserValidation);
+            }
+        }
+        if (errors.size() > 0) {
+            return new AppResponse(ProcessUtil.ERROR, String.format("Total %d source jobs invalid.", errors.size()), errors);
+        }
+        appUserValidations.forEach(appUserValidation -> {
+            // save the job and scheduler
+            AppUser newAppUser = new AppUser();
+            newAppUser.setFirstName(appUserValidation.getFirstName());
+            newAppUser.setLastName(appUserValidation.getLastName());
+            newAppUser.setEmail(appUserValidation.getEmail());
+            newAppUser.setUsername(appUserValidation.getUsername());
+            newAppUser.setPassword(this.passwordEncoder.encode(appUserValidation.getPassword()));
+            newAppUser.setStatus(Status.ACTIVE.getLookupValue());
+            newAppUser.setParentAppUser(appUser.get());
+            newAppUser.setTimeZone(appUserValidation.getTimeZone());
+            Optional<Role> role = Optional.empty();
+            if (signupRequest.getAccessUserDetail().isRootUser()) {
+                role = this.roleRepository.findByRoleNameAndStatus(ERole.ROLE_ADMIN.name(), Status.ACTIVE.getLookupValue());
+            } else {
+                role = this.roleRepository.findByRoleNameAndStatus(ERole.ROLE_USER.name(), Status.ACTIVE.getLookupValue());
+            }
+            if (role.isPresent()) {
+                Set<Role> roleSet = new HashSet<>();
+                roleSet.add(role.get());
+                newAppUser.setAppUserRoles(roleSet);
+            }
+            this.appUserRepository.save(newAppUser);
+            SignupRequest emailRequest = new SignupRequest();
+            emailRequest.setFirstname(newAppUser.getFirstName());
+            emailRequest.setLastname(newAppUser.getLastName());
+            emailRequest.setEmail(newAppUser.getEmail());
+            emailRequest.setTimeZone(newAppUser.getTimeZone());
+            emailRequest.setRole(newAppUser.getAppUserRoles().iterator().next().getRoleName());
+            this.emailMessagesFactory.sendRegisterUser(emailRequest);
+        });
+        return new AppResponse(ProcessUtil.SUCCESS, "Data save successfully.");
+    }
+
+    /**
      * Method use for signIn appUser
-     * @param loginRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse signInAppUser(LoginRequest loginRequest) throws Exception {
+    public AppResponse signInAppUser(LoginRequest payload) throws Exception {
         // spring auth manager will call user detail service
         Authentication authentication = this.authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
+            new UsernamePasswordAuthenticationToken(payload.getUsername(), payload.getPassword()));
         SecurityContextHolder.getContext().setAuthentication(authentication);
         // get the user detail from authentication
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         // token generate
         String jwtToken = this.jwtUtils.generateJwtToken(userDetails);
-        List<String> roles = userDetails.getAuthorities().stream()
-            .map(item -> item.getAuthority()).collect(Collectors.toList());
         // refresh token generate
         RefreshToken refreshToken = this.refreshTokenService.createRefreshToken(userDetails.getAppUserId());
         return new AppResponse(ProcessUtil.SUCCESS, "User successfully authenticate.",
             new AuthResponse(userDetails.getAppUserId(), jwtToken, refreshToken.getToken(),
-            userDetails.getUsername(), userDetails.getEmail(), roles));
+            userDetails.getUsername(), userDetails.getEmail(), userDetails.getAuthorities().stream()
+                .map(item -> item.getAuthority()).collect(Collectors.toList())));
     }
 
     /**
      * Method use for signUp appUser as admin
-     * @param signUpRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse signupAppUser(SignupRequest signUpRequest) throws Exception {
-        logger.info("Request signupAppUser :- " + signUpRequest);
-        if (ProcessUtil.isNull(signUpRequest.getUsername())) {
+    public AppResponse signupAppUser(SignupRequest payload) throws Exception {
+        logger.info("Request signupAppUser :- " + payload);
+        if (ProcessUtil.isNull(payload.getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (ProcessUtil.isNull(signUpRequest.getEmail())) {
+        } else if (ProcessUtil.isNull(payload.getEmail())) {
             return new AppResponse(ProcessUtil.ERROR, "Email missing.");
-        } else if (ProcessUtil.isNull(signUpRequest.getPassword())) {
+        } else if (ProcessUtil.isNull(payload.getPassword())) {
             return new AppResponse(ProcessUtil.ERROR, "Password missing.");
-        } else if (this.appUserRepository.existsByUsername(signUpRequest.getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getTimeZone())) {
+            return new AppResponse(ProcessUtil.ERROR, "TimeZone missing.");
+        } else if (this.appUserRepository.existsByUsername(payload.getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username is already taken.");
-        } else if (this.appUserRepository.existsByEmail(signUpRequest.getEmail())) {
+        } else if (this.appUserRepository.existsByEmail(payload.getEmail())) {
             return new AppResponse(ProcessUtil.ERROR, "Email is already in use.");
         }
         // check if the username and email exist or not
-        AppUser adminUser = new AppUser();
-        adminUser.setEmail(signUpRequest.getEmail());
-        adminUser.setUsername(signUpRequest.getUsername());
-        adminUser.setPassword(this.passwordEncoder.encode(signUpRequest.getPassword()));
+        AppUser appUser = new AppUser();
+        appUser.setFirstName(payload.getFirstname());
+        appUser.setLastName(payload.getLastname());
+        appUser.setEmail(payload.getEmail());
+        appUser.setUsername(payload.getUsername());
+        appUser.setPassword(this.passwordEncoder.encode(payload.getPassword()));
         // by default active user no need extra action
-        adminUser.setStatus(Status.ACTIVE.getLookupValue());
+        appUser.setStatus(Status.ACTIVE.getLookupValue());
         // set the parent user which is master admin
         LookupDataResponse lookupDataResponse = this.lookupDataCacheService
             .getParentLookupById(LookupDetailUtil.SUPER_ADMIN);
         Optional<AppUser> superAdmin = this.appUserRepository.
             findByUsernameAndStatus(lookupDataResponse.getLookupValue(), Status.ACTIVE.getLookupValue());
         if (superAdmin.isPresent()) {
-            adminUser.setParentAppUser(superAdmin.get());
+            appUser.setParentAppUser(superAdmin.get());
         }
-        lookupDataResponse = this.lookupDataCacheService.getChildLookupById(
-            LookupDetailUtil.SCHEDULER_TIMEZONE, LookupDetailUtil.ASIA_QATAR);
-        if (!ProcessUtil.isNull(lookupDataResponse)) {
-            adminUser.setTimeZone(lookupDataResponse.getLookupValue());
-            signUpRequest.setTimeZone(lookupDataResponse.getLookupValue());
+        if (!ProcessUtil.isNull(payload.getTimeZone())) {
+            appUser.setTimeZone(payload.getTimeZone());
         }
         // register user role default as admin role
         Optional<Role> adminRole = this.roleRepository.findByRoleNameAndStatus(
-            ERole.ROLE_USER.name(), Status.ACTIVE.getLookupValue());
+            ERole.ROLE_ADMIN.name(), Status.ACTIVE.getLookupValue());
         if (adminRole.isPresent()) {
             Set<Role> roleSet = new HashSet<>();
             roleSet.add(adminRole.get());
-            adminUser.setAppUserRoles(roleSet);
+            appUser.setAppUserRoles(roleSet);
         }
         // saving process
-        adminUser = this.appUserRepository.save(adminUser);
-        signUpRequest.setRole(adminUser.getAppUserRoles().stream()
-            .filter(role -> role.getRoleName().equals(ERole.ROLE_USER.name()))
-            .findAny().get().getRoleName());
-        this.emailMessagesFactory.sendRegisterUser(signUpRequest);
-        return new AppResponse(ProcessUtil.SUCCESS, String.format(
-            "User successfully register %s.", adminUser.getUsername()));
+        this.appUserRepository.save(appUser);
+        this.emailMessagesFactory.sendRegisterUser(payload);
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("User successfully register %s.", appUser.getUsername()));
     }
 
     /**
      * Method use support to forgot password
-     * @param forgotPasswordRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest) throws Exception {
-        logger.info("Request forgotPassword :- " + forgotPasswordRequest);
-        if (ProcessUtil.isNull(forgotPasswordRequest.getEmail())) {
+    public AppResponse forgotPassword(ForgotPasswordRequest payload) throws Exception {
+        logger.info("Request forgotPassword :- " + payload);
+        if (ProcessUtil.isNull(payload.getEmail())) {
             return new AppResponse(ProcessUtil.ERROR, "Email missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByEmailAndStatus(
-            forgotPasswordRequest.getEmail(), Status.ACTIVE.getLookupValue());
+        Optional<AppUser> appUser = this.appUserRepository.findByEmailAndStatus(payload.getEmail(), Status.ACTIVE.getLookupValue());
         if (appUser.isPresent()) {
-            forgotPasswordRequest.setUsername(appUser.get().getUsername());
-            forgotPasswordRequest.setAppUserId(appUser.get().getAppUserId());
-            if (this.emailMessagesFactory.sendForgotPassword(forgotPasswordRequest)) {
+            payload.setUsername(appUser.get().getUsername());
+            payload.setAppUserId(appUser.get().getAppUserId());
+            if (this.emailMessagesFactory.sendForgotPassword(payload)) {
                 return new AppResponse(ProcessUtil.SUCCESS, "Email send successfully");
             }
             return new AppResponse(ProcessUtil.ERROR,"Email not send contact with support.");
@@ -351,23 +553,22 @@ public class AppUserServiceImpl implements AppUserService {
 
     /**
      * Method use to reset app user password
-     * @param passwordResetRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse resetPassword(PasswordResetRequest passwordResetRequest) throws Exception {
-        logger.info("Request resetPassword :- " + passwordResetRequest);
-        if (ProcessUtil.isNull(passwordResetRequest.getEmail())) {
+    public AppResponse resetPassword(PasswordResetRequest payload) throws Exception {
+        logger.info("Request resetPassword :- " + payload);
+        if (ProcessUtil.isNull(payload.getEmail())) {
             return new AppResponse(ProcessUtil.ERROR, "Email missing.");
-        } else if (ProcessUtil.isNull(passwordResetRequest.getNewPassword())) {
+        } else if (ProcessUtil.isNull(payload.getNewPassword())) {
             return new AppResponse(ProcessUtil.ERROR, "New password missing.");
         }
-        Optional<AppUser> appUser = this.appUserRepository.findByEmailAndStatus(
-            passwordResetRequest.getEmail(), Status.ACTIVE.getLookupValue());
+        Optional<AppUser> appUser = this.appUserRepository.findByEmailAndStatus(payload.getEmail(), Status.ACTIVE.getLookupValue());
         if (appUser.isPresent()) {
-            appUser.get().setPassword(this.passwordEncoder.encode(passwordResetRequest.getNewPassword()));
+            appUser.get().setPassword(this.passwordEncoder.encode(payload.getNewPassword()));
             this.appUserRepository.save(appUser.get());
-            if (this.emailMessagesFactory.sendResetPassword(passwordResetRequest)) {
+            if (this.emailMessagesFactory.sendResetPassword(payload)) {
                 return new AppResponse(ProcessUtil.SUCCESS, "Email send successfully.");
             }
             return new AppResponse(ProcessUtil.ERROR,"Email not send contact with support.");
@@ -377,12 +578,12 @@ public class AppUserServiceImpl implements AppUserService {
 
     /**
      * Method generate new token base on refresh token
-     * @param tokenRefreshRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse authClamByRefreshToken(TokenRefreshRequest tokenRefreshRequest) throws Exception {
-        AtomicReference<String> requestRefreshToken = new AtomicReference<>(tokenRefreshRequest.getRefreshToken());
+    public AppResponse authClamByRefreshToken(TokenRefreshRequest payload) throws Exception {
+        AtomicReference<String> requestRefreshToken = new AtomicReference<>(payload.getRefreshToken());
         return this.refreshTokenService.findByToken(requestRefreshToken.get())
             .map(this.refreshTokenService::verifyExpiration)
             .map(appResponse -> {
@@ -397,12 +598,99 @@ public class AppUserServiceImpl implements AppUserService {
 
     /**
      * Method use to delete the token to log Out the session
-     * @param tokenRefreshRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse logoutAppUser(TokenRefreshRequest tokenRefreshRequest) throws Exception {
-        return this.refreshTokenService.deleteRefreshToken(tokenRefreshRequest);
+    public AppResponse logoutAppUser(TokenRefreshRequest payload) throws Exception {
+        return this.refreshTokenService.deleteRefreshToken(payload);
+    }
+
+    /**
+     * Method use to add/edit app user detail
+     * @param payload
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse addEditAppUserAccount(SignupRequest payload) throws Exception {
+        logger.info("Request addEditAppUserAccount :- " + payload);
+        if (ProcessUtil.isNull(payload.getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "Username missing.");
+        } else if (ProcessUtil.isNull(payload.getEmail())) {
+            return new AppResponse(ProcessUtil.ERROR, "Email missing.");
+        } else if (ProcessUtil.isNull(payload.getTimeZone())) {
+            return new AppResponse(ProcessUtil.ERROR, "TimeZone missing.");
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail()) ||
+             ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "Admin user detail missing.");
+        }
+        // in new user then need to check
+        if (ProcessUtil.isNull(payload.getAppUserId())) {
+            if (this.appUserRepository.existsByUsername(payload.getUsername())) {
+                return new AppResponse(ProcessUtil.ERROR, "Username is already taken.");
+            } else if (this.appUserRepository.existsByEmail(payload.getEmail())) {
+                return new AppResponse(ProcessUtil.ERROR, "Email is already in use.");
+            } else if (ProcessUtil.isNull(payload.getPassword())) {
+                return new AppResponse(ProcessUtil.ERROR, "Password missing.");
+            }
+        }
+        // check if the username and email exist or not
+        AppUser appUser = !ProcessUtil.isNull(payload.getAppUserId()) ?
+            this.appUserRepository.findByUsernameAndStatus(payload.getUsername(),
+                Status.ACTIVE.getLookupValue()).get() : new AppUser();
+        appUser.setFirstName(payload.getFirstname());
+        appUser.setLastName(payload.getLastname());
+        // email and username can't update
+        if (ProcessUtil.isNull(payload.getAppUserId())) {
+            appUser.setEmail(payload.getEmail());
+            appUser.setUsername(payload.getUsername());
+            appUser.setStatus(Status.ACTIVE.getLookupValue());
+            appUser.setPassword(this.passwordEncoder.encode(payload.getPassword()));
+            Optional<Role> role = Optional.empty();
+            if (payload.getAccessUserDetail().isRootUser()) {
+                role = this.roleRepository.findByRoleNameAndStatus(
+                    ERole.ROLE_ADMIN.name(), Status.ACTIVE.getLookupValue());
+            } else {
+                role = this.roleRepository.findByRoleNameAndStatus(
+                    ERole.ROLE_USER.name(), Status.ACTIVE.getLookupValue());
+            }
+            if (role.isPresent()) {
+                Set<Role> roleSet = new HashSet<>();
+                roleSet.add(role.get());
+                appUser.setAppUserRoles(roleSet);
+            }
+        } else if (!ProcessUtil.isNull(payload.getStatus())) {
+            appUser.setStatus(payload.getStatus());
+        }
+        appUser.setTimeZone(payload.getTimeZone());
+        // set the parent user which is master admin
+        Optional<AppUser> superAdmin = this.appUserRepository.findByUsernameAndStatus(
+            payload.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+        if (superAdmin.isPresent()) {
+            appUser.setParentAppUser(superAdmin.get());
+        } else {
+            return new AppResponse(ProcessUtil.ERROR, "Admin user detail missing.");
+        }
+        // saving process
+        this.appUserRepository.save(appUser);
+        /**
+         * Will update rest of the code
+         * close all child
+         * close all jobs
+         * close all task
+         * and update email not send if user inactive and delete
+         * */
+        if (!ProcessUtil.isNull(payload.getAppUserId())) {
+            UpdateUserProfileRequest updateUserProfileRequest = new UpdateUserProfileRequest();
+            updateUserProfileRequest.setEmail(payload.getEmail());
+            updateUserProfileRequest.setUsername(payload.getUsername());
+            updateUserProfileRequest.setFirstName(payload.getFirstname());
+            updateUserProfileRequest.setLastName(payload.getLastname());
+            this.emailMessagesFactory.sendUpdateAppUserProfile(updateUserProfileRequest);
+        } else {
+            this.emailMessagesFactory.sendRegisterUser(payload);
+        }
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("Request successfully process %s.", appUser.getUsername()));
     }
 
     private AppUserResponse getAppUserDetail(AppUser appUser) {
@@ -425,7 +713,7 @@ public class AppUserServiceImpl implements AppUserService {
         roleResponse.setRoleId(role.getRoleId());
         roleResponse.setRoleName(role.getRoleName());
         roleResponse.setStatus(Status.getStatusByValue(role.getStatus()));
+        roleResponse.setDateCreated(role.getDateCreated());
         return roleResponse;
     }
-
 }

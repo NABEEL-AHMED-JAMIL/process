@@ -33,6 +33,9 @@ public class STTSLinkSTTF {
     @GeneratedValue(generator = "auSttsSequenceGenerator")
     private Long auSttsId;
 
+    @Column(name = "stts_order")
+    private Long sttsOrder;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "stts_id", nullable = false)
     private STTSection stts;
@@ -68,6 +71,14 @@ public class STTSLinkSTTF {
 
     public void setAuSttsId(Long auSttsId) {
         this.auSttsId = auSttsId;
+    }
+
+    public Long getSttsOrder() {
+        return sttsOrder;
+    }
+
+    public void setSttsOrder(Long sttsOrder) {
+        this.sttsOrder = sttsOrder;
     }
 
     public STTSection getStts() {

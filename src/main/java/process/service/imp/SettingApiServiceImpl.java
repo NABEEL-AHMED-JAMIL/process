@@ -23,16 +23,16 @@ public class SettingApiServiceImpl implements SettingApiService {
     private QueryService queryService;
 
     @Override
-    public AppResponse dynamicQueryResponse(QueryRequest queryRequest) {
-        if (isNull(queryRequest.getQuery())) {
+    public AppResponse dynamicQueryResponse(QueryRequest payload) {
+        if (isNull(payload.getQuery())) {
             return new AppResponse(ERROR, "Query missing.");
         }
-        queryRequest.setQuery(queryRequest.getQuery().trim());
-        if (!queryRequest.getQuery().toLowerCase().startsWith("select")) {
+        payload.setQuery(payload.getQuery().trim());
+        if (!payload.getQuery().toLowerCase().startsWith("select")) {
             return new AppResponse(ERROR, "Only select query execute.");
         }
         return new AppResponse(SUCCESS, "Data fetch successfully.",
-            this.queryService.executeQueryResponse(queryRequest.getQuery()));
+            this.queryService.executeQueryResponse(payload.getQuery()));
     }
 
 

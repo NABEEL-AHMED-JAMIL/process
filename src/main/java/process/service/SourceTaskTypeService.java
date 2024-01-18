@@ -3,10 +3,7 @@ package process.service;
 import process.model.pojo.LookupData;
 import process.payload.request.*;
 import process.payload.response.AppResponse;
-import process.util.ProcessUtil;
 import process.util.lookuputil.GLookup;
-import process.util.lookuputil.LookupDetailUtil;
-
 import java.io.ByteArrayOutputStream;
 import java.util.Optional;
 
@@ -15,75 +12,93 @@ import java.util.Optional;
  */
 public interface SourceTaskTypeService {
 
-    public AppResponse addSTT(STTRequest sttRequest) throws Exception;
+    public AppResponse addSTT(STTRequest payload) throws Exception;
 
-    public AppResponse editSTT(STTRequest sttRequest) throws Exception;
+    public AppResponse editSTT(STTRequest payload) throws Exception;
 
-    public AppResponse deleteSTT(STTRequest sttRequest) throws Exception;
+    public AppResponse deleteSTT(STTRequest payload) throws Exception;
 
-    public AppResponse fetchSTTBySttId(STTRequest sttRequest) throws Exception;
+    public AppResponse fetchSTTBySttId(STTRequest payload) throws Exception;
 
-    public AppResponse fetchSTT(STTRequest sttRequest) throws Exception;
+    public AppResponse fetchSTT(STTRequest payload) throws Exception;
 
-    public AppResponse addSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception;
+    public AppResponse addSTTLinkUser(STTLinkUserRequest payload) throws Exception;
 
-    public AppResponse deleteSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception;
+    public AppResponse deleteSTTLinkUser(STTLinkUserRequest payload) throws Exception;
 
-    public AppResponse fetchSTTLinkUser(STTLinkUserRequest sttLinkUserRequest) throws Exception;
+    public AppResponse fetchSTTLinkUser(STTLinkUserRequest payload) throws Exception;
 
-    public AppResponse addSTTF(STTFormRequest sttFormRequest) throws Exception;
+    public AppResponse addSTTLinkSTTF(STTFLinkSTTRequest payload) throws Exception;
 
-    public AppResponse editSTTF(STTFormRequest sttFormRequest) throws Exception;
+    public AppResponse deleteSTTLinkSTTF(STTFLinkSTTRequest payload) throws Exception;
 
-    public AppResponse deleteSTTF(STTFormRequest sttFormRequest) throws Exception;
+    public AppResponse fetchSTTLinkSTTF(STTFLinkSTTRequest payload) throws Exception;
 
-    public AppResponse fetchSTTFBySttfId(STTFormRequest sttFormRequest) throws Exception;
+    public AppResponse addSTTF(STTFormRequest payload) throws Exception;
 
-    public AppResponse fetchSTTF(STTFormRequest sttFormRequest) throws Exception;
+    public AppResponse editSTTF(STTFormRequest payload) throws Exception;
 
-    public AppResponse addSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception;
+    public AppResponse deleteSTTF(STTFormRequest payload) throws Exception;
 
-    public AppResponse deleteSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception;
+    public AppResponse fetchSTTFBySttfId(STTFormRequest payload) throws Exception;
 
-    public AppResponse fetchSTTFLinkSTT(STTFLinkSTTRequest sttfLinkSTTRequest) throws Exception;
+    public AppResponse fetchSTTF(STTFormRequest payload) throws Exception;
 
-    public AppResponse addSTTS(STTSectionRequest sttSectionRequest) throws Exception;
+    public AppResponse addSTTFLinkSTT(STTFLinkSTTRequest payload) throws Exception;
 
-    public AppResponse editSTTS(STTSectionRequest sttSectionRequest) throws Exception;
+    public AppResponse deleteSTTFLinkSTT(STTFLinkSTTRequest payload) throws Exception;
 
-    public AppResponse deleteSTTS(STTSectionRequest sttSectionRequest) throws Exception;
+    public AppResponse fetchSTTFLinkSTT(STTFLinkSTTRequest payload) throws Exception;
 
-    public AppResponse fetchSTTSBySttsId(STTSectionRequest sttSectionRequest) throws Exception;
+    public AppResponse addSTTFLinkSTTS(STTSLinkSTTFRequest payload) throws Exception;
 
-    public AppResponse fetchSTTS(STTSectionRequest sttSectionRequest) throws Exception;
+    public AppResponse deleteSTTFLinkSTTS(STTSLinkSTTFRequest payload) throws Exception;
 
-    public AppResponse addSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception;
+    public AppResponse fetchSTTFLinkSTTS(STTSLinkSTTFRequest payload) throws Exception;
 
-    public AppResponse deleteSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception;
+    public AppResponse addSTTS(STTSectionRequest payload) throws Exception;
 
-    public AppResponse fetchSTTSLinkSTTF(STTSLinkSTTFRequest sttsLinkSTTFRequest) throws Exception;
+    public AppResponse editSTTS(STTSectionRequest payload) throws Exception;
 
-    public AppResponse addSTTC(STTControlRequest sttControlRequest) throws Exception;
+    public AppResponse deleteSTTS(STTSectionRequest payload) throws Exception;
 
-    public AppResponse editSTTC(STTControlRequest sttControlRequest) throws Exception;
+    public AppResponse fetchSTTSBySttsId(STTSectionRequest payload) throws Exception;
 
-    public AppResponse deleteSTTC(STTControlRequest sttControlRequest) throws Exception;
+    public AppResponse fetchSTTS(STTSectionRequest payload) throws Exception;
 
-    public AppResponse fetchSTTCBySttcId(STTControlRequest sttControlRequest) throws Exception;
+    public AppResponse addSTTSLinkSTTF(STTSLinkSTTFRequest payload) throws Exception;
 
-    public AppResponse fetchSTTC(STTControlRequest sttControlRequest) throws Exception;
+    public AppResponse deleteSTTSLinkSTTF(STTSLinkSTTFRequest payload) throws Exception;
 
-    public AppResponse addSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception;
+    public AppResponse fetchSTTSLinkSTTF(STTSLinkSTTFRequest payload) throws Exception;
 
-    public AppResponse deleteSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception;
+    public AppResponse addSTTSLinkSTTC(STTCLinkSTTSRequest payload) throws Exception;
 
-    public AppResponse fetchSTTCLinkSTTS(STTCLinkSTTSRequest sttcLinkSTTSRequest) throws Exception;
+    public AppResponse deleteSTTSLinkSTTC(STTCLinkSTTSRequest payload) throws Exception;
 
-    public ByteArrayOutputStream downloadSTTCommonTemplateFile(STTFileUploadRequest sttFileUReq) throws Exception;
+    public AppResponse fetchSTTSLinkSTTC(STTCLinkSTTSRequest payload) throws Exception;
 
-    public ByteArrayOutputStream downloadSTTCommon(STTFileUploadRequest sttFileUReq) throws Exception;
+    public AppResponse addSTTC(STTControlRequest payload) throws Exception;
 
-    public AppResponse uploadSTTCommon(FileUploadRequest fileObject) throws Exception;
+    public AppResponse editSTTC(STTControlRequest payload) throws Exception;
+
+    public AppResponse deleteSTTC(STTControlRequest payload) throws Exception;
+
+    public AppResponse fetchSTTCBySttcId(STTControlRequest payload) throws Exception;
+
+    public AppResponse fetchSTTC(STTControlRequest payload) throws Exception;
+
+    public AppResponse addSTTCLinkSTTS(STTCLinkSTTSRequest payload) throws Exception;
+
+    public AppResponse deleteSTTCLinkSTTS(STTCLinkSTTSRequest payload) throws Exception;
+
+    public AppResponse fetchSTTCLinkSTTS(STTCLinkSTTSRequest payload) throws Exception;
+
+    public ByteArrayOutputStream downloadSTTCommonTemplateFile(STTFileUploadRequest payload) throws Exception;
+
+    public ByteArrayOutputStream downloadSTTCommon(STTFileUploadRequest payload) throws Exception;
+
+    public AppResponse uploadSTTCommon(FileUploadRequest payload) throws Exception;
 
     public default GLookup getDBLoopUp(Long lookupValue, Optional<LookupData> lookupData) {
         if (lookupData.isPresent()) {

@@ -5,8 +5,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.STTFLinkSTT;
-
-import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,7 +12,6 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  */
 @Repository
-@Transactional
 public interface STTFLinkSTTRepository extends CrudRepository<STTFLinkSTT, Long> {
 
     @Query(value = "SELECT count(sttfLinkSTT.auSttfId) FROM STTFLinkSTT sttfLinkSTT " +
@@ -34,6 +31,10 @@ public interface STTFLinkSTTRepository extends CrudRepository<STTFLinkSTT, Long>
         " AND sttfLinkSTT.appUser.appUserId = ?4 AND sttfLinkSTT.status != ?5")
     public Optional<STTFLinkSTT> findByAuSttfIdAndSttIdAndSttfIdAndAppUserIdAndStatusNotIn(
             Long auSttId, Long sttId, Long sttfId, Long appUserId, Long status);
+
+    @Query(value = "SELECT sttfLinkSTT FROM STTFLinkSTT sttfLinkSTT " +
+            "WHERE sttfLinkSTT.stt.sttId = ?1 AND sttfLinkSTT.status != ?2")
+    public List<STTFLinkSTT> findBySttIdAndStatusNotIn(Long sttId, Long status);
 
     @Query(value = "SELECT sttfLinkSTT FROM STTFLinkSTT sttfLinkSTT " +
         "WHERE sttfLinkSTT.sttf.sttfId = ?1 AND sttfLinkSTT.status != ?2")

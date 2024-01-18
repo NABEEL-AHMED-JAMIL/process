@@ -3,7 +3,6 @@ package process.model.repository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.AppUserSTT;
 import java.util.List;
 import java.util.Optional;
@@ -12,7 +11,6 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  */
 @Repository
-@Transactional
 public interface AppUserSTTRepository extends CrudRepository<AppUserSTT, Long> {
 
     @Query(value = "SELECT count(appUserSTT) FROM AppUserSTT appUserSTT " +

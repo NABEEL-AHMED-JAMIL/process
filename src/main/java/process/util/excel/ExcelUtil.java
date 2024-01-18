@@ -8,12 +8,17 @@ public interface ExcelUtil {
 
     public static String BLANK_VAL = "";
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    public static String APP_USER = "AppUser";
     public static String LOOKUP = "LookupTemplate";
     public static String STT = "SourceTaskType";
     public static String STT_FORM = "SourceTaskTypeForm";
     public static String STT_SECTION = "SourceTaskTypeSection";
     public static String STT_CONTROL = "SourceTaskTypeControl";
     public static String BATCH = "Batch.xlsx";
+
+    public static String[] APP_USER_HEADER_FILED_BATCH_FILE = new String[] {
+        "FIRSTNAME", "LASTNAME", "TIMEZONE", "USERNAME", "EMAIL", "PASSWORD"
+    };
     public static String[] LOOKUP_HEADER_FILED_BATCH_FILE = new String[] {
         "LOOKUP_TYPE", "LOOKUP_VALUE", "DESCRIPTION"
     };
@@ -25,10 +30,10 @@ public interface ExcelUtil {
         "FORM_NAME", "DESCRIPTION", "DEFAULT", "FORM_TYPE"
     };
     public static String[] STTS_HEADER_FILED_BATCH_FILE = new String[] {
-        "SECTION_ORDER", "SECTION_NAME", "DESCRIPTION", "DEFAULT"
+        "SECTION_NAME", "DESCRIPTION", "DEFAULT"
     };
     public static String[] STTC_HEADER_FILED_BATCH_FILE = new String[] {
-        "CONTROL_ORDER", "CONTROL_NAME", "DESCRIPTION", "FILED_NAME", "FILED_TITLE",
+        "CONTROL_NAME", "DESCRIPTION", "FILED_NAME", "FILED_TITLE",
         "FILED_WIDTH", "PLACEHOLDER", "PATTERN", "FILED_TYPE",
         "MIN_LENGTH", "MAX_LENGTH", "REQUIRED"
     };

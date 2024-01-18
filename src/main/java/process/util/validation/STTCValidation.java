@@ -19,8 +19,6 @@ public class STTCValidation {
 
     private Integer rowCounter = 0;
     private String errorMsg;
-
-    private String controlOrder;
     private String controlName;
     private String description;
     private String filedName;
@@ -50,14 +48,6 @@ public class STTCValidation {
 
     public void setErrorMsg(String errorMsg) {
         this.errorMsg = errorMsg;
-    }
-
-    public String getControlOrder() {
-        return controlOrder;
-    }
-
-    public void setControlOrder(String controlOrder) {
-        this.controlOrder = controlOrder;
     }
 
     public String getControlName() {
@@ -158,11 +148,6 @@ public class STTCValidation {
 
     public void isValidSTTC() {
         try {
-            if (this.isNull(this.controlOrder)) {
-                this.setErrorMsg(String.format("ControlOrder should not be empty at row %s.<br>", rowCounter));
-            } else if (!this.patternRegx.matcher(controlOrder).matches()) {
-                this.setErrorMsg(String.format("ControlOrder type not correct at row %s.<br>", rowCounter));
-            }
             if (this.isNull(this.controlName)) {
                 this.setErrorMsg(String.format("ControlName should not be empty at row %s.<br>", rowCounter));
             }

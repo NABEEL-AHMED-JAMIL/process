@@ -13,6 +13,7 @@ public class ParseRequest {
 
     private Long appUserId;
     private String username;
+    private boolean rootUser;
 
     public ParseRequest() {
     }
@@ -36,6 +37,14 @@ public class ParseRequest {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public boolean isRootUser() {
+        return rootUser;
+    }
+
+    public void setRootUser(boolean rootUser) {
+        this.rootUser = rootUser;
     }
 
     @Override

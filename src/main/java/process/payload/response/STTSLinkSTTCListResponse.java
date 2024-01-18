@@ -11,23 +11,57 @@ import java.sql.Timestamp;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class STTControlListResponse {
+public class STTSLinkSTTCListResponse {
 
+    private Long sttsLinkSttcId;
+    private Long appUserid;
+    private String username;
+    private String email;
     private Long sttcId;
     private String sttcName;
     private String filedName;
     private GLookup filedType;
-    private String description;
     private GLookup mandatory;
-    private GLookup status;
     private GLookup sttcDefault;
     private GLookup sttcDisabled;
+    private GLookup status;
     private Timestamp dateCreated;
-    private Long totalStt;
-    private Long totalForm;
-    private Long totalSection;
+    private Long sttcOrder;
 
-    public STTControlListResponse() {}
+    public STTSLinkSTTCListResponse() {
+    }
+
+    public Long getSttsLinkSttcId() {
+        return sttsLinkSttcId;
+    }
+
+    public void setSttsLinkSttcId(Long sttsLinkSttcId) {
+        this.sttsLinkSttcId = sttsLinkSttcId;
+    }
+
+    public Long getAppUserid() {
+        return appUserid;
+    }
+
+    public void setAppUserid(Long appUserid) {
+        this.appUserid = appUserid;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
 
     public Long getSttcId() {
         return sttcId;
@@ -61,32 +95,12 @@ public class STTControlListResponse {
         this.filedType = filedType;
     }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public GLookup isMandatory() {
+    public GLookup getMandatory() {
         return mandatory;
     }
 
     public void setMandatory(GLookup mandatory) {
         this.mandatory = mandatory;
-    }
-
-    public GLookup getMandatory() {
-        return mandatory;
-    }
-
-    public GLookup getStatus() {
-        return status;
-    }
-
-    public void setStatus(GLookup status) {
-        this.status = status;
     }
 
     public GLookup getSttcDefault() {
@@ -105,6 +119,14 @@ public class STTControlListResponse {
         this.sttcDisabled = sttcDisabled;
     }
 
+    public GLookup getStatus() {
+        return status;
+    }
+
+    public void setStatus(GLookup status) {
+        this.status = status;
+    }
+
     public Timestamp getDateCreated() {
         return dateCreated;
     }
@@ -113,32 +135,17 @@ public class STTControlListResponse {
         this.dateCreated = dateCreated;
     }
 
-    public Long getTotalStt() {
-        return totalStt;
+    public Long getSttcOrder() {
+        return sttcOrder;
     }
 
-    public void setTotalStt(Long totalStt) {
-        this.totalStt = totalStt;
-    }
-
-    public Long getTotalForm() {
-        return totalForm;
-    }
-
-    public void setTotalForm(Long totalForm) {
-        this.totalForm = totalForm;
-    }
-
-    public Long getTotalSection() {
-        return totalSection;
-    }
-
-    public void setTotalSection(Long totalSection) {
-        this.totalSection = totalSection;
+    public void setSttcOrder(Long sttcOrder) {
+        this.sttcOrder = sttcOrder;
     }
 
     @Override
     public String toString() {
         return new Gson().toJson(this);
     }
+
 }

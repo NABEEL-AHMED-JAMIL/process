@@ -5,7 +5,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.STTSLinkSTTF;
-import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,7 +12,6 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  */
 @Repository
-@Transactional
 public interface STTSLinkSTTFRepository extends CrudRepository<STTSLinkSTTF, Long> {
 
     @Query(value = "SELECT count(sttsLinkSTTF.auSttsId) FROM STTSLinkSTTF sttsLinkSTTF " +
@@ -37,6 +35,10 @@ public interface STTSLinkSTTFRepository extends CrudRepository<STTSLinkSTTF, Lon
     @Query(value = "SELECT sttsLinkSTTF FROM STTSLinkSTTF sttsLinkSTTF " +
         "WHERE sttsLinkSTTF.stts.sttsId = ?1 AND sttsLinkSTTF.status != ?2")
     public List<STTSLinkSTTF> findBySttsIdAndStatusNotIn(Long sttfId, Long status);
+
+    @Query(value = "SELECT sttsLinkSTTF FROM STTSLinkSTTF sttsLinkSTTF " +
+            "WHERE sttsLinkSTTF.sttf.sttfId = ?1 AND sttsLinkSTTF.status != ?2")
+    public List<STTSLinkSTTF> findBySttfIdAndStatusNotIn(Long sttfId, Long status);
 
     @Modifying
     @Query("UPDATE STTSLinkSTTF sttsLinkSTTF SET sttsLinkSTTF.status = ?1 " +

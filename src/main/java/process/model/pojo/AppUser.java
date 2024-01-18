@@ -41,7 +41,7 @@ public class AppUser {
     @Column(name = "last_name")
     private String lastName;
 
-    @Column(name = "time_zone_id", nullable = false)
+    @Column(name = "time_zone_id")
     private String timeZone;
 
     @Column(name = "username", nullable=false)

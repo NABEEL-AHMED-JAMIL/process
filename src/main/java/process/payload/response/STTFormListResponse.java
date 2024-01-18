@@ -18,6 +18,8 @@ public class STTFormListResponse {
     private String description;
     private GLookup status;
     private GLookup sttfDefault;
+    private GLookup homePage;
+    private String serviceId;
     private GLookup formType;
     private Timestamp dateCreated;
     private Long totalStt = 0l;
@@ -73,6 +75,22 @@ public class STTFormListResponse {
 
     public void setFormType(GLookup formType) {
         this.formType = formType;
+    }
+
+    public GLookup getHomePage() {
+        return homePage;
+    }
+
+    public void setHomePage(GLookup homePage) {
+        this.homePage = homePage;
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
     }
 
     public Timestamp getDateCreated() {

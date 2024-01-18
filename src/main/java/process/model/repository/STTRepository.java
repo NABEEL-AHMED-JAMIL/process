@@ -4,7 +4,6 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.STT;
 import process.model.projection.STTProjection;
 import java.util.List;
@@ -14,7 +13,6 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  */
 @Repository
-@Transactional
 public interface STTRepository extends CrudRepository<STT, Long> {
 
     @Query(value = "select stt.*\n" +
@@ -42,7 +40,7 @@ public interface STTRepository extends CrudRepository<STT, Long> {
 
     @Query(value = "select stt.stt_id as sttId, stt.service_name as serviceName, stt.description as description,\n" +
         "stt.task_type as taskType, stt.status as status, case when stt.is_default then true else false  end as sttDefault,\n" +
-        "stt.date_created as dateCreated, stt.service_id as serviceId, stt.home_page as homePage, crd.credential_name as credentialName\n" +
+        "stt.date_created as dateCreated, crd.credential_name as credentialName\n" +
         "from stt stt\n" +
         "inner join app_users au on au.app_user_id  = stt.app_user_id\n" +
         "left join credential crd on crd.credential_id = stt.credential_id\n" +

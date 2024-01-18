@@ -31,18 +31,18 @@ public class CredentialRestApi {
      * api-status :- done
      * @apiName :- addCredential
      * Api use to add the credential data
-     * @param credentialRequest
+     * @param payload
      * @return ResponseEntity<?> addCredential
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/addCredential", method = RequestMethod.POST)
-    public ResponseEntity<?> addCredential(@RequestBody CredentialRequest credentialRequest) {
+    public ResponseEntity<?> addCredential(@RequestBody CredentialRequest payload) {
         try {
-            return new ResponseEntity<>(this.credentialService.addCredential(credentialRequest), HttpStatus.OK);
+            return new ResponseEntity<>(this.credentialService.addCredential(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addCredential ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -50,18 +50,18 @@ public class CredentialRestApi {
      * api-status :- done
      * @apiName :- updateCredential
      * Api use to update the credential data
-     * @param credentialRequest
+     * @param payload
      * @return ResponseEntity<?> updateCredential
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/updateCredential", method = RequestMethod.PUT)
-    public ResponseEntity<?> updateCredential(@RequestBody CredentialRequest credentialRequest) {
+    public ResponseEntity<?> updateCredential(@RequestBody CredentialRequest payload) {
         try {
-            return new ResponseEntity<>(this.credentialService.updateCredential(credentialRequest), HttpStatus.OK);
+            return new ResponseEntity<>(this.credentialService.updateCredential(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateCredential ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -73,13 +73,13 @@ public class CredentialRestApi {
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchAllCredential", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchAllCredential(@RequestBody CredentialRequest credentialRequest) {
+    public ResponseEntity<?> fetchAllCredential(@RequestBody CredentialRequest payload) {
         try {
-            return new ResponseEntity<>(this.credentialService.fetchAllCredential(credentialRequest), HttpStatus.OK);
+            return new ResponseEntity<>(this.credentialService.fetchAllCredential(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllCredential ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -87,18 +87,18 @@ public class CredentialRestApi {
      * api-status :- done
      * @apiName :- fetchCredentialByCredentialId
      * Api use to fetch the Credential by Credential id
-     * @param credentialRequest
+     * @param payload
      * @return ResponseEntity<?> fetchCredentialByCredentialId
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchCredentialByCredentialId", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchCredentialByCredentialId(@RequestBody CredentialRequest credentialRequest) {
+    public ResponseEntity<?> fetchCredentialByCredentialId(@RequestBody CredentialRequest payload) {
         try {
-            return new ResponseEntity<>(this.credentialService.fetchCredentialByCredentialId(credentialRequest), HttpStatus.OK);
+            return new ResponseEntity<>(this.credentialService.fetchCredentialByCredentialId(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchCredentialByCredentialId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -106,18 +106,18 @@ public class CredentialRestApi {
      * api-status :- done
      * @apiName :- deleteCredential
      * Api use to delete the lookup data
-     * @param credentialRequest
+     * @param payload
      * @return ResponseEntity<?> deleteCredential
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/deleteCredential", method = RequestMethod.PUT)
-    public ResponseEntity<?> deleteCredential(@RequestBody CredentialRequest credentialRequest) {
+    public ResponseEntity<?> deleteCredential(@RequestBody CredentialRequest payload) {
         try {
-            return new ResponseEntity<>(this.credentialService.deleteCredential(credentialRequest), HttpStatus.OK);
+            return new ResponseEntity<>(this.credentialService.deleteCredential(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteCredential ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 }

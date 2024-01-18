@@ -18,6 +18,8 @@ public class STTFormResponse {
     private GLookup status;
     private GLookup formType;
     private GLookup defaultSttf;
+    private GLookup homePage;
+    private String serviceId;
 
     public STTFormResponse() {
     }
@@ -68,6 +70,22 @@ public class STTFormResponse {
 
     public void setDefaultSttf(GLookup defaultSttf) {
         this.defaultSttf = defaultSttf;
+    }
+
+    public GLookup getHomePage() {
+        return homePage;
+    }
+
+    public void setHomePage(GLookup homePage) {
+        this.homePage = homePage;
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
     }
 
     @Override

@@ -23,6 +23,7 @@ public class STTSLinkSTTFListResponse {
     private GLookup formDefault;
     private GLookup status;
     private Timestamp dateCreated;
+    private Long sttsOrder;
 
     public STTSLinkSTTFListResponse() {
     }
@@ -105,6 +106,14 @@ public class STTSLinkSTTFListResponse {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Long getSttsOrder() {
+        return sttsOrder;
+    }
+
+    public void setSttsOrder(Long sttsOrder) {
+        this.sttsOrder = sttsOrder;
     }
 
     @Override

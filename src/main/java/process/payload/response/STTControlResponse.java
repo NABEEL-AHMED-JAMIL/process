@@ -13,7 +13,6 @@ import process.util.lookuputil.GLookup;
 public class STTControlResponse {
 
     private Long sttcId;
-    private Long sttcOrder;
     private String sttcName;
     private String description;
     private GLookup filedType;
@@ -27,6 +26,7 @@ public class STTControlResponse {
     private GLookup mandatory;
     private GLookup sttcDefault;
     private GLookup sttcDisabled;
+    private String defaultValue;
     private String pattern;
     private GLookup status;
 
@@ -39,14 +39,6 @@ public class STTControlResponse {
 
     public void setSttcId(Long sttcId) {
         this.sttcId = sttcId;
-    }
-
-    public Long getSttcOrder() {
-        return sttcOrder;
-    }
-
-    public void setSttcOrder(Long sttcOrder) {
-        this.sttcOrder = sttcOrder;
     }
 
     public String getSttcName() {
@@ -151,6 +143,14 @@ public class STTControlResponse {
 
     public void setSttcDisabled(GLookup sttcDisabled) {
         this.sttcDisabled = sttcDisabled;
+    }
+
+    public String getDefaultValue() {
+        return defaultValue;
+    }
+
+    public void setDefaultValue(String defaultValue) {
+        this.defaultValue = defaultValue;
     }
 
     public String getPattern() {

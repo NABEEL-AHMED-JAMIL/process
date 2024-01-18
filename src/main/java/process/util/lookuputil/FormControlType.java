@@ -9,7 +9,6 @@ public enum FormControlType {
 
     WEEK("WEEK", "week", "Week"),
     RANGE("RANGE", "range", "Range"),
-    HIDDEN("HIDDEN", "hidden", "Hidden"),
     FILE("FILE", "file", "File"),
     DATE("DATE", "date", "Date"),
     EMAIL("EMAIL","email", "Email"),
@@ -68,8 +67,6 @@ public enum FormControlType {
             formControlType = WEEK;
         } else if (lookupValue.equals(RANGE.lookupValue)) {
             formControlType = RANGE;
-        } else if (lookupValue.equals(HIDDEN.lookupValue)) {
-            formControlType = HIDDEN;
         } else if (lookupValue.equals(FILE.lookupValue)) {
             formControlType = FILE;
         } else if (lookupValue.equals(DATE.lookupValue)) {
@@ -115,8 +112,6 @@ public enum FormControlType {
             formControlType = WEEK;
         } else if (lookupValue.equals(RANGE.description)) {
             formControlType = RANGE;
-        } else if (lookupValue.equals(HIDDEN.description)) {
-            formControlType = HIDDEN;
         } else if (lookupValue.equals(FILE.description)) {
             formControlType = FILE;
         } else if (lookupValue.equals(DATE.description)) {

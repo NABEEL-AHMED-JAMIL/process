@@ -18,8 +18,6 @@ public class STTResponse {
     private GLookup status;
     private GLookup taskType;
     private GLookup defaultStt;
-    private GLookup homePage;
-    private String serviceId;
     private Long credentialId;
     private KafkaTaskTypeResponse kafkaTaskType;
     private ApiTaskTypeResponse apiTaskType;
@@ -73,22 +71,6 @@ public class STTResponse {
 
     public void setDefaultStt(GLookup defaultStt) {
         this.defaultStt = defaultStt;
-    }
-
-    public GLookup getHomePage() {
-        return homePage;
-    }
-
-    public void setHomePage(GLookup homePage) {
-        this.homePage = homePage;
-    }
-
-    public String getServiceId() {
-        return serviceId;
-    }
-
-    public void setServiceId(String serviceId) {
-        this.serviceId = serviceId;
     }
 
     public Long getCredentialId() {

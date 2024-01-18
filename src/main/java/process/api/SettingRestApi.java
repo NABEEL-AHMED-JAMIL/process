@@ -38,36 +38,36 @@ public class SettingRestApi {
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/dynamicQueryResponse", method = RequestMethod.POST)
-    public ResponseEntity<?> dynamicQueryResponse(@RequestBody QueryRequest queryRequest) {
+    public ResponseEntity<?> dynamicQueryResponse(@RequestBody QueryRequest payload) {
         try {
-            return new ResponseEntity<>(this.settingApiService.dynamicQueryResponse(queryRequest), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingApiService.dynamicQueryResponse(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while dynamicQueryResponse ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
      * Integration Status :- done
      * Api use to create the xml setting for source task
-     * @param xlmMakerRequest
+     * @param payload
      * @return ResponseEntity<?> xmlCreateChecker
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(path = "xmlCreateChecker",  method = RequestMethod.POST)
-    public ResponseEntity<?> xmlCreateChecker(@RequestBody ConfigurationMakerRequest xlmMakerRequest) {
+    public ResponseEntity<?> xmlCreateChecker(@RequestBody ConfigurationMakerRequest payload) {
         try {
-            if (xlmMakerRequest.getXmlTagsInfo() != null) {
+            if (payload.getXmlTagsInfo() != null) {
                 return new ResponseEntity<>(new AppResponse(ProcessUtil.SUCCESS,
-                    this.xmlOutTagInfoUtil.makeXml(xlmMakerRequest)), HttpStatus.OK);
+                    this.xmlOutTagInfoUtil.makeXml(payload)), HttpStatus.OK);
             } else {
                 return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "Wrong Input"), HttpStatus.OK);
             }
         } catch (Exception ex) {
             logger.error("An error occurred while xmlCreateChecker ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

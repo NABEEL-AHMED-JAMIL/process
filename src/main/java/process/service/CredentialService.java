@@ -8,14 +8,14 @@ import process.payload.response.AppResponse;
  */
 public interface CredentialService {
 
-    public AppResponse addCredential(CredentialRequest credentialRequest) throws Exception ;
+    public AppResponse addCredential(CredentialRequest payload) throws Exception ;
 
-    public AppResponse updateCredential(CredentialRequest credentialRequest) throws Exception ;
+    public AppResponse updateCredential(CredentialRequest payload) throws Exception ;
 
-    public AppResponse fetchAllCredential(CredentialRequest credentialRequest) throws Exception ;
+    public AppResponse fetchAllCredential(CredentialRequest payload) throws Exception ;
 
-    public AppResponse fetchCredentialByCredentialId(CredentialRequest credentialRequest) throws Exception ;
+    public AppResponse fetchCredentialByCredentialId(CredentialRequest payload) throws Exception ;
 
-    public AppResponse deleteCredential(CredentialRequest credentialRequest) throws Exception ;
+    public AppResponse deleteCredential(CredentialRequest payload) throws Exception ;
 
 }

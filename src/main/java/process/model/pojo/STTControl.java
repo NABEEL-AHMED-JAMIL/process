@@ -39,9 +39,6 @@ public class STTControl {
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "sttc_order")
-    private Long sttcOrder;
-
     // select,multiple select, need the lookup value
     @Column(name = "filed_type")
     private String filedType;
@@ -79,6 +76,9 @@ public class STTControl {
     @Column(name = "is_default",
         columnDefinition = "boolean default false")
     private Boolean isDefault;
+
+    @Column(name = "default_val")
+    private String defaultValue;
 
     @Column(name = "pattern")
     private String pattern;
@@ -126,14 +126,6 @@ public class STTControl {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public Long getSttcOrder() {
-        return sttcOrder;
-    }
-
-    public void setSttcOrder(Long sttcOrder) {
-        this.sttcOrder = sttcOrder;
     }
 
     public String getFiledType() {
@@ -222,6 +214,14 @@ public class STTControl {
 
     public void setDefault(Boolean aDefault) {
         isDefault = aDefault;
+    }
+
+    public String getDefaultValue() {
+        return defaultValue;
+    }
+
+    public void setDefaultValue(String defaultValue) {
+        this.defaultValue = defaultValue;
     }
 
     public String getPattern() {

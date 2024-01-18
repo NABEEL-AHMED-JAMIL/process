@@ -44,18 +44,18 @@ public class LookupDataRestApi {
      * api-status :- done
      * @apiName :- addLookupData
      * Api use to add the lookup data
-     * @param tempLookupData
+     * @param payload
      * @return ResponseEntity<?> addLookupData
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/addLookupData", method = RequestMethod.POST)
-    public ResponseEntity<?> addLookupData(@RequestBody LookupDataRequest tempLookupData) {
+    public ResponseEntity<?> addLookupData(@RequestBody LookupDataRequest payload) {
         try {
-            return new ResponseEntity<>(this.lookupDataCacheService.addLookupData(tempLookupData), HttpStatus.OK);
+            return new ResponseEntity<>(this.lookupDataCacheService.addLookupData(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -63,18 +63,18 @@ public class LookupDataRestApi {
      * api-status :- done
      * @apiName :- updateLookupData
      * Api use to update the lookup data
-     * @param tempLookupData
+     * @param payload
      * @return ResponseEntity<?> updateLookupData
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/updateLookupData", method = RequestMethod.PUT)
-    public ResponseEntity<?> updateLookupData(@RequestBody LookupDataRequest tempLookupData) {
+    public ResponseEntity<?> updateLookupData(@RequestBody LookupDataRequest payload) {
         try {
-            return new ResponseEntity<>(this.lookupDataCacheService.updateLookupData(tempLookupData), HttpStatus.OK);
+            return new ResponseEntity<>(this.lookupDataCacheService.updateLookupData(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -86,13 +86,13 @@ public class LookupDataRestApi {
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchAllLookup", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchAllLookup(@RequestBody LookupDataRequest tempLookupData) {
+    public ResponseEntity<?> fetchAllLookup(@RequestBody LookupDataRequest payload) {
         try {
-            return new ResponseEntity<>(this.lookupDataCacheService.fetchAllLookup(tempLookupData), HttpStatus.OK);
+            return new ResponseEntity<>(this.lookupDataCacheService.fetchAllLookup(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLookup ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -100,18 +100,18 @@ public class LookupDataRestApi {
      * api-status :- done
      * @apiName :- fetchSubLookupByParentId
      * Api use to fetch the sub-Lookup by parent lookup id
-     * @param lookupDataRequest
+     * @param payload
      * @return ResponseEntity<?> fetchSubLookupByParentId
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/fetchSubLookupByParentId", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchSubLookupByParentId(@RequestBody LookupDataRequest lookupDataRequest) {
+    public ResponseEntity<?> fetchSubLookupByParentId(@RequestBody LookupDataRequest payload) {
         try {
-            return new ResponseEntity<>(this.lookupDataCacheService.fetchSubLookupByParentId(lookupDataRequest), HttpStatus.OK);
+            return new ResponseEntity<>(this.lookupDataCacheService.fetchSubLookupByParentId(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSubLookupByParentId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -119,17 +119,17 @@ public class LookupDataRestApi {
      * api-status :- done
      * @apiName :- fetchLookupByLookupType
      * Api use to fetch the sub-Lookup by parent lookup type
-     * @param lookupDataRequest
+     * @param payload
      * @return ResponseEntity<?> fetchLookupByLookupType
      * */
     @RequestMapping(value = "/fetchLookupByLookupType", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchLookupByLookupType(@RequestBody LookupDataRequest lookupDataRequest) {
+    public ResponseEntity<?> fetchLookupByLookupType(@RequestBody LookupDataRequest payload) {
         try {
-            return new ResponseEntity<>(this.lookupDataCacheService.fetchLookupByLookupType(lookupDataRequest), HttpStatus.OK);
+            return new ResponseEntity<>(this.lookupDataCacheService.fetchLookupByLookupType(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLookupByLookupType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -137,18 +137,18 @@ public class LookupDataRestApi {
      * api-status :- done
      * @apiName :- deleteLookupData
      * Api use to delete the lookup data
-     * @param tempLookupData
+     * @param payload
      * @return ResponseEntity<?> deleteLookupData
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/deleteLookupData", method = RequestMethod.PUT)
-    public ResponseEntity<?> deleteLookupData(@RequestBody LookupDataRequest tempLookupData) {
+    public ResponseEntity<?> deleteLookupData(@RequestBody LookupDataRequest payload) {
         try {
-            return new ResponseEntity<>(this.lookupDataCacheService.deleteLookupData(tempLookupData), HttpStatus.OK);
+            return new ResponseEntity<>(this.lookupDataCacheService.deleteLookupData(payload), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -184,18 +184,18 @@ public class LookupDataRestApi {
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/downloadLookup", method = RequestMethod.POST)
-    public ResponseEntity<?> downloadLookup(@RequestBody LookupDataRequest tempLookupData) {
+    public ResponseEntity<?> downloadLookup(@RequestBody LookupDataRequest payload) {
         try {
             HttpHeaders headers = new HttpHeaders();
             DateFormat dateFormat = new SimpleDateFormat(ProcessUtil.SIMPLE_DATE_PATTERN);
             String fileName = "BatchLookupDownload-"+dateFormat.format(new Date())+"-"+ UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
             return ResponseEntity.ok().headers(headers).body(
-                this.lookupDataCacheService.downloadLookup(tempLookupData).toByteArray());
+                this.lookupDataCacheService.downloadLookup(payload).toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadLookup ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -207,16 +207,16 @@ public class LookupDataRestApi {
      * */
     @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/uploadLookup", method = RequestMethod.POST)
-    public ResponseEntity<?> uploadLookup(FileUploadRequest fileObject) {
+    public ResponseEntity<?> uploadLookup(FileUploadRequest payload) {
         try {
-            if (!ProcessUtil.isNull(fileObject.getFile())) {
-                return new ResponseEntity<>(this.lookupDataCacheService.uploadLookup(fileObject), HttpStatus.OK);
+            if (!ProcessUtil.isNull(payload.getFile())) {
+                return new ResponseEntity<>(this.lookupDataCacheService.uploadLookup(payload), HttpStatus.OK);
             }
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadLookup ", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
+        "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 

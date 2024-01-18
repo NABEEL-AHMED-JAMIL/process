@@ -39,9 +39,6 @@ public class STTSection {
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "stts_order")
-    private Long sttsOrder;
-
     @Column(name = "status",nullable = false)
     private Long status;
 
@@ -88,14 +85,6 @@ public class STTSection {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public Long getSttsOrder() {
-        return sttsOrder;
-    }
-
-    public void setSttsOrder(Long sttsOrder) {
-        this.sttsOrder = sttsOrder;
     }
 
     public Long getStatus() {

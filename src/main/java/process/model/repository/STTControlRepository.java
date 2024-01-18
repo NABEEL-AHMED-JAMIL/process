@@ -5,8 +5,6 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.STTControl;
 import process.model.projection.STTCProjection;
-
-import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,7 +12,6 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  */
 @Repository
-@Transactional
 public interface STTControlRepository extends CrudRepository<STTControl, Long> {
 
     @Query(value = "select sttc.*\n" +
@@ -23,7 +20,7 @@ public interface STTControlRepository extends CrudRepository<STTControl, Long> {
         "where sttc.sttc_id = ?1 and au.username = ?2 and sttc.status != ?3", nativeQuery = true)
     public Optional<STTControl> findBySttcIdAndAppUserUsernameAndStatusNotIn(Long sttcId, String username, Long status);
 
-    @Query(value = "select sc.sttc_id as sttcId, sc.sttc_order as sttcOrder, sc.sttc_name as sttcName,\n" +
+    @Query(value = "select sc.sttc_id as sttcId, sc.sttc_name as sttcName,\n" +
         "sc.filed_name as filedName, sc.filed_type as filedType, sc.status as status, \n" +
         "case when sc.is_default then true else false  end as sttcDefault,\n" +
         "case when sc.mandatory then true else false  end as mandatory,\n" +

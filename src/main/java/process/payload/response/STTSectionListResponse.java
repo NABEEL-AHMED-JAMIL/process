@@ -16,7 +16,6 @@ public class STTSectionListResponse {
     private Long sttsId;
     private String sttsName;
     private String description;
-    private Long sttsOrder;
     private GLookup status;
     private GLookup sttsDefault;
     private Timestamp dateCreated;
@@ -48,14 +47,6 @@ public class STTSectionListResponse {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public Long getSttsOrder() {
-        return sttsOrder;
-    }
-
-    public void setSttsOrder(Long sttsOrder) {
-        this.sttsOrder = sttsOrder;
     }
 
     public GLookup getStatus() {

@@ -32,6 +32,9 @@ public class STTFLinkSTT {
     @GeneratedValue(generator = "auSttfSequenceGenerator")
     private Long auSttfId;
 
+    @Column(name = "sttf_order", nullable = false)
+    private Long sttfOrder;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "sttf_id", nullable = false)
     private STTForm sttf;
@@ -67,6 +70,14 @@ public class STTFLinkSTT {
 
     public void setAuSttfId(Long auSttfId) {
         this.auSttfId = auSttfId;
+    }
+
+    public Long getSttfOrder() {
+        return sttfOrder;
+    }
+
+    public void setSttfOrder(Long sttfOrder) {
+        this.sttfOrder = sttfOrder;
     }
 
     public STTForm getSttf() {

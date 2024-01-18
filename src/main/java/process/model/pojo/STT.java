@@ -39,14 +39,9 @@ public class STT {
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "task_type", nullable = false, updatable = false)
+    @Column(name = "task_type",
+        nullable = false, updatable = false)
     private Long taskType;
-
-    @Column(name = "home_page")
-    private String homePage;
-
-    @Column(name = "service_id", unique = true)
-    private String serviceId;
 
     @OneToMany(mappedBy = "stt")
     private List<ApiTaskType> apiTaskType = new ArrayList<>();
@@ -117,22 +112,6 @@ public class STT {
 
     public void setTaskType(Long taskType) {
         this.taskType = taskType;
-    }
-
-    public String getHomePage() {
-        return homePage;
-    }
-
-    public void setHomePage(String homePage) {
-        this.homePage = homePage;
-    }
-
-    public String getServiceId() {
-        return serviceId;
-    }
-
-    public void setServiceId(String serviceId) {
-        this.serviceId = serviceId;
     }
 
     public List<ApiTaskType> getApiTaskType() {

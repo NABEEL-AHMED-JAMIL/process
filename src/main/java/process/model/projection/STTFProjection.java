@@ -13,6 +13,8 @@ public interface STTFProjection {
     public Long getStatus();
     public Long getFormType();
     public Boolean getSttFDefault();
+    public String getHomePage();
+    public String getServiceId();
     public Timestamp getDateCreated();
     public Long getTotalStt();
     public Long getTotalSection();

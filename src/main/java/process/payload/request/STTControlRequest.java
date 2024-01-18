@@ -12,7 +12,6 @@ import com.google.gson.Gson;
 public class STTControlRequest {
 
     private Long sttcId;
-    private Long sttcOrder; // yes
     private String sttcName; // yes
     private String filedType; // yes
     private String filedTitle; // yes
@@ -26,6 +25,7 @@ public class STTControlRequest {
     private boolean mandatory; // yes
     private boolean sttcDisabled;
     private boolean sttcDefault; // yes
+    private String defaultValue;
     private String pattern;
     private Long status;
     private ParseRequest accessUserDetail;
@@ -39,14 +39,6 @@ public class STTControlRequest {
 
     public void setSttcId(Long sttcId) {
         this.sttcId = sttcId;
-    }
-
-    public Long getSttcOrder() {
-        return sttcOrder;
-    }
-
-    public void setSttcOrder(Long sttcOrder) {
-        this.sttcOrder = sttcOrder;
     }
 
     public String getSttcName() {
@@ -151,6 +143,14 @@ public class STTControlRequest {
 
     public void setSttcDefault(boolean sttcDefault) {
         this.sttcDefault = sttcDefault;
+    }
+
+    public String getDefaultValue() {
+        return defaultValue;
+    }
+
+    public void setDefaultValue(String defaultValue) {
+        this.defaultValue = defaultValue;
     }
 
     public String getPattern() {

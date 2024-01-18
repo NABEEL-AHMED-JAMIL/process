@@ -21,10 +21,10 @@ public class STTCLinkSTTSListResponse {
     private Long sttsId;
     private String sttsName;
     private String description;
-    private Long sttsOrder;
     private GLookup sttsDefault;
     private GLookup status;
     private Timestamp dateCreated;
+    private Long sttcOrder;
 
     public STTCLinkSTTSListResponse() {
     }
@@ -85,14 +85,6 @@ public class STTCLinkSTTSListResponse {
         this.description = description;
     }
 
-    public Long getSttsOrder() {
-        return sttsOrder;
-    }
-
-    public void setSttsOrder(Long sttsOrder) {
-        this.sttsOrder = sttsOrder;
-    }
-
     public GLookup getSttsDefault() {
         return sttsDefault;
     }
@@ -115,6 +107,14 @@ public class STTCLinkSTTSListResponse {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Long getSttcOrder() {
+        return sttcOrder;
+    }
+
+    public void setSttcOrder(Long sttcOrder) {
+        this.sttcOrder = sttcOrder;
     }
 
     @Override

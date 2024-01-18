@@ -14,6 +14,7 @@ public class STTCLinkSTTSRequest {
     private Long auSttcId;
     private Long sttsId;
     private Long sttcId;
+    private Long sttcOrder;
     private Long appUserId;
     private ParseRequest accessUserDetail; // yes
 
@@ -41,6 +42,14 @@ public class STTCLinkSTTSRequest {
 
     public void setSttcId(Long sttcId) {
         this.sttcId = sttcId;
+    }
+
+    public Long getSttcOrder() {
+        return sttcOrder;
+    }
+
+    public void setSttcOrder(Long sttcOrder) {
+        this.sttcOrder = sttcOrder;
     }
 
     public Long getAppUserId() {

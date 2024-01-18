@@ -10,7 +10,6 @@ public interface STTSProjection {
     public Long getSttsId();
     public String getSttsName();
     public String getDescription();
-    public Long getSttsOrder();
     public Long getStatus();
     public Boolean getSttsDefault();
     public Timestamp getDateCreated();

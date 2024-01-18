@@ -11,21 +11,24 @@ import java.sql.Timestamp;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class STTFLinkSTTListResponse {
+public class STTLinkSTTFListResponse {
 
     private Long sttfLinkSttId;
     private Long appUserid;
     private String username;
     private String email;
-    private Long sttId;
-    private String serviceName;
-    private GLookup taskType;
-    private GLookup sttDefault;
+    private Long sttfId;
+    private String sttfName;
+    private String description;
+    private GLookup formType;
+    private GLookup defaultSttf;
+    private GLookup homePage;
+    private String serviceId;
     private GLookup status;
     private Timestamp dateCreated;
     private Long sttfOrder;
 
-    public STTFLinkSTTListResponse() {
+    public STTLinkSTTFListResponse() {
     }
 
     public Long getSttfLinkSttId() {
@@ -60,36 +63,60 @@ public class STTFLinkSTTListResponse {
         this.email = email;
     }
 
-    public Long getSttId() {
-        return sttId;
+    public Long getSttfId() {
+        return sttfId;
     }
 
-    public void setSttId(Long sttId) {
-        this.sttId = sttId;
+    public void setSttfId(Long sttfId) {
+        this.sttfId = sttfId;
     }
 
-    public String getServiceName() {
-        return serviceName;
+    public String getSttfName() {
+        return sttfName;
     }
 
-    public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
+    public void setSttfName(String sttfName) {
+        this.sttfName = sttfName;
     }
 
-    public GLookup getTaskType() {
-        return taskType;
+    public String getDescription() {
+        return description;
     }
 
-    public void setTaskType(GLookup taskType) {
-        this.taskType = taskType;
+    public void setDescription(String description) {
+        this.description = description;
     }
 
-    public GLookup getSttDefault() {
-        return sttDefault;
+    public GLookup getFormType() {
+        return formType;
     }
 
-    public void setSttDefault(GLookup sttDefault) {
-        this.sttDefault = sttDefault;
+    public void setFormType(GLookup formType) {
+        this.formType = formType;
+    }
+
+    public GLookup getDefaultSttf() {
+        return defaultSttf;
+    }
+
+    public void setDefaultSttf(GLookup defaultSttf) {
+        this.defaultSttf = defaultSttf;
+    }
+
+    public GLookup getHomePage() {
+        return homePage;
+    }
+
+    public void setHomePage(GLookup homePage) {
+        this.homePage = homePage;
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
     }
 
     public GLookup getStatus() {
@@ -120,5 +147,4 @@ public class STTFLinkSTTListResponse {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 }

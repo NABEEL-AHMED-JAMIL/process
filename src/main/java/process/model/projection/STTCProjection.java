@@ -8,7 +8,6 @@ import java.sql.Timestamp;
 public interface STTCProjection {
 
     public Long getSttcId();
-    public Long getSttcOrder();
     public String getSttcName();
     public String getFiledName();
     public String getFiledType();

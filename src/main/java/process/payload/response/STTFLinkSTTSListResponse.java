@@ -11,29 +11,28 @@ import java.sql.Timestamp;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class STTFLinkSTTListResponse {
+public class STTFLinkSTTSListResponse {
 
-    private Long sttfLinkSttId;
+    private Long sttfLinkSttsId;
     private Long appUserid;
     private String username;
     private String email;
-    private Long sttId;
-    private String serviceName;
-    private GLookup taskType;
-    private GLookup sttDefault;
+    private Long sttsId;
+    private String sttsName;
+    private Long sttsOrder;
+    private GLookup sttsDefault;
     private GLookup status;
     private Timestamp dateCreated;
-    private Long sttfOrder;
 
-    public STTFLinkSTTListResponse() {
+    public STTFLinkSTTSListResponse() {
     }
 
-    public Long getSttfLinkSttId() {
-        return sttfLinkSttId;
+    public Long getSttfLinkSttsId() {
+        return sttfLinkSttsId;
     }
 
-    public void setSttfLinkSttId(Long sttfLinkSttId) {
-        this.sttfLinkSttId = sttfLinkSttId;
+    public void setSttfLinkSttsId(Long sttfLinkSttsId) {
+        this.sttfLinkSttsId = sttfLinkSttsId;
     }
 
     public Long getAppUserid() {
@@ -60,36 +59,36 @@ public class STTFLinkSTTListResponse {
         this.email = email;
     }
 
-    public Long getSttId() {
-        return sttId;
+    public Long getSttsId() {
+        return sttsId;
     }
 
-    public void setSttId(Long sttId) {
-        this.sttId = sttId;
+    public void setSttsId(Long sttsId) {
+        this.sttsId = sttsId;
     }
 
-    public String getServiceName() {
-        return serviceName;
+    public String getSttsName() {
+        return sttsName;
     }
 
-    public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
+    public void setSttsName(String sttsName) {
+        this.sttsName = sttsName;
     }
 
-    public GLookup getTaskType() {
-        return taskType;
+    public Long getSttsOrder() {
+        return sttsOrder;
     }
 
-    public void setTaskType(GLookup taskType) {
-        this.taskType = taskType;
+    public void setSttsOrder(Long sttsOrder) {
+        this.sttsOrder = sttsOrder;
     }
 
-    public GLookup getSttDefault() {
-        return sttDefault;
+    public GLookup getSttsDefault() {
+        return sttsDefault;
     }
 
-    public void setSttDefault(GLookup sttDefault) {
-        this.sttDefault = sttDefault;
+    public void setSttsDefault(GLookup sttsDefault) {
+        this.sttsDefault = sttsDefault;
     }
 
     public GLookup getStatus() {
@@ -108,17 +107,8 @@ public class STTFLinkSTTListResponse {
         this.dateCreated = dateCreated;
     }
 
-    public Long getSttfOrder() {
-        return sttfOrder;
-    }
-
-    public void setSttfOrder(Long sttfOrder) {
-        this.sttfOrder = sttfOrder;
-    }
-
     @Override
     public String toString() {
         return new Gson().toJson(this);
     }
-
 }
