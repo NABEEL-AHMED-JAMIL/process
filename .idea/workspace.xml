@@ -7,12 +7,9 @@
     <list default="true" id="d72000d1-6c13-4efd-b837-0f31e50e0ca8" name="Changes" comment="">
       <change afterPath="$PROJECT_DIR$/ext-detail/USATruckData.png" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/api/NotificationRestApi.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/config/WebSocketConfig.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/efs/EfsFileExchange.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/efs/FileHashing.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/async/executor/AsyncDALTaskExecutor.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/async/properties/AsyncTaskProperties.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/consumer/CommonConsumer.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/consumer/TestConsumer.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/consumer/TruckDataConsumer.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/parser/FileAnalyticsData.java" afterDir="false" />
@@ -20,21 +17,15 @@
       <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/parser/TruckData.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/task/TestLoopTask.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/engine/task/USATruckDataTask.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/model/service/DashboardApiService.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/mongo/documents/FileInfo.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/mongo/documents/HashMeta.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/mongo/documents/RawData.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/mongo/repository/FileInfoRepository.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/MessageQSearchRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/QueueMessageStatusRequest.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/payload/request/SearchTextRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/JobStatusStatisticRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/WeeklyHrJobDimensionStatisticsRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/payload/response/WeeklyJobStatisticsResponse.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/socket/GlobalProperties.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/socket/payload/Message.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/java/process/socket/service/NotificationService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/process/util/ProcessTimeUtil.java" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/resources/logback.xml" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/resources/templates/complete_job.vm" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/src/main/resources/templates/fail_job.vm" afterDir="false" />
@@ -42,47 +33,20 @@
       <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/ModelApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/ModelApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/AppUserRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/AppUserRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/AuthRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/AuthRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/CredentialRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/CredentialRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/LookupDataRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/LookupDataRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/MessageQRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/MessageQRestApi.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/api/SettingRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/SettingRestApi.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/api/SourceTaskTypeRestApi.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/api/SourceTaskTypeRestApi.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/config/KafkaProducerConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/config/KafkaProducerConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/config/WebSecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/config/WebSecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/emailer/EmailMessagesFactory.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/emailer/EmailMessagesFactory.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/engine/BulkAction.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/engine/BulkAction.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/engine/ProducerBulkEngine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/engine/ProducerBulkEngine.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/engine/cron/ProcessCron.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/engine/cron/ProcessCron.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/model/dto/SourceJobDto.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/dto/SourceJobDto.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/model/dto/SourceJobQueueDto.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/dto/SourceJobQueueDto.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/model/dto/WeeklyHrJobDimensionStatisticsDto.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/dto/WeeklyHrJobDimensionStatisticsDto.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/model/enums/JobStatus.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/enums/JobStatus.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/JobAuditLogs.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/JobAuditLogs.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/pojo/JobQueue.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/pojo/JobQueue.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/repository/JobQueueRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/repository/JobQueueRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/service/MessageQApiService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/MessageQApiService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/service/impl/DashboardApiServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/DashboardApiServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/service/impl/MessageQApiServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/MessageQApiServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/model/service/impl/QueryService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/QueryService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/model/service/impl/SourceJobApiServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/SourceJobApiServiceImpl.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/model/service/impl/TransactionServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/TransactionServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/AppUserService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/AppUserService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/service/CredentialService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/CredentialService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/LookupDataCacheService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/LookupDataCacheService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/SettingApiService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/SettingApiService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/SourceTaskTypeService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/SourceTaskTypeService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/AppUserServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/AppUserServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/CredentialServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/CredentialServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/LookupDataCacheServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/LookupDataCacheServiceImpl.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/QueryService.java" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/SettingApiServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/SettingApiServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/service/imp/SourceTaskTypeServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/model/service/impl/SourceTaskTypeServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/ProcessUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/ProcessUtil.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/process/util/XmlOutTagInfoUtil.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/XmlOutTagInfoUtil.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/process/util/validation/JobDetailValidation.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/process/util/validation/JobDetailValidation.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
@@ -119,17 +83,17 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;Merging process-v2&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/Project/process/src/main/java/process/model/pojo&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;inlay.hints&quot;,
-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "UI-MODIFY-ANALAYTICS-SCREEN",
+    "last_opened_file_path": "D:/Project/process/src/main/java/process/model/pojo",
+    "settings.editor.selected.configurable": "inlay.hints",
+    "show.migrate.to.gradle.popup": "false"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\Project\process\src\main\java\process\model\pojo" />
