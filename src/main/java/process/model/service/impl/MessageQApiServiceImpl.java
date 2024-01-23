@@ -7,18 +7,17 @@ import org.springframework.stereotype.Service;
 import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
 import process.engine.async.executor.AsyncDALTaskExecutor;
-import process.model.dto.*;
 import process.model.enums.JobStatus;
+import process.model.payload.response.JobStatusStatisticResponse;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQApiService;
-import process.payload.request.MessageQSearchRequest;
-import process.payload.request.QueueMessageStatusRequest;
-import process.payload.response.AppResponse;
+import process.model.payload.request.MessageQSearchRequest;
+import process.model.payload.request.QueueMessageStatusRequest;
+import process.model.payload.response.AppResponse;
 import process.util.ProcessUtil;
-
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -118,10 +117,10 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             objectMap.put(SOURCE_JOB_QUEUES, sourceJobQueues);
             result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, true));
             if (!isNull(result) && result.size() > 0) {
-                List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
+                List<JobStatusStatisticResponse> jobStatusStatistic = new ArrayList<>();
                 for(Object[] obj : result) {
                     int index = 0;
-                    jobStatusStatistic.add(new JobStatusStatisticDto(
+                    jobStatusStatistic.add(new JobStatusStatisticResponse(
                         String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
                 }
                 objectMap.put(JOB_STATUS_STATISTICS, jobStatusStatistic);
@@ -143,14 +142,15 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             if (!jobQueue.get().getJobStatus().equals(JobStatus.Queue)) {
                 return new AppResponse(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
             }
-            this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
+            this.bulkAction.changeJobStatus(jobQueue.get().getSourceJob().getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(),
-                String.format("Job %s fail by manual.", jobQueue.get().getJobId()));
+                String.format("Job %s fail by manual.", jobQueue.get().getSourceJob().getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
-            SourceJob sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId()).get();
+            SourceJob sourceJob = this.sourceJobRepository.findById(jobQueue.get().getSourceJob().getJobId()).get();
             if (sourceJob.isSkipJob()) {
-                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
+                this.emailMessagesFactory.sendSourceJobEmail(
+                    this.emailMessagesFactory.getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
             }
             return new AppResponse(SUCCESS, "JobQueue successfully Update.", jobQId);
         }
@@ -164,10 +164,10 @@ public class MessageQApiServiceImpl implements MessageQApiService {
         }
         Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(jobQId);
         if (jobQueue.isPresent()) {
-            this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
+            this.bulkAction.changeJobStatus(jobQueue.get().getSourceJob().getJobId(), JobStatus.Interrupt);
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(),
-                String.format("Job %s interrupted.", jobQueue.get().getJobId()));
+                String.format("Job %s interrupted.", jobQueue.get().getSourceJob().getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
             return new AppResponse(SUCCESS, "JobQueue successfully Update.", jobQId);
         }

@@ -37,7 +37,7 @@ public class TruckDataConsumer extends CommonConsumer {
         try {
             logger.info("TruckDataConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
                 consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-            Thread.sleep(1000);
+            Thread.sleep(500);
             JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
             this.usaTruckDataTask.setData(this.fillTaskDetail(convertedObject));
             this.getAsyncDALTaskExecutor().addTask(this.usaTruckDataTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());

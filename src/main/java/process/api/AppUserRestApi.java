@@ -8,10 +8,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import process.payload.request.FileUploadRequest;
-import process.payload.request.SignupRequest;
-import process.payload.request.UpdateUserProfileRequest;
-import process.payload.response.AppResponse;
+import process.model.payload.request.FileUploadRequest;
+import process.model.payload.request.SignupRequest;
+import process.model.payload.request.UpdateUserProfileRequest;
+import process.model.payload.response.AppResponse;
 import process.model.service.AppUserService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
@@ -66,7 +66,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while getAppUserProfile ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -85,7 +85,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateAppUserProfile ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -123,7 +123,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while updateAppUserTimeZone ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -142,7 +142,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while closeAppUserAccount ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -161,7 +161,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while getSubAppUserAccount ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -180,7 +180,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while addEditAppUserAccount ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

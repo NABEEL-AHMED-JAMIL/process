@@ -13,9 +13,9 @@ import process.model.repository.LookupDataRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardApiService;
-import process.payload.response.AppResponse;
-import process.payload.response.JobStatusStatisticRequest;
-import process.payload.response.WeeklyJobStatisticsResponse;
+import process.model.payload.response.AppResponse;
+import process.model.payload.response.JobStatusStatisticResponse;
+import process.model.payload.response.WeeklyJobStatisticsResponse;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -43,10 +43,10 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public AppResponse jobStatusStatistics() throws Exception {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobStatusStatistics());
         if (!isNull(result) && result.size() > 0) {
-            List<JobStatusStatisticRequest> jobStatusStatistic = new ArrayList<>();
+            List<JobStatusStatisticResponse> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
-                jobStatusStatistic.add(new JobStatusStatisticRequest(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
+                jobStatusStatistic.add(new JobStatusStatisticResponse(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
             return new AppResponse(SUCCESS, "Data found for jobStatusStatistics.", jobStatusStatistic);
         }
@@ -57,10 +57,10 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public AppResponse jobRunningStatistics() throws Exception {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobRunningStatistics());
         if (!isNull(result) && result.size() > 0) {
-            List<JobStatusStatisticRequest> jobStatusStatistic = new ArrayList<>();
+            List<JobStatusStatisticResponse> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
-                jobStatusStatistic.add(new JobStatusStatisticRequest(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
+                jobStatusStatistic.add(new JobStatusStatisticResponse(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
             return new AppResponse(SUCCESS, "Data found for jobRunningStatistics.", jobStatusStatistic);
         }
@@ -71,10 +71,10 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public AppResponse weeklyRunningJobStatistics(String startDate, String endDate) throws Exception {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyRunningJobStatistics(startDate, endDate));
         if (!isNull(result) && result.size() > 0) {
-            List<JobStatusStatisticRequest> jobStatusStatistic = new ArrayList<>();
+            List<JobStatusStatisticResponse> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
-                jobStatusStatistic.add(new JobStatusStatisticRequest(obj[index].toString().trim(), Integer.valueOf(obj[++index].toString())));
+                jobStatusStatistic.add(new JobStatusStatisticResponse(obj[index].toString().trim(), Integer.valueOf(obj[++index].toString())));
             }
             return new AppResponse(SUCCESS, "Data found for weeklyRunningJobStatistics.", jobStatusStatistic);
         }

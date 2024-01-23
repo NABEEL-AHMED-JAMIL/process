@@ -1,6 +1,6 @@
 package process.model.service;
 
-import process.payload.response.AppResponse;
+import process.model.payload.response.AppResponse;
 
 /**
  * @author Nabeel Ahmed

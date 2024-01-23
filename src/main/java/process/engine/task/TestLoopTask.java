@@ -8,9 +8,8 @@ import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
 import com.google.gson.Gson;
 import process.engine.parser.TestLoop;
-import process.model.dto.SourceJobQueueDto;
-import process.model.dto.SourceTaskDto;
 import process.model.enums.JobStatus;
+import process.model.payload.response.SourceJobQueueResponse;
 import process.model.service.impl.TransactionServiceImpl;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
@@ -45,7 +44,7 @@ public class TestLoopTask implements Runnable {
     @Override
     public void run() {
         // change the status into the running status
-        SourceJobQueueDto jobQueue = (SourceJobQueueDto) this.getData().get(ProcessUtil.JOB_QUEUE);
+        SourceJobQueueResponse jobQueue = (SourceJobQueueResponse) this.getData().get(ProcessUtil.JOB_QUEUE);
         SourceTaskDto sourceTaskDto = (SourceTaskDto) this.getData().get(ProcessUtil.TASK_DETAIL);
         try {
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Running);

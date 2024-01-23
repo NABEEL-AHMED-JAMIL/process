@@ -1,9 +1,9 @@
 package process.model.service;
 
-import process.payload.request.FileUploadRequest;
-import process.payload.request.LookupDataRequest;
-import process.payload.response.AppResponse;
-import process.payload.response.LookupDataResponse;
+import process.model.payload.request.FileUploadRequest;
+import process.model.payload.request.LookupDataRequest;
+import process.model.payload.response.AppResponse;
+import process.model.payload.response.LookupDataResponse;
 import java.io.ByteArrayOutputStream;
 
 /**

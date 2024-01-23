@@ -1,8 +1,8 @@
 package process.model.service;
 
-import process.payload.request.MessageQSearchRequest;
-import process.payload.request.QueueMessageStatusRequest;
-import process.payload.response.AppResponse;
+import process.model.payload.request.MessageQSearchRequest;
+import process.model.payload.request.QueueMessageStatusRequest;
+import process.model.payload.response.AppResponse;
 
 /**
  * @author Nabeel Ahmed

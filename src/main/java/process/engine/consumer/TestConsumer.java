@@ -36,7 +36,7 @@ public class TestConsumer extends CommonConsumer {
         try {
             logger.info("TestConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
                 consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-            Thread.sleep(1000);
+            Thread.sleep(500);
             JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
             this.helloWorldTask.setData(this.fillTaskDetail(convertedObject));
             this.getAsyncDALTaskExecutor().addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());

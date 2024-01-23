@@ -8,9 +8,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import process.engine.BulkAction;
 import process.model.service.MessageQApiService;
-import process.payload.request.MessageQSearchRequest;
-import process.payload.request.QueueMessageStatusRequest;
-import process.payload.response.AppResponse;
+import process.model.payload.request.MessageQSearchRequest;
+import process.model.payload.request.QueueMessageStatusRequest;
+import process.model.payload.response.AppResponse;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 

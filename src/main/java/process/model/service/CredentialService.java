@@ -1,7 +1,7 @@
 package process.model.service;
 
-import process.payload.request.CredentialRequest;
-import process.payload.response.AppResponse;
+import process.model.payload.request.CredentialRequest;
+import process.model.payload.response.AppResponse;
 
 /**
  * @author Nabeel Ahmed

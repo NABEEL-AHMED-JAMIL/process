@@ -6,11 +6,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
-import process.payload.request.ForgotPasswordRequest;
-import process.payload.request.PasswordResetRequest;
-import process.payload.request.SignupRequest;
-import process.payload.request.UpdateUserProfileRequest;
-import process.payload.response.LookupDataResponse;
+import process.model.enums.JobStatus;
+import process.model.payload.request.ForgotPasswordRequest;
+import process.model.payload.request.PasswordResetRequest;
+import process.model.payload.request.SignupRequest;
+import process.model.payload.request.UpdateUserProfileRequest;
+import process.model.payload.response.LookupDataResponse;
+import process.model.payload.response.SourceJobQueueResponse;
+import process.model.pojo.JobQueue;
 import process.security.jwt.JwtUtils;
 import process.model.service.LookupDataCacheService;
 import process.util.lookuputil.LookupDetailUtil;
@@ -46,30 +49,30 @@ public class EmailMessagesFactory {
      * @param jobStatus
      * @return String
      * */
-    public String sendSourceJobEmail(SourceJobQueueDto jobQueue, JobStatus jobStatus) {
+    public String sendSourceJobEmail(SourceJobQueueResponse jobQueue, JobStatus jobStatus) {
         try {
-            LookupDataDto lookupDataDto = this.lookupDataCacheService.getParentLookupById(ProcessUtil.EMAIL_RECEIVER);
+            LookupDataResponse lookupDataDto = this.lookupDataCacheService.getParentLookupById(ProcessUtil.EMAIL_RECEIVER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("job_id", jobQueue.getJobId());
             metaData.put("event_id", jobQueue.getJobQueueId());
             metaData.put("time_slot", jobQueue.getStartTime());
-            EmailMessageDto emailMessageDto = new EmailMessageDto();
-            emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
+            EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
+            emailMessageRequest.setRecipients(lookupDataDto.getLookupValue());
             if (jobStatus.equals(JobStatus.Skip)) {
                 metaData.put("status", JobStatus.Skip);
-                emailMessageDto.setSubject("Source Job Skip");
-                emailMessageDto.setEmailTemplateName(TemplateType.SKIP_JOB);
+                emailMessageRequest.setSubject("Source Job Skip");
+                emailMessageRequest.setEmailTemplateName(TemplateType.SKIP_JOB);
             } else if (jobStatus.equals(JobStatus.Completed)) {
                 metaData.put("status", JobStatus.Completed);
-                emailMessageDto.setSubject("Source Job Completed");
-                emailMessageDto.setEmailTemplateName(TemplateType.COMPLETE_JOB);
+                emailMessageRequest.setSubject("Source Job Completed");
+                emailMessageRequest.setEmailTemplateName(TemplateType.COMPLETE_JOB);
             } else if (jobStatus.equals(JobStatus.Failed)) {
                 metaData.put("status", JobStatus.Failed);
-                emailMessageDto.setSubject("Source Job Failed");
-                emailMessageDto.setEmailTemplateName(TemplateType.FAIL_JOB);
+                emailMessageRequest.setSubject("Source Job Failed");
+                emailMessageRequest.setEmailTemplateName(TemplateType.FAIL_JOB);
             }
-            emailMessageDto.setBodyMap(metaData);
-            return this.sendSimpleMail(emailMessageDto);
+            emailMessageRequest.setBodyMap(metaData);
+            return this.sendSimpleMail(emailMessageRequest);
         } catch (Exception ex) {
             logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
@@ -113,13 +116,13 @@ public class EmailMessagesFactory {
     public boolean sendForgotPassword(ForgotPasswordRequest forgotPasswordRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                    .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             LookupDataResponse resetPasswordLink = this.lookupDataCacheService
-                    .getParentLookupById(LookupDetailUtil.RESET_PASSWORD_LINK);
+                .getParentLookupById(LookupDetailUtil.RESET_PASSWORD_LINK);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", forgotPasswordRequest.getUsername());
             metaData.put("forgotPasswordPageUrl", resetPasswordLink.getLookupValue()+"?token="+
-                    this.jwtUtils.generateTokenFromUsername(forgotPasswordRequest.toString()));
+                this.jwtUtils.generateTokenFromUsername(forgotPasswordRequest.toString()));
             // email object
             EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
             emailMessageRequest.setFromEmail(senderEmail.getLookupValue());
@@ -142,7 +145,7 @@ public class EmailMessagesFactory {
     public boolean sendResetPassword(PasswordResetRequest passwordResetRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                    .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", passwordResetRequest.getUsername());
             // email object
@@ -194,7 +197,7 @@ public class EmailMessagesFactory {
     public boolean sendUpdateAppUserPassword(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                    .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", updateUserProfileRequest.getUsername());
             // email object
@@ -293,6 +296,14 @@ public class EmailMessagesFactory {
             logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
         }
+    }
+
+    public static SourceJobQueueResponse getSourceJobQueueDto(JobQueue jobQueue) {
+        SourceJobQueueResponse sourceJobQueueResponse = new SourceJobQueueResponse();
+        sourceJobQueueResponse.setJobId(jobQueue.getSourceJob().getJobId());
+        sourceJobQueueResponse.setJobQueueId(jobQueue.getJobQueueId());
+        sourceJobQueueResponse.setStartTime(jobQueue.getStartTime());
+        return sourceJobQueueResponse;
     }
 
 }

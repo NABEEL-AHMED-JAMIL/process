@@ -1,8 +1,7 @@
 package process.model.service;
 
-import org.springframework.web.bind.annotation.RequestBody;
-import process.payload.request.*;
-import process.payload.response.AppResponse;
+import process.model.payload.request.*;
+import process.model.payload.response.AppResponse;
 
 import java.io.ByteArrayOutputStream;
 

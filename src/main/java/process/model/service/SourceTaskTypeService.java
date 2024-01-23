@@ -1,8 +1,8 @@
 package process.model.service;
 
 import process.model.pojo.LookupData;
-import process.payload.request.*;
-import process.payload.response.AppResponse;
+import process.model.payload.request.*;
+import process.model.payload.response.AppResponse;
 import process.util.lookuputil.GLookup;
 import java.io.ByteArrayOutputStream;
 import java.util.Optional;

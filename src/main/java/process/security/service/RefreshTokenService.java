@@ -6,8 +6,8 @@ import org.springframework.stereotype.Service;
 import process.model.pojo.RefreshToken;
 import process.model.repository.AppUserRepository;
 import process.model.repository.RefreshTokenRepository;
-import process.payload.request.TokenRefreshRequest;
-import process.payload.response.AppResponse;
+import process.model.payload.request.TokenRefreshRequest;
+import process.model.payload.response.AppResponse;
 import process.util.ProcessUtil;
 import process.util.lookuputil.Status;
 

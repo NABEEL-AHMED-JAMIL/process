@@ -131,6 +131,22 @@ public class JobQueue {
         this.jobStatus = jobStatus;
     }
 
+    public SourceJob getSourceJob() {
+        return sourceJob;
+    }
+
+    public void setSourceJob(SourceJob sourceJob) {
+        this.sourceJob = sourceJob;
+    }
+
+    public AppUser getAppUser() {
+        return appUser;
+    }
+
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
+    }
+
     public String getJobStatusMessage() {
         return jobStatusMessage;
     }

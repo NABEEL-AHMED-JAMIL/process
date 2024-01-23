@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
-import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
@@ -61,7 +60,7 @@ public class BulkAction {
     public void changeJobQueueEndDate(Long jobQueueId, LocalDateTime endTime) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
         jobQueue.get().setEndTime(endTime);
-        jobQueue.get().setJobStatusMessage(String.format("Job %s now complete.", jobQueue.get().getJobId()));
+        jobQueue.get().setJobStatusMessage(String.format("Job %s now complete.", jobQueue.get().getSourceJob().getJobId()));
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
 

@@ -16,7 +16,6 @@ import process.efs.EfsFileExchange;
 import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
 import process.engine.parser.TruckData;
-import process.model.dto.SourceJobQueueDto;
 import process.model.dto.SourceTaskDto;
 import process.model.enums.JobStatus;
 import process.model.service.impl.TransactionServiceImpl;
