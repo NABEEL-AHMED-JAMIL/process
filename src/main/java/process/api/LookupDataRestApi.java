@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import process.payload.request.FileUploadRequest;
 import process.payload.request.LookupDataRequest;
 import process.payload.response.AppResponse;
-import process.service.LookupDataCacheService;
+import process.model.service.LookupDataCacheService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.text.DateFormat;

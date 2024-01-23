@@ -68,7 +68,7 @@ public class JobQueue {
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
 
-    @Column(name = "job_status_message")
+    @Column(name = "job_status_message", length = 2500)
     private String jobStatusMessage;
 
     @Column(name = "skip_manual")
@@ -129,22 +129,6 @@ public class JobQueue {
 
     public void setJobStatus(JobStatus jobStatus) {
         this.jobStatus = jobStatus;
-    }
-
-    public SourceJob getSourceJob() {
-        return sourceJob;
-    }
-
-    public void setSourceJob(SourceJob sourceJob) {
-        this.sourceJob = sourceJob;
-    }
-
-    public AppUser getAppUser() {
-        return appUser;
-    }
-
-    public void setAppUser(AppUser appUser) {
-        this.appUser = appUser;
     }
 
     public String getJobStatusMessage() {

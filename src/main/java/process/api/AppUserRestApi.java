@@ -12,7 +12,7 @@ import process.payload.request.FileUploadRequest;
 import process.payload.request.SignupRequest;
 import process.payload.request.UpdateUserProfileRequest;
 import process.payload.response.AppResponse;
-import process.service.AppUserService;
+import process.model.service.AppUserService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.text.DateFormat;

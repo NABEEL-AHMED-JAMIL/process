@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import process.payload.request.ConfigurationMakerRequest;
 import process.payload.request.QueryRequest;
 import process.payload.response.AppResponse;
-import process.service.SettingApiService;
+import process.model.service.SettingApiService;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
 import process.util.exception.ExceptionUtil;

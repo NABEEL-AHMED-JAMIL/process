@@ -12,7 +12,7 @@ import process.payload.request.SignupRequest;
 import process.payload.request.UpdateUserProfileRequest;
 import process.payload.response.LookupDataResponse;
 import process.security.jwt.JwtUtils;
-import process.service.LookupDataCacheService;
+import process.model.service.LookupDataCacheService;
 import process.util.lookuputil.LookupDetailUtil;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
@@ -41,8 +41,46 @@ public class EmailMessagesFactory {
     private LookupDataCacheService lookupDataCacheService;
 
     /**
-     * sendRegisterUser method use on user register.
+     * method using to send the mail
+     * @param jobQueue
+     * @param jobStatus
+     * @return String
+     * */
+    public String sendSourceJobEmail(SourceJobQueueDto jobQueue, JobStatus jobStatus) {
+        try {
+            LookupDataDto lookupDataDto = this.lookupDataCacheService.getParentLookupById(ProcessUtil.EMAIL_RECEIVER);
+            Map<String, Object> metaData = new HashMap<>();
+            metaData.put("job_id", jobQueue.getJobId());
+            metaData.put("event_id", jobQueue.getJobQueueId());
+            metaData.put("time_slot", jobQueue.getStartTime());
+            EmailMessageDto emailMessageDto = new EmailMessageDto();
+            emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
+            if (jobStatus.equals(JobStatus.Skip)) {
+                metaData.put("status", JobStatus.Skip);
+                emailMessageDto.setSubject("Source Job Skip");
+                emailMessageDto.setEmailTemplateName(TemplateType.SKIP_JOB);
+            } else if (jobStatus.equals(JobStatus.Completed)) {
+                metaData.put("status", JobStatus.Completed);
+                emailMessageDto.setSubject("Source Job Completed");
+                emailMessageDto.setEmailTemplateName(TemplateType.COMPLETE_JOB);
+            } else if (jobStatus.equals(JobStatus.Failed)) {
+                metaData.put("status", JobStatus.Failed);
+                emailMessageDto.setSubject("Source Job Failed");
+                emailMessageDto.setEmailTemplateName(TemplateType.FAIL_JOB);
+            }
+            emailMessageDto.setBodyMap(metaData);
+            return this.sendSimpleMail(emailMessageDto);
+        } catch (Exception ex) {
+            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            return "Error while Sending Mail";
+        }
+    }
+
+
+    /**
+     * method using to send the mail
      * @param signUpRequest
+     * @return String
      * */
     public boolean sendRegisterUser(SignupRequest signUpRequest) {
         try {
@@ -75,13 +113,13 @@ public class EmailMessagesFactory {
     public boolean sendForgotPassword(ForgotPasswordRequest forgotPasswordRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+                    .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             LookupDataResponse resetPasswordLink = this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.RESET_PASSWORD_LINK);
+                    .getParentLookupById(LookupDetailUtil.RESET_PASSWORD_LINK);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", forgotPasswordRequest.getUsername());
             metaData.put("forgotPasswordPageUrl", resetPasswordLink.getLookupValue()+"?token="+
-                this.jwtUtils.generateTokenFromUsername(forgotPasswordRequest.toString()));
+                    this.jwtUtils.generateTokenFromUsername(forgotPasswordRequest.toString()));
             // email object
             EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
             emailMessageRequest.setFromEmail(senderEmail.getLookupValue());
@@ -104,7 +142,7 @@ public class EmailMessagesFactory {
     public boolean sendResetPassword(PasswordResetRequest passwordResetRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+                    .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", passwordResetRequest.getUsername());
             // email object
@@ -129,7 +167,7 @@ public class EmailMessagesFactory {
     public boolean sendUpdateAppUserProfile(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+                    .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", updateUserProfileRequest.getUsername());
             metaData.put("firstName", updateUserProfileRequest.getFirstName());
@@ -156,7 +194,7 @@ public class EmailMessagesFactory {
     public boolean sendUpdateAppUserPassword(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
             LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+                    .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", updateUserProfileRequest.getUsername());
             // email object
@@ -180,14 +218,12 @@ public class EmailMessagesFactory {
      * */
     public boolean sendUpdateAppUserTimeZone(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
-            LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+            LookupDataResponse senderEmail = this.lookupDataCacheService.getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", updateUserProfileRequest.getUsername());
             if (!ProcessUtil.isNull(updateUserProfileRequest.getTimeZone())) {
-                LookupDataResponse timeZoneLookup = this.lookupDataCacheService
-                    .getChildLookupById(LookupDetailUtil.SCHEDULER_TIMEZONE,
-                    updateUserProfileRequest.getTimeZone());
+                LookupDataResponse timeZoneLookup = this.lookupDataCacheService.getChildLookupById(
+                   LookupDetailUtil.SCHEDULER_TIMEZONE, updateUserProfileRequest.getTimeZone());
                 metaData.put("timeZone", timeZoneLookup.getLookupValue());
             }
             // email object
@@ -211,16 +247,13 @@ public class EmailMessagesFactory {
      * */
     public boolean sendCloseAppUserAccount(UpdateUserProfileRequest updateUserProfileRequest) {
         try {
-            LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
-            Map<String, Object> metaData = new HashMap<>();
-            // email object
+            LookupDataResponse senderEmail = this.lookupDataCacheService.getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
             EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
             emailMessageRequest.setFromEmail(senderEmail.getLookupValue());
             emailMessageRequest.setRecipients(updateUserProfileRequest.getEmail());
             emailMessageRequest.setSubject("Account Close");
             emailMessageRequest.setEmailTemplateName(TemplateType.CLOSE_ACCOUNT);
-            emailMessageRequest.setBodyMap(metaData);
+            emailMessageRequest.setBodyMap(new HashMap<>());
             logger.info("Email Send Status :- " + this.sendSimpleMail(emailMessageRequest));
             return true;
         } catch (Exception ex) {
@@ -230,8 +263,9 @@ public class EmailMessagesFactory {
     }
 
     /**
-     * sendSimpleMail method use to send email.
+     * method using to send the mail
      * @param emailContent
+     * @return String
      * */
     private String sendSimpleMail(EmailMessageRequest emailContent) {
         try {
@@ -250,9 +284,9 @@ public class EmailMessagesFactory {
                 helper.setText(this.velocityManager.getResponseMessage(
                     emailContent.getEmailTemplateName(), emailContent.getBodyMap()), true);
                 this.javaMailSender.send(mailMessage);
-                //logger.info(String.format("Email Send Successfully Content %s.", emailContent.getBodyMap().toString()));
+                logger.info(String.format("Email Send Successfully Content %s .", emailContent.getBodyMap().toString()));
             } else {
-                logger.error(String.format("Error :- Sent To Null Content %s.", emailContent.getBodyMap().toString()));
+                logger.error(String.format("Error :- Sent To Null Content %s .", emailContent.getBodyMap().toString()));
             }
             return "Mail Sent Successfully...";
         } catch (Exception ex) {

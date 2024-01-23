@@ -9,7 +9,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 import process.payload.request.*;
 import process.payload.response.AppResponse;
-import process.service.AppUserService;
+import process.model.service.AppUserService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 

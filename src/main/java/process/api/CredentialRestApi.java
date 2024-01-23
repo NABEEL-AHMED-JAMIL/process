@@ -9,7 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.payload.request.CredentialRequest;
 import process.payload.response.AppResponse;
-import process.service.CredentialService;
+import process.model.service.CredentialService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 
