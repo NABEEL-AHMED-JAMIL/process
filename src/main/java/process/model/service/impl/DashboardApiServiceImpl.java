@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
+import process.model.payload.response.*;
 import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
@@ -13,9 +14,6 @@ import process.model.repository.LookupDataRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardApiService;
-import process.model.payload.response.AppResponse;
-import process.model.payload.response.JobStatusStatisticResponse;
-import process.model.payload.response.WeeklyJobStatisticsResponse;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -105,10 +103,10 @@ public class DashboardApiServiceImpl implements DashboardApiService {
         AppResponse responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimension(targetDate, targetHr));
         if (!isNull(result) && result.size() > 0) {
-            List<WeeklyHrJobDimensionStatisticsDto> weeklyJobStatistics = new ArrayList<>();
+            List<WeeklyHrJobDimensionStatisticsResponse> weeklyJobStatistics = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
-                weeklyJobStatistics.add(new WeeklyHrJobDimensionStatisticsDto(
+                weeklyJobStatistics.add(new WeeklyHrJobDimensionStatisticsResponse(
                     obj[index] != null ? Long.valueOf(obj[index].toString()) : null, String.valueOf(obj[++index]),
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
@@ -129,10 +127,10 @@ public class DashboardApiServiceImpl implements DashboardApiService {
         List<Object[]> result = this.queryService.executeQuery(this.queryService
             .weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
         if (!isNull(result) && result.size() > 0) {
-            List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
+            List<SourceJobQueueResponse> sourceJobQueues = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
-                SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
+                SourceJobQueueResponse sourceJobQueueDto = new SourceJobQueueResponse();
                 if (!isNull(obj[index])) {
                     sourceJobQueueDto.setJobQueueId(Long.valueOf(String.valueOf(obj[index])));
                 }

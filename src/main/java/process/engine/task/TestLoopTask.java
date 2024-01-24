@@ -45,7 +45,7 @@ public class TestLoopTask implements Runnable {
     public void run() {
         // change the status into the running status
         SourceJobQueueResponse jobQueue = (SourceJobQueueResponse) this.getData().get(ProcessUtil.JOB_QUEUE);
-        SourceTaskDto sourceTaskDto = (SourceTaskDto) this.getData().get(ProcessUtil.TASK_DETAIL);
+        SourceTask sourceTaskDto = (SourceTaskDto) this.getData().get(ProcessUtil.TASK_DETAIL);
         try {
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Running);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Running);
