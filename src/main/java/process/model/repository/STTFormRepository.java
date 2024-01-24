@@ -16,6 +16,8 @@ import java.util.Optional;
 @Repository
 public interface STTFormRepository extends CrudRepository<STTForm, Long> {
 
+    public Optional<STTForm> findBySttfId(Long sttfId);
+
     @Query(value = "select sttf.*\n" +
         "from stt_form sttf\n" +
         "inner join app_users au on au.app_user_id  = sttf.app_user_id  \n" +

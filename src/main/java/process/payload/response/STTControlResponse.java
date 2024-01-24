@@ -29,6 +29,7 @@ public class STTControlResponse {
     private String defaultValue;
     private String pattern;
     private GLookup status;
+    private Long controlOrder;
 
     public STTControlResponse() {
     }
@@ -167,6 +168,14 @@ public class STTControlResponse {
 
     public void setStatus(GLookup status) {
         this.status = status;
+    }
+
+    public Long getControlOrder() {
+        return controlOrder;
+    }
+
+    public void setControlOrder(Long controlOrder) {
+        this.controlOrder = controlOrder;
     }
 
     @Override

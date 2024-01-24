@@ -27,10 +27,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.isNull;
@@ -1829,6 +1826,75 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 return sttcLinkSTTSListResponse;
             }).collect(Collectors.toList());
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", sttcLinkSTTSListResponses);
+    }
+
+    @Override
+    public AppResponse fetchSTTFormDetail(Long formId) throws Exception {
+        logger.info("Request fetchSTTFormDetail :- " + formId);
+        List<STTSLinkSTTF> sttsLinkSTTFList = this.sttsLinkSTTFRepository.findBySttfIdAndStatusNotIn(formId, Status.DELETE.getLookupValue());
+        if (!sttsLinkSTTFList.isEmpty()) {
+            Collections.sort(sttsLinkSTTFList, Comparator.comparingLong(STTSLinkSTTF ::getSttsOrder));
+            FormSectionResponse formSectionResponse = new FormSectionResponse();
+            formSectionResponse.setFormSection(
+                sttsLinkSTTFList.stream().map(sttsLinkSTTF -> {
+                    SectionControlResponse sectionDetail = new SectionControlResponse();
+                    sectionDetail.setSectionOder(sttsLinkSTTF.getSttsOrder());
+                    sectionDetail.setSection(getSTTSectionResponse(sttsLinkSTTF.getStts()));
+                    List<STTCLinkSTTS> sttcLinkSTTSList = this.sttcLinkSTTSRepository.findBySttsIdAndStatusNotIn(
+                        sttsLinkSTTF.getStts().getSttsId(), Status.DELETE.getLookupValue());
+                    if (!sttcLinkSTTSList.isEmpty()) {
+                        Collections.sort(sttcLinkSTTSList, Comparator.comparingLong(STTCLinkSTTS ::getSttcOrder));
+                        sectionDetail.setControlFiled(
+                            sttcLinkSTTSList.stream().map(sttcLinkSTTS -> {
+                                STTControlResponse sttControlResponse = this.getSTTControlResponse(sttcLinkSTTS.getSttc());
+                                sttControlResponse.setControlOrder(sttcLinkSTTS.getSttcOrder());
+                                return sttControlResponse;
+                            }).collect(Collectors.toList()));
+                    }
+                    return sectionDetail;
+                }).collect(Collectors.toList())
+            );
+            return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", formSectionResponse);
+        }
+        return new AppResponse(ProcessUtil.ERROR, "No data found.");
+    }
+
+    /**
+     * Method use sttSection to STTSectionResponse
+     * @param sttSection
+     * */
+    private STTSectionResponse getSTTSectionResponse(STTSection sttSection) {
+        STTSectionResponse sectionResponse = new STTSectionResponse();
+        sectionResponse.setSttsId(sttSection.getSttsId());
+        sectionResponse.setSttsName(sttSection.getSttsName());
+        sectionResponse.setDescription(sttSection.getDescription());
+        return sectionResponse;
+    }
+
+    /**
+     * Method use to convert sttControl to STTControlResponse
+     * @param sttControl
+     * */
+    private STTControlResponse getSTTControlResponse(STTControl sttControl) {
+        STTControlResponse sttControlResponse = new STTControlResponse();
+        sttControlResponse.setSttcId(sttControl.getSttcId());
+        sttControlResponse.setSttcName(sttControl.getSttcName());
+        sttControlResponse.setDescription(sttControl.getDescription());
+        sttControlResponse.setFiledType(FormControlType.getFormControlTypeByValue(sttControl.getFiledType()));
+        sttControlResponse.setFiledTitle(sttControl.getFiledTitle());
+        sttControlResponse.setFiledName(sttControl.getFiledName());
+        sttControlResponse.setPlaceHolder(sttControl.getPlaceHolder());
+        sttControlResponse.setFiledWidth(sttControl.getFiledWidth());
+        sttControlResponse.setMinLength(sttControl.getMinLength());
+        sttControlResponse.setMaxLength(sttControl.getMaxLength());
+        sttControlResponse.setFiledLookUp(sttControl.getFiledLkValue());
+        sttControlResponse.setMandatory(IsDefault.getDefaultByValue(sttControl.getMandatory()));
+        sttControlResponse.setSttcDefault(IsDefault.getDefaultByValue(sttControl.getDefault()));
+        sttControlResponse.setSttcDisabled(IsDefault.getDefaultByValue(sttControl.getDisabled()));
+        sttControlResponse.setDefaultValue(sttControl.getDefaultValue());
+        sttControlResponse.setPattern(sttControl.getPattern());
+        sttControlResponse.setStatus(Status.getStatusByValue(sttControl.getStatus()));
+        return sttControlResponse;
     }
 
     /**

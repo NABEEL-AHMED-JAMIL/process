@@ -773,6 +773,24 @@ public class SourceTaskTypeRestApi {
     }
 
     /**
+     * @apiName :- fetchSTTFormDetail
+     * @apiNote :- Api use to fetch sttf detail
+     * @param formId
+     * @return ResponseEntity<?>
+     * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
+    @RequestMapping(value = "/fetchSTTFormDetail", method = RequestMethod.GET)
+    public ResponseEntity<?> fetchSTTFormDetail(@RequestParam Long formId) {
+        try {
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSTTFormDetail(formId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchSTTDetail ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
      * @apiName :- downloadSTTCommonTemplateFile
      * @apiNote :- Api use to download sttc template file
      * @param payload

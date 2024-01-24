@@ -94,6 +94,8 @@ public interface SourceTaskTypeService {
 
     public AppResponse fetchSTTCLinkSTTS(STTCLinkSTTSRequest payload) throws Exception;
 
+    public AppResponse fetchSTTFormDetail(Long formId) throws Exception;
+
     public ByteArrayOutputStream downloadSTTCommonTemplateFile(STTFileUploadRequest payload) throws Exception;
 
     public ByteArrayOutputStream downloadSTTCommon(STTFileUploadRequest payload) throws Exception;
