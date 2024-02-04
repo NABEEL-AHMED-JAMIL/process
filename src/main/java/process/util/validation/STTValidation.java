@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.util.ProcessUtil;
-import process.util.lookuputil.IsDefault;
-import process.util.lookuputil.TaskType;
+import process.util.lookuputil.ISDEFAULT;
+import process.util.lookuputil.TASKTYPE_OPTION;
 
 /**
  * @author Nabeel Ahmed
@@ -109,12 +109,12 @@ public class STTValidation {
             }
             if (this.isNull(this.defaultSTT)) {
                 this.setErrorMsg(String.format("Default should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.defaultSTT))) {
+            } else if (ProcessUtil.isNull(ISDEFAULT.getDefaultByDescription(this.defaultSTT))) {
                 this.setErrorMsg(String.format("Default type not correct at row %s.<br>", rowCounter));
             }
             if (this.isNull(this.taskType)) {
                 this.setErrorMsg(String.format("TaskType should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(TaskType.getTaskTypeByDescription(this.taskType))) {
+            } else if (ProcessUtil.isNull(TASKTYPE_OPTION.getTaskTypeByDescription(this.taskType))) {
                 this.setErrorMsg(String.format("TaskType type not correct at row %s.<br>", rowCounter));
             }
             if (this.isNull(this.topicName)) {

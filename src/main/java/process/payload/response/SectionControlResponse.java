@@ -12,11 +12,20 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SectionControlResponse {
 
+    private Long auSttsId;
     private Long sectionOder;
     private STTSectionResponse section;
     private List<STTControlResponse> controlFiled;
 
     public SectionControlResponse() {
+    }
+
+    public Long getAuSttsId() {
+        return auSttsId;
+    }
+
+    public void setAuSttsId(Long auSttsId) {
+        this.auSttsId = auSttsId;
     }
 
     public Long getSectionOder() {

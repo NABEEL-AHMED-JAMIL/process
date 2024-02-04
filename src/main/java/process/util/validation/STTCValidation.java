@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.util.ProcessUtil;
-import process.util.lookuputil.FormControlType;
-import process.util.lookuputil.IsDefault;
+import process.util.lookuputil.FORM_CONTROL_TYPE;
+import process.util.lookuputil.ISDEFAULT;
 import java.util.regex.Pattern;
 
 /**
@@ -167,12 +167,12 @@ public class STTCValidation {
             }
             if (this.isNull(this.filedType)) {
                 this.setErrorMsg(String.format("FiledType should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(FormControlType.getFormControlTypeByDescription(this.filedType))) {
+            } else if (ProcessUtil.isNull(FORM_CONTROL_TYPE.getFormControlTypeByDescription(this.filedType))) {
                 this.setErrorMsg(String.format("FiledType type not correct at row %s.<br>", rowCounter));
             }
             if (this.isNull(this.required)) {
                 this.setErrorMsg(String.format("Required should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.required))) {
+            } else if (ProcessUtil.isNull(ISDEFAULT.getDefaultByDescription(this.required))) {
                 this.setErrorMsg(String.format("Required type not correct at row %s.<br>", rowCounter));
             }
         } catch (Exception ex) {

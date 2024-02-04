@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 /**
  * @author Nabeel Ahmed
  */
-public enum RequestMethod {
+public enum REQUEST_METHOD {
 
     GET("GET", 0l, "GET"),
     HEAD("HEAD", 1l, "HEAD"),
@@ -17,14 +17,14 @@ public enum RequestMethod {
     private Long lookupValue;
     private String description;
 
-    RequestMethod(String lookupType, Long lookupValue, String description) {
+    REQUEST_METHOD(String lookupType, Long lookupValue, String description) {
         this.lookupType = lookupType;
         this.lookupValue = lookupValue;
         this.description = description;
     }
 
     public static GLookup getRequestMethodByValue(Long lookupValue) {
-        RequestMethod requestMethod = null;
+        REQUEST_METHOD requestMethod = null;
         if (lookupValue.equals(GET.getLookupValue())) {
             requestMethod = GET;
         } else if (lookupValue.equals(HEAD.getLookupValue())) {

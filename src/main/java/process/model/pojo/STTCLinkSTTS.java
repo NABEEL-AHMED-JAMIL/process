@@ -115,9 +115,5 @@ public class STTCLinkSTTS {
         this.dateCreated = dateCreated;
     }
 
-    @Override
-    public String toString() {
-        return new Gson().toJson(this);
-    }
 
 }

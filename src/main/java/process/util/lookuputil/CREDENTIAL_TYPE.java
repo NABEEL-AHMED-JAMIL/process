@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 /**
  * @author Nabeel Ahmed
  */
-public enum CredentialType {
+public enum CREDENTIAL_TYPE {
 
     BASIC_AUTH("BASIC_AUTH", 0l, "Basic Auth"),
     CERTIFICATE("CERTIFICATE", 1l, "Certificate"),
@@ -18,8 +18,8 @@ public enum CredentialType {
     private Long lookupValue;
     private String description;
 
-    CredentialType(String lookupType, Long lookupValue,
-        String description) {
+    CREDENTIAL_TYPE(String lookupType, Long lookupValue,
+                    String description) {
         this.lookupType = lookupType;
         this.lookupValue = lookupValue;
         this.description = description;
@@ -50,7 +50,7 @@ public enum CredentialType {
     }
 
     public static GLookup getFormControlTypeByValue(Long lookupValue) {
-        CredentialType credentialType = null;
+        CREDENTIAL_TYPE credentialType = null;
         if (lookupValue.equals(BASIC_AUTH.lookupValue)) {
             credentialType = BASIC_AUTH;
         } else if (lookupValue.equals(CERTIFICATE.lookupValue)) {
@@ -64,8 +64,7 @@ public enum CredentialType {
         } else if (lookupValue.equals(FTP.lookupValue)) {
             credentialType = FTP;
         }
-        return new GLookup(credentialType.lookupType,
-            credentialType.lookupValue,credentialType.description);
+        return new GLookup(credentialType.lookupType, credentialType.lookupValue, credentialType.description);
     }
 
     @Override

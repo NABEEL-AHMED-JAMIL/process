@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.util.ProcessUtil;
-import process.util.lookuputil.IsDefault;
+import process.util.lookuputil.ISDEFAULT;
 import java.util.regex.Pattern;
 
 /**
@@ -76,7 +76,7 @@ public class STTSValidation {
             }
             if (this.isNull(this.defaultSTTS)) {
                 this.setErrorMsg(String.format("Default should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.defaultSTTS))) {
+            } else if (ProcessUtil.isNull(ISDEFAULT.getDefaultByDescription(this.defaultSTTS))) {
                 this.setErrorMsg(String.format("Default type not correct at row %s.<br>", rowCounter));
             }
         } catch (Exception ex) {

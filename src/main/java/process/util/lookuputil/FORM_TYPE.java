@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 /**
  * @author Nabeel Ahmed
  */
-public enum FormType {
+public enum FORM_TYPE {
 
     SERVICE_FORM("SERVICE_FORM", 0l, "Service Form"),
     QUERY_FORM("QUERY_FORM", 1l, "Query Form");
@@ -14,7 +14,7 @@ public enum FormType {
     private Long lookupValue;
     private String description;
 
-    FormType(String lookupType, Long lookupValue, String description) {
+    FORM_TYPE(String lookupType, Long lookupValue, String description) {
         this.lookupType = lookupType;
         this.lookupValue = lookupValue;
         this.description = description;
@@ -45,25 +45,23 @@ public enum FormType {
     }
 
     public static GLookup getFormTypeByValue(Long lookupValue) {
-        FormType formType = null;
+        FORM_TYPE formType = null;
         if (lookupValue.equals(SERVICE_FORM.lookupValue)) {
             formType = SERVICE_FORM;
         } else if (lookupValue.equals(QUERY_FORM.lookupValue)) {
             formType = QUERY_FORM;
         }
-        return new GLookup(formType.lookupType,
-            formType.lookupValue, formType.description);
+        return new GLookup(formType.lookupType, formType.lookupValue, formType.description);
     }
 
     public static GLookup getFormTypeByDescription(String lookupValue) {
-        FormType formType = null;
+        FORM_TYPE formType = null;
         if (lookupValue.equals(SERVICE_FORM.description)) {
             formType = SERVICE_FORM;
         } else if (lookupValue.equals(QUERY_FORM.description)) {
             formType = QUERY_FORM;
         }
-        return new GLookup(formType.lookupType,
-            formType.lookupValue, formType.description);
+        return new GLookup(formType.lookupType, formType.lookupValue, formType.description);
     }
 
     @Override

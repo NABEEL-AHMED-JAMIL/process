@@ -17,7 +17,7 @@ public class CredentialResponse {
     private Long credentialId;
     private String credentialName;
     private GLookup credentialType;
-    private AppUser appUser;
+    protected AppUserResponse appUser;
     private GLookup status;
     private Object credentialContent;
     private Timestamp dateCreated;
@@ -48,11 +48,11 @@ public class CredentialResponse {
         this.credentialType = credentialType;
     }
 
-    public AppUser getAppUser() {
+    public AppUserResponse getAppUser() {
         return appUser;
     }
 
-    public void setAppUser(AppUser appUser) {
+    public void setAppUser(AppUserResponse appUser) {
         this.appUser = appUser;
     }
 

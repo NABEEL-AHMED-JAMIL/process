@@ -15,8 +15,8 @@ import process.payload.response.AppResponse;
 import process.payload.response.CredentialResponse;
 import process.service.CredentialService;
 import process.util.ProcessUtil;
-import process.util.lookuputil.CredentialType;
-import process.util.lookuputil.Status;
+import process.util.lookuputil.CREDENTIAL_TYPE;
+import process.util.lookuputil.APPLICATION_STATUS;
 import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
@@ -52,7 +52,7 @@ public class CredentialServiceImpl implements CredentialService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
-            payload.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!adminUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         } else if (ProcessUtil.isNull(payload.getCredentialName())) {
@@ -66,7 +66,7 @@ public class CredentialServiceImpl implements CredentialService {
         credential.setCredentialName(payload.getCredentialName());
         credential.setCredentialType(payload.getCredentialType());
         credential.setCredentialContent(new Gson().toJson(payload.getCredentialContent()));
-        credential.setStatus(Status.ACTIVE.getLookupValue());
+        credential.setStatus(APPLICATION_STATUS.ACTIVE.getLookupValue());
         credential.setAppUser(adminUser.get());
         this.credentialRepository.save(credential);
         payload.setCredentialId(credential.getCredentialId());
@@ -85,7 +85,7 @@ public class CredentialServiceImpl implements CredentialService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
-            payload.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!adminUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         } else if (ProcessUtil.isNull(payload.getCredentialId())) {
@@ -100,7 +100,7 @@ public class CredentialServiceImpl implements CredentialService {
             return new AppResponse(ProcessUtil.ERROR, "Status missing.");
         }
         Optional<Credential> credentialOptional = this.credentialRepository.findByCredentialIdAndUsernameAndStatusNotIn(
-            payload.getCredentialId(), payload.getAccessUserDetail().getUsername(), Status.DELETE.getLookupValue());
+            payload.getCredentialId(), payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.DELETE.getLookupValue());
         if (!credentialOptional.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Credential not found");
         }
@@ -124,19 +124,19 @@ public class CredentialServiceImpl implements CredentialService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
-            payload.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!adminUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
         List<CredentialResponse> credentialResponseList = this.credentialRepository.findAllByUsernameAndStatusNotIn(
-            payload.getAccessUserDetail().getUsername(), Status.DELETE.getLookupValue())
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.DELETE.getLookupValue())
             .stream().map(credential -> {
                 CredentialResponse credentialResponse = new CredentialResponse();
                 credentialResponse.setCredentialId(credential.getCredentialId());
                 credentialResponse.setCredentialName(credential.getCredentialName());
-                credentialResponse.setCredentialType(CredentialType.getFormControlTypeByValue(
+                credentialResponse.setCredentialType(CREDENTIAL_TYPE.getFormControlTypeByValue(
                     credential.getCredentialType()));
-                credentialResponse.setStatus(Status.getStatusByValue(credential.getStatus()));
+                credentialResponse.setStatus(APPLICATION_STATUS.getStatusByValue(credential.getStatus()));
                 credentialResponse.setDateCreated(credential.getDateCreated());
                 return credentialResponse;
             }).collect(Collectors.toList());
@@ -155,23 +155,23 @@ public class CredentialServiceImpl implements CredentialService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
-            payload.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!adminUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         } else if (ProcessUtil.isNull(payload.getCredentialId())) {
             return new AppResponse(ProcessUtil.ERROR, "CredentialId missing.");
         }
         Optional<Credential> credentialOptional = this.credentialRepository.findByCredentialIdAndUsernameAndStatusNotIn(
-            payload.getCredentialId(), payload.getAccessUserDetail().getUsername(), Status.DELETE.getLookupValue());
+            payload.getCredentialId(), payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.DELETE.getLookupValue());
         if (!credentialOptional.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Credential not found");
         }
         CredentialResponse credentialResponse = new CredentialResponse();
         credentialResponse.setCredentialId(credentialOptional.get().getCredentialId());
         credentialResponse.setCredentialName(credentialOptional.get().getCredentialName());
-        credentialResponse.setCredentialType(CredentialType.getFormControlTypeByValue(
+        credentialResponse.setCredentialType(CREDENTIAL_TYPE.getFormControlTypeByValue(
             credentialOptional.get().getCredentialType()));
-        credentialResponse.setStatus(Status.getStatusByValue(
+        credentialResponse.setStatus(APPLICATION_STATUS.getStatusByValue(
             credentialOptional.get().getStatus()));
         credentialResponse.setDateCreated(credentialOptional.get().getDateCreated());
         credentialResponse.setCredentialContent(new Gson().fromJson(
@@ -191,21 +191,21 @@ public class CredentialServiceImpl implements CredentialService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
-            payload.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!adminUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         } else if (ProcessUtil.isNull(payload.getCredentialId())) {
             return new AppResponse(ProcessUtil.ERROR, "CredentialId missing.");
         }
         Optional<Credential> credentialOptional = this.credentialRepository.findByCredentialIdAndUsernameAndStatusNotIn(
-            payload.getCredentialId(), payload.getAccessUserDetail().getUsername(), Status.DELETE.getLookupValue());
+            payload.getCredentialId(), payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.DELETE.getLookupValue());
         if (!credentialOptional.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Credential not found");
         }
-        credentialOptional.get().setStatus(Status.DELETE.getLookupValue());
+        credentialOptional.get().setStatus(APPLICATION_STATUS.DELETE.getLookupValue());
         this.credentialRepository.save(credentialOptional.get());
         this.sttRepository.unLinkCredentialWithSttByCredentialId(
-            credentialOptional.get().getCredentialId(), Status.DELETE.getLookupValue());
+            credentialOptional.get().getCredentialId(), APPLICATION_STATUS.DELETE.getLookupValue());
         return new AppResponse(SUCCESS, "Data delete successfully.");
     }
 

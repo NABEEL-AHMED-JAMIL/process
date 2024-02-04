@@ -250,7 +250,7 @@ public class EmailMessagesFactory {
                 helper.setText(this.velocityManager.getResponseMessage(
                     emailContent.getEmailTemplateName(), emailContent.getBodyMap()), true);
                 this.javaMailSender.send(mailMessage);
-                //logger.info(String.format("Email Send Successfully Content %s.", emailContent.getBodyMap().toString()));
+                logger.info(String.format("Email Send Successfully Content %s.", emailContent.getBodyMap().toString()));
             } else {
                 logger.error(String.format("Error :- Sent To Null Content %s.", emailContent.getBodyMap().toString()));
             }

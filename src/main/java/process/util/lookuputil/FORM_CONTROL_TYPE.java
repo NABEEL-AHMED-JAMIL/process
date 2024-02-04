@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 /**
  * @author Nabeel Ahmed
  */
-public enum FormControlType {
+public enum FORM_CONTROL_TYPE {
 
     WEEK("WEEK", "week", "Week"),
     RANGE("RANGE", "range", "Range"),
@@ -31,7 +31,7 @@ public enum FormControlType {
     private String lookupValue;
     private String description;
 
-    FormControlType(String lookupType, String lookupValue, String description) {
+    FORM_CONTROL_TYPE(String lookupType, String lookupValue, String description) {
         this.lookupType = lookupType;
         this.lookupValue = lookupValue;
         this.description = description;
@@ -62,7 +62,7 @@ public enum FormControlType {
     }
 
     public static GLookup getFormControlTypeByValue(String lookupValue) {
-        FormControlType formControlType = null;
+        FORM_CONTROL_TYPE formControlType = null;
         if (lookupValue.equals(WEEK.lookupValue)) {
             formControlType = WEEK;
         } else if (lookupValue.equals(RANGE.lookupValue)) {
@@ -103,11 +103,11 @@ public enum FormControlType {
             formControlType = MULTI_SELECT;
         }
         return new GLookup(formControlType.lookupType,
-            formControlType.lookupValue, formControlType.description);
+                formControlType.lookupValue, formControlType.description);
     }
 
     public static GLookup getFormControlTypeByDescription(String lookupValue) {
-        FormControlType formControlType = null;
+        FORM_CONTROL_TYPE formControlType = null;
         if (lookupValue.equals(WEEK.description)) {
             formControlType = WEEK;
         } else if (lookupValue.equals(RANGE.description)) {

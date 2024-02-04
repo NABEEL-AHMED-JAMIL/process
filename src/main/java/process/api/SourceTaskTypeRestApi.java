@@ -791,6 +791,42 @@ public class SourceTaskTypeRestApi {
     }
 
     /**
+     * @apiName :- addSTTCInteractions
+     * @apiNote :- Api use to link interaction
+     * @param payload
+     * @return ResponseEntity<?>
+     * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
+    @RequestMapping(value = "/addSTTCInteractions", method = RequestMethod.POST)
+    public ResponseEntity<?> addSTTCInteractions(@RequestBody STTCInteractionsRequest payload) {
+        try {
+            return new ResponseEntity<>(this.sourceTaskTypeService.addSTTCInteractions(payload), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while addSTTCInteractions ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * @apiName :- deleteSTTCInteractions
+     * @apiNote :- Api use to unlink interaction
+     * @param payload
+     * @return ResponseEntity<?>
+     * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
+    @RequestMapping(value = "/deleteSTTCInteractions", method = RequestMethod.POST)
+    public ResponseEntity<?> deleteSTTCInteractions(@RequestBody STTCInteractionsRequest payload) {
+        try {
+            return new ResponseEntity<>(this.sourceTaskTypeService.deleteSTTCInteractions(payload), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while deleteSTTCInteractions ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
      * @apiName :- downloadSTTCommonTemplateFile
      * @apiNote :- Api use to download sttc template file
      * @param payload

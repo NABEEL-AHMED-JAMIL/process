@@ -9,7 +9,7 @@ import process.model.repository.RefreshTokenRepository;
 import process.payload.request.TokenRefreshRequest;
 import process.payload.response.AppResponse;
 import process.util.ProcessUtil;
-import process.util.lookuputil.Status;
+import process.util.lookuputil.APPLICATION_STATUS;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -34,7 +34,7 @@ public class RefreshTokenService {
      * @return Optional<RefreshToken>
      * */
     public Optional<RefreshToken> findByToken(String token) {
-        return this.refreshTokenRepository.findByTokenAndStatus(token, Status.ACTIVE.getLookupValue());
+        return this.refreshTokenRepository.findByTokenAndStatus(token, APPLICATION_STATUS.ACTIVE.getLookupValue());
     }
 
     /**
@@ -47,7 +47,7 @@ public class RefreshTokenService {
         refreshToken.setAppUser(this.appUserRepository.findById(userId).get());
         refreshToken.setExpiryDate(Instant.now().plusMillis(this.refreshTokenDurationMs));
         refreshToken.setToken(UUID.randomUUID().toString());
-        refreshToken.setStatus(Status.ACTIVE.getLookupValue());
+        refreshToken.setStatus(APPLICATION_STATUS.ACTIVE.getLookupValue());
         refreshToken = this.refreshTokenRepository.save(refreshToken);
         return refreshToken;
     }
@@ -59,7 +59,7 @@ public class RefreshTokenService {
      * */
     public AppResponse verifyExpiration(RefreshToken token) {
         if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
-            token.setStatus(Status.DELETE.getLookupValue());
+            token.setStatus(APPLICATION_STATUS.DELETE.getLookupValue());
             this.refreshTokenRepository.save(token);
             return new AppResponse(ProcessUtil.ERROR, "Refresh token was expired." +
                 "Please make a new signing request" ,token);
@@ -75,7 +75,7 @@ public class RefreshTokenService {
     public AppResponse deleteRefreshToken(TokenRefreshRequest tokenRefreshRequest) {
         Optional<RefreshToken> refreshToken = this.findByToken(tokenRefreshRequest.getRefreshToken());
         if (refreshToken.isPresent()) {
-            refreshToken.get().setStatus(Status.DELETE.getLookupValue());
+            refreshToken.get().setStatus(APPLICATION_STATUS.DELETE.getLookupValue());
             this.refreshTokenRepository.save(refreshToken.get());
         }
         return new AppResponse(ProcessUtil.SUCCESS, "Token delete." ,tokenRefreshRequest);

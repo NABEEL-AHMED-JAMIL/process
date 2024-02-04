@@ -12,9 +12,18 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class FormSectionResponse {
 
+    private STTFormResponse formDetail;
     private List<SectionControlResponse> formSection;
 
     public FormSectionResponse() {
+    }
+
+    public STTFormResponse getFormDetail() {
+        return formDetail;
+    }
+
+    public void setFormDetail(STTFormResponse formDetail) {
+        this.formDetail = formDetail;
     }
 
     public List<SectionControlResponse> getFormSection() {

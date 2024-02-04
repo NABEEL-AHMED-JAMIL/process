@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 /**
  * @author Nabeel Ahmed
  */
-public enum TaskType {
+public enum TASKTYPE_OPTION {
 
     API("API", 0l, "Api"),
     AWS_SQS("AWS_SQS", 1l, "SQS"),
@@ -16,7 +16,7 @@ public enum TaskType {
     private Long lookupValue;
     private String description;
 
-    TaskType(String lookupType, Long lookupValue, String description) {
+    TASKTYPE_OPTION(String lookupType, Long lookupValue, String description) {
         this.lookupType = lookupType;
         this.lookupValue = lookupValue;
         this.description = description;
@@ -47,31 +47,31 @@ public enum TaskType {
     }
 
     public static GLookup getTaskTypeByValue(Long lookupValue) {
-        TaskType taskType = null;
+        TASKTYPE_OPTION tasktypeOption = null;
         if (lookupValue.equals(API.getLookupValue())) {
-            taskType = API;
+            tasktypeOption = API;
         } else if (lookupValue.equals(AWS_SQS.getLookupValue())) {
-            taskType = AWS_SQS;
+            tasktypeOption = AWS_SQS;
         } else if (lookupValue.equals(WEB_SOCKET.getLookupValue())) {
-            taskType = WEB_SOCKET;
+            tasktypeOption = WEB_SOCKET;
         } else if (lookupValue.equals(KAFKA.getLookupValue())) {
-            taskType = KAFKA;
+            tasktypeOption = KAFKA;
         }
-        return new GLookup(taskType.lookupType, taskType.lookupValue, taskType.description);
+        return new GLookup(tasktypeOption.lookupType, tasktypeOption.lookupValue, tasktypeOption.description);
     }
 
     public static GLookup getTaskTypeByDescription(String description) {
-        TaskType taskType = null;
+        TASKTYPE_OPTION tasktypeOption = null;
         if (description.equals(API.getDescription())) {
-            taskType = API;
+            tasktypeOption = API;
         } else if (description.equals(AWS_SQS.getDescription())) {
-            taskType = AWS_SQS;
+            tasktypeOption = AWS_SQS;
         } else if (description.equals(WEB_SOCKET.getDescription())) {
-            taskType = WEB_SOCKET;
+            tasktypeOption = WEB_SOCKET;
         } else if (description.equals(KAFKA.getDescription())) {
-            taskType = KAFKA;
+            tasktypeOption = KAFKA;
         }
-        return new GLookup(taskType.lookupType, taskType.lookupValue, taskType.description);
+        return new GLookup(tasktypeOption.lookupType, tasktypeOption.lookupValue, tasktypeOption.description);
     }
 
     @Override

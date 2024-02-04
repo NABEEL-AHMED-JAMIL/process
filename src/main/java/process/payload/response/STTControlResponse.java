@@ -30,6 +30,7 @@ public class STTControlResponse {
     private String pattern;
     private GLookup status;
     private Long controlOrder;
+    private STTCInteractionsResponse interaction;
 
     public STTControlResponse() {
     }
@@ -176,6 +177,14 @@ public class STTControlResponse {
 
     public void setControlOrder(Long controlOrder) {
         this.controlOrder = controlOrder;
+    }
+
+    public STTCInteractionsResponse getInteraction() {
+        return interaction;
+    }
+
+    public void setInteraction(STTCInteractionsResponse interaction) {
+        this.interaction = interaction;
     }
 
     @Override

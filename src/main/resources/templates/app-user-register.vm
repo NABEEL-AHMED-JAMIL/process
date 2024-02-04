@@ -32,16 +32,8 @@
         <td>${request.username}</td>
       </tr>
       <tr>
-        <td>Password</td>
-        <td>${request.password}</td>
-      </tr>
-      <tr>
         <td>Scheduler TimeZone</td>
         <td>${request.timeZone}</td>
-      </tr>
-      <tr>
-        <td>Role</td>
-        <td>${request.role}</td>
       </tr>
     </table>
   </body>

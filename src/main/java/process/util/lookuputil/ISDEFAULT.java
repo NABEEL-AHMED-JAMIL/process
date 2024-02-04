@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 /**
  * @author Nabeel Ahmed
  */
-public enum IsDefault {
+public enum ISDEFAULT {
 
     NO_DEFAULT("NO_DEFAULT", false, "No"),
     YES_DEFAULT("YES_DEFAULT", true, "Yes");
@@ -14,7 +14,7 @@ public enum IsDefault {
     private Boolean lookupValue;
     private String description;
 
-    IsDefault(String lookupType, Boolean lookupValue, String description) {
+    ISDEFAULT(String lookupType, Boolean lookupValue, String description) {
         this.lookupType = lookupType;
         this.lookupValue = lookupValue;
         this.description = description;
@@ -45,7 +45,7 @@ public enum IsDefault {
     }
 
     public static GLookup getDefaultByValue(Boolean lookupValue) {
-        IsDefault aDefault = null;
+        ISDEFAULT aDefault = null;
          if (!lookupValue) {
             aDefault = NO_DEFAULT;
         } else if (lookupValue) {
@@ -55,7 +55,7 @@ public enum IsDefault {
     }
 
     public static GLookup getDefaultByDescription(String description) {
-        IsDefault aDefault = null;
+        ISDEFAULT aDefault = null;
         if (description.equals(NO_DEFAULT.getDescription())) {
             aDefault = NO_DEFAULT;
         } else if (description.equals(YES_DEFAULT.getDescription())) {

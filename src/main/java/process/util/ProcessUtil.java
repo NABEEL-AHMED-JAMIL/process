@@ -2,6 +2,9 @@ package process.util;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.sql.Timestamp;
+import java.util.Calendar;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -43,6 +46,18 @@ public class ProcessUtil {
             result = String.format("(GMT%d:%02d) %s :: %s", hours, minutes, tz.getID(), tz.getDisplayName());
         }
         return result;
+    }
+
+    /**
+     * Method use to add days into timestamp
+     * @param days
+     * @param  date
+     * */
+    public static Timestamp addDays(Timestamp date, Long days) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.add(Calendar.DATE, days.intValue());
+        return new Timestamp(cal.getTime().getTime());
     }
 
 }

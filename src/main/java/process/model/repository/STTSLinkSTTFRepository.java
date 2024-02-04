@@ -22,6 +22,10 @@ public interface STTSLinkSTTFRepository extends CrudRepository<STTSLinkSTTF, Lon
             "WHERE sttsLinkSTTF.sttf.sttfId = ?1 AND sttsLinkSTTF.status != ?2")
     public Long countBySttfIdAndStatusNotIn(Long sttfId, Long status);
 
+    @Query(value = "SELECT sttsLinkSTTF FROM STTSLinkSTTF sttsLinkSTTF WHERE sttsLinkSTTF.auSttsId = ?1 " +
+        "AND sttsLinkSTTF.appUser.appUserId = ?2 AND sttsLinkSTTF.status != ?3")
+    public Optional<STTSLinkSTTF> findByAuSttsIdAndAppUserIdAndStatusNotIn(Long auSttsId, Long appUserId, Long status);
+
     @Query(value = "SELECT sttsLinkSTTF FROM STTSLinkSTTF sttsLinkSTTF " +
         "WHERE sttsLinkSTTF.auSttsId = ?1 AND sttsLinkSTTF.stts.sttsId = ?2 AND sttsLinkSTTF.sttf.sttfId = ?3 " +
         "AND sttsLinkSTTF.appUser.appUserId = ?4 AND sttsLinkSTTF.status != ?5")
