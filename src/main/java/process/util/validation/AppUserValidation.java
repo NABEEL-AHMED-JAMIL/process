@@ -15,7 +15,7 @@ import javax.persistence.Column;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AppUserValidation {
 
-    // validation filed
+    // validation field
     private final String REGEX_PASSWORD = "(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*#?&^_-]).{8,}";
     private final String REGEX_EMAIL = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$";
 
@@ -131,8 +131,8 @@ public class AppUserValidation {
         }
     }
 
-    private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+    private static boolean isNull(String field) {
+        return (field == null || field.length() == 0) ? true : false;
     }
 
     @Override

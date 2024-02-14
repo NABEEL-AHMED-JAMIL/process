@@ -1464,8 +1464,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 if (!ProcessUtil.isNull(sttsLinkSTTC.getSttc())) {
                     sttsLinkSTTCListResponse.setSttcId(sttsLinkSTTC.getSttc().getSttcId());
                     sttsLinkSTTCListResponse.setSttcName(sttsLinkSTTC.getSttc().getSttcName());
-                    sttsLinkSTTCListResponse.setFiledName(sttsLinkSTTC.getSttc().getFiledName());
-                    sttsLinkSTTCListResponse.setFiledType(FORM_CONTROL_TYPE.getFormControlTypeByValue(sttsLinkSTTC.getSttc().getFiledType()));
+                    sttsLinkSTTCListResponse.setFieldName(sttsLinkSTTC.getSttc().getFieldName());
+                    sttsLinkSTTCListResponse.setFieldType(FORM_CONTROL_TYPE.getFormControlTypeByValue(sttsLinkSTTC.getSttc().getFieldType()));
                     sttsLinkSTTCListResponse.setMandatory(ISDEFAULT.getDefaultByValue(sttsLinkSTTC.getSttc().getMandatory()));
                     sttsLinkSTTCListResponse.setSttcDefault(ISDEFAULT.getDefaultByValue(sttsLinkSTTC.getSttc().getDefault()));
                     sttsLinkSTTCListResponse.setSttcDisabled(ISDEFAULT.getDefaultByValue(sttsLinkSTTC.getSttc().getDisabled()));
@@ -1485,18 +1485,18 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         logger.info("Request addSTTC :- " + payload);
         if (isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getFiledType())) {
-            return new AppResponse(ProcessUtil.ERROR, "FiledType missing.");
+        } else if (isNull(payload.getFieldType())) {
+            return new AppResponse(ProcessUtil.ERROR, "FieldType missing.");
         } else if (isNull(payload.getSttcName())) {
             return new AppResponse(ProcessUtil.ERROR, "SttCName missing.");
         } else if (isNull(payload.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Description missing.");
-        } else if (isNull(payload.getFiledName())) {
-            return new AppResponse(ProcessUtil.ERROR, "FiledName missing.");
-        } else if (isNull(payload.getFiledTitle())) {
-            return new AppResponse(ProcessUtil.ERROR, "FiledTitle missing.");
-        } else if (isNull(payload.getFiledWidth())) {
-            return new AppResponse(ProcessUtil.ERROR, "FiledWidth missing.");
+        } else if (isNull(payload.getFieldName())) {
+            return new AppResponse(ProcessUtil.ERROR, "FieldName missing.");
+        } else if (isNull(payload.getFieldTitle())) {
+            return new AppResponse(ProcessUtil.ERROR, "FieldTitle missing.");
+        } else if (isNull(payload.getFieldWidth())) {
+            return new AppResponse(ProcessUtil.ERROR, "FieldWidth missing.");
         } else if (isNull(payload.isMandatory())) {
             return new AppResponse(ProcessUtil.ERROR, "Mandatory missing.");
         }
@@ -1507,20 +1507,20 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         }
         STTControl sttControl = new STTControl();
         sttControl.setSttcName(payload.getSttcName());
-        sttControl.setFiledType(payload.getFiledType());
-        sttControl.setFiledTitle(payload.getFiledTitle());
-        sttControl.setFiledName(payload.getFiledName());
+        sttControl.setFieldType(payload.getFieldType());
+        sttControl.setFieldTitle(payload.getFieldTitle());
+        sttControl.setFieldName(payload.getFieldName());
         sttControl.setDescription(payload.getDescription());
         sttControl.setPlaceHolder(payload.getPlaceHolder());
-        sttControl.setFiledWidth(payload.getFiledWidth());
+        sttControl.setFieldWidth(payload.getFieldWidth());
         sttControl.setMinLength(payload.getMinLength());
         sttControl.setMaxLength(payload.getMaxLength());
         sttControl.setDisabled(payload.isSttcDisabled());
-        if (FORM_CONTROL_TYPE.RADIO.getLookupValue().equals(payload.getFiledType()) ||
-            FORM_CONTROL_TYPE.CHECKBOX.getLookupValue().equals(payload.getFiledType()) ||
-            FORM_CONTROL_TYPE.SELECT.getLookupValue().equals(payload.getFiledType()) ||
-            FORM_CONTROL_TYPE.MULTI_SELECT.getLookupValue().equals(payload.getFiledType())) {
-            sttControl.setFiledLkValue(payload.getFiledLookUp());
+        if (FORM_CONTROL_TYPE.RADIO.getLookupValue().equals(payload.getFieldType()) ||
+            FORM_CONTROL_TYPE.CHECKBOX.getLookupValue().equals(payload.getFieldType()) ||
+            FORM_CONTROL_TYPE.SELECT.getLookupValue().equals(payload.getFieldType()) ||
+            FORM_CONTROL_TYPE.MULTI_SELECT.getLookupValue().equals(payload.getFieldType())) {
+            sttControl.setFieldLkValue(payload.getFieldLookUp());
         }
         sttControl.setMandatory(payload.isMandatory());
         sttControl.setDefault(ISDEFAULT.NO_DEFAULT.getLookupValue());
@@ -1545,18 +1545,18 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         } else if (isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttcId missing.");
-        } else if (isNull(payload.getFiledType())) {
-            return new AppResponse(ProcessUtil.ERROR, "FiledType missing.");
+        } else if (isNull(payload.getFieldType())) {
+            return new AppResponse(ProcessUtil.ERROR, "FieldType missing.");
         } else if (isNull(payload.getSttcName())) {
             return new AppResponse(ProcessUtil.ERROR, "SttCName missing.");
         } else if (isNull(payload.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Description missing.");
-        } else if (isNull(payload.getFiledName())) {
-            return new AppResponse(ProcessUtil.ERROR, "FiledName missing.");
-        } else if (isNull(payload.getFiledTitle())) {
-            return new AppResponse(ProcessUtil.ERROR, "FiledTitle missing.");
-        } else if (isNull(payload.getFiledWidth())) {
-            return new AppResponse(ProcessUtil.ERROR, "FiledWidth missing.");
+        } else if (isNull(payload.getFieldName())) {
+            return new AppResponse(ProcessUtil.ERROR, "FieldName missing.");
+        } else if (isNull(payload.getFieldTitle())) {
+            return new AppResponse(ProcessUtil.ERROR, "FieldTitle missing.");
+        } else if (isNull(payload.getFieldWidth())) {
+            return new AppResponse(ProcessUtil.ERROR, "FieldWidth missing.");
         } else if (isNull(payload.isMandatory())) {
             return new AppResponse(ProcessUtil.ERROR, "Mandatory missing.");
         }
@@ -1570,19 +1570,19 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!sttControlOptional.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "STTControl not found.");
         }
-        if (FORM_CONTROL_TYPE.RADIO.getLookupValue().equals(payload.getFiledType()) ||
-            FORM_CONTROL_TYPE.CHECKBOX.getLookupValue().equals(payload.getFiledType()) ||
-            FORM_CONTROL_TYPE.SELECT.getLookupValue().equals(payload.getFiledType()) ||
-            FORM_CONTROL_TYPE.MULTI_SELECT.getLookupValue().equals(payload.getFiledType())) {
-            sttControlOptional.get().setFiledLkValue(payload.getFiledLookUp());
+        if (FORM_CONTROL_TYPE.RADIO.getLookupValue().equals(payload.getFieldType()) ||
+            FORM_CONTROL_TYPE.CHECKBOX.getLookupValue().equals(payload.getFieldType()) ||
+            FORM_CONTROL_TYPE.SELECT.getLookupValue().equals(payload.getFieldType()) ||
+            FORM_CONTROL_TYPE.MULTI_SELECT.getLookupValue().equals(payload.getFieldType())) {
+            sttControlOptional.get().setFieldLkValue(payload.getFieldLookUp());
         }
         sttControlOptional.get().setSttcName(payload.getSttcName());
-        sttControlOptional.get().setFiledType(payload.getFiledType());
-        sttControlOptional.get().setFiledTitle(payload.getFiledTitle());
-        sttControlOptional.get().setFiledName(payload.getFiledName());
+        sttControlOptional.get().setFieldType(payload.getFieldType());
+        sttControlOptional.get().setFieldTitle(payload.getFieldTitle());
+        sttControlOptional.get().setFieldName(payload.getFieldName());
         sttControlOptional.get().setDescription(payload.getDescription());
         sttControlOptional.get().setPlaceHolder(payload.getPlaceHolder());
-        sttControlOptional.get().setFiledWidth(payload.getFiledWidth());
+        sttControlOptional.get().setFieldWidth(payload.getFieldWidth());
         sttControlOptional.get().setMinLength(payload.getMinLength());
         sttControlOptional.get().setMaxLength(payload.getMaxLength());
         sttControlOptional.get().setMandatory(payload.isMandatory());
@@ -1663,14 +1663,14 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttControlResponse.setSttcId(sttControlOptional.get().getSttcId());
         sttControlResponse.setSttcName(sttControlOptional.get().getSttcName());
         sttControlResponse.setDescription(sttControlOptional.get().getDescription());
-        sttControlResponse.setFiledType(FORM_CONTROL_TYPE.getFormControlTypeByValue(sttControlOptional.get().getFiledType()));
-        sttControlResponse.setFiledTitle(sttControlOptional.get().getFiledTitle());
-        sttControlResponse.setFiledName(sttControlOptional.get().getFiledName());
+        sttControlResponse.setFieldType(FORM_CONTROL_TYPE.getFormControlTypeByValue(sttControlOptional.get().getFieldType()));
+        sttControlResponse.setFieldTitle(sttControlOptional.get().getFieldTitle());
+        sttControlResponse.setFieldName(sttControlOptional.get().getFieldName());
         sttControlResponse.setPlaceHolder(sttControlOptional.get().getPlaceHolder());
-        sttControlResponse.setFiledWidth(sttControlOptional.get().getFiledWidth());
+        sttControlResponse.setFieldWidth(sttControlOptional.get().getFieldWidth());
         sttControlResponse.setMinLength(sttControlOptional.get().getMinLength());
         sttControlResponse.setMaxLength(sttControlOptional.get().getMaxLength());
-        sttControlResponse.setFiledLookUp(sttControlOptional.get().getFiledLkValue());
+        sttControlResponse.setFieldLookUp(sttControlOptional.get().getFieldLkValue());
         sttControlResponse.setMandatory(ISDEFAULT.getDefaultByValue(sttControlOptional.get().getMandatory()));
         sttControlResponse.setSttcDefault(ISDEFAULT.getDefaultByValue(sttControlOptional.get().getDefault()));
         sttControlResponse.setSttcDisabled(ISDEFAULT.getDefaultByValue(sttControlOptional.get().getDisabled()));
@@ -1702,8 +1702,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 STTControlListResponse sttControlListResponse = new STTControlListResponse();
                 sttControlListResponse.setSttcId(sttcProjection.getSttcId());
                 sttControlListResponse.setSttcName(sttcProjection.getSttcName());
-                sttControlListResponse.setFiledName(sttcProjection.getFiledName());
-                sttControlListResponse.setFiledType(FORM_CONTROL_TYPE.getFormControlTypeByValue(sttcProjection.getFiledType()));
+                sttControlListResponse.setFieldName(sttcProjection.getFieldName());
+                sttControlListResponse.setFieldType(FORM_CONTROL_TYPE.getFormControlTypeByValue(sttcProjection.getFieldType()));
                 sttControlListResponse.setStatus(APPLICATION_STATUS.getStatusByValue(sttcProjection.getStatus()));
                 sttControlListResponse.setMandatory(ISDEFAULT.getDefaultByValue(sttcProjection.getMandatory()));
                 sttControlListResponse.setSttcDefault(ISDEFAULT.getDefaultByValue(sttcProjection.getSttcDefault()));
@@ -1847,7 +1847,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                         sttsLinkSTTF.getStts().getSttsId(), APPLICATION_STATUS.DELETE.getLookupValue());
                     if (!sttcLinkSTTSList.isEmpty()) {
                         Collections.sort(sttcLinkSTTSList, Comparator.comparingLong(STTCLinkSTTS ::getSttcOrder));
-                        sectionResponse.setControlFiled(
+                        sectionResponse.setControlField(
                             sttcLinkSTTSList.stream().map(sttcLinkSTTS -> {
                                 STTControlResponse sttControlResponse = this.getSTTControlResponse(sttcLinkSTTS.getSttc());
                                 sttControlResponse.setControlOrder(sttcLinkSTTS.getSttcOrder());
@@ -1959,16 +1959,16 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         String[] header = null;
         if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT)) {
             sheetName = this.bulkExcel.STT;
-            header = this.bulkExcel.STT_HEADER_FILED_BATCH_FILE;
+            header = this.bulkExcel.STT_HEADER_FIELD_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_FORM)) {
             sheetName = this.bulkExcel.STT_FORM;
-            header = this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE;
+            header = this.bulkExcel.STTF_HEADER_FIELD_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
             sheetName = this.bulkExcel.STT_SECTION;
-            header = this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE;
+            header = this.bulkExcel.STTS_HEADER_FIELD_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
             sheetName = this.bulkExcel.STT_CONTROL;
-            header = this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE;
+            header = this.bulkExcel.STTC_HEADER_FIELD_BATCH_FILE;
         }
         XSSFSheet sheet = workbook.createSheet(sheetName);
         this.bulkExcel.setSheet(sheet);
@@ -2002,16 +2002,16 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         String[] header = null;
         if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT)) {
             sheetName = this.bulkExcel.STT;
-            header = this.bulkExcel.STT_HEADER_FILED_BATCH_FILE;
+            header = this.bulkExcel.STT_HEADER_FIELD_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_FORM)) {
             sheetName = this.bulkExcel.STT_FORM;
-            header = this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE;
+            header = this.bulkExcel.STTF_HEADER_FIELD_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_SECTION)) {
             sheetName = this.bulkExcel.STT_SECTION;
-            header = this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE;
+            header = this.bulkExcel.STTS_HEADER_FIELD_BATCH_FILE;
         } else if (sttFileUReq.getDownloadType().equals(this.bulkExcel.STT_CONTROL)) {
             sheetName = this.bulkExcel.STT_CONTROL;
-            header = this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE;
+            header = this.bulkExcel.STTC_HEADER_FIELD_BATCH_FILE;
         }
         XSSFSheet xssfSheet = workbook.createSheet(sheetName);
         this.bulkExcel.setSheet(xssfSheet);
@@ -2067,14 +2067,14 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                     List<String> dataCellValue = new ArrayList<>();
                     dataCellValue.add(sttc.getSttcName());
                     dataCellValue.add(sttc.getDescription());
-                    dataCellValue.add(sttc.getFiledName());
-                    dataCellValue.add(sttc.getFiledTitle());
-                    dataCellValue.add(!ProcessUtil.isNull(sttc.getFiledWidth()) ?
-                        sttc.getFiledWidth().toString(): this.bulkExcel.BLANK_VAL);
+                    dataCellValue.add(sttc.getFieldName());
+                    dataCellValue.add(sttc.getFieldTitle());
+                    dataCellValue.add(!ProcessUtil.isNull(sttc.getFieldWidth()) ?
+                        sttc.getFieldWidth().toString(): this.bulkExcel.BLANK_VAL);
                     dataCellValue.add(sttc.getPlaceHolder());
                     dataCellValue.add(sttc.getPattern());
                     dataCellValue.add(FORM_CONTROL_TYPE.getFormControlTypeByValue(
-                        sttc.getFiledType()).getDescription());
+                        sttc.getFieldType()).getDescription());
                     dataCellValue.add(!ProcessUtil.isNull(sttc.getMinLength()) ?
                         sttc.getMinLength().toString(): this.bulkExcel.BLANK_VAL);
                     dataCellValue.add(!ProcessUtil.isNull(sttc.getMaxLength()) ?
@@ -2158,16 +2158,16 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         while (rows.hasNext()) {
             Row currentRow = rows.next();
             if (currentRow.getRowNum() == 0) {
-                for (int i=0; i < this.bulkExcel.STT_HEADER_FILED_BATCH_FILE.length; i++) {
-                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STT_HEADER_FILED_BATCH_FILE[i])) {
+                for (int i=0; i < this.bulkExcel.STT_HEADER_FIELD_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STT_HEADER_FIELD_BATCH_FILE[i])) {
                         return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
-                            this.bulkExcel.STT_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                            this.bulkExcel.STT_HEADER_FIELD_BATCH_FILE[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 STTValidation sttValidation = new STTValidation();
                 sttValidation.setRowCounter(currentRow.getRowNum()+1);
-                for (int i=0; i < this.bulkExcel.STT_HEADER_FILED_BATCH_FILE.length; i++) {
+                for (int i=0; i < this.bulkExcel.STT_HEADER_FIELD_BATCH_FILE.length; i++) {
                     int index = 0;
                     if (i == index) {
                         sttValidation.setServiceName(this.bulkExcel.getCellDetail(currentRow, i));
@@ -2232,16 +2232,16 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         while (rows.hasNext()) {
             Row currentRow = rows.next();
             if (currentRow.getRowNum() == 0) {
-                for (int i=0; i < this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE.length; i++) {
-                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE[i])) {
+                for (int i=0; i < this.bulkExcel.STTF_HEADER_FIELD_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTF_HEADER_FIELD_BATCH_FILE[i])) {
                         return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
-                            this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                            this.bulkExcel.STTF_HEADER_FIELD_BATCH_FILE[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 STTFValidation sttfValidation = new STTFValidation();
                 sttfValidation.setRowCounter(currentRow.getRowNum()+1);
-                for (int i=0; i < this.bulkExcel.STTF_HEADER_FILED_BATCH_FILE.length; i++) {
+                for (int i=0; i < this.bulkExcel.STTF_HEADER_FIELD_BATCH_FILE.length; i++) {
                     int index = 0;
                     if (i == index) {
                         sttfValidation.setFormName(this.bulkExcel.getCellDetail(currentRow, i));
@@ -2287,16 +2287,16 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         while (rows.hasNext()) {
             Row currentRow = rows.next();
             if (currentRow.getRowNum() == 0) {
-                for (int i=0; i < this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE.length; i++) {
-                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE[i])) {
+                for (int i=0; i < this.bulkExcel.STTS_HEADER_FIELD_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTS_HEADER_FIELD_BATCH_FILE[i])) {
                         return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
-                            this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                            this.bulkExcel.STTS_HEADER_FIELD_BATCH_FILE[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 STTSValidation sttsValidation = new STTSValidation();
                 sttsValidation.setRowCounter(currentRow.getRowNum()+1);
-                for (int i=0; i < this.bulkExcel.STTS_HEADER_FILED_BATCH_FILE.length; i++) {
+                for (int i=0; i < this.bulkExcel.STTS_HEADER_FIELD_BATCH_FILE.length; i++) {
                     int index = 0;
                     if (i == index) {
                         sttsValidation.setSectionName(this.bulkExcel.getCellDetail(currentRow, i));
@@ -2338,33 +2338,33 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         while (rows.hasNext()) {
             Row currentRow = rows.next();
             if (currentRow.getRowNum() == 0) {
-                for (int i=0; i < this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE.length; i++) {
-                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE[i])) {
+                for (int i=0; i < this.bulkExcel.STTC_HEADER_FIELD_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.STTC_HEADER_FIELD_BATCH_FILE[i])) {
                         return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
-                            this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                            this.bulkExcel.STTC_HEADER_FIELD_BATCH_FILE[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 STTCValidation sttcValidation = new STTCValidation();
                 sttcValidation.setRowCounter(currentRow.getRowNum()+1);
-                for (int i=0; i < this.bulkExcel.STTC_HEADER_FILED_BATCH_FILE.length; i++) {
+                for (int i=0; i < this.bulkExcel.STTC_HEADER_FIELD_BATCH_FILE.length; i++) {
                     int index = 0;
                     if (i == index) {
                         sttcValidation.setControlName(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
                         sttcValidation.setDescription(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
-                        sttcValidation.setFiledName(this.bulkExcel.getCellDetail(currentRow, i));
+                        sttcValidation.setFieldName(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
-                        sttcValidation.setFiledTitle(this.bulkExcel.getCellDetail(currentRow, i));
+                        sttcValidation.setFieldTitle(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
-                        sttcValidation.setFiledWidth(this.bulkExcel.getCellDetail(currentRow, i));
+                        sttcValidation.setFieldWidth(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
                         sttcValidation.setPlaceHolder(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
                         sttcValidation.setPattern(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
-                        sttcValidation.setFiledType(this.bulkExcel.getCellDetail(currentRow, i));
+                        sttcValidation.setFieldType(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
                         sttcValidation.setMinLength(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
@@ -2389,13 +2389,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             STTControl sttControl = new STTControl();
             sttControl.setSttcName(sttcValidation.getControlName());
             sttControl.setDescription(sttcValidation.getDescription());
-            sttControl.setFiledType(FORM_CONTROL_TYPE.getFormControlTypeByDescription(
-                sttcValidation.getFiledType()).getLookupValue().toString());
-            sttControl.setFiledTitle(sttcValidation.getFiledTitle());
-            sttControl.setFiledName(sttcValidation.getFiledName());
+            sttControl.setFieldType(FORM_CONTROL_TYPE.getFormControlTypeByDescription(
+                sttcValidation.getFieldType()).getLookupValue().toString());
+            sttControl.setFieldTitle(sttcValidation.getFieldTitle());
+            sttControl.setFieldName(sttcValidation.getFieldName());
             sttControl.setPlaceHolder(sttcValidation.getPlaceHolder());
-            if (!ProcessUtil.isNull(sttcValidation.getFiledWidth())) {
-                sttControl.setFiledWidth(Long.valueOf(sttcValidation.getFiledWidth()));
+            if (!ProcessUtil.isNull(sttcValidation.getFieldWidth())) {
+                sttControl.setFieldWidth(Long.valueOf(sttcValidation.getFieldWidth()));
             }
             if (!ProcessUtil.isNull(sttcValidation.getMinLength())) {
                 sttControl.setMinLength(Long.valueOf(sttcValidation.getMinLength()));
@@ -2403,11 +2403,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             if (!ProcessUtil.isNull(sttcValidation.getMaxLength())) {
                 sttControl.setMaxLength(Long.valueOf(sttcValidation.getMaxLength()));
             }
-            if (FORM_CONTROL_TYPE.RADIO.getLookupValue().equals(sttcValidation.getFiledType()) ||
-                FORM_CONTROL_TYPE.CHECKBOX.getLookupValue().equals(sttcValidation.getFiledType()) ||
-                FORM_CONTROL_TYPE.SELECT.getLookupValue().equals(sttcValidation.getFiledType()) ||
-                FORM_CONTROL_TYPE.MULTI_SELECT.getLookupValue().equals(sttcValidation.getFiledType())) {
-                sttControl.setFiledLkValue(sttcValidation.getFiledLkValue());
+            if (FORM_CONTROL_TYPE.RADIO.getLookupValue().equals(sttcValidation.getFieldType()) ||
+                FORM_CONTROL_TYPE.CHECKBOX.getLookupValue().equals(sttcValidation.getFieldType()) ||
+                FORM_CONTROL_TYPE.SELECT.getLookupValue().equals(sttcValidation.getFieldType()) ||
+                FORM_CONTROL_TYPE.MULTI_SELECT.getLookupValue().equals(sttcValidation.getFieldType())) {
+                sttControl.setFieldLkValue(sttcValidation.getFieldLkValue());
             }
             sttControl.setMandatory(Boolean.valueOf(ISDEFAULT.getDefaultByDescription(
                 sttcValidation.getRequired()).getLookupValue().toString()));
@@ -2461,14 +2461,14 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttControlResponse.setSttcId(sttControl.getSttcId());
         sttControlResponse.setSttcName(sttControl.getSttcName());
         sttControlResponse.setDescription(sttControl.getDescription());
-        sttControlResponse.setFiledType(FORM_CONTROL_TYPE.getFormControlTypeByValue(sttControl.getFiledType()));
-        sttControlResponse.setFiledTitle(sttControl.getFiledTitle());
-        sttControlResponse.setFiledName(sttControl.getFiledName());
+        sttControlResponse.setFieldType(FORM_CONTROL_TYPE.getFormControlTypeByValue(sttControl.getFieldType()));
+        sttControlResponse.setFieldTitle(sttControl.getFieldTitle());
+        sttControlResponse.setFieldName(sttControl.getFieldName());
         sttControlResponse.setPlaceHolder(sttControl.getPlaceHolder());
-        sttControlResponse.setFiledWidth(sttControl.getFiledWidth());
+        sttControlResponse.setFieldWidth(sttControl.getFieldWidth());
         sttControlResponse.setMinLength(sttControl.getMinLength());
         sttControlResponse.setMaxLength(sttControl.getMaxLength());
-        sttControlResponse.setFiledLookUp(sttControl.getFiledLkValue());
+        sttControlResponse.setFieldLookUp(sttControl.getFieldLkValue());
         sttControlResponse.setMandatory(ISDEFAULT.getDefaultByValue(sttControl.getMandatory()));
         sttControlResponse.setSttcDefault(ISDEFAULT.getDefaultByValue(sttControl.getDefault()));
         sttControlResponse.setSttcDisabled(ISDEFAULT.getDefaultByValue(sttControl.getDisabled()));

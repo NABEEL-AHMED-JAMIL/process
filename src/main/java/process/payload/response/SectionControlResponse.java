@@ -15,7 +15,7 @@ public class SectionControlResponse {
     private Long auSttsId;
     private Long sectionOder;
     private STTSectionResponse section;
-    private List<STTControlResponse> controlFiled;
+    private List<STTControlResponse> controlField;
 
     public SectionControlResponse() {
     }
@@ -44,12 +44,12 @@ public class SectionControlResponse {
         this.section = section;
     }
 
-    public List<STTControlResponse> getControlFiled() {
-        return controlFiled;
+    public List<STTControlResponse> getControlField() {
+        return controlField;
     }
 
-    public void setControlFiled(List<STTControlResponse> controlFiled) {
-        this.controlFiled = controlFiled;
+    public void setControlField(List<STTControlResponse> controlField) {
+        this.controlField = controlField;
     }
 
     @Override

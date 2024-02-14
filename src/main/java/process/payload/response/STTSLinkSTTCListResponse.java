@@ -19,8 +19,8 @@ public class STTSLinkSTTCListResponse {
     private String email;
     private Long sttcId;
     private String sttcName;
-    private String filedName;
-    private GLookup filedType;
+    private String fieldName;
+    private GLookup fieldType;
     private GLookup mandatory;
     private GLookup sttcDefault;
     private GLookup sttcDisabled;
@@ -79,20 +79,20 @@ public class STTSLinkSTTCListResponse {
         this.sttcName = sttcName;
     }
 
-    public String getFiledName() {
-        return filedName;
+    public String getFieldName() {
+        return fieldName;
     }
 
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
     }
 
-    public GLookup getFiledType() {
-        return filedType;
+    public GLookup getFieldType() {
+        return fieldType;
     }
 
-    public void setFiledType(GLookup filedType) {
-        this.filedType = filedType;
+    public void setFieldType(GLookup fieldType) {
+        this.fieldType = fieldType;
     }
 
     public GLookup getMandatory() {

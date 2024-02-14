@@ -40,22 +40,22 @@ public class STTControl {
     private String description;
 
     // select,multiple select, need the lookup value
-    @Column(name = "filed_type")
-    private String filedType;
+    @Column(name = "field_type")
+    private String fieldType;
 
     // label name
-    @Column(name = "filed_title", nullable = false)
-    private String filedTitle;
+    @Column(name = "field_title", nullable = false)
+    private String fieldTitle;
 
-    // filed name not be space
-    @Column(name = "filed_name", nullable = false)
-    private String filedName;
+    // field name not be space
+    @Column(name = "field_name", nullable = false)
+    private String fieldName;
 
     @Column(name = "place_holder")
     private String placeHolder;
 
-    @Column(name = "filed_width")
-    private Long filedWidth;
+    @Column(name = "field_width")
+    private Long fieldWidth;
 
     @Column(name = "min_length")
     private Long minLength;
@@ -63,8 +63,8 @@ public class STTControl {
     @Column(name = "max_length")
     private Long maxLength;
 
-    @Column(name = "filed_lk_value")
-    private String filedLkValue;
+    @Column(name = "field_lk_value")
+    private String fieldLkValue;
 
     @Column(name = "mandatory")
     private Boolean mandatory;
@@ -128,28 +128,28 @@ public class STTControl {
         this.description = description;
     }
 
-    public String getFiledType() {
-        return filedType;
+    public String getFieldType() {
+        return fieldType;
     }
 
-    public void setFiledType(String filedType) {
-        this.filedType = filedType;
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
     }
 
-    public String getFiledTitle() {
-        return filedTitle;
+    public String getFieldTitle() {
+        return fieldTitle;
     }
 
-    public void setFiledTitle(String filedTitle) {
-        this.filedTitle = filedTitle;
+    public void setFieldTitle(String fieldTitle) {
+        this.fieldTitle = fieldTitle;
     }
 
-    public String getFiledName() {
-        return filedName;
+    public String getFieldName() {
+        return fieldName;
     }
 
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
     }
 
     public String getPlaceHolder() {
@@ -160,12 +160,12 @@ public class STTControl {
         this.placeHolder = placeHolder;
     }
 
-    public Long getFiledWidth() {
-        return filedWidth;
+    public Long getFieldWidth() {
+        return fieldWidth;
     }
 
-    public void setFiledWidth(Long filedWidth) {
-        this.filedWidth = filedWidth;
+    public void setFieldWidth(Long fieldWidth) {
+        this.fieldWidth = fieldWidth;
     }
 
     public Long getMinLength() {
@@ -184,12 +184,12 @@ public class STTControl {
         this.maxLength = maxLength;
     }
 
-    public String getFiledLkValue() {
-        return filedLkValue;
+    public String getFieldLkValue() {
+        return fieldLkValue;
     }
 
-    public void setFiledLkValue(String filedLkValue) {
-        this.filedLkValue = filedLkValue;
+    public void setFieldLkValue(String fieldLkValue) {
+        this.fieldLkValue = fieldLkValue;
     }
 
     public Boolean getMandatory() {

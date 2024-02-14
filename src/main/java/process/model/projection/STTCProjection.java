@@ -9,8 +9,8 @@ public interface STTCProjection {
 
     public Long getSttcId();
     public String getSttcName();
-    public String getFiledName();
-    public String getFiledType();
+    public String getFieldName();
+    public String getFieldType();
     public Long getStatus();
     public Boolean getSttcDefault();
     public Boolean getMandatory();

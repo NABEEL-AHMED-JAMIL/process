@@ -13,15 +13,15 @@ public class STTControlRequest {
 
     private Long sttcId;
     private String sttcName; // yes
-    private String filedType; // yes
-    private String filedTitle; // yes
-    private String filedName; // yes
+    private String fieldType; // yes
+    private String fieldTitle; // yes
+    private String fieldName; // yes
     private String description; // yes
     private String placeHolder;
-    private Long filedWidth; // 1-12 yes
+    private Long fieldWidth; // 1-12 yes
     private Long minLength; // 1
     private Long maxLength; // not -1
-    private String filedLookUp;
+    private String fieldLookUp;
     private boolean mandatory; // yes
     private boolean sttcDisabled;
     private boolean sttcDefault; // yes
@@ -49,36 +49,36 @@ public class STTControlRequest {
         this.sttcName = sttcName;
     }
 
+    public String getFieldType() {
+        return fieldType;
+    }
+
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
+    }
+
+    public String getFieldTitle() {
+        return fieldTitle;
+    }
+
+    public void setFieldTitle(String fieldTitle) {
+        this.fieldTitle = fieldTitle;
+    }
+
+    public String getFieldName() {
+        return fieldName;
+    }
+
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
+    }
+
     public String getDescription() {
         return description;
     }
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public String getFiledType() {
-        return filedType;
-    }
-
-    public void setFiledType(String filedType) {
-        this.filedType = filedType;
-    }
-
-    public String getFiledTitle() {
-        return filedTitle;
-    }
-
-    public void setFiledTitle(String filedTitle) {
-        this.filedTitle = filedTitle;
-    }
-
-    public String getFiledName() {
-        return filedName;
-    }
-
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
     }
 
     public String getPlaceHolder() {
@@ -89,12 +89,12 @@ public class STTControlRequest {
         this.placeHolder = placeHolder;
     }
 
-    public Long getFiledWidth() {
-        return filedWidth;
+    public Long getFieldWidth() {
+        return fieldWidth;
     }
 
-    public void setFiledWidth(Long filedWidth) {
-        this.filedWidth = filedWidth;
+    public void setFieldWidth(Long fieldWidth) {
+        this.fieldWidth = fieldWidth;
     }
 
     public Long getMinLength() {
@@ -113,12 +113,12 @@ public class STTControlRequest {
         this.maxLength = maxLength;
     }
 
-    public String getFiledLookUp() {
-        return filedLookUp;
+    public String getFieldLookUp() {
+        return fieldLookUp;
     }
 
-    public void setFiledLookUp(String filedLookUp) {
-        this.filedLookUp = filedLookUp;
+    public void setFieldLookUp(String fieldLookUp) {
+        this.fieldLookUp = fieldLookUp;
     }
 
     public boolean isMandatory() {

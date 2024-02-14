@@ -292,7 +292,7 @@ public class AppUserServiceImpl implements AppUserService {
         this.bulkExcel.setWb(workbook);
         XSSFSheet sheet = workbook.createSheet(this.bulkExcel.APP_USER);
         this.bulkExcel.setSheet(sheet);
-        this.bulkExcel.fillBulkHeader(0, this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE);
+        this.bulkExcel.fillBulkHeader(0, this.bulkExcel.APP_USER_HEADER_FIELD_BATCH_FILE);
         // Priority
         workbook.write(fileOut);
         fileOut.close();
@@ -387,16 +387,16 @@ public class AppUserServiceImpl implements AppUserService {
         while (rows.hasNext()) {
             Row currentRow = rows.next();
             if (currentRow.getRowNum() == 0) {
-                for (int i=0; i < this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE.length; i++) {
-                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE[i])) {
+                for (int i=0; i < this.bulkExcel.APP_USER_HEADER_FIELD_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.APP_USER_HEADER_FIELD_BATCH_FILE[i])) {
                         return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
-                            this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                            this.bulkExcel.APP_USER_HEADER_FIELD_BATCH_FILE[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 AppUserValidation appUserValidation = new AppUserValidation();
                 appUserValidation.setRowCounter(currentRow.getRowNum()+1);
-                for (int i=0; i < this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE.length; i++) {
+                for (int i=0; i < this.bulkExcel.APP_USER_HEADER_FIELD_BATCH_FILE.length; i++) {
                     if (i==0) {
                         appUserValidation.setFirstName(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==1) {

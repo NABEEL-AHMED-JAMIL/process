@@ -95,8 +95,8 @@ public class STTFValidation {
         }
     }
 
-    private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+    private static boolean isNull(String field) {
+        return (field == null || field.length() == 0) ? true : false;
     }
 
     @Override

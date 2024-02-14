@@ -15,14 +15,14 @@ public class STTControlResponse {
     private Long sttcId;
     private String sttcName;
     private String description;
-    private GLookup filedType;
-    private String filedTitle;
-    private String filedName;
+    private GLookup fieldType;
+    private String fieldTitle;
+    private String fieldName;
     private String placeHolder;
-    private Long filedWidth;
+    private Long fieldWidth;
     private Long minLength;
     private Long maxLength;
-    private String filedLookUp;
+    private String fieldLookUp;
     private GLookup mandatory;
     private GLookup sttcDefault;
     private GLookup sttcDisabled;
@@ -59,28 +59,28 @@ public class STTControlResponse {
         this.description = description;
     }
 
-    public GLookup getFiledType() {
-        return filedType;
+    public GLookup getFieldType() {
+        return fieldType;
     }
 
-    public void setFiledType(GLookup filedType) {
-        this.filedType = filedType;
+    public void setFieldType(GLookup fieldType) {
+        this.fieldType = fieldType;
     }
 
-    public String getFiledTitle() {
-        return filedTitle;
+    public String getFieldTitle() {
+        return fieldTitle;
     }
 
-    public void setFiledTitle(String filedTitle) {
-        this.filedTitle = filedTitle;
+    public void setFieldTitle(String fieldTitle) {
+        this.fieldTitle = fieldTitle;
     }
 
-    public String getFiledName() {
-        return filedName;
+    public String getFieldName() {
+        return fieldName;
     }
 
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
     }
 
     public String getPlaceHolder() {
@@ -91,12 +91,12 @@ public class STTControlResponse {
         this.placeHolder = placeHolder;
     }
 
-    public Long getFiledWidth() {
-        return filedWidth;
+    public Long getFieldWidth() {
+        return fieldWidth;
     }
 
-    public void setFiledWidth(Long filedWidth) {
-        this.filedWidth = filedWidth;
+    public void setFieldWidth(Long fieldWidth) {
+        this.fieldWidth = fieldWidth;
     }
 
     public Long getMinLength() {
@@ -115,12 +115,12 @@ public class STTControlResponse {
         this.maxLength = maxLength;
     }
 
-    public String getFiledLookUp() {
-        return filedLookUp;
+    public String getFieldLookUp() {
+        return fieldLookUp;
     }
 
-    public void setFiledLookUp(String filedLookUp) {
-        this.filedLookUp = filedLookUp;
+    public void setFieldLookUp(String fieldLookUp) {
+        this.fieldLookUp = fieldLookUp;
     }
 
     public GLookup getMandatory() {

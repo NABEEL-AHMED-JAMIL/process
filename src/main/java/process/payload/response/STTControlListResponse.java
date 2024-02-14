@@ -15,8 +15,8 @@ public class STTControlListResponse {
 
     private Long sttcId;
     private String sttcName;
-    private String filedName;
-    private GLookup filedType;
+    private String fieldName;
+    private GLookup fieldType;
     private String description;
     private GLookup mandatory;
     private GLookup status;
@@ -45,20 +45,20 @@ public class STTControlListResponse {
         this.sttcName = sttcName;
     }
 
-    public String getFiledName() {
-        return filedName;
+    public String getFieldName() {
+        return fieldName;
     }
 
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
     }
 
-    public GLookup getFiledType() {
-        return filedType;
+    public GLookup getFieldType() {
+        return fieldType;
     }
 
-    public void setFiledType(GLookup filedType) {
-        this.filedType = filedType;
+    public void setFieldType(GLookup fieldType) {
+        this.fieldType = fieldType;
     }
 
     public String getDescription() {
@@ -69,16 +69,12 @@ public class STTControlListResponse {
         this.description = description;
     }
 
-    public GLookup isMandatory() {
+    public GLookup getMandatory() {
         return mandatory;
     }
 
     public void setMandatory(GLookup mandatory) {
         this.mandatory = mandatory;
-    }
-
-    public GLookup getMandatory() {
-        return mandatory;
     }
 
     public GLookup getStatus() {

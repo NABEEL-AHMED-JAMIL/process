@@ -89,7 +89,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     }
 
     /**
-     * Method use to add new filed into cache
+     * Method use to add new field into cache
      * @param payload
      * */
     private void addNewLookupData(LookupData payload) {
@@ -102,7 +102,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     }
 
     /**
-     * Method use to add new filed into db & cache
+     * Method use to add new field into db & cache
      * @param payload
      * @return AppResponse
      * */
@@ -144,7 +144,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
 
 
     /**
-     * Method use to update new filed into db & cache
+     * Method use to update new field into db & cache
      * @param payload
      * @return AppResponse
      * */
@@ -254,6 +254,8 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
                     lookupDataResponses.add(childLookupDataResponse);
                 }
             }
+            // sort before submit
+            Collections.sort(lookupDataResponses, Comparator.comparing(LookupDataResponse::getLookupValue));
             appSettingDetail.put(SUB_LOOKUP_DATA, lookupDataResponses);
             return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully.", appSettingDetail);
         }
@@ -334,7 +336,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         this.bulkExcel.setWb(workbook);
         XSSFSheet sheet = workbook.createSheet(this.bulkExcel.LOOKUP);
         this.bulkExcel.setSheet(sheet);
-        this.bulkExcel.fillBulkHeader(0, this.bulkExcel.APP_USER_HEADER_FILED_BATCH_FILE);
+        this.bulkExcel.fillBulkHeader(0, this.bulkExcel.APP_USER_HEADER_FIELD_BATCH_FILE);
         // Priority
         workbook.write(fileOut);
         fileOut.close();
@@ -379,7 +381,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         XSSFSheet xssfSheet = workbook.createSheet(this.bulkExcel.LOOKUP);
         this.bulkExcel.setSheet(xssfSheet);
         AtomicInteger rowCount = new AtomicInteger();
-        this.bulkExcel.fillBulkHeader(rowCount.get(), this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE);
+        this.bulkExcel.fillBulkHeader(rowCount.get(), this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE);
         lookupDataList.forEach(sourceJob -> {
             rowCount.getAndIncrement();
             List<String> dataCellValue = new ArrayList<>();
@@ -434,16 +436,16 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         while (rows.hasNext()) {
             Row currentRow = rows.next();
             if (currentRow.getRowNum() == 0) {
-                for (int i=0; i < this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE.length; i++) {
-                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE[i])) {
+                for (int i=0; i < this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE[i])) {
                         return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
-                            this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                            this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 LookupValidation lookupValidation = new LookupValidation();
                 lookupValidation.setRowCounter(currentRow.getRowNum()+1);
-                for (int i=0; i < this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE.length; i++) {
+                for (int i=0; i < this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE.length; i++) {
                     if (i==0) {
                         lookupValidation.setLookupType(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==1) {

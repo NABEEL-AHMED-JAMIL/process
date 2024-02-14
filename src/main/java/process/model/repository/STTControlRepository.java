@@ -21,7 +21,7 @@ public interface STTControlRepository extends CrudRepository<STTControl, Long> {
     public Optional<STTControl> findBySttcIdAndAppUserUsernameAndStatusNotIn(Long sttcId, String username, Long status);
 
     @Query(value = "select sc.sttc_id as sttcId, sc.sttc_name as sttcName,\n" +
-        "sc.filed_name as filedName, sc.filed_type as filedType, sc.status as status, \n" +
+        "sc.field_name as fieldName, sc.field_type as fieldType, sc.status as status, \n" +
         "case when sc.is_default then true else false  end as sttcDefault,\n" +
         "case when sc.mandatory then true else false  end as mandatory,\n" +
         "sc.date_created as dateCreated, '0' as totalStt, '0' as totalForm, '0' as totalSection\n" +
