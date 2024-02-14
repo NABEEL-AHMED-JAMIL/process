@@ -14,14 +14,12 @@ import java.util.Optional;
 @Repository
 public interface STTSectionRepository extends CrudRepository<STTSection, Long> {
 
-    @Query(value = "select stts.*\n" +
-        "from stt_section stts\n" +
+    @Query(value = "select stts.* from stt_section stts\n" +
         "inner join app_users au on au.app_user_id = stts.app_user_id\n" +
         "where stts.stts_id = ?1 and au.username = ?2 ", nativeQuery = true)
     public Optional<STTSection> findBySttsIdAndAppUser(Long sttsId, String username);
 
-    @Query(value = "select stts.*\n" +
-        "from stt_section stts\n" +
+    @Query(value = "select stts.* from stt_section stts\n" +
         "inner join app_users au on au.app_user_id = stts.app_user_id\n" +
         "where stts.stts_id = ?1 and au.username = ?2 and stts.status != ?3", nativeQuery = true)
     public Optional<STTSection> findBySttsIdAndAppUserAndStatusNotIn(Long sttsId, String username, Long status);

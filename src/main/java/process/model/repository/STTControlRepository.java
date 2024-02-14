@@ -14,8 +14,7 @@ import java.util.Optional;
 @Repository
 public interface STTControlRepository extends CrudRepository<STTControl, Long> {
 
-    @Query(value = "select sttc.*\n" +
-        "from stt_control sttc\n" +
+    @Query(value = "select sttc.* from stt_control sttc\n" +
         "inner join app_users au on au.app_user_id  = sttc.app_user_id  \n" +
         "where sttc.sttc_id = ?1 and au.username = ?2 and sttc.status != ?3", nativeQuery = true)
     public Optional<STTControl> findBySttcIdAndAppUserUsernameAndStatusNotIn(Long sttcId, String username, Long status);
@@ -31,8 +30,7 @@ public interface STTControlRepository extends CrudRepository<STTControl, Long> {
         "order by sc.sttc_id desc\n", nativeQuery = true)
     public List<STTCProjection> findByAppUserUsernameAndStatusNotIn(String username, Long status);
 
-    @Query(value = "select sttc.*\n" +
-        "from stt_control sttc\n" +
+    @Query(value = "select sttc.* from stt_control sttc\n" +
         "inner join app_users au on au.app_user_id  = sttc.app_user_id  \n" +
         "where au.username = ?1 and sttc.status != ?2", nativeQuery = true)
     public List<STTControl> findSttControlByAppUserUsernameAndStatusNotIn(String username, Long status);

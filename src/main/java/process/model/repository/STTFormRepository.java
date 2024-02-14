@@ -18,14 +18,12 @@ public interface STTFormRepository extends CrudRepository<STTForm, Long> {
 
     public Optional<STTForm> findBySttfId(Long sttfId);
 
-    @Query(value = "select sttf.*\n" +
-        "from stt_form sttf\n" +
+    @Query(value = "select sttf.* from stt_form sttf\n" +
         "inner join app_users au on au.app_user_id  = sttf.app_user_id  \n" +
         "where sttf.sttf_id = ?1 and au.username = ?2 ", nativeQuery = true)
     public Optional<STTForm> findBySttfIdAndAppUser(Long sttfId, String username);
 
-    @Query(value = "select sttf.*\n" +
-        "from stt_form sttf\n" +
+    @Query(value = "select sttf.* from stt_form sttf\n" +
         "inner join app_users au on au.app_user_id  = sttf.app_user_id  \n" +
         "where sttf.sttf_id = ?1 and au.username = ?2 and sttf.status != ?3", nativeQuery = true)
     public Optional<STTForm> findBySttfIdAndAppUserAndStatusNotIn(Long sttfId, String username, Long status);

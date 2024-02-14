@@ -33,7 +33,7 @@ public interface STTFLinkSTTRepository extends CrudRepository<STTFLinkSTT, Long>
             Long auSttId, Long sttId, Long sttfId, Long appUserId, Long status);
 
     @Query(value = "SELECT sttfLinkSTT FROM STTFLinkSTT sttfLinkSTT " +
-            "WHERE sttfLinkSTT.stt.sttId = ?1 AND sttfLinkSTT.status != ?2")
+        "WHERE sttfLinkSTT.stt.sttId = ?1 AND sttfLinkSTT.status != ?2")
     public List<STTFLinkSTT> findBySttIdAndStatusNotIn(Long sttId, Long status);
 
     @Query(value = "SELECT sttfLinkSTT FROM STTFLinkSTT sttfLinkSTT " +

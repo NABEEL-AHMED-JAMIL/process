@@ -37,7 +37,7 @@ public interface AppUserEnvRepository extends CrudRepository<AppUserEnv, Long> {
 
 
     @Query(value = "SELECT appUserEnv FROM AppUserEnv appUserEnv WHERE appUserEnv.envVariables.envKey = ?1 " +
-            "AND appUserEnv.appUser.appUserId = ?2 AND appUserEnv.status = ?3")
+        "AND appUserEnv.appUser.appUserId = ?2 AND appUserEnv.status = ?3")
     public Optional<AppUserEnv> findByEnvKeyAndAppUserIdAndStatus(String envKey, Long appUserId, Long status);
 
 }

@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import process.model.pojo.*;
+import process.model.projection.STTFProjection;
 import process.model.repository.*;
 import process.payload.request.*;
 import process.payload.response.*;
@@ -817,28 +818,31 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!adminUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         }
-        List<STTFormListResponse> result = this.sttfRepository.findByAppUserAndStatusNotIn(
-            adminUser.get().getUsername(), APPLICATION_STATUS.DELETE.getLookupValue())
-            .stream().map(sttfProjection -> {
-                STTFormListResponse sttfResponse = new STTFormListResponse();
-                sttfResponse.setSttfId(sttfProjection.getSttfId());
-                sttfResponse.setSttfName(sttfProjection.getSttfName());
-                sttfResponse.setDescription(sttfProjection.getDescription());
-                sttfResponse.setServiceId(sttfProjection.getServiceId());
-                if (!ProcessUtil.isNull(sttfProjection.getHomePage())) {
-                    sttfResponse.setHomePage(this.getDBLoopUp(this.lookupDataRepository.findByLookupType(sttfProjection.getHomePage())));
-                }
-                sttfResponse.setStatus(APPLICATION_STATUS.getStatusByValue(sttfProjection.getStatus()));
-                sttfResponse.setFormType(FORM_TYPE.getFormTypeByValue(sttfProjection.getFormType()));
-                sttfResponse.setSttfDefault(ISDEFAULT.getDefaultByValue(sttfProjection.getSttFDefault()));
-                sttfResponse.setDateCreated(sttfProjection.getDateCreated());
-                sttfResponse.setTotalStt(this.sttfLinkSTTRepository.countBySttfIdAndNotInStatus(
-                    sttfProjection.getSttfId(), APPLICATION_STATUS.DELETE.getLookupValue()));
-                sttfResponse.setTotalSection(this.sttsLinkSTTFRepository.countBySttfIdAndStatusNotIn(
-                    sttfProjection.getSttfId(), APPLICATION_STATUS.DELETE.getLookupValue()));
-                return sttfResponse;
-            }).collect(Collectors.toList());
-        return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", result);
+        List<STTFProjection> result = this.sttfRepository.findByAppUserAndStatusNotIn(
+                adminUser.get().getUsername(), APPLICATION_STATUS.DELETE.getLookupValue());
+        if (result.isEmpty()) {
+            return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", new ArrayList<>());
+        }
+        List<STTFormListResponse> responses = result.stream().map(sttfProjection -> {
+            STTFormListResponse sttfResponse = new STTFormListResponse();
+            sttfResponse.setSttfId(sttfProjection.getSttfId());
+            sttfResponse.setSttfName(sttfProjection.getSttfName());
+            sttfResponse.setDescription(sttfProjection.getDescription());
+            sttfResponse.setServiceId(sttfProjection.getServiceId());
+            if (!ProcessUtil.isNull(sttfProjection.getHomePage())) {
+                sttfResponse.setHomePage(this.getDBLoopUp(this.lookupDataRepository.findByLookupType(sttfProjection.getHomePage())));
+            }
+            sttfResponse.setStatus(APPLICATION_STATUS.getStatusByValue(sttfProjection.getStatus()));
+            sttfResponse.setFormType(FORM_TYPE.getFormTypeByValue(sttfProjection.getFormType()));
+            sttfResponse.setSttfDefault(ISDEFAULT.getDefaultByValue(sttfProjection.getSttFDefault()));
+            sttfResponse.setDateCreated(sttfProjection.getDateCreated());
+            sttfResponse.setTotalStt(this.sttfLinkSTTRepository.countBySttfIdAndNotInStatus(
+                sttfProjection.getSttfId(), APPLICATION_STATUS.DELETE.getLookupValue()));
+            sttfResponse.setTotalSection(this.sttsLinkSTTFRepository.countBySttfIdAndStatusNotIn(
+                sttfProjection.getSttfId(), APPLICATION_STATUS.DELETE.getLookupValue()));
+            return sttfResponse;
+        }).collect(Collectors.toList());
+        return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", responses);
     }
 
     /**

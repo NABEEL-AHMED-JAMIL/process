@@ -15,11 +15,11 @@ import java.util.Optional;
 public interface STTSLinkSTTFRepository extends CrudRepository<STTSLinkSTTF, Long> {
 
     @Query(value = "SELECT count(sttsLinkSTTF.auSttsId) FROM STTSLinkSTTF sttsLinkSTTF " +
-            "WHERE sttsLinkSTTF.stts.sttsId = ?1 AND sttsLinkSTTF.status != ?2")
+        "WHERE sttsLinkSTTF.stts.sttsId = ?1 AND sttsLinkSTTF.status != ?2")
     public Long countBySttsIdAndStatusNotIn(Long sttsId, Long status);
 
     @Query(value = "SELECT count(sttsLinkSTTF.auSttsId) FROM STTSLinkSTTF sttsLinkSTTF " +
-            "WHERE sttsLinkSTTF.sttf.sttfId = ?1 AND sttsLinkSTTF.status != ?2")
+        "WHERE sttsLinkSTTF.sttf.sttfId = ?1 AND sttsLinkSTTF.status != ?2")
     public Long countBySttfIdAndStatusNotIn(Long sttfId, Long status);
 
     @Query(value = "SELECT sttsLinkSTTF FROM STTSLinkSTTF sttsLinkSTTF WHERE sttsLinkSTTF.auSttsId = ?1 " +

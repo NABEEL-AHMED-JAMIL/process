@@ -15,14 +15,12 @@ import java.util.Optional;
 @Repository
 public interface STTRepository extends CrudRepository<STT, Long> {
 
-    @Query(value = "select stt.*\n" +
-        "from stt stt\n" +
+    @Query(value = "select stt.* from stt stt\n" +
         "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
         "where stt.stt_id = ?1 and au.username = ?2", nativeQuery = true)
     public Optional<STT> findBySttIdAndAppUser(Long sourceTaskTypeId, String username);
 
-    @Query(value = "select stt.*\n" +
-        "from stt stt\n" +
+    @Query(value = "select stt.* from stt stt\n" +
         "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
         "where stt.stt_id = ?1 and au.username = ?2 and stt.status != ?3", nativeQuery = true)
     public Optional<STT> findBySttIdAndAppUserAndSttStatusNotIn(Long sttId, String username, Long status);
@@ -49,8 +47,7 @@ public interface STTRepository extends CrudRepository<STT, Long> {
         "order by stt.stt_id desc\n", nativeQuery = true)
     public List<STTProjection> findByAppUserAndStatusNotIn(String username, Long status);
 
-    @Query(value = "select stt.*\n" +
-        "from stt stt\n" +
+    @Query(value = "select stt.* from stt stt\n" +
         "inner join app_users au on au.app_user_id = stt.app_user_id \n" +
         "where au.username = ?1 and stt.status != ?2", nativeQuery = true)
     public List<STT> findSttByAppUserAndStatusNotIn(String username, Long status);
