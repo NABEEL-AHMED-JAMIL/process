@@ -84,7 +84,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTT(STTRequest payload) throws Exception {
         logger.info("Request addSTT :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -174,7 +174,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse editSTT(STTRequest payload) throws Exception {
         logger.info("Request editSTT :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -278,7 +278,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTT(STTRequest payload) throws Exception {
         logger.info("Request deleteSTT :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -325,9 +325,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTBySttId(STTRequest payload) throws Exception {
         logger.info("Request fetchSTTBySttId :- " + payload);
-        if (isNull(payload.getSttId())) {
+        if (ProcessUtil.isNull(payload.getSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
-        } else if (isNull(payload.getAccessUserDetail().getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -379,7 +379,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTT(STTRequest payload) throws Exception {
         logger.info("Request fetchSTT :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -425,11 +425,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTLinkUser(STTLinkUserRequest payload) throws Exception {
         logger.info("Request addSTTLinkUser :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttId())) {
+        } else if (ProcessUtil.isNull(payload.getSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
-        } else if (isNull(payload.getAppUserId())) {
+        } else if (ProcessUtil.isNull(payload.getAppUserId())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUserId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -468,11 +468,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTLinkUser(STTLinkUserRequest payload) throws Exception {
         logger.info("Request deleteSTTLinkUser :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getAppUserId())) {
+        } else if (ProcessUtil.isNull(payload.getAppUserId())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUserId missing.");
-        } else if (isNull(payload.getAuSttId())) {
+        } else if (ProcessUtil.isNull(payload.getAuSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "AuSttId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -498,9 +498,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTLinkUser(STTLinkUserRequest payload) throws Exception {
         logger.info("Request fetchSTTLinkUser :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttId())) {
+        } else if (ProcessUtil.isNull(payload.getSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -534,11 +534,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTLinkSTTF(STTFLinkSTTRequest payload) throws Exception {
         logger.info("Request addSTTLinkSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttId())) {
+        } else if (ProcessUtil.isNull(payload.getSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -556,8 +556,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         if (!sttOptional.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Stt not found");
         }
-        if (!this.sttfLinkSTTRepository.findBySttIdAndSttfIdAndAppUserIdAndStatus(payload.getSttId(),
-            payload.getSttfId(), adminUser.get().getAppUserId(), APPLICATION_STATUS.ACTIVE.getLookupValue()).isPresent()) {
+        if (!this.sttfLinkSTTRepository.findBySttIdAndSttfIdAndAppUserIdAndStatus(payload.getSttId(), payload.getSttfId(),
+            adminUser.get().getAppUserId(), APPLICATION_STATUS.ACTIVE.getLookupValue()).isPresent()) {
             STTFLinkSTT sttfLinkSTT = new STTFLinkSTT();
             sttfLinkSTT.setSttf(sttFormOptional.get());
             sttfLinkSTT.setStatus(sttFormOptional.get().getStatus());
@@ -578,13 +578,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTLinkSTTF(STTFLinkSTTRequest payload) throws Exception {
         logger.info("Request deleteSTTLinkSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttId())) {
+        } else if (ProcessUtil.isNull(payload.getSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
-        } else if (isNull(payload.getAuSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getAuSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "AuSttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -610,9 +610,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTLinkSTTF(STTFLinkSTTRequest payload) throws Exception {
         logger.info("Request fetchSTTLinkSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttId())) {
+        } else if (ProcessUtil.isNull(payload.getSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -652,7 +652,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTF(STTFormRequest payload) throws Exception {
         logger.info("Request addSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -687,7 +687,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse editSTTF(STTFormRequest payload) throws Exception {
         logger.info("Request editSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -736,7 +736,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTF(STTFormRequest payload) throws Exception {
         logger.info("Request deleteSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -773,9 +773,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTFBySttfId(STTFormRequest payload) throws Exception {
         logger.info("Request fetchSTTFBySttfId :- " + payload);
-        if (isNull(payload.getSttfId())) {
+        if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
-        } else if (isNull(payload.getAccessUserDetail().getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -810,7 +810,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTF(STTFormRequest payload) throws Exception {
         logger.info("Request fetchSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -853,11 +853,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTFLinkSTT(STTFLinkSTTRequest payload) throws Exception {
         logger.info("Request addSTTFLinkSTT :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttId())) {
+        } else if (ProcessUtil.isNull(payload.getSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -897,13 +897,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTFLinkSTT(STTFLinkSTTRequest payload) throws Exception {
         logger.info("Request deleteSTTFLinkSTT :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttId())) {
+        } else if (ProcessUtil.isNull(payload.getSttId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
-        } else if (isNull(payload.getAuSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getAuSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "AuSttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -929,9 +929,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTFLinkSTT(STTFLinkSTTRequest payload) throws Exception {
         logger.info("Request fetchSTTFLinkSTT :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -966,11 +966,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTFLinkSTTS(STTSLinkSTTFRequest payload) throws Exception {
         logger.info("Request addSTTFLinkSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1011,13 +1011,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTFLinkSTTS(STTSLinkSTTFRequest payload) throws Exception {
         logger.info("Request deleteSTTFLinkSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
-        } else if (isNull(payload.getAuSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getAuSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "AuSttsId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1043,9 +1043,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTFLinkSTTS(STTSLinkSTTFRequest payload) throws Exception {
         logger.info("Request fetchSTTFLinkSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1079,7 +1079,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTS(STTSectionRequest payload) throws Exception {
         logger.info("Request addSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1110,7 +1110,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse editSTTS(STTSectionRequest payload) throws Exception {
         logger.info("Request editSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1154,7 +1154,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTS(STTSectionRequest payload) throws Exception {
         logger.info("Request deleteSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1189,9 +1189,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTSBySttsId(STTSectionRequest payload) throws Exception {
         logger.info("Request fetchSTTSBySttsId :- " + payload);
-        if (isNull(payload.getSttsId())) {
+        if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getAccessUserDetail().getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1223,7 +1223,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTS(STTSectionRequest payload) throws Exception {
         logger.info("Request fetchSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1258,11 +1258,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTSLinkSTTF(STTSLinkSTTFRequest payload) throws Exception {
         logger.info("Request addSTTSLinkSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1302,13 +1302,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTSLinkSTTF(STTSLinkSTTFRequest payload) throws Exception {
         logger.info("Request deleteSTTSLinkSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getSttfId())) {
+        } else if (ProcessUtil.isNull(payload.getSttfId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
-        } else if (isNull(payload.getAuSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getAuSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "AuSttsId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1334,9 +1334,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTSLinkSTTF(STTSLinkSTTFRequest payload) throws Exception {
         logger.info("Request fetchSTTSLinkSTTF :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1371,11 +1371,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTSLinkSTTC(STTCLinkSTTSRequest payload) throws Exception {
         logger.info("Request addSTTSLinkSTTC :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttcId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1415,13 +1415,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTSLinkSTTC(STTCLinkSTTSRequest payload) throws Exception {
         logger.info("Request deleteSTTCLinkSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttcId missing.");
-        } else if (isNull(payload.getAuSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getAuSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "AuSttcId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1447,9 +1447,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTSLinkSTTC(STTCLinkSTTSRequest payload) throws Exception {
         logger.info("Request fetchSTTSLinkSTTC :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1487,21 +1487,21 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTC(STTControlRequest payload) throws Exception {
         logger.info("Request addSTTC :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getFieldType())) {
+        } else if (ProcessUtil.isNull(payload.getFieldType())) {
             return new AppResponse(ProcessUtil.ERROR, "FieldType missing.");
-        } else if (isNull(payload.getSttcName())) {
+        } else if (ProcessUtil.isNull(payload.getSttcName())) {
             return new AppResponse(ProcessUtil.ERROR, "SttCName missing.");
-        } else if (isNull(payload.getDescription())) {
+        } else if (ProcessUtil.isNull(payload.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Description missing.");
-        } else if (isNull(payload.getFieldName())) {
+        } else if (ProcessUtil.isNull(payload.getFieldName())) {
             return new AppResponse(ProcessUtil.ERROR, "FieldName missing.");
-        } else if (isNull(payload.getFieldTitle())) {
+        } else if (ProcessUtil.isNull(payload.getFieldTitle())) {
             return new AppResponse(ProcessUtil.ERROR, "FieldTitle missing.");
-        } else if (isNull(payload.getFieldWidth())) {
+        } else if (ProcessUtil.isNull(payload.getFieldWidth())) {
             return new AppResponse(ProcessUtil.ERROR, "FieldWidth missing.");
-        } else if (isNull(payload.isMandatory())) {
+        } else if (ProcessUtil.isNull(payload.isMandatory())) {
             return new AppResponse(ProcessUtil.ERROR, "Mandatory missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1527,7 +1527,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sttControl.setFieldLkValue(payload.getFieldLookUp());
         }
         sttControl.setMandatory(payload.isMandatory());
-        sttControl.setDefault(ISDEFAULT.NO_DEFAULT.getLookupValue());
+        sttControl.setDefault(payload.isSttcDefault());
         sttControl.setDefaultValue(payload.getDefaultValue());
         sttControl.setPattern(payload.getPattern());
         sttControl.setStatus(APPLICATION_STATUS.ACTIVE.getLookupValue());
@@ -1545,23 +1545,23 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse editSTTC(STTControlRequest payload) throws Exception {
         logger.info("Request editSTTC :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttcId missing.");
-        } else if (isNull(payload.getFieldType())) {
+        } else if (ProcessUtil.isNull(payload.getFieldType())) {
             return new AppResponse(ProcessUtil.ERROR, "FieldType missing.");
-        } else if (isNull(payload.getSttcName())) {
+        } else if (ProcessUtil.isNull(payload.getSttcName())) {
             return new AppResponse(ProcessUtil.ERROR, "SttCName missing.");
-        } else if (isNull(payload.getDescription())) {
+        } else if (ProcessUtil.isNull(payload.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Description missing.");
-        } else if (isNull(payload.getFieldName())) {
+        } else if (ProcessUtil.isNull(payload.getFieldName())) {
             return new AppResponse(ProcessUtil.ERROR, "FieldName missing.");
-        } else if (isNull(payload.getFieldTitle())) {
+        } else if (ProcessUtil.isNull(payload.getFieldTitle())) {
             return new AppResponse(ProcessUtil.ERROR, "FieldTitle missing.");
-        } else if (isNull(payload.getFieldWidth())) {
+        } else if (ProcessUtil.isNull(payload.getFieldWidth())) {
             return new AppResponse(ProcessUtil.ERROR, "FieldWidth missing.");
-        } else if (isNull(payload.isMandatory())) {
+        } else if (ProcessUtil.isNull(payload.isMandatory())) {
             return new AppResponse(ProcessUtil.ERROR, "Mandatory missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1614,7 +1614,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTC(STTControlRequest payload) throws Exception {
         logger.info("Request deleteSTTC :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1648,9 +1648,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTCBySttcId(STTControlRequest payload) throws Exception {
         logger.info("Request fetchSTTCBySttcId :- " + payload);
-        if (isNull(payload.getSttcId())) {
+        if (ProcessUtil.isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "Sttcid missing.");
-        } else if (isNull(payload.getAccessUserDetail().getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1692,7 +1692,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTC(STTControlRequest payload) throws Exception {
         logger.info("Request fetchSTTC :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1727,11 +1727,11 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTCLinkSTTS(STTCLinkSTTSRequest payload) throws Exception {
         logger.info("Request addSTTCLinkSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttfId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1772,13 +1772,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTCLinkSTTS(STTCLinkSTTSRequest payload) throws Exception {
         logger.info("Request deleteSTTCLinkSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttsId missing.");
-        } else if (isNull(payload.getSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttcId missing.");
-        } else if (isNull(payload.getAuSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getAuSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "AuSttcId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1804,9 +1804,9 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse fetchSTTCLinkSTTS(STTCLinkSTTSRequest payload) throws Exception {
         logger.info("Request fetchSTTCLinkSTTS :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttcId missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1839,7 +1839,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         List<STTSLinkSTTF> sttsLinkSTTFList = this.sttsLinkSTTFRepository.findBySttfIdAndStatusNotIn(formId, APPLICATION_STATUS.DELETE.getLookupValue());
         if (!sttsLinkSTTFList.isEmpty()) {
             Collections.sort(sttsLinkSTTFList, Comparator.comparingLong(STTSLinkSTTF ::getSttsOrder));
-            FormSectionResponse formResponse = new FormSectionResponse();
+            FormResponse formResponse = new FormResponse();
             formResponse.setFormDetail(this.getSTTFormResponse(sttsLinkSTTFList.get(0).getSttf()));
             formResponse.setFormSection(
                 sttsLinkSTTFList.stream().map(sttsLinkSTTF -> {
@@ -1875,13 +1875,13 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse addSTTCInteractions(STTCInteractionsRequest payload) throws Exception {
         logger.info("Request addSTTCInteractions :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (isNull(payload.getSttcId())) {
+        } else if (ProcessUtil.isNull(payload.getSttcId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttcId missing.");
-        } else if (isNull(payload.getAuSttsId())) {
+        } else if (ProcessUtil.isNull(payload.getAuSttsId())) {
             return new AppResponse(ProcessUtil.ERROR, "auSttsId missing.");
-        } else if (isNull(payload.getDisabledPattern()) && isNull(payload.getVisiblePattern())) {
+        } else if (ProcessUtil.isNull(payload.getDisabledPattern()) && isNull(payload.getVisiblePattern())) {
             return new AppResponse(ProcessUtil.ERROR, isNull(payload.getDisabledPattern()) ?  "disabledPattern missing." : "visiblePattern missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -1921,7 +1921,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public AppResponse deleteSTTCInteractions(STTCInteractionsRequest payload) throws Exception {
         logger.info("Request deleteSTTCInteractions :- " + payload);
-        if (isNull(payload.getInteractionsId())) {
+        if (ProcessUtil.isNull(payload.getInteractionsId())) {
             return new AppResponse(ProcessUtil.ERROR, "SttcId missing.");
         }
         Optional<STTCInteractions> sttcInteractions = this.sttcInteractionsRepository.findByInteractionsIdAndStatusNot(
@@ -1941,7 +1941,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public ByteArrayOutputStream downloadSTTCommonTemplateFile(STTFileUploadRequest sttFileUReq) throws Exception {
         logger.info("Request downloadSTTCommonTemplateFile :- " + sttFileUReq);
-        if (isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
             throw new Exception("Username missing.");
         } else if (ProcessUtil.isNull(sttFileUReq.getDownloadType())) {
             throw new Exception("Download type missing.");
@@ -1995,7 +1995,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     @Override
     public ByteArrayOutputStream downloadSTTCommon(STTFileUploadRequest sttFileUReq) throws Exception {
         logger.info("Request downloadSTTCommon :- " + sttFileUReq);
-        if (isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
             throw new Exception("Username missing.");
         } else if (ProcessUtil.isNull(sttFileUReq.getDownloadType())) {
             throw new Exception("Download type missing.");
@@ -2110,7 +2110,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         Gson gson = new Gson();
         STTFileUploadRequest sttFileUReq = gson.fromJson((String)
         fileObject.getData(), STTFileUploadRequest.class);
-        if (isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(sttFileUReq.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         } else if (ProcessUtil.isNull(sttFileUReq.getUploadType())) {
             return new AppResponse(ProcessUtil.ERROR, "Upload type missing.");
@@ -2122,7 +2122,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         }
         Optional<LookupData> uploadLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
         XSSFWorkbook workbook = new XSSFWorkbook(fileObject.getFile().getInputStream());
-        if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
+        if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new AppResponse(ProcessUtil.ERROR,  "You uploaded empty file.");
         }
         XSSFSheet sheet = null;
@@ -2133,7 +2133,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sheet = workbook.getSheet(sttFileUReq.getUploadType());
         }
         // target sheet upload limit validation
-        if (isNull(sheet)) {
+        if (ProcessUtil.isNull(sheet)) {
             return new AppResponse(ProcessUtil.ERROR, String.format("Sheet not found with (%s)",
                 sttFileUReq.getUploadType()));
         } else if (sheet.getLastRowNum() < 1) {

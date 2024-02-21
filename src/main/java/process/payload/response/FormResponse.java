@@ -10,12 +10,12 @@ import java.util.List;
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class FormSectionResponse {
+public class FormResponse {
 
     private STTFormResponse formDetail;
     private List<SectionControlResponse> formSection;
 
-    public FormSectionResponse() {
+    public FormResponse() {
     }
 
     public STTFormResponse getFormDetail() {

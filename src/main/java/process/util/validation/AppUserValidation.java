@@ -3,6 +3,7 @@ package process.util.validation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import process.util.ProcessUtil;
 
 import javax.persistence.Column;
 
@@ -45,7 +46,7 @@ public class AppUserValidation {
     }
 
     public void setErrorMsg(String errorMsg) {
-        if (isNull(this.errorMsg)) {
+        if (ProcessUtil.isNull(this.errorMsg)) {
             this.errorMsg = errorMsg;
         } else {
             this.errorMsg += errorMsg;

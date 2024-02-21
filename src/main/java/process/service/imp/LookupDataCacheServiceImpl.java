@@ -109,13 +109,13 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     @Override
     public AppResponse addLookupData(LookupDataRequest payload) throws Exception {
         logger.info("Request addLookupData :- " + payload);
-        if (isNull(payload.getLookupValue())) {
+        if (ProcessUtil.isNull(payload.getLookupValue())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupValue missing.");
-        } else if (isNull(payload.getLookupType())) {
+        } else if (ProcessUtil.isNull(payload.getLookupType())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupType missing.");
-        } else if (isNull(payload.getDescription())) {
+        } else if (ProcessUtil.isNull(payload.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Description missing.");
-        } else if (isNull(payload.getAccessUserDetail().getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         } else if (this.lookupDataRepository.findByLookupType(payload.getLookupType()).isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "LookupType already exist.");
@@ -151,15 +151,15 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     @Override
     public AppResponse updateLookupData(LookupDataRequest payload) throws Exception {
         logger.info("Request updateLookupData :- " + payload);
-        if (isNull(payload.getLookupId())) {
+        if (ProcessUtil.isNull(payload.getLookupId())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupId missing.");
-        } else if (isNull(payload.getLookupValue())) {
+        } else if (ProcessUtil.isNull(payload.getLookupValue())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupValue missing.");
-        } else if (isNull(payload.getLookupType())) {
+        } else if (ProcessUtil.isNull(payload.getLookupType())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupType missing.");
-        } else if (isNull(payload.getDescription())) {
+        } else if (ProcessUtil.isNull(payload.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Description missing.");
-        } else if (isNull(payload.getAccessUserDetail().getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
@@ -189,10 +189,10 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     @Override
     public AppResponse fetchSubLookupByParentId(LookupDataRequest payload) throws Exception {
         logger.info("Request fetchSubLookupByParentId :- " + payload);
-        if (isNull(payload.getParentLookupId())) {
+        if (ProcessUtil.isNull(payload.getParentLookupId())) {
             return new AppResponse(ProcessUtil.ERROR, "ParentLookupId missing.");
         }
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         if (!this.appUserRepository.findByUsernameAndStatus(payload.getAccessUserDetail().getUsername(),
@@ -228,11 +228,11 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     @Override
     public AppResponse fetchLookupByLookupType(LookupDataRequest payload) throws Exception {
         logger.info("Request fetchLookupByLookupType :- " + payload);
-        if (isNull(payload.getLookupType())) {
+        if (ProcessUtil.isNull(payload.getLookupType())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupType missing.");
         }
         if (payload.isValidate()) {
-            if (isNull(payload.getAccessUserDetail().getUsername())) {
+            if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
                 return new AppResponse(ProcessUtil.ERROR, "Username missing.");
             }
             if (!this.appUserRepository.findByUsernameAndStatus(payload.getAccessUserDetail().getUsername(),
@@ -270,7 +270,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     @Override
     public AppResponse fetchAllLookup(LookupDataRequest payload) throws Exception {
         logger.info("Request fetchAllLookup :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
@@ -299,10 +299,10 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     @Override
     public AppResponse deleteLookupData(LookupDataRequest payload) throws Exception {
         logger.info("Request deleteLookupData :- " + payload);
-        if (isNull(payload.getLookupId())) {
+        if (ProcessUtil.isNull(payload.getLookupId())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupData id missing.");
         }
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
@@ -357,7 +357,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     @Override
     public ByteArrayOutputStream downloadLookup(LookupDataRequest payload) throws Exception {
         logger.info("Request deleteLookupData :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             throw new Exception("AppUser username missing");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
@@ -405,7 +405,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         logger.info("Request for bulk uploading file!");
         Gson gson = new Gson();
         LookupDataRequest lookupDataRequest = gson.fromJson((String) payload.getData(), LookupDataRequest.class);
-        if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
@@ -419,11 +419,11 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         // fill the stream with file into work-book
         Optional<LookupData> uploadLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
         XSSFWorkbook workbook = new XSSFWorkbook(payload.getFile().getInputStream());
-        if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
+        if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new AppResponse(ProcessUtil.ERROR,  "You uploaded empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(this.bulkExcel.LOOKUP);
-        if (isNull(sheet)) {
+        if (ProcessUtil.isNull(sheet)) {
             return new AppResponse(ProcessUtil.ERROR, "Sheet not found with (LookupTemplate)");
         } else if (sheet.getLastRowNum() < 1) {
             return new AppResponse(ProcessUtil.ERROR,  "You can't upload empty file.");

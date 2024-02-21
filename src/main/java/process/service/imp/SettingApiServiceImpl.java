@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import process.payload.request.QueryRequest;
 import process.payload.response.AppResponse;
 import process.service.SettingApiService;
+import process.util.ProcessUtil;
+
 import javax.transaction.Transactional;
 import static process.util.ProcessUtil.*;
 
@@ -24,7 +26,7 @@ public class SettingApiServiceImpl implements SettingApiService {
 
     @Override
     public AppResponse dynamicQueryResponse(QueryRequest payload) {
-        if (isNull(payload.getQuery())) {
+        if (ProcessUtil.isNull(payload.getQuery())) {
             return new AppResponse(ERROR, "Query missing.");
         }
         payload.setQuery(payload.getQuery().trim());

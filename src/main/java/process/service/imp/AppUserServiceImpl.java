@@ -313,7 +313,7 @@ public class AppUserServiceImpl implements AppUserService {
     @Override
     public ByteArrayOutputStream downloadAppUser(SignupRequest payload) throws Exception {
         logger.info("Request downloadAppUser :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             throw new Exception("AppUser username missing");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
@@ -356,7 +356,7 @@ public class AppUserServiceImpl implements AppUserService {
         logger.info("Request for bulk uploading file!");
         Gson gson = new Gson();
         SignupRequest signupRequest = gson.fromJson((String) payload.getData(), SignupRequest.class);
-        if (isNull(signupRequest.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(signupRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
@@ -370,11 +370,11 @@ public class AppUserServiceImpl implements AppUserService {
         // fill the stream with file into work-book
         Optional<LookupData> uploadLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
         XSSFWorkbook workbook = new XSSFWorkbook(payload.getFile().getInputStream());
-        if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
+        if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new AppResponse(ProcessUtil.ERROR,  "You uploaded empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(this.bulkExcel.APP_USER);
-        if (isNull(sheet)) {
+        if (ProcessUtil.isNull(sheet)) {
             return new AppResponse(ProcessUtil.ERROR, "Sheet not found with (LookupTemplate)");
         } else if (sheet.getLastRowNum() < 1) {
             return new AppResponse(ProcessUtil.ERROR,  "You can't upload empty file.");

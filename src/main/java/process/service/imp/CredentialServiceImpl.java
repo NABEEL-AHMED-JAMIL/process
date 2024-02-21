@@ -48,7 +48,7 @@ public class CredentialServiceImpl implements CredentialService {
     @Override
     public AppResponse addCredential(CredentialRequest payload) throws Exception {
         logger.info("Request addCredential :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -81,7 +81,7 @@ public class CredentialServiceImpl implements CredentialService {
     @Override
     public AppResponse updateCredential(CredentialRequest payload) throws Exception {
         logger.info("Request updateCredential :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -120,7 +120,7 @@ public class CredentialServiceImpl implements CredentialService {
     @Override
     public AppResponse fetchAllCredential(CredentialRequest payload) throws Exception {
         logger.info("Request deleteCredential :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -151,7 +151,7 @@ public class CredentialServiceImpl implements CredentialService {
     @Override
     public AppResponse fetchCredentialByCredentialId(CredentialRequest payload) throws Exception {
         logger.info("Request fetchCredentialByCredentialId :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
@@ -187,7 +187,7 @@ public class CredentialServiceImpl implements CredentialService {
     @Override
     public AppResponse deleteCredential(CredentialRequest payload) throws Exception {
         logger.info("Request deleteCredential :- " + payload);
-        if (isNull(payload.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
