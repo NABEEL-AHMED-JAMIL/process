@@ -15,8 +15,6 @@ public class ApiTaskTypeRequest {
     private Long apiTaskTypeId;
     private String apiUrl; // yes
     private HttpMethod httpMethod; // yes
-    // ref to lookup id
-    private String apiSecurityLkValue;
 
     public ApiTaskTypeRequest() {
     }
@@ -43,14 +41,6 @@ public class ApiTaskTypeRequest {
 
     public void setHttpMethod(HttpMethod httpMethod) {
         this.httpMethod = httpMethod;
-    }
-
-    public String getApiSecurityLkValue() {
-        return apiSecurityLkValue;
-    }
-
-    public void setApiSecurityLkValue(String apiSecurityLkValue) {
-        this.apiSecurityLkValue = apiSecurityLkValue;
     }
 
     @Override

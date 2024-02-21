@@ -12,48 +12,43 @@ import process.util.lookuputil.GLookup;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTControlResponse {
 
-    private Long sttCId;
-    private Long sttCOrder;
-    private String sttCName;
+    private Long sttcId;
+    private String sttcName;
     private String description;
-    private GLookup filedType;
-    private String filedTitle;
-    private String filedName;
+    private GLookup fieldType;
+    private String fieldTitle;
+    private String fieldName;
     private String placeHolder;
-    private Long filedWidth;
+    private Long fieldWidth;
     private Long minLength;
     private Long maxLength;
-    private String filedLookUp;
+    private String fieldLookUp;
     private GLookup mandatory;
-    private GLookup defaultSttc;
+    private GLookup sttcDefault;
+    private GLookup sttcDisabled;
+    private String defaultValue;
     private String pattern;
     private GLookup status;
+    private Long controlOrder;
+    private STTCInteractionsResponse interaction;
 
     public STTControlResponse() {
     }
 
-    public Long getSttCId() {
-        return sttCId;
+    public Long getSttcId() {
+        return sttcId;
     }
 
-    public void setSttCId(Long sttCId) {
-        this.sttCId = sttCId;
+    public void setSttcId(Long sttcId) {
+        this.sttcId = sttcId;
     }
 
-    public Long getSttCOrder() {
-        return sttCOrder;
+    public String getSttcName() {
+        return sttcName;
     }
 
-    public void setSttCOrder(Long sttCOrder) {
-        this.sttCOrder = sttCOrder;
-    }
-
-    public String getSttCName() {
-        return sttCName;
-    }
-
-    public void setSttCName(String sttCName) {
-        this.sttCName = sttCName;
+    public void setSttcName(String sttcName) {
+        this.sttcName = sttcName;
     }
 
     public String getDescription() {
@@ -64,28 +59,28 @@ public class STTControlResponse {
         this.description = description;
     }
 
-    public GLookup getFiledType() {
-        return filedType;
+    public GLookup getFieldType() {
+        return fieldType;
     }
 
-    public void setFiledType(GLookup filedType) {
-        this.filedType = filedType;
+    public void setFieldType(GLookup fieldType) {
+        this.fieldType = fieldType;
     }
 
-    public String getFiledTitle() {
-        return filedTitle;
+    public String getFieldTitle() {
+        return fieldTitle;
     }
 
-    public void setFiledTitle(String filedTitle) {
-        this.filedTitle = filedTitle;
+    public void setFieldTitle(String fieldTitle) {
+        this.fieldTitle = fieldTitle;
     }
 
-    public String getFiledName() {
-        return filedName;
+    public String getFieldName() {
+        return fieldName;
     }
 
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
     }
 
     public String getPlaceHolder() {
@@ -96,12 +91,12 @@ public class STTControlResponse {
         this.placeHolder = placeHolder;
     }
 
-    public Long getFiledWidth() {
-        return filedWidth;
+    public Long getFieldWidth() {
+        return fieldWidth;
     }
 
-    public void setFiledWidth(Long filedWidth) {
-        this.filedWidth = filedWidth;
+    public void setFieldWidth(Long fieldWidth) {
+        this.fieldWidth = fieldWidth;
     }
 
     public Long getMinLength() {
@@ -120,12 +115,12 @@ public class STTControlResponse {
         this.maxLength = maxLength;
     }
 
-    public String getFiledLookUp() {
-        return filedLookUp;
+    public String getFieldLookUp() {
+        return fieldLookUp;
     }
 
-    public void setFiledLookUp(String filedLookUp) {
-        this.filedLookUp = filedLookUp;
+    public void setFieldLookUp(String fieldLookUp) {
+        this.fieldLookUp = fieldLookUp;
     }
 
     public GLookup getMandatory() {
@@ -136,12 +131,28 @@ public class STTControlResponse {
         this.mandatory = mandatory;
     }
 
-    public GLookup getDefaultSttc() {
-        return defaultSttc;
+    public GLookup getSttcDefault() {
+        return sttcDefault;
     }
 
-    public void setDefaultSttc(GLookup defaultSttc) {
-        this.defaultSttc = defaultSttc;
+    public void setSttcDefault(GLookup sttcDefault) {
+        this.sttcDefault = sttcDefault;
+    }
+
+    public GLookup getSttcDisabled() {
+        return sttcDisabled;
+    }
+
+    public void setSttcDisabled(GLookup sttcDisabled) {
+        this.sttcDisabled = sttcDisabled;
+    }
+
+    public String getDefaultValue() {
+        return defaultValue;
+    }
+
+    public void setDefaultValue(String defaultValue) {
+        this.defaultValue = defaultValue;
     }
 
     public String getPattern() {
@@ -158,6 +169,22 @@ public class STTControlResponse {
 
     public void setStatus(GLookup status) {
         this.status = status;
+    }
+
+    public Long getControlOrder() {
+        return controlOrder;
+    }
+
+    public void setControlOrder(Long controlOrder) {
+        this.controlOrder = controlOrder;
+    }
+
+    public STTCInteractionsResponse getInteraction() {
+        return interaction;
+    }
+
+    public void setInteraction(STTCInteractionsResponse interaction) {
+        this.interaction = interaction;
     }
 
     @Override

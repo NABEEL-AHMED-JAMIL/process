@@ -3,6 +3,7 @@ package process.util.validation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import process.util.ProcessUtil;
 
 /**
  * This SourceTaskValidation validate the information of the sheet
@@ -13,11 +14,11 @@ import com.google.gson.Gson;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LookupValidation {
 
-    // validation filed
+    // validation field
     private final String REGEX = "^[-a-zA-Z0-9@\\.+_]+$";
     private Integer rowCounter = 0;
     private String errorMsg;
-    // business filed
+    // business field
     private String lookupType;
     private String lookupValue;
     private String description;
@@ -38,7 +39,7 @@ public class LookupValidation {
     }
 
     public void setErrorMsg(String errorMsg) {
-        if (isNull(this.errorMsg)) {
+        if (ProcessUtil.isNull(this.errorMsg)) {
             this.errorMsg = errorMsg;
         } else {
             this.errorMsg += errorMsg;
@@ -89,8 +90,8 @@ public class LookupValidation {
         }
     }
 
-    private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+    private static boolean isNull(String field) {
+        return (field == null || field.length() == 0) ? true : false;
     }
 
 

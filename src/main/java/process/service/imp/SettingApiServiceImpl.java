@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import process.payload.request.QueryRequest;
 import process.payload.response.AppResponse;
 import process.service.SettingApiService;
+import process.util.ProcessUtil;
+
 import javax.transaction.Transactional;
 import static process.util.ProcessUtil.*;
 
@@ -23,16 +25,16 @@ public class SettingApiServiceImpl implements SettingApiService {
     private QueryService queryService;
 
     @Override
-    public AppResponse dynamicQueryResponse(QueryRequest queryRequest) {
-        if (isNull(queryRequest.getQuery())) {
+    public AppResponse dynamicQueryResponse(QueryRequest payload) {
+        if (ProcessUtil.isNull(payload.getQuery())) {
             return new AppResponse(ERROR, "Query missing.");
         }
-        queryRequest.setQuery(queryRequest.getQuery().trim());
-        if (!queryRequest.getQuery().toLowerCase().startsWith("select")) {
+        payload.setQuery(payload.getQuery().trim());
+        if (!payload.getQuery().toLowerCase().startsWith("select")) {
             return new AppResponse(ERROR, "Only select query execute.");
         }
         return new AppResponse(SUCCESS, "Data fetch successfully.",
-            this.queryService.executeQueryResponse(queryRequest.getQuery()));
+            this.queryService.executeQueryResponse(payload.getQuery()));
     }
 
 

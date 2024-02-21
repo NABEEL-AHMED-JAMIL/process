@@ -24,7 +24,7 @@ import process.service.LookupDataCacheService;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
 import process.util.lookuputil.LookupDetailUtil;
-import process.util.lookuputil.Status;
+import process.util.lookuputil.APPLICATION_STATUS;
 import process.util.validation.LookupValidation;
 import javax.annotation.PostConstruct;
 import java.io.ByteArrayOutputStream;
@@ -89,124 +89,120 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
     }
 
     /**
-     * Method use to add new filed into cache
+     * Method use to add new field into cache
+     * @param payload
      * */
-    private void addNewLookupData(LookupData lookupData) {
+    private void addNewLookupData(LookupData payload) {
         this.writeLock.lock();
         try {
-            this.lookupCacheMap.put(lookupData.getLookupType(),
-                getLookupDataDetail(lookupData));
+            this.lookupCacheMap.put(payload.getLookupType(), getLookupDataDetail(payload));
         } finally {
             this.writeLock.unlock();
         }
     }
 
     /**
-     * Method use to add new filed into db & cache
-     * @param lookupDataRequest
+     * Method use to add new field into db & cache
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse addLookupData(LookupDataRequest lookupDataRequest) throws Exception {
-        logger.info("Request addLookupData :- " + lookupDataRequest);
-        if (isNull(lookupDataRequest.getLookupValue())) {
+    public AppResponse addLookupData(LookupDataRequest payload) throws Exception {
+        logger.info("Request addLookupData :- " + payload);
+        if (ProcessUtil.isNull(payload.getLookupValue())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupValue missing.");
-        } else if (isNull(lookupDataRequest.getLookupType())) {
+        } else if (ProcessUtil.isNull(payload.getLookupType())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupType missing.");
-        } else if (isNull(lookupDataRequest.getDescription())) {
+        } else if (ProcessUtil.isNull(payload.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Description missing.");
-        } else if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
-        } else if (this.lookupDataRepository.findByLookupType(lookupDataRequest.getLookupType()).isPresent()) {
+        } else if (this.lookupDataRepository.findByLookupType(payload.getLookupType()).isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "LookupType already exist.");
         }
         LookupData lookupData = new LookupData();
-        lookupData.setLookupValue(lookupDataRequest.getLookupValue());
-        lookupData.setLookupType(lookupDataRequest.getLookupType());
-        if (!isNull(lookupDataRequest.getDescription())) {
-            lookupData.setDescription(lookupDataRequest.getDescription());
+        lookupData.setLookupValue(payload.getLookupValue());
+        lookupData.setLookupType(payload.getLookupType());
+        if (!isNull(payload.getDescription())) {
+            lookupData.setDescription(payload.getDescription());
         }
-        if (!isNull(lookupDataRequest.getParentLookupId())) {
-            Optional<LookupData> parentLookupData = this.lookupDataRepository
-                .findById(lookupDataRequest.getParentLookupId());
+        if (!isNull(payload.getParentLookupId())) {
+            Optional<LookupData> parentLookupData = this.lookupDataRepository.findById(payload.getParentLookupId());
             if (parentLookupData.isPresent()) {
                 lookupData.setParentLookup(parentLookupData.get());
             }
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            lookupDataRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
         lookupData.setAppUser(appUser.get());
         this.addNewLookupData(this.lookupDataRepository.save(lookupData));
-        return new AppResponse(ProcessUtil.SUCCESS, String.format(
-            "LookupData save with %d.",lookupData.getLookupId()));
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("LookupData save with %d.",lookupData.getLookupId()));
     }
 
 
     /**
-     * Method use to update new filed into db & cache
-     * @param lookupDataRequest
+     * Method use to update new field into db & cache
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse updateLookupData(LookupDataRequest lookupDataRequest) throws Exception {
-        logger.info("Request updateLookupData :- " + lookupDataRequest);
-        if (isNull(lookupDataRequest.getLookupId())) {
+    public AppResponse updateLookupData(LookupDataRequest payload) throws Exception {
+        logger.info("Request updateLookupData :- " + payload);
+        if (ProcessUtil.isNull(payload.getLookupId())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupId missing.");
-        } else if (isNull(lookupDataRequest.getLookupValue())) {
+        } else if (ProcessUtil.isNull(payload.getLookupValue())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupValue missing.");
-        } else if (isNull(lookupDataRequest.getLookupType())) {
+        } else if (ProcessUtil.isNull(payload.getLookupType())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupType missing.");
-        } else if (isNull(lookupDataRequest.getDescription())) {
+        } else if (ProcessUtil.isNull(payload.getDescription())) {
             return new AppResponse(ProcessUtil.ERROR, "Description missing.");
-        } else if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+        } else if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            lookupDataRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
-        Optional<LookupData> lookupData = this.lookupDataRepository.findById(lookupDataRequest.getLookupId());
+        Optional<LookupData> lookupData = this.lookupDataRepository.findById(payload.getLookupId());
         if (lookupData.isPresent()) {
-            lookupData.get().setLookupValue(lookupDataRequest.getLookupValue());
-            lookupData.get().setLookupType(lookupDataRequest.getLookupType());
-            if (!isNull(lookupDataRequest.getDescription())) {
-                lookupData.get().setDescription(lookupDataRequest.getDescription());
+            lookupData.get().setLookupValue(payload.getLookupValue());
+            lookupData.get().setLookupType(payload.getLookupType());
+            if (!isNull(payload.getDescription())) {
+                lookupData.get().setDescription(payload.getDescription());
             }
             this.lookupDataRepository.save(lookupData.get());
             this.initialize(); // its update and add new also
-            return new AppResponse(ProcessUtil.SUCCESS, String.format(
-                "LookupData update with %d.", lookupDataRequest.getLookupId()));
+            return new AppResponse(ProcessUtil.SUCCESS, String.format("LookupData update with %d.", payload.getLookupId()));
         }
-        return new AppResponse(ProcessUtil.ERROR, String.format(
-            "LookupData not found with %d.", lookupDataRequest.getLookupId()));
+        return new AppResponse(ProcessUtil.ERROR, String.format("LookupData not found with %d.", payload.getLookupId()));
     }
 
     /**
      * Method use to fetch sub lookup by ParentId
-     * @param lookupDataRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse fetchSubLookupByParentId(LookupDataRequest lookupDataRequest) throws Exception {
-        logger.info("Request fetchSubLookupByParentId :- " + lookupDataRequest);
-        if (isNull(lookupDataRequest.getParentLookupId())) {
+    public AppResponse fetchSubLookupByParentId(LookupDataRequest payload) throws Exception {
+        logger.info("Request fetchSubLookupByParentId :- " + payload);
+        if (ProcessUtil.isNull(payload.getParentLookupId())) {
             return new AppResponse(ProcessUtil.ERROR, "ParentLookupId missing.");
         }
-        if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         }
-        if (!this.appUserRepository.findByUsernameAndStatus(lookupDataRequest.getAccessUserDetail().getUsername(),
-                Status.ACTIVE.getLookupValue()).isPresent()) {
+        if (!this.appUserRepository.findByUsernameAndStatus(payload.getAccessUserDetail().getUsername(),
+                APPLICATION_STATUS.ACTIVE.getLookupValue()).isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
         Map<String, Object> appSettingDetail = new HashMap<>();
         List<LookupDataResponse> lookupDataResponses = new ArrayList<>();
         Optional<LookupData> parentLookup = this.lookupDataRepository.findByParentLookupAndAppUserUsername(
-            lookupDataRequest.getParentLookupId(), lookupDataRequest.getAccessUserDetail().getUsername());
+            payload.getParentLookupId(), payload.getAccessUserDetail().getUsername());
         if (parentLookup.isPresent()) {
             LookupDataResponse parentLookupDataResponse = new LookupDataResponse();
             this.fillLookupDateDto(parentLookup.get(), parentLookupDataResponse);
@@ -221,32 +217,32 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             appSettingDetail.put(SUB_LOOKUP_DATA, lookupDataResponses);
             return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully.", appSettingDetail);
         }
-        return new AppResponse(ProcessUtil.ERROR, String.format("LookupData not found with %s.", lookupDataRequest));
+        return new AppResponse(ProcessUtil.ERROR, String.format("LookupData not found with %s.", payload));
     }
 
     /**
      * Method use to fetch lookup by lookup type
-     * @param lookupDataRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse fetchLookupByLookupType(LookupDataRequest lookupDataRequest) throws Exception {
-        logger.info("Request fetchLookupByLookupType :- " + lookupDataRequest);
-        if (isNull(lookupDataRequest.getLookupType())) {
+    public AppResponse fetchLookupByLookupType(LookupDataRequest payload) throws Exception {
+        logger.info("Request fetchLookupByLookupType :- " + payload);
+        if (ProcessUtil.isNull(payload.getLookupType())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupType missing.");
         }
-        if (lookupDataRequest.isValidate()) {
-            if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+        if (payload.isValidate()) {
+            if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
                 return new AppResponse(ProcessUtil.ERROR, "Username missing.");
             }
-            if (!this.appUserRepository.findByUsernameAndStatus(lookupDataRequest.getAccessUserDetail().getUsername(),
-                Status.ACTIVE.getLookupValue()).isPresent()) {
+            if (!this.appUserRepository.findByUsernameAndStatus(payload.getAccessUserDetail().getUsername(),
+                APPLICATION_STATUS.ACTIVE.getLookupValue()).isPresent()) {
                 return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
             }
         }
         Map<String, Object> appSettingDetail = new HashMap<>();
         List<LookupDataResponse> lookupDataResponses = new ArrayList<>();
-        Optional<LookupData> parentLookup = this.lookupDataRepository.findByLookupType(lookupDataRequest.getLookupType());
+        Optional<LookupData> parentLookup = this.lookupDataRepository.findByLookupType(payload.getLookupType());
         if (parentLookup.isPresent()) {
             LookupDataResponse parentLookupDataResponse = new LookupDataResponse();
             this.fillLookupDateDto(parentLookup.get(), parentLookupDataResponse);
@@ -258,30 +254,32 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
                     lookupDataResponses.add(childLookupDataResponse);
                 }
             }
+            // sort before submit
+            Collections.sort(lookupDataResponses, Comparator.comparing(LookupDataResponse::getLookupValue));
             appSettingDetail.put(SUB_LOOKUP_DATA, lookupDataResponses);
             return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully.", appSettingDetail);
         }
-        return new AppResponse(ProcessUtil.ERROR, String.format("LookupData not found with %s.", lookupDataRequest));
+        return new AppResponse(ProcessUtil.ERROR, String.format("LookupData not found with %s.", payload));
     }
 
     /**
      * Method use to fetch all lookup by user id
-     * @param lookupDataRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse fetchAllLookup(LookupDataRequest lookupDataRequest) throws Exception {
-        logger.info("Request fetchAllLookup :- " + lookupDataRequest);
-        if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+    public AppResponse fetchAllLookup(LookupDataRequest payload) throws Exception {
+        logger.info("Request fetchAllLookup :- " + payload);
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            lookupDataRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
         List<LookupData> lookupDataList = this.lookupDataRepository.fetchAllLookup(
-            lookupDataRequest.getAccessUserDetail().getUsername());
+            payload.getAccessUserDetail().getUsername());
         List<LookupDataResponse> lookupDataResponses = new ArrayList<>();
         if (!lookupDataList.isEmpty()) {
             for (LookupData lookup: lookupDataList) {
@@ -295,27 +293,26 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
 
     /**
      * Method use to delete the lookUp by lookup id and username
-     * @param lookupDataRequest
+     * @param payload
      * @return AppResponse
      * */
     @Override
-    public AppResponse deleteLookupData(LookupDataRequest lookupDataRequest) throws Exception {
-        logger.info("Request deleteLookupData :- " + lookupDataRequest);
-        if (isNull(lookupDataRequest.getLookupId())) {
+    public AppResponse deleteLookupData(LookupDataRequest payload) throws Exception {
+        logger.info("Request deleteLookupData :- " + payload);
+        if (ProcessUtil.isNull(payload.getLookupId())) {
             return new AppResponse(ProcessUtil.ERROR, "LookupData id missing.");
         }
-        if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            lookupDataRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
         }
-        this.lookupDataRepository.deleteById(lookupDataRequest.getLookupId());
+        this.lookupDataRepository.deleteById(payload.getLookupId());
         this.initialize(); // its update and add new also
-        return new AppResponse(ProcessUtil.SUCCESS, String.format(
-            "LookupData delete with %d.", lookupDataRequest.getLookupId()));
+        return new AppResponse(ProcessUtil.SUCCESS, String.format("LookupData delete with %d.", payload.getLookupId()));
     }
 
     /**
@@ -337,9 +334,9 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         // 2nd insert data to newly copied file. So that template couldn't be changed.
         XSSFWorkbook workbook = new XSSFWorkbook(new File(fileUploadPath));
         this.bulkExcel.setWb(workbook);
-        XSSFSheet sheet = workbook.getSheet(this.bulkExcel.LOOKUP);
+        XSSFSheet sheet = workbook.createSheet(this.bulkExcel.LOOKUP);
         this.bulkExcel.setSheet(sheet);
-        this.bulkExcel.fillBulkHeader(0, this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE);
+        this.bulkExcel.fillBulkHeader(0, this.bulkExcel.APP_USER_HEADER_FIELD_BATCH_FILE);
         // Priority
         workbook.write(fileOut);
         fileOut.close();
@@ -354,27 +351,26 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
 
     /**
      * Method use to download lookup file with content
-     * @param lookupDataRequest
+     * @param payload
      * @return ByteArrayOutputStream
      * */
     @Override
-    public ByteArrayOutputStream downloadLookup(LookupDataRequest lookupDataRequest) throws Exception {
-        logger.info("Request deleteLookupData :- " + lookupDataRequest);
-        if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+    public ByteArrayOutputStream downloadLookup(LookupDataRequest payload) throws Exception {
+        logger.info("Request deleteLookupData :- " + payload);
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
             throw new Exception("AppUser username missing");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            lookupDataRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             throw new Exception("AppUser not found");
         }
         List<LookupData> lookupDataList;
-        if (ProcessUtil.isNull(lookupDataRequest.getParentLookupId())) {
-            lookupDataList = this.lookupDataRepository.fetchAllLookup(
-                lookupDataRequest.getAccessUserDetail().getUsername());
+        if (ProcessUtil.isNull(payload.getParentLookupId())) {
+            lookupDataList = this.lookupDataRepository.fetchAllLookup(payload.getAccessUserDetail().getUsername());
         } else {
             Optional<LookupData> parentLookup = this.lookupDataRepository.findByParentLookupAndAppUserUsername(
-                lookupDataRequest.getParentLookupId(), lookupDataRequest.getAccessUserDetail().getUsername());
+                payload.getParentLookupId(), payload.getAccessUserDetail().getUsername());
             if (!parentLookup.isPresent()) {
                 throw new Exception("ParentLookup not found");
             }
@@ -385,7 +381,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         XSSFSheet xssfSheet = workbook.createSheet(this.bulkExcel.LOOKUP);
         this.bulkExcel.setSheet(xssfSheet);
         AtomicInteger rowCount = new AtomicInteger();
-        this.bulkExcel.fillBulkHeader(rowCount.get(), this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE);
+        this.bulkExcel.fillBulkHeader(rowCount.get(), this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE);
         lookupDataList.forEach(sourceJob -> {
             rowCount.getAndIncrement();
             List<String> dataCellValue = new ArrayList<>();
@@ -401,33 +397,33 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
 
     /**
      * Method use to upload lookup file with content
-     * @param fileObject
+     * @param payload
      * @return ByteArrayOutputStream
      * */
     @Override
-    public AppResponse uploadLookup(FileUploadRequest fileObject) throws Exception {
+    public AppResponse uploadLookup(FileUploadRequest payload) throws Exception {
         logger.info("Request for bulk uploading file!");
         Gson gson = new Gson();
-        LookupDataRequest lookupDataRequest = gson.fromJson((String) fileObject.getData(), LookupDataRequest.class);
-        if (isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
+        LookupDataRequest lookupDataRequest = gson.fromJson((String) payload.getData(), LookupDataRequest.class);
+        if (ProcessUtil.isNull(lookupDataRequest.getAccessUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser username missing.");
         }
         Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
-            lookupDataRequest.getAccessUserDetail().getUsername(), Status.ACTIVE.getLookupValue());
+            lookupDataRequest.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         if (!appUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found.");
-        } else if (!fileObject.getFile().getContentType().equalsIgnoreCase(this.bulkExcel.SHEET_NAME)) {
-            logger.info("File Type " + fileObject.getFile().getContentType());
+        } else if (!payload.getFile().getContentType().equalsIgnoreCase(this.bulkExcel.SHEET_NAME)) {
+            logger.info("File Type " + payload.getFile().getContentType());
             return new AppResponse(ProcessUtil.ERROR, "You can upload only .xlsx extension file.");
         }
         // fill the stream with file into work-book
         Optional<LookupData> uploadLimit = this.lookupDataRepository.findByLookupType(LookupDetailUtil.UPLOAD_LIMIT);
-        XSSFWorkbook workbook = new XSSFWorkbook(fileObject.getFile().getInputStream());
-        if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
+        XSSFWorkbook workbook = new XSSFWorkbook(payload.getFile().getInputStream());
+        if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new AppResponse(ProcessUtil.ERROR,  "You uploaded empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(this.bulkExcel.LOOKUP);
-        if (isNull(sheet)) {
+        if (ProcessUtil.isNull(sheet)) {
             return new AppResponse(ProcessUtil.ERROR, "Sheet not found with (LookupTemplate)");
         } else if (sheet.getLastRowNum() < 1) {
             return new AppResponse(ProcessUtil.ERROR,  "You can't upload empty file.");
@@ -440,16 +436,16 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
         while (rows.hasNext()) {
             Row currentRow = rows.next();
             if (currentRow.getRowNum() == 0) {
-                for (int i=0; i < this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE.length; i++) {
-                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE[i])) {
+                for (int i=0; i < this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE.length; i++) {
+                    if (!currentRow.getCell(i).getStringCellValue().equals(this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE[i])) {
                         return new AppResponse(ProcessUtil.ERROR, "File at row " + (currentRow.getRowNum() + 1) + " " +
-                            this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE[i] + " heading missing.");
+                            this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 LookupValidation lookupValidation = new LookupValidation();
                 lookupValidation.setRowCounter(currentRow.getRowNum()+1);
-                for (int i=0; i < this.bulkExcel.LOOKUP_HEADER_FILED_BATCH_FILE.length; i++) {
+                for (int i=0; i < this.bulkExcel.LOOKUP_HEADER_FIELD_BATCH_FILE.length; i++) {
                     if (i==0) {
                         lookupValidation.setLookupType(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i==1) {
@@ -473,8 +469,7 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             }
         }
         if (errors.size() > 0) {
-            return new AppResponse(ProcessUtil.ERROR, String.format("Total %d source jobs invalid.",
-                errors.size()), errors);
+            return new AppResponse(ProcessUtil.ERROR, String.format("Total %d source jobs invalid.", errors.size()), errors);
         }
         lookupValidations.forEach(lookupValidation -> {
             // save the job and scheduler
@@ -495,6 +490,18 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
             this.addNewLookupData(this.lookupDataRepository.save(lookupData));
         });
         return new AppResponse(ProcessUtil.SUCCESS, "Data save successfully.");
+    }
+
+    @Override
+    public LookupDataResponse getParentLookupById(String lookupType) {
+        return this.lookupCacheMap.get(lookupType);
+    }
+
+    @Override
+    public LookupDataResponse getChildLookupById(String parentLookupType, String childLookupType) {
+        return this.getParentLookupById(parentLookupType).getLookupChildren().stream()
+            .filter(childLookup -> childLookupType.equals(childLookup.getLookupType()))
+            .findAny().orElse(null);
     }
 
     private void fillLookupDateDto(LookupData lookupData, LookupDataResponse lookupDataResponse) {
@@ -525,16 +532,6 @@ public class LookupDataCacheServiceImpl implements LookupDataCacheService {
                 }).collect(Collectors.toSet()));
         }
         return parentLookupData;
-    }
-
-    public LookupDataResponse getParentLookupById(String lookupType) {
-        return this.lookupCacheMap.get(lookupType);
-    }
-
-    public LookupDataResponse getChildLookupById(String parentLookupType, String childLookupType) {
-        return this.getParentLookupById(parentLookupType).getLookupChildren().stream()
-            .filter(childLookup -> childLookupType.equals(childLookup.getLookupType()))
-            .findAny().orElse(null);
     }
 
     public Map<String, LookupDataResponse> getLookupCacheMap() {

@@ -12,30 +12,32 @@ import process.util.lookuputil.GLookup;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTFormResponse {
 
-    private Long sttFId;
-    private String sttFName;
+    private Long sttfId;
+    private String sttfName;
     private String description;
     private GLookup status;
     private GLookup formType;
     private GLookup defaultSttf;
+    private GLookup homePage;
+    private String serviceId;
 
     public STTFormResponse() {
     }
 
-    public Long getSttFId() {
-        return sttFId;
+    public Long getSttfId() {
+        return sttfId;
     }
 
-    public void setSttFId(Long sttFId) {
-        this.sttFId = sttFId;
+    public void setSttfId(Long sttfId) {
+        this.sttfId = sttfId;
     }
 
-    public String getSttFName() {
-        return sttFName;
+    public String getSttfName() {
+        return sttfName;
     }
 
-    public void setSttFName(String sttFName) {
-        this.sttFName = sttFName;
+    public void setSttfName(String sttfName) {
+        this.sttfName = sttfName;
     }
 
     public String getDescription() {
@@ -68,6 +70,22 @@ public class STTFormResponse {
 
     public void setDefaultSttf(GLookup defaultSttf) {
         this.defaultSttf = defaultSttf;
+    }
+
+    public GLookup getHomePage() {
+        return homePage;
+    }
+
+    public void setHomePage(GLookup homePage) {
+        this.homePage = homePage;
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
     }
 
     @Override

@@ -32,16 +32,22 @@ public class STTForm {
     @Id
     @Column(name="sttf_id", unique=true, nullable=false)
     @GeneratedValue(generator = "sttFormSequenceGenerator")
-    private Long sttFId;
+    private Long sttfId;
 
     @Column(name = "sttf_name", nullable = false)
-    private String sttFName;
+    private String sttfName;
 
     @Column(name = "description", nullable = false)
     private String description;
 
+    @Column(name = "home_page")
+    private String homePage;
+
+    @Column(name = "service_id")
+    private String serviceId;
+
     // status of job (active or disable or delete)
-    @Column(name = "status",nullable = false)
+    @Column(name = "status", nullable = false)
     private Long status;
 
     @Column(name = "is_default",
@@ -52,7 +58,7 @@ public class STTForm {
     private Long formType;
 
     @OneToMany(mappedBy="sttf")
-    private List<AppUserSTTF> appUserSTTF = new ArrayList<>();
+    private List<STTFLinkSTT> sttfLink = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name="app_user_id")
@@ -61,28 +67,27 @@ public class STTForm {
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
-    public STTForm() {
-    }
+    public STTForm() {}
 
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
-    public Long getSttFId() {
-        return sttFId;
+    public Long getSttfId() {
+        return sttfId;
     }
 
-    public void setSttFId(Long sttFId) {
-        this.sttFId = sttFId;
+    public void setSttfId(Long sttfId) {
+        this.sttfId = sttfId;
     }
 
-    public String getSttFName() {
-        return sttFName;
+    public String getSttfName() {
+        return sttfName;
     }
 
-    public void setSttFName(String sttFName) {
-        this.sttFName = sttFName;
+    public void setSttfName(String sttfName) {
+        this.sttfName = sttfName;
     }
 
     public String getDescription() {
@@ -91,6 +96,22 @@ public class STTForm {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getHomePage() {
+        return homePage;
+    }
+
+    public void setHomePage(String homePage) {
+        this.homePage = homePage;
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
     }
 
     public Long getStatus() {
@@ -117,12 +138,12 @@ public class STTForm {
         this.formType = formType;
     }
 
-    public List<AppUserSTTF> getAppUserSTTF() {
-        return appUserSTTF;
+    public List<STTFLinkSTT> getSttfLink() {
+        return sttfLink;
     }
 
-    public void setAppUserSTTF(List<AppUserSTTF> appUserSTTF) {
-        this.appUserSTTF = appUserSTTF;
+    public void setSttfLink(List<STTFLinkSTT> sttfLink) {
+        this.sttfLink = sttfLink;
     }
 
     public AppUser getAppUser() {

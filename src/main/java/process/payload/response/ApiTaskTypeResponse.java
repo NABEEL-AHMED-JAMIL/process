@@ -16,7 +16,6 @@ public class ApiTaskTypeResponse {
     private Long apiTaskTypeId;
     private String apiUrl; // yes
     private GLookup httpMethod; // yes
-    private String apiSecurityLkValue;
 
     public ApiTaskTypeResponse() {
     }
@@ -43,14 +42,6 @@ public class ApiTaskTypeResponse {
 
     public void setHttpMethod(GLookup httpMethod) {
         this.httpMethod = httpMethod;
-    }
-
-    public String getApiSecurityLkValue() {
-        return apiSecurityLkValue;
-    }
-
-    public void setApiSecurityLkValue(String apiSecurityLkValue) {
-        this.apiSecurityLkValue = apiSecurityLkValue;
     }
 
     @Override

@@ -13,15 +13,15 @@ import java.sql.Timestamp;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTControlListResponse {
 
-    private Long sttCId;
-    private Long sttCOrder;
-    private String sttCName;
-    private String filedName;
-    private GLookup filedType;
+    private Long sttcId;
+    private String sttcName;
+    private String fieldName;
+    private GLookup fieldType;
     private String description;
     private GLookup mandatory;
     private GLookup status;
     private GLookup sttcDefault;
+    private GLookup sttcDisabled;
     private Timestamp dateCreated;
     private Long totalStt;
     private Long totalForm;
@@ -29,44 +29,36 @@ public class STTControlListResponse {
 
     public STTControlListResponse() {}
 
-    public Long getSttCId() {
-        return sttCId;
+    public Long getSttcId() {
+        return sttcId;
     }
 
-    public void setSttCId(Long sttCId) {
-        this.sttCId = sttCId;
+    public void setSttcId(Long sttcId) {
+        this.sttcId = sttcId;
     }
 
-    public Long getSttCOrder() {
-        return sttCOrder;
+    public String getSttcName() {
+        return sttcName;
     }
 
-    public void setSttCOrder(Long sttCOrder) {
-        this.sttCOrder = sttCOrder;
+    public void setSttcName(String sttcName) {
+        this.sttcName = sttcName;
     }
 
-    public String getSttCName() {
-        return sttCName;
+    public String getFieldName() {
+        return fieldName;
     }
 
-    public void setSttCName(String sttCName) {
-        this.sttCName = sttCName;
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
     }
 
-    public String getFiledName() {
-        return filedName;
+    public GLookup getFieldType() {
+        return fieldType;
     }
 
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
-    }
-
-    public GLookup getFiledType() {
-        return filedType;
-    }
-
-    public void setFiledType(GLookup filedType) {
-        this.filedType = filedType;
+    public void setFieldType(GLookup fieldType) {
+        this.fieldType = fieldType;
     }
 
     public String getDescription() {
@@ -77,16 +69,12 @@ public class STTControlListResponse {
         this.description = description;
     }
 
-    public GLookup isMandatory() {
+    public GLookup getMandatory() {
         return mandatory;
     }
 
     public void setMandatory(GLookup mandatory) {
         this.mandatory = mandatory;
-    }
-
-    public GLookup getMandatory() {
-        return mandatory;
     }
 
     public GLookup getStatus() {
@@ -103,6 +91,14 @@ public class STTControlListResponse {
 
     public void setSttcDefault(GLookup sttcDefault) {
         this.sttcDefault = sttcDefault;
+    }
+
+    public GLookup getSttcDisabled() {
+        return sttcDisabled;
+    }
+
+    public void setSttcDisabled(GLookup sttcDisabled) {
+        this.sttcDisabled = sttcDisabled;
     }
 
     public Timestamp getDateCreated() {

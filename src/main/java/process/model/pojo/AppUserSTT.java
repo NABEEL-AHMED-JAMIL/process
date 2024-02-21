@@ -40,8 +40,12 @@ public class AppUserSTT {
     @JoinColumn(name = "app_user_id", nullable = false)
     private AppUser appUser;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "created_by", nullable = false)
+    private AppUser createdBy;
+
     @OneToMany(mappedBy="stt")
-    private List<AppUserSTTF> appUserSTTF = new ArrayList<>();
+    private List<STTFLinkSTT> sttfLink = new ArrayList<>();
 
     @Column(name = "status", nullable = false)
     private Long status;
@@ -49,8 +53,7 @@ public class AppUserSTT {
     @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
-    public AppUserSTT() {
-    }
+    public AppUserSTT() {}
 
     public AppUserSTT(STT stt, AppUser appUser, Long status) {
         this.stt = stt;
@@ -87,12 +90,20 @@ public class AppUserSTT {
         this.appUser = appUser;
     }
 
-    public List<AppUserSTTF> getAppUserSTTF() {
-        return appUserSTTF;
+    public AppUser getCreatedBy() {
+        return createdBy;
     }
 
-    public void setAppUserSTTF(List<AppUserSTTF> appUserSTTF) {
-        this.appUserSTTF = appUserSTTF;
+    public void setCreatedBy(AppUser createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public List<STTFLinkSTT> getSttfLink() {
+        return sttfLink;
+    }
+
+    public void setSttfLink(List<STTFLinkSTT> sttfLink) {
+        this.sttfLink = sttfLink;
     }
 
     public Long getStatus() {

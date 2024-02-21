@@ -15,9 +15,8 @@ public class STTSectionRequest {
     private String sttsName; // yes
     private String description; // yes
     private Long status;
-    private Long sttsOrder;  // yes
-    private ParseRequest accessUserDetail; // yes
     private boolean defaultStts;
+    private ParseRequest accessUserDetail; // yes
 
     public STTSectionRequest() {
     }
@@ -52,14 +51,6 @@ public class STTSectionRequest {
 
     public void setStatus(Long status) {
         this.status = status;
-    }
-
-    public Long getSttsOrder() {
-        return sttsOrder;
-    }
-
-    public void setSttsOrder(Long sttsOrder) {
-        this.sttsOrder = sttsOrder;
     }
 
     public ParseRequest getAccessUserDetail() {

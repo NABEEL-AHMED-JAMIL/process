@@ -18,6 +18,7 @@ public class STTResponse {
     private GLookup status;
     private GLookup taskType;
     private GLookup defaultStt;
+    private Long credentialId;
     private KafkaTaskTypeResponse kafkaTaskType;
     private ApiTaskTypeResponse apiTaskType;
 
@@ -70,6 +71,14 @@ public class STTResponse {
 
     public void setDefaultStt(GLookup defaultStt) {
         this.defaultStt = defaultStt;
+    }
+
+    public Long getCredentialId() {
+        return credentialId;
+    }
+
+    public void setCredentialId(Long credentialId) {
+        this.credentialId = credentialId;
     }
 
     public KafkaTaskTypeResponse getKafkaTaskType() {

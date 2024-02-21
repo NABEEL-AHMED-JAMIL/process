@@ -13,10 +13,9 @@ import java.sql.Timestamp;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTSectionResponse {
 
-    private Long sttSId;
-    private String sttSName;
+    private Long sttsId;
+    private String sttsName;
     private String description;
-    private Long sttSOrder;
     private GLookup status;
     private GLookup defaultStts;
     private Timestamp dateCreated;
@@ -24,20 +23,20 @@ public class STTSectionResponse {
     public STTSectionResponse() {
     }
 
-    public Long getSttSId() {
-        return sttSId;
+    public Long getSttsId() {
+        return sttsId;
     }
 
-    public void setSttSId(Long sttSId) {
-        this.sttSId = sttSId;
+    public void setSttsId(Long sttsId) {
+        this.sttsId = sttsId;
     }
 
-    public String getSttSName() {
-        return sttSName;
+    public String getSttsName() {
+        return sttsName;
     }
 
-    public void setSttSName(String sttSName) {
-        this.sttSName = sttSName;
+    public void setSttsName(String sttsName) {
+        this.sttsName = sttsName;
     }
 
     public String getDescription() {
@@ -46,14 +45,6 @@ public class STTSectionResponse {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public Long getSttSOrder() {
-        return sttSOrder;
-    }
-
-    public void setSttSOrder(Long sttSOrder) {
-        this.sttSOrder = sttSOrder;
     }
 
     public GLookup getStatus() {

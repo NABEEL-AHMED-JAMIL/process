@@ -30,6 +30,11 @@ public class AppUserResponse {
 
     public AppUserResponse() {}
 
+    public AppUserResponse(Long appUserId, String username) {
+        this.appUserId = appUserId;
+        this.username = username;
+    }
+
     public Long getAppUserId() {
         return appUserId;
     }

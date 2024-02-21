@@ -11,13 +11,44 @@ import com.google.gson.Gson;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SignupRequest {
 
+    private Long appUserId;
+    private String firstname;
+    private String lastname;
     private String username;
     private String email;
     private String password;
     private String role;
+
+    private Long status;
     private String timeZone;
 
+    private ParseRequest accessUserDetail;
+
     public SignupRequest() {
+    }
+
+    public Long getAppUserId() {
+        return appUserId;
+    }
+
+    public void setAppUserId(Long appUserId) {
+        this.appUserId = appUserId;
+    }
+
+    public String getFirstname() {
+        return firstname;
+    }
+
+    public void setFirstname(String firstname) {
+        this.firstname = firstname;
+    }
+
+    public String getLastname() {
+        return lastname;
+    }
+
+    public void setLastname(String lastname) {
+        this.lastname = lastname;
     }
 
     public String getUsername() {
@@ -52,12 +83,28 @@ public class SignupRequest {
         this.role = role;
     }
 
+    public Long getStatus() {
+        return status;
+    }
+
+    public void setStatus(Long status) {
+        this.status = status;
+    }
+
     public String getTimeZone() {
         return timeZone;
     }
 
     public void setTimeZone(String timeZone) {
         this.timeZone = timeZone;
+    }
+
+    public ParseRequest getAccessUserDetail() {
+        return accessUserDetail;
+    }
+
+    public void setAccessUserDetail(ParseRequest accessUserDetail) {
+        this.accessUserDetail = accessUserDetail;
     }
 
     @Override

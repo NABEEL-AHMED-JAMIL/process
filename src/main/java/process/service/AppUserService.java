@@ -1,7 +1,10 @@
 package process.service;
 
+import org.springframework.web.bind.annotation.RequestBody;
 import process.payload.request.*;
 import process.payload.response.AppResponse;
+
+import java.io.ByteArrayOutputStream;
 
 /**
  * @author Nabeel Ahmed
@@ -31,5 +34,13 @@ public interface AppUserService {
     public AppResponse authClamByRefreshToken(TokenRefreshRequest tokenRefreshRequest)  throws Exception;
 
     public AppResponse logoutAppUser(TokenRefreshRequest tokenRefreshRequest)  throws Exception;
+
+    public AppResponse addEditAppUserAccount(SignupRequest signupRequest)  throws Exception;
+
+    public ByteArrayOutputStream downloadAppUserTemplateFile() throws Exception;
+
+    public ByteArrayOutputStream downloadAppUser(SignupRequest signupRequest) throws Exception;
+
+    public AppResponse uploadAppUser(FileUploadRequest fileObject) throws Exception;
 
 }

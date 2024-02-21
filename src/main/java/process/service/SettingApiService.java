@@ -8,6 +8,6 @@ import process.payload.response.AppResponse;
  */
 public interface SettingApiService {
 
-    public AppResponse dynamicQueryResponse(QueryRequest queryRequest);
+    public AppResponse dynamicQueryResponse(QueryRequest payload);
 
 }

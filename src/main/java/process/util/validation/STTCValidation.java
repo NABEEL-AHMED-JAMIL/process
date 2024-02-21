@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.util.ProcessUtil;
-import process.util.lookuputil.FormControlType;
-import process.util.lookuputil.IsDefault;
+import process.util.lookuputil.FORM_CONTROL_TYPE;
+import process.util.lookuputil.ISDEFAULT;
 import java.util.regex.Pattern;
 
 /**
@@ -19,22 +19,28 @@ public class STTCValidation {
 
     private Integer rowCounter = 0;
     private String errorMsg;
-
-    private String controlOrder;
     private String controlName;
     private String description;
-    private String filedName;
-    private String filedTitle;
-    private String filedWidth;
+    private String fieldName;
+    private String fieldTitle;
+    private String fieldWidth;
     private String placeHolder;
     private String pattern;
-    private String filedType;
-    private String filedLkValue;
+    private String fieldType;
+    private String fieldLkValue;
     private String minLength;
     private String maxLength;
     private String required;
 
     public STTCValidation() {}
+
+    public Pattern getPatternRegx() {
+        return patternRegx;
+    }
+
+    public void setPatternRegx(Pattern patternRegx) {
+        this.patternRegx = patternRegx;
+    }
 
     public Integer getRowCounter() {
         return rowCounter;
@@ -50,14 +56,6 @@ public class STTCValidation {
 
     public void setErrorMsg(String errorMsg) {
         this.errorMsg = errorMsg;
-    }
-
-    public String getControlOrder() {
-        return controlOrder;
-    }
-
-    public void setControlOrder(String controlOrder) {
-        this.controlOrder = controlOrder;
     }
 
     public String getControlName() {
@@ -76,28 +74,28 @@ public class STTCValidation {
         this.description = description;
     }
 
-    public String getFiledName() {
-        return filedName;
+    public String getFieldName() {
+        return fieldName;
     }
 
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
     }
 
-    public String getFiledTitle() {
-        return filedTitle;
+    public String getFieldTitle() {
+        return fieldTitle;
     }
 
-    public void setFiledTitle(String filedTitle) {
-        this.filedTitle = filedTitle;
+    public void setFieldTitle(String fieldTitle) {
+        this.fieldTitle = fieldTitle;
     }
 
-    public String getFiledWidth() {
-        return filedWidth;
+    public String getFieldWidth() {
+        return fieldWidth;
     }
 
-    public void setFiledWidth(String filedWidth) {
-        this.filedWidth = filedWidth;
+    public void setFieldWidth(String fieldWidth) {
+        this.fieldWidth = fieldWidth;
     }
 
     public String getPlaceHolder() {
@@ -116,20 +114,20 @@ public class STTCValidation {
         this.pattern = pattern;
     }
 
-    public String getFiledType() {
-        return filedType;
+    public String getFieldType() {
+        return fieldType;
     }
 
-    public void setFiledType(String filedType) {
-        this.filedType = filedType;
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
     }
 
-    public String getFiledLkValue() {
-        return filedLkValue;
+    public String getFieldLkValue() {
+        return fieldLkValue;
     }
 
-    public void setFiledLkValue(String filedLkValue) {
-        this.filedLkValue = filedLkValue;
+    public void setFieldLkValue(String fieldLkValue) {
+        this.fieldLkValue = fieldLkValue;
     }
 
     public String getMinLength() {
@@ -158,36 +156,31 @@ public class STTCValidation {
 
     public void isValidSTTC() {
         try {
-            if (this.isNull(this.controlOrder)) {
-                this.setErrorMsg(String.format("ControlOrder should not be empty at row %s.<br>", rowCounter));
-            } else if (!this.patternRegx.matcher(controlOrder).matches()) {
-                this.setErrorMsg(String.format("ControlOrder type not correct at row %s.<br>", rowCounter));
-            }
             if (this.isNull(this.controlName)) {
                 this.setErrorMsg(String.format("ControlName should not be empty at row %s.<br>", rowCounter));
             }
             if (this.isNull(this.description)) {
                 this.setErrorMsg(String.format("Description should not be empty at row %s.<br>", rowCounter));
             }
-            if (this.isNull(this.filedName)) {
-                this.setErrorMsg(String.format("FiledName should not be empty at row %s.<br>", rowCounter));
+            if (this.isNull(this.fieldName)) {
+                this.setErrorMsg(String.format("FieldName should not be empty at row %s.<br>", rowCounter));
             }
-            if (this.isNull(this.filedTitle)) {
-                this.setErrorMsg(String.format("FiledTitle should not be empty at row %s.<br>", rowCounter));
+            if (this.isNull(this.fieldTitle)) {
+                this.setErrorMsg(String.format("FieldTitle should not be empty at row %s.<br>", rowCounter));
             }
-            if (this.isNull(this.filedWidth)) {
-                this.setErrorMsg(String.format("FiledWidth should not be empty at row %s.<br>", rowCounter));
-            } else if (!this.patternRegx.matcher(filedWidth).matches()) {
-                this.setErrorMsg(String.format("FiledWidth type not correct at row %s.<br>", rowCounter));
+            if (this.isNull(this.fieldWidth)) {
+                this.setErrorMsg(String.format("FieldWidth should not be empty at row %s.<br>", rowCounter));
+            } else if (!this.patternRegx.matcher(fieldWidth).matches()) {
+                this.setErrorMsg(String.format("FieldWidth type not correct at row %s.<br>", rowCounter));
             }
-            if (this.isNull(this.filedType)) {
-                this.setErrorMsg(String.format("FiledType should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(FormControlType.getFormControlTypeByDescription(this.filedType))) {
-                this.setErrorMsg(String.format("FiledType type not correct at row %s.<br>", rowCounter));
+            if (this.isNull(this.fieldType)) {
+                this.setErrorMsg(String.format("FieldType should not be empty at row %s.<br>", rowCounter));
+            } else if (ProcessUtil.isNull(FORM_CONTROL_TYPE.getFormControlTypeByDescription(this.fieldType))) {
+                this.setErrorMsg(String.format("FieldType type not correct at row %s.<br>", rowCounter));
             }
             if (this.isNull(this.required)) {
                 this.setErrorMsg(String.format("Required should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.required))) {
+            } else if (ProcessUtil.isNull(ISDEFAULT.getDefaultByDescription(this.required))) {
                 this.setErrorMsg(String.format("Required type not correct at row %s.<br>", rowCounter));
             }
         } catch (Exception ex) {
@@ -195,8 +188,8 @@ public class STTCValidation {
         }
     }
 
-    private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+    private static boolean isNull(String field) {
+        return (field == null || field.length() == 0) ? true : false;
     }
 
     @Override

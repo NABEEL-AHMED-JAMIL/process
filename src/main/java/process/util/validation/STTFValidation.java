@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.util.ProcessUtil;
-import process.util.lookuputil.FormType;
-import process.util.lookuputil.IsDefault;
+import process.util.lookuputil.FORM_TYPE;
+import process.util.lookuputil.ISDEFAULT;
 
 /**
  * @author Nabeel Ahmed
@@ -82,12 +82,12 @@ public class STTFValidation {
             }
             if (this.isNull(this.defaultSTTF)) {
                 this.setErrorMsg(String.format("Default should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.defaultSTTF))) {
+            } else if (ProcessUtil.isNull(ISDEFAULT.getDefaultByDescription(this.defaultSTTF))) {
                 this.setErrorMsg(String.format("Default type not correct at row %s.<br>", rowCounter));
             }
             if (this.isNull(this.formType)) {
                 this.setErrorMsg(String.format("FormType should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(FormType.getFormTypeByDescription(this.formType))) {
+            } else if (ProcessUtil.isNull(FORM_TYPE.getFormTypeByDescription(this.formType))) {
                 this.setErrorMsg(String.format("FormType type not correct at row %s.<br>", rowCounter));
             }
         } catch (Exception ex) {
@@ -95,8 +95,8 @@ public class STTFValidation {
         }
     }
 
-    private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+    private static boolean isNull(String field) {
+        return (field == null || field.length() == 0) ? true : false;
     }
 
     @Override

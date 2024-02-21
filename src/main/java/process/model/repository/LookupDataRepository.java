@@ -15,29 +15,16 @@ public interface LookupDataRepository extends CrudRepository<LookupData, Long> {
 
     public Optional<LookupData> findByLookupType(String lookupType);
 
-    @Query(value = "select ld.*\n" +
-        "from lookup_data ld\n" +
-        "where ld.lookup_id = ?", nativeQuery = true)
-    public Optional<LookupData> findByParentLookupId(Long parentLookupId);
-
     public List<LookupData> findByParentLookupIsNull();
 
-    @Query(value = "select ld.*, au.app_user_id, au.username\n" +
-        "from lookup_data ld\n" +
+    @Query(value = "select ld.*, au.app_user_id, au.username from lookup_data ld\n" +
         "join app_users au on au.app_user_id  = ld.app_user_id  \n" +
         "where au.username = ?1 and ld.parent_lookup_id  is null", nativeQuery = true)
     public List<LookupData> fetchAllLookup(String username);
 
-    @Query(value = "select ld.*, au.app_user_id, au.username\n" +
-        "from lookup_data ld\n" +
+    @Query(value = "select ld.*, au.app_user_id, au.username from lookup_data ld\n" +
         "join app_users au on au.app_user_id  = ld.app_user_id  \n" +
         "where ld.lookup_id = ?1 and au.username = ?2 ", nativeQuery = true)
     public Optional<LookupData> findByParentLookupAndAppUserUsername(Long parentLookupId, String username);
-
-    @Query(value = "select ld.*, au.app_user_id, au.username\n" +
-            "from lookup_data ld\n" +
-            "join app_users au on au.app_user_id  = ld.app_user_id  \n" +
-            "where ld.lookup_type = ?1 and au.username = ?2 ", nativeQuery = true)
-    public Optional<LookupData> findByLookupTypeAndAppUserUsername(String lookupType, String username);
 
 }

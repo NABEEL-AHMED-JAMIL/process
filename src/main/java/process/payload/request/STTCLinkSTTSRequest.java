@@ -11,9 +11,54 @@ import com.google.gson.Gson;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class STTCLinkSTTSRequest {
 
+    private Long auSttcId;
+    private Long sttsId;
+    private Long sttcId;
+    private Long sttcOrder;
+    private Long appUserId;
     private ParseRequest accessUserDetail; // yes
 
     public STTCLinkSTTSRequest() {}
+
+    public Long getAuSttcId() {
+        return auSttcId;
+    }
+
+    public void setAuSttcId(Long auSttcId) {
+        this.auSttcId = auSttcId;
+    }
+
+    public Long getSttsId() {
+        return sttsId;
+    }
+
+    public void setSttsId(Long sttsId) {
+        this.sttsId = sttsId;
+    }
+
+    public Long getSttcId() {
+        return sttcId;
+    }
+
+    public void setSttcId(Long sttcId) {
+        this.sttcId = sttcId;
+    }
+
+    public Long getSttcOrder() {
+        return sttcOrder;
+    }
+
+    public void setSttcOrder(Long sttcOrder) {
+        this.sttcOrder = sttcOrder;
+    }
+
+    public Long getAppUserId() {
+        return appUserId;
+    }
+
+    public void setAppUserId(Long appUserId) {
+        this.appUserId = appUserId;
+    }
 
     public ParseRequest getAccessUserDetail() {
         return accessUserDetail;

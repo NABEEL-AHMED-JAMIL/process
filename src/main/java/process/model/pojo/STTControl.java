@@ -31,34 +31,31 @@ public class STTControl {
     @Id
     @Column(name="sttc_id", unique=true, nullable=false)
     @GeneratedValue(generator = "sttControlSequenceGenerator")
-    private Long sttCId;
+    private Long sttcId;
 
     @Column(name = "sttc_name", nullable=false)
-    private String sttCName;
+    private String sttcName;
 
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "sttc_order")
-    private Long sttCOrder;
-
     // select,multiple select, need the lookup value
-    @Column(name = "filed_type")
-    private String filedType;
+    @Column(name = "field_type")
+    private String fieldType;
 
     // label name
-    @Column(name = "filed_title", nullable = false)
-    private String filedTitle;
+    @Column(name = "field_title", nullable = false)
+    private String fieldTitle;
 
-    // filed name not be space
-    @Column(name = "filed_name", nullable = false)
-    private String filedName;
+    // field name not be space
+    @Column(name = "field_name", nullable = false)
+    private String fieldName;
 
     @Column(name = "place_holder")
     private String placeHolder;
 
-    @Column(name = "filed_width")
-    private Long filedWidth;
+    @Column(name = "field_width")
+    private Long fieldWidth;
 
     @Column(name = "min_length")
     private Long minLength;
@@ -66,20 +63,27 @@ public class STTControl {
     @Column(name = "max_length")
     private Long maxLength;
 
-    @Column(name = "filed_lk_value")
-    private String filedLkValue;
+    @Column(name = "field_lk_value")
+    private String fieldLkValue;
 
     @Column(name = "mandatory")
     private Boolean mandatory;
+
+    @Column(name = "disabled",
+        columnDefinition = "boolean default false")
+    private Boolean disabled;
 
     @Column(name = "is_default",
         columnDefinition = "boolean default false")
     private Boolean isDefault;
 
+    @Column(name = "default_val")
+    private String defaultValue;
+
     @Column(name = "pattern")
     private String pattern;
 
-    @Column(name = "status",nullable = false)
+    @Column(name = "status", nullable = false)
     private Long status;
 
     @ManyToOne
@@ -90,7 +94,7 @@ public class STTControl {
     private Timestamp dateCreated;
 
     @OneToMany(mappedBy="sttc")
-    private List<AppUserSTTC> appUserSTTC = new ArrayList<>();
+    private List<STTCLinkSTTS> sttcLink = new ArrayList<>();
 
     public STTControl() {
     }
@@ -100,20 +104,20 @@ public class STTControl {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
     }
 
-    public Long getSttCId() {
-        return sttCId;
+    public Long getSttcId() {
+        return sttcId;
     }
 
-    public void setSttCId(Long sttCId) {
-        this.sttCId = sttCId;
+    public void setSttcId(Long sttcId) {
+        this.sttcId = sttcId;
     }
 
-    public String getSttCName() {
-        return sttCName;
+    public String getSttcName() {
+        return sttcName;
     }
 
-    public void setSttCName(String sttCName) {
-        this.sttCName = sttCName;
+    public void setSttcName(String sttcName) {
+        this.sttcName = sttcName;
     }
 
     public String getDescription() {
@@ -124,36 +128,28 @@ public class STTControl {
         this.description = description;
     }
 
-    public Long getSttCOrder() {
-        return sttCOrder;
+    public String getFieldType() {
+        return fieldType;
     }
 
-    public void setSttCOrder(Long sttCOrder) {
-        this.sttCOrder = sttCOrder;
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
     }
 
-    public String getFiledType() {
-        return filedType;
+    public String getFieldTitle() {
+        return fieldTitle;
     }
 
-    public void setFiledType(String filedType) {
-        this.filedType = filedType;
+    public void setFieldTitle(String fieldTitle) {
+        this.fieldTitle = fieldTitle;
     }
 
-    public String getFiledTitle() {
-        return filedTitle;
+    public String getFieldName() {
+        return fieldName;
     }
 
-    public void setFiledTitle(String filedTitle) {
-        this.filedTitle = filedTitle;
-    }
-
-    public String getFiledName() {
-        return filedName;
-    }
-
-    public void setFiledName(String filedName) {
-        this.filedName = filedName;
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
     }
 
     public String getPlaceHolder() {
@@ -164,12 +160,12 @@ public class STTControl {
         this.placeHolder = placeHolder;
     }
 
-    public Long getFiledWidth() {
-        return filedWidth;
+    public Long getFieldWidth() {
+        return fieldWidth;
     }
 
-    public void setFiledWidth(Long filedWidth) {
-        this.filedWidth = filedWidth;
+    public void setFieldWidth(Long fieldWidth) {
+        this.fieldWidth = fieldWidth;
     }
 
     public Long getMinLength() {
@@ -188,12 +184,12 @@ public class STTControl {
         this.maxLength = maxLength;
     }
 
-    public String getFiledLkValue() {
-        return filedLkValue;
+    public String getFieldLkValue() {
+        return fieldLkValue;
     }
 
-    public void setFiledLkValue(String filedLkValue) {
-        this.filedLkValue = filedLkValue;
+    public void setFieldLkValue(String fieldLkValue) {
+        this.fieldLkValue = fieldLkValue;
     }
 
     public Boolean getMandatory() {
@@ -204,12 +200,28 @@ public class STTControl {
         this.mandatory = mandatory;
     }
 
+    public Boolean getDisabled() {
+        return disabled;
+    }
+
+    public void setDisabled(Boolean disabled) {
+        this.disabled = disabled;
+    }
+
     public Boolean getDefault() {
         return isDefault;
     }
 
     public void setDefault(Boolean aDefault) {
         isDefault = aDefault;
+    }
+
+    public String getDefaultValue() {
+        return defaultValue;
+    }
+
+    public void setDefaultValue(String defaultValue) {
+        this.defaultValue = defaultValue;
     }
 
     public String getPattern() {
@@ -244,12 +256,12 @@ public class STTControl {
         this.dateCreated = dateCreated;
     }
 
-    public List<AppUserSTTC> getAppUserSTTC() {
-        return appUserSTTC;
+    public List<STTCLinkSTTS> getSttcLink() {
+        return sttcLink;
     }
 
-    public void setAppUserSTTC(List<AppUserSTTC> appUserSTTC) {
-        this.appUserSTTC = appUserSTTC;
+    public void setSttcLink(List<STTCLinkSTTS> sttcLink) {
+        this.sttcLink = sttcLink;
     }
 
     @Override

@@ -16,6 +16,8 @@ public class STTFormRequest {
     private String description; // yes
     private Long status;
     private Long formType;
+    private String homePage;
+    private String serviceId;
     private boolean defaultSttf;
     private ParseRequest accessUserDetail; // yes
 
@@ -68,6 +70,22 @@ public class STTFormRequest {
 
     public void setDefaultSttf(boolean defaultSttf) {
         this.defaultSttf = defaultSttf;
+    }
+
+    public String getHomePage() {
+        return homePage;
+    }
+
+    public void setHomePage(String homePage) {
+        this.homePage = homePage;
+    }
+
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
     }
 
     public ParseRequest getAccessUserDetail() {

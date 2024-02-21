@@ -11,7 +11,7 @@ import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.repository.LookupDataRepository;
-import process.util.lookuputil.Status;
+import process.util.lookuputil.APPLICATION_STATUS;
 
 /**
  * @author Nabeel Ahmed
@@ -34,7 +34,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AppUser appUser = appUserRepository.findByUsernameAndStatus(username, Status.ACTIVE.getLookupValue())
+        AppUser appUser = this.appUserRepository.findByUsernameAndStatus(username, APPLICATION_STATUS.ACTIVE.getLookupValue())
             .orElseThrow(() -> new UsernameNotFoundException("User Not Found with username: " + username));
         return UserDetailsImpl.build(appUser);
     }

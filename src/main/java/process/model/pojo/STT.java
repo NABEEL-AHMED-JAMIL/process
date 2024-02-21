@@ -39,7 +39,8 @@ public class STT {
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "task_type", nullable = false, updatable = false)
+    @Column(name = "task_type",
+        nullable = false, updatable = false)
     private Long taskType;
 
     @OneToMany(mappedBy = "stt")
@@ -47,6 +48,10 @@ public class STT {
 
     @OneToMany(mappedBy = "stt")
     private List<KafkaTaskType> kafkaTaskType = new ArrayList<>();
+
+    @ManyToOne
+    @JoinColumn(name="credential_id")
+    private Credential credential;
 
     @Column(name = "status", nullable = false)
     private Long status;
@@ -59,6 +64,9 @@ public class STT {
 
     @OneToMany(mappedBy="stt")
     private List<AppUserSTT> appUserSTT = new ArrayList<>();
+
+    @OneToMany(mappedBy="stt")
+    private List<SourceTask> sourceTasks = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name="app_user_id")
@@ -122,6 +130,14 @@ public class STT {
         this.kafkaTaskType = kafkaTaskType;
     }
 
+    public Credential getCredential() {
+        return credential;
+    }
+
+    public void setCredential(Credential credential) {
+        this.credential = credential;
+    }
+
     public Long getStatus() {
         return status;
     }
@@ -144,6 +160,14 @@ public class STT {
 
     public void setAppUserSTT(List<AppUserSTT> appUserSTT) {
         this.appUserSTT = appUserSTT;
+    }
+
+    public List<SourceTask> getSourceTasks() {
+        return sourceTasks;
+    }
+
+    public void setSourceTasks(List<SourceTask> sourceTasks) {
+        this.sourceTasks = sourceTasks;
     }
 
     public AppUser getAppUser() {

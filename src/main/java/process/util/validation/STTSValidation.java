@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.util.ProcessUtil;
-import process.util.lookuputil.IsDefault;
+import process.util.lookuputil.ISDEFAULT;
 import java.util.regex.Pattern;
 
 /**
@@ -19,7 +19,6 @@ public class STTSValidation {
     private Integer rowCounter = 0;
     private String errorMsg;
 
-    private String sectionOrder;
     private String sectionName;
     private String description;
     private String defaultSTTS;
@@ -41,14 +40,6 @@ public class STTSValidation {
 
     public void setErrorMsg(String errorMsg) {
         this.errorMsg = errorMsg;
-    }
-
-    public String getSectionOrder() {
-        return sectionOrder;
-    }
-
-    public void setSectionOrder(String sectionOrder) {
-        this.sectionOrder = sectionOrder;
     }
 
     public String getSectionName() {
@@ -77,11 +68,6 @@ public class STTSValidation {
 
     public void isValidSTTS() {
         try {
-            if (this.isNull(this.sectionOrder)) {
-                this.setErrorMsg(String.format("SectionOrder should not be empty at row %s.<br>", rowCounter));
-            } else if (!this.pattern.matcher(sectionOrder).matches()) {
-                this.setErrorMsg(String.format("SectionOrder type not correct at row %s.<br>", rowCounter));
-            }
             if (this.isNull(this.sectionName)) {
                 this.setErrorMsg(String.format("SectionName should not be empty at row %s.<br>", rowCounter));
             }
@@ -90,7 +76,7 @@ public class STTSValidation {
             }
             if (this.isNull(this.defaultSTTS)) {
                 this.setErrorMsg(String.format("Default should not be empty at row %s.<br>", rowCounter));
-            } else if (ProcessUtil.isNull(IsDefault.getDefaultByDescription(this.defaultSTTS))) {
+            } else if (ProcessUtil.isNull(ISDEFAULT.getDefaultByDescription(this.defaultSTTS))) {
                 this.setErrorMsg(String.format("Default type not correct at row %s.<br>", rowCounter));
             }
         } catch (Exception ex) {
@@ -98,8 +84,8 @@ public class STTSValidation {
         }
     }
 
-    private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+    private static boolean isNull(String field) {
+        return (field == null || field.length() == 0) ? true : false;
     }
 
     @Override

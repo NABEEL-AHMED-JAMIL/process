@@ -37,9 +37,6 @@ public class ApiTaskType {
     @Column(name = "http_method", nullable = false)
     private HttpMethod httpMethod;
 
-    @Column(name = "api_sec_lk_value")
-    private String apiSecurityLkValue;
-
     @ManyToOne(fetch=FetchType.LAZY)
     @JoinColumn(name="stt_id")
     private STT stt;
@@ -72,14 +69,6 @@ public class ApiTaskType {
 
     public void setHttpMethod(HttpMethod httpMethod) {
         this.httpMethod = httpMethod;
-    }
-
-    public String getApiSecurityLkValue() {
-        return apiSecurityLkValue;
-    }
-
-    public void setApiSecurityLkValue(String apiSecurityLkValue) {
-        this.apiSecurityLkValue = apiSecurityLkValue;
     }
 
     public STT getStt() {

@@ -7,12 +7,11 @@ import java.sql.Timestamp;
  */
 public interface STTSProjection {
 
-    public Long getSttSId();
-    public String getSttSName();
+    public Long getSttsId();
+    public String getSttsName();
     public String getDescription();
-    public Long getSttSOrder();
     public Long getStatus();
-    public Boolean getSttSDefault();
+    public Boolean getSttsDefault();
     public Timestamp getDateCreated();
     public Long getTotalSTT();
     public Long getTotalForm();
