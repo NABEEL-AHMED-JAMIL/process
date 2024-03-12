@@ -28,14 +28,8 @@ public class KafkaProducerConfig {
      * @Value("${tpd.data-analytics-topic}")
      * private String dataAnalyticsTopic;
      * */
-    @Value("${tpd.test-topic}")
-    private String testTopic;
-
-    @Value("${tpd.truck-topic}")
-    private String trucksTopic;
-
-    @Value("${tpd.scrapping-topic}")
-    private String scrappingTopic;
+    @Value("${tpd.action-topic}")
+    private String actionTopic;
 
     @Autowired
     private KafkaProperties kafkaProperties;
@@ -60,19 +54,12 @@ public class KafkaProducerConfig {
         return new KafkaTemplate<>(producerFactory());
     }
 
+    /**
+     * Action Consumer will use here to connect the server
+     * */
     @Bean
-    public NewTopic testTopic() {
-        return new NewTopic(this.testTopic, 2, (short) 1);
-    }
-
-    @Bean
-    public NewTopic trucksTopic() {
-        return new NewTopic(this.trucksTopic, 2, (short) 2);
-    }
-
-    @Bean
-    public NewTopic scrappingTopic() {
-        return new NewTopic(this.scrappingTopic, 2, (short) 1);
+    public NewTopic actionTopic() {
+        return new NewTopic(this.actionTopic, 3, (short) 1);
     }
 
 }

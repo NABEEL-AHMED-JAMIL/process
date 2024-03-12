@@ -21,6 +21,7 @@ public class STTValidation {
     private String description;
     private String defaultSTT;
     private String taskType;
+    private String serviceUrl;
     private String topicName;
     private String partitions;
     private String topicPattern = "topic=%s&partitions=[*]";
@@ -75,6 +76,14 @@ public class STTValidation {
         this.taskType = taskType;
     }
 
+    public String getServiceUrl() {
+        return serviceUrl;
+    }
+
+    public void setServiceUrl(String serviceUrl) {
+        this.serviceUrl = serviceUrl;
+    }
+
     public String getTopicName() {
         return topicName;
     }
@@ -116,6 +125,9 @@ public class STTValidation {
                 this.setErrorMsg(String.format("TaskType should not be empty at row %s.<br>", rowCounter));
             } else if (ProcessUtil.isNull(TASKTYPE_OPTION.getTaskTypeByDescription(this.taskType))) {
                 this.setErrorMsg(String.format("TaskType type not correct at row %s.<br>", rowCounter));
+            }
+            if (this.isNull(this.serviceUrl)) {
+                this.setErrorMsg(String.format("ServiceUrl should not be empty at row %s.<br>", rowCounter));
             }
             if (this.isNull(this.topicName)) {
                 this.setErrorMsg(String.format("TopicName should not be empty at row %s.<br>", rowCounter));

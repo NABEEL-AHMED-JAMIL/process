@@ -6,6 +6,8 @@ import com.google.gson.Gson;
 import process.payload.request.ParseRequest;
 import process.util.lookuputil.GLookup;
 
+import java.sql.Timestamp;
+
 /**
  * @author Nabeel Ahmed
  */
@@ -18,6 +20,7 @@ public class AppUserEnvResponse {
     private String envKey;
     private String envValue;
     private GLookup status;
+    private Timestamp dateCreated;
     private AppUserResponse appUser;
 
     public AppUserEnvResponse() {
@@ -61,6 +64,14 @@ public class AppUserEnvResponse {
 
     public void setStatus(GLookup status) {
         this.status = status;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     public AppUserResponse getAppUser() {

@@ -46,6 +46,11 @@ public class EnvVariables {
     public EnvVariables() {
     }
 
+    @PrePersist
+    protected void onCreate() {
+        this.dateCreated = new Timestamp(System.currentTimeMillis());
+    }
+
     public Long getEnvKeyId() {
         return envKeyId;
     }

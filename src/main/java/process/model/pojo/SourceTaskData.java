@@ -67,7 +67,7 @@ public class SourceTaskData {
     @Column(name = "checkbox_value")
     private Boolean checkBoxValue;
 
-    // can be use for both single and multi
+    // can be used for both single and multi
     @Column(name = "select_value")
     private Long selectValue;
 

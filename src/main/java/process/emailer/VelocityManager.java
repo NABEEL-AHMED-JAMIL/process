@@ -43,7 +43,7 @@ public class VelocityManager {
         String responseMessage;
         this.setWriter(new StringWriter());
         this.setContext(new VelocityContext());
-        //logger.info("Request Content :- " + object);
+        logger.info("Request Content :- " + object);
         this.context.put("request", object);
         responseMessage = this.getWriterResponse(templateType).toString();
         return responseMessage;
@@ -53,11 +53,12 @@ public class VelocityManager {
         Template template = this.engine.getTemplate(templateType.getTemplatePath());
         if (template != null) {
             template.merge(this.getContext(), this.getWriter());
-            //logger.info("Response Content :- " + this.getWriter().toString().replaceAll("\\s+",""));
+            logger.info("Response Content :- " + this.getWriter().toString().replaceAll("\\s+",""));
             return this.getWriter();
         }
         throw new NullPointerException("Template Not Found");
     }
+
     private VelocityEngine getEngine() {
         return new VelocityEngine();
     }
@@ -73,6 +74,7 @@ public class VelocityManager {
     public StringWriter getWriter() {
         return writer;
     }
+
     public void setWriter(StringWriter writer) {
         this.writer = writer;
     }

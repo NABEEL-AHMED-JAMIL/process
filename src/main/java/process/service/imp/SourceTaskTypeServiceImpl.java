@@ -77,6 +77,38 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
     private CredentialRepository credentialRepository;
 
     /**
+     * Method use t fetch the source task
+     * @param payload
+     * @return AppResponse
+     * */
+    @Override
+    public AppResponse fetchSourceTaskType(STTLinkUserRequest payload) throws Exception {
+        logger.info("Request fetchSTTLinkUser :- " + payload);
+        if (ProcessUtil.isNull(payload.getAccessUserDetail().getUsername())) {
+            return new AppResponse(ProcessUtil.ERROR, "Username missing.");
+        } else if (ProcessUtil.isNull(payload.getSttId())) {
+            return new AppResponse(ProcessUtil.ERROR, "SttId missing.");
+        }
+        Optional<AppUser> appUser = this.appUserRepository.findByUsernameAndStatus(
+            payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
+        if (!appUser.isPresent()) {
+            return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
+        }
+        List<STTLinkUserListResponse> sttLinkUserResponseList = this.appUserSTTRepository.findByAppUserIdAndStatusNotIn(
+            appUser.get().getAppUserId(), APPLICATION_STATUS.DELETE.getLookupValue())
+            .stream().map(appUserSTT -> {
+                STTLinkUserListResponse sttLinkUserResponse = new STTLinkUserListResponse();
+                STTResponse sttResponse = new STTResponse();
+                sttResponse.setSttId(appUserSTT.getStt().getSttId());
+                sttResponse.setServiceName(appUserSTT.getStt().getServiceName());
+                sttResponse.setDescription(appUserSTT.getStt().getDescription());
+                sttLinkUserResponse.setStt(sttResponse);
+                return sttLinkUserResponse;
+            }).collect(Collectors.toList());
+        return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", sttLinkUserResponseList);
+    }
+
+    /**
      * Method use to add STT value in kafka|api etc.
      * @param payload
      * @return AppResponse
@@ -98,8 +130,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         } else if (ProcessUtil.isNull(payload.getTaskType())) {
             return new AppResponse(ProcessUtil.ERROR, "TaskType missing.");
         } else if ((payload.getTaskType().equals(TASKTYPE_OPTION.API.getLookupValue()) ||
-                payload.getTaskType().equals(TASKTYPE_OPTION.AWS_SQS.getLookupValue()) ||
-                payload.getTaskType().equals(TASKTYPE_OPTION.WEB_SOCKET.getLookupValue())) &&
+            payload.getTaskType().equals(TASKTYPE_OPTION.AWS_SQS.getLookupValue()) ||
+            payload.getTaskType().equals(TASKTYPE_OPTION.WEB_SOCKET.getLookupValue())) &&
             ProcessUtil.isNull(payload.getApiTaskType())) {
             return new AppResponse(ProcessUtil.ERROR, "TaskType with api type missing.");
         } else if (payload.getTaskType().equals(TASKTYPE_OPTION.KAFKA.getLookupValue()) &&
@@ -112,8 +144,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         stt.setTaskType(payload.getTaskType());
         stt.setDefault(payload.isDefaultStt());
         if (!ProcessUtil.isNull(payload.getCredentialId())) {
-            Optional<Credential> credential = this.credentialRepository.findByCredentialIdAndUsernameAndStatus(
-                payload.getCredentialId(), payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
+            Optional<Credential> credential = this.credentialRepository.findByCredentialIdAndUsernameAndStatus(payload.getCredentialId(),
+               payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
             if (credential.isPresent()) {
                 stt.setCredential(credential.get());
             }
@@ -129,9 +161,6 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 return new AppResponse(ProcessUtil.ERROR, "Api url missing.");
             } else if (ProcessUtil.isNull(apiTaskTypeRequest.getHttpMethod())) {
                 return new AppResponse(ProcessUtil.ERROR, "Http method missing.");
-            } else if (!apiTaskTypeRequest.getApiUrl().matches(this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.URL_VALIDATOR).getLookupValue())) {
-                return new AppResponse(ProcessUtil.ERROR, "Api url invalid.");
             }
             ApiTaskType apiTaskType = new ApiTaskType();
             apiTaskType.setApiUrl(apiTaskTypeRequest.getApiUrl());
@@ -143,12 +172,15 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             KafkaTaskTypeRequest kafkaTaskTypeRequest = payload.getKafkaTaskType();
             if (ProcessUtil.isNull(kafkaTaskTypeRequest.getNumPartitions())) {
                 return new AppResponse(ProcessUtil.ERROR, "Description missing.");
+            } else if (ProcessUtil.isNull(kafkaTaskTypeRequest.getServiceUrl())) {
+                return new AppResponse(ProcessUtil.ERROR, "Service url missing.");
             } else if (ProcessUtil.isNull(kafkaTaskTypeRequest.getTopicName())) {
                 return new AppResponse(ProcessUtil.ERROR, "TopicName missing.");
             } else if (ProcessUtil.isNull(kafkaTaskTypeRequest.getTopicPattern())) {
                 return new AppResponse(ProcessUtil.ERROR, "ServiceName missing.");
             }
             KafkaTaskType kafkaTaskType = new KafkaTaskType();
+            kafkaTaskType.setServiceUrl(kafkaTaskTypeRequest.getServiceUrl());
             kafkaTaskType.setNumPartitions(kafkaTaskTypeRequest.getNumPartitions());
             kafkaTaskType.setTopicName(kafkaTaskTypeRequest.getTopicName());
             kafkaTaskType.setTopicPattern(kafkaTaskTypeRequest.getTopicPattern());
@@ -198,8 +230,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             ProcessUtil.isNull(payload.getKafkaTaskType())) {
             return new AppResponse(ProcessUtil.ERROR, "TaskType with kafka type missing.");
         }
-        Optional<STT> sttOptional = this.sttRepository.findBySttIdAndAppUserAndSttStatusNotIn(
-            payload.getSttId(), adminUser.get().getUsername(), APPLICATION_STATUS.DELETE.getLookupValue());
+        Optional<STT> sttOptional = this.sttRepository.findBySttIdAndAppUserAndSttStatusNotIn(payload.getSttId(),
+            adminUser.get().getUsername(), APPLICATION_STATUS.DELETE.getLookupValue());
         if (!sttOptional.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Stt not found.");
         } else if (!sttOptional.get().getTaskType().equals(payload.getTaskType())) {
@@ -213,8 +245,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sttOptional.get().setStatus(payload.getStatus());
         }
         if (!ProcessUtil.isNull(payload.getCredentialId())) {
-            Optional<Credential> credential = this.credentialRepository.findByCredentialIdAndUsernameAndStatus(
-                payload.getCredentialId(), payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
+            Optional<Credential> credential = this.credentialRepository.findByCredentialIdAndUsernameAndStatus(payload.getCredentialId(),
+                payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
             if (credential.isPresent()) {
                 sttOptional.get().setCredential(credential.get());
             }
@@ -227,9 +259,6 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 return new AppResponse(ProcessUtil.ERROR, "Api url missing.");
             } else if (ProcessUtil.isNull(apiTaskTypeRequest.getHttpMethod())) {
                 return new AppResponse(ProcessUtil.ERROR, "Http method missing.");
-            } else if (!apiTaskTypeRequest.getApiUrl().matches(
-                this.lookupDataCacheService.getParentLookupById(LookupDetailUtil.URL_VALIDATOR).getLookupValue())) {
-                return new AppResponse(ProcessUtil.ERROR, "Api url invalid.");
             }
             ApiTaskType apiTaskType = sttOptional.get().getApiTaskType().get(0);
             apiTaskType.setApiUrl(apiTaskTypeRequest.getApiUrl());
@@ -250,6 +279,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                 return new AppResponse(ProcessUtil.ERROR, "TopicPattern missing.");
             }
             KafkaTaskType kafkaTaskType = sttOptional.get().getKafkaTaskType().get(0);
+            kafkaTaskType.setServiceUrl(kafkaTaskTypeRequest.getServiceUrl());
             kafkaTaskType.setNumPartitions(kafkaTaskTypeRequest.getNumPartitions());
             kafkaTaskType.setTopicName(kafkaTaskTypeRequest.getTopicName());
             kafkaTaskType.setTopicPattern(kafkaTaskTypeRequest.getTopicPattern());
@@ -257,8 +287,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             if (!ProcessUtil.isNull(payload.getStatus())) {
                 kafkaTaskType.setStatus(payload.getStatus());
             }
-            sttOptional.get().getAppUserSTT()
-            .stream()
+            sttOptional.get().getAppUserSTT().stream()
             .filter(appUserSTT -> !appUserSTT.getStatus().equals(APPLICATION_STATUS.DELETE.getLookupValue()))
             .map(appUserSTT -> {
                 appUserSTT.setStatus(payload.getStatus());
@@ -354,6 +383,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             KafkaTaskType kafkaTaskType = sttOptional.get().getKafkaTaskType().get(0);
             KafkaTaskTypeResponse kafkaTaskTypeResponse = new KafkaTaskTypeResponse();
             kafkaTaskTypeResponse.setKafkaTTId(kafkaTaskType.getKafkaTaskTypeId());
+            kafkaTaskTypeResponse.setServiceUrl(kafkaTaskType.getServiceUrl());
             kafkaTaskTypeResponse.setTopicName(kafkaTaskType.getTopicName());
             kafkaTaskTypeResponse.setNumPartitions(kafkaTaskType.getNumPartitions());
             kafkaTaskTypeResponse.setTopicPattern(kafkaTaskType.getTopicPattern());
@@ -525,7 +555,6 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data fetch successfully", sttLinkUserResponseList);
     }
 
-
     /**
      * Method use to add STT Link STTF
      * @param payload
@@ -634,7 +663,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                     sttLinkSTTFListResponse.setDescription(appUserSTTF.getSttf().getDescription());
                     sttLinkSTTFListResponse.setServiceId(appUserSTTF.getSttf().getServiceId());
                     if (!ProcessUtil.isNull(appUserSTTF.getSttf().getHomePage())) {
-                        sttLinkSTTFListResponse.setHomePage(this.getDBLoopUp(this.lookupDataRepository.findByLookupType(appUserSTTF.getSttf().getHomePage())));
+                        sttLinkSTTFListResponse.setHomePage(this.getDBLoopUp(
+                            this.lookupDataRepository.findByLookupType(appUserSTTF.getSttf().getHomePage())));
                     }
                     sttLinkSTTFListResponse.setFormType(FORM_TYPE.getFormTypeByValue(appUserSTTF.getSttf().getFormType()));
                     sttLinkSTTFListResponse.setDefaultSttf(ISDEFAULT.getDefaultByValue(appUserSTTF.getSttf().getDefault()));
@@ -795,7 +825,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
         sttFormResponse.setStatus(APPLICATION_STATUS.getStatusByValue(sttFormOptional.get().getStatus()));
         sttFormResponse.setFormType(FORM_TYPE.getFormTypeByValue(sttFormOptional.get().getFormType()));
         if (!ProcessUtil.isNull(sttFormOptional.get().getHomePage())) {
-            sttFormResponse.setHomePage(this.getDBLoopUp(this.lookupDataRepository.findByLookupType(sttFormOptional.get().getHomePage())));
+            sttFormResponse.setHomePage(this.getDBLoopUp(
+                 this.lookupDataRepository.findByLookupType(sttFormOptional.get().getHomePage())));
         }
         sttFormResponse.setServiceId(sttFormOptional.get().getServiceId());
         sttFormResponse.setDefaultSttf(ISDEFAULT.getDefaultByValue(sttFormOptional.get().getDefault()));
@@ -830,7 +861,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             sttfResponse.setDescription(sttfProjection.getDescription());
             sttfResponse.setServiceId(sttfProjection.getServiceId());
             if (!ProcessUtil.isNull(sttfProjection.getHomePage())) {
-                sttfResponse.setHomePage(this.getDBLoopUp(this.lookupDataRepository.findByLookupType(sttfProjection.getHomePage())));
+                sttfResponse.setHomePage(this.getDBLoopUp(
+                    this.lookupDataRepository.findByLookupType(sttfProjection.getHomePage())));
             }
             sttfResponse.setStatus(APPLICATION_STATUS.getStatusByValue(sttfProjection.getStatus()));
             sttfResponse.setFormType(FORM_TYPE.getFormTypeByValue(sttfProjection.getFormType()));
@@ -876,7 +908,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             return new AppResponse(ProcessUtil.ERROR, "Stt not found");
         }
         if (!this.sttfLinkSTTRepository.findBySttIdAndSttfIdAndAppUserIdAndStatus(payload.getSttId(),
-            payload.getSttfId(), adminUser.get().getAppUserId(), APPLICATION_STATUS.ACTIVE.getLookupValue()).isPresent()) {
+            payload.getSttfId(), adminUser.get().getAppUserId(),
+                APPLICATION_STATUS.ACTIVE.getLookupValue()).isPresent()) {
             STTFLinkSTT sttfLinkSTT = new STTFLinkSTT();
             sttfLinkSTT.setSttf(sttFormOptional.get());
             sttfLinkSTT.setSttfOrder(payload.getSttfOrder());
@@ -1855,7 +1888,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                             sttcLinkSTTSList.stream().map(sttcLinkSTTS -> {
                                 STTControlResponse sttControlResponse = this.getSTTControlResponse(sttcLinkSTTS.getSttc());
                                 sttControlResponse.setControlOrder(sttcLinkSTTS.getSttcOrder());
-                                sttControlResponse.setInteraction(this.getSTTCInteractionsResponse(sttsLinkSTTF.getAuSttsId(), sttcLinkSTTS.getSttc().getSttcId()));
+                                sttControlResponse.setInteraction(this.getSTTCInteractionsResponse(
+                                        sttsLinkSTTF.getAuSttsId(), sttcLinkSTTS.getSttc().getSttcId()));
                                 return sttControlResponse;
                             }).collect(Collectors.toList()));
                     }
@@ -2038,6 +2072,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                         dataCellValue.add(ISDEFAULT.getDefaultByValue(stt.getDefault()).getDescription());
                         dataCellValue.add(TASKTYPE_OPTION.getTaskTypeByValue(stt.getTaskType()).getDescription());
                         // only kafka support for this version 2.0
+                        dataCellValue.add(stt.getKafkaTaskType().get(0).getServiceUrl());
                         dataCellValue.add(stt.getKafkaTaskType().get(0).getTopicName());
                         dataCellValue.add(stt.getKafkaTaskType().get(0).getNumPartitions().toString());
                         this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
@@ -2182,6 +2217,8 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
                     } else if (i == ++index) {
                         sttValidation.setTaskType(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
+                        sttValidation.setServiceUrl(this.bulkExcel.getCellDetail(currentRow, i));
+                    }  else if (i == ++index) {
                         sttValidation.setTopicName(this.bulkExcel.getCellDetail(currentRow, i));
                     } else if (i == ++index) {
                         sttValidation.setPartitions(this.bulkExcel.getCellDetail(currentRow, i));
@@ -2211,6 +2248,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             if (stt.getTaskType().equals(TASKTYPE_OPTION.KAFKA.getLookupValue())) {
                 KafkaTaskType kafkaTaskType = new KafkaTaskType();
                 kafkaTaskType.setNumPartitions(Integer.valueOf(sttValidation.getPartitions()));
+                kafkaTaskType.setServiceUrl(sttValidation.getServiceUrl());
                 kafkaTaskType.setTopicName(sttValidation.getTopicName());
                 kafkaTaskType.setTopicPattern(sttValidation.getTopicPattern());
                 kafkaTaskType.setStatus(APPLICATION_STATUS.ACTIVE.getLookupValue());
@@ -2266,8 +2304,7 @@ public class SourceTaskTypeServiceImpl implements SourceTaskTypeService {
             }
         }
         if (errors.size() > 0) {
-            return new AppResponse(ProcessUtil.ERROR,
-                String.format("Total %d STTF invalid.", errors.size()), errors);
+            return new AppResponse(ProcessUtil.ERROR, String.format("Total %d STTF invalid.", errors.size()), errors);
         }
         sttfValidations.forEach(sttfValidation -> {
             STTForm sttForm = new STTForm();

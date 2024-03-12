@@ -21,7 +21,6 @@
   <body>
     <h2>Dear User,</h2>
     <p>You have successfully register your account please check below detail for your account.</p>
-
     <table>
       <tr>
         <th>Type</th>

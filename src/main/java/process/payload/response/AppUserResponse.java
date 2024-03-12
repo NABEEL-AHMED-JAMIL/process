@@ -19,7 +19,7 @@ public class AppUserResponse {
     private Long appUserId;
     private String firstName;
     private String lastName;
-    private String timeZone;
+    private GLookup timeZone;
     private String username;
     private String email;
     private Set<RoleResponse> roleResponse;
@@ -59,11 +59,11 @@ public class AppUserResponse {
         this.lastName = lastName;
     }
 
-    public String getTimeZone() {
+    public GLookup getTimeZone() {
         return timeZone;
     }
 
-    public void setTimeZone(String timeZone) {
+    public void setTimeZone(GLookup timeZone) {
         this.timeZone = timeZone;
     }
 

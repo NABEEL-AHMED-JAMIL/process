@@ -14,6 +14,7 @@ import java.sql.Timestamp;
 public class STTLinkUserListResponse {
 
     private Long sttLinkUserId;
+    private STTResponse stt;
     private Long appUserid;
     private String username;
     private String email;
@@ -29,6 +30,14 @@ public class STTLinkUserListResponse {
 
     public void setSttLinkUserId(Long sttLinkUserId) {
         this.sttLinkUserId = sttLinkUserId;
+    }
+
+    public STTResponse getStt() {
+        return stt;
+    }
+
+    public void setStt(STTResponse stt) {
+        this.stt = stt;
     }
 
     public Timestamp getDateCreated() {

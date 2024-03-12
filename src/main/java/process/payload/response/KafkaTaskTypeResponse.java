@@ -12,6 +12,7 @@ import com.google.gson.Gson;
 public class KafkaTaskTypeResponse {
 
     private Long kafkaTTId;
+    private String serviceUrl;
     private Integer numPartitions; // yes
     private String topicName; // yes
     private String topicPattern; // yes
@@ -25,6 +26,14 @@ public class KafkaTaskTypeResponse {
 
     public void setKafkaTTId(Long kafkaTTId) {
         this.kafkaTTId = kafkaTTId;
+    }
+
+    public String getServiceUrl() {
+        return serviceUrl;
+    }
+
+    public void setServiceUrl(String serviceUrl) {
+        this.serviceUrl = serviceUrl;
     }
 
     public Integer getNumPartitions() {

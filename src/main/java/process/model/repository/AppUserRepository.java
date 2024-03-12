@@ -1,5 +1,6 @@
 package process.model.repository;
 
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.AppUser;
@@ -9,7 +10,7 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  */
 @Repository
-public interface AppUserRepository extends CrudRepository<AppUser, Long> {
+public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     public Optional<AppUser> findByAppUserIdAndStatus(Long appUserId, Long status);
 

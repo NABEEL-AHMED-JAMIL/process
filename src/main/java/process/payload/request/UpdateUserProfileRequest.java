@@ -19,7 +19,7 @@ public class UpdateUserProfileRequest {
     private String email;
     private String oldPassword;
     private String newPassword;
-    private String timeZone;
+    private Long timeZone;
 
     public UpdateUserProfileRequest() {
     }
@@ -80,11 +80,11 @@ public class UpdateUserProfileRequest {
         this.newPassword = newPassword;
     }
 
-    public String getTimeZone() {
+    public Long getTimeZone() {
         return timeZone;
     }
 
-    public void setTimeZone(String timeZone) {
+    public void setTimeZone(Long timeZone) {
         this.timeZone = timeZone;
     }
 

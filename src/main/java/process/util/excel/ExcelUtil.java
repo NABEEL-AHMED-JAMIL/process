@@ -24,7 +24,7 @@ public interface ExcelUtil {
     };
     public static String[] STT_HEADER_FIELD_BATCH_FILE = new String[] {
         "SERVICE_NAME", "DESCRIPTION", "DEFAULT", "TASK_TYPE",
-        "TOPIC_NAME", "PARTITIONS"
+        "SERVICE_URL", "TOPIC_NAME", "PARTITIONS"
     };
     public static String[] STTF_HEADER_FIELD_BATCH_FILE = new String[] {
         "FORM_NAME", "DESCRIPTION", "DEFAULT", "FORM_TYPE"
@@ -36,18 +36,6 @@ public interface ExcelUtil {
         "CONTROL_NAME", "DESCRIPTION", "FIELD_NAME", "FIELD_TITLE",
         "FIELD_WIDTH", "PLACEHOLDER", "PATTERN", "FIELD_TYPE",
         "MIN_LENGTH", "MAX_LENGTH", "REQUIRED"
-    };
-
-    public static String[] HEADER_FIELD_BATCH_FILE = new String[] {
-            "Job Name", "Task Detail Id", "Start Date", "End Date", "Start Time",
-            "Frequency", "Recurrence", "Priority", "Email Job Complete",
-            "Email Job Fail", "Email Job Skip"
-    };
-
-    public static String[] HEADER_FIELD_BATCH_DOWNLOAD_FILE = new String[] {
-            "Job Name", "Task", "Execution", "Priority",  "Status", "Created Date",
-            "Start Date", "End Date", "Time", "Last Run", "Next Flight",
-            "R-Status", "Email job complete", "Email job fail", "Email job skip"
     };
 
     public static String XLSX_EXTENSION = ".xlsx";

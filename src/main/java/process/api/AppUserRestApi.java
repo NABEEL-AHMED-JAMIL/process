@@ -66,7 +66,7 @@ public class AppUserRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while getAppUserProfile ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
     }
 

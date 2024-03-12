@@ -21,7 +21,6 @@ import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import static process.util.ProcessUtil.isNull;
 
 /**
  * @author Nabeel Ahmed
@@ -133,16 +132,16 @@ public class EnvServiceImpl implements EnvService {
         if (!envVariables.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "Env not found.");
         }
-        envVariables.get().setStatus(APPLICATION_STATUS.DELETE.getLookupValue());
         List<AppUserEnv> appUserEnvList = this.appUserEnvRepository.findAllByEnvKeyIdAndStatus(
             envVariables.get().getEnvKeyId(), APPLICATION_STATUS.ACTIVE.getLookupValue());
-        if (appUserEnvList.isEmpty()) {
+        if (!appUserEnvList.isEmpty()) {
             this.appUserEnvRepository.saveAll(appUserEnvList.stream()
             .map(appUserEnv -> {
                 appUserEnv.setStatus(APPLICATION_STATUS.DELETE.getLookupValue());
                 return appUserEnv;
             }).collect(Collectors.toSet()));
         }
+        envVariables.get().setStatus(APPLICATION_STATUS.DELETE.getLookupValue());
         this.envVariablesRepository.save(envVariables.get());
         return new AppResponse(ProcessUtil.SUCCESS, "EnvVariables Delete", payload);
     }
@@ -159,14 +158,19 @@ public class EnvServiceImpl implements EnvService {
                 AppUserEnvResponse appUserEnvResponse = new AppUserEnvResponse();
                 appUserEnvResponse.setEnvKeyId(envVariables.getEnvKeyId());
                 appUserEnvResponse.setEnvKey(envVariables.getEnvKey());
+                appUserEnvResponse.setDateCreated(envVariables.getDateCreated());
                 appUserEnvResponse.setStatus(APPLICATION_STATUS.getStatusByValue(envVariables.getStatus()));
                 return appUserEnvResponse;
             }).collect(Collectors.toList()));
     }
 
+    /**
+     * Method use to get the env variable detail by id
+     * @param payload
+     * */
     @Override
     public AppResponse fetchEnvById(AppUserEnvRequest payload) {
-        if (!ProcessUtil.isNull(payload.getEnvKeyId())) {
+        if (ProcessUtil.isNull(payload.getEnvKeyId())) {
             return new AppResponse(ProcessUtil.ERROR, "Env keyId not null.");
         }
         Optional<EnvVariables> envVariables = this.envVariablesRepository.findByEnvKeyIdAndStatusNot(
@@ -181,7 +185,12 @@ public class EnvServiceImpl implements EnvService {
         return new AppResponse(ProcessUtil.SUCCESS, "Data Fetch", appUserEnvResponse);
     }
 
+    /**
+     * Method use to get the env variable detail by env key
+     * @param payload
+     * */
     @Override
+    @Deprecated
     public AppResponse fetchUserEnvByEnvKey(AppUserEnvRequest payload) {
         if (ProcessUtil.isNull(payload.getEnvKey())) {
             return new AppResponse(ProcessUtil.ERROR, "Env envKey not null.");
@@ -201,6 +210,7 @@ public class EnvServiceImpl implements EnvService {
         AppUserEnvResponse appUserEnvResponse = new AppUserEnvResponse();
         appUserEnvResponse.setEnvKey(appUserEnv.get().getEnvVariables().getEnvKey());
         appUserEnvResponse.setEnvValue(appUserEnv.get().getEnvValue());
+        appUserEnvResponse.setStatus(APPLICATION_STATUS.getStatusByValue(appUserEnv.get().getStatus()));
         return new AppResponse(ProcessUtil.SUCCESS, "Data Fetch", appUserEnvResponse);
     }
 
@@ -216,15 +226,15 @@ public class EnvServiceImpl implements EnvService {
             return new AppResponse(ProcessUtil.ERROR, "Username missing.");
         } else if (ProcessUtil.isNull(payload.getAssignUserDetail().getUsername())) {
             return new AppResponse(ProcessUtil.ERROR, "Assign Username missing.");
-        } else if (ProcessUtil.isNull(payload.getEnvKey())) {
-            return new AppResponse(ProcessUtil.ERROR, "Env envKey required.");
+        } else if (ProcessUtil.isNull(payload.getEnvKeyId())) {
+            return new AppResponse(ProcessUtil.ERROR, "Env envKeyId required.");
         }
         Optional<AppUser> adminUser = this.appUserRepository.findByUsernameAndStatus(
             payload.getAccessUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         Optional<AppUser> assignUser = this.appUserRepository.findByUsernameAndStatus(
             payload.getAssignUserDetail().getUsername(), APPLICATION_STATUS.ACTIVE.getLookupValue());
         Optional<EnvVariables> envVariables = this.envVariablesRepository.findByEnvKeyIdAndStatusNot(
-                payload.getEnvKeyId(), APPLICATION_STATUS.DELETE.getLookupValue());
+            payload.getEnvKeyId(), APPLICATION_STATUS.DELETE.getLookupValue());
         if (!adminUser.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUser not found");
         } else if (!assignUser.isPresent()) {
@@ -306,7 +316,7 @@ public class EnvServiceImpl implements EnvService {
         }
         Optional<AppUserEnv> appUserEnvOptional = this.appUserEnvRepository.findByEnvKeyIdAndAppUserIdAndStatusNot(payload.getEnvKeyId(),
             payload.getAccessUserDetail().getAppUserId(), APPLICATION_STATUS.DELETE.getLookupValue());
-        if (appUserEnvOptional.isPresent()) {
+        if (!appUserEnvOptional.isPresent()) {
             return new AppResponse(ProcessUtil.ERROR, "AppUserEnv not found.");
         }
         appUserEnvOptional.get().setStatus(APPLICATION_STATUS.DELETE.getLookupValue());
@@ -315,7 +325,7 @@ public class EnvServiceImpl implements EnvService {
     }
 
     /***
-     * Method use to update the env varaible
+     * Method use to update the env variable
      * @param payload
      * @return AppResponse
      * */

@@ -33,6 +33,24 @@ public class SourceTaskTypeRestApi {
     private SourceTaskTypeService sourceTaskTypeService;
 
     /**
+     * @apiName :- fetchSourceTaskType
+     * @apiNote :- Api use to fetch link stt with user
+     * @param payload
+     * @return ResponseEntity<?>
+     * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
+    @RequestMapping(value = "/fetchSourceTaskType", method = RequestMethod.POST)
+    public ResponseEntity<?> fetchSourceTaskType(@RequestBody STTLinkUserRequest payload) {
+        try {
+            return new ResponseEntity<>(this.sourceTaskTypeService.fetchSourceTaskType(payload), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchSourceTaskType ", ExceptionUtil.getRootCause(ex));
+            return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR,
+                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
      * @apiName :- addSTT
      * @apiNote :- Api use to create stt (source task type)
      * @param payload

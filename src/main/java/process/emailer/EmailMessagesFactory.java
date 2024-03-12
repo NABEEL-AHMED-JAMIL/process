@@ -16,6 +16,8 @@ import process.service.LookupDataCacheService;
 import process.util.lookuputil.LookupDetailUtil;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
+import process.util.lookuputil.SCHEDULER_TIMEZONE;
+
 import javax.mail.internet.MimeMessage;
 import java.util.HashMap;
 import java.util.Map;
@@ -185,10 +187,7 @@ public class EmailMessagesFactory {
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("username", updateUserProfileRequest.getUsername());
             if (!ProcessUtil.isNull(updateUserProfileRequest.getTimeZone())) {
-                LookupDataResponse timeZoneLookup = this.lookupDataCacheService
-                    .getChildLookupById(LookupDetailUtil.SCHEDULER_TIMEZONE,
-                    updateUserProfileRequest.getTimeZone());
-                metaData.put("timeZone", timeZoneLookup.getLookupValue());
+                 metaData.put("timeZone", SCHEDULER_TIMEZONE.getSchedulerTimeZoneByValue(updateUserProfileRequest.getTimeZone()).getDescription());
             }
             // email object
             EmailMessageRequest emailMessageRequest = new EmailMessageRequest();

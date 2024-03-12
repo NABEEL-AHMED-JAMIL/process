@@ -42,7 +42,7 @@ public class AppUser {
     private String lastName;
 
     @Column(name = "time_zone_id")
-    private String timeZone;
+    private Long timeZone;
 
     @Column(name = "username", nullable=false)
     private String username;
@@ -117,11 +117,11 @@ public class AppUser {
         this.lastName = lastName;
     }
 
-    public String getTimeZone() {
+    public Long getTimeZone() {
         return timeZone;
     }
 
-    public void setTimeZone(String timeZone) {
+    public void setTimeZone(Long timeZone) {
         this.timeZone = timeZone;
     }
 

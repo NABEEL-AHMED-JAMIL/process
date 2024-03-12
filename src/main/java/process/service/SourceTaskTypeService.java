@@ -12,6 +12,8 @@ import java.util.Optional;
  */
 public interface SourceTaskTypeService {
 
+    public AppResponse fetchSourceTaskType(STTLinkUserRequest payload) throws Exception;
+
     public AppResponse addSTT(STTRequest payload) throws Exception;
 
     public AppResponse editSTT(STTRequest payload) throws Exception;

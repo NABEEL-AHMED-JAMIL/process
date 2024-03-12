@@ -20,7 +20,7 @@ public class SignupRequest {
     private String role;
 
     private Long status;
-    private String timeZone;
+    private Long timeZone;
 
     private ParseRequest accessUserDetail;
 
@@ -91,11 +91,11 @@ public class SignupRequest {
         this.status = status;
     }
 
-    public String getTimeZone() {
+    public Long getTimeZone() {
         return timeZone;
     }
 
-    public void setTimeZone(String timeZone) {
+    public void setTimeZone(Long timeZone) {
         this.timeZone = timeZone;
     }
 

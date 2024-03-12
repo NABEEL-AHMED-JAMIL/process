@@ -32,6 +32,9 @@ public class KafkaTaskType {
     @GeneratedValue(generator = "kafkaTaskTypeSequenceGenerator")
     private Long kafkaTaskTypeId;
 
+    @Column(name = "service_url", nullable = false)
+    private String serviceUrl;
+
     @Column(name = "topic_name", nullable = false)
     private String topicName;
 
@@ -57,6 +60,14 @@ public class KafkaTaskType {
 
     public void setKafkaTaskTypeId(Long kafkaTaskTypeId) {
         this.kafkaTaskTypeId = kafkaTaskTypeId;
+    }
+
+    public String getServiceUrl() {
+        return serviceUrl;
+    }
+
+    public void setServiceUrl(String serviceUrl) {
+        this.serviceUrl = serviceUrl;
     }
 
     public String getTopicName() {
