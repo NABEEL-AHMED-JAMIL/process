@@ -12,7 +12,7 @@ import java.io.*;
  * @author Nabeel Ahmed
  */
 @Component
-public class EfsFileExchange {
+public class EfsFileExchange extends FileHashing {
 
     private Logger logger = LogManager.getLogger(EfsFileExchange.class);
 
@@ -38,10 +38,10 @@ public class EfsFileExchange {
     }
 
     public void saveFile(ByteArrayOutputStream byteArrayOutputStream,
-        String targetFileName) throws Exception {
+                         String targetFileName) throws Exception {
         if (byteArrayOutputStream != null && byteArrayOutputStream.size() > 0) {
             try (OutputStream outputStream = new FileOutputStream(
-                this.basePathTempDire.concat(targetFileName))) {
+                    this.basePathTempDire.concat(targetFileName))) {
                 byteArrayOutputStream.writeTo(outputStream);
             } finally {
                 if (byteArrayOutputStream != null) {
