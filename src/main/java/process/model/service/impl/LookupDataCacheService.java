@@ -48,6 +48,7 @@ public class LookupDataCacheService {
         parentLookupData.setLookupType(lookupData.getLookupType());
         parentLookupData.setLookupValue(lookupData.getLookupValue());
         parentLookupData.setDescription(lookupData.getDescription());
+        parentLookupData.setDateCreated(lookupData.getDateCreated());
         if (lookupData.getChildren().size() > 0) {
             parentLookupData.setChildren(lookupData.getChildren()
                 .stream().map(childLookup -> {
@@ -56,6 +57,7 @@ public class LookupDataCacheService {
                     childLookupData.setLookupType(childLookup.getLookupType());
                     childLookupData.setLookupValue(childLookup.getLookupValue());
                     childLookupData.setDescription(childLookup.getDescription());
+                    childLookupData.setDateCreated(childLookup.getDateCreated());
                     return childLookupData;
             }).collect(Collectors.toSet()));
         }

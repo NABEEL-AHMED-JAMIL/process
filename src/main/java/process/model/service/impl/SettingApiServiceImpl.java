@@ -156,9 +156,7 @@ public class SettingApiServiceImpl implements SettingApiService {
         }
         if (!isNull(tempLookupData.getParentLookupId())) {
             Optional<LookupData> parentLookupData = this.lookupDataRepository.findById(tempLookupData.getParentLookupId());
-            if (parentLookupData.isPresent()) {
-                lookupData.setParent(parentLookupData.get());
-            }
+            parentLookupData.ifPresent(lookupData::setParent);
         }
         this.lookupDataRepository.save(lookupData);
         return new ResponseDto(SUCCESS, String.format("LookupData save with %d.", lookupData.getLookupId()));
@@ -182,9 +180,7 @@ public class SettingApiServiceImpl implements SettingApiService {
             }
             if (!isNull(tempLookupData.getParentLookupId())) {
                 Optional<LookupData> parentLookupData = this.lookupDataRepository.findById(tempLookupData.getParentLookupId());
-                if (parentLookupData.isPresent()) {
-                    lookupData.get().setParent(parentLookupData.get());
-                }
+                parentLookupData.ifPresent(data -> lookupData.get().setParent(data));
             }
             this.lookupDataRepository.save(lookupData.get());
             return new ResponseDto(SUCCESS, String.format("LookupData update with %d.", tempLookupData.getLookupId()));

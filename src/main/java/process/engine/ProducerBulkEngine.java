@@ -120,7 +120,7 @@ public class ProducerBulkEngine {
                         // update the next run in scheduler
                         this.bulkAction.updateNextScheduler(scheduler);
                         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
-                            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+                                this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
                     }
                 });
                 return;
@@ -263,7 +263,7 @@ public class ProducerBulkEngine {
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(message, jobQueue.getJobId()));
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
-            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+                this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {
             this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Failed);
         }

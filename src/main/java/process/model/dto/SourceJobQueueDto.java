@@ -27,7 +27,6 @@ public class SourceJobQueueDto {
     private Boolean skipManual;
     private Boolean runManual;
     private Timestamp dateCreated;
-
     private List<JobStatusStatisticDto> jobStatusStatistic;
 
     public SourceJobQueueDto() {}

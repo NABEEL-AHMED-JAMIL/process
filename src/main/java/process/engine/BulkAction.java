@@ -87,7 +87,7 @@ public class BulkAction {
      * @return JobQueueDto
      * */
     public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime,
-        JobStatus jobStatus, String message, Boolean isSkip) {
+                                   JobStatus jobStatus, String message, Boolean isSkip) {
         JobQueue jobQueue = new JobQueue();
         if (isSkip) {
             jobQueue.setSkipTime(scheduledTime);
@@ -112,7 +112,7 @@ public class BulkAction {
      * @return JobQueueDto
      * */
     public JobQueue createJobQueueV1(Long jobId, LocalDateTime scheduledTime,
-        JobStatus jobStatus, String message, Boolean isSkip) {
+                                     JobStatus jobStatus, String message, Boolean isSkip) {
         JobQueue jobQueue = new JobQueue();
         if (isSkip) {
             jobQueue.setSkipManual(true);
@@ -173,7 +173,6 @@ public class BulkAction {
         } else if (nextJobRun != null) {
             scheduler.setRecurrenceTime(nextJobRun);
             this.transactionService.saveOrUpdateScheduler(scheduler);
-            return;
         }
     }
 
@@ -183,9 +182,7 @@ public class BulkAction {
      * @param transactionId
      * */
     public void sendJobStatusNotification(Integer jobId, String transactionId) {
-        List<Integer> jobIds = new ArrayList<>();
-        jobIds.add(jobId);
-        List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(jobIds);
+        List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
         if (!sourceJob.isEmpty()) {
             this.notificationService.sendNotificationToSpecificUser(this.getSourceJobDetail(sourceJob.get(0)), transactionId);
         }
@@ -206,8 +203,7 @@ public class BulkAction {
             jsonObject.put("recurrenceTime",sourceJobProjection.getRecurrenceTime().toString());
         }
         jsonObject.put("execution",sourceJobProjection.getExecution());
-        Gson gson = new Gson();
-        return gson.toJson(jsonObject);
+        return new Gson().toJson(jsonObject);
     }
 
     private static boolean isNull(String filed) {
