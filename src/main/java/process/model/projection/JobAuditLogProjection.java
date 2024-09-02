@@ -8,4 +8,6 @@ public interface JobAuditLogProjection {
 
     public String getLogsDetail();
 
+    public String getDateCreated();
+
 }
