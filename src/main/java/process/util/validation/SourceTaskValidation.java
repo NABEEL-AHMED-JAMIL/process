@@ -100,13 +100,13 @@ public class SourceTaskValidation {
      * @return boolean true|false
      * */
     public void isValidSourceTask() {
-        if (this.isNull(this.sourceTaskTypeId)) {
+        if (isNull(this.sourceTaskTypeId)) {
             this.setErrorMsg(String.format("TaskTypeId should not be empty at row %s.<br>", rowCounter));
         }
-        if (this.isNull(this.taskName)) {
+        if (isNull(this.taskName)) {
             this.setErrorMsg(String.format("Task Name should not be empty at row %s.<br>", rowCounter));
         }
-        if (this.isNull(this.taskPayload)) {
+        if (isNull(this.taskPayload)) {
             this.setErrorMsg(String.format("Task Payload should not be empty at row %s.<br>", rowCounter));
         }
     }

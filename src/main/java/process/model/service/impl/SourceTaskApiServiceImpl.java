@@ -182,7 +182,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             /* fetch Record According to Pagination*/
             List<Object[]> result = this.queryService.executeQuery(this.queryService.listSourceTaskQuery(
                     false, appUserId, startDate, endDate, columnName, order, searchTextDto), paging);
-            if (!isNull(result) && result.size() > 0) {
+            if (!isNull(result) && !result.isEmpty()) {
                 List<SourceTaskDto> sourceTaskDtoList = new ArrayList<>();
                 for(Object[] obj : result) {
                     int index = 0;
@@ -266,7 +266,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         if (!isNull(countQueryResult)) {
             List<Object[]> result = this.queryService.executeQuery(
                 this.queryService.fetchAllLinkJobsWithSourceTaskQuery(false, sourceTaskId, startDate, endDate, searchTextDto));
-            if (!isNull(result) && result.size() > 0) {
+            if (!isNull(result) && !result.isEmpty()) {
                 List<SourceJobDto> sourceJobDtoList = new ArrayList<>();
                 for(Object[] obj : result) {
                     int index = 0;
@@ -418,36 +418,34 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         }
         List<SourceTaskValidation> sourceTaskValidations = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        Iterator<Row> rows = sheet.iterator();
-        while (rows.hasNext()) {
-            Row currentRow = rows.next();
+        for (Row currentRow : sheet) {
             // header validation check
             if (currentRow.getRowNum() == 0) {
                 if (currentRow.getPhysicalNumberOfCells() != 5) {
                     return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " heading missing.");
                 }
                 // loop on the header
-                for (int i=0; i < this.UPLOAD_SOURCE_TASK_HEADER.length; i++) {
+                for (int i = 0; i < this.UPLOAD_SOURCE_TASK_HEADER.length; i++) {
                     if (!currentRow.getCell(i).getStringCellValue().equals(this.UPLOAD_SOURCE_TASK_HEADER[i])) {
-                        return new ResponseDto(ERROR,"File at row " + (currentRow.getRowNum() + 1)
-                            + this.UPLOAD_SOURCE_TASK_HEADER[i] + " heading missing.");
+                        return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1)
+                                + this.UPLOAD_SOURCE_TASK_HEADER[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
                 // data validation and save
                 SourceTaskValidation sourceTaskValidation = new SourceTaskValidation();
-                sourceTaskValidation.setRowCounter(currentRow.getRowNum()+1);
+                sourceTaskValidation.setRowCounter(currentRow.getRowNum() + 1);
                 // get the row data and add into job-dto
-                for (int i=0; i < this.UPLOAD_SOURCE_TASK_HEADER.length; i++) {
-                    if (i==0) {
+                for (int i = 0; i < this.UPLOAD_SOURCE_TASK_HEADER.length; i++) {
+                    if (i == 0) {
                         sourceTaskValidation.setSourceTaskTypeId(this.bulkExcel.getCellDetail(currentRow, i));
-                    } else if (i==1) {
+                    } else if (i == 1) {
                         sourceTaskValidation.setTaskName(this.bulkExcel.getCellDetail(currentRow, i));
-                    } else if (i==2) {
+                    } else if (i == 2) {
                         sourceTaskValidation.setTaskPayload(this.bulkExcel.getCellDetail(currentRow, i));
-                    } else if (i==3) {
+                    } else if (i == 3) {
                         sourceTaskValidation.setPipelineId(this.bulkExcel.getCellDetail(currentRow, i));
-                    } else if (i==4) {
+                    } else if (i == 4) {
                         sourceTaskValidation.setHomePageId(this.bulkExcel.getCellDetail(currentRow, i));
                     }
                 }
@@ -469,7 +467,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 sourceTaskValidations.add(sourceTaskValidation);
             }
         }
-        if (errors.size() > 0) {
+        if (!errors.isEmpty()) {
             return new ResponseDto(ERROR, String.format("Total %d source task invalid.", errors.size()), errors);
         }
         sourceTaskValidations.forEach(sourceTaskValidation -> {

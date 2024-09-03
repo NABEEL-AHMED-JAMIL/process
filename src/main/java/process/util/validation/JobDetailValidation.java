@@ -162,22 +162,22 @@ public class JobDetailValidation {
      * @return boolean true|false
      * */
     public void isValidJobDetail() {
-        if (this.isNull(this.jobName)) {
+        if (isNull(this.jobName)) {
             this.setErrorMsg(String.format("JobName should not be empty at row %s.<br>", rowCounter));
         }
-        if (this.isNull(this.taskId)) {
+        if (isNull(this.taskId)) {
             this.setErrorMsg(String.format("TaskId should not be empty at row %s.<br>", rowCounter));
         }
-        if (this.isNull(this.startDate)) {
+        if (isNull(this.startDate)) {
             this.setErrorMsg(String.format("StartDate should not be empty at row %s.<br>", rowCounter));
         }
-        if (this.isNull(this.startTime)) {
+        if (isNull(this.startTime)) {
             this.setErrorMsg(String.format("StartTime should not be empty at row %s.<br>", rowCounter));
         }
-        if (this.isNull(this.frequency)) {
+        if (isNull(this.frequency)) {
             this.setErrorMsg(String.format("Frequency should not be empty at row %s.<br>", rowCounter));
         }
-        if (this.isNull(this.priority)) {
+        if (isNull(this.priority)) {
             this.setErrorMsg(String.format("Priority should not be empty at row %s.<br>", rowCounter));
         }
         if (this.isValidPattern(this.startDate, this.dateFormat)) {
@@ -189,19 +189,19 @@ public class JobDetailValidation {
         if (this.isValidFrequency()) {
             this.setErrorMsg(String.format("Frequency not valid its should be %s at row %s.", this.frequencyDetail.toString(), rowCounter));
         }
-        if (!this.isNull(this.endDate) && this.isValidPattern(this.endDate, this.dateFormat)) {
+        if (!isNull(this.endDate) && this.isValidPattern(this.endDate, this.dateFormat)) {
             this.setErrorMsg(String.format("Invalid EndDate at row %s.<br>", rowCounter));
         }
         if (this.isValidPriority()) {
             this.setErrorMsg(String.format("Priority not valid its should be %s at row %s.<br>", this.priorityDetail.toString(), rowCounter));
         }
-        if (!this.isNull(this.emailJobComplete)  && this.isValidChecked(this.emailJobComplete)) {
+        if (!isNull(this.emailJobComplete)  && this.isValidChecked(this.emailJobComplete)) {
             this.setErrorMsg(String.format("EmailJobComplete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
-        if (!this.isNull(this.emailJobFail)  && this.isValidChecked(this.emailJobFail)) {
+        if (!isNull(this.emailJobFail)  && this.isValidChecked(this.emailJobFail)) {
             this.setErrorMsg(String.format("EmailJobFail Complete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
-        if (!this.isNull(this.emailJobSkip)  && this.isValidChecked(this.emailJobSkip)) {
+        if (!isNull(this.emailJobSkip)  && this.isValidChecked(this.emailJobSkip)) {
             this.setErrorMsg(String.format("EmailJobSkip Complete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
         this.isValidDetail();
@@ -214,7 +214,7 @@ public class JobDetailValidation {
      * */
     private void isValidDetail() {
         try {
-            if (!this.isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency)
+            if (!isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency)
                 .stream().filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
                 this.setErrorMsg(String.format("Recurrence not valid its should be %s at row %s.",
                     this.frequencyDetailByTime.get(this.frequency), rowCounter));

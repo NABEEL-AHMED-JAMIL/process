@@ -46,6 +46,7 @@ public class TestLoopTask implements Runnable {
         SourceJobQueueDto jobQueue = (SourceJobQueueDto) this.getData().get(ProcessUtil.JOB_QUEUE);
         SourceTaskDto sourceTaskDto = (SourceTaskDto) this.getData().get(ProcessUtil.TASK_DETAIL);
         try {
+            Thread.sleep(1000);
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Running);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Running);
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the running.", jobQueue.getJobId()));
@@ -53,8 +54,7 @@ public class TestLoopTask implements Runnable {
             TestLoop testLoop = xmlOutTagInfoUtil.convertXMLToObject(sourceTaskDto.getTaskPayload(), TestLoop.class);
             // process for the current job.....
             for (int i=testLoop.getStart(); i<testLoop.getEnd(); i++) {
-                logger.info(String.format("Job Id %d with sub job id %d for number count %s",
-                     jobQueue.getJobId(), jobQueue.getJobQueueId(), "Number Count " + i));
+                logger.info("Job Id {} with sub job id {} for number count :- {}.", jobQueue.getJobId(), jobQueue.getJobQueueId(), "Number Count " + i);
             }
             // change the status into the complete status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Completed);
@@ -66,7 +66,7 @@ public class TestLoopTask implements Runnable {
                 this.emailMessagesFactory.sendSourceJobEmail(jobQueue,JobStatus.Completed);
             }
         } catch (Exception ex) {
-            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             // change the status into the fail status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);

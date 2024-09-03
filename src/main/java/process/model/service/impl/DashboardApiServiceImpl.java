@@ -40,7 +40,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto jobStatusStatistics() throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobStatusStatistics());
-        if (!isNull(result) && result.size() > 0) {
+        if (!isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
@@ -57,7 +57,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto jobRunningStatistics() throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobRunningStatistics());
-        if (!isNull(result) && result.size() > 0) {
+        if (!isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
@@ -74,7 +74,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto weeklyRunningJobStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyRunningJobStatistics(startDate, endDate));
-        if (!isNull(result) && result.size() > 0) {
+        if (!isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
@@ -91,7 +91,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto weeklyHrsRunningJobStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrsRunningJobStatistics(startDate, endDate));
-        if (!isNull(result) && result.size() > 0) {
+        if (!isNull(result) && !result.isEmpty()) {
             List<WeeklyJobStatisticsDto> weeklyJobStatistics = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
@@ -110,7 +110,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimension(targetDate, targetHr));
-        if (!isNull(result) && result.size() > 0) {
+        if (!isNull(result) && !result.isEmpty()) {
             List<WeeklyHrJobDimensionStatisticsDto> weeklyJobStatistics = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
@@ -132,9 +132,8 @@ public class DashboardApiServiceImpl implements DashboardApiService {
         String jobStatus, Long jobId) throws Exception {
         ResponseDto responseDto;
         Map<String, Object> objectDetail = new HashMap<>();
-        List<Object[]> result = this.queryService.executeQuery(this.queryService
-            .weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
-        if (!isNull(result) && result.size() > 0) {
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
+        if (!isNull(result) && !result.isEmpty()) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
@@ -156,7 +155,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                 }
                 index++;
                 if (!isNull(obj[index])) {
-                    sourceJobQueueDto.setJobSend(Boolean.valueOf(obj[index].toString()));
+                    sourceJobQueueDto.setJobSend(Boolean.parseBoolean(obj[index].toString()));
                 }
                 index++;
                 if (!isNull(obj[index])) {
@@ -210,8 +209,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                         sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
                         sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
                         if (!isNull(sourceTask.getHomePageId())) {
-                            String homePage = this.lookupDataRepository.findById(
-                                    Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue();
+                            String homePage = this.lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue();
                             homePage = homePage.replace("{jobId}", String.valueOf(sourceJobDto.getJobId()));
                             homePage = homePage.replace("{taskId}", String.valueOf(sourceTaskDto.getTaskDetailId()));
                             if (!isNull(sourceTask.getPipelineId())) {
@@ -224,27 +222,13 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                                 Long.valueOf(sourceTask.getPipelineId())).get().getLookupValue());
                         }
                         if (sourceTask.getSourceTaskType() != null) {
-                            SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
-                            SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
-                            sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
-                            sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
-                            sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
-                            sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
-                            sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
+                            sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask));
                         }
                         sourceJobDto.setTaskDetail(sourceTaskDto);
                     }
                     Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(jobId);
                     if (scheduler.isPresent()) {
-                        SchedulerDto schedulerDto = new SchedulerDto();
-                        schedulerDto.setSchedulerId(scheduler.get().getSchedulerId());
-                        schedulerDto.setStartDate(scheduler.get().getStartDate());
-                        schedulerDto.setEndDate(scheduler.get().getEndDate());
-                        schedulerDto.setStartTime(scheduler.get().getStartTime());
-                        schedulerDto.setFrequency(scheduler.get().getFrequency());
-                        schedulerDto.setRecurrence(scheduler.get().getRecurrence());
-                        schedulerDto.setRecurrenceTime(scheduler.get().getRecurrenceTime());
-                        sourceJobDto.setScheduler(schedulerDto);
+                        sourceJobDto.setScheduler(getSchedulerDto(scheduler.get()));
                     }
                     objectDetail.put("sourceJob", sourceJobDto);
                     result = this.queryService.executeQuery(this.queryService.statisticsBySourceJobId(jobId));
@@ -262,6 +246,28 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyHrRunningStatisticsDimensionDetail.");
         }
         return responseDto;
+    }
+
+    private static SchedulerDto getSchedulerDto(Scheduler scheduler) {
+        SchedulerDto schedulerDto = new SchedulerDto();
+        schedulerDto.setSchedulerId(scheduler.getSchedulerId());
+        schedulerDto.setStartDate(scheduler.getStartDate());
+        schedulerDto.setEndDate(scheduler.getEndDate());
+        schedulerDto.setStartTime(scheduler.getStartTime());
+        schedulerDto.setFrequency(scheduler.getFrequency());
+        schedulerDto.setRecurrence(scheduler.getRecurrence());
+        schedulerDto.setRecurrenceTime(scheduler.getRecurrenceTime());
+        return schedulerDto;
+    }
+
+    private static SourceTaskTypeDto getSourceTaskTypeDto(SourceTask sourceTask) {
+        SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
+        SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
+        sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
+        sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
+        sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
+        sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
+        return sourceTaskTypeDto;
     }
 
 }

@@ -58,8 +58,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         // validation for scheduler list -> if any missing then
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobName(tempSourceJob.getJobName());
-        sourceJob.setTaskDetail(this.sourceTaskRepository.findById(
-            tempSourceJob.getTaskDetail().getTaskDetailId()).get());
+        sourceJob.setTaskDetail(this.sourceTaskRepository.findById(tempSourceJob.getTaskDetail().getTaskDetailId()).get());
         sourceJob.setJobStatus(Status.Active);
         sourceJob.setExecution(tempSourceJob.getExecution());
         sourceJob.setPriority(tempSourceJob.getPriority());
@@ -67,8 +66,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         sourceJob.setFailJob(tempSourceJob.isFailJob());
         sourceJob.setSkipJob(tempSourceJob.isSkipJob());
         this.sourceJobRepository.saveAndFlush(sourceJob);
-        if (tempSourceJob.getSchedulers() != null && tempSourceJob.getSchedulers().size() > 0) {
-            tempSourceJob.getSchedulers().stream()
+        if (tempSourceJob.getSchedulers() != null && !tempSourceJob.getSchedulers().isEmpty()) {
+            tempSourceJob.getSchedulers()
                 .forEach(schedulerDto -> {
                     Scheduler scheduler = new Scheduler();
                     scheduler.setStartDate(schedulerDto.getStartDate());
@@ -124,8 +123,8 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
             sourceJob.get().setFailJob(tempSourceJob.isFailJob());
             sourceJob.get().setSkipJob(tempSourceJob.isSkipJob());
             this.sourceJobRepository.saveAndFlush(sourceJob.get());
-            if (!isNull(tempSourceJob.getSchedulers()) && tempSourceJob.getSchedulers().size() > 0) {
-                tempSourceJob.getSchedulers().stream()
+            if (!isNull(tempSourceJob.getSchedulers()) && !tempSourceJob.getSchedulers().isEmpty()) {
+                tempSourceJob.getSchedulers()
                     .forEach(schedulerDto -> {
                         Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(tempSourceJob.getJobId());
                         if (scheduler.isPresent()) {
@@ -198,15 +197,15 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
         Scheduler scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId()).get();
         LocalDateTime nextJobRun = null;
         if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.valueOf(scheduler.getRecurrence()));
+            nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.parseLong(scheduler.getRecurrence()));
         } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.valueOf(scheduler.getRecurrence()));
+            nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.parseLong(scheduler.getRecurrence()));
         } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.valueOf(scheduler.getRecurrence()));
+            nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.parseLong(scheduler.getRecurrence()));
         } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.valueOf(scheduler.getRecurrence()));
+            nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.parseLong(scheduler.getRecurrence()));
         } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.valueOf(scheduler.getRecurrence()));
+            nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.parseLong(scheduler.getRecurrence()));
         }
         if (!isNull(scheduler.getEndDate())) {
             LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
@@ -367,8 +366,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
                 schedulerDto.setRecurrenceTime(scheduler.get().getRecurrenceTime());
                 sourceJobDto.setScheduler(schedulerDto);
             }
-            sourceJobDto.setTabActive(this.jobQueueRepository.getCountForJobByJobId(
-                sourceJobDto.getJobId()) > 0 ? true : false);
+            sourceJobDto.setTabActive(this.jobQueueRepository.getCountForJobByJobId(sourceJobDto.getJobId()) > 0 ? true : false);
             sourceJobDtoList.add(sourceJobDto);
         });
         return new ResponseDto(SUCCESS, String.format("Fetch Source Jobs."), sourceJobDtoList);

@@ -30,11 +30,9 @@ public class NotificationRestApi {
      * @param headerAccessor
      * */
     @MessageMapping("/register")
-    public void processMessageFromClient(@Payload Message message,
-        SimpMessageHeaderAccessor headerAccessor) throws Exception {
-        logger.info("sessionID" + message);
-        this.globalProperties.addTransactionAndSession(
-            message.getSessionId(), message.getTransactionId());
+    public void processMessageFromClient(@Payload Message message, SimpMessageHeaderAccessor headerAccessor) throws Exception {
+        logger.info("processMessageFromClient :- {}.", message);
+        this.globalProperties.addTransactionAndSession(message.getSessionId(), message.getTransactionId());
     }
 
     /**
@@ -43,10 +41,9 @@ public class NotificationRestApi {
      * @param headerAccessor
      * */
     @MessageMapping("/unregister")
-    public void unregister(@Payload Message message,
-         SimpMessageHeaderAccessor headerAccessor) throws Exception {
-         logger.info("sessionID" + message);
-         this.globalProperties.removeTransactionAndSession(message.getSessionId());
+    public void unregister(@Payload Message message, SimpMessageHeaderAccessor headerAccessor) throws Exception {
+        logger.info("unregister :- {}.", message);
+        this.globalProperties.removeTransactionAndSession(message.getSessionId());
     }
 
 }

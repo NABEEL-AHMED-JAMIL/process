@@ -81,13 +81,7 @@ public class SettingApiServiceImpl implements SettingApiService {
         } else if (isNull(tempSourceTaskType.getQueueTopicPartition())) {
             return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition missing.");
         }
-        SourceTaskType sourceTaskType = new SourceTaskType();
-        sourceTaskType.setServiceName(tempSourceTaskType.getServiceName());
-        sourceTaskType.setDescription(tempSourceTaskType.getDescription());
-        sourceTaskType.setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
-        sourceTaskType.setSchemaPayload(tempSourceTaskType.getSchemaPayload());
-        sourceTaskType.setSchemaRegister(isNull(tempSourceTaskType.getSchemaPayload()) ? false: true);
-        sourceTaskType.setStatus(Status.Active);
+        SourceTaskType sourceTaskType = this.getSourceTaskType(tempSourceTaskType);
         this.sourceTaskTypeRepository.save(sourceTaskType);
         return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.", sourceTaskType.getSourceTaskTypeId()));
     }
@@ -234,5 +228,16 @@ public class SettingApiServiceImpl implements SettingApiService {
         lookupDataDto.setLookupType(lookupData.getLookupType());
         lookupDataDto.setDescription(lookupData.getDescription());
         lookupDataDto.setDateCreated(lookupData.getDateCreated());
+    }
+
+    private SourceTaskType getSourceTaskType(SourceTaskTypeDto tempSourceTaskType) {
+        SourceTaskType sourceTaskType = new SourceTaskType();
+        sourceTaskType.setServiceName(tempSourceTaskType.getServiceName());
+        sourceTaskType.setDescription(tempSourceTaskType.getDescription());
+        sourceTaskType.setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
+        sourceTaskType.setSchemaPayload(tempSourceTaskType.getSchemaPayload());
+        sourceTaskType.setSchemaRegister(isNull(tempSourceTaskType.getSchemaPayload()) ? false: true);
+        sourceTaskType.setStatus(Status.Active);
+        return sourceTaskType;
     }
 }

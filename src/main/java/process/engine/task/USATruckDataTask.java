@@ -66,6 +66,7 @@ public class USATruckDataTask implements Runnable {
         SourceJobQueueDto sourceJobQueueResponse = (SourceJobQueueDto) this.getData().get(ProcessUtil.JOB_QUEUE);
         SourceTaskDto sourceTaskDto = (SourceTaskDto) this.getData().get(ProcessUtil.TASK_DETAIL);
         try {
+            Thread.sleep(1000);
             this.bulkAction.changeJobStatus(sourceJobQueueResponse.getJobId(), JobStatus.Running);
             this.bulkAction.changeJobQueueStatus(sourceJobQueueResponse.getJobQueueId(), JobStatus.Running);
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job %s now in the running.", sourceJobQueueResponse.getJobId()));
@@ -99,16 +100,17 @@ public class USATruckDataTask implements Runnable {
             // process for the current job.....
             while (true) {
                 List<RawData> rawData = (this.fileInfoRepository.getFileInfoCountByJobId(sourceJobQueueResponse.getJobId()) > 0) ?
-                    this.fetchRawDataDetail(Boolean.TRUE, truckData, sourceJobQueueResponse) : this.fetchRawDataDetail(Boolean.FALSE, truckData, sourceJobQueueResponse);
+                    this.fetchRawDataDetail(Boolean.TRUE, truckData, sourceJobQueueResponse) :
+                    this.fetchRawDataDetail(Boolean.FALSE, truckData, sourceJobQueueResponse);
                 // if the rawData is not null and size for rawData is empty then break the process
                 if (!ProcessUtil.isNull(rawData) & rawData.isEmpty()) {
                     break;
                 }
-                rawData.stream().forEach(inputRawData -> {
+                rawData.forEach(inputRawData -> {
                     try {
                         this.processRawFile(inputRawData, sourceJobQueueResponse, truckData);
                     } catch (Exception ex) {
-                        logger.info("Exception " + ExceptionUtil.getRootCauseMessage(ex));
+                        logger.info("Exception :- {}.", ExceptionUtil.getRootCauseMessage(ex));
                     }
                 });
             }
@@ -122,7 +124,7 @@ public class USATruckDataTask implements Runnable {
                 this.emailMessagesFactory.sendSourceJobEmail(sourceJobQueueResponse,JobStatus.Completed);
             }
         } catch (Exception ex) {
-            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             // change the status into the fail status
             this.bulkAction.changeJobStatus(sourceJobQueueResponse.getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(sourceJobQueueResponse.getJobQueueId(), JobStatus.Failed);
@@ -178,33 +180,33 @@ public class USATruckDataTask implements Runnable {
      * @param truckData
      * */
     private void processRawFile(RawData rawData, SourceJobQueueDto sourceJobQueueDto, TruckData truckData) throws Exception {
-        logger.info("Processing rawData file " + rawData);
+        logger.info("Processing rawData file :- {}.", rawData);
         InputStream inputStream = this.efsFileExchange.getFile(rawData.getFilePath());
         String result = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
         if (!ProcessUtil.isNull(result)) {
             inputStream.close();
-            String xmlString = this.convertJsonObjectToXml(JsonParser.parseString(result).getAsJsonObject());
-            logger.info("XML detail " + xmlString);
+            String xmlString = convertJsonObjectToXml(JsonParser.parseString(result).getAsJsonObject());
+            logger.info("XML detail :- {}.", xmlString);
             FileInfo fileInfo = new FileInfo();
             fileInfo.setJobId(sourceJobQueueDto.getJobId());
             fileInfo.setJobQueueId(sourceJobQueueDto.getJobQueueId());
             fileInfo.setLastDate(System.currentTimeMillis()+"ms");
             fileInfo.setFileAccess(Boolean.TRUE);
-            fileInfo.setRemoteFileName(this.getLastNameName(rawData.getFilePath()));
+            fileInfo.setRemoteFileName(getLastNameName(rawData.getFilePath()));
             fileInfo.setRemoteFileUrl(rawData.getFilePath());
             fileInfo.setRemoteFileTag(rawData.getTag());
             if (!ProcessUtil.isNull(truckData.getOutputFolder()) && (this.efsFileExchange.makeDir(truckData.getOutputFolder()) &&
-                this.efsFileExchange.makeDir(truckData.getOutputFolder()+"\\"+sourceJobQueueDto.getJobId()+"\\"+this.getLastNameName(rawData.getFolderPath())))) {
+                this.efsFileExchange.makeDir(truckData.getOutputFolder()+"\\"+sourceJobQueueDto.getJobId()+"\\"+ getLastNameName(rawData.getFolderPath())))) {
                 String storeFile = fileInfo.getRemoteFileName();
                 storeFile = storeFile.replace(".txt", ".xml");
                 fileInfo.setStoreFileName(storeFile);
                 fileInfo.setStoreFileUrl(truckData.getRootFolder() + truckData.getOutputFolder() + "\\" + sourceJobQueueDto.getJobId()
-                    + "\\" + this.getLastNameName(rawData.getFolderPath()) + "\\" + storeFile);
+                    + "\\" + getLastNameName(rawData.getFolderPath()) + "\\" + storeFile);
                 byte[] xmlBytes = xmlString.getBytes();
                 ByteArrayOutputStream baos = new ByteArrayOutputStream(xmlBytes.length);
                 baos.write(xmlBytes, 0, xmlBytes.length);
                 this.efsFileExchange.saveFile(baos, truckData.getOutputFolder() + "\\" + sourceJobQueueDto.getJobId()
-                    + "\\" + this.getLastNameName(rawData.getFolderPath()) + "\\" + storeFile);
+                    + "\\" + getLastNameName(rawData.getFolderPath()) + "\\" + storeFile);
                 HashMeta hashMeta = new HashMeta();
                 hashMeta.setHashTag(this.efsFileExchange.bytesToHex(xmlBytes));
                 fileInfo.setHashMeta(hashMeta);

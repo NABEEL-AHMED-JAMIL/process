@@ -119,15 +119,14 @@ public class ProducerBulkEngine {
                         }
                         // update the next run in scheduler
                         this.bulkAction.updateNextScheduler(scheduler);
-                        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
-                                this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+                        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(), this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
                     }
                 });
                 return;
             }
             logger.info("addJobInQueue --> NO scheduler is set for this timestamp");
         } catch (Exception ex) {
-            logger.error("Error In addJobInQueue " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Error In addJobInQueue :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 
@@ -145,21 +144,20 @@ public class ProducerBulkEngine {
                 jobQueues.parallelStream().forEach(jobQueue -> {
                     Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
                     try {
-                        Thread.sleep(200);
                         if (sourceJob.isPresent()) {
                             this.pushMessageToQueue(sourceJob.get(), jobQueue);
                         } else {
                             this.changeStatusForLastJob(jobQueue, "Job %s fail in the queue due to main job either (delete|inactive).");
                         }
                     } catch (Exception ex) {
-                        logger.error("Error In runJobInCurrentTimeSlot " + ExceptionUtil.getRootCauseMessage(ex));
+                        logger.error("Error In runJobInCurrentTimeSlot :- {}.", ExceptionUtil.getRootCauseMessage(ex));
                     }
                 });
                 return;
             }
-            logger.info("addJobInQueue --> NO scheduler is set for this timestamp");
+            logger.info("runJobInCurrentTimeSlot --> NO scheduler is set for this timestamp");
         } catch (Exception ex) {
-            logger.error("Error In runJobInCurrentTimeSlot " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Error In runJobInCurrentTimeSlot :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 
@@ -197,7 +195,7 @@ public class ProducerBulkEngine {
                         future.addCallback(new ListenableFutureCallback<SendResult<String, String>>() {
                             @Override
                             public void onSuccess(SendResult<String, String> result) {
-                                logger.info("Sent message=[" + payload + "] with " + "offset=[" + result.getRecordMetadata().offset() + "]");
+                                logger.info("Sent message=[{}] with offset=[{}]", payload, result.getRecordMetadata().offset());
                                 synchronized (this) {
                                     jobQueue.setJobSend(true);
                                     jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + result.getRecordMetadata().offset() + "]");
@@ -209,13 +207,13 @@ public class ProducerBulkEngine {
                             }
                             @Override
                             public void onFailure(Throwable ex) {
-                                logger.info("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
+                                logger.info("Unable to send message=[{}] due to : {}", payload, ex.getMessage());
                                 synchronized (this) {
                                     jobQueue.setJobSend(false);
                                     jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
                                     transactionService.updateJobQueue(jobQueue);
-                                    bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
-                                        "Job %s unable to send message=[%s] due to : %s", sourceJob.getJobId(), payload, ex.getMessage()));
+                                    changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to : %s",
+                                         sourceJob.getJobId(), payload, ex.getMessage()));
                                 }
                             }
                         });

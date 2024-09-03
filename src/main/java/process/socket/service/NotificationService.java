@@ -29,13 +29,13 @@ public class NotificationService {
      * @param transactionId
      */
     public void sendNotificationToSpecificUser(String message, String transactionId) {
-        logger.info("Request sendNotificationToSpecificUser :- " + message);
+        logger.info("Request sendNotificationToSpecificUser :- {}.", message);
         if (!ProcessUtil.isNull(this.globalProperties.getSessionId(transactionId))) {
             String sendTo = this.globalProperties.getSessionId(transactionId)+"-"+transactionId;
             this.messagingTemplate.convertAndSendToUser(sendTo, REPLAY, message);
-            logger.info("Session exist, Sending To " + sendTo);
+            logger.info("Session exist, Sending To :- {}.", sendTo);
         } else {
-            logger.info("No session exist with transactionId " + transactionId);
+            logger.info("No session exist with transactionId :- {}.", transactionId);
         }
     }
 

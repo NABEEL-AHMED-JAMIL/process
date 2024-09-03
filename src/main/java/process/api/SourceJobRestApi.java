@@ -46,7 +46,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.addSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while addSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while addSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -63,7 +63,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.updateSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while uploadSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while uploadSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -80,7 +80,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.deleteSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while deleteSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while deleteSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -96,7 +96,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.listSourceJob(), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while listSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while listSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -114,7 +114,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.fetchRunningJobEvent(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while fetchRunningJobEvent ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while fetchRunningJobEvent :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -132,7 +132,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.fetchSourceJobDetailWithSourceJobId(jobId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while fetchAllLinkJobsWithSourceTask ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while fetchAllLinkJobsWithSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -149,7 +149,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.runSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while runSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while runSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -166,7 +166,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.skipNextSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while skipNextSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while skipNextSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -183,7 +183,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.findSourceJobAuditLog(jobQueueId, jobId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while findSourceJobAuditLog ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while findSourceJobAuditLog :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                     "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -205,8 +205,9 @@ public class SourceJobRestApi {
             return ResponseEntity.ok().headers(headers)
                 .body(this.sourceJobBulkApiService.downloadSourceJobTemplateFile().toByteArray());
         } catch (Exception ex) {
-            logger.error("An error occurred while downloadSourceJobTemplateFile xlsx file", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
+            logger.error("An error occurred while downloadSourceJobTemplateFile xlsx file :- {}.", ExceptionUtil.getRootCauseMessage(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+            "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -224,7 +225,7 @@ public class SourceJobRestApi {
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
             return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkApiService.downloadListSourceJob().toByteArray());
         } catch (Exception ex) {
-            logger.error("An error occurred while downloadListSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while downloadListSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
         }
@@ -247,7 +248,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "File not found for process."),
                 HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
-            logger.error("An error occurred while uploadSourceJob ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An error occurred while uploadSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
             "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
         }
