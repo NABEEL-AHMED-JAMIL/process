@@ -46,8 +46,7 @@ public class SourceTaskRestApi {
             return new ResponseEntity<>(this.sourceTaskApiService.addSourceTask(tempSourceTask), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -63,8 +62,7 @@ public class SourceTaskRestApi {
             return new ResponseEntity<>(this.sourceTaskApiService.updateSourceTask(tempSourceTask), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -80,8 +78,7 @@ public class SourceTaskRestApi {
             return new ResponseEntity<>(this.sourceTaskApiService.deleteSourceTask(tempSourceTask), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -113,8 +110,7 @@ public class SourceTaskRestApi {
                 PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -147,8 +143,7 @@ public class SourceTaskRestApi {
                 startDate, endDate, columnName, order, PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkJobsWithSourceTaskId :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -164,8 +159,7 @@ public class SourceTaskRestApi {
             return new ResponseEntity<>(this.sourceTaskApiService.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkSourceTaskWithSourceTaskTypeId :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -181,8 +175,7 @@ public class SourceTaskRestApi {
             return new ResponseEntity<>(this.sourceTaskApiService.fetchSourceTaskWithSourceTaskId(sourceTaskId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSourceTaskWithSourceTaskId :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -201,8 +194,7 @@ public class SourceTaskRestApi {
             return ResponseEntity.ok().headers(headers).body(this.sourceTaskApiService.downloadListSourceTask().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -221,8 +213,7 @@ public class SourceTaskRestApi {
             return ResponseEntity.ok().headers(headers).body(this.sourceTaskApiService.downloadSourceTaskTemplate().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadSourceTaskTemplate :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -242,8 +233,7 @@ public class SourceTaskRestApi {
             "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 

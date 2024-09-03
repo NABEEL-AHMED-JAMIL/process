@@ -43,8 +43,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.dynamicQueryResponse(itemResponse), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while dynamicQueryResponse ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -59,8 +58,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.appSetting(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while appSetting ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -76,8 +74,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.addSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceTaskType ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -93,8 +90,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.updateSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateSourceTaskType ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -110,8 +106,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.deleteSourceTaskType(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSourceTaskType ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -127,8 +122,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.addLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addLookupData ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -144,8 +138,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.updateLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -159,8 +152,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.fetchAllLookup(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLookup ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -175,8 +167,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.fetchSubLookupByParentId(parentLookUpId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSubLookupByParentId ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -192,8 +183,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingApiService.deleteLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteLookupData ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-        "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -214,8 +204,7 @@ public class SettingRestApi {
             }
         } catch (Exception ex) {
             logger.error("An error occurred while xmlCreateChecker ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 

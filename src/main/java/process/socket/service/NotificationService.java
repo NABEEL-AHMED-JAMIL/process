@@ -16,8 +16,6 @@ public class NotificationService {
 
     private Logger logger = LoggerFactory.getLogger(NotificationService.class);
 
-    private final String REPLAY = "/reply";
-
     @Autowired
     private GlobalProperties globalProperties;
     @Autowired
@@ -32,7 +30,7 @@ public class NotificationService {
         logger.info("Request sendNotificationToSpecificUser :- {}.", message);
         if (!ProcessUtil.isNull(this.globalProperties.getSessionId(transactionId))) {
             String sendTo = this.globalProperties.getSessionId(transactionId)+"-"+transactionId;
-            this.messagingTemplate.convertAndSendToUser(sendTo, REPLAY, message);
+            this.messagingTemplate.convertAndSendToUser(sendTo, "/reply", message);
             logger.info("Session exist, Sending To :- {}.", sendTo);
         } else {
             logger.info("No session exist with transactionId :- {}.", transactionId);

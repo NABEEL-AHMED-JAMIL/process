@@ -7,6 +7,8 @@ import com.google.gson.Gson;
 import org.apache.tomcat.util.http.fileupload.FileUtils;
 import process.util.exception.ExceptionUtil;
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 /**
  * @author Nabeel Ahmed
@@ -25,14 +27,14 @@ public class EfsFileExchange extends FileHashing {
             basePath = this.basePathTempDire.concat(basePath);
             File finalDir = new File(basePath);
             if (!finalDir.exists()) {
-                logger.info("Making New Directory at path [ " + basePath + " ]");
+                logger.info("Making New Directory at path [{}]", basePath);
                 return finalDir.mkdirs();
             } else {
-                logger.info("Directory Already Exist At Path [ " + basePath + " ]");
+                logger.info("Directory Already Exist At Path [{}]", basePath);
                 return true;
             }
         } catch (Exception ex) {
-            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception :- : {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
         return false;
     }
@@ -40,32 +42,29 @@ public class EfsFileExchange extends FileHashing {
     public void saveFile(ByteArrayOutputStream byteArrayOutputStream,
                          String targetFileName) throws Exception {
         if (byteArrayOutputStream != null && byteArrayOutputStream.size() > 0) {
-            try (OutputStream outputStream = new FileOutputStream(
-                    this.basePathTempDire.concat(targetFileName))) {
+            try (OutputStream outputStream = Files.newOutputStream(Paths.get(this.basePathTempDire.concat(targetFileName)))) {
                 byteArrayOutputStream.writeTo(outputStream);
             } finally {
-                if (byteArrayOutputStream != null) {
-                    byteArrayOutputStream.flush();
-                    byteArrayOutputStream.close();
-                }
+                byteArrayOutputStream.flush();
+                byteArrayOutputStream.close();
             }
             logger.info("File Convert and Store into local path");
         }
     }
 
     public InputStream getFile(String targetFileName) throws Exception {
-        return new FileInputStream(targetFileName);
+        return Files.newInputStream(Paths.get(targetFileName));
     }
 
     public void deleteDir(String basePath) {
         try {
             File file = new File(basePath);
             if (file.exists()) {
-                logger.info("Deleting Directory At Path [ " + basePath + " ]");
+                logger.info("Deleting Directory At Path [{}]", basePath);
                 FileUtils.deleteDirectory(file);
             }
         } catch (Exception ex) {
-            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception :- : {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 

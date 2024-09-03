@@ -36,8 +36,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardApiService.jobStatusStatistics(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while jobStatusStatistics ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -52,8 +51,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardApiService.jobRunningStatistics(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while jobRunningStatistics ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -69,8 +67,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardApiService.weeklyRunningJobStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while weeklyJobRunningStatistics ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -86,8 +83,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardApiService.weeklyHrsRunningJobStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while weeklyHrsRunningJobStatistics ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -103,8 +99,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardApiService.weeklyHrRunningStatisticsDimension(targetDate, targetHr), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while weeklyHrRunningStatisticsDimension ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -121,8 +116,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardApiService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while weeklyHrRunningStatisticsDimensionDetail ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 

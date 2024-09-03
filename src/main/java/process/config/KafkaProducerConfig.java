@@ -24,10 +24,6 @@ public class KafkaProducerConfig {
 
     public Logger logger = LogManager.getLogger(KafkaProducerConfig.class);
 
-    /**
-     * @Value("${tpd.data-analytics-topic}")
-     * private String dataAnalyticsTopic;
-     * */
     @Value("${tpd.test-topic}")
     private String testTopic;
 

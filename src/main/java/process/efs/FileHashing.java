@@ -1,6 +1,8 @@
 package process.efs;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.*;
 
 /**
@@ -18,7 +20,7 @@ public class FileHashing {
      * @return byte[]
      * */
     public byte[] generateHash(String filePath, MessageDigest digest) throws IOException {
-        try (InputStream fis = new FileInputStream(filePath)) {
+        try (InputStream fis = Files.newInputStream(Paths.get(filePath))) {
             byte[] buffer = new byte[8192];
             int len;
             while ((len = fis.read(buffer)) != -1) {

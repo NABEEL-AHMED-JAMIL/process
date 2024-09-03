@@ -68,7 +68,7 @@ public class EmailMessagesFactory {
             emailMessageDto.setBodyMap(metaData);
             return this.sendSimpleMail(emailMessageDto);
         } catch (Exception ex) {
-            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception :- : {}.", ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
         }
     }
@@ -85,7 +85,7 @@ public class EmailMessagesFactory {
             helper.setFrom(sender);
             if(!isNull(emailContent.getRecipients())) {
                 helper.setTo(emailContent.getRecipients());
-                if (emailContent.getRecipientsMulti() != null && emailContent.getRecipientsMulti().size() > 0) {
+                if (emailContent.getRecipientsMulti() != null && !emailContent.getRecipientsMulti().isEmpty()) {
                     // * * * * * * * * *Send cc's* * * * * * * * *
                     String ccSendTo = emailContent.getRecipientsMulti().toString();
                     ccSendTo = ccSendTo.substring(1, ccSendTo.length()-1);
@@ -95,13 +95,13 @@ public class EmailMessagesFactory {
                 helper.setText(this.velocityManager.getResponseMessage(
                     emailContent.getEmailTemplateName(), emailContent.getBodyMap()), true);
                 this.javaMailSender.send(mailMessage);
-                logger.info(String.format("Email Send Successfully Content %s .", emailContent.getBodyMap().toString()));
+                logger.info("Email Send Successfully Content :- {}.", emailContent.getBodyMap().toString());
             } else {
-                logger.error(String.format("Error :- Sent To Null Content %s .", emailContent.getBodyMap().toString()));
+                logger.error("Error :- Sent To Null Content :- {}.", emailContent.getBodyMap().toString());
             }
             return "Mail Sent Successfully...";
         } catch (Exception ex) {
-            logger.error("Exception :- " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception :- : {}.", ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
         }
     }

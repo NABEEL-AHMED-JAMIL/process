@@ -112,7 +112,7 @@ public class SourceTaskValidation {
     }
 
     private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+        return filed == null || filed.isEmpty();
     }
 
         @Override

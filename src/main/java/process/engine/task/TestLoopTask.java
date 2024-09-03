@@ -18,7 +18,9 @@ import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
 import java.util.Map;
 
-
+/**
+ * @author Nabeel Ahmed
+ */
 @Component
 public class TestLoopTask implements Runnable {
 
@@ -70,8 +72,7 @@ public class TestLoopTask implements Runnable {
             // change the status into the fail status
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
-            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s fail due to %s .",
-                 jobQueue.getJobId(), ExceptionUtil.getRootCauseMessage(ex)));
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s fail due to %s .", jobQueue.getJobId(), ExceptionUtil.getRootCauseMessage(ex)));
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
             this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(), (String)this.getData().get(ProcessUtil.TRANSACTION_ID));
             if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {

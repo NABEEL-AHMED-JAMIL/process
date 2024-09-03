@@ -87,7 +87,7 @@ public class BulkAction {
      * @return JobQueueDto
      * */
     public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime,
-                                   JobStatus jobStatus, String message, Boolean isSkip) {
+        JobStatus jobStatus, String message, Boolean isSkip) {
         JobQueue jobQueue = new JobQueue();
         if (isSkip) {
             jobQueue.setSkipTime(scheduledTime);
@@ -169,7 +169,7 @@ public class BulkAction {
                 this.transactionService.saveOrUpdateScheduler(scheduler);
                 return;
             }
-            logger.info("No More Nex Job for jobId :- " + scheduler.getJobId());
+            logger.info("No More Nex Job for jobId :- {}.", scheduler.getJobId());
         } else if (nextJobRun != null) {
             scheduler.setRecurrenceTime(nextJobRun);
             this.transactionService.saveOrUpdateScheduler(scheduler);
@@ -207,6 +207,6 @@ public class BulkAction {
     }
 
     private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+        return filed == null || filed.isEmpty();
     }
 }

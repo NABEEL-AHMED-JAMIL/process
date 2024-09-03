@@ -78,7 +78,7 @@ public class USATruckDataTask implements Runnable {
             // fetch the lookup data and set the real value into object and set the base path
             truckData.setRootFolder(this.transactionService.findByLookupType(truckData.getRootFolder()).getLookupValue());
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job id %s with queue id %s using root folder %s.",
-                    sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId(), truckData.getRootFolder()));
+                  sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId(), truckData.getRootFolder()));
             this.efsFileExchange.setBasePathTempDire(truckData.getRootFolder());
             if (ProcessUtil.isNull(truckData.getOutputFolder())) {
                 throw new Exception("TruckData outputFolder not defined.");
@@ -96,24 +96,22 @@ public class USATruckDataTask implements Runnable {
             // check the folder pattern for input file
             truckData.setFolderPattern(this.transactionService.findByLookupType(truckData.getFolderPattern()).getLookupValue());
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job id %s with queue id %s using file pattern %s.",
-                    sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId(), truckData.getFolderPattern()));
+                sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId(), truckData.getFolderPattern()));
             // process for the current job.....
-            while (true) {
+            do {
                 List<RawData> rawData = (this.fileInfoRepository.getFileInfoCountByJobId(sourceJobQueueResponse.getJobId()) > 0) ?
                     this.fetchRawDataDetail(Boolean.TRUE, truckData, sourceJobQueueResponse) :
                     this.fetchRawDataDetail(Boolean.FALSE, truckData, sourceJobQueueResponse);
                 // if the rawData is not null and size for rawData is empty then break the process
-                if (!ProcessUtil.isNull(rawData) & rawData.isEmpty()) {
-                    break;
-                }
-                rawData.forEach(inputRawData -> {
+                if (!ProcessUtil.isNull(rawData) & rawData.isEmpty()) break;
+                for (RawData inputRawData : rawData) {
                     try {
                         this.processRawFile(inputRawData, sourceJobQueueResponse, truckData);
                     } catch (Exception ex) {
                         logger.info("Exception :- {}.", ExceptionUtil.getRootCauseMessage(ex));
                     }
-                });
-            }
+                }
+            } while (true);
             // change the status into the complete status
             this.bulkAction.changeJobStatus(sourceJobQueueResponse.getJobId(), JobStatus.Completed);
             this.bulkAction.changeJobQueueStatus(sourceJobQueueResponse.getJobQueueId(), JobStatus.Completed);

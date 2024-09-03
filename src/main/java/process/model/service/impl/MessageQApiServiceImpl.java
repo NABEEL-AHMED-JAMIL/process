@@ -145,7 +145,7 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
             SourceJob sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId()).get();
             if (sourceJob.isSkipJob()) {
-                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
+                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
             }
             return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
         }
@@ -185,13 +185,13 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             // if the user configure then send email
             SourceJob sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId()).get();
             if (sourceJob.isSkipJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Skip)) {
-                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(
+                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(
                     this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             } else if (sourceJob.isCompleteJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Completed)) {
-                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(
+                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(
                     this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             } else if (sourceJob.isFailJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Failed)) {
-                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(
+                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(
                     this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             }
         }

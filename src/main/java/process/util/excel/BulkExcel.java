@@ -19,7 +19,6 @@ public class BulkExcel {
 
     public XSSFWorkbook wb;
     private XSSFSheet sheet;
-    private final String FOUNT_NAME = "Calibre";
 
     public XSSFWorkbook getWb() {
         return wb;
@@ -82,14 +81,14 @@ public class BulkExcel {
      * */
     public Font getFont() {
         Font font = this.wb.createFont();
-        font.setFontName(FOUNT_NAME);
+        font.setFontName("Calibre");
         font.setBold(true);
         font.setFontHeightInPoints((short) 11);
         return font;
     }
 
     /**
-     * This method use to fill Heading for excel file
+     * This method use to fill Heading for Excel file
      * @param fillCellCount
      * @param title
      * @param style

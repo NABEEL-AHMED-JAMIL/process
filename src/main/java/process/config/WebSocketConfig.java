@@ -17,12 +17,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     public Logger logger = LogManager.getLogger(WebSocketConfig.class);
 
+    /**
+     * Method use to register stomp endpoint with origins allow
+     * @param registry
+     * */
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws")
-            .setAllowedOrigins("http://localhost:8080").withSockJS();
+        registry.addEndpoint("/ws").setAllowedOrigins("http://localhost:8080").withSockJS();
     }
 
+    /**
+     * Method use to config the broker
+     * @param config
+     * */
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
         config.enableSimpleBroker("/queue", "/user");

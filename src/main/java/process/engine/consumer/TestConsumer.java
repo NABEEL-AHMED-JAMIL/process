@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
+import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.engine.task.TestLoopTask;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
@@ -39,11 +40,11 @@ public class TestConsumer extends CommonConsumer {
             Thread.sleep(500);
             JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
             this.helloWorldTask.setData(this.fillTaskDetail(convertedObject));
-            this.getAsyncDALTaskExecutor().addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
+            AsyncDALTaskExecutor.addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
         } catch (InterruptedException ex) {
-            logger.error("Exception in TestConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception in TestConsumerListener :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         } catch (Exception ex) {
-            logger.error("Exception in TestConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception in TestConsumerListener :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 }

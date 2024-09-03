@@ -177,11 +177,11 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
         ResponseDto responseDto;
         Object countQueryResult = this.queryService.executeQueryForSingleResult(this.queryService.listSourceTaskQuery(
-                true, appUserId, startDate, endDate, columnName, order, searchTextDto));
+        true, appUserId, startDate, endDate, columnName, order, searchTextDto));
         if (!isNull(countQueryResult)) {
             /* fetch Record According to Pagination*/
             List<Object[]> result = this.queryService.executeQuery(this.queryService.listSourceTaskQuery(
-                    false, appUserId, startDate, endDate, columnName, order, searchTextDto), paging);
+            false, appUserId, startDate, endDate, columnName, order, searchTextDto), paging);
             if (!isNull(result) && !result.isEmpty()) {
                 List<SourceTaskDto> sourceTaskDtoList = new ArrayList<>();
                 for(Object[] obj : result) {
@@ -221,7 +221,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                     index++;
                     if (!isNull(obj[index])) {
-                        sourceTaskTypeDto.setSchemaRegister(Boolean.valueOf(obj[index].toString()));
+                        sourceTaskTypeDto.setSchemaRegister(Boolean.parseBoolean(obj[index].toString()));
                     }
                     index++;
                     if (!isNull(obj[index])) {
@@ -324,15 +324,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             sourceTaskDto.setHomePageId(sourceTask.get().getHomePageId());
             sourceTaskDto.setPipelineId(sourceTask.get().getPipelineId());
             sourceTaskDto.setTaskPayload(sourceTask.get().getTaskPayload());
-            SourceTaskType sourceTaskType = sourceTask.get().getSourceTaskType();
-            SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
-            sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
-            sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
-            sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
-            sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
-            sourceTaskTypeDto.setStatus(sourceTaskType.getStatus());
-            sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
-            sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
+            SourceTaskTypeDto sourceTaskTypeDto = this.getSourceTaskTypeDto(sourceTask.get().getSourceTaskType());
             sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
             if (!isNull(sourceTask.get().getSourceTaskPayload())) {
                 sourceTaskDto.setXmlTagsInfo(
@@ -482,5 +474,17 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             this.sourceTaskRepository.save(sourceTask);
         });
         return new ResponseDto(SUCCESS, String.format("Total %d Task Save Successfully", sourceTaskValidations.size()));
+    }
+
+    private SourceTaskTypeDto getSourceTaskTypeDto(SourceTaskType sourceTaskType) {
+        SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
+        sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
+        sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
+        sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
+        sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
+        sourceTaskTypeDto.setStatus(sourceTaskType.getStatus());
+        sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
+        sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
+        return sourceTaskTypeDto;
     }
 }

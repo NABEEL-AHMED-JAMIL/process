@@ -42,8 +42,7 @@ public class MessageQRestApi {
             return new ResponseEntity<>(this.messageQApiService.fetchLogs(messageQSearch), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLogs ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -59,8 +58,7 @@ public class MessageQRestApi {
             return new ResponseEntity<>(this.messageQApiService.failJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while failJobLogs ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -76,8 +74,7 @@ public class MessageQRestApi {
             return new ResponseEntity<>(this.messageQApiService.interruptJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while interruptJobLogs ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -93,8 +90,7 @@ public class MessageQRestApi {
             return new ResponseEntity<>(this.messageQApiService.changeJobStatus(queueMessageStatus), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while changeJobStatus ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 }

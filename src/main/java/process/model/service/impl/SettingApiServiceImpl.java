@@ -101,7 +101,7 @@ public class SettingApiServiceImpl implements SettingApiService {
             sourceTaskType.get().setDescription(tempSourceTaskType.getDescription());
             sourceTaskType.get().setSchemaPayload(tempSourceTaskType.getSchemaPayload());
             sourceTaskType.get().setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
-            sourceTaskType.get().setSchemaRegister(isNull(tempSourceTaskType.getSchemaPayload()) ? false: true);
+            sourceTaskType.get().setSchemaRegister(!isNull(tempSourceTaskType.getSchemaPayload()));
             /**
              * Note :- Source Task Type Status Impact on Source Job
              * like :- if active the source job active
@@ -236,7 +236,7 @@ public class SettingApiServiceImpl implements SettingApiService {
         sourceTaskType.setDescription(tempSourceTaskType.getDescription());
         sourceTaskType.setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
         sourceTaskType.setSchemaPayload(tempSourceTaskType.getSchemaPayload());
-        sourceTaskType.setSchemaRegister(isNull(tempSourceTaskType.getSchemaPayload()) ? false: true);
+        sourceTaskType.setSchemaRegister(!isNull(tempSourceTaskType.getSchemaPayload()));
         sourceTaskType.setStatus(Status.Active);
         return sourceTaskType;
     }

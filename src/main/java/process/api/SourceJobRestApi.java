@@ -47,8 +47,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobApiService.addSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -63,9 +62,8 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.updateSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while uploadSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            logger.error("An error occurred while updateSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -81,8 +79,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobApiService.deleteSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -97,8 +94,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobApiService.listSourceJob(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -115,8 +111,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobApiService.fetchRunningJobEvent(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchRunningJobEvent :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -133,8 +128,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobApiService.fetchSourceJobDetailWithSourceJobId(jobId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkJobsWithSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -150,8 +144,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobApiService.runSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while runSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -167,8 +160,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobApiService.skipNextSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while skipNextSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -184,8 +176,7 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobApiService.findSourceJobAuditLog(jobQueueId, jobId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while findSourceJobAuditLog :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-                    "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -227,7 +218,7 @@ public class SourceJobRestApi {
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Some internal error occurred contact with support."), HttpStatus.BAD_REQUEST);
+            ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 

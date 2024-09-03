@@ -9,6 +9,7 @@ import java.util.stream.StreamSupport;
  */
 public class ProcessUtil {
 
+    public static String INTERNAL_ERROR_500 = "Some internal error occurred contact with support.";
     public static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     public static String START = "*";
     public static String ERROR_MESSAGE = "ERROR";
@@ -50,7 +51,7 @@ public class ProcessUtil {
     }
 
     public static boolean isNull(Object payload) {
-        return payload == null || payload == "" ? true : false;
+        return payload == null || payload == "";
     }
 
 }

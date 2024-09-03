@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
+import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.engine.task.USATruckDataTask;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
@@ -40,11 +41,11 @@ public class TruckDataConsumer extends CommonConsumer {
             Thread.sleep(500);
             JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
             this.usaTruckDataTask.setData(this.fillTaskDetail(convertedObject));
-            this.getAsyncDALTaskExecutor().addTask(this.usaTruckDataTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
+            AsyncDALTaskExecutor.addTask(this.usaTruckDataTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
         } catch (InterruptedException ex) {
-            logger.error("Exception in TruckDataConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception in TruckDataConsumerListener :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         } catch (Exception ex) {
-            logger.error("Exception in TruckDataConsumerListener ", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Exception in TruckDataConsumerListener :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 

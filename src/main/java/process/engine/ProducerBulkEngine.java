@@ -32,7 +32,6 @@ public class ProducerBulkEngine {
     public Logger logger = LogManager.getLogger(ProducerBulkEngine.class);
 
     private final Pattern pattern;
-    private final String REGEX = "^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$";
     @Autowired
     private BulkAction bulkAction;
     @Autowired
@@ -45,7 +44,7 @@ public class ProducerBulkEngine {
     private LookupDataCacheService lookupDataCacheService;
 
     public ProducerBulkEngine() {
-        this.pattern = Pattern.compile(REGEX);
+        this.pattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$");
     }
 
     /**
@@ -59,7 +58,7 @@ public class ProducerBulkEngine {
         this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId().intValue(),
-                this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
     }
 
     /**
@@ -75,7 +74,7 @@ public class ProducerBulkEngine {
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
             this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isSkipJob()) {
-            this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Skip);
+            this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Skip);
         }
     }
 
@@ -107,7 +106,7 @@ public class ProducerBulkEngine {
                                 JobStatus.Skip, "Job %s skip, already in queue.", true);
                             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
                             if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isSkipJob()) {
-                                this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Skip);
+                                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Skip);
                             }
                         } else {
                             this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
@@ -175,7 +174,7 @@ public class ProducerBulkEngine {
                 if (sourceTaskType.getStatus().equals(Status.Active)) {
                     String queueTopicPartition = sourceTaskType.getQueueTopicPartition();
                     Matcher matcher = this.pattern.matcher(queueTopicPartition);
-                    Boolean resultRegex = matcher.matches();
+                    boolean resultRegex = matcher.matches();
                     if (resultRegex) {
                         String topic = matcher.group(1);
                         String partition = matcher.group(2);
@@ -212,8 +211,7 @@ public class ProducerBulkEngine {
                                     jobQueue.setJobSend(false);
                                     jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
                                     transactionService.updateJobQueue(jobQueue);
-                                    changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to : %s",
-                                         sourceJob.getJobId(), payload, ex.getMessage()));
+                                    changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to : %s", sourceJob.getJobId(), payload, ex.getMessage()));
                                 }
                             }
                         });
@@ -226,7 +224,7 @@ public class ProducerBulkEngine {
                 this.changeStatusForLastJob(jobQueue, "Broker not active job %s fail.");
             } catch (Exception ex) {
                 this.changeStatusForLastJob(jobQueue, "Broker not active job %s fail.");
-                logger.error("Error In pushMessageToQueue " + ExceptionUtil.getRootCauseMessage(ex));
+                logger.error("Error In pushMessageToQueue :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             }
         }
     }
@@ -261,9 +259,9 @@ public class ProducerBulkEngine {
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(message, jobQueue.getJobId()));
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
-                this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {
-            this.emailMessagesFactory.sendSourceJobEmail(this.emailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Failed);
+            this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Failed);
         }
     }
 

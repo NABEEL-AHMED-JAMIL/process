@@ -29,16 +29,14 @@ public class JobDetailValidation {
     private Integer rowCounter = 0;
 
     // detail for advance validation
-    private List<String> frequencyDetail = ProcessTimeUtil.frequency;
-    private List<String> priorityDetail = ProcessTimeUtil.priority;
-    private List<String> checkedDetail = ProcessTimeUtil.checked;
-    private Map<String, List<?>> frequencyDetailByTime = ProcessTimeUtil.frequencyDetail;
-    // use to split the time
-    private String split = ":";
+    private final List<String> frequencyDetail = ProcessTimeUtil.frequency;
+    private final List<String> priorityDetail = ProcessTimeUtil.priority;
+    private final List<String> checkedDetail = ProcessTimeUtil.checked;
+    private final Map<String, List<?>> frequencyDetailByTime = ProcessTimeUtil.frequencyDetail;
     // time format validation
-    private String timeFormat = "^(0[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$";
+    private final String timeFormat = "^(0[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$";
     // date format validation
-    private String dateFormat = "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$";
+    private final String dateFormat = "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$";
 
     private String jobName;
     private String taskId;
@@ -214,8 +212,8 @@ public class JobDetailValidation {
      * */
     private void isValidDetail() {
         try {
-            if (!isNull(this.recurrence) && !this.frequencyDetailByTime.get(this.frequency)
-                .stream().filter(x -> x.equals(Integer.valueOf(this.recurrence))).findFirst().isPresent()) {
+            if (!isNull(this.recurrence) && this.frequencyDetailByTime.get(this.frequency)
+                .stream().noneMatch(x -> x.equals(Integer.valueOf(this.recurrence)))) {
                 this.setErrorMsg(String.format("Recurrence not valid its should be %s at row %s.",
                     this.frequencyDetailByTime.get(this.frequency), rowCounter));
             }
@@ -238,7 +236,7 @@ public class JobDetailValidation {
      * @return boolean true|false
      * */
     private static boolean isNull(String filed) {
-        return (filed == null || filed.length() == 0) ? true : false;
+        return filed == null || filed.isEmpty();
     }
 
     /**
@@ -246,7 +244,7 @@ public class JobDetailValidation {
      * @return boolean true|false
      * */
     private boolean isValidFrequency() {
-        return !this.frequencyDetail.contains(this.frequency) ? true : false;
+        return !this.frequencyDetail.contains(this.frequency);
     }
 
     /**
@@ -254,7 +252,7 @@ public class JobDetailValidation {
      * @return boolean true|false
      * */
     private boolean isValidPriority() {
-        return !this.priorityDetail.contains(this.priority) ? true : false;
+        return !this.priorityDetail.contains(this.priority);
     }
 
     /**
@@ -263,7 +261,7 @@ public class JobDetailValidation {
      * @return boolean true|false
      * */
     private boolean isValidChecked(String checkDetail) {
-        return !this.checkedDetail.contains(StringUtils.capitalize(checkDetail.toLowerCase())) ? true : false;
+        return !this.checkedDetail.contains(StringUtils.capitalize(checkDetail.toLowerCase()));
     }
 
     /**
@@ -275,7 +273,7 @@ public class JobDetailValidation {
         try {
             Pattern pattern = Pattern.compile(dataFormat);
             Matcher matcher = pattern.matcher(inputDate);
-            return matcher.find() ? false : true;
+            return !matcher.find();
         } catch (Exception ex) {
             return true;
         }
@@ -291,10 +289,10 @@ public class JobDetailValidation {
         // Check Start Date,End Date,Start Time
         // 1st check the start-date it's should not be the yesterday date
         LocalDate userInputStartDate = LocalDate.parse(this.startDate);
-        logger.info("User StartDate Valid " + userInputStartDate);
+        logger.info("User StartDate Valid :- {}.", userInputStartDate);
         // check the current date with the given time with zone
         LocalDate todayDateWithTimeZone = LocalDate.now();;
-        logger.info("System Date With Time Zone " + todayDateWithTimeZone);
+        logger.info("System Date With Time Zone :- {}.", todayDateWithTimeZone);
         // 2021-03-13 == 2021-03-13 || 2021-03-13 > 2021-03-12
         if (userInputStartDate.isEqual(todayDateWithTimeZone) || userInputStartDate.isAfter(todayDateWithTimeZone)) {
             // 2nd check the end-date it's should not be the yesterday
@@ -310,9 +308,10 @@ public class JobDetailValidation {
                     this.setErrorMsg(String.format("EndDate must be 31 day difference from StartDate at row %s.<br>", rowCounter));
                 }
             }
-            String timeSplit[] = this.startTime.split(this.split);
+            // use to split the time
+            String timeSplit[] = this.startTime.split(":");
             if (LocalDateTime.now().isAfter(userInputStartDate.atStartOfDay()
-                .plusHours(Integer.valueOf(timeSplit[0])).plusMinutes(Integer.valueOf(timeSplit[1])))) {
+                .plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1])))) {
                 this.setErrorMsg(String.format("StartTime should not be previous time at row %s.<br>", rowCounter));
             }
         } else {

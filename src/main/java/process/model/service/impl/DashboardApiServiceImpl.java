@@ -227,9 +227,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                         sourceJobDto.setTaskDetail(sourceTaskDto);
                     }
                     Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(jobId);
-                    if (scheduler.isPresent()) {
-                        sourceJobDto.setScheduler(getSchedulerDto(scheduler.get()));
-                    }
+                    scheduler.ifPresent(value -> sourceJobDto.setScheduler(getSchedulerDto(value)));
                     objectDetail.put("sourceJob", sourceJobDto);
                     result = this.queryService.executeQuery(this.queryService.statisticsBySourceJobId(jobId));
                     for(Object[] obj : result) {

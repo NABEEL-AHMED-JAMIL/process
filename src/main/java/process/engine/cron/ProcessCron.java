@@ -18,8 +18,6 @@ public class ProcessCron {
     public Logger logger = LogManager.getLogger(ProcessCron.class);
 
     public static final int SCHEDULER_CRON_TIME_IN_ONE_MINUTES=1;
-    public static final int SCHEDULER_CRON_TIME_IN_TWO_MINUTES=2;
-    public static final int SCHEDULER_CRON_TIME_IN_ONE_HOUR=60;
 
     @Autowired
     private ProducerBulkEngine producerBulkEngine;

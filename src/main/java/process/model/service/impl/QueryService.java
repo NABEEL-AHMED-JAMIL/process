@@ -30,19 +30,19 @@ public class QueryService {
     private EntityManager _em;
 
     public Object executeQueryForSingleResult(String queryStr) {
-        logger.info("Execute Query :- " + queryStr);
+        logger.info("Execute Query :- {}.", queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getSingleResult();
     }
 
     public List<Object[]> executeQuery(String queryStr) {
-        logger.info("Execute Query :- " + queryStr);
+        logger.info("Execute Query :- {}.", queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getResultList();
     }
 
     public List<Object[]> executeQuery(String queryStr, Pageable paging) {
-        logger.info("Execute Query :- " + queryStr);
+        logger.info("Execute Query :- {}.", queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         if (paging != null) {
             query.setFirstResult(paging.getPageNumber() * paging.getPageSize());
@@ -52,13 +52,13 @@ public class QueryService {
     }
 
     public ItemResponse executeQueryResponse(String queryString) {
-        logger.info("Execute Query :- " + queryString);
+        logger.info("Execute Query :- {}. ", queryString);
         Query query = this._em.createNativeQuery(queryString);
         NativeQueryImpl nativeQuery = (NativeQueryImpl) query;
         nativeQuery.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
         List<Map<String,Object>> result = nativeQuery.getResultList();
         ItemResponse itemResponse=new ItemResponse();
-        if (result != null && result.size() > 0) {
+        if (result != null && !result.isEmpty()) {
             itemResponse.setQuery(queryString);
             itemResponse.setData(result);
             itemResponse.setColumn(result.get(0).keySet());
@@ -142,7 +142,8 @@ public class QueryService {
         if (isCount) {
             selectPortion = "select count(*) as result ";
         } else {
-            selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, cast(sj.last_job_run AS varchar), sj.priority, cast(sj.date_created AS varchar) ";
+            selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, " +
+                "cast(sj.last_job_run AS varchar), sj.priority, cast(sj.date_created AS varchar) ";
         }
         String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
         query += "where st.task_status in ('Delete', 'Inactive', 'Active') ";
@@ -309,15 +310,15 @@ public class QueryService {
         if (!isState) {
             query += String.format("where cast(date_created as date) between '%s' and '%s' \n",
                 messageQSearch.getFromDate(), messageQSearch.getToDate());
-            if (!isNull(messageQSearch.getJobId()) && messageQSearch.getJobId().size() > 0) {
+            if (!isNull(messageQSearch.getJobId()) && !messageQSearch.getJobId().isEmpty()) {
                 String jobId = messageQSearch.getJobId().toString();
                 query += String.format("and job_id in (%s) \n", jobId.substring(1, jobId.length()-1));
             }
-            if (!isNull(messageQSearch.getJobQId()) && messageQSearch.getJobQId().size() > 0) {
+            if (!isNull(messageQSearch.getJobQId()) && !messageQSearch.getJobQId().isEmpty()) {
                 String jobQId = messageQSearch.getJobQId().toString();
                 query += String.format("and job_queue_id in (%s) \n", jobQId.substring(1, jobQId.length()-1));
             }
-            if (!isNull(messageQSearch.getJobStatuses()) && messageQSearch.getJobStatuses().size() > 0) {
+            if (!isNull(messageQSearch.getJobStatuses()) && !messageQSearch.getJobStatuses().isEmpty()) {
                 String jobStatus = messageQSearch.getJobStatuses().stream()
                     .map(jobStatus1 -> "'" +jobStatus1.toString()+"',").collect(Collectors.joining());
                 query += String.format("and job_status in (%s)", jobStatus.substring(0,jobStatus.length()-1));

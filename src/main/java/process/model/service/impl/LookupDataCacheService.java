@@ -43,23 +43,11 @@ public class LookupDataCacheService {
     }
 
     private LookupDataDto getLookupDataDetail(LookupData lookupData) {
-        LookupDataDto parentLookupData = new LookupDataDto();
-        parentLookupData.setLookupId(lookupData.getLookupId());
-        parentLookupData.setLookupType(lookupData.getLookupType());
-        parentLookupData.setLookupValue(lookupData.getLookupValue());
-        parentLookupData.setDescription(lookupData.getDescription());
-        parentLookupData.setDateCreated(lookupData.getDateCreated());
-        if (lookupData.getChildren().size() > 0) {
+        LookupDataDto parentLookupData = this.toLookupDataDto(lookupData);
+        if (!lookupData.getChildren().isEmpty()) {
             parentLookupData.setChildren(lookupData.getChildren()
-                .stream().map(childLookup -> {
-                    LookupDataDto childLookupData =new LookupDataDto();
-                    childLookupData.setLookupId(childLookup.getLookupId());
-                    childLookupData.setLookupType(childLookup.getLookupType());
-                    childLookupData.setLookupValue(childLookup.getLookupValue());
-                    childLookupData.setDescription(childLookup.getDescription());
-                    childLookupData.setDateCreated(childLookup.getDateCreated());
-                    return childLookupData;
-            }).collect(Collectors.toSet()));
+                .stream().map(this::toLookupDataDto)
+                .collect(Collectors.toSet()));
         }
         return parentLookupData;
     }
@@ -80,5 +68,15 @@ public class LookupDataCacheService {
 
     public void setLookupCacheMap(Map<String, LookupDataDto> lookupCacheMap) {
         this.lookupCacheMap = lookupCacheMap;
+    }
+
+    private LookupDataDto toLookupDataDto(LookupData lookupData) {
+        LookupDataDto lookupDataDto = new LookupDataDto();
+        lookupDataDto.setLookupId(lookupData.getLookupId());
+        lookupDataDto.setLookupType(lookupData.getLookupType());
+        lookupDataDto.setLookupValue(lookupData.getLookupValue());
+        lookupDataDto.setDescription(lookupData.getDescription());
+        lookupDataDto.setDateCreated(lookupData.getDateCreated());
+        return lookupDataDto;
     }
 }
