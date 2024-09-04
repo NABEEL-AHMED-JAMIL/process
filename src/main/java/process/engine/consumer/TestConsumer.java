@@ -18,10 +18,12 @@ import process.util.exception.ExceptionUtil;
  * @author Nabeel Ahmed
  */
 @Component
-public class TestConsumer extends CommonConsumer {
+public class TestConsumer {
 
     public Logger logger = LogManager.getLogger(TestConsumer.class);
 
+    @Autowired
+    private CommonConsumer consumer;
     @Autowired
     private TestLoopTask helloWorldTask;
 
@@ -35,12 +37,13 @@ public class TestConsumer extends CommonConsumer {
         containerFactory = "kafkaListenerContainerFactory")
     public void testConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
         try {
-            logger.info("TestConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
-                consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-            Thread.sleep(500);
-            JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
-            this.helloWorldTask.setData(this.fillTaskDetail(convertedObject));
-            AsyncDALTaskExecutor.addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
+            synchronized (this) {
+                logger.info("TestConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+                    consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
+                JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
+                this.helloWorldTask.setData(this.consumer.fillTaskDetail(convertedObject));
+                AsyncDALTaskExecutor.addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
+            }
         } catch (InterruptedException ex) {
             logger.error("Exception in TestConsumerListener :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         } catch (Exception ex) {

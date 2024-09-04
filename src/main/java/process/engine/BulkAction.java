@@ -195,14 +195,16 @@ public class BulkAction {
      * */
     private String getSourceJobDetail(SourceJobProjection sourceJobProjection) {
         HashMap<String, Object> jsonObject = new HashMap<>();
-        jsonObject.put("jobId",sourceJobProjection.getJobId());
-        jsonObject.put("jobStatus",sourceJobProjection.getJobStatus());
-        jsonObject.put("jobRunningStatus",sourceJobProjection.getJobRunningStatus());
-        jsonObject.put("lastJobRun",sourceJobProjection.getLastJobRun().toString());
-        if (!ProcessUtil.isNull(sourceJobProjection.getRecurrenceTime())) {
-            jsonObject.put("recurrenceTime",sourceJobProjection.getRecurrenceTime().toString());
+        jsonObject.put("jobId", sourceJobProjection.getJobId());
+        jsonObject.put("jobStatus", sourceJobProjection.getJobStatus());
+        jsonObject.put("jobRunningStatus", sourceJobProjection.getJobRunningStatus());
+        if (!ProcessUtil.isNull(sourceJobProjection.getLastJobRun())) {
+            jsonObject.put("lastJobRun", sourceJobProjection.getLastJobRun().toString());
         }
-        jsonObject.put("execution",sourceJobProjection.getExecution());
+        if (!ProcessUtil.isNull(sourceJobProjection.getRecurrenceTime())) {
+            jsonObject.put("recurrenceTime", sourceJobProjection.getRecurrenceTime().toString());
+        }
+        jsonObject.put("execution", sourceJobProjection.getExecution());
         return new Gson().toJson(jsonObject);
     }
 

@@ -15,7 +15,7 @@ public class AsyncDALTaskExecutor {
 
     public static Logger logger = LogManager.getLogger(AsyncDALTaskExecutor.class);
 
-    private static final LinkedBlockingQueue<Runnable> blockingQueue = new LinkedBlockingQueue<>(1000);
+    private static LinkedBlockingQueue<Runnable> blockingQueue = new LinkedBlockingQueue<>(500);
     private static ThreadPoolExecutor threadPool;
 
     /**
@@ -26,10 +26,8 @@ public class AsyncDALTaskExecutor {
     public static void addTask(Runnable task, Integer priority) {
         try {
             logger.info("Submitting Task of type :- {}.", task.getClass().getCanonicalName());
-            Thread runningTask = new Thread(task);
-            // priority set for the task
-            runningTask.setPriority(priority);
-            threadPool.submit(runningTask);
+            PrioritizedTask prioritizedTask = new PrioritizedTask(task, priority);
+            threadPool.submit(prioritizedTask);
         } catch (RejectedExecutionException ex) {
             logger.error("Failed to submit Task in queue :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
@@ -44,7 +42,7 @@ public class AsyncDALTaskExecutor {
      * */
     public AsyncDALTaskExecutor(Integer minThreads, Integer maxThreads, Integer threadLifeInMains) {
         logger.info(">============AsyncDALTaskExecutor Start Successful============<");
-        threadPool = new ThreadPoolExecutor(minThreads, maxThreads, threadLifeInMains, TimeUnit.MINUTES, blockingQueue);
+        threadPool = new ThreadPoolExecutor(minThreads, maxThreads, threadLifeInMains, TimeUnit.MINUTES, blockingQueue, new ThreadPoolExecutor.CallerRunsPolicy());
         threadPool.setRejectedExecutionHandler((Runnable task, ThreadPoolExecutor executor) -> {
             try {
                 logger.error("Task Rejected :- {}.", task.getClass().getCanonicalName());

@@ -66,7 +66,6 @@ public class USATruckDataTask implements Runnable {
         SourceJobQueueDto sourceJobQueueResponse = (SourceJobQueueDto) this.getData().get(ProcessUtil.JOB_QUEUE);
         SourceTaskDto sourceTaskDto = (SourceTaskDto) this.getData().get(ProcessUtil.TASK_DETAIL);
         try {
-            Thread.sleep(1000);
             this.bulkAction.changeJobStatus(sourceJobQueueResponse.getJobId(), JobStatus.Running);
             this.bulkAction.changeJobQueueStatus(sourceJobQueueResponse.getJobQueueId(), JobStatus.Running);
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job %s now in the running.", sourceJobQueueResponse.getJobId()));
@@ -98,20 +97,16 @@ public class USATruckDataTask implements Runnable {
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job id %s with queue id %s using file pattern %s.",
                 sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId(), truckData.getFolderPattern()));
             // process for the current job.....
-            do {
-                List<RawData> rawData = (this.fileInfoRepository.getFileInfoCountByJobId(sourceJobQueueResponse.getJobId()) > 0) ?
-                    this.fetchRawDataDetail(Boolean.TRUE, truckData, sourceJobQueueResponse) :
-                    this.fetchRawDataDetail(Boolean.FALSE, truckData, sourceJobQueueResponse);
-                // if the rawData is not null and size for rawData is empty then break the process
-                if (!ProcessUtil.isNull(rawData) & rawData.isEmpty()) break;
-                for (RawData inputRawData : rawData) {
-                    try {
-                        this.processRawFile(inputRawData, sourceJobQueueResponse, truckData);
-                    } catch (Exception ex) {
-                        logger.info("Exception :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-                    }
+            List<RawData> rawData = (this.fileInfoRepository.getFileInfoCountByJobId(sourceJobQueueResponse.getJobId()) > 0) ?
+                this.fetchRawDataDetail(Boolean.TRUE, truckData, sourceJobQueueResponse) :
+                this.fetchRawDataDetail(Boolean.FALSE, truckData, sourceJobQueueResponse);
+            for (RawData inputRawData : rawData) {
+                try {
+                    this.processRawFile(inputRawData, sourceJobQueueResponse, truckData);
+                } catch (Exception ex) {
+                    logger.info("Exception :- {}.", ExceptionUtil.getRootCauseMessage(ex));
                 }
-            } while (true);
+            }
             // change the status into the complete status
             this.bulkAction.changeJobStatus(sourceJobQueueResponse.getJobId(), JobStatus.Completed);
             this.bulkAction.changeJobQueueStatus(sourceJobQueueResponse.getJobQueueId(), JobStatus.Completed);
@@ -136,6 +131,8 @@ public class USATruckDataTask implements Runnable {
         }
     }
 
+
+
     /**
      * Method use to fetch the raw data detail
      * @param existDataForJob
@@ -144,10 +141,13 @@ public class USATruckDataTask implements Runnable {
      * @return List<?>
      * **/
     private List<RawData> fetchRawDataDetail(Boolean existDataForJob, TruckData truckData, SourceJobQueueDto sourceJobQueueResponse) {
-        List<RawData> rawData = new ArrayList<>();
+        logger.info("fetchRawDataDetail is existDataForJob :- {}.",existDataForJob);
+        List<RawData> rawData;
         if (existDataForJob) {
+            logger.info("Job id {} with queue id {}, previous iteration have data for job id", sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId());
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job id %s with queue id %s, previous iteration have data for job id",
                 sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId()));
+            // query to fetch the result
             rawData = this.mongoTemplate.aggregate(Aggregation.newAggregation(
                 Aggregation.lookup("fileInfo", "tag", "remoteFileTag", "matchingFiles"),
                 Aggregation.match(Criteria.where("matchingFiles.jobId").ne(sourceJobQueueResponse.getJobId())),
@@ -156,16 +156,16 @@ public class USATruckDataTask implements Runnable {
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job id %s with queue id %s found total %s result.",
                 sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId(), rawData.size()));
         } else {
+            logger.info("Job id {} with queue id {} fetch data from root.", sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId());
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job id %s with queue id %s fetch data from root.",
                 sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId()));
-            Criteria folderPatternCriteria = where("folderPath").regex(truckData.getFolderPattern());
-            Criteria validTypeCriteria = where("filePath").regex(truckData.getValidType());
-            Criteria finalCriteria = new Criteria().andOperator(folderPatternCriteria, validTypeCriteria);
-            Query query = new Query(finalCriteria);
+            // query to fetch the result
+            Query query = new Query(new Criteria().andOperator(where("folderPath").regex(truckData.getFolderPattern()),where("filePath").regex(truckData.getValidType())));
             rawData = this.mongoTemplate.find(query.limit(truckData.getFetchLimit()), RawData.class);
             this.bulkAction.saveJobAuditLogs(sourceJobQueueResponse.getJobQueueId(), String.format("Job id %s with queue id %s found total %s result.",
                 sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId(), rawData.size()));
         }
+        logger.info("Job id {} with queue id {} found total {} result.", sourceJobQueueResponse.getJobId(), sourceJobQueueResponse.getJobQueueId(), rawData.size());
         return rawData;
     }
 
@@ -179,49 +179,51 @@ public class USATruckDataTask implements Runnable {
      * */
     private void processRawFile(RawData rawData, SourceJobQueueDto sourceJobQueueDto, TruckData truckData) throws Exception {
         logger.info("Processing rawData file :- {}.", rawData);
-        InputStream inputStream = this.efsFileExchange.getFile(rawData.getFilePath());
-        String result = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
-        if (!ProcessUtil.isNull(result)) {
-            inputStream.close();
-            String xmlString = convertJsonObjectToXml(JsonParser.parseString(result).getAsJsonObject());
-            logger.info("XML detail :- {}.", xmlString);
-            FileInfo fileInfo = new FileInfo();
-            fileInfo.setJobId(sourceJobQueueDto.getJobId());
-            fileInfo.setJobQueueId(sourceJobQueueDto.getJobQueueId());
-            fileInfo.setLastDate(System.currentTimeMillis()+"ms");
-            fileInfo.setFileAccess(Boolean.TRUE);
-            fileInfo.setRemoteFileName(getLastNameName(rawData.getFilePath()));
-            fileInfo.setRemoteFileUrl(rawData.getFilePath());
-            fileInfo.setRemoteFileTag(rawData.getTag());
-            if (!ProcessUtil.isNull(truckData.getOutputFolder()) && (this.efsFileExchange.makeDir(truckData.getOutputFolder()) &&
-                this.efsFileExchange.makeDir(truckData.getOutputFolder()+"\\"+sourceJobQueueDto.getJobId()+"\\"+ getLastNameName(rawData.getFolderPath())))) {
-                String storeFile = fileInfo.getRemoteFileName();
-                storeFile = storeFile.replace(".txt", ".xml");
-                fileInfo.setStoreFileName(storeFile);
-                fileInfo.setStoreFileUrl(truckData.getRootFolder() + truckData.getOutputFolder() + "\\" + sourceJobQueueDto.getJobId()
-                    + "\\" + getLastNameName(rawData.getFolderPath()) + "\\" + storeFile);
-                byte[] xmlBytes = xmlString.getBytes();
-                ByteArrayOutputStream baos = new ByteArrayOutputStream(xmlBytes.length);
-                baos.write(xmlBytes, 0, xmlBytes.length);
-                this.efsFileExchange.saveFile(baos, truckData.getOutputFolder() + "\\" + sourceJobQueueDto.getJobId()
-                    + "\\" + getLastNameName(rawData.getFolderPath()) + "\\" + storeFile);
-                HashMeta hashMeta = new HashMeta();
-                hashMeta.setHashTag(this.efsFileExchange.bytesToHex(xmlBytes));
-                fileInfo.setHashMeta(hashMeta);
-                this.fileInfoRepository.save(fileInfo);
-                this.bulkAction.saveJobAuditLogs(sourceJobQueueDto.getJobQueueId(), String.format("Job id %s with queue id %s, file save %s.",
-                        sourceJobQueueDto.getJobId(), sourceJobQueueDto.getJobQueueId(), fileInfo.getStoreFileUrl()));
-                return;
+        try (InputStream inputStream = this.efsFileExchange.getFile(rawData.getFilePath())) {
+            String result = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+            if (!ProcessUtil.isNull(result)) {
+                String xmlString = this.convertJsonObjectToXml(JsonParser.parseString(result).getAsJsonObject());
+                logger.info("XML detail :- {}.", xmlString);
+                FileInfo fileInfo = createFileInfo(rawData, sourceJobQueueDto);
+                if (!ProcessUtil.isNull(truckData.getOutputFolder()) && (this.efsFileExchange.makeDir(truckData.getOutputFolder()) &&
+                    this.efsFileExchange.makeDir(truckData.getOutputFolder()+"\\"+sourceJobQueueDto.getJobId()+"\\"+ getLastNameName(rawData.getFolderPath())))) {
+                    String storeFile = fileInfo.getRemoteFileName();
+                    storeFile = storeFile.replace(".txt", ".xml");
+                    fileInfo.setStoreFileName(storeFile);
+                    fileInfo.setStoreFileUrl(String.format("%s%s\\%d\\%s\\%s", truckData.getRootFolder(), truckData.getOutputFolder(), sourceJobQueueDto.getJobId(), getLastNameName(rawData.getFolderPath()), storeFile));
+                    // xml string bytes array convert into the bytearray out stream
+                    byte[] xmlBytes = xmlString.getBytes();
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream(xmlBytes.length);
+                    baos.write(xmlBytes, 0, xmlBytes.length);
+                    this.efsFileExchange.saveFile(baos, String.format("%s\\%d\\%s\\%s", truckData.getOutputFolder(), sourceJobQueueDto.getJobId(), getLastNameName(rawData.getFolderPath()), storeFile));
+                    HashMeta hashMeta = new HashMeta();
+                    hashMeta.setHashTag(this.efsFileExchange.bytesToHex(xmlBytes));
+                    fileInfo.setHashMeta(hashMeta);
+                    this.fileInfoRepository.save(fileInfo);
+                    this.bulkAction.saveJobAuditLogs(sourceJobQueueDto.getJobQueueId(), String.format("Job id %s with queue id %s, file save %s.", sourceJobQueueDto.getJobId(), sourceJobQueueDto.getJobQueueId(), fileInfo.getStoreFileUrl()));
+                    logger.info("Output directory have issue %s", truckData::getOutputFolder);
+                }
             }
-            logger.info("Output directory have issue %s", truckData::getOutputFolder);
         }
+    }
+
+    private FileInfo createFileInfo(RawData rawData, SourceJobQueueDto sourceJobQueueDto) {
+        FileInfo fileInfo = new FileInfo();
+        fileInfo.setJobId(sourceJobQueueDto.getJobId());
+        fileInfo.setJobQueueId(sourceJobQueueDto.getJobQueueId());
+        fileInfo.setLastDate(System.currentTimeMillis() + "ms");
+        fileInfo.setFileAccess(Boolean.TRUE);
+        fileInfo.setRemoteFileName(getLastNameName(rawData.getFilePath()));
+        fileInfo.setRemoteFileUrl(rawData.getFilePath());
+        fileInfo.setRemoteFileTag(rawData.getTag());
+        return fileInfo;
     }
 
     /**
      * Get fileName
      * @param filePath
      * */
-    private static String getLastNameName(String filePath) {
+    private String getLastNameName(String filePath) {
         int lastSlashIndex = filePath.lastIndexOf('/');
         if (lastSlashIndex >= 0 && lastSlashIndex < filePath.length() - 1) {
             return filePath.substring(lastSlashIndex + 1);
@@ -234,7 +236,7 @@ public class USATruckDataTask implements Runnable {
      * Method use to convert json object to xml
      * @param jsonObject
      * */
-    private static String convertJsonObjectToXml(JsonObject jsonObject) {
+    private String convertJsonObjectToXml(JsonObject jsonObject) {
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<root>\n");
@@ -248,7 +250,7 @@ public class USATruckDataTask implements Runnable {
      * Method use to convert json object to xml
      * @param jsonObject
      * */
-    private static String convertJsonObjectToXmlRecursively(JsonObject jsonObject) {
+    private String convertJsonObjectToXmlRecursively(JsonObject jsonObject) {
         StringBuilder sb = new StringBuilder();
         for (String key : jsonObject.keySet()) {
             Object value = jsonObject.get(key);

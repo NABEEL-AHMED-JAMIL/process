@@ -39,8 +39,7 @@ public class EfsFileExchange extends FileHashing {
         return false;
     }
 
-    public void saveFile(ByteArrayOutputStream byteArrayOutputStream,
-                         String targetFileName) throws Exception {
+    public void saveFile(ByteArrayOutputStream byteArrayOutputStream, String targetFileName) throws Exception {
         if (byteArrayOutputStream != null && byteArrayOutputStream.size() > 0) {
             try (OutputStream outputStream = Files.newOutputStream(Paths.get(this.basePathTempDire.concat(targetFileName)))) {
                 byteArrayOutputStream.writeTo(outputStream);

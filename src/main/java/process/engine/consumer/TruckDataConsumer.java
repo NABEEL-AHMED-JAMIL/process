@@ -18,13 +18,14 @@ import process.util.exception.ExceptionUtil;
  * @author Nabeel Ahmed
  */
 @Component
-public class TruckDataConsumer extends CommonConsumer {
+public class TruckDataConsumer {
 
     public Logger logger = LogManager.getLogger(TruckDataConsumer.class);
 
     @Autowired
+    private CommonConsumer consumer;
+    @Autowired
     private USATruckDataTask usaTruckDataTask;
-
 
     /**
      * Consumer user to handle only truck source with all-partition * for test-topic
@@ -36,12 +37,13 @@ public class TruckDataConsumer extends CommonConsumer {
         groupId = "tpd-process", containerFactory = "kafkaListenerContainerFactory")
     public void truckDataConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
         try {
-            logger.info("TruckDataConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
-                consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-            Thread.sleep(500);
-            JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
-            this.usaTruckDataTask.setData(this.fillTaskDetail(convertedObject));
-            AsyncDALTaskExecutor.addTask(this.usaTruckDataTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
+            synchronized (this) {
+                logger.info("TruckDataConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+                    consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
+                JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
+                this.usaTruckDataTask.setData(this.consumer.fillTaskDetail(convertedObject));
+                AsyncDALTaskExecutor.addTask(this.usaTruckDataTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
+            }
         } catch (InterruptedException ex) {
             logger.error("Exception in TruckDataConsumerListener :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         } catch (Exception ex) {
