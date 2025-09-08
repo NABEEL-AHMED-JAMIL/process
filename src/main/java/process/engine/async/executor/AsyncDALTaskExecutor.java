@@ -3,9 +3,8 @@ package process.engine.async.executor;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import process.util.exception.ExceptionUtil;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.*;
 
 /**
@@ -15,8 +14,8 @@ public class AsyncDALTaskExecutor {
 
     public static Logger logger = LogManager.getLogger(AsyncDALTaskExecutor.class);
 
-    private static LinkedBlockingQueue<Runnable> blockingQueue = new LinkedBlockingQueue<>(500);
-    private static ThreadPoolExecutor threadPool;
+    private static ThreadPoolTaskExecutor threadPoolTask;
+    private static ScheduledExecutorService scheduler;
 
     /**
      * This method use to add the task in thread pool
@@ -27,7 +26,7 @@ public class AsyncDALTaskExecutor {
         try {
             logger.info("Submitting Task of type :- {}.", task.getClass().getCanonicalName());
             PrioritizedTask prioritizedTask = new PrioritizedTask(task, priority);
-            threadPool.submit(prioritizedTask);
+            threadPoolTask.execute(prioritizedTask);
         } catch (RejectedExecutionException ex) {
             logger.error("Failed to submit Task in queue :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
@@ -36,28 +35,37 @@ public class AsyncDALTaskExecutor {
     /**
      * If max threads reach the limit the new thread reject state so its depend on the requirement
      * either rejected thread add again into the thread or else save in the db with the as inQueue status
-     * @param minThreads
-     * @param maxThreads
-     * @param threadLifeInMains
+     * @param corePoolSize
+     * @param maxPoolSize
+     * @param queueCapacity
+     * @param keepAlive
      * */
-    public AsyncDALTaskExecutor(Integer minThreads, Integer maxThreads, Integer threadLifeInMains) {
+    public AsyncDALTaskExecutor(Integer corePoolSize, Integer maxPoolSize, Integer queueCapacity, Integer keepAlive) {
         logger.info(">============AsyncDALTaskExecutor Start Successful============<");
-        threadPool = new ThreadPoolExecutor(minThreads, maxThreads, threadLifeInMains, TimeUnit.MINUTES, blockingQueue, new ThreadPoolExecutor.CallerRunsPolicy());
-        threadPool.setRejectedExecutionHandler((Runnable task, ThreadPoolExecutor executor) -> {
+        threadPoolTask = new ThreadPoolTaskExecutor();
+        threadPoolTask.setCorePoolSize(corePoolSize);
+        threadPoolTask.setMaxPoolSize(maxPoolSize);
+        threadPoolTask.setQueueCapacity(queueCapacity);
+        threadPoolTask.setKeepAliveSeconds(keepAlive);
+        threadPoolTask.setAllowCoreThreadTimeOut(false);
+        threadPoolTask.setThreadNamePrefix("task-");
+        threadPoolTask.initialize();
+        // Custom RejectedExecutionHandler
+        threadPoolTask.setRejectedExecutionHandler((Runnable task, ThreadPoolExecutor executor) -> {
             try {
                 logger.error("Task Rejected :- {}.", task.getClass().getCanonicalName());
-                Thread.sleep(1000); // if the task reject then wait for 1 mint
+                Thread.sleep(1000); // wait for 1 second if task is rejected
             } catch (InterruptedException ex) {
                 logger.error("DAL Task Interrupted  :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             }
         });
-        // scheduler use to check how man thread are active and other pool size detail
-        (new Timer()).schedule(new TimerTask() {
-            @Override public void run() {
-            logger.info("AsyncDAL Active No Threads: {} Core Pool size of Threads: {} Current no of threads in pool: {} Current Blocking Queue Size: {} Max allowed Threads: {}",
-                threadPool.getActiveCount(), threadPool.getCorePoolSize(), threadPool.getPoolSize(), blockingQueue.size(), threadPool.getMaximumPoolSize());
-            }
-        }, 5 * 60 * 1000, 60000);
+        // Scheduler to log thread pool stats every minute
+        scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.scheduleAtFixedRate(() -> {
+            logger.info("Active: {}, PoolSize: {}, Core: {}, Max: {}, Queue: {}",
+            threadPoolTask.getActiveCount(), threadPoolTask.getPoolSize(), threadPoolTask.getCorePoolSize(),
+            threadPoolTask.getThreadPoolExecutor().getMaximumPoolSize(), threadPoolTask.getThreadPoolExecutor().getQueue().size());
+        }, 5 * 60, 60, TimeUnit.SECONDS);
         logger.info(">============AsyncDALTaskExecutor End Successful============<");
     }
 

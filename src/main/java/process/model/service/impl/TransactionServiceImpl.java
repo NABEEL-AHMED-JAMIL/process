@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.projection.SourceJobProjection;
@@ -17,7 +16,6 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  */
 @Service
-@Transactional
 public class TransactionServiceImpl {
 
     private Logger logger = LoggerFactory.getLogger(TransactionServiceImpl.class);

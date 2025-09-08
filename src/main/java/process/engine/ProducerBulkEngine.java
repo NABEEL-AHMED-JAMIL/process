@@ -96,7 +96,7 @@ public class ProducerBulkEngine {
             lookupData.setLookupValue(currentSchedulerTime.toString());
             this.transactionService.updateLookupDate(lookupData);
             if (!schedulerForToday.isEmpty()) {
-                schedulerForToday.parallelStream().forEach(scheduler -> {
+                schedulerForToday.forEach(scheduler -> {
                     if (this.isScheduled(lastSchedulerRun, currentSchedulerTime, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
                         // we have to check if job in the queue then send the detail of job as skip with message
                         JobQueue jobQueue;
@@ -140,7 +140,7 @@ public class ProducerBulkEngine {
             List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(lookupData.getLookupValue()));
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
-                jobQueues.parallelStream().forEach(jobQueue -> {
+                jobQueues.forEach(jobQueue -> {
                     Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
                     try {
                         if (sourceJob.isPresent()) {
@@ -179,8 +179,7 @@ public class ProducerBulkEngine {
                         String topic = matcher.group(1);
                         String partition = matcher.group(2);
                         // random key for send the msg for partitions
-                        UUID uuid = UUID.randomUUID();
-                        String key = uuid.toString();
+                        String key = UUID.randomUUID().toString();
                         Map<String, Object> payload = new HashMap<>();
                         payload.put(ProcessUtil.JOB_QUEUE, jobQueue);
                         payload.put(ProcessUtil.TASK_DETAIL, sourceTask);
@@ -195,24 +194,20 @@ public class ProducerBulkEngine {
                             @Override
                             public void onSuccess(SendResult<String, String> result) {
                                 logger.info("Sent message=[{}] with offset=[{}]", payload, result.getRecordMetadata().offset());
-                                synchronized (this) {
-                                    jobQueue.setJobSend(true);
-                                    jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + result.getRecordMetadata().offset() + "]");
-                                    jobQueue.setJobStatus(JobStatus.Start);
-                                    transactionService.updateJobQueue(jobQueue);
-                                    bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s send message=[%s] with offset=[%s]",
+                                jobQueue.setJobSend(true);
+                                jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + result.getRecordMetadata().offset() + "]");
+                                jobQueue.setJobStatus(JobStatus.Start);
+                                transactionService.updateJobQueue(jobQueue);
+                                bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s send message=[%s] with offset=[%s]",
                                         sourceJob.getJobId(), payload, result.getRecordMetadata().offset()));
-                                }
                             }
                             @Override
                             public void onFailure(Throwable ex) {
                                 logger.info("Unable to send message=[{}] due to : {}", payload, ex.getMessage());
-                                synchronized (this) {
-                                    jobQueue.setJobSend(false);
-                                    jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
-                                    transactionService.updateJobQueue(jobQueue);
-                                    changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to : %s", sourceJob.getJobId(), payload, ex.getMessage()));
-                                }
+                                jobQueue.setJobSend(false);
+                                jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
+                                transactionService.updateJobQueue(jobQueue);
+                                changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to : %s", sourceJob.getJobId(), payload, ex.getMessage()));
                             }
                         });
                         return;

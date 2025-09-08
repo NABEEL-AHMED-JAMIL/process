@@ -14,34 +14,50 @@ import org.springframework.stereotype.Component;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AsyncTaskProperties {
 
-    @Value("${async.task.executor.minThreads}")
-    private Integer minThreads;
-    @Value("${async.task.executor.maxThreads}")
-    private Integer maxThreads;
-    @Value("${async.task.executor.idleThreadLife}")
-    private Integer idleThreadLife;
+    @Value("${async.task.executor.corePoolSize}")
+    private Integer corePoolSize;
+
+    @Value("${async.task.executor.maxPoolSize}")
+    private Integer maxPoolSize;
+
+    @Value("${async.task.executor.queueCapacity}")
+    private Integer queueCapacity;
+
+    @Value("${async.task.executor.keepAlive}")
+    private Integer keepAlive;
 
     public AsyncTaskProperties() {}
 
-    public Integer getMinThreads() {
-        return minThreads;
-    }
-    public void setMinThreads(Integer minThreads) {
-        this.minThreads = minThreads;
+    public Integer getCorePoolSize() {
+        return corePoolSize;
     }
 
-    public Integer getMaxThreads() {
-        return maxThreads;
-    }
-    public void setMaxThreads(Integer maxThreads) {
-        this.maxThreads = maxThreads;
+    public void setCorePoolSize(Integer corePoolSize) {
+        this.corePoolSize = corePoolSize;
     }
 
-    public Integer getIdleThreadLife() {
-        return idleThreadLife;
+    public Integer getMaxPoolSize() {
+        return maxPoolSize;
     }
-    public void setIdleThreadLife(Integer idleThreadLife) {
-        this.idleThreadLife = idleThreadLife;
+
+    public void setMaxPoolSize(Integer maxPoolSize) {
+        this.maxPoolSize = maxPoolSize;
+    }
+
+    public Integer getQueueCapacity() {
+        return queueCapacity;
+    }
+
+    public void setQueueCapacity(Integer queueCapacity) {
+        this.queueCapacity = queueCapacity;
+    }
+
+    public Integer getKeepAlive() {
+        return keepAlive;
+    }
+
+    public void setKeepAlive(Integer keepAlive) {
+        this.keepAlive = keepAlive;
     }
 
     @Override

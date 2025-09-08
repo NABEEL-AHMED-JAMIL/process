@@ -20,8 +20,8 @@ public class PagingUtil {
 
     public static Object convertEntityToPagingDTO(Long totalCount, Pageable page) {
         PagingDto pdto = new PagingDto();
-        pdto.setPageSize(new Long(page.getPageSize()));
-        pdto.setCurrentPage(new Long(page.getPageNumber()+1));
+        pdto.setPageSize(Long.valueOf(page.getPageSize()));
+        pdto.setCurrentPage(Long.valueOf(page.getPageNumber() + 1));
         pdto.setTotalRecord(totalCount);
         return pdto;
     }

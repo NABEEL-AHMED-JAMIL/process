@@ -57,6 +57,7 @@ public class JobAuditLogs {
     public Long getJobAuditLogId() {
         return jobAuditLogId;
     }
+
     public void setJobAuditLogId(Long jobAuditLogId) {
         this.jobAuditLogId = jobAuditLogId;
     }
@@ -72,6 +73,7 @@ public class JobAuditLogs {
     public String getLogsDetail() {
         return logsDetail;
     }
+
     public void setLogsDetail(String logsDetail) {
         this.logsDetail = logsDetail;
     }
@@ -79,6 +81,7 @@ public class JobAuditLogs {
     public Timestamp getDateCreated() {
         return dateCreated;
     }
+
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
     }

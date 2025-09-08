@@ -27,6 +27,8 @@ public class TestConsumer {
     @Autowired
     private TestLoopTask helloWorldTask;
 
+    public TestConsumer() {}
+
     /**
      * Consumer user to handle only test source with all-partition * for test-topic
      * alter use can use the batch message consumer using the below one KafkaListener
@@ -37,13 +39,11 @@ public class TestConsumer {
         containerFactory = "kafkaListenerContainerFactory")
     public void testConsumerListener(ConsumerRecord<String, String> consumerRecord, @Payload String payload) {
         try {
-            synchronized (this) {
-                logger.info("TestConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
+            logger.info("TestConsumerListener [String] received key {}: Type [{}] | Payload: {} | Record: {}",
                     consumerRecord.key(), ProcessUtil.typeIdHeader(consumerRecord.headers()), payload, consumerRecord.toString());
-                JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
-                this.helloWorldTask.setData(this.consumer.fillTaskDetail(convertedObject));
-                AsyncDALTaskExecutor.addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
-            }
+            JsonObject convertedObject = new Gson().fromJson(payload, JsonObject.class);
+            this.helloWorldTask.setData(this.consumer.fillTaskDetail(convertedObject));
+            AsyncDALTaskExecutor.addTask(this.helloWorldTask, convertedObject.get(ProcessUtil.PRIORITY).getAsInt());
         } catch (InterruptedException ex) {
             logger.error("Exception in TestConsumerListener :- {}.", ExceptionUtil.getRootCauseMessage(ex));
         } catch (Exception ex) {

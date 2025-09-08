@@ -31,8 +31,8 @@ public class ProcessConfig {
     public AsyncDALTaskExecutor asyncDALTaskExecutor() throws Exception {
         logger.debug("===============Application-DAO-INIT===============");
         AsyncDALTaskExecutor taskExecutor = new AsyncDALTaskExecutor(
-            this.asyncTaskProperties.getMinThreads(), this.asyncTaskProperties.getMaxThreads(),
-            this.asyncTaskProperties.getIdleThreadLife());
+            this.asyncTaskProperties.getCorePoolSize(), this.asyncTaskProperties.getMaxPoolSize(),
+            this.asyncTaskProperties.getQueueCapacity(), this.asyncTaskProperties.getKeepAlive());
         logger.debug("===============Application-DAO-END===============");
         return taskExecutor;
     }

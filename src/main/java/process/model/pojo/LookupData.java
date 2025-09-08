@@ -69,6 +69,7 @@ public class LookupData {
     public Long getLookupId() {
         return lookupId;
     }
+
     public void setLookupId(Long lookupId) {
         this.lookupId = lookupId;
     }
@@ -84,6 +85,7 @@ public class LookupData {
     public String getLookupType() {
         return lookupType;
     }
+
     public void setLookupType(String lookupType) {
         this.lookupType = lookupType;
     }
@@ -91,6 +93,7 @@ public class LookupData {
     public String getDescription() {
         return description;
     }
+
     public void setDescription(String description) {
         this.description = description;
     }
@@ -98,6 +101,7 @@ public class LookupData {
     public Timestamp getDateCreated() {
         return dateCreated;
     }
+
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
     }

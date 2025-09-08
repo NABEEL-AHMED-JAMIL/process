@@ -42,6 +42,7 @@ public class SourceJobQueueDto {
     public LocalDateTime getStartTime() {
         return startTime;
     }
+
     public void setStartTime(LocalDateTime startTime) {
         this.startTime = startTime;
     }
@@ -49,6 +50,7 @@ public class SourceJobQueueDto {
     public LocalDateTime getEndTime() {
         return endTime;
     }
+
     public void setEndTime(LocalDateTime endTime) {
         this.endTime = endTime;
     }
@@ -64,6 +66,7 @@ public class SourceJobQueueDto {
     public JobStatus getJobStatus() {
         return jobStatus;
     }
+
     public void setJobStatus(JobStatus jobStatus) {
         this.jobStatus = jobStatus;
     }
@@ -71,6 +74,7 @@ public class SourceJobQueueDto {
     public Long getJobId() {
         return jobId;
     }
+
     public void setJobId(Long jobId) {
         this.jobId = jobId;
     }
@@ -102,6 +106,7 @@ public class SourceJobQueueDto {
     public String getJobStatusMessage() {
         return jobStatusMessage;
     }
+
     public void setJobStatusMessage(String jobStatusMessage) {
         this.jobStatusMessage = jobStatusMessage;
     }
@@ -125,6 +130,7 @@ public class SourceJobQueueDto {
     public Timestamp getDateCreated() {
         return dateCreated;
     }
+
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
     }

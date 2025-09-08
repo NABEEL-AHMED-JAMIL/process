@@ -28,8 +28,7 @@ public class CommonConsumer {
     @Autowired
     private BulkAction bulkAction;
 
-    public CommonConsumer() {
-    }
+    public CommonConsumer() {}
 
     public LookupDataCacheService getLookupDataCacheService() {
         return lookupDataCacheService;

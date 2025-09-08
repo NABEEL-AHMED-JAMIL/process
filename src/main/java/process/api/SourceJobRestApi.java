@@ -193,12 +193,10 @@ public class SourceJobRestApi {
             DateFormat dateFormat = new SimpleDateFormat(ProcessUtil.SIMPLE_DATE_PATTERN);
             String fileName = "BatchDownload-"+dateFormat.format(new Date())+"-"+ UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers)
-                .body(this.sourceJobBulkApiService.downloadSourceJobTemplateFile().toByteArray());
+            return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkApiService.downloadSourceJobTemplateFile().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadSourceJobTemplateFile xlsx file :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -217,8 +215,7 @@ public class SourceJobRestApi {
             return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkApiService.downloadListSourceJob().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -236,12 +233,10 @@ public class SourceJobRestApi {
             if (fileObject.getFile() != null) {
                 return new ResponseEntity<>(this.sourceJobBulkApiService.uploadSourceJob(fileObject), HttpStatus.OK);
             }
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "File not found for process."),
-                HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
             logger.error("An error occurred while uploadSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
-            "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Sorry File Not Upload Contact With Support"), HttpStatus.BAD_REQUEST);
         }
     }
 

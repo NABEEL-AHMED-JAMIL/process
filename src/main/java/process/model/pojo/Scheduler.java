@@ -88,6 +88,7 @@ public class Scheduler {
     public Long getSchedulerId() {
         return schedulerId;
     }
+
     public void setSchedulerId(Long schedulerId) {
         this.schedulerId = schedulerId;
     }
@@ -95,6 +96,7 @@ public class Scheduler {
     public LocalDate getStartDate() {
         return startDate;
     }
+
     public void setStartDate(LocalDate startDate) {
         this.startDate = startDate;
     }
@@ -102,6 +104,7 @@ public class Scheduler {
     public LocalDate getEndDate() {
         return endDate;
     }
+
     public void setEndDate(LocalDate endDate) {
         this.endDate = endDate;
     }
@@ -117,6 +120,7 @@ public class Scheduler {
     public String getFrequency() {
         return frequency;
     }
+
     public void setFrequency(String frequency) {
         this.frequency = frequency;
     }
@@ -124,6 +128,7 @@ public class Scheduler {
     public String getRecurrence() {
         return recurrence;
     }
+
     public void setRecurrence(String recurrence) {
         this.recurrence = recurrence;
     }
@@ -131,6 +136,7 @@ public class Scheduler {
     public Long getJobId() {
         return jobId;
     }
+
     public void setJobId(Long jobId) {
         this.jobId = jobId;
     }
@@ -138,6 +144,7 @@ public class Scheduler {
     public Timestamp getDateCreated() {
         return dateCreated;
     }
+
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
     }
@@ -145,6 +152,7 @@ public class Scheduler {
     public LocalDateTime getRecurrenceTime() {
         return recurrenceTime;
     }
+
     public void setRecurrenceTime(LocalDateTime recurrenceTime) {
         this.recurrenceTime = recurrenceTime;
     }
