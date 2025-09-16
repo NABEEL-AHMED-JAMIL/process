@@ -2,7 +2,6 @@ package process.model.service.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.model.enums.Status;
 import process.model.pojo.*;
@@ -20,18 +19,26 @@ public class TransactionServiceImpl {
 
     private Logger logger = LoggerFactory.getLogger(TransactionServiceImpl.class);
 
-    @Autowired
     private SourceJobRepository sourceJobRepository;
-    @Autowired
     private SchedulerRepository schedulerRepository;
-    @Autowired
     private JobQueueRepository jobQueueRepository;
-    @Autowired
     private LookupDataRepository lookupDataRepository;
-    @Autowired
     private JobAuditLogRepository jobAuditLogRepository;
-    @Autowired
     private SourceTaskRepository sourceTaskRepository;
+
+    public TransactionServiceImpl(SourceJobRepository sourceJobRepository,
+        SchedulerRepository schedulerRepository,
+        JobQueueRepository jobQueueRepository,
+        LookupDataRepository lookupDataRepository,
+        JobAuditLogRepository jobAuditLogRepository,
+        SourceTaskRepository sourceTaskRepository) {
+        this.sourceJobRepository = sourceJobRepository;
+        this.schedulerRepository = schedulerRepository;
+        this.jobQueueRepository = jobQueueRepository;
+        this.lookupDataRepository = lookupDataRepository;
+        this.jobAuditLogRepository = jobAuditLogRepository;
+        this.sourceTaskRepository = sourceTaskRepository;
+    }
 
     /**
      * The method use to save the logs for job

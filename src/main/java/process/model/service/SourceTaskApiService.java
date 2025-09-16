@@ -18,10 +18,10 @@ public interface SourceTaskApiService {
 
     public ResponseDto deleteSourceTask(SourceTaskDto tempSourceTask) throws Exception;
 
-    public ResponseDto listSourceTask(Long appUserId, String startDate, String endDate,
+    public ResponseDto listSourceTask(String startDate, String endDate,
           String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception;
 
-    public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long appUserId, Long sourceTaskId, String startDate, String endDate,
+    public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
           String columnName, String order, Pageable paging, SearchTextDto searchTextDt) throws Exception;
 
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId);

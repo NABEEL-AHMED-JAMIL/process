@@ -39,7 +39,6 @@ public class ModelApplication {
 
     /**
      * Method run on the start to set the time
-     * zone for application Karachi
      * */
     @PostConstruct
     public void started() {

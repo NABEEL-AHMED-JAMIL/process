@@ -57,6 +57,7 @@ public class VelocityManager {
         }
         throw new NullPointerException("Template Not Found");
     }
+
     private VelocityEngine getEngine() {
         return new VelocityEngine();
     }
@@ -72,6 +73,7 @@ public class VelocityManager {
     public StringWriter getWriter() {
         return writer;
     }
+
     public void setWriter(StringWriter writer) {
         this.writer = writer;
     }

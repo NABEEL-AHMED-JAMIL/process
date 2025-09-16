@@ -13,8 +13,11 @@ import java.util.List;
 @Repository
 public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long> {
 
-    public List<JobAuditLogs> findAllByJobQueueId(Long jobQueueId);
-
+    /**
+     * Note :- Method use to find the job in queue by id
+     * @param jobQueueId
+     * @return List<JobAuditLogProjection>
+     * */
     @Query(value = "select job_audit_log_id as jobAuditLogId, job_queue_id as jobQueueId, log_detail as logsDetail, date_created as dateCreated " +
         "from job_audit_logs where job_queue_id = ?", nativeQuery = true)
     public List<JobAuditLogProjection> findAllByJobQueueIdV1(Long jobQueueId);

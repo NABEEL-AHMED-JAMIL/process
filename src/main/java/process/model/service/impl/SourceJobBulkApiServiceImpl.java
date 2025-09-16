@@ -6,7 +6,6 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -41,14 +40,21 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
     @Value("${storage.efsFileDire}")
     private String tempFileStoreDirectory;
     private final String SourceJob = "SourceJob";
-    @Autowired
-    private BulkExcel bulkExcel;
-    @Autowired
-    private TransactionServiceImpl transactionService;
-    @Autowired
-    private SourceJobRepository sourceJobRepository;
-    @Autowired
-    private SchedulerRepository schedulerRepository;
+
+    private final BulkExcel bulkExcel;
+    private final TransactionServiceImpl transactionService;
+    private final SourceJobRepository sourceJobRepository;
+    private final SchedulerRepository schedulerRepository;
+
+    public SourceJobBulkApiServiceImpl(TransactionServiceImpl transactionService,
+        SourceJobRepository sourceJobRepository,
+        SchedulerRepository schedulerRepository,
+        BulkExcel bulkExcel) {
+        this.transactionService = transactionService;
+        this.sourceJobRepository = sourceJobRepository;
+        this.schedulerRepository = schedulerRepository;
+        this.bulkExcel = bulkExcel;
+    }
 
     private String[] getHEADER_FILED_BATCH_FILE() {
         return HEADER_FILED_BATCH_FILE;

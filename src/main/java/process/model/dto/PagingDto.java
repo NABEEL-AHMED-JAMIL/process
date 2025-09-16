@@ -76,6 +76,7 @@ public class PagingDto implements Serializable {
     public void setCurrentPage(Long currentPage) {
         this.currentPage = currentPage;
     }
+
     @Override
     public String toString() {
         return new Gson().toJson(this);

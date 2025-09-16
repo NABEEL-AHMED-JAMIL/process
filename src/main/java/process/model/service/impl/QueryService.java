@@ -69,7 +69,6 @@ public class QueryService {
     /**
      * Query:- query help to fetch the source task
      * @param isCount
-     * @param appUserId
      * @param startDate
      * @param endDate
      * @param columnName
@@ -77,7 +76,7 @@ public class QueryService {
      * @param searchTextDto
      * @return string
      * */
-    public String listSourceTaskQuery(boolean isCount, Long appUserId, String startDate, String endDate, String columnName,
+    public String listSourceTaskQuery(boolean isCount, String startDate, String endDate, String columnName,
         String order, SearchTextDto searchTextDto) {
         String selectPortion = "";
         if (isCount) {
@@ -93,9 +92,6 @@ public class QueryService {
             query += "left join lookup_data ld2 on cast(ld2.lookup_id as varchar(10)) = st.pipeline_id\n";
         }
         query += "where 1=1 ";
-        if (appUserId != null) {
-            query += String.format(" and st.created_by_id = %d ", appUserId);
-        }
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
             if ((startDate != null && !startDate.isEmpty()) && (endDate != null && !endDate.isEmpty())) {
                 query += String.format("and cast(st.date_created as date) between '%s' and '%s' ", startDate, endDate);
@@ -188,7 +184,7 @@ public class QueryService {
     public String jobRunningStatistics() {
         return "select job_running_status, count(job_id) as total_count\n" +
             "from source_job\n" +
-            "where job_running_status in ('Start', 'Running', 'Failed', 'Completed')\n" +
+            "where job_running_status in ('Queue', 'Start', 'Running')\n" +
             "group by job_running_status";
     }
 

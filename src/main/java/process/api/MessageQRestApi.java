@@ -2,11 +2,9 @@ package process.api;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import process.engine.BulkAction;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.QueueMessageStatusDto;
 import process.model.dto.ResponseDto;
@@ -25,10 +23,11 @@ public class MessageQRestApi {
 
     private Logger logger = LoggerFactory.getLogger(MessageQRestApi.class);
 
-    @Autowired
-    private MessageQApiService messageQApiService;
-    @Autowired
-    private BulkAction bulkAction;
+    private final MessageQApiService messageQApiService;
+
+    public MessageQRestApi(MessageQApiService messageQApiService) {
+        this.messageQApiService = messageQApiService;
+    }
 
     /**
      * Integration Status :- done
@@ -37,7 +36,8 @@ public class MessageQRestApi {
      * @return ResponseEntity
      * */
     @RequestMapping(value = "/fetchLogs", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchLogs(@RequestBody MessageQSearchDto messageQSearch) {
+    public ResponseEntity<?> fetchLogs(
+        @RequestBody MessageQSearchDto messageQSearch) {
         try {
             return new ResponseEntity<>(this.messageQApiService.fetchLogs(messageQSearch), HttpStatus.OK);
         } catch (Exception ex) {
@@ -53,7 +53,8 @@ public class MessageQRestApi {
      * @return ResponseEntity
      * */
     @RequestMapping(value = "/failJobLogs", method = RequestMethod.DELETE)
-    public ResponseEntity<?> failJobLogs(@RequestParam Long jobQId) {
+    public ResponseEntity<?> failJobLogs(
+        @RequestParam Long jobQId) {
         try {
             return new ResponseEntity<>(this.messageQApiService.failJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
@@ -69,7 +70,8 @@ public class MessageQRestApi {
      * @return ResponseEntity
      * */
     @RequestMapping(value = "/interruptJobLogs", method = RequestMethod.DELETE)
-    public ResponseEntity<?> interruptJobLogs(@RequestParam Long jobQId) {
+    public ResponseEntity<?> interruptJobLogs(
+        @RequestParam Long jobQId) {
         try {
             return new ResponseEntity<>(this.messageQApiService.interruptJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
@@ -85,7 +87,8 @@ public class MessageQRestApi {
      * @return ResponseEntity
      * */
     @RequestMapping(value = "/changeJobStatus", method = RequestMethod.PUT)
-    public ResponseEntity<?> changeJobStatus(@RequestBody QueueMessageStatusDto queueMessageStatus) {
+    public ResponseEntity<?> changeJobStatus(
+        @RequestBody QueueMessageStatusDto queueMessageStatus) {
         try {
             return new ResponseEntity<>(this.messageQApiService.changeJobStatus(queueMessageStatus), HttpStatus.OK);
         } catch (Exception ex) {

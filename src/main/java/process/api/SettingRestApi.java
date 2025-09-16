@@ -2,7 +2,6 @@ package process.api;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,10 +26,14 @@ public class SettingRestApi {
 
     private Logger logger = LoggerFactory.getLogger(SettingRestApi.class);
 
-    @Autowired
-    private SettingApiService settingApiService;
-    @Autowired
-    private XmlOutTagInfoUtil xmlOutTagInfoUtil;
+    private final SettingApiService settingApiService;
+    private final XmlOutTagInfoUtil xmlOutTagInfoUtil;
+
+    public SettingRestApi(SettingApiService settingApiService,
+        XmlOutTagInfoUtil xmlOutTagInfoUtil) {
+        this.settingApiService = settingApiService;
+        this.xmlOutTagInfoUtil = xmlOutTagInfoUtil;
+    }
 
     /**
      * Integration Status :- done
@@ -38,7 +41,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/dynamicQueryResponse", method = RequestMethod.POST)
-    public ResponseEntity<?> dynamicQueryResponse(@RequestBody ItemResponse itemResponse) {
+    public ResponseEntity<?> dynamicQueryResponse(
+        @RequestBody ItemResponse itemResponse) {
         try {
             return new ResponseEntity<>(this.settingApiService.dynamicQueryResponse(itemResponse), HttpStatus.OK);
         } catch (Exception ex) {
@@ -69,7 +73,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/addSourceTaskType", method = RequestMethod.POST)
-    public ResponseEntity<?> addSourceTaskType(@RequestBody SourceTaskTypeDto tempSourceTaskType) {
+    public ResponseEntity<?> addSourceTaskType(
+        @RequestBody SourceTaskTypeDto tempSourceTaskType) {
         try {
             return new ResponseEntity<>(this.settingApiService.addSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
@@ -85,7 +90,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/updateSourceTaskType", method = RequestMethod.PUT)
-    public ResponseEntity<?> updateSourceTaskType(@RequestBody SourceTaskTypeDto tempSourceTaskType) {
+    public ResponseEntity<?> updateSourceTaskType(
+        @RequestBody SourceTaskTypeDto tempSourceTaskType) {
         try {
             return new ResponseEntity<>(this.settingApiService.updateSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
@@ -101,7 +107,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?> deleteSourceTaskType
      * */
     @RequestMapping(value = "/deleteSourceTaskType", method = RequestMethod.DELETE)
-    public ResponseEntity<?> deleteSourceTaskType(@RequestParam Long sourceTaskTypeId) {
+    public ResponseEntity<?> deleteSourceTaskType(
+        @RequestParam Long sourceTaskTypeId) {
         try {
             return new ResponseEntity<>(this.settingApiService.deleteSourceTaskType(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
@@ -117,7 +124,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?> addLookupData
      * */
     @RequestMapping(value = "/addLookupData", method = RequestMethod.POST)
-    public ResponseEntity<?> addLookupData(@RequestBody LookupDataDto tempLookupData) {
+    public ResponseEntity<?> addLookupData(
+        @RequestBody LookupDataDto tempLookupData) {
         try {
             return new ResponseEntity<>(this.settingApiService.addLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
@@ -133,7 +141,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?> updateLookupData
      * */
     @RequestMapping(value = "/updateLookupData", method = RequestMethod.PUT)
-    public ResponseEntity<?> updateLookupData(@RequestBody LookupDataDto tempLookupData) {
+    public ResponseEntity<?> updateLookupData(
+        @RequestBody LookupDataDto tempLookupData) {
         try {
             return new ResponseEntity<>(this.settingApiService.updateLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
@@ -162,7 +171,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?> fetchSubLookupByParentId
      * */
     @RequestMapping(value = "/fetchSubLookupByParentId", method = RequestMethod.GET)
-    public ResponseEntity<?> fetchSubLookupByParentId(@RequestParam Long parentLookUpId) {
+    public ResponseEntity<?> fetchSubLookupByParentId(
+        @RequestParam Long parentLookUpId) {
         try {
             return new ResponseEntity<>(this.settingApiService.fetchSubLookupByParentId(parentLookUpId), HttpStatus.OK);
         } catch (Exception ex) {
@@ -178,7 +188,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?> deleteLookupData
      * */
     @RequestMapping(value = "/deleteLookupData", method = RequestMethod.PUT)
-    public ResponseEntity<?> deleteLookupData(@RequestBody LookupDataDto tempLookupData) {
+    public ResponseEntity<?> deleteLookupData(
+        @RequestBody LookupDataDto tempLookupData) {
         try {
             return new ResponseEntity<>(this.settingApiService.deleteLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
@@ -194,7 +205,8 @@ public class SettingRestApi {
      * @return ResponseEntity<?> xmlCreateChecker
      * */
     @RequestMapping(path = "xmlCreateChecker",  method = RequestMethod.POST)
-    public ResponseEntity<?> xmlCreateChecker(@RequestBody ConfigurationMakerRequest xlmMakerRequest) {
+    public ResponseEntity<?> xmlCreateChecker(
+        @RequestBody ConfigurationMakerRequest xlmMakerRequest) {
         try {
             if(xlmMakerRequest.getXmlTagsInfo() != null) {
                 return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,

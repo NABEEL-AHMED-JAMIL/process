@@ -13,7 +13,7 @@ import java.util.List;
 public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
 
     /**
-     * Method use to get the JobQueue by limit if present in db
+     * Note :- Method use to get the JobQueue by limit if present in db
      * @param limit
      * @return List<JobQueue>
      * */
@@ -21,7 +21,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     public List<JobQueue> findAllJobForTodayWithLimit(Long limit);
 
     /**
-     * Method use to get the source job count from the job queue base on 'Queue|Running'
+     * Note :- Method use to get the source job count from the job queue base on 'Queue|Running'
      * @param jobId
      * @return int
      * */
@@ -29,7 +29,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     public int getCountForInQueueJobByJobId(Long jobId);
 
     /**
-     * Method use to get the source job count from the job queue
+     * Note :- Method use to get the source job count from the job queue
      * @param jobId
      * @return int
      * */

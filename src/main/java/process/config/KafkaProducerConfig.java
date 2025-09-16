@@ -5,7 +5,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
@@ -33,8 +32,11 @@ public class KafkaProducerConfig {
     @Value("${tpd.scrapping-topic}")
     private String scrappingTopic;
 
-    @Autowired
-    private KafkaProperties kafkaProperties;
+    private final KafkaProperties kafkaProperties;
+
+    public KafkaProducerConfig(KafkaProperties kafkaProperties) {
+        this.kafkaProperties = kafkaProperties;
+    }
 
     @Bean
     public Map<String, Object> producerConfigs() {

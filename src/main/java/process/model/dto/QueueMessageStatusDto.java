@@ -18,7 +18,6 @@ public class QueueMessageStatusDto {
     private Long jobQueueId;
     private String logsDetail;
     private LocalDateTime endTime;
-
     private String messageType;
 
     public QueueMessageStatusDto() {}

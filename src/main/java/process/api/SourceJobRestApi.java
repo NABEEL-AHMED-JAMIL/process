@@ -2,7 +2,6 @@ package process.api;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,10 +29,14 @@ public class SourceJobRestApi {
 
     private Logger logger = LoggerFactory.getLogger(SourceJobRestApi.class);
 
-    @Autowired
-    private SourceJobApiService sourceJobApiService;
-    @Autowired
-    private SourceJobBulkApiService sourceJobBulkApiService;
+    private final SourceJobApiService sourceJobApiService;
+    private final SourceJobBulkApiService sourceJobBulkApiService;
+
+    public SourceJobRestApi(SourceJobApiService sourceJobApiService,
+        SourceJobBulkApiService sourceJobBulkApiService) {
+        this.sourceJobApiService = sourceJobApiService;
+        this.sourceJobBulkApiService = sourceJobBulkApiService;
+    }
 
     /**
      * Integration Status :- done
@@ -42,7 +45,8 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/addSourceJob", method = RequestMethod.POST)
-    public ResponseEntity<?> addSourceJob(@RequestBody SourceJobDto tempSourceJob) {
+    public ResponseEntity<?> addSourceJob(
+        @RequestBody SourceJobDto tempSourceJob) {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.addSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
@@ -58,7 +62,8 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/updateSourceJob", method = RequestMethod.PUT)
-    public ResponseEntity<?> updateSourceJob(@RequestBody SourceJobDto tempSourceJob) {
+    public ResponseEntity<?> updateSourceJob(
+        @RequestBody SourceJobDto tempSourceJob) {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.updateSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
@@ -74,7 +79,8 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/deleteSourceJob", method = RequestMethod.PUT)
-    public ResponseEntity<?> deleteSourceJob(@RequestBody SourceJobDto tempSourceJob) {
+    public ResponseEntity<?> deleteSourceJob(
+        @RequestBody SourceJobDto tempSourceJob) {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.deleteSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
@@ -106,7 +112,8 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/fetchRunningJobEvent", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchRunningJobEvent(@RequestBody SourceJobDto tempSourceJob) {
+    public ResponseEntity<?> fetchRunningJobEvent(
+        @RequestBody SourceJobDto tempSourceJob) {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.fetchRunningJobEvent(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
@@ -123,7 +130,8 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/fetchSourceJobDetailWithSourceJobId", method = RequestMethod.GET)
-    public ResponseEntity<?> fetchSourceJobDetailWithSourceJobId(@RequestParam(value = "jobId") Long jobId) {
+    public ResponseEntity<?> fetchSourceJobDetailWithSourceJobId(
+        @RequestParam(value = "jobId") Long jobId) {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.fetchSourceJobDetailWithSourceJobId(jobId), HttpStatus.OK);
         } catch (Exception ex) {
@@ -139,7 +147,8 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/runSourceJob", method = RequestMethod.POST)
-    public ResponseEntity<?> runSourceJob(@RequestBody SourceJobDto tempSourceJob) {
+    public ResponseEntity<?> runSourceJob(
+        @RequestBody SourceJobDto tempSourceJob) {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.runSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
@@ -155,7 +164,8 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/skipNextSourceJob", method = RequestMethod.POST)
-    public ResponseEntity<?> skipNextSourceJob(@RequestBody SourceJobDto tempSourceJob) {
+    public ResponseEntity<?> skipNextSourceJob(
+        @RequestBody SourceJobDto tempSourceJob) {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.skipNextSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
@@ -171,7 +181,9 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/findSourceJobAuditLog", method = RequestMethod.GET)
-    public ResponseEntity<?> findSourceJobAuditLog(@RequestParam Long jobQueueId, @RequestParam Long jobId) {
+    public ResponseEntity<?> findSourceJobAuditLog(
+        @RequestParam Long jobQueueId,
+        @RequestParam Long jobId) {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.findSourceJobAuditLog(jobQueueId, jobId), HttpStatus.OK);
         } catch (Exception ex) {
@@ -228,7 +240,8 @@ public class SourceJobRestApi {
      * @return ResponseEntity<?>
      */
     @RequestMapping(value = "/uploadSourceJob", method = RequestMethod.POST)
-    public ResponseEntity<?> uploadSourceJob(FileUploadDto fileObject) {
+    public ResponseEntity<?> uploadSourceJob(
+        FileUploadDto fileObject) {
         try {
             if (fileObject.getFile() != null) {
                 return new ResponseEntity<>(this.sourceJobBulkApiService.uploadSourceJob(fileObject), HttpStatus.OK);

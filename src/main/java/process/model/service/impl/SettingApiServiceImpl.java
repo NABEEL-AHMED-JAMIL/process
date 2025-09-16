@@ -2,7 +2,6 @@ package process.model.service.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
@@ -25,24 +24,32 @@ import static process.util.ProcessUtil.*;
 @Service
 public class SettingApiServiceImpl implements SettingApiService {
 
-    private Logger logger = LoggerFactory.getLogger(SourceJobBulkApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(SettingApiServiceImpl.class);
 
     private final String PARENT_LOOKUP_DATA = "parentLookupData";
     private final String LOOKUP_DATA = "lookupDatas";
     private final String SOURCE_TASK_TYPE = "sourceTaskTaypes";
 
-    @Autowired
-    private LookupDataRepository lookupDataRepository;
-    @Autowired
-    private SourceJobRepository sourceJobRepository;
-    @Autowired
-    private SourceTaskRepository sourceTaskRepository;
-    @Autowired
-    private SourceTaskTypeRepository sourceTaskTypeRepository;
-    @Autowired
-    private LookupDataCacheService lookupDataCacheService;
-    @Autowired
-    private QueryService queryService;
+    private final LookupDataRepository lookupDataRepository;
+    private final SourceJobRepository sourceJobRepository;
+    private final SourceTaskRepository sourceTaskRepository;
+    private final SourceTaskTypeRepository sourceTaskTypeRepository;
+    private final LookupDataCacheService lookupDataCacheService;
+    private final QueryService queryService;
+
+    public SettingApiServiceImpl(LookupDataRepository lookupDataRepository,
+        SourceJobRepository sourceJobRepository,
+        SourceTaskRepository sourceTaskRepository,
+        SourceTaskTypeRepository sourceTaskTypeRepository,
+        LookupDataCacheService lookupDataCacheService,
+        QueryService queryService) {
+        this.lookupDataRepository = lookupDataRepository;
+        this.sourceJobRepository = sourceJobRepository;
+        this.sourceTaskRepository = sourceTaskRepository;
+        this.sourceTaskTypeRepository = sourceTaskTypeRepository;
+        this.lookupDataCacheService = lookupDataCacheService;
+        this.queryService = queryService;
+    }
 
     @Override
     public ResponseDto dynamicQueryResponse(ItemResponse itemResponse) {

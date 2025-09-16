@@ -2,7 +2,6 @@ package process.model.service.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -29,22 +28,32 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
 
     private Logger logger = LoggerFactory.getLogger(SourceJobApiServiceImpl.class);
 
-    @Autowired
     private SourceJobRepository sourceJobRepository;
-    @Autowired
     private SchedulerRepository schedulerRepository;
-    @Autowired
     private SourceTaskRepository sourceTaskRepository;
-    @Autowired
     private JobAuditLogRepository jobAuditLogRepository;
-    @Autowired
     private JobQueueRepository jobQueueRepository;
-    @Autowired
     private LookupDataRepository lookupDataRepository;
-    @Autowired
     private ProducerBulkEngine producerBulkEngine;
-    @Autowired
     private EmailMessagesFactory emailMessagesFactory;
+
+    public SourceJobApiServiceImpl(SourceJobRepository sourceJobRepository,
+        SchedulerRepository schedulerRepository,
+        SourceTaskRepository sourceTaskRepository,
+        JobAuditLogRepository jobAuditLogRepository,
+        JobQueueRepository jobQueueRepository,
+        LookupDataRepository lookupDataRepository,
+        ProducerBulkEngine producerBulkEngine,
+        EmailMessagesFactory emailMessagesFactory) {
+        this.sourceJobRepository = sourceJobRepository;
+        this.schedulerRepository = schedulerRepository;
+        this.sourceTaskRepository = sourceTaskRepository;
+        this.jobAuditLogRepository = jobAuditLogRepository;
+        this.jobQueueRepository = jobQueueRepository;
+        this.lookupDataRepository = lookupDataRepository;
+        this.producerBulkEngine = producerBulkEngine;
+        this.emailMessagesFactory = emailMessagesFactory;
+    }
 
     @Override
     public ResponseDto addSourceJob(SourceJobDto tempSourceJob) throws Exception {

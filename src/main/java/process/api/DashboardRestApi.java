@@ -2,7 +2,6 @@ package process.api;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,8 +21,11 @@ public class DashboardRestApi {
 
     private Logger logger = LoggerFactory.getLogger(DashboardRestApi.class);
 
-    @Autowired
-    private DashboardApiService dashboardApiService;
+    private final DashboardApiService dashboardApiService;
+
+    public DashboardRestApi(DashboardApiService dashboardApiService) {
+        this.dashboardApiService = dashboardApiService;
+    }
 
     /**
      * Integration Status :- done
@@ -61,7 +63,8 @@ public class DashboardRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/weeklyRunningJobStatistics", method = RequestMethod.GET)
-    public ResponseEntity<?> weeklyRunningJobStatistics(@RequestParam(name = "startDate") String startDate,
+    public ResponseEntity<?> weeklyRunningJobStatistics(
+        @RequestParam(name = "startDate") String startDate,
         @RequestParam(name = "endDate") String endDate) {
         try {
             return new ResponseEntity<>(this.dashboardApiService.weeklyRunningJobStatistics(startDate, endDate), HttpStatus.OK);
@@ -77,7 +80,8 @@ public class DashboardRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/weeklyHrsRunningJobStatistics", method = RequestMethod.GET)
-    public ResponseEntity<?> weeklyHrsRunningJobStatistics(@RequestParam(name = "startDate") String startDate,
+    public ResponseEntity<?> weeklyHrsRunningJobStatistics(
+        @RequestParam(name = "startDate") String startDate,
         @RequestParam(name = "endDate") String endDate) {
         try {
             return new ResponseEntity<>(this.dashboardApiService.weeklyHrsRunningJobStatistics(startDate, endDate), HttpStatus.OK);
@@ -93,7 +97,8 @@ public class DashboardRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimension", method = RequestMethod.GET)
-    public ResponseEntity<?> weeklyHrRunningStatisticsDimension(@RequestParam(name = "targetDate") String targetDate,
+    public ResponseEntity<?> weeklyHrRunningStatisticsDimension(
+        @RequestParam(name = "targetDate") String targetDate,
         @RequestParam(name = "targetHr") Long targetHr) {
         try {
             return new ResponseEntity<>(this.dashboardApiService.weeklyHrRunningStatisticsDimension(targetDate, targetHr), HttpStatus.OK);
@@ -109,8 +114,10 @@ public class DashboardRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimensionDetail", method = RequestMethod.GET)
-    public ResponseEntity<?> weeklyHrRunningStatisticsDimensionDetail(@RequestParam(name = "targetDate", required = false) String targetDate,
-        @RequestParam(name = "targetHr", required = false) Long targetHr, @RequestParam(name = "jobStatus", required = false) String jobStatus,
+    public ResponseEntity<?> weeklyHrRunningStatisticsDimensionDetail(
+        @RequestParam(name = "targetDate", required = false) String targetDate,
+        @RequestParam(name = "targetHr", required = false) Long targetHr,
+        @RequestParam(name = "jobStatus", required = false) String jobStatus,
         @RequestParam(name = "jobId", required = false) Long jobId) {
         try {
             return new ResponseEntity<>(this.dashboardApiService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId), HttpStatus.OK);

@@ -5,7 +5,6 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import process.model.dto.*;
@@ -21,6 +20,7 @@ import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceTaskApiService;
 import process.util.PagingUtil;
+import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
 import process.util.validation.SourceTaskValidation;
 import java.io.ByteArrayOutputStream;
@@ -40,18 +40,26 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
 
     private Logger logger = LoggerFactory.getLogger(SourceTaskApiServiceImpl.class);
 
-    @Autowired
-    private BulkExcel bulkExcel;
-    @Autowired
-    private QueryService queryService;
-    @Autowired
-    private SourceJobRepository sourceJobRepository;
-    @Autowired
-    private SourceTaskRepository sourceTaskRepository;
-    @Autowired
-    private SourceTaskTypeRepository sourceTaskTypeRepository;
-    @Autowired
-    private LookupDataCacheService lookupDataCacheService;
+    private final BulkExcel bulkExcel;
+    private final QueryService queryService;
+    private final SourceJobRepository sourceJobRepository;
+    private final SourceTaskRepository sourceTaskRepository;
+    private final SourceTaskTypeRepository sourceTaskTypeRepository;
+    private final LookupDataCacheService lookupDataCacheService;
+
+    public SourceTaskApiServiceImpl(BulkExcel bulkExcel,
+        QueryService queryService,
+        SourceJobRepository sourceJobRepository,
+        SourceTaskRepository sourceTaskRepository,
+        SourceTaskTypeRepository sourceTaskTypeRepository,
+        LookupDataCacheService lookupDataCacheService) {
+        this.bulkExcel = bulkExcel;
+        this.queryService = queryService;
+        this.sourceJobRepository = sourceJobRepository;
+        this.sourceTaskRepository = sourceTaskRepository;
+        this.sourceTaskTypeRepository = sourceTaskTypeRepository;
+        this.lookupDataCacheService = lookupDataCacheService;
+    }
 
     private final String ListSourceTask = "ListSourceTask";
     private final String SOURCE_TASK_HEADER[] = {
@@ -173,15 +181,15 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
     }
 
     @Override
-    public ResponseDto listSourceTask(Long appUserId, String startDate, String endDate,
+    public ResponseDto listSourceTask(String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
         ResponseDto responseDto;
         Object countQueryResult = this.queryService.executeQueryForSingleResult(this.queryService.listSourceTaskQuery(
-        true, appUserId, startDate, endDate, columnName, order, searchTextDto));
+        true, startDate, endDate, columnName, order, searchTextDto));
         if (!isNull(countQueryResult)) {
             /* fetch Record According to Pagination*/
             List<Object[]> result = this.queryService.executeQuery(this.queryService.listSourceTaskQuery(
-            false, appUserId, startDate, endDate, columnName, order, searchTextDto), paging);
+            false, startDate, endDate, columnName, order, searchTextDto), paging);
             if (!isNull(result) && !result.isEmpty()) {
                 List<SourceTaskDto> sourceTaskDtoList = new ArrayList<>();
                 for(Object[] obj : result) {
@@ -249,16 +257,16 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 responseDto = new ResponseDto(SUCCESS, "SourceTask successfully ", sourceTaskDtoList,
                     PagingUtil.convertEntityToPagingDTO(Long.valueOf(countQueryResult.toString()), paging));
             } else {
-                responseDto = new ResponseDto(SUCCESS, "No Data found for sourceTask.", new ArrayList<>());
+                responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
             }
         } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for sourceTask.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
 
     @Override
-    public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long appUserId, Long sourceTaskId, String startDate, String endDate,
+    public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
         ResponseDto responseDto = null;
         Object countQueryResult = this.queryService.executeQuery(
@@ -306,10 +314,10 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 }
                 responseDto = new ResponseDto(SUCCESS, "LinkJobsWithSourceTask successfully ", sourceJobDtoList);
             } else {
-                responseDto = new ResponseDto(SUCCESS, "No Data found for LinkJobsWithSourceTask.", new ArrayList<>());
+                responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
             }
         } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for LinkJobsWithSourceTask.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -441,7 +449,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                         sourceTaskValidation.setHomePageId(this.bulkExcel.getCellDetail(currentRow, i));
                     }
                 }
-                if (!isNull(sourceTaskValidation.getSourceTaskTypeId())) {
+                if (!ProcessUtil.isNull(sourceTaskValidation.getSourceTaskTypeId())) {
                     Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId()));
                     if (!sourceTaskType.isPresent()) {
                         sourceTaskValidation.setErrorMsg("SourceTaskType not exist at row " + (currentRow.getRowNum() + 1) + ".\n");
@@ -452,7 +460,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                     }
                 }
                 sourceTaskValidation.isValidSourceTask();
-                if (!isNull(sourceTaskValidation.getErrorMsg())) {
+                if (!ProcessUtil.isNull(sourceTaskValidation.getErrorMsg())) {
                     errors.add(sourceTaskValidation.getErrorMsg());
                     continue;
                 }
@@ -469,8 +477,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             sourceTask.setPipelineId(sourceTaskValidation.getPipelineId());
             sourceTask.setHomePageId(sourceTaskValidation.getHomePageId());
             sourceTask.setTaskStatus(Status.Active);
-            sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(
-                    Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
+            sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
             this.sourceTaskRepository.save(sourceTask);
         });
         return new ResponseDto(SUCCESS, String.format("Total %d Task Save Successfully", sourceTaskValidations.size()));

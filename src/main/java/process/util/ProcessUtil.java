@@ -16,15 +16,12 @@ public class ProcessUtil {
     public static String SIMPLE_DATE_PATTERN = "yyyy-MM-dd";
     public static String CONTENT_DISPOSITION ="Content-Disposition";
     public static String FILE_NAME_HEADER = "attachment; filename=";
-    public static String KARACHI_TIME_ZONE = "Asia/Karachi";
-    public static String QATAR_TIME_ZONE = "Asia/Qatar";
     public static String QUEUE_FETCH_LIMIT = "QUEUE_FETCH_LIMIT";
     public static String SCHEDULER_LAST_RUN_TIME = "SCHEDULER_LAST_RUN_TIME";
     public static String JOB_QUEUE = "jobQueue";
     public static String TASK_DETAIL = "taskDetail";
     public static String PRIORITY = "Priority";
     public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";
-    public static String TRANSACTION_ID = "TRANSACTION_ID";
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     public static String REAL_FILE_PATH = "Scheduler.xlsx";
     public static String XLSX_EXTENSION = ".xlsx";

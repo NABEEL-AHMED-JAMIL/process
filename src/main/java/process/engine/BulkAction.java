@@ -13,7 +13,7 @@ import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
 import process.model.projection.SourceJobProjection;
 import process.model.service.impl.TransactionServiceImpl;
-import process.socket.service.NotificationService;
+import process.socket.NotificationService;
 import process.util.ProcessUtil;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -179,12 +179,11 @@ public class BulkAction {
     /**
      * This method use the change the status of main job
      * @param jobId
-     * @param transactionId
      * */
-    public void sendJobStatusNotification(Integer jobId, String transactionId) {
+    public void sendJobStatusNotification(Integer jobId) {
         List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
         if (!sourceJob.isEmpty()) {
-            this.notificationService.sendNotificationToSpecificUser(this.getSourceJobDetail(sourceJob.get(0)), transactionId);
+            this.notificationService.sendNotificationToSpecificUser(this.getSourceJobDetail(sourceJob.get(0)));
         }
     }
 

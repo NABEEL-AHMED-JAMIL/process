@@ -12,11 +12,15 @@ import java.util.List;
 public interface LookupDataRepository extends CrudRepository<LookupData, Long> {
 
     /**
-     * Method use to get the LookupData by lookupType if present in db
+     * Note :- Method use to get the LookupData by lookupType if present in db
      * @param lookupType
      * @return LookupData
      * */
     public LookupData findByLookupType(String lookupType);
 
+    /**
+     * Note :- Method use to get the LookupData list by lookup id null
+     * @return List<LookupData>
+     * */
     public List<LookupData> findByParentLookupIdIsNull();
 }

@@ -27,7 +27,6 @@ public class JobDetailValidation {
     private Logger logger = LoggerFactory.getLogger(JobDetailValidation.class);
 
     private Integer rowCounter = 0;
-
     // detail for advance validation
     private final List<String> frequencyDetail = ProcessTimeUtil.frequency;
     private final List<String> priorityDetail = ProcessTimeUtil.priority;
@@ -64,6 +63,7 @@ public class JobDetailValidation {
     public String getJobName() {
         return jobName;
     }
+
     public void setJobName(String jobName) {
         this.jobName = jobName;
     }
@@ -71,6 +71,7 @@ public class JobDetailValidation {
     public String getTaskId() {
         return taskId;
     }
+
     public void setTaskId(String taskId) {
         this.taskId = taskId;
     }
@@ -78,6 +79,7 @@ public class JobDetailValidation {
     public String getStartDate() {
         return startDate;
     }
+
     public void setStartDate(String startDate) {
         this.startDate = startDate;
     }
@@ -85,6 +87,7 @@ public class JobDetailValidation {
     public String getEndDate() {
         return endDate;
     }
+
     public void setEndDate(String endDate) {
         this.endDate = endDate;
     }
@@ -92,6 +95,7 @@ public class JobDetailValidation {
     public String getStartTime() {
         return startTime;
     }
+
     public void setStartTime(String startTime) {
         this.startTime = startTime;
     }
@@ -99,6 +103,7 @@ public class JobDetailValidation {
     public String getFrequency() {
         return frequency;
     }
+
     public void setFrequency(String frequency) {
         this.frequency = frequency;
     }
@@ -106,6 +111,7 @@ public class JobDetailValidation {
     public String getRecurrence() {
         return recurrence;
     }
+
     public void setRecurrence(String recurrence) {
         this.recurrence = recurrence;
     }
@@ -145,6 +151,7 @@ public class JobDetailValidation {
     public String getErrorMsg() {
         return errorMsg;
     }
+
     public void setErrorMsg(String errorMsg) {
         if (isNull(this.errorMsg)) {
             this.errorMsg = errorMsg;
@@ -226,7 +233,7 @@ public class JobDetailValidation {
                 this.dateTimeValidation(false, true) ;
             }
         } catch (Exception ex) {
-            this.setErrorMsg(String.format("Issue with (Start Date,End Date,Start Time,Recurrence) at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Issue with (Start Date, End Date, Start Time, Recurrence) at row %s.<br>", rowCounter));
         }
     }
 
@@ -310,8 +317,7 @@ public class JobDetailValidation {
             }
             // use to split the time
             String timeSplit[] = this.startTime.split(":");
-            if (LocalDateTime.now().isAfter(userInputStartDate.atStartOfDay()
-                .plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1])))) {
+            if (LocalDateTime.now().isAfter(userInputStartDate.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1])))) {
                 this.setErrorMsg(String.format("StartTime should not be previous time at row %s.<br>", rowCounter));
             }
         } else {

@@ -2,11 +2,9 @@ package process.model.service.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
-import process.engine.async.executor.AsyncDALTaskExecutor;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
@@ -33,20 +31,23 @@ public class MessageQApiServiceImpl implements MessageQApiService {
     private final String AUDIT_LOG = "AUDIT_LOG";
     private final String QUEUE_DETAIL = "QUEUE_DETAIL";
 
-    @Autowired
-    private BulkAction bulkAction;
-    @Autowired
-    private QueryService queryService;
-    @Autowired
-    private JobQueueRepository jobQueueRepository;
-    @Autowired
-    private SourceJobRepository sourceJobRepository;
-    @Autowired
-    private EmailMessagesFactory emailMessagesFactory;
-    @Autowired
-    private AsyncDALTaskExecutor asyncDALTaskExecutor;
+    private final BulkAction bulkAction;
+    private final QueryService queryService;
+    private final JobQueueRepository jobQueueRepository;
+    private final SourceJobRepository sourceJobRepository;
+    private final EmailMessagesFactory emailMessagesFactory;
 
-    public MessageQApiServiceImpl() {}
+    public MessageQApiServiceImpl(BulkAction bulkAction,
+        QueryService queryService,
+        JobQueueRepository jobQueueRepository,
+        SourceJobRepository sourceJobRepository,
+        EmailMessagesFactory emailMessagesFactory) {
+        this.bulkAction = bulkAction;
+        this.queryService = queryService;
+        this.jobQueueRepository = jobQueueRepository;
+        this.sourceJobRepository = sourceJobRepository;
+        this.emailMessagesFactory = emailMessagesFactory;
+    }
 
     @Override
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch) {

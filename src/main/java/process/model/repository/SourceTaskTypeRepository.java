@@ -15,8 +15,18 @@ import java.util.Optional;
 @Repository
 public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, Long> {
 
+    /**
+     * Note :- Method use to find the source task type by source task type id and status
+     * @param sourceTaskTypeId
+     * @param status
+     * @return List<SourceTaskType>
+     * */
     public Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
 
+    /**
+     * Note :- Method use to find all soruce task type
+     * @return List<SourceTaskTypeProjection>
+     * */
     @Query(value = "select source_task_type.source_task_type_id as sourceTaskTypeId, source_task_type.description as description, task_type_status as status,\n" +
         "source_task_type.queue_topic_partition as queueTopicPartition, source_task_type.service_name as serviceName,\n" +
         "count(source_task.source_task_type_id) as totalTaskLink, source_task_type.is_schema_register as schemaRegister, source_task_type.schema_payload as schemaPayload\n" +

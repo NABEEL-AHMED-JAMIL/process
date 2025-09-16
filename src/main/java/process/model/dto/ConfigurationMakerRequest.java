@@ -13,7 +13,6 @@ import java.util.List;
 public class ConfigurationMakerRequest {
 
     private List<TagInfo> xmlTagsInfo;
-    private List<TagInfo> jsonTagsInfo;
 
     public ConfigurationMakerRequest() {}
 
@@ -23,14 +22,6 @@ public class ConfigurationMakerRequest {
 
     public void setXmlTagsInfo(List<TagInfo> xmlTagsInfo) {
         this.xmlTagsInfo = xmlTagsInfo;
-    }
-
-    public List<TagInfo> getJsonTagsInfo() {
-        return jsonTagsInfo;
-    }
-
-    public void setJsonTagsInfo(List<TagInfo> jsonTagsInfo) {
-        this.jsonTagsInfo = jsonTagsInfo;
     }
 
     public static class TagInfo implements Comparable<TagInfo> {

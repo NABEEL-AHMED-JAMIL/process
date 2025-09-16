@@ -2,7 +2,6 @@ package process.model.service.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
@@ -14,6 +13,7 @@ import process.model.repository.LookupDataRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardApiService;
+import process.util.ProcessUtil;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -27,28 +27,34 @@ public class DashboardApiServiceImpl implements DashboardApiService {
 
     private Logger logger = LoggerFactory.getLogger(DashboardApiServiceImpl.class);
 
-    @Autowired
-    private QueryService queryService;
-    @Autowired
-    private SourceJobRepository sourceJobRepository;
-    @Autowired
-    private SchedulerRepository schedulerRepository;
-    @Autowired
-    private LookupDataRepository lookupDataRepository;
+    private final QueryService queryService;
+    private final SourceJobRepository sourceJobRepository;
+    private final SchedulerRepository schedulerRepository;
+    private final LookupDataRepository lookupDataRepository;
+
+    public DashboardApiServiceImpl(QueryService queryService,
+        SourceJobRepository sourceJobRepository,
+        SchedulerRepository schedulerRepository,
+        LookupDataRepository lookupDataRepository) {
+        this.queryService = queryService;
+        this.sourceJobRepository = sourceJobRepository;
+        this.schedulerRepository = schedulerRepository;
+        this.lookupDataRepository = lookupDataRepository;
+    }
 
     @Override
     public ResponseDto jobStatusStatistics() throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobStatusStatistics());
-        if (!isNull(result) && !result.isEmpty()) {
+        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
-            responseDto = new ResponseDto(SUCCESS, "Data found for jobStatusStatistics.", jobStatusStatistic);
+            responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
         } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for jobStatusStatistics.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -57,15 +63,15 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto jobRunningStatistics() throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobRunningStatistics());
-        if (!isNull(result) && !result.isEmpty()) {
+        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
-            responseDto = new ResponseDto(SUCCESS, "Data found for jobRunningStatistics.", jobStatusStatistic);
+            responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
         } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for jobRunningStatistics.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -74,15 +80,15 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto weeklyRunningJobStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyRunningJobStatistics(startDate, endDate));
-        if (!isNull(result) && !result.isEmpty()) {
+        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(obj[index].toString().trim(), Integer.valueOf(obj[++index].toString())));
             }
-            responseDto = new ResponseDto(SUCCESS, "Data found for weeklyRunningJobStatistics.", jobStatusStatistic);
+            responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
         } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyRunningJobStatistics.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -91,7 +97,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto weeklyHrsRunningJobStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrsRunningJobStatistics(startDate, endDate));
-        if (!isNull(result) && !result.isEmpty()) {
+        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<WeeklyJobStatisticsDto> weeklyJobStatistics = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
@@ -99,9 +105,9 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     Double.valueOf(obj[++index].toString()).longValue(), obj[++index].toString().trim(),
                     Double.valueOf(obj[++index].toString()).longValue()));
             }
-            responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrsRunningJobStatistics.", weeklyJobStatistics);
+            responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
         } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyHrsRunningJobStatistics.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -110,7 +116,7 @@ public class DashboardApiServiceImpl implements DashboardApiService {
     public ResponseDto weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) throws Exception {
         ResponseDto responseDto;
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimension(targetDate, targetHr));
-        if (!isNull(result) && !result.isEmpty()) {
+        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<WeeklyHrJobDimensionStatisticsDto> weeklyJobStatistics = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
@@ -120,9 +126,9 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),Long.valueOf(obj[++index].toString())));
             }
-            responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionData.", weeklyJobStatistics);
+            responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
         } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyHrRunningStatisticsDimensionData.", new ArrayList<>());
+            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
@@ -133,59 +139,59 @@ public class DashboardApiServiceImpl implements DashboardApiService {
         ResponseDto responseDto;
         Map<String, Object> objectDetail = new HashMap<>();
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
-        if (!isNull(result) && !result.isEmpty()) {
+        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
                 SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setJobQueueId(Long.valueOf(String.valueOf(obj[index])));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setDateCreated(Timestamp.valueOf(String.valueOf(obj[index])));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setEndTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setJobId(Long.valueOf(String.valueOf(obj[index])));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setJobSend(Boolean.parseBoolean(obj[index].toString()));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setJobStatus(JobStatus.valueOf(String.valueOf(obj[index])));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setJobStatusMessage(String.valueOf(obj[index]));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setRunManual(Boolean.valueOf(obj[index].toString()));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setSkipManual(Boolean.valueOf(obj[index].toString()));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setSkipTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueueDto.setStartTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
 
                 sourceJobQueues.add(sourceJobQueueDto);
             }
             objectDetail.put("sourceJobQueues", sourceJobQueues);
-            if (!isNull(jobId)) {
+            if (!ProcessUtil.isNull(jobId)) {
                 Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId);
                 if (sourceJob.isPresent()) {
                     SourceJobDto sourceJobDto = new SourceJobDto();
@@ -201,27 +207,27 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     sourceJobDto.setFailJob(sourceJob.get().isFailJob());
                     sourceJobDto.setPdfReportUrl(sourceJob.get().getJobId().toString());
                     sourceJobDto.setSkipJob(sourceJob.get().isSkipJob());
-                    if (sourceJob.get().getTaskDetail() != null) {
+                    if (!ProcessUtil.isNull(sourceJob.get().getTaskDetail())) {
                         SourceTask sourceTask = sourceJob.get().getTaskDetail();
                         SourceTaskDto sourceTaskDto = new SourceTaskDto();
                         sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
                         sourceTaskDto.setTaskName(sourceTask.getTaskName());
                         sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
                         sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
-                        if (!isNull(sourceTask.getHomePageId())) {
+                        if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
                             String homePage = this.lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue();
                             homePage = homePage.replace("{jobId}", String.valueOf(sourceJobDto.getJobId()));
                             homePage = homePage.replace("{taskId}", String.valueOf(sourceTaskDto.getTaskDetailId()));
-                            if (!isNull(sourceTask.getPipelineId())) {
+                            if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
                                 homePage = homePage.replace("{pipeline}", sourceTask.getPipelineId());
                             }
                             sourceTaskDto.setHomePageId(homePage);
                         }
-                        if (!isNull(sourceTask.getPipelineId())) {
+                        if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
                             sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(
                                 Long.valueOf(sourceTask.getPipelineId())).get().getLookupValue());
                         }
-                        if (sourceTask.getSourceTaskType() != null) {
+                        if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
                             sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask));
                         }
                         sourceJobDto.setTaskDetail(sourceTaskDto);
@@ -239,9 +245,9 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     }
                 }
             }
-            responseDto = new ResponseDto(SUCCESS, "Data found for weeklyHrRunningStatisticsDimensionDetail.", objectDetail);
+            responseDto = new ResponseDto(SUCCESS, "Data found.", objectDetail);
         } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for weeklyHrRunningStatisticsDimensionDetail.");
+            responseDto = new ResponseDto(SUCCESS, "No Data found.");
         }
         return responseDto;
     }

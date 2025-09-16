@@ -53,12 +53,11 @@ public class ProducerBulkEngine {
      * */
     public void addManualJobInQueue(SourceJob sourceJob) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
-        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
-            LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(), LocalDateTime.now(),
+            JobStatus.Queue, "Job %s now in the queue.", false);
         this.bulkAction.changeJobLastJobRun(jobQueue.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
-        this.bulkAction.sendJobStatusNotification(sourceJob.getJobId().intValue(),
-            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+        this.bulkAction.sendJobStatusNotification(sourceJob.getJobId().intValue());
     }
 
     /**
@@ -71,8 +70,7 @@ public class ProducerBulkEngine {
             JobStatus.Skip, "Job %s skip, by user action.", true);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, by user action.", scheduler.getJobId()));
         // if the user fail the job manual need to send the mail
-        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
-            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isSkipJob()) {
             this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Skip);
         }
@@ -118,7 +116,7 @@ public class ProducerBulkEngine {
                         }
                         // update the next run in scheduler
                         this.bulkAction.updateNextScheduler(scheduler);
-                        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(), this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+                        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue());
                     }
                 });
                 return;
@@ -253,8 +251,7 @@ public class ProducerBulkEngine {
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(message, jobQueue.getJobId()));
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
-        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue(),
-            this.lookupDataCacheService.getParentLookupById(ProcessUtil.TRANSACTION_ID).getLookupValue());
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId().intValue());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {
             this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue),JobStatus.Failed);
         }
