@@ -186,28 +186,28 @@ public class JobDetailValidation {
             this.setErrorMsg(String.format("Priority should not be empty at row %s.<br>", rowCounter));
         }
         if (this.isValidPattern(this.startDate, this.dateFormat)) {
-            this.setErrorMsg(String.format("Invalid StartDate at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Invalid startDate at row %s.<br>", rowCounter));
         }
         if (this.isValidPattern(this.startTime, this.timeFormat)) {
-            this.setErrorMsg(String.format("Invalid StartTime at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Invalid startTime at row %s.<br>", rowCounter));
         }
         if (this.isValidFrequency()) {
             this.setErrorMsg(String.format("Frequency not valid its should be %s at row %s.", this.frequencyDetail.toString(), rowCounter));
         }
         if (!isNull(this.endDate) && this.isValidPattern(this.endDate, this.dateFormat)) {
-            this.setErrorMsg(String.format("Invalid EndDate at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Invalid endDate at row %s.<br>", rowCounter));
         }
         if (this.isValidPriority()) {
             this.setErrorMsg(String.format("Priority not valid its should be %s at row %s.<br>", this.priorityDetail.toString(), rowCounter));
         }
         if (!isNull(this.emailJobComplete)  && this.isValidChecked(this.emailJobComplete)) {
-            this.setErrorMsg(String.format("EmailJobComplete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("EmailJob complete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
         if (!isNull(this.emailJobFail)  && this.isValidChecked(this.emailJobFail)) {
-            this.setErrorMsg(String.format("EmailJobFail Complete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("EmailJob fail not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
         if (!isNull(this.emailJobSkip)  && this.isValidChecked(this.emailJobSkip)) {
-            this.setErrorMsg(String.format("EmailJobSkip Complete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("EmailJob skip not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
         }
         this.isValidDetail();
     }
@@ -296,23 +296,23 @@ public class JobDetailValidation {
         // Check Start Date,End Date,Start Time
         // 1st check the start-date it's should not be the yesterday date
         LocalDate userInputStartDate = LocalDate.parse(this.startDate);
-        logger.info("User StartDate Valid :- {}.", userInputStartDate);
+        logger.info("User startDate valid :- {}.", userInputStartDate);
         // check the current date with the given time with zone
         LocalDate todayDateWithTimeZone = LocalDate.now();;
-        logger.info("System Date With Time Zone :- {}.", todayDateWithTimeZone);
+        logger.info("System date with time zone :- {}.", todayDateWithTimeZone);
         // 2021-03-13 == 2021-03-13 || 2021-03-13 > 2021-03-12
         if (userInputStartDate.isEqual(todayDateWithTimeZone) || userInputStartDate.isAfter(todayDateWithTimeZone)) {
             // 2nd check the end-date it's should not be the yesterday
             if (!isNull(this.endDate)) {
                 LocalDate userInputEndDate = LocalDate.parse(this.endDate);
-                logger.info("User End Date Valid " + userInputEndDate);
+                logger.info("User endDate valid " + userInputEndDate);
                 // 2021-03-13 != 2021-03-13 || 2021-03-13 < 2021-03-15
                 if (userInputEndDate.isBefore(userInputStartDate)) {
                     this.setErrorMsg(String.format("EndDate should not be previous date at row %s.<br>", rowCounter));
                 } else if ((DAYS.between(userInputStartDate, userInputEndDate) < 6) && isWeekdayCheck) {
-                    this.setErrorMsg(String.format("EndDate must be 7 day difference from StartDate at row %s.<br>", rowCounter));
+                    this.setErrorMsg(String.format("EndDate must be 7 day difference from startDate at row %s.<br>", rowCounter));
                 } else if ((DAYS.between(userInputStartDate, userInputEndDate) < 30) && isMonthlyCheck) {
-                    this.setErrorMsg(String.format("EndDate must be 31 day difference from StartDate at row %s.<br>", rowCounter));
+                    this.setErrorMsg(String.format("EndDate must be 31 day difference from startDate at row %s.<br>", rowCounter));
                 }
             }
             // use to split the time

@@ -3,9 +3,12 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.JobStatus;
+import process.util.LocalDateTimeAdapter;
+
 import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -176,7 +179,10 @@ public class JobQueue {
 
     @Override
     public String toString() {
-        return new Gson().toJson(this);
+        Gson gson = new GsonBuilder()
+        .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
+        .create();
+        return gson.toJson(this);
     }
 
 }

@@ -94,7 +94,7 @@ public class SourceJobRestApi {
      * Api use to fetch the source job list
      * @return ResponseEntity<?>
      * */
-    @RequestMapping(value = "/listSourceJob", method = RequestMethod.POST)
+    @RequestMapping(value = "/listSourceJob", method = RequestMethod.GET)
     public ResponseEntity<?> listSourceJob() {
         try {
             return new ResponseEntity<>(this.sourceJobApiService.listSourceJob(), HttpStatus.OK);

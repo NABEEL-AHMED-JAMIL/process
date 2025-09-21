@@ -7,6 +7,9 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 
+/**
+ * @author Nabeel Ahmed
+ */
 @Entity
 @Table(name = "source_task_payload")
 @JsonIgnoreProperties(ignoreUnknown=true)

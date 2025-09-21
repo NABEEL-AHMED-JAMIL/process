@@ -138,7 +138,6 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 sourceTask.get().setSourceTaskType(sourceTaskType.get());
             }
             if (!isNull(tempSourceTask.getXmlTagsInfo())) {
-                sourceTask.get().getSourceTaskPayload().clear();
                 sourceTask.get().setSourceTaskPayload(tempSourceTask.getXmlTagsInfo()
                     .stream().map(tagInfo -> {
                         SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
@@ -478,6 +477,14 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
             sourceTask.setHomePageId(sourceTaskValidation.getHomePageId());
             sourceTask.setTaskStatus(Status.Active);
             sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
+            sourceTask.setSourceTaskPayload(sourceTaskValidation.getXmlTagsInfo()
+                .stream().map(tagInfo -> {
+                    SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
+                    sourceTaskPayload.setTagKey(tagInfo.getTagKey());
+                    sourceTaskPayload.setTagParent(tagInfo.getTagParent());
+                    sourceTaskPayload.setTagValue(tagInfo.getTagValue());
+                    return sourceTaskPayload;
+                }).collect(Collectors.toList()));
             this.sourceTaskRepository.save(sourceTask);
         });
         return new ResponseDto(SUCCESS, String.format("Total %d Task Save Successfully", sourceTaskValidations.size()));

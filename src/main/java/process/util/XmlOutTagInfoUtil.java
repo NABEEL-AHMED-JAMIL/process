@@ -10,9 +10,6 @@ import process.model.dto.ConfigurationMakerRequest;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import javax.annotation.PostConstruct;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Unmarshaller;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -20,7 +17,6 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.io.StringReader;
 import java.io.StringWriter;
 
 /**
@@ -132,23 +128,6 @@ public class XmlOutTagInfoUtil {
             child.appendChild(xmlDoc.createTextNode(tagValue));
         } else {
             child.appendChild(xmlDoc.createTextNode(BLANK));
-        }
-    }
-
-    /**
-     * Method use to convert xml to object
-     * @param xmlString
-     * @param type
-     * @return <T> T
-     * */
-    public <T> T convertXMLToObject(String xmlString, Class<T> type) {
-        try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(type);
-            Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
-            return type.cast(jaxbUnmarshaller.unmarshal(new StringReader(xmlString)));
-        } catch (JAXBException e) {
-            e.printStackTrace();
-            return null;
         }
     }
 

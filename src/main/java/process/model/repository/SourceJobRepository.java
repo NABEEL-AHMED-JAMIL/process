@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.projection.SourceJobProjection;
@@ -41,6 +42,7 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      * @return status
      * @return int
      * */
+    @Transactional
     @Modifying
     @Query(value = "update source_job set job_status = ?2\n" +
         "where task_detail_id in (select task_detail_id from source_task where source_task_type_id = ?1)",
@@ -53,6 +55,7 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      * @return status
      * @return int
      * */
+    @Transactional
     @Modifying
     @Query(value = "update source_job set job_status = ?2 where task_detail_id = ?1", nativeQuery = true)
     public int statusChangeSourceJobWithSourceTaskId(Long sourceTaskId, String status);

@@ -41,15 +41,14 @@ public class SourceTask {
     @Enumerated(EnumType.STRING)
     private Status taskStatus;
 
-    @Column(name = "home_page_id",
-        nullable = true)
+    @Column(name = "home_page_id")
     private String homePageId;
 
     /**
      * pipeline id use to move the data to the
      * right path if kafka topic using for multiple pipeline
      * */
-    @Column(name = "pipeline_id", nullable = true)
+    @Column(name = "pipeline_id")
     private String pipelineId;
 
     // save lob data for job detail
@@ -61,8 +60,8 @@ public class SourceTask {
     @JoinColumn(name = "source_task_type_id")
     private SourceTaskType sourceTaskType;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "payload_id")
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
 
     public SourceTask() {}

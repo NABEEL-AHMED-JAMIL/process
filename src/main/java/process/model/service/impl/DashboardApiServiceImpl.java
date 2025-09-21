@@ -205,7 +205,6 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     sourceJobDto.setExecution(sourceJob.get().getExecution());
                     sourceJobDto.setCompleteJob(sourceJob.get().isCompleteJob());
                     sourceJobDto.setFailJob(sourceJob.get().isFailJob());
-                    sourceJobDto.setPdfReportUrl(sourceJob.get().getJobId().toString());
                     sourceJobDto.setSkipJob(sourceJob.get().isSkipJob());
                     if (!ProcessUtil.isNull(sourceJob.get().getTaskDetail())) {
                         SourceTask sourceTask = sourceJob.get().getTaskDetail();

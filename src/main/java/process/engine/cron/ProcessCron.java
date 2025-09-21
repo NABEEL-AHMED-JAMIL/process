@@ -1,6 +1,7 @@
 package process.engine.cron;
 
 import com.google.gson.Gson;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,7 @@ public class ProcessCron {
      * This addJobInQueue method run every 1 minutes
      * */
     @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
+    @SchedulerLock(name = "addJobInQueue", lockAtLeastFor = "5S", lockAtMostFor = "10M")
     public void addJobInQueue() {
         logger.info("++++++++++++++++++++++++Start-AddJobInQueue++++++++++++++++++++++++++++++++");
         this.producerBulkEngine.addJobInQueue();
@@ -36,6 +38,7 @@ public class ProcessCron {
      * This runJob method run every 1 minutes and put the job into the running state
      * */
     @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
+    @SchedulerLock(name = "runJob", lockAtLeastFor = "5S", lockAtMostFor = "10M")
     public void runJob() {
         logger.info("************************Start-RunJob********************************");
         this.producerBulkEngine.runJobInCurrentTimeSlot();

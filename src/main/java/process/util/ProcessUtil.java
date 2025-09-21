@@ -1,8 +1,6 @@
 package process.util;
 
-import org.apache.kafka.common.header.Headers;
 import java.time.format.DateTimeFormatter;
-import java.util.stream.StreamSupport;
 
 /**
  * @author Nabeel Ahmed
@@ -18,10 +16,10 @@ public class ProcessUtil {
     public static String FILE_NAME_HEADER = "attachment; filename=";
     public static String QUEUE_FETCH_LIMIT = "QUEUE_FETCH_LIMIT";
     public static String SCHEDULER_LAST_RUN_TIME = "SCHEDULER_LAST_RUN_TIME";
+    public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";
     public static String JOB_QUEUE = "jobQueue";
     public static String TASK_DETAIL = "taskDetail";
     public static String PRIORITY = "Priority";
-    public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     public static String REAL_FILE_PATH = "Scheduler.xlsx";
     public static String XLSX_EXTENSION = ".xlsx";
@@ -40,12 +38,6 @@ public class ProcessUtil {
         "Start Date", "End Date", "Time", "Last Run", "Next Flight",
         "R-Status", "Email job complete", "Email job fail", "Email job skip"
     };
-
-    public static String typeIdHeader(Headers headers) {
-        return StreamSupport.stream(headers.spliterator(), false)
-            .filter(header -> header.key().equals("__TypeId__"))
-            .findFirst().map(header -> new String(header.value())).orElse("N/A");
-    }
 
     public static boolean isNull(Object payload) {
         return payload == null || payload == "";

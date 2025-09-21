@@ -8,16 +8,12 @@ import process.model.pojo.LookupData;
 import javax.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
-import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import process.model.service.impl.TransactionServiceImpl;
 
 /**
  * @author Nabeel Ahmed
  */
-@EnableAsync
-@EnableScheduling
 @SpringBootApplication
 public class ModelApplication {
 
@@ -25,6 +21,7 @@ public class ModelApplication {
 
     @Autowired
     private TransactionServiceImpl transactionService;
+
     /**
      * Method run the application
      * @param args
@@ -50,4 +47,5 @@ public class ModelApplication {
             this.transactionService.updateLookupDate(lookupData);
         }
     }
+
 }

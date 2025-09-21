@@ -33,7 +33,6 @@ public class SourceJobDto {
     private boolean completeJob;
     private boolean failJob;
     private boolean skipJob;
-    private String pdfReportUrl;
     private boolean tabActive;
 
     public SourceJobDto() {}
@@ -156,14 +155,6 @@ public class SourceJobDto {
 
     public void setSkipJob(boolean skipJob) {
         this.skipJob = skipJob;
-    }
-
-    public String getPdfReportUrl() {
-        return pdfReportUrl;
-    }
-
-    public void setPdfReportUrl(String pdfReportUrl) {
-        this.pdfReportUrl = pdfReportUrl;
     }
 
     public boolean isTabActive() {
