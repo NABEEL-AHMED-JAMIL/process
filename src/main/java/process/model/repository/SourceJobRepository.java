@@ -34,7 +34,7 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
         "sj.last_job_run as lastJobRun, sc.recurrence_time as recurrenceTime, sj.execution as execution\n" +
         "from source_job sj left join scheduler sc on sc.job_id = sj.job_id\n" +
         "where sj.job_id in (?1) and sj.job_status = 'Active'", nativeQuery = true)
-    public List<SourceJobProjection> fetchRunningJobEvent(List<Integer> jobIds);
+    public List<SourceJobProjection> fetchRunningJobEvent(List<Long> jobIds);
 
     /**
      * Note :- Method use to change the source job link with source task type id

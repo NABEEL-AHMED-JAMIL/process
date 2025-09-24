@@ -6,7 +6,7 @@ import java.io.ByteArrayOutputStream;
 /**
  * @author Nabeel Ahmed
  */
-public interface SourceJobBulkApiService {
+public interface SourceJobBulkService {
 
     public ByteArrayOutputStream downloadSourceJobTemplateFile() throws Exception;
 

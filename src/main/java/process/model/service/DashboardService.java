@@ -5,7 +5,7 @@ import process.model.dto.ResponseDto;
 /**
  * @author Nabeel Ahmed
  */
-public interface DashboardApiService {
+public interface DashboardService {
 
     public ResponseDto jobStatusStatistics() throws Exception;
 

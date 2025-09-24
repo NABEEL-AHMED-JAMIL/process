@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.QueueMessageStatusDto;
 import process.model.dto.ResponseDto;
-import process.model.service.MessageQApiService;
+import process.model.service.MessageQService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 
@@ -23,14 +23,13 @@ public class MessageQRestApi {
 
     private Logger logger = LoggerFactory.getLogger(MessageQRestApi.class);
 
-    private final MessageQApiService messageQApiService;
+    private final MessageQService messageQService;
 
-    public MessageQRestApi(MessageQApiService messageQApiService) {
-        this.messageQApiService = messageQApiService;
+    public MessageQRestApi(MessageQService messageQService) {
+        this.messageQService = messageQService;
     }
 
     /**
-     * Integration Status :- done
      * Fetch all message queue by create time (default week data)
      * @param messageQSearch
      * @return ResponseEntity
@@ -39,7 +38,7 @@ public class MessageQRestApi {
     public ResponseEntity<?> fetchLogs(
         @RequestBody MessageQSearchDto messageQSearch) {
         try {
-            return new ResponseEntity<>(this.messageQApiService.fetchLogs(messageQSearch), HttpStatus.OK);
+            return new ResponseEntity<>(this.messageQService.fetchLogs(messageQSearch), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLogs ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -47,7 +46,6 @@ public class MessageQRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Only the queue job be failed
      * @param jobQId
      * @return ResponseEntity
@@ -56,7 +54,7 @@ public class MessageQRestApi {
     public ResponseEntity<?> failJobLogs(
         @RequestParam Long jobQId) {
         try {
-            return new ResponseEntity<>(this.messageQApiService.failJobLogs(jobQId), HttpStatus.OK);
+            return new ResponseEntity<>(this.messageQService.failJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while failJobLogs ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -64,7 +62,6 @@ public class MessageQRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Only the queue job be interrupted
      * @param jobQId
      * @return ResponseEntity
@@ -73,7 +70,7 @@ public class MessageQRestApi {
     public ResponseEntity<?> interruptJobLogs(
         @RequestParam Long jobQId) {
         try {
-            return new ResponseEntity<>(this.messageQApiService.interruptJobLogs(jobQId), HttpStatus.OK);
+            return new ResponseEntity<>(this.messageQService.interruptJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while interruptJobLogs ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -81,7 +78,6 @@ public class MessageQRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to change the status of running job
      * @param queueMessageStatus
      * @return ResponseEntity
@@ -90,7 +86,7 @@ public class MessageQRestApi {
     public ResponseEntity<?> changeJobStatus(
         @RequestBody QueueMessageStatusDto queueMessageStatus) {
         try {
-            return new ResponseEntity<>(this.messageQApiService.changeJobStatus(queueMessageStatus), HttpStatus.OK);
+            return new ResponseEntity<>(this.messageQService.changeJobStatus(queueMessageStatus), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while changeJobStatus ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);

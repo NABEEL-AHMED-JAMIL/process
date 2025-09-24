@@ -13,7 +13,7 @@ import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.repository.*;
-import process.model.service.SourceJobApiService;
+import process.model.service.SourceJobService;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.time.LocalDateTime;
@@ -25,9 +25,9 @@ import static process.util.ProcessUtil.*;
  * @author Nabeel Ahmed
  */
 @Service
-public class SourceJobApiServiceImpl implements SourceJobApiService {
+public class SourceJobServiceImpl implements SourceJobService {
 
-    private Logger logger = LoggerFactory.getLogger(SourceJobApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(SourceJobServiceImpl.class);
 
     private SourceJobRepository sourceJobRepository;
     private SchedulerRepository schedulerRepository;
@@ -37,7 +37,7 @@ public class SourceJobApiServiceImpl implements SourceJobApiService {
     private LookupDataRepository lookupDataRepository;
     private ProducerBulkEngine producerBulkEngine;
 
-    public SourceJobApiServiceImpl(SourceJobRepository sourceJobRepository,
+    public SourceJobServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         SourceTaskRepository sourceTaskRepository,
         JobAuditLogRepository jobAuditLogRepository,

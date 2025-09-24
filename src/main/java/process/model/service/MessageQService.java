@@ -7,7 +7,7 @@ import process.model.dto.ResponseDto;
 /**
  * @author Nabeel Ahmed
  */
-public interface MessageQApiService {
+public interface MessageQService {
 
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch);
 

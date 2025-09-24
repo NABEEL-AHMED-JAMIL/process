@@ -6,7 +6,7 @@ import process.model.dto.SourceJobDto;
 /**
  * @author Nabeel Ahmed
  */
-public interface SourceJobApiService {
+public interface SourceJobService {
 
     public ResponseDto addSourceJob(SourceJobDto sourceJobDto) throws Exception;
 

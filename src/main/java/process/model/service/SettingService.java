@@ -8,7 +8,7 @@ import process.model.projection.ItemResponse;
 /**
  * @author Nabeel Ahmed
  */
-public interface SettingApiService {
+public interface SettingService {
 
     public ResponseDto dynamicQueryResponse(ItemResponse itemResponse);
 
@@ -25,8 +25,6 @@ public interface SettingApiService {
     public ResponseDto updateLookupData(LookupDataDto lookupDataDto) throws Exception;
 
     public ResponseDto fetchSubLookupByParentId(Long parentLookUpId) throws Exception;
-
-    public ResponseDto fetchAllLookup() throws Exception;
 
     public ResponseDto deleteLookupData(LookupDataDto lookupDataDto) throws Exception;
 

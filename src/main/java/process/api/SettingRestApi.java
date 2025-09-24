@@ -10,7 +10,7 @@ import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.dto.ConfigurationMakerRequest;
 import process.model.projection.ItemResponse;
-import process.model.service.SettingApiService;
+import process.model.service.SettingService;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
 import process.util.exception.ExceptionUtil;
@@ -26,17 +26,16 @@ public class SettingRestApi {
 
     private Logger logger = LoggerFactory.getLogger(SettingRestApi.class);
 
-    private final SettingApiService settingApiService;
+    private final SettingService settingService;
     private final XmlOutTagInfoUtil xmlOutTagInfoUtil;
 
-    public SettingRestApi(SettingApiService settingApiService,
-        XmlOutTagInfoUtil xmlOutTagInfoUtil) {
-        this.settingApiService = settingApiService;
+    public SettingRestApi(SettingService settingService,
+                          XmlOutTagInfoUtil xmlOutTagInfoUtil) {
+        this.settingService = settingService;
         this.xmlOutTagInfoUtil = xmlOutTagInfoUtil;
     }
 
     /**
-     * Integration Status :- done
      * Api use to fetch the app setting
      * @return ResponseEntity<?>
      * */
@@ -44,7 +43,7 @@ public class SettingRestApi {
     public ResponseEntity<?> dynamicQueryResponse(
         @RequestBody ItemResponse itemResponse) {
         try {
-            return new ResponseEntity<>(this.settingApiService.dynamicQueryResponse(itemResponse), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.dynamicQueryResponse(itemResponse), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while dynamicQueryResponse ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -52,14 +51,13 @@ public class SettingRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to fetch the app setting
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/appSetting", method = RequestMethod.GET)
     public ResponseEntity<?> appSetting() {
         try {
-            return new ResponseEntity<>(this.settingApiService.appSetting(), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.appSetting(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while appSetting ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -67,7 +65,6 @@ public class SettingRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to add the sourceTaskType
      * @param tempSourceTaskType
      * @return ResponseEntity<?>
@@ -76,7 +73,7 @@ public class SettingRestApi {
     public ResponseEntity<?> addSourceTaskType(
         @RequestBody SourceTaskTypeDto tempSourceTaskType) {
         try {
-            return new ResponseEntity<>(this.settingApiService.addSourceTaskType(tempSourceTaskType), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.addSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceTaskType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -84,7 +81,6 @@ public class SettingRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to update the sourceTaskType
      * @param tempSourceTaskType
      * @return ResponseEntity<?>
@@ -93,7 +89,7 @@ public class SettingRestApi {
     public ResponseEntity<?> updateSourceTaskType(
         @RequestBody SourceTaskTypeDto tempSourceTaskType) {
         try {
-            return new ResponseEntity<>(this.settingApiService.updateSourceTaskType(tempSourceTaskType), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.updateSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateSourceTaskType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -101,7 +97,6 @@ public class SettingRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to delete the sourceTaskType
      * @param sourceTaskTypeId
      * @return ResponseEntity<?> deleteSourceTaskType
@@ -110,7 +105,7 @@ public class SettingRestApi {
     public ResponseEntity<?> deleteSourceTaskType(
         @RequestParam Long sourceTaskTypeId) {
         try {
-            return new ResponseEntity<>(this.settingApiService.deleteSourceTaskType(sourceTaskTypeId), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.deleteSourceTaskType(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSourceTaskType ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -118,7 +113,6 @@ public class SettingRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to add the lookup data
      * @param tempLookupData
      * @return ResponseEntity<?> addLookupData
@@ -127,7 +121,7 @@ public class SettingRestApi {
     public ResponseEntity<?> addLookupData(
         @RequestBody LookupDataDto tempLookupData) {
         try {
-            return new ResponseEntity<>(this.settingApiService.addLookupData(tempLookupData), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.addLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -135,7 +129,6 @@ public class SettingRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to update the lookup data
      * @param tempLookupData
      * @return ResponseEntity<?> updateLookupData
@@ -144,23 +137,9 @@ public class SettingRestApi {
     public ResponseEntity<?> updateLookupData(
         @RequestBody LookupDataDto tempLookupData) {
         try {
-            return new ResponseEntity<>(this.settingApiService.updateLookupData(tempLookupData), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.updateLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * Api use to fetch the lookup detail
-     * @return ResponseEntity<?> fetchAllLookup
-     * */
-    @RequestMapping(value = "/fetchAllLookup", method = RequestMethod.GET)
-    public ResponseEntity<?> fetchAllLookup() {
-        try {
-            return new ResponseEntity<>(this.settingApiService.fetchAllLookup(), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while fetchAllLookup ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -174,7 +153,7 @@ public class SettingRestApi {
     public ResponseEntity<?> fetchSubLookupByParentId(
         @RequestParam Long parentLookUpId) {
         try {
-            return new ResponseEntity<>(this.settingApiService.fetchSubLookupByParentId(parentLookUpId), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.fetchSubLookupByParentId(parentLookUpId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSubLookupByParentId ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -182,7 +161,6 @@ public class SettingRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to delete the lookup data
      * @param tempLookupData
      * @return ResponseEntity<?> deleteLookupData
@@ -191,7 +169,7 @@ public class SettingRestApi {
     public ResponseEntity<?> deleteLookupData(
         @RequestBody LookupDataDto tempLookupData) {
         try {
-            return new ResponseEntity<>(this.settingApiService.deleteLookupData(tempLookupData), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.deleteLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteLookupData ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -199,7 +177,6 @@ public class SettingRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Api use to create the xml setting for source task
      * @param xlmMakerRequest
      * @return ResponseEntity<?> xmlCreateChecker

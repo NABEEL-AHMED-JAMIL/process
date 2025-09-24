@@ -16,7 +16,7 @@ import process.model.pojo.SourceJob;
 import process.model.pojo.Scheduler;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
-import process.model.service.SourceJobBulkApiService;
+import process.model.service.SourceJobBulkService;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
@@ -32,9 +32,9 @@ import static process.util.ProcessUtil.*;
  * @author Nabeel Ahmed
  */
 @Service
-public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
+public class SourceJobBulkServiceImpl implements SourceJobBulkService {
 
-    private Logger logger = LoggerFactory.getLogger(SourceJobBulkApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(SourceJobBulkServiceImpl.class);
 
     // env-filed
     @Value("${storage.efsFileDire}")
@@ -46,7 +46,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
     private final SourceJobRepository sourceJobRepository;
     private final SchedulerRepository schedulerRepository;
 
-    public SourceJobBulkApiServiceImpl(TransactionServiceImpl transactionService,
+    public SourceJobBulkServiceImpl(TransactionServiceImpl transactionService,
         SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         BulkExcel bulkExcel) {

@@ -10,7 +10,7 @@ import process.model.dto.FileUploadDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SearchTextDto;
 import process.model.dto.SourceTaskDto;
-import process.model.service.SourceTaskApiService;
+import process.model.service.SourceTaskService;
 import process.util.PagingUtil;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
@@ -30,10 +30,10 @@ public class SourceTaskRestApi {
 
     private Logger logger = LoggerFactory.getLogger(SourceTaskRestApi.class);
 
-    private final SourceTaskApiService sourceTaskApiService;
+    private final SourceTaskService sourceTaskService;
 
-    public SourceTaskRestApi(SourceTaskApiService sourceTaskApiService) {
-        this.sourceTaskApiService = sourceTaskApiService;
+    public SourceTaskRestApi(SourceTaskService sourceTaskService) {
+        this.sourceTaskService = sourceTaskService;
     }
 
     /**
@@ -44,7 +44,7 @@ public class SourceTaskRestApi {
     @RequestMapping(value = "/addSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
-            return new ResponseEntity<>(this.sourceTaskApiService.addSourceTask(sourceTaskDto), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskService.addSourceTask(sourceTaskDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -60,7 +60,7 @@ public class SourceTaskRestApi {
     @RequestMapping(value = "/updateSourceTask", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
-            return new ResponseEntity<>(this.sourceTaskApiService.updateSourceTask(sourceTaskDto), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskService.updateSourceTask(sourceTaskDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -76,7 +76,7 @@ public class SourceTaskRestApi {
     @RequestMapping(value = "/deleteSourceTask", method = RequestMethod.PUT)
     public ResponseEntity<?> deleteSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
-            return new ResponseEntity<>(this.sourceTaskApiService.deleteSourceTask(sourceTaskDto), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskService.deleteSourceTask(sourceTaskDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -105,7 +105,7 @@ public class SourceTaskRestApi {
         @RequestParam(value = "order", required = false) String order,
         @RequestBody(required = false) SearchTextDto searchTextDto) {
         try {
-            return new ResponseEntity<>(this.sourceTaskApiService.listSourceTask(startDate, endDate, columnName,
+            return new ResponseEntity<>(this.sourceTaskService.listSourceTask(startDate, endDate, columnName,
                 order, PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
@@ -136,7 +136,7 @@ public class SourceTaskRestApi {
         @RequestParam(value = "order", required = false) String order,
         @RequestBody(required = false) SearchTextDto searchTextDto) {
         try {
-            return new ResponseEntity<>(this.sourceTaskApiService.fetchAllLinkJobsWithSourceTaskId(sourceTaskId, startDate, endDate,
+            return new ResponseEntity<>(this.sourceTaskService.fetchAllLinkJobsWithSourceTaskId(sourceTaskId, startDate, endDate,
                 columnName, order, PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkJobsWithSourceTaskId :- {}.", ExceptionUtil.getRootCauseMessage(ex));
@@ -153,7 +153,7 @@ public class SourceTaskRestApi {
     public ResponseEntity<?> fetchAllLinkSourceTaskWithSourceTaskTypeId(
         @RequestParam(value = "sourceTaskTypeId", required = false) Long sourceTaskTypeId) {
         try {
-            return new ResponseEntity<>(this.sourceTaskApiService.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskService.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkSourceTaskWithSourceTaskTypeId :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -169,7 +169,7 @@ public class SourceTaskRestApi {
     @RequestMapping(value = "/fetchSourceTaskWithSourceTaskId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSourceTaskWithSourceTaskId(@RequestParam(value = "sourceTaskId") Long sourceTaskId) {
         try {
-            return new ResponseEntity<>(this.sourceTaskApiService.fetchSourceTaskWithSourceTaskId(sourceTaskId), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceTaskService.fetchSourceTaskWithSourceTaskId(sourceTaskId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSourceTaskWithSourceTaskId :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -188,7 +188,7 @@ public class SourceTaskRestApi {
             DateFormat dateFormat = new SimpleDateFormat(ProcessUtil.SIMPLE_DATE_PATTERN);
             String fileName = "BatchDownload-"+dateFormat.format(new Date()) + "-" + UUID.randomUUID() + ProcessUtil.XLSX_EXTENSION;
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(this.sourceTaskApiService.downloadListSourceTask().toByteArray());
+            return ResponseEntity.ok().headers(headers).body(this.sourceTaskService.downloadListSourceTask().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -207,7 +207,7 @@ public class SourceTaskRestApi {
             DateFormat dateFormat = new SimpleDateFormat(ProcessUtil.SIMPLE_DATE_PATTERN);
             String fileName = "BatchDownload-"+dateFormat.format(new Date())+ "-" + UUID.randomUUID() + ProcessUtil.XLSX_EXTENSION;
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(this.sourceTaskApiService.downloadSourceTaskTemplate().toByteArray());
+            return ResponseEntity.ok().headers(headers).body(this.sourceTaskService.downloadSourceTaskTemplate().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadSourceTaskTemplate :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -224,7 +224,7 @@ public class SourceTaskRestApi {
     public ResponseEntity<?> uploadSourceTask(FileUploadDto fileUploadDto) {
         try {
             if (fileUploadDto.getFile() != null) {
-                return new ResponseEntity<>(this.sourceTaskApiService.uploadSourceTask(fileUploadDto), HttpStatus.OK);
+                return new ResponseEntity<>(this.sourceTaskService.uploadSourceTask(fileUploadDto), HttpStatus.OK);
             }
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {

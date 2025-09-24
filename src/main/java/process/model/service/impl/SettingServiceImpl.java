@@ -13,7 +13,7 @@ import process.model.projection.ItemResponse;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
-import process.model.service.SettingApiService;
+import process.model.service.SettingService;
 import java.util.*;
 import static process.util.ProcessUtil.*;
 
@@ -21,9 +21,9 @@ import static process.util.ProcessUtil.*;
  * @author Nabeel Ahmed
  */
 @Service
-public class SettingApiServiceImpl implements SettingApiService {
+public class SettingServiceImpl implements SettingService {
 
-    private Logger logger = LoggerFactory.getLogger(SettingApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(SettingServiceImpl.class);
 
     private final String PARENT_LOOKUP_DATA = "parentLookupData";
     private final String LOOKUP_DATA = "lookupDatas";
@@ -32,18 +32,15 @@ public class SettingApiServiceImpl implements SettingApiService {
     private final LookupDataRepository lookupDataRepository;
     private final SourceJobRepository sourceJobRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
-    private final LookupDataCacheService lookupDataCacheService;
     private final QueryService queryService;
 
-    public SettingApiServiceImpl(LookupDataRepository lookupDataRepository,
+    public SettingServiceImpl(LookupDataRepository lookupDataRepository,
         SourceJobRepository sourceJobRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
-        LookupDataCacheService lookupDataCacheService,
         QueryService queryService) {
         this.lookupDataRepository = lookupDataRepository;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
-        this.lookupDataCacheService = lookupDataCacheService;
         this.queryService = queryService;
     }
 
@@ -246,15 +243,6 @@ public class SettingApiServiceImpl implements SettingApiService {
             return new ResponseDto(SUCCESS, "Data fetch successfully.", appSettingDetail);
         }
         return new ResponseDto(ERROR, String.format("LookupData not found with %d.", parentLookUpId));
-    }
-
-    /**
-     * Method use to fetch all lookup
-     * @return ResponseDto
-     * */
-    @Override
-    public ResponseDto fetchAllLookup() throws Exception {
-        return new ResponseDto(SUCCESS, "Data fetch successfully.", this.lookupDataCacheService.getLookupCacheMap());
     }
 
     /**

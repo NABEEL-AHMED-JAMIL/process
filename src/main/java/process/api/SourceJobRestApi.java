@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobDto;
-import process.model.service.SourceJobApiService;
-import process.model.service.SourceJobBulkApiService;
+import process.model.service.SourceJobService;
+import process.model.service.SourceJobBulkService;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.text.DateFormat;
@@ -29,13 +29,13 @@ public class SourceJobRestApi {
 
     private Logger logger = LoggerFactory.getLogger(SourceJobRestApi.class);
 
-    private final SourceJobApiService sourceJobApiService;
-    private final SourceJobBulkApiService sourceJobBulkApiService;
+    private final SourceJobService sourceJobService;
+    private final SourceJobBulkService sourceJobBulkService;
 
-    public SourceJobRestApi(SourceJobApiService sourceJobApiService,
-        SourceJobBulkApiService sourceJobBulkApiService) {
-        this.sourceJobApiService = sourceJobApiService;
-        this.sourceJobBulkApiService = sourceJobBulkApiService;
+    public SourceJobRestApi(SourceJobService sourceJobService,
+                            SourceJobBulkService sourceJobBulkService) {
+        this.sourceJobService = sourceJobService;
+        this.sourceJobBulkService = sourceJobBulkService;
     }
 
     /**
@@ -48,7 +48,7 @@ public class SourceJobRestApi {
     public ResponseEntity<?> addSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.addSourceJob(tempSourceJob), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.addSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -65,7 +65,7 @@ public class SourceJobRestApi {
     public ResponseEntity<?> updateSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.updateSourceJob(tempSourceJob), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.updateSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -82,7 +82,7 @@ public class SourceJobRestApi {
     public ResponseEntity<?> deleteSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.deleteSourceJob(tempSourceJob), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.deleteSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -97,7 +97,7 @@ public class SourceJobRestApi {
     @RequestMapping(value = "/listSourceJob", method = RequestMethod.GET)
     public ResponseEntity<?> listSourceJob() {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.listSourceJob(), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.listSourceJob(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -105,7 +105,6 @@ public class SourceJobRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Method uses to get source job detail with id
      * like :- json payload | validation detail |
      * @param jobId
@@ -115,7 +114,7 @@ public class SourceJobRestApi {
     public ResponseEntity<?> fetchSourceJobDetailWithSourceJobId(
         @RequestParam(value = "jobId") Long jobId) {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.fetchSourceJobDetailWithSourceJobId(jobId), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.fetchSourceJobDetailWithSourceJobId(jobId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkJobsWithSourceTask :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -123,7 +122,6 @@ public class SourceJobRestApi {
     }
 
     /**
-     * Integration Status :- pending
      * Method uses to runSourceJob manual
      * @param tempSourceJob
      * @return ResponseEntity<?>
@@ -132,7 +130,7 @@ public class SourceJobRestApi {
     public ResponseEntity<?> runSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.runSourceJob(tempSourceJob), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.runSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while runSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -149,7 +147,7 @@ public class SourceJobRestApi {
     public ResponseEntity<?> skipNextSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.skipNextSourceJob(tempSourceJob), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.skipNextSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while skipNextSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -157,7 +155,6 @@ public class SourceJobRestApi {
     }
 
     /**
-     * Integration Status :- done
      * Method uses to skip the sourceJob
      * @param jobQueueId
      * @return ResponseEntity<?>
@@ -167,7 +164,7 @@ public class SourceJobRestApi {
         @RequestParam Long jobQueueId,
         @RequestParam Long jobId) {
         try {
-            return new ResponseEntity<>(this.sourceJobApiService.findSourceJobAuditLog(jobQueueId, jobId), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.findSourceJobAuditLog(jobQueueId, jobId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while findSourceJobAuditLog :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -175,7 +172,6 @@ public class SourceJobRestApi {
     }
 
     /**
-     * Integration Status :- done
      * The method used to download the template file for batch scheduler
      * with the list of timezone and frequency or triggerDetail
      * @return ResponseEntity<?>
@@ -187,7 +183,7 @@ public class SourceJobRestApi {
             DateFormat dateFormat = new SimpleDateFormat(ProcessUtil.SIMPLE_DATE_PATTERN);
             String fileName = "BatchDownload-"+dateFormat.format(new Date())+"-"+ UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkApiService.downloadSourceJobTemplateFile().toByteArray());
+            return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkService.downloadSourceJobTemplateFile().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadSourceJobTemplateFile xlsx file :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
@@ -195,7 +191,6 @@ public class SourceJobRestApi {
     }
 
     /**
-     * Integration Status :- done
      * The method used to download the file for batch scheduler
      * @return ResponseEntity<?>
      */
@@ -206,7 +201,7 @@ public class SourceJobRestApi {
             DateFormat dateFormat = new SimpleDateFormat(ProcessUtil.SIMPLE_DATE_PATTERN);
             String fileName = "BatchDownload-"+dateFormat.format(new Date())+"-"+ UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkApiService.downloadListSourceJob().toByteArray());
+            return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkService.downloadListSourceJob().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceJob :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -214,7 +209,6 @@ public class SourceJobRestApi {
     }
 
     /**
-     * Integration Status :- done
      * The method used to upload the batch file for batch scheduler
      * note :- validation process may-fail the process of upload file
      * and share the detail
@@ -226,7 +220,7 @@ public class SourceJobRestApi {
         FileUploadDto fileObject) {
         try {
             if (fileObject.getFile() != null) {
-                return new ResponseEntity<>(this.sourceJobBulkApiService.uploadSourceJob(fileObject), HttpStatus.OK);
+                return new ResponseEntity<>(this.sourceJobBulkService.uploadSourceJob(fileObject), HttpStatus.OK);
             }
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "File not found for process."), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {

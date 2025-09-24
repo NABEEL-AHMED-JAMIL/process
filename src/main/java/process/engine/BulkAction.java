@@ -180,7 +180,7 @@ public class BulkAction {
      * This method use the change the status of main job
      * @param jobId
      * */
-    public void sendJobStatusNotification(Integer jobId) {
+    public void sendJobStatusNotification(Long jobId) {
         List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
         if (!sourceJob.isEmpty()) {
             this.notificationService.sendNotificationToSpecificUser(this.getSourceJobDetail(sourceJob.get(0)));

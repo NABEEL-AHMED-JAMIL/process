@@ -18,7 +18,7 @@ import process.model.projection.SourceTaskProjection;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
-import process.model.service.SourceTaskApiService;
+import process.model.service.SourceTaskService;
 import process.util.PagingUtil;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
@@ -36,9 +36,9 @@ import static process.util.ProcessUtil.ERROR;
  * @author Nabeel Ahmed
  */
 @Service
-public class SourceTaskApiServiceImpl implements SourceTaskApiService {
+public class SourceTaskServiceImpl implements SourceTaskService {
 
-    private Logger logger = LoggerFactory.getLogger(SourceTaskApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(SourceTaskServiceImpl.class);
 
     private final BulkExcel bulkExcel;
     private final QueryService queryService;
@@ -46,7 +46,7 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
     private final SourceTaskRepository sourceTaskRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
 
-    public SourceTaskApiServiceImpl(BulkExcel bulkExcel,
+    public SourceTaskServiceImpl(BulkExcel bulkExcel,
         QueryService queryService,
         SourceJobRepository sourceJobRepository,
         SourceTaskRepository sourceTaskRepository,

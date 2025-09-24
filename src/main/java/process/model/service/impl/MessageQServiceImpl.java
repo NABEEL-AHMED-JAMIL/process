@@ -11,7 +11,7 @@ import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
-import process.model.service.MessageQApiService;
+import process.model.service.MessageQService;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -23,9 +23,9 @@ import static process.util.ProcessUtil.SUCCESS;
  * @author Nabeel Ahmed
  */
 @Service
-public class MessageQApiServiceImpl implements MessageQApiService {
+public class MessageQServiceImpl implements MessageQService {
 
-    private Logger logger = LoggerFactory.getLogger(MessageQApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(MessageQServiceImpl.class);
 
     private final String SOURCE_JOB_QUEUES = "sourceJobQueues";
     private final String JOB_STATUS_STATISTICS = "jobStatusStatistic";
@@ -38,7 +38,7 @@ public class MessageQApiServiceImpl implements MessageQApiService {
     private final SourceJobRepository sourceJobRepository;
     private final EmailMessagesFactory emailMessagesFactory;
 
-    public MessageQApiServiceImpl(BulkAction bulkAction,
+    public MessageQServiceImpl(BulkAction bulkAction,
         QueryService queryService,
         JobQueueRepository jobQueueRepository,
         SourceJobRepository sourceJobRepository,

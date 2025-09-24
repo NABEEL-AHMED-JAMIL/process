@@ -174,7 +174,7 @@ public class TransactionServiceImpl {
      * @param jobIds
      * @return List<SourceJobProjection>
      */
-    public List<SourceJobProjection> fetchRunningJobEvent(List<Integer> jobIds) {
+    public List<SourceJobProjection> fetchRunningJobEvent(List<Long> jobIds) {
         return this.sourceJobRepository.fetchRunningJobEvent(jobIds);
     }
 

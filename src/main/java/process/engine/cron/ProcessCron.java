@@ -45,16 +45,6 @@ public class ProcessCron {
         logger.info("*************************End-RunJob*********************************");
     }
 
-    /**
-     * This runJob method run every 1 minutes and put the job into the running state
-     * */
-    @Scheduled(fixedDelay = 30000)
-    @SchedulerLock(name = "pushNotifyMessageJob", lockAtLeastFor = "5S", lockAtMostFor = "10M")
-    public void pushNotifyMessageJob() {
-        logger.info("************************Start-Push Notify MessageJob********************************");
-        logger.info("************************End-Push Notify MessageJob********************************");
-    }
-
     @Override
     public String toString() {
         return new Gson().toJson(this);

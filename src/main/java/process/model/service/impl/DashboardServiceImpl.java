@@ -12,7 +12,7 @@ import process.model.pojo.SourceTaskType;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
-import process.model.service.DashboardApiService;
+import process.model.service.DashboardService;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -23,16 +23,16 @@ import static process.util.ProcessUtil.*;
  * @author Nabeel Ahmed
  */
 @Service
-public class DashboardApiServiceImpl implements DashboardApiService {
+public class DashboardServiceImpl implements DashboardService {
 
-    private Logger logger = LoggerFactory.getLogger(DashboardApiServiceImpl.class);
+    private Logger logger = LoggerFactory.getLogger(DashboardServiceImpl.class);
 
     private final QueryService queryService;
     private final SourceJobRepository sourceJobRepository;
     private final SchedulerRepository schedulerRepository;
     private final LookupDataRepository lookupDataRepository;
 
-    public DashboardApiServiceImpl(QueryService queryService,
+    public DashboardServiceImpl(QueryService queryService,
         SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         LookupDataRepository lookupDataRepository) {
