@@ -12,6 +12,7 @@ import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQApiService;
+import process.util.ProcessUtil;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -49,73 +50,74 @@ public class MessageQApiServiceImpl implements MessageQApiService {
         this.emailMessagesFactory = emailMessagesFactory;
     }
 
+    /**
+     * Method use to fetch the logs
+     * @param messageQSearch
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch) {
-        ResponseDto responseDto;
-        if (isNull(messageQSearch.getFromDate())) {
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
+        if (ProcessUtil.isNull(messageQSearch.getFromDate())) {
             return new ResponseDto(ERROR, "FromDate missing.");
-        } else if (isNull(messageQSearch.getToDate())) {
+        } else if (ProcessUtil.isNull(messageQSearch.getToDate())) {
             return new ResponseDto(ERROR, "ToDate missing.");
         }
         Map<String, Object> objectMap = new HashMap<>();
-        List<Object[]> result = this.queryService.executeQuery(
-            this.queryService.fetchJobQLog(messageQSearch, false));
-        if (!isNull(result) && !result.isEmpty()) {
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, false));
+        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
             for(Object[] obj : result) {
                 int index = 0;
                 SourceJobQueueDto sourceJobQueue = new SourceJobQueueDto();
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setJobQueueId(Long.valueOf(obj[index].toString()));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setDateCreated(Timestamp.valueOf(String.valueOf(obj[index])));
                 }
                 index++;
-                if (!isNull(obj[index])) {
-                    sourceJobQueue.setEndTime(LocalDateTime.parse(
-                        String.valueOf(obj[index]).substring(0,19), formatter));
+                if (!ProcessUtil.isNull(obj[index])) {
+                    sourceJobQueue.setEndTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setJobId(Long.valueOf(String.valueOf(obj[index])));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setJobSend(Boolean.parseBoolean(obj[index].toString()));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setJobStatus(JobStatus.valueOf(String.valueOf(obj[index])));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setJobStatusMessage(String.valueOf(obj[index]));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setRunManual(Boolean.valueOf(obj[index].toString()));
                 }
                 index++;
-                if (!isNull(obj[index])) {
+                if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setSkipManual(Boolean.valueOf(obj[index].toString()));
                 }
                 index++;
-                if (!isNull(obj[index])) {
-                    sourceJobQueue.setSkipTime(LocalDateTime.parse(
-                        String.valueOf(obj[index]).substring(0,19), formatter));
+                if (!ProcessUtil.isNull(obj[index])) {
+                    sourceJobQueue.setSkipTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 index++;
-                if (!isNull(obj[index])) {
-                    sourceJobQueue.setStartTime(LocalDateTime.parse(
-                        String.valueOf(obj[index]).substring(0,19), formatter));
+                if (!ProcessUtil.isNull(obj[index])) {
+                    sourceJobQueue.setStartTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
                 }
                 sourceJobQueues.add(sourceJobQueue);
             }
             objectMap.put(SOURCE_JOB_QUEUES, sourceJobQueues);
             result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, true));
-            if (!isNull(result) && !result.isEmpty()) {
+            if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
                 List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
                 for(Object[] obj : result) {
                     int index = 0;
@@ -124,12 +126,15 @@ public class MessageQApiServiceImpl implements MessageQApiService {
                 objectMap.put(JOB_STATUS_STATISTICS, jobStatusStatistic);
             }
             responseDto = new ResponseDto(SUCCESS, "MessageQ successfully ", objectMap);
-        } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found for sourceTask.", new ArrayList<>());
         }
         return responseDto;
     }
 
+    /**
+     * Method use to fail the job
+     * @param jobQId
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto failJobLogs(Long jobQId) {
         if (isNull(jobQId)) {
@@ -148,11 +153,16 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             if (sourceJob.isSkipJob()) {
                 this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
             }
-            return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
+            return new ResponseDto(SUCCESS, "JobQueue successfully update.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");
     }
 
+    /**
+     * Method use to interrupt the job
+     * @param jobQId
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto interruptJobLogs(Long jobQId) {
         if (isNull(jobQId)) {
@@ -164,11 +174,16 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), String.format("Job %s interrupted.", jobQueue.get().getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
-            return new ResponseDto(SUCCESS, "JobQueue successfully Update.", jobQId);
+            return new ResponseDto(SUCCESS, "JobQueue successfully update.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");
     }
 
+    /**
+     * Method use to method use to change the job status
+     * @param queueMessageStatus
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto changeJobStatus(QueueMessageStatusDto queueMessageStatus) {
         if (isNull(queueMessageStatus.getMessageType())) {
@@ -186,17 +201,14 @@ public class MessageQApiServiceImpl implements MessageQApiService {
             // if the user configure then send email
             SourceJob sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId()).get();
             if (sourceJob.isSkipJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Skip)) {
-                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(
-                    this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
+                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             } else if (sourceJob.isCompleteJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Completed)) {
-                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(
-                    this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
+                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             } else if (sourceJob.isFailJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Failed)) {
-                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(
-                    this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
+                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
             }
         }
-        return new ResponseDto(SUCCESS, "QueueMessage Successfully Update.");
+        return new ResponseDto(SUCCESS, "QueueMessage successfully update.");
     }
 
 }

@@ -42,9 +42,13 @@ public class DashboardApiServiceImpl implements DashboardApiService {
         this.lookupDataRepository = lookupDataRepository;
     }
 
+    /**
+     * Method use to for get job status statistics
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto jobStatusStatistics() throws Exception {
-        ResponseDto responseDto;
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobStatusStatistics());
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
@@ -53,15 +57,17 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                 jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
-        } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
 
+    /**
+     * Method use to for get job running statistics
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto jobRunningStatistics() throws Exception {
-        ResponseDto responseDto;
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobRunningStatistics());
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
@@ -70,15 +76,19 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                 jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
-        } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
 
+    /**
+     * Method use to for get weekly running job statistics
+     * @param startDate
+     * @param endDate
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto weeklyRunningJobStatistics(String startDate, String endDate) throws Exception {
-        ResponseDto responseDto;
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyRunningJobStatistics(startDate, endDate));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
@@ -87,15 +97,19 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                 jobStatusStatistic.add(new JobStatusStatisticDto(obj[index].toString().trim(), Integer.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
-        } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
 
+    /**
+     * Method use to run weekly rs running job statistics
+     * @param startDate
+     * @param endDate
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto weeklyHrsRunningJobStatistics(String startDate, String endDate) throws Exception {
-        ResponseDto responseDto;
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrsRunningJobStatistics(startDate, endDate));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<WeeklyJobStatisticsDto> weeklyJobStatistics = new ArrayList<>();
@@ -106,15 +120,19 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     Double.valueOf(obj[++index].toString()).longValue()));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
-        } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
 
+    /**
+     * Method use to get weekly hr running statistics dimension
+     * @param targetHr
+     * @param targetDate
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) throws Exception {
-        ResponseDto responseDto;
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimension(targetDate, targetHr));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<WeeklyHrJobDimensionStatisticsDto> weeklyJobStatistics = new ArrayList<>();
@@ -127,16 +145,21 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                     Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),Long.valueOf(obj[++index].toString())));
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
-        } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
 
+    /**
+     * Method use to get weekly hr running statistics dimension
+     * @param targetHr
+     * @param targetDate
+     * @param jobStatus
+     * @param jobId
+     * @return ResponseDto
+     * */
     @Override
-    public ResponseDto weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr,
-        String jobStatus, Long jobId) throws Exception {
-        ResponseDto responseDto;
+    public ResponseDto weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) throws Exception {
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.");
         Map<String, Object> objectDetail = new HashMap<>();
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
@@ -194,41 +217,9 @@ public class DashboardApiServiceImpl implements DashboardApiService {
             if (!ProcessUtil.isNull(jobId)) {
                 Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId);
                 if (sourceJob.isPresent()) {
-                    SourceJobDto sourceJobDto = new SourceJobDto();
-                    sourceJobDto.setJobId(sourceJob.get().getJobId());
-                    sourceJobDto.setJobStatus(sourceJob.get().getJobStatus());
-                    sourceJobDto.setLastJobRun(sourceJob.get().getLastJobRun());
-                    sourceJobDto.setJobName(sourceJob.get().getJobName());
-                    sourceJobDto.setDateCreated(sourceJob.get().getDateCreated());
-                    sourceJobDto.setPriority(sourceJob.get().getPriority());
-                    sourceJobDto.setJobRunningStatus(sourceJob.get().getJobRunningStatus());
-                    sourceJobDto.setExecution(sourceJob.get().getExecution());
-                    sourceJobDto.setCompleteJob(sourceJob.get().isCompleteJob());
-                    sourceJobDto.setFailJob(sourceJob.get().isFailJob());
-                    sourceJobDto.setSkipJob(sourceJob.get().isSkipJob());
+                    SourceJobDto sourceJobDto = getSourceJobDto(sourceJob.get());
                     if (!ProcessUtil.isNull(sourceJob.get().getTaskDetail())) {
-                        SourceTask sourceTask = sourceJob.get().getTaskDetail();
-                        SourceTaskDto sourceTaskDto = new SourceTaskDto();
-                        sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
-                        sourceTaskDto.setTaskName(sourceTask.getTaskName());
-                        sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
-                        sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
-                        if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
-                            String homePage = this.lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue();
-                            homePage = homePage.replace("{jobId}", String.valueOf(sourceJobDto.getJobId()));
-                            homePage = homePage.replace("{taskId}", String.valueOf(sourceTaskDto.getTaskDetailId()));
-                            if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
-                                homePage = homePage.replace("{pipeline}", sourceTask.getPipelineId());
-                            }
-                            sourceTaskDto.setHomePageId(homePage);
-                        }
-                        if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
-                            sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(
-                                Long.valueOf(sourceTask.getPipelineId())).get().getLookupValue());
-                        }
-                        if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
-                            sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask));
-                        }
+                        SourceTaskDto sourceTaskDto = getSourceTaskDto(sourceJob.get().getTaskDetail());
                         sourceJobDto.setTaskDetail(sourceTaskDto);
                     }
                     Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(jobId);
@@ -245,13 +236,62 @@ public class DashboardApiServiceImpl implements DashboardApiService {
                 }
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", objectDetail);
-        } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found.");
         }
         return responseDto;
     }
 
-    private static SchedulerDto getSchedulerDto(Scheduler scheduler) {
+    /**
+     * Method use get source job
+     * @param sourceJob
+     * @return SourceJobDto
+     * */
+    private SourceJobDto getSourceJobDto(SourceJob sourceJob) {
+        SourceJobDto sourceJobDto = new SourceJobDto();
+        sourceJobDto.setJobId(sourceJob.getJobId());
+        sourceJobDto.setJobStatus(sourceJob.getJobStatus());
+        sourceJobDto.setJobRunningStatus(sourceJob.getJobRunningStatus());
+        sourceJobDto.setLastJobRun(sourceJob.getLastJobRun());
+        sourceJobDto.setJobName(sourceJob.getJobName());
+        sourceJobDto.setDateCreated(sourceJob.getDateCreated());
+        sourceJobDto.setPriority(sourceJob.getPriority());
+        sourceJobDto.setExecution(sourceJob.getExecution());
+        sourceJobDto.setCompleteJob(sourceJob.isCompleteJob());
+        sourceJobDto.setFailJob(sourceJob.isFailJob());
+        sourceJobDto.setSkipJob(sourceJob.isSkipJob());
+        return sourceJobDto;
+    }
+
+    /**
+     * Method use get source task
+     * @param sourceTask
+     * @return SourceTaskDto
+     * */
+    private SourceTaskDto getSourceTaskDto(SourceTask sourceTask) {
+        SourceTaskDto sourceTaskDto = new SourceTaskDto();
+        sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
+        sourceTaskDto.setTaskName(sourceTask.getTaskName());
+        sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
+        sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
+        if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
+            sourceTaskDto.setHomePageId(this.lookupDataRepository.findById(
+                Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue());
+        }
+        if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
+            sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(
+                Long.valueOf(sourceTask.getPipelineId())).get().getLookupValue());
+        }
+        if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
+            sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask));
+        }
+        return sourceTaskDto;
+    }
+
+    /**
+     * Method use get scheduler
+     * @param scheduler
+     * @return SchedulerDto
+     * */
+    private SchedulerDto getSchedulerDto(Scheduler scheduler) {
         SchedulerDto schedulerDto = new SchedulerDto();
         schedulerDto.setSchedulerId(scheduler.getSchedulerId());
         schedulerDto.setStartDate(scheduler.getStartDate());
@@ -263,7 +303,12 @@ public class DashboardApiServiceImpl implements DashboardApiService {
         return schedulerDto;
     }
 
-    private static SourceTaskTypeDto getSourceTaskTypeDto(SourceTask sourceTask) {
+    /**
+     * Method use get source task type
+     * @param sourceTask
+     * @return SourceTaskTypeDto
+     * */
+    private SourceTaskTypeDto getSourceTaskTypeDto(SourceTask sourceTask) {
         SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
         SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
         sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());

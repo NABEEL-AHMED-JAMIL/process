@@ -42,6 +42,11 @@ public class LookupDataCacheService {
         logger.info("***************Cache-Lookup-End********************************");
     }
 
+    /**
+     * Method use to get the lookup data detail
+     * @param lookupData
+     * @return LookupData
+     * */
     private LookupDataDto getLookupDataDetail(LookupData lookupData) {
         LookupDataDto parentLookupData = this.toLookupDataDto(lookupData);
         if (!lookupData.getChildren().isEmpty()) {
@@ -56,20 +61,15 @@ public class LookupDataCacheService {
         return this.lookupCacheMap.get(lookupType);
     }
 
-    public LookupDataDto getChildLookupById(String parentLookupType, String childLookupType) {
-        return this.getParentLookupById(parentLookupType).getChildren().stream()
-            .filter(childLookup -> childLookupType.equals(childLookup.getLookupId()))
-            .findAny().orElse(null);
-    }
-
     public Map<String, LookupDataDto> getLookupCacheMap() {
         return lookupCacheMap;
     }
 
-    public void setLookupCacheMap(Map<String, LookupDataDto> lookupCacheMap) {
-        this.lookupCacheMap = lookupCacheMap;
-    }
-
+    /**
+     * Method use to convert lookup data dto to lookup data
+     * @param lookupData
+     * @return LookupDataDto
+     * */
     private LookupDataDto toLookupDataDto(LookupData lookupData) {
         LookupDataDto lookupDataDto = new LookupDataDto();
         lookupDataDto.setLookupId(lookupData.getLookupId());

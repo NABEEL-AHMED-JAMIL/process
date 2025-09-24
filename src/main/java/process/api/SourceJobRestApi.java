@@ -106,24 +106,6 @@ public class SourceJobRestApi {
 
     /**
      * Integration Status :- done
-     * note: this api call ever 1 mint from the ui by using the timer and update the below detail on the table
-     * jobId, jobStatus, Next Flight, Last Run, R-Status
-     * @param tempSourceJob
-     * @return ResponseEntity<?>
-     * */
-    @RequestMapping(value = "/fetchRunningJobEvent", method = RequestMethod.POST)
-    public ResponseEntity<?> fetchRunningJobEvent(
-        @RequestBody SourceJobDto tempSourceJob) {
-        try {
-            return new ResponseEntity<>(this.sourceJobApiService.fetchRunningJobEvent(tempSourceJob), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while fetchRunningJobEvent :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /**
-     * Integration Status :- done
      * Method uses to get source job detail with id
      * like :- json payload | validation detail |
      * @param jobId

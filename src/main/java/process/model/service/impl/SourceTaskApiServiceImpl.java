@@ -45,20 +45,17 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
     private final SourceJobRepository sourceJobRepository;
     private final SourceTaskRepository sourceTaskRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
-    private final LookupDataCacheService lookupDataCacheService;
 
     public SourceTaskApiServiceImpl(BulkExcel bulkExcel,
         QueryService queryService,
         SourceJobRepository sourceJobRepository,
         SourceTaskRepository sourceTaskRepository,
-        SourceTaskTypeRepository sourceTaskTypeRepository,
-        LookupDataCacheService lookupDataCacheService) {
+        SourceTaskTypeRepository sourceTaskTypeRepository) {
         this.bulkExcel = bulkExcel;
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
-        this.lookupDataCacheService = lookupDataCacheService;
     }
 
     private final String ListSourceTask = "ListSourceTask";
@@ -71,31 +68,36 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         "TaskTypeId", "Task Name", "Task Payload", "PipelineId", "HomePage"
     };
 
+    /**
+     * Method use to add source task
+     * @param sourceTaskDto
+     * @return ResponseDto
+     * */
     @Override
-    public ResponseDto addSourceTask(SourceTaskDto tempSourceTask) throws Exception {
-        if (isNull(tempSourceTask.getTaskName())) {
+    public ResponseDto addSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
+        if (ProcessUtil.isNull(sourceTaskDto.getTaskName())) {
             return new ResponseDto(ERROR, "SourceTask taskName missing.");
-        } else if (isNull(tempSourceTask.getTaskPayload())) {
+        } else if (ProcessUtil.isNull(sourceTaskDto.getTaskPayload())) {
             return new ResponseDto(ERROR, "SourceTask taskPayload missing.");
-        } else if (isNull(tempSourceTask.getSourceTaskType())) {
+        } else if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType())) {
             return new ResponseDto(ERROR, "SourceTask sourceTaskType missing.");
-        } else if (isNull(tempSourceTask.getSourceTaskType().getSourceTaskTypeId())) {
+        } else if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType().getSourceTaskTypeId())) {
             return new ResponseDto(ERROR, "SourceTask sourceTaskTypeId missing.");
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findSourceTaskTypeBySourceTaskTypeIdAndStatus(
-            tempSourceTask.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
+            sourceTaskDto.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
         if (!sourceTaskType.isPresent()) {
             return new ResponseDto(ERROR, "Provided sourceTaskTypeId not found.");
         }
         SourceTask sourceTask = new SourceTask();
-        sourceTask.setTaskName(tempSourceTask.getTaskName());
-        sourceTask.setTaskPayload(tempSourceTask.getTaskPayload());
-        sourceTask.setHomePageId(tempSourceTask.getHomePageId());
-        sourceTask.setPipelineId(tempSourceTask.getPipelineId());
+        sourceTask.setTaskName(sourceTaskDto.getTaskName());
+        sourceTask.setTaskPayload(sourceTaskDto.getTaskPayload());
+        sourceTask.setHomePageId(sourceTaskDto.getHomePageId());
+        sourceTask.setPipelineId(sourceTaskDto.getPipelineId());
         sourceTask.setTaskStatus(Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
-        if (!isNull(tempSourceTask.getXmlTagsInfo())) {
-            sourceTask.setSourceTaskPayload(tempSourceTask.getXmlTagsInfo()
+        if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())) {
+            sourceTask.setSourceTaskPayload(sourceTaskDto.getXmlTagsInfo()
                 .stream().map(tagInfo -> {
                     SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
                     sourceTaskPayload.setTagKey(tagInfo.getTagKey());
@@ -108,37 +110,42 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         return new ResponseDto(SUCCESS, String.format("SourceTask successfully save with %d.", sourceTask.getTaskDetailId()));
     }
 
+    /**
+     * Method use update the source task
+     * @param
+     * @return ResponseDto
+     * */
     @Override
-    public ResponseDto updateSourceTask(SourceTaskDto tempSourceTask) throws Exception {
-        if (isNull(tempSourceTask.getTaskDetailId())) {
+    public ResponseDto updateSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
+        if (ProcessUtil.isNull(sourceTaskDto.getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceTask taskDetailId missing.");
-        } else if (isNull(tempSourceTask.getTaskName())) {
+        } else if (ProcessUtil.isNull(sourceTaskDto.getTaskName())) {
             return new ResponseDto(ERROR, "SourceTask taskName missing.");
-        } else if (isNull(tempSourceTask.getTaskPayload())) {
+        } else if (ProcessUtil.isNull(sourceTaskDto.getTaskPayload())) {
             return new ResponseDto(ERROR, "SourceTask taskPayload missing.");
-        } else if (isNull(tempSourceTask.getSourceTaskType())) {
+        } else if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType())) {
             return new ResponseDto(ERROR, "SourceTask sourceTaskType missing.");
-        } else if (isNull(tempSourceTask.getSourceTaskType().getSourceTaskTypeId())) {
+        } else if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType().getSourceTaskTypeId())) {
             return new ResponseDto(ERROR, "SourceTask sourceTaskTypeId missing.");
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findSourceTaskTypeBySourceTaskTypeIdAndStatus(
-            tempSourceTask.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
+            sourceTaskDto.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
         if (!sourceTaskType.isPresent()) {
             return new ResponseDto(ERROR, "Active the linked sourceTaskType.");
         }
-        Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(tempSourceTask.getTaskDetailId());
+        Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskDto.getTaskDetailId());
         if (sourceTask.isPresent()) {
-            if (!isNull(tempSourceTask.getTaskName())) {
-                sourceTask.get().setTaskName(tempSourceTask.getTaskName());
+            if (!ProcessUtil.isNull(sourceTaskDto.getTaskName())) {
+                sourceTask.get().setTaskName(sourceTaskDto.getTaskName());
             }
-            if (!isNull(tempSourceTask.getTaskPayload())) {
-                sourceTask.get().setTaskPayload(tempSourceTask.getTaskPayload());
+            if (!ProcessUtil.isNull(sourceTaskDto.getTaskPayload())) {
+                sourceTask.get().setTaskPayload(sourceTaskDto.getTaskPayload());
             }
-            if (!isNull(tempSourceTask.getSourceTaskType())) {
+            if (!ProcessUtil.isNull(sourceTaskDto.getSourceTaskType())) {
                 sourceTask.get().setSourceTaskType(sourceTaskType.get());
             }
-            if (!isNull(tempSourceTask.getXmlTagsInfo())) {
-                sourceTask.get().setSourceTaskPayload(tempSourceTask.getXmlTagsInfo()
+            if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())) {
+                sourceTask.get().setSourceTaskPayload(sourceTaskDto.getXmlTagsInfo()
                     .stream().map(tagInfo -> {
                         SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
                         sourceTaskPayload.setTagKey(tagInfo.getTagKey());
@@ -147,108 +154,123 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                         return sourceTaskPayload;
                     }).collect(Collectors.toList()));
             }
-            if (!isNull(tempSourceTask.getTaskStatus())) {
-                sourceTask.get().setTaskStatus(tempSourceTask.getTaskStatus());
+            if (!ProcessUtil.isNull(sourceTaskDto.getTaskStatus())) {
+                sourceTask.get().setTaskStatus(sourceTaskDto.getTaskStatus());
             }
-            sourceTask.get().setHomePageId(tempSourceTask.getHomePageId());
-            sourceTask.get().setPipelineId(tempSourceTask.getPipelineId());
+            sourceTask.get().setHomePageId(sourceTaskDto.getHomePageId());
+            sourceTask.get().setPipelineId(sourceTaskDto.getPipelineId());
             this.sourceTaskRepository.save(sourceTask.get());
-            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
+            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", sourceTaskDto.getTaskDetailId()));
         }
-        return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", tempSourceTask.getTaskDetailId()));
+        return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
     }
 
+    /**
+     * Method use delete the source task
+     * @param sourceTaskDto
+     * @return ResponseDto
+     * */
     @Override
-    public ResponseDto deleteSourceTask(SourceTaskDto tempSourceTask) throws Exception {
-        if (isNull(tempSourceTask.getTaskDetailId())) {
+    public ResponseDto deleteSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
+        if (ProcessUtil.isNull(sourceTaskDto.getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceTask taskDetailId missing.");
         }
         /**
          * Note :- if the source task delete then delete all the source job link with source task
          * Use case :- if the source task type delete then only 'inactive or delete perform'
          * */
-        Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(tempSourceTask.getTaskDetailId());
+        Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskDto.getTaskDetailId());
         if (sourceTask.isPresent()) {
-            if (!isNull(tempSourceTask.getTaskStatus())) {
+            if (!ProcessUtil.isNull(sourceTaskDto.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(Status.Delete);
             }
             this.sourceTaskRepository.save(sourceTask.get());
-            this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(tempSourceTask.getTaskDetailId(), Status.Delete.name());
-            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", tempSourceTask.getTaskDetailId()));
+            this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(sourceTaskDto.getTaskDetailId(), Status.Delete.name());
+            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", sourceTaskDto.getTaskDetailId()));
         }
-        return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", tempSourceTask.getTaskDetailId()));
+        return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
     }
 
+    /**
+     * Method use to fetch the list source task
+     * @param startDate
+     * @param endDate
+     * @param columnName
+     * @param order
+     * @param paging
+     * @param searchTextDto
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto listSourceTask(String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
         ResponseDto responseDto;
         Object countQueryResult = this.queryService.executeQueryForSingleResult(this.queryService.listSourceTaskQuery(
         true, startDate, endDate, columnName, order, searchTextDto));
-        if (!isNull(countQueryResult)) {
+        if (!ProcessUtil.isNull(countQueryResult)) {
             /* fetch Record According to Pagination*/
             List<Object[]> result = this.queryService.executeQuery(this.queryService.listSourceTaskQuery(
             false, startDate, endDate, columnName, order, searchTextDto), paging);
-            if (!isNull(result) && !result.isEmpty()) {
+            if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
                 List<SourceTaskDto> sourceTaskDtoList = new ArrayList<>();
                 for(Object[] obj : result) {
                     int index = 0;
                     SourceTaskDto sourceTaskDto = new SourceTaskDto();
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setTaskDetailId(Long.valueOf(obj[index].toString()));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setTaskName(String.valueOf(obj[index]));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setTaskPayload(String.valueOf(obj[index]));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setHomePageId(String.valueOf(obj[index]));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setPipelineId(String.valueOf(obj[index]));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setTaskStatus(Status.valueOf(String.valueOf(obj[index])));
                     }
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskTypeDto.setSourceTaskTypeId(Long.valueOf(obj[index].toString()));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskTypeDto.setDescription(String.valueOf(obj[index].toString()));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskTypeDto.setSchemaRegister(Boolean.parseBoolean(obj[index].toString()));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskTypeDto.setQueueTopicPartition(String.valueOf(obj[index].toString()));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskTypeDto.setSchemaPayload(String.valueOf(obj[index].toString()));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskTypeDto.setServiceName(String.valueOf(obj[index].toString()));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskTypeDto.setStatus(Status.valueOf(obj[index].toString()));
                     }
                     sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setTotalLinksJobs(Long.valueOf(obj[index].toString()));
                     }
                     sourceTaskDtoList.add(sourceTaskDto);
@@ -264,63 +286,75 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         return responseDto;
     }
 
+    /**
+     * Method use to fetch all link job with source task id
+     * @param sourceTaskId
+     * @param startDate
+     * @param endDate
+     * @param columnName
+     * @param order
+     * @param paging
+     * @param searchTextDto
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
-        ResponseDto responseDto = null;
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());;
         Object countQueryResult = this.queryService.executeQuery(
             this.queryService.fetchAllLinkJobsWithSourceTaskQuery(true, sourceTaskId, startDate, endDate, searchTextDto));
-        if (!isNull(countQueryResult)) {
+        if (!ProcessUtil.isNull(countQueryResult)) {
             List<Object[]> result = this.queryService.executeQuery(
                 this.queryService.fetchAllLinkJobsWithSourceTaskQuery(false, sourceTaskId, startDate, endDate, searchTextDto));
-            if (!isNull(result) && !result.isEmpty()) {
+            if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
                 List<SourceJobDto> sourceJobDtoList = new ArrayList<>();
                 for(Object[] obj : result) {
                     int index = 0;
                     SourceJobDto sourceJobDto = new SourceJobDto();
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceJobDto.setJobId(Long.valueOf(obj[index].toString()));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceJobDto.setJobName(String.valueOf(obj[index]));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceJobDto.setJobStatus(Status.valueOf(String.valueOf(obj[index])));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceJobDto.setExecution(Execution.valueOf(String.valueOf(obj[index])));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceJobDto.setJobRunningStatus(JobStatus.valueOf(String.valueOf(obj[index])));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceJobDto.setLastJobRun(LocalDateTime.parse(String.valueOf(obj[index]), formatter));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceJobDto.setPriority(Integer.valueOf(String.valueOf(obj[index])));
                     }
                     index++;
-                    if (!isNull(obj[index])) {
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceJobDto.setDateCreated(Timestamp.valueOf(String.valueOf(obj[index])));
                     }
                     sourceJobDtoList.add(sourceJobDto);
                 }
                 responseDto = new ResponseDto(SUCCESS, "LinkJobsWithSourceTask successfully ", sourceJobDtoList);
-            } else {
-                responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
             }
-        } else {
-            responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
     }
 
+    /**
+     * Method use to fetch source task with source task id
+     * @param sourceTaskId
+     * @return ResponseDto
+     * */
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId) {
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskId);
         if (sourceTask.isPresent()) {
@@ -348,12 +382,21 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskId));
     }
 
+    /**
+     * Method use to fetch all link source task with source task type id
+     * @param sourceTaskTypeId
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId) throws Exception {
         return new ResponseDto(SUCCESS, String.format("SourceTask fetch with SourceTaskTypeId %d.", sourceTaskTypeId),
             this.sourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId));
     }
 
+    /**
+     * Method use to download list source task
+     * @return ByteArrayOutputStream
+     * */
     @Override
     public ByteArrayOutputStream downloadListSourceTask() throws Exception {
         List<SourceTaskProjection> sourceTask = this.sourceTaskRepository.downloadListSourceTask();
@@ -382,6 +425,10 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         return outputStream;
     }
 
+    /**
+     * Method use to download source task template
+     * @return ByteArrayOutputStream
+     * */
     @Override
     public ByteArrayOutputStream downloadSourceTaskTemplate() throws Exception {
         XSSFWorkbook workbook = new XSSFWorkbook();
@@ -395,6 +442,11 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
         return outputStream;
     }
 
+    /**
+     * Method use to upload source task
+     * @param object
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto uploadSourceTask(FileUploadDto object) throws Exception {
         logger.info("### Start bulk uploadSourceTask file!");
@@ -487,9 +539,14 @@ public class SourceTaskApiServiceImpl implements SourceTaskApiService {
                 }).collect(Collectors.toList()));
             this.sourceTaskRepository.save(sourceTask);
         });
-        return new ResponseDto(SUCCESS, String.format("Total %d Task Save Successfully", sourceTaskValidations.size()));
+        return new ResponseDto(SUCCESS, String.format("Total %d task save successfully", sourceTaskValidations.size()));
     }
 
+    /**
+     * Method use to get source task type dto
+     * @param sourceTaskType
+     * @return SourceTaskTypeDto
+     * */
     private SourceTaskTypeDto getSourceTaskTypeDto(SourceTaskType sourceTaskType) {
         SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
         sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());

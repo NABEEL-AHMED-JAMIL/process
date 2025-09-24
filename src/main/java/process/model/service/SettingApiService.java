@@ -14,20 +14,20 @@ public interface SettingApiService {
 
     public ResponseDto appSetting() throws Exception;
 
-    public ResponseDto addSourceTaskType(SourceTaskTypeDto tempSourceTaskType) throws Exception;
+    public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 
-    public ResponseDto updateSourceTaskType(SourceTaskTypeDto tempSourceTaskType) throws Exception;
+    public ResponseDto updateSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 
     public ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception;
 
-    public ResponseDto addLookupData(LookupDataDto tempLookupData) throws Exception;
+    public ResponseDto addLookupData(LookupDataDto lookupDataDto) throws Exception;
 
-    public ResponseDto updateLookupData(LookupDataDto tempLookupData) throws Exception;
+    public ResponseDto updateLookupData(LookupDataDto lookupDataDto) throws Exception;
 
     public ResponseDto fetchSubLookupByParentId(Long parentLookUpId) throws Exception;
 
     public ResponseDto fetchAllLookup() throws Exception;
 
-    public ResponseDto deleteLookupData(LookupDataDto tempLookupData) throws Exception;
+    public ResponseDto deleteLookupData(LookupDataDto lookupDataDto) throws Exception;
 
 }

@@ -18,6 +18,7 @@ import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.SourceJobBulkApiService;
 import process.util.ProcessTimeUtil;
+import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
 import process.util.validation.JobDetailValidation;
 import java.io.*;
@@ -26,7 +27,6 @@ import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import static process.util.ProcessUtil.*;
-import static process.util.ProcessUtil.isNull;
 
 /**
  * @author Nabeel Ahmed
@@ -64,7 +64,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
 
     /**
      * The method used to download the template file for batch scheduler
-     * @return ByteArrayInputStream downloadSourceJobBatchSchedulerTemplateFile
+     * @return ByteArrayInputStream
      */
     @Override
     public ByteArrayOutputStream downloadSourceJobTemplateFile() throws Exception {
@@ -84,8 +84,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
         XSSFWorkbook wb = new XSSFWorkbook(new File(fileUploadPath));
         XSSFSheet sheet = wb.getSheet(JOB_ADD);
         /**Trigger Detail fetch from db as per user login*/
-        this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllSourceTask()
-            .stream().map(String::valueOf).toArray(String[]::new));
+        this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
         this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.toArray(new String[0]));
         // Priority
         this.bulkExcel.fillDropDownValue(sheet,1,7, ProcessTimeUtil.priority.toArray(new String[0]));
@@ -106,7 +105,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
 
     /**
      * The method used to download the template file for batch scheduler
-     * @return ByteArrayInputStream downloadListSourceJobBatchScheduler
+     * @return ByteArrayInputStream
      */
     @Override
     public ByteArrayOutputStream downloadListSourceJob() throws Exception {
@@ -120,7 +119,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
         sourceJobs.forEach(sourceJob -> {
             rowCount.getAndIncrement();
             List<String> dataCellValue = new ArrayList<>();
-            dataCellValue.add(!isNull(sourceJob.getJobName()) ? String.valueOf(sourceJob.getJobName()) : "");
+            dataCellValue.add(!ProcessUtil.isNull(sourceJob.getJobName()) ? String.valueOf(sourceJob.getJobName()) : "");
             dataCellValue.add(String.format("%d [%s]", sourceJob.getTaskDetail().getTaskDetailId(), sourceJob.getTaskDetail().getTaskName()));
             dataCellValue.add(String.valueOf(sourceJob.getExecution()));
             dataCellValue.add(String.valueOf(sourceJob.getPriority()));
@@ -130,20 +129,20 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
             Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.getJobId());
             if (scheduler.isPresent()) {
                 dataCellValue.add(String.valueOf(scheduler.get().getStartDate()));
-                dataCellValue.add(!isNull(scheduler.get().getEndDate()) ? String.valueOf(scheduler.get().getEndDate()): "");
-                dataCellValue.add(!isNull(String.valueOf(scheduler.get().getStartTime())) ? String.valueOf(scheduler.get().getStartTime()) : "");
+                dataCellValue.add(!ProcessUtil.isNull(scheduler.get().getEndDate()) ? String.valueOf(scheduler.get().getEndDate()): "");
+                dataCellValue.add(!ProcessUtil.isNull(String.valueOf(scheduler.get().getStartTime())) ? String.valueOf(scheduler.get().getStartTime()) : "");
             } else {
                 dataCellValue.add("");
                 dataCellValue.add("");
                 dataCellValue.add("");
             }
-            dataCellValue.add(!isNull(sourceJob.getLastJobRun()) ? String.valueOf(sourceJob.getLastJobRun()) : "");
+            dataCellValue.add(!ProcessUtil.isNull(sourceJob.getLastJobRun()) ? String.valueOf(sourceJob.getLastJobRun()) : "");
             if (scheduler.isPresent()) {
-                dataCellValue.add(!isNull(scheduler.get().getRecurrenceTime()) ? String.valueOf(scheduler.get().getRecurrenceTime()) : "");
+                dataCellValue.add(!ProcessUtil.isNull(scheduler.get().getRecurrenceTime()) ? String.valueOf(scheduler.get().getRecurrenceTime()) : "");
             } else {
                 dataCellValue.add("");
             }
-            dataCellValue.add(!isNull(sourceJob.getJobRunningStatus()) ? String.valueOf(sourceJob.getJobRunningStatus()) : "");
+            dataCellValue.add(!ProcessUtil.isNull(sourceJob.getJobRunningStatus()) ? String.valueOf(sourceJob.getJobRunningStatus()) : "");
             dataCellValue.add(sourceJob.isCompleteJob() ? ProcessTimeUtil.checked.get(0): ProcessTimeUtil.checked.get(1));
             dataCellValue.add(sourceJob.isFailJob() ? ProcessTimeUtil.checked.get(0) : ProcessTimeUtil.checked.get(1));
             dataCellValue.add(sourceJob.isSkipJob() ? ProcessTimeUtil.checked.get(0) : ProcessTimeUtil.checked.get(1));
@@ -158,7 +157,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
      * The method use to process the batch file and upload the data into database
      * max file have 1000 row if file have more than 1000 row it's will reject the process
      * @param object
-     * @return ResponseDto uploadSourceJob
+     * @return ResponseDto
      */
     public ResponseDto uploadSourceJob(FileUploadDto object) throws Exception {
         logger.info("### Start bulk uploading file!");
@@ -168,11 +167,11 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
         }
         // fill the stream with file into work-book
         XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream());
-        if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
+        if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(JOB_ADD);
-        if(isNull(sheet)) {
+        if(ProcessUtil.isNull(sheet)) {
             return new ResponseDto(ERROR, "Sheet not found with (Job-Add)");
         } else if (sheet.getLastRowNum() < 1) {
             return new ResponseDto(ERROR,  "You can't upload empty file.");
@@ -188,7 +187,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
                 for (int i = 0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
                     if (!currentRow.getCell(i).getStringCellValue().equals(this.getHEADER_FILED_BATCH_FILE()[i])) {
                         return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " "
-                                + this.getHEADER_FILED_BATCH_FILE()[i] + " heading missing.");
+                            + this.getHEADER_FILED_BATCH_FILE()[i] + " heading missing.");
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
@@ -222,12 +221,12 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
                     }
                 }
                 jobDetailValidation.isValidJobDetail();
-                if (!isNull(jobDetailValidation.getTaskId())) {
+                if (!ProcessUtil.isNull(jobDetailValidation.getTaskId())) {
                     if (!this.transactionService.findByTaskDetailIdAndTaskStatus(Long.valueOf(jobDetailValidation.getTaskId())).isPresent()) {
                         jobDetailValidation.setErrorMsg("Delete sourceTask not link with source job at row " + (currentRow.getRowNum() + 1) + ".\n");
                     }
                 }
-                if (!isNull(jobDetailValidation.getErrorMsg())) {
+                if (!ProcessUtil.isNull(jobDetailValidation.getErrorMsg())) {
                     errors.add(jobDetailValidation.getErrorMsg());
                     continue;
                 }
@@ -258,8 +257,7 @@ public class SourceJobBulkApiServiceImpl implements SourceJobBulkApiService {
             if (!StringUtils.isEmpty(jobDetailValidation.getRecurrence())) {
                 scheduler.setRecurrence(jobDetailValidation.getRecurrence());
             }
-            scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
-                LocalDate.parse(jobDetailValidation.getStartDate()), jobDetailValidation.getStartTime()));
+            scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(LocalDate.parse(jobDetailValidation.getStartDate()), jobDetailValidation.getStartTime()));
             scheduler.setJobId(sourceJob.getJobId());
             this.transactionService.saveOrUpdateScheduler(scheduler);
         }

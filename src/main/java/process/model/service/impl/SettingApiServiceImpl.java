@@ -12,7 +12,6 @@ import process.model.pojo.SourceTaskType;
 import process.model.projection.ItemResponse;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
-import process.model.repository.SourceTaskRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.service.SettingApiService;
 import java.util.*;
@@ -28,38 +27,43 @@ public class SettingApiServiceImpl implements SettingApiService {
 
     private final String PARENT_LOOKUP_DATA = "parentLookupData";
     private final String LOOKUP_DATA = "lookupDatas";
-    private final String SOURCE_TASK_TYPE = "sourceTaskTaypes";
+    private final String SOURCE_TASK_TYPE = "sourceTaskTypes";
 
     private final LookupDataRepository lookupDataRepository;
     private final SourceJobRepository sourceJobRepository;
-    private final SourceTaskRepository sourceTaskRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final LookupDataCacheService lookupDataCacheService;
     private final QueryService queryService;
 
     public SettingApiServiceImpl(LookupDataRepository lookupDataRepository,
         SourceJobRepository sourceJobRepository,
-        SourceTaskRepository sourceTaskRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
         LookupDataCacheService lookupDataCacheService,
         QueryService queryService) {
         this.lookupDataRepository = lookupDataRepository;
         this.sourceJobRepository = sourceJobRepository;
-        this.sourceTaskRepository = sourceTaskRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.lookupDataCacheService = lookupDataCacheService;
         this.queryService = queryService;
     }
 
+    /**
+     * Method use to fetch the dynamic query response
+     * @param itemResponse
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto dynamicQueryResponse(ItemResponse itemResponse) {
         if (isNull(itemResponse.getQuery())) {
             return new ResponseDto(ERROR, "Query missing.");
         }
-        return new ResponseDto(SUCCESS, "Data fetch successfully.",
-            this.queryService.executeQueryResponse(itemResponse.getQuery()));
+        return new ResponseDto(SUCCESS, "Data fetch successfully.", this.queryService.executeQueryResponse(itemResponse.getQuery()));
     }
 
+    /**
+     * Method use to fetch the lookup data and source task type
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto appSetting() throws Exception {
         Map<String, Object> appSettingDetail = new HashMap<>();
@@ -79,52 +83,67 @@ public class SettingApiServiceImpl implements SettingApiService {
         return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
     }
 
+    /**
+     * Method use to add the source task type
+     * @param sourceTaskTypeDto
+     * @return ResponseDto
+     * */
     @Override
-    public ResponseDto addSourceTaskType(SourceTaskTypeDto tempSourceTaskType) throws Exception {
-        if (isNull(tempSourceTaskType.getServiceName())) {
+    public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception {
+        if (isNull(sourceTaskTypeDto.getServiceName())) {
             return new ResponseDto(ERROR, "SourceTaskType serviceName missing.");
-        } else if (isNull(tempSourceTaskType.getDescription())) {
+        } else if (isNull(sourceTaskTypeDto.getDescription())) {
             return new ResponseDto(ERROR, "SourceTaskType description missing.");
-        } else if (isNull(tempSourceTaskType.getQueueTopicPartition())) {
+        } else if (isNull(sourceTaskTypeDto.getQueueTopicPartition())) {
             return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition missing.");
         }
-        SourceTaskType sourceTaskType = this.getSourceTaskType(tempSourceTaskType);
+        SourceTaskType sourceTaskType = this.getSourceTaskType(sourceTaskTypeDto);
         this.sourceTaskTypeRepository.save(sourceTaskType);
         return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.", sourceTaskType.getSourceTaskTypeId()));
     }
 
+    /**
+     * Method use to update the source task type
+     * @param sourceTaskTypeDto
+     * @return ResponseDto
+     * */
     @Override
-    public ResponseDto updateSourceTaskType(SourceTaskTypeDto tempSourceTaskType) throws Exception {
-        if (isNull(tempSourceTaskType.getSourceTaskTypeId())) {
+    public ResponseDto updateSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception {
+        if (isNull(sourceTaskTypeDto.getSourceTaskTypeId())) {
             return new ResponseDto(ERROR, "SourceTaskType sourceTaskTypeId missing.");
-        } else if (isNull(tempSourceTaskType.getServiceName())) {
+        } else if (isNull(sourceTaskTypeDto.getServiceName())) {
             return new ResponseDto(ERROR, "SourceTaskType serviceName missing.");
-        } else if (isNull(tempSourceTaskType.getQueueTopicPartition())) {
+        } else if (isNull(sourceTaskTypeDto.getQueueTopicPartition())) {
             return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition missing.");
         }
-        Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(tempSourceTaskType.getSourceTaskTypeId());
+        Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(sourceTaskTypeDto.getSourceTaskTypeId());
         if (sourceTaskType.isPresent()) {
-            sourceTaskType.get().setServiceName(tempSourceTaskType.getServiceName());
-            sourceTaskType.get().setDescription(tempSourceTaskType.getDescription());
-            sourceTaskType.get().setSchemaPayload(tempSourceTaskType.getSchemaPayload());
-            sourceTaskType.get().setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
-            sourceTaskType.get().setSchemaRegister(!isNull(tempSourceTaskType.getSchemaPayload()));
+            sourceTaskType.get().setServiceName(sourceTaskTypeDto.getServiceName());
+            sourceTaskType.get().setDescription(sourceTaskTypeDto.getDescription());
+            sourceTaskType.get().setSchemaPayload(sourceTaskTypeDto.getSchemaPayload());
+            sourceTaskType.get().setQueueTopicPartition(sourceTaskTypeDto.getQueueTopicPartition());
+            sourceTaskType.get().setSchemaRegister(!isNull(sourceTaskTypeDto.getSchemaPayload()));
             /**
              * Note :- Source Task Type Status Impact on Source Job
              * like :- if active the source job active
              * if delete then source job delete
              * if inactive then source job inactive
              * */
-            this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(tempSourceTaskType.getSourceTaskTypeId(), tempSourceTaskType.getStatus().name());
-            if (!isNull(tempSourceTaskType.getStatus())) {
-                sourceTaskType.get().setStatus(tempSourceTaskType.getStatus());
+            this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(sourceTaskTypeDto.getSourceTaskTypeId(), sourceTaskTypeDto.getStatus().name());
+            if (!isNull(sourceTaskTypeDto.getStatus())) {
+                sourceTaskType.get().setStatus(sourceTaskTypeDto.getStatus());
             }
             this.sourceTaskTypeRepository.save(sourceTaskType.get());
-            return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.", tempSourceTaskType.getSourceTaskTypeId()));
+            return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
         }
-        return new ResponseDto(ERROR, String.format("SourceTaskType not found with %s.", tempSourceTaskType.getSourceTaskTypeId()));
+        return new ResponseDto(ERROR, String.format("SourceTaskType not found with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
     }
 
+    /**
+     * Method use to delete source task type
+     * @param sourceTaskTypeId
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception {
         if (isNull(sourceTaskTypeId)) {
@@ -142,6 +161,11 @@ public class SettingApiServiceImpl implements SettingApiService {
         return new ResponseDto(SUCCESS, String.format("SourceTaskType delete with %s.", sourceTaskTypeId));
     }
 
+    /**
+     * Method use to add the new lookup data
+     * @param tempLookupData
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto addLookupData(LookupDataDto tempLookupData) throws Exception {
         if (isNull(tempLookupData.getLookupValue())) {
@@ -163,6 +187,11 @@ public class SettingApiServiceImpl implements SettingApiService {
         return new ResponseDto(SUCCESS, String.format("LookupData save with %d.", lookupData.getLookupId()));
     }
 
+    /**
+     * Method use to update the lookup date
+     * @param tempLookupData
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto updateLookupData(LookupDataDto tempLookupData) throws Exception {
         if (isNull(tempLookupData.getLookupId())) {
@@ -189,6 +218,11 @@ public class SettingApiServiceImpl implements SettingApiService {
         return new ResponseDto(ERROR, String.format("LookupData not found with %d.", tempLookupData.getLookupId()));
     }
 
+    /**
+     * Method use to fetch teh sub lookup by parent id
+     * @param parentLookUpId
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto fetchSubLookupByParentId(Long parentLookUpId) throws Exception {
         if (isNull(parentLookUpId)) {
@@ -214,12 +248,20 @@ public class SettingApiServiceImpl implements SettingApiService {
         return new ResponseDto(ERROR, String.format("LookupData not found with %d.", parentLookUpId));
     }
 
+    /**
+     * Method use to fetch all lookup
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto fetchAllLookup() throws Exception {
-        return new ResponseDto(SUCCESS, "Data fetch successfully.",
-            this.lookupDataCacheService.getLookupCacheMap());
+        return new ResponseDto(SUCCESS, "Data fetch successfully.", this.lookupDataCacheService.getLookupCacheMap());
     }
 
+    /**
+     * Method use to delete the lookup data
+     * @param tempLookupData
+     * @return ResponseDto
+     * */
     @Override
     public ResponseDto deleteLookupData(LookupDataDto tempLookupData) throws Exception {
         if (isNull(tempLookupData.getLookupId())) {
@@ -229,6 +271,11 @@ public class SettingApiServiceImpl implements SettingApiService {
         return new ResponseDto(SUCCESS, String.format("LookupData delete with %d.", tempLookupData.getLookupId()));
     }
 
+    /**
+     * Method use to fill the lookup data dto
+     * @param lookupData
+     * @param lookupDataDto
+     * */
     private void fillLookupDateDto(LookupData lookupData, LookupDataDto lookupDataDto) {
         lookupDataDto.setLookupId(lookupData.getLookupId());
         lookupDataDto.setLookupValue(lookupData.getLookupValue());
@@ -237,14 +284,20 @@ public class SettingApiServiceImpl implements SettingApiService {
         lookupDataDto.setDateCreated(lookupData.getDateCreated());
     }
 
-    private SourceTaskType getSourceTaskType(SourceTaskTypeDto tempSourceTaskType) {
+    /**
+     * Method use to get teh source task type
+     * @param sourceTaskTypeDto
+     * @return SourceTaskType
+     * */
+    private SourceTaskType getSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) {
         SourceTaskType sourceTaskType = new SourceTaskType();
-        sourceTaskType.setServiceName(tempSourceTaskType.getServiceName());
-        sourceTaskType.setDescription(tempSourceTaskType.getDescription());
-        sourceTaskType.setQueueTopicPartition(tempSourceTaskType.getQueueTopicPartition());
-        sourceTaskType.setSchemaPayload(tempSourceTaskType.getSchemaPayload());
-        sourceTaskType.setSchemaRegister(!isNull(tempSourceTaskType.getSchemaPayload()));
+        sourceTaskType.setServiceName(sourceTaskTypeDto.getServiceName());
+        sourceTaskType.setDescription(sourceTaskTypeDto.getDescription());
+        sourceTaskType.setQueueTopicPartition(sourceTaskTypeDto.getQueueTopicPartition());
+        sourceTaskType.setSchemaPayload(sourceTaskTypeDto.getSchemaPayload());
+        sourceTaskType.setSchemaRegister(!isNull(sourceTaskTypeDto.getSchemaPayload()));
         sourceTaskType.setStatus(Status.Active);
         return sourceTaskType;
     }
+
 }

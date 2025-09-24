@@ -8,22 +8,20 @@ import process.model.dto.SourceJobDto;
  */
 public interface SourceJobApiService {
 
-    public ResponseDto addSourceJob(SourceJobDto tempSourceJob) throws Exception;
+    public ResponseDto addSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
-    public ResponseDto updateSourceJob(SourceJobDto tempSourceJob) throws Exception;
+    public ResponseDto updateSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
-    public ResponseDto deleteSourceJob(SourceJobDto tempSourceJob) throws Exception;
+    public ResponseDto deleteSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
-    public ResponseDto runSourceJob(SourceJobDto tempSourceJob) throws Exception;
+    public ResponseDto runSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
-    public ResponseDto skipNextSourceJob(SourceJobDto tempSourceJob) throws Exception;
+    public ResponseDto skipNextSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
     public ResponseDto findSourceJobAuditLog(Long jobQueueIdb, Long jobId) throws Exception;
 
     public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobId) throws Exception;
 
     public ResponseDto listSourceJob() throws Exception;
-
-    public ResponseDto fetchRunningJobEvent(SourceJobDto tempSourceJob) throws Exception;
 
 }

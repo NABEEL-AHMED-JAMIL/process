@@ -24,7 +24,7 @@ public class ProcessCron {
     private ProducerBulkEngine producerBulkEngine;
 
     /**
-     * This addJobInQueue method run every 1 minutes
+     * This addJobInQueue method run every 30 second and put the job into queue
      * */
     @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     @SchedulerLock(name = "addJobInQueue", lockAtLeastFor = "5S", lockAtMostFor = "10M")
@@ -35,7 +35,7 @@ public class ProcessCron {
     }
 
     /**
-     * This runJob method run every 1 minutes and put the job into the running state
+     * This runJob method run every 30 second and put the job into the running state
      * */
     @Scheduled(fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     @SchedulerLock(name = "runJob", lockAtLeastFor = "5S", lockAtMostFor = "10M")
@@ -43,6 +43,16 @@ public class ProcessCron {
         logger.info("************************Start-RunJob********************************");
         this.producerBulkEngine.runJobInCurrentTimeSlot();
         logger.info("*************************End-RunJob*********************************");
+    }
+
+    /**
+     * This runJob method run every 1 minutes and put the job into the running state
+     * */
+    @Scheduled(fixedDelay = 30000)
+    @SchedulerLock(name = "pushNotifyMessageJob", lockAtLeastFor = "5S", lockAtMostFor = "10M")
+    public void pushNotifyMessageJob() {
+        logger.info("************************Start-Push Notify MessageJob********************************");
+        logger.info("************************End-Push Notify MessageJob********************************");
     }
 
     @Override

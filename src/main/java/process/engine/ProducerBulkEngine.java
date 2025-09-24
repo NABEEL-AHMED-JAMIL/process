@@ -8,7 +8,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 import org.springframework.util.concurrent.ListenableFuture;
-import org.springframework.util.concurrent.ListenableFutureCallback;
 import process.emailer.EmailMessagesFactory;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -19,6 +18,7 @@ import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static java.util.Objects.isNull;
@@ -174,31 +174,33 @@ public class ProducerBulkEngine {
                         // random key for send the msg for partitions
                         String key = UUID.randomUUID().toString();
                         Map<String, String> payload = fillPayloadDetail(sourceJob, jobQueue);
-                        ListenableFuture<SendResult<String, String>> future = null;
-                        if (partition.contains(ProcessUtil.START)) {
-                            future = this.kafkaTemplate.send(topic, key, payload.toString());
-                        } else {
-                            future = this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString());
+                        ListenableFuture<SendResult<String, String>> future;
+                        try {
+                            if (partition.contains(ProcessUtil.START)) {
+                                future = this.kafkaTemplate.send(topic, key, payload.toString());
+                            } else {
+                                future = this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString());
+                            }
+                            // Synchronous wait for Kafka send result
+                            SendResult<String, String> result = future.get();
+                            long offset = result.getRecordMetadata().offset();
+                            logger.info("Sent message=[{}] with offset=[{}]", payload, offset);
+                            // Update job queue
+                            jobQueue.setJobSend(true);
+                            jobQueue.setJobStatus(JobStatus.Start);
+                            jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + offset + "]");
+                            transactionService.updateJobQueue(jobQueue);
+                            // Save audit logs
+                            bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s sent message=[%s] with offset=[%s]", sourceJob.getJobId(), payload, offset));
+                        } catch (InterruptedException | ExecutionException ex) {
+                            logger.error("Unable to send message=[{}] due to: {}", payload, ex.getMessage());
+                            // Update job queue on failure
+                            jobQueue.setJobSend(false);
+                            jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to: " + ex.getMessage());
+                            transactionService.updateJobQueue(jobQueue);
+                            // Optionally update last job status
+                            changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to: %s", sourceJob.getJobId(), payload, ex.getMessage()));
                         }
-                        future.addCallback(new ListenableFutureCallback<SendResult<String, String>>() {
-                            @Override
-                            public void onSuccess(SendResult<String, String> result) {
-                                logger.info("Sent message=[{}] with offset=[{}]", payload, result.getRecordMetadata().offset());
-                                jobQueue.setJobSend(true);
-                                jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + result.getRecordMetadata().offset() + "]");
-                                jobQueue.setJobStatus(JobStatus.Start);
-                                transactionService.updateJobQueue(jobQueue);
-                                bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s send message=[%s] with offset=[%s]", sourceJob.getJobId(), payload, result.getRecordMetadata().offset()));
-                            }
-                            @Override
-                            public void onFailure(Throwable ex) {
-                                logger.info("Unable to send message=[{}] due to : {}", payload, ex.getMessage());
-                                jobQueue.setJobSend(false);
-                                jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to : " + ex.getMessage());
-                                transactionService.updateJobQueue(jobQueue);
-                                changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to : %s", sourceJob.getJobId(), payload, ex.getMessage()));
-                            }
-                        });
                         return;
                     }
                     logger.error("Regex Not match..");

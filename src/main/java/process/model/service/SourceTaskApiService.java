@@ -12,11 +12,11 @@ import java.io.ByteArrayOutputStream;
  */
 public interface SourceTaskApiService {
 
-    public ResponseDto addSourceTask(SourceTaskDto tempSourceTask) throws Exception;
+    public ResponseDto addSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
 
-    public ResponseDto updateSourceTask(SourceTaskDto tempSourceTask) throws Exception;
+    public ResponseDto updateSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
 
-    public ResponseDto deleteSourceTask(SourceTaskDto tempSourceTask) throws Exception;
+    public ResponseDto deleteSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
 
     public ResponseDto listSourceTask(String startDate, String endDate,
           String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception;
