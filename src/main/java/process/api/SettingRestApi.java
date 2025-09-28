@@ -30,7 +30,7 @@ public class SettingRestApi {
     private final XmlOutTagInfoUtil xmlOutTagInfoUtil;
 
     public SettingRestApi(SettingService settingService,
-                          XmlOutTagInfoUtil xmlOutTagInfoUtil) {
+        XmlOutTagInfoUtil xmlOutTagInfoUtil) {
         this.settingService = settingService;
         this.xmlOutTagInfoUtil = xmlOutTagInfoUtil;
     }

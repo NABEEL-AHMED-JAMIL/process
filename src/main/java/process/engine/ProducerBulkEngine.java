@@ -7,18 +7,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
-import org.springframework.util.concurrent.ListenableFuture;
 import process.emailer.EmailMessagesFactory;
+import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
-import process.model.service.impl.LookupDataCacheService;
 import process.model.service.impl.TransactionServiceImpl;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static java.util.Objects.isNull;
@@ -40,8 +38,6 @@ public class ProducerBulkEngine {
     private EmailMessagesFactory emailMessagesFactory;
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
-    @Autowired
-    private LookupDataCacheService lookupDataCacheService;
 
     public ProducerBulkEngine() {
         this.pattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$");
@@ -53,7 +49,8 @@ public class ProducerBulkEngine {
      * */
     public void addManualJobInQueue(SourceJob sourceJob) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
-        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
+            LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
         this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
@@ -65,12 +62,13 @@ public class ProducerBulkEngine {
      * */
     public void skipManualJobInQueue(Scheduler scheduler) {
         // if the job in the skip state no need update the last run queue
-        JobQueue jobQueue = this.bulkAction.createJobQueueV1(scheduler.getJobId(), scheduler.getRecurrenceTime(), JobStatus.Skip, "Job %s skip, by user action.", true);
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(scheduler.getJobId(),
+            scheduler.getRecurrenceTime(), JobStatus.Skip, "Job %s skip, by user action.", true);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, by user action.", scheduler.getJobId()));
         // if the user fail the job manual need to send the mail
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isSkipJob()) {
-            this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue), JobStatus.Skip);
+            this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Skip);
         }
     }
 
@@ -101,7 +99,7 @@ public class ProducerBulkEngine {
                             jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
                             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
                             if (this.transactionService.findByJobId(scheduler.getJobId()).get().isSkipJob()) {
-                                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue), JobStatus.Skip);
+                                this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Skip);
                             }
                         } else {
                             this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
@@ -171,35 +169,26 @@ public class ProducerBulkEngine {
                     if (resultRegex) {
                         String topic = matcher.group(1);
                         String partition = matcher.group(2);
-                        // random key for send the msg for partitions
+                        // random key for sending to partitions
                         String key = UUID.randomUUID().toString();
                         Map<String, String> payload = fillPayloadDetail(sourceJob, jobQueue);
-                        ListenableFuture<SendResult<String, String>> future;
                         try {
                             if (partition.contains(ProcessUtil.START)) {
-                                future = this.kafkaTemplate.send(topic, key, payload.toString());
+                                this.kafkaTemplate.send(topic, key, payload.toString())
+                                    .addCallback(
+                                        result -> handleSendSuccess(result, payload, sourceJob, jobQueue),
+                                        ex -> handleSendFailure(ex, payload, sourceJob, jobQueue)
+                                    );
                             } else {
-                                future = this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString());
+                                this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString())
+                                    .addCallback(
+                                        result -> handleSendSuccess(result, payload, sourceJob, jobQueue),
+                                        ex -> handleSendFailure(ex, payload, sourceJob, jobQueue)
+                                    );
                             }
-                            // Synchronous wait for Kafka send result
-                            SendResult<String, String> result = future.get();
-                            long offset = result.getRecordMetadata().offset();
-                            logger.info("Sent message=[{}] with offset=[{}]", payload, offset);
-                            // Update job queue
-                            jobQueue.setJobSend(true);
-                            jobQueue.setJobStatus(JobStatus.Start);
-                            jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + offset + "]");
-                            transactionService.updateJobQueue(jobQueue);
-                            // Save audit logs
-                            bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s sent message=[%s] with offset=[%s]", sourceJob.getJobId(), payload, offset));
-                        } catch (InterruptedException | ExecutionException ex) {
-                            logger.error("Unable to send message=[{}] due to: {}", payload, ex.getMessage());
-                            // Update job queue on failure
-                            jobQueue.setJobSend(false);
-                            jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to: " + ex.getMessage());
-                            transactionService.updateJobQueue(jobQueue);
-                            // Optionally update last job status
-                            changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to: %s", sourceJob.getJobId(), payload, ex.getMessage()));
+                        } catch (Exception ex) {
+                            logger.error("Unexpected exception while sending message=[{}]: {}", payload, ex.getMessage());
+                            handleSendFailure(ex, payload, sourceJob, jobQueue);
                         }
                         return;
                     }
@@ -213,6 +202,43 @@ public class ProducerBulkEngine {
                 logger.error("Error In pushMessageToQueue :- {}.", ExceptionUtil.getRootCauseMessage(ex));
             }
         }
+    }
+
+    /**
+     * Method use to handle send success
+     * @param result
+     * @param payload
+     * @param sourceJob
+     * @param jobQueue
+     * */
+    private void handleSendSuccess(SendResult<String, String> result, Map<String, String> payload, SourceJob sourceJob, JobQueue jobQueue) {
+        long offset = result.getRecordMetadata().offset();
+        logger.info("Sent message=[{}] with offset=[{}]", payload, offset);
+        // Update job queue
+        jobQueue.setJobSend(true);
+        jobQueue.setJobStatus(JobStatus.Start);
+        jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + offset + "]");
+        this.transactionService.updateJobQueue(jobQueue);
+        this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Start);
+        // Save audit logs
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s sent message=[%s] with offset=[%s]", sourceJob.getJobId(), payload, offset));
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
+    }
+
+    /**
+     * Method use to handle send failure
+     * @param ex
+     * @param payload
+     * @param sourceJob
+     * @param jobQueue
+     * */
+    private void handleSendFailure(Throwable ex, Map<String, String> payload, SourceJob sourceJob, JobQueue jobQueue) {
+        logger.error("Unable to send message=[{}] due to: {}", payload, ex.getMessage());
+        // Update job queue on failure
+        jobQueue.setJobSend(false);
+        jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to: " + ex.getMessage());
+        // Optionally update last job status
+        this.changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to: %s", sourceJob.getJobId(), payload, ex.getMessage()));
     }
 
     /***
@@ -246,12 +272,33 @@ public class ProducerBulkEngine {
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
         if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {
-            this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue), JobStatus.Failed);
+            this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Failed);
         }
     }
 
     /**
+     * method use convert job queue to job dto
+     * @param jobQueue
+     * @return SourceJobQueueDto
+     * */
+    private SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
+        SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
+        sourceJobQueueDto.setJobId(jobQueue.getJobId());
+        sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
+        if (jobQueue.getJobStatus().equals(JobStatus.Skip)) {
+            sourceJobQueueDto.setStartTime(jobQueue.getSkipTime());
+        } else {
+            sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
+        }
+        return sourceJobQueueDto;
+    }
+
+
+    /**
      * Method use to fill the payload detail
+     * @param sourceJob
+     * @param jobQueue
+     * @return Map<String, String>
      * */
     private Map<String, String> fillPayloadDetail(SourceJob sourceJob, JobQueue jobQueue) {
         Map<String, String> payload = new HashMap<>();

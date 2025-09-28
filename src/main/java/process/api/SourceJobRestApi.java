@@ -33,7 +33,7 @@ public class SourceJobRestApi {
     private final SourceJobBulkService sourceJobBulkService;
 
     public SourceJobRestApi(SourceJobService sourceJobService,
-                            SourceJobBulkService sourceJobBulkService) {
+        SourceJobBulkService sourceJobBulkService) {
         this.sourceJobService = sourceJobService;
         this.sourceJobBulkService = sourceJobBulkService;
     }

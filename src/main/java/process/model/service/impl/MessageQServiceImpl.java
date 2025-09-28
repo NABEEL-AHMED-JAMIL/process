@@ -151,7 +151,7 @@ public class MessageQServiceImpl implements MessageQService {
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
             SourceJob sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId()).get();
             if (sourceJob.isSkipJob()) {
-                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
+                this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
             }
             return new ResponseDto(SUCCESS, "JobQueue successfully update.", jobQId);
         }
@@ -200,15 +200,32 @@ public class MessageQServiceImpl implements MessageQService {
             }
             // if the user configure then send email
             SourceJob sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId()).get();
-            if (sourceJob.isSkipJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Skip)) {
-                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
-            } else if (sourceJob.isCompleteJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Completed)) {
-                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
-            } else if (sourceJob.isFailJob() && queueMessageStatus.getJobStatus().equals(JobStatus.Failed)) {
-                this.emailMessagesFactory.sendSourceJobEmail(EmailMessagesFactory.getSourceJobQueueDto(this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()),queueMessageStatus.getJobStatus());
+            JobStatus status = queueMessageStatus.getJobStatus();
+            boolean shouldSend = (sourceJob.isSkipJob() && status.equals(JobStatus.Skip)) ||
+                (sourceJob.isCompleteJob() && status.equals(JobStatus.Completed)) || (sourceJob.isFailJob() && status.equals(JobStatus.Failed));
+            if (shouldSend) {
+                this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(
+                    this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()), status);
             }
         }
         return new ResponseDto(SUCCESS, "QueueMessage successfully update.");
+    }
+
+    /**
+     * method use convert job queue to job dto
+     * @param jobQueue
+     * @return SourceJobQueueDto
+     * */
+    private SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
+        SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
+        sourceJobQueueDto.setJobId(jobQueue.getJobId());
+        sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
+        if (jobQueue.getJobStatus().equals(JobStatus.Skip)) {
+            sourceJobQueueDto.setStartTime(jobQueue.getSkipTime());
+        } else {
+            sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
+        }
+        return sourceJobQueueDto;
     }
 
 }

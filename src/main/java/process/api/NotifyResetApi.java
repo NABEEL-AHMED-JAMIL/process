@@ -8,8 +8,15 @@ import org.springframework.web.bind.annotation.*;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.service.NotifyService;
+import process.socket.GlobalProperties;
+import process.socket.Message;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Api use to perform crud operation on dashboard
@@ -17,15 +24,41 @@ import process.util.exception.ExceptionUtil;
  */
 @RestController
 @CrossOrigin(origins = "*")
-@RequestMapping(value = "/notify.json")
 public class NotifyResetApi {
 
     private Logger logger = LoggerFactory.getLogger(NotifyResetApi.class);
 
     private final NotifyService notifyService;
+    private final GlobalProperties globalProperties;
 
-    public NotifyResetApi(NotifyService notifyService) {
+    public NotifyResetApi(NotifyService notifyService,
+        GlobalProperties globalProperties) {
         this.notifyService = notifyService;
+        this.globalProperties = globalProperties;
+    }
+
+    /**
+     * Process message for register the session
+     * @param message
+     * @param headerAccessor
+     * */
+    @MessageMapping("/register")
+    public void register(@Payload Message message,
+        SimpMessageHeaderAccessor headerAccessor) throws Exception {
+        logger.info("register sessionID" + message);
+        this.globalProperties.addTransactionAndSession(message.getSessionId(), message.getTransactionId());
+    }
+
+    /**
+     * Process message for unregister the session
+     * @param message
+     * @param headerAccessor
+     * */
+    @MessageMapping("/unregister")
+    public void unregister(@Payload Message message,
+        SimpMessageHeaderAccessor headerAccessor) throws Exception {
+        logger.info("unregister sessionID" + message);
+        this.globalProperties.removeTransactionAndSession(message.getSessionId());
     }
 
     // send email

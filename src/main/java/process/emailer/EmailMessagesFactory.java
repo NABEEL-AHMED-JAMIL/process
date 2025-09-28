@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 import process.model.dto.LookupDataDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
-import process.model.pojo.JobQueue;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import javax.mail.internet.MimeMessage;
@@ -28,14 +27,21 @@ public class EmailMessagesFactory {
     private Logger logger = LoggerFactory.getLogger(EmailMessagesFactory.class);
 
     private final String UTF8 = "utf-8";
+
     @Value("${spring.mail.username}")
     private String sender;
-    @Autowired
-    private JavaMailSender javaMailSender;
-    @Autowired
-    private VelocityManager velocityManager;
-    @Autowired
-    private LookupDataCacheService lookupDataCacheService;
+
+    private final JavaMailSender javaMailSender;
+    private final VelocityManager velocityManager;
+    private final LookupDataCacheService lookupDataCacheService;
+
+    public EmailMessagesFactory(JavaMailSender javaMailSender,
+        VelocityManager velocityManager,
+        LookupDataCacheService lookupDataCacheService) {
+        this.javaMailSender = javaMailSender;
+        this.velocityManager = velocityManager;
+        this.lookupDataCacheService = lookupDataCacheService;
+    }
 
     /**
      * method using to send the mail
@@ -105,22 +111,4 @@ public class EmailMessagesFactory {
             return "Error while Sending Mail";
         }
     }
-
-    /**
-     * method use convert job queue to job dto
-     * @param jobQueue
-     * @return SourceJobQueueDto
-     * */
-    public static SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
-        SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
-        sourceJobQueueDto.setJobId(jobQueue.getJobId());
-        sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
-        if (jobQueue.getJobStatus().equals(JobStatus.Skip)) {
-            sourceJobQueueDto.setStartTime(jobQueue.getSkipTime());
-        } else {
-            sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
-        }
-        return sourceJobQueueDto;
-    }
-
 }

@@ -19,9 +19,12 @@ public class NotificationService {
     @Value("${socket.transaction.id}")
     private String transactionId;
 
+    private final GlobalProperties globalProperties;
     private final SimpMessagingTemplate messagingTemplate;
 
-    public NotificationService(SimpMessagingTemplate messagingTemplate) {
+    public NotificationService(GlobalProperties globalProperties,
+        SimpMessagingTemplate messagingTemplate) {
+        this.globalProperties = globalProperties;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -31,9 +34,13 @@ public class NotificationService {
      */
     public void sendNotificationToSpecificUser(String message) {
         logger.info("Request sendNotificationToSpecificUser :- {}.", message);
-        String sendTo = sessionId+"-"+transactionId;
-        this.messagingTemplate.convertAndSendToUser(sendTo, "/reply", message);
-        logger.info("Session exist, Sending To :- {}.", sendTo);
+        if (this.globalProperties.isSessionActive(sessionId)) {
+            String sendTo = sessionId+"-"+transactionId;
+            this.messagingTemplate.convertAndSendToUser(sendTo, "/reply", message);
+            logger.info("Session exist, Sending To :- {}.", sendTo);
+        } else {
+            logger.warn("Cannot send, no active WebSocket session for: {}", sessionId);
+        }
     }
 
 }
