@@ -103,7 +103,7 @@ public class SourceTaskRestApi {
         @RequestParam(value = "endDate", required = false) String endDate,
         @RequestParam(value = "columnName", required = false) String columnName,
         @RequestParam(value = "order", required = false) String order,
-        @RequestBody(required = false) SearchTextDto searchTextDto) {
+        @RequestBody(required = false) SearchTextRequest searchTextDto) {
         try {
             return new ResponseEntity<>(this.sourceTaskService.listSourceTask(startDate, endDate, columnName,
                 order, PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
@@ -134,7 +134,7 @@ public class SourceTaskRestApi {
         @RequestParam(value = "endDate", required = false) String endDate,
         @RequestParam(value = "columnName", required = false) String columnName,
         @RequestParam(value = "order", required = false) String order,
-        @RequestBody(required = false) SearchTextDto searchTextDto) {
+        @RequestBody(required = false) SearchTextRequest searchTextDto) {
         try {
             return new ResponseEntity<>(this.sourceTaskService.fetchAllLinkJobsWithSourceTaskId(sourceTaskId, startDate, endDate,
                 columnName, order, PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
@@ -151,7 +151,7 @@ public class SourceTaskRestApi {
      * */
     @RequestMapping(value = "/fetchAllLinkSourceTaskWithSourceTaskTypeId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllLinkSourceTaskWithSourceTaskTypeId(
-        @RequestParam(value = "sourceTaskTypeId", required = false) Long sourceTaskTypeId) {
+            @RequestParam(value = "sourceTaskTypeId", required = false) Long sourceTaskTypeId) {
         try {
             return new ResponseEntity<>(this.sourceTaskService.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {

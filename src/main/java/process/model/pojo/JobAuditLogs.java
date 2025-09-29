@@ -8,6 +8,7 @@ import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
+
 /**
  * Detail for job-audit-logs
  * this class store the detail for job
@@ -35,9 +36,13 @@ public class JobAuditLogs {
     @GeneratedValue(generator = "jobAuditLogsSequenceGenerator")
     private Long jobAuditLogId;
 
-    @Column(name = "job_queue_id",
-        nullable = false)
-    private Long jobQueueId;
+    @ManyToOne
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
+
+    @ManyToOne
+    @JoinColumn(name = "job_queue_id", nullable = false)
+    private JobQueue jobQueue;
 
     @Column(name = "log_detail",
         nullable = false, length = 2500)
@@ -62,12 +67,12 @@ public class JobAuditLogs {
         this.jobAuditLogId = jobAuditLogId;
     }
 
-    public Long getJobQueueId() {
-        return jobQueueId;
+    public JobQueue getJobQueue() {
+        return jobQueue;
     }
 
-    public void setJobQueueId(Long jobQueueId) {
-        this.jobQueueId = jobQueueId;
+    public void setJobQueue(JobQueue jobQueue) {
+        this.jobQueue = jobQueue;
     }
 
     public String getLogsDetail() {

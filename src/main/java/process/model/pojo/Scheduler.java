@@ -67,16 +67,23 @@ public class Scheduler {
     @Column(name = "recurrence")
     private String recurrence;
 
-    // like:- email notification job, so other job ect.
-    @Column(name = "job_id",
-        nullable = false)
-    private Long jobId;
+    @Column(name = "recurrence_time")
+    private LocalDateTime recurrenceTime;
+
+    @Column(name = "time_zone_id", nullable = false)
+    private String timeZone;
+
+    @OneToOne
+    @MapsId
+    @JoinColumn(name = "job_id", nullable = false)
+    private SourceJob sourceJob;
+
+    @ManyToOne
+    @JoinColumn(name="app_user_id")
+    private AppUser appUser;
 
     @Column(name = "date_created")
     private Timestamp dateCreated;
-
-    @Column(name = "recurrence_time")
-    private LocalDateTime recurrenceTime;
 
     public Scheduler() {}
 
@@ -155,6 +162,38 @@ public class Scheduler {
 
     public void setRecurrenceTime(LocalDateTime recurrenceTime) {
         this.recurrenceTime = recurrenceTime;
+    }
+
+    public String getTimeZone() {
+        return timeZone;
+    }
+
+    public void setTimeZone(String timeZone) {
+        this.timeZone = timeZone;
+    }
+
+    public SourceJob getSourceJob() {
+        return sourceJob;
+    }
+
+    public void setSourceJob(SourceJob sourceJob) {
+        this.sourceJob = sourceJob;
+    }
+
+    public AppUser getAppUser() {
+        return appUser;
+    }
+
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
     @Override

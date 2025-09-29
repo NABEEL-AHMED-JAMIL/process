@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
@@ -39,6 +40,7 @@ public class SettingRestApi {
      * Api use to fetch the app setting
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(value = "/dynamicQueryResponse", method = RequestMethod.POST)
     public ResponseEntity<?> dynamicQueryResponse(
         @RequestBody ItemResponse itemResponse) {
@@ -178,18 +180,19 @@ public class SettingRestApi {
 
     /**
      * Api use to create the xml setting for source task
-     * @param xlmMakerRequest
+     * @param payload
      * @return ResponseEntity<?> xmlCreateChecker
      * */
+    @PreAuthorize("hasRole('MASTER_ADMIN') or hasRole('ADMIN')")
     @RequestMapping(path = "xmlCreateChecker",  method = RequestMethod.POST)
     public ResponseEntity<?> xmlCreateChecker(
         @RequestBody ConfigurationMakerRequest xlmMakerRequest) {
         try {
-            if(xlmMakerRequest.getXmlTagsInfo() != null) {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
-                    this.xmlOutTagInfoUtil.makeXml(xlmMakerRequest)), HttpStatus.OK);
+            if (payload.getXmlTagsInfo() != null) {
+                return new ResponseEntity<>(new AppResponse(ProcessUtil.SUCCESS,
+                    this.xmlOutTagInfoUtil.makeXml(payload)), HttpStatus.OK);
             } else {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Wrong Input"), HttpStatus.OK);
+                return new ResponseEntity<>(new AppResponse(ProcessUtil.ERROR, "Wrong Input"), HttpStatus.OK);
             }
         } catch (Exception ex) {
             logger.error("An error occurred while xmlCreateChecker ", ExceptionUtil.getRootCause(ex));

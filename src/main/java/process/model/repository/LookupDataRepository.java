@@ -1,9 +1,11 @@
 package process.model.repository;
 
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.LookupData;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * @author Nabeel Ahmed

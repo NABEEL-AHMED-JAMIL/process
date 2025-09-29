@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * @author Nabeel Ahmed
  */
 @Component
-public class BulkExcel {
+public class BulkExcel implements ExcelUtil {
 
     private Logger logger = LogManager.getLogger(BulkExcel.class);
 
@@ -23,6 +23,7 @@ public class BulkExcel {
     public XSSFWorkbook getWb() {
         return wb;
     }
+
     public void setWb(XSSFWorkbook wb) {
         this.wb = wb;
     }
@@ -30,6 +31,7 @@ public class BulkExcel {
     public XSSFSheet getSheet() {
         return sheet;
     }
+
     public void setSheet(XSSFSheet sheet) {
         this.sheet = sheet;
     }
@@ -37,14 +39,14 @@ public class BulkExcel {
     /**
      * This method use to fill the header in excel file
      * @param rowCount
-     * @param HEADER_FILED_BATCH_FILE
+     * @param HEADER_FIELD_BATCH_FILE
      * */
-    public void fillBulkHeader(Integer rowCount, String[] HEADER_FILED_BATCH_FILE) {
+    public void fillBulkHeader(Integer rowCount, String[] HEADER_FIELD_BATCH_FILE) {
         Row header = this.sheet.createRow(rowCount);
         CellStyle style = this.cellHeadingBackgroundColorStyle(IndexedColors.GREY_25_PERCENT.getIndex());
         int start = 0; int index = 0;
-        for (int i=start; i<HEADER_FILED_BATCH_FILE.length; i++) {
-            fillHeading(index, header, style, HEADER_FILED_BATCH_FILE[i]);
+        for (int i=start; i<HEADER_FIELD_BATCH_FILE.length; i++) {
+            fillHeading(index, header, style, HEADER_FIELD_BATCH_FILE[i]);
             index = index+1;
         }
     }
@@ -56,7 +58,7 @@ public class BulkExcel {
      * */
     public void fillBulkBody(List<String> data, Integer rowCount) {
         Row body = this.sheet.createRow(rowCount);
-        for(int i=0; i<data.size(); i++) {
+        for (int i=0; i<data.size(); i++) {
             this.fillCellValue(i, body, data.get(i));
         }
     }

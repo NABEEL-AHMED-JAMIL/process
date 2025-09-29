@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import process.model.enums.Status;
 import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,8 +32,7 @@ public class SourceTask {
     @GeneratedValue(generator = "taskDetailSequenceGenerator")
     private Long taskDetailId;
 
-    @Column(name = "task_name",
-        nullable = false)
+    @Column(name = "task_name", nullable = false)
     private String taskName;
 
     @Column(name = "task_status", nullable = false)
@@ -57,8 +55,8 @@ public class SourceTask {
     private String taskPayload;
 
     @ManyToOne
-    @JoinColumn(name = "source_task_type_id")
-    private SourceTaskType sourceTaskType;
+    @JoinColumn(name = "stt_id")
+    private STT stt;
 
     @JoinColumn(name = "payload_id")
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
@@ -82,53 +80,36 @@ public class SourceTask {
         this.taskName = taskName;
     }
 
-    public Status getTaskStatus() {
-        return taskStatus;
+    public Long getStatus() {
+        return status;
     }
 
-    public void setTaskStatus(Status taskStatus) {
-        this.taskStatus = taskStatus;
+    public void setStatus(Long status) {
+        this.status = status;
     }
 
-    public String getHomePageId() {
-        return homePageId;
+    public STT getStt() {
+        return stt;
     }
 
-    public void setHomePageId(String homePageId) {
-        this.homePageId = homePageId;
+    public void setStt(STT stt) {
+        this.stt = stt;
     }
 
-    public String getPipelineId() {
-        return pipelineId;
+    public AppUser getAppUser() {
+        return appUser;
     }
 
-    public void setPipelineId(String pipelineId) {
-        this.pipelineId = pipelineId;
+    public void setAppUser(AppUser appUser) {
+        this.appUser = appUser;
     }
 
-    public String getTaskPayload() {
-        return taskPayload;
+    public List<SourceTaskData> getSourceTaskData() {
+        return sourceTaskData;
     }
 
-    public void setTaskPayload(String taskPayload) {
-        this.taskPayload = taskPayload;
-    }
-
-    public SourceTaskType getSourceTaskType() {
-        return sourceTaskType;
-    }
-
-    public void setSourceTaskType(SourceTaskType sourceTaskType) {
-        this.sourceTaskType = sourceTaskType;
-    }
-
-    public List<SourceTaskPayload> getSourceTaskPayload() {
-        return sourceTaskPayload;
-    }
-
-    public void setSourceTaskPayload(List<SourceTaskPayload> sourceTaskPayload) {
-        this.sourceTaskPayload.clear();
-        this.sourceTaskPayload.addAll(sourceTaskPayload);
+    public void setSourceTaskData(List<SourceTaskData> sourceTaskData) {
+        this.sourceTaskData = sourceTaskData;
     }
 
     @Override

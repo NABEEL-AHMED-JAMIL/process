@@ -222,10 +222,10 @@ public class JobDetailValidation {
             if (!isNull(this.recurrence) && this.frequencyDetailByTime.get(this.frequency)
                 .stream().noneMatch(x -> x.equals(Integer.valueOf(this.recurrence)))) {
                 this.setErrorMsg(String.format("Recurrence not valid its should be %s at row %s.",
-                    this.frequencyDetailByTime.get(this.frequency), rowCounter));
+                        this.frequencyDetailByTime.get(this.frequency), rowCounter));
             }
             if (this.frequency.equals(Frequency.Mint.name()) || this.frequency.equals(Frequency.Hr.name())
-                || this.frequency.equals(Frequency.Daily.name())) {
+                    || this.frequency.equals(Frequency.Daily.name())) {
                 this.dateTimeValidation(false, false);
             } else if (this.frequency.equals(Frequency.Weekly.name())) {
                 this.dateTimeValidation(true, false);
@@ -238,8 +238,8 @@ public class JobDetailValidation {
     }
 
     /**
-     * Check the filed detail valid or not
-     * @param filed
+     * Check the field detail valid or not
+     * @param field
      * @return boolean true|false
      * */
     private static boolean isNull(String filed) {
