@@ -40,6 +40,7 @@ public class PagingResponse implements Serializable {
     public String getColumnName() {
         return columnName;
     }
+
     public void setColumnName(String columnName) {
         this.columnName = columnName;
     }
@@ -47,6 +48,7 @@ public class PagingResponse implements Serializable {
     public String getOrder() {
         return order;
     }
+
     public void setOrder(String order) {
         this.order = order;
     }
@@ -54,6 +56,7 @@ public class PagingResponse implements Serializable {
     public Long getTotalRecord() {
         return totalRecord;
     }
+
     public void setTotalRecord(Long totalRecord) {
         this.totalRecord = totalRecord;
     }
@@ -61,6 +64,7 @@ public class PagingResponse implements Serializable {
     public Long getPageSize() {
         return pageSize;
     }
+
     public void setPageSize(Long pageSize) {
         this.pageSize = pageSize;
     }
@@ -68,6 +72,7 @@ public class PagingResponse implements Serializable {
     public Long getCurrentPage() {
         return currentPage;
     }
+
     public void setCurrentPage(Long currentPage) {
         this.currentPage = currentPage;
     }

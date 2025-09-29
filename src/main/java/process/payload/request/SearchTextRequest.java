@@ -19,6 +19,7 @@ public class SearchTextRequest {
     public String getItemName() {
         return itemName;
     }
+
     public void setItemName(String itemName) {
         this.itemName = itemName;
     }
@@ -26,6 +27,7 @@ public class SearchTextRequest {
     public Object getItemValue() {
         return itemValue;
     }
+
     public void setItemValue(Object itemValue) {
         this.itemValue = itemValue;
     }

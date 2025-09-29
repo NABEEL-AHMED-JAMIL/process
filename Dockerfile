@@ -1,15 +1,20 @@
-# JDK Run time
-FROM openjdk:11
-# name of authors
-LABEL maintainer="Nabeel Ahmed <nabeel.amd93@gmail.com>"
-LABEL version="1.0"
-LABEL description="This is a docker image for a rest api for scheduler system."
-LABEL description="Github detil [https://github.com/NABEEL-AHMED-JAMIL/process]"
-# variable that can be use to store the info of project detail and its can be use in docker file
-ARG JAR_FILE=target/*.jar
-# copy all the detail from varaible to use the variable in the coker ${JAR_FILE}
-COPY ${JAR_FILE} process.jar
-# EXPOSE the port
+# Use a lightweight OpenJDK image
+FROM openjdk:8-jdk-alpine
+
+# Maintainer info
+LABEL maintainer="nabeel.amd93@gmail.com"
+
+# Expose port
 EXPOSE 9098
-# help to run the file
-ENTRYPOINT ["java","-jar","/process.jar"]
+
+# Add a volume for temp files (optional)
+VOLUME /tmp
+
+# Argument for the JAR file
+ARG JAR_FILE=target/process-1.0-0.jar
+
+# Copy the JAR into the container
+COPY ${JAR_FILE} app.jar
+
+# Run the JAR
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app.jar"]

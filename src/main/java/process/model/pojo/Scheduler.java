@@ -140,6 +140,22 @@ public class Scheduler {
         this.recurrence = recurrence;
     }
 
+    public Long getJobId() {
+        return jobId;
+    }
+
+    public void setJobId(Long jobId) {
+        this.jobId = jobId;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
+    }
+
     public LocalDateTime getRecurrenceTime() {
         return recurrenceTime;
     }

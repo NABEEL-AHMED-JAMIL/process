@@ -28,7 +28,6 @@ public class XmlOutTagInfoUtil {
     public Logger logger = LoggerFactory.getLogger(XmlOutTagInfoUtil.class);
 
     final String BLANK = "";
-    final String SPACE = "";
     final String UTF8 ="UTF-8";
     final String YES = "yes";
     final String NAME = "{http://xml.apache.org/xslt}indent-amount";
@@ -129,7 +128,7 @@ public class XmlOutTagInfoUtil {
         if (!ProcessUtil.isNull(tagValue)) {
             child.appendChild(xmlDoc.createTextNode(tagValue));
         } else {
-            child.appendChild(xmlDoc.createTextNode(SPACE));
+            child.appendChild(xmlDoc.createTextNode(BLANK));
         }
     }
 

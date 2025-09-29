@@ -5,7 +5,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
@@ -24,10 +23,6 @@ public class KafkaProducerConfig {
 
     public Logger logger = LogManager.getLogger(KafkaProducerConfig.class);
 
-    /**
-     * @Value("${tpd.data-analytics-topic}")
-     * private String dataAnalyticsTopic;
-     * */
     @Value("${tpd.test-topic}")
     private String testTopic;
 
@@ -37,8 +32,11 @@ public class KafkaProducerConfig {
     @Value("${tpd.scrapping-topic}")
     private String scrappingTopic;
 
-    @Autowired
-    private KafkaProperties kafkaProperties;
+    private final KafkaProperties kafkaProperties;
+
+    public KafkaProducerConfig(KafkaProperties kafkaProperties) {
+        this.kafkaProperties = kafkaProperties;
+    }
 
     @Bean
     public Map<String, Object> producerConfigs() {
@@ -62,17 +60,17 @@ public class KafkaProducerConfig {
 
     @Bean
     public NewTopic testTopic() {
-        return new NewTopic(this.testTopic, 2, (short) 1);
+        return new NewTopic(this.testTopic, 5, (short) 1);
     }
 
     @Bean
     public NewTopic trucksTopic() {
-        return new NewTopic(this.trucksTopic, 2, (short) 2);
+        return new NewTopic(this.trucksTopic, 3, (short) 1);
     }
 
     @Bean
     public NewTopic scrappingTopic() {
-        return new NewTopic(this.scrappingTopic, 2, (short) 1);
+        return new NewTopic(this.scrappingTopic, 3, (short) 1);
     }
 
 }

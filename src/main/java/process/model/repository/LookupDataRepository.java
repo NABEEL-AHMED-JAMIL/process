@@ -13,18 +13,16 @@ import java.util.Optional;
 @Repository
 public interface LookupDataRepository extends CrudRepository<LookupData, Long> {
 
-    public Optional<LookupData> findByLookupType(String lookupType);
+    /**
+     * Note :- Method use to get the LookupData by lookupType if present in db
+     * @param lookupType
+     * @return LookupData
+     * */
+    public LookupData findByLookupType(String lookupType);
 
-    public List<LookupData> findByParentLookupIsNull();
-
-    @Query(value = "select ld.*, au.app_user_id, au.username from lookup_data ld\n" +
-        "join app_users au on au.app_user_id  = ld.app_user_id  \n" +
-        "where au.username = ?1 and ld.parent_lookup_id  is null", nativeQuery = true)
-    public List<LookupData> fetchAllLookup(String username);
-
-    @Query(value = "select ld.*, au.app_user_id, au.username from lookup_data ld\n" +
-        "join app_users au on au.app_user_id  = ld.app_user_id  \n" +
-        "where ld.lookup_id = ?1 and au.username = ?2 ", nativeQuery = true)
-    public Optional<LookupData> findByParentLookupAndAppUserUsername(Long parentLookupId, String username);
-
+    /**
+     * Note :- Method use to get the LookupData list by lookup id null
+     * @return List<LookupData>
+     * */
+    public List<LookupData> findByParentLookupIdIsNull();
 }

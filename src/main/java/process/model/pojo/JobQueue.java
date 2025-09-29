@@ -3,9 +3,12 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.JobStatus;
+import process.util.LocalDateTimeAdapter;
+
 import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -68,7 +71,7 @@ public class JobQueue {
     @JoinColumn(name="app_user_id")
     private AppUser appUser;
 
-    @Column(name = "job_status_message")
+    @Column(name = "job_status_message", length = 2500)
     private String jobStatusMessage;
 
     @Column(name = "skip_manual")
@@ -131,20 +134,12 @@ public class JobQueue {
         this.jobStatus = jobStatus;
     }
 
-    public SourceJob getSourceJob() {
-        return sourceJob;
+    public Long getJobId() {
+        return jobId;
     }
 
-    public void setSourceJob(SourceJob sourceJob) {
-        this.sourceJob = sourceJob;
-    }
-
-    public AppUser getAppUser() {
-        return appUser;
-    }
-
-    public void setAppUser(AppUser appUser) {
-        this.appUser = appUser;
+    public void setJobId(Long jobId) {
+        this.jobId = jobId;
     }
 
     public String getJobStatusMessage() {
@@ -189,7 +184,10 @@ public class JobQueue {
 
     @Override
     public String toString() {
-        return new Gson().toJson(this);
+        Gson gson = new GsonBuilder()
+        .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
+        .create();
+        return gson.toJson(this);
     }
 
 }

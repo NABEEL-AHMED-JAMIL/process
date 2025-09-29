@@ -42,6 +42,7 @@ public class FileUploadRequest<T> {
     public MultipartFile getFile() {
         return file;
     }
+
     public void setFile(MultipartFile file) {
         this.file = file;
     }
@@ -49,6 +50,7 @@ public class FileUploadRequest<T> {
     public List<MultipartFile> getFiles() {
         return files;
     }
+
     public void setFiles(List<MultipartFile> files) {
         this.files = files;
     }
@@ -56,6 +58,7 @@ public class FileUploadRequest<T> {
     public T getData() {
         return data;
     }
+
     public void setData(T data) {
         this.data = data;
     }

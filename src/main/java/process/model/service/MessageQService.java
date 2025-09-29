@@ -1,0 +1,20 @@
+package process.model.service;
+
+import process.model.dto.MessageQSearchDto;
+import process.model.dto.QueueMessageStatusDto;
+import process.model.dto.ResponseDto;
+
+/**
+ * @author Nabeel Ahmed
+ */
+public interface MessageQService {
+
+    public ResponseDto fetchLogs(MessageQSearchDto messageQSearch);
+
+    public ResponseDto failJobLogs(Long jobQId);
+
+    public ResponseDto interruptJobLogs(Long jobQId);
+
+    public ResponseDto changeJobStatus(QueueMessageStatusDto queueMessageStatus);
+
+}

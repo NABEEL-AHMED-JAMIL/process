@@ -57,9 +57,10 @@ public class SourceJob {
     private SourceTask sourceTask;
 
     // status of job (active or disable or delete)
-    @Column(name = "status",
-        nullable = false)
-    private Long status;
+    @Column(name = "job_status",
+         nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Status jobStatus;
 
     // status :- blank,queue,running,fail,complete
     @Column(name = "job_running_status")
@@ -71,6 +72,7 @@ public class SourceJob {
          columnDefinition = "TIMESTAMP")
     private LocalDateTime lastJobRun;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "execution",
         nullable = false)
     @Enumerated(EnumType.ORDINAL)
@@ -79,6 +81,10 @@ public class SourceJob {
     @Column(name = "priority",
         nullable = false)
     private Integer priority;
+
+    @Column(name = "date_created",
+         nullable = false)
+    private Timestamp dateCreated;
 
     @Column(name = "complete_job")
     private boolean completeJob;

@@ -1,7 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
@@ -11,27 +11,10 @@
         <relativePath/>
     </parent>
 
-    <licenses>
-        <license>
-            <name>Barco-Process</name>
-            <url>https://www.barco.com/</url>
-            <distribution>repo</distribution>
-        </license>
-    </licenses>
-
-    <developers>
-        <developer>
-            <name>NABEEL AHMED JAMIL</name>
-            <email>ahmjamil@barco.ae</email>
-            <organization>Barco</organization>
-            <organizationUrl>https://www.barco.ae/en/index.jsp</organizationUrl>
-        </developer>
-    </developers>
-
     <groupId>sys.scheduler</groupId>
     <artifactId>process</artifactId>
-    <version>1.0-SNAPSHOT</version>
-    <description>This is bulk engine to run the code.</description>
+    <version>1.0-0</version>
+    <description>This is bulk engine to run the kafka source job.</description>
 
     <properties>
         <java.version>11</java.version>
@@ -41,6 +24,7 @@
 
     <dependencies>
 
+        <!-- Spring Boot Starters (versions managed by parent) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -65,7 +49,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
-            <version>2.1.8.RELEASE</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
         <dependency>
@@ -73,6 +61,19 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Monitoring -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Swagger -->
         <dependency>
             <groupId>io.springfox</groupId>
             <artifactId>springfox-swagger2</artifactId>
@@ -91,12 +92,14 @@
             <version>${swagger.version}</version>
         </dependency>
 
+        <!-- Kafka -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
-            <version>2.5.2.RELEASE</version>
+            <version>2.5.12.RELEASE</version>
         </dependency>
 
+        <!-- Database -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -104,30 +107,47 @@
         </dependency>
 
         <dependency>
+            <groupId>org.liquibase</groupId>
+            <artifactId>liquibase-core</artifactId>
+        </dependency>
+
+        <!-- ShedLock -->
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-spring</artifactId>
+            <version>4.9.3</version>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-jdbc-template</artifactId>
+            <version>4.7.1</version>
+        </dependency>
+
+        <!-- Apache POI -->
+        <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
             <version>3.15</version>
         </dependency>
-
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
             <version>3.15</version>
-            <type>jar</type>
         </dependency>
 
+        <!-- Velocity -->
         <dependency>
             <groupId>org.apache.velocity</groupId>
             <artifactId>velocity</artifactId>
             <version>1.7</version>
         </dependency>
-
         <dependency>
             <groupId>org.apache.velocity</groupId>
             <artifactId>velocity-tools</artifactId>
             <version>2.0</version>
         </dependency>
 
+        <!-- Utils -->
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>

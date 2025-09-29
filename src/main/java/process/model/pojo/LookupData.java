@@ -95,6 +95,14 @@ public class LookupData {
         this.lookupValue = lookupValue;
     }
 
+    public String getLookupType() {
+        return lookupType;
+    }
+
+    public void setLookupType(String lookupType) {
+        this.lookupType = lookupType;
+    }
+
     public String getDescription() {
         return description;
     }

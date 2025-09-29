@@ -1,102 +1,182 @@
-# ELT Schedule Management System
+# Scheduler Engine
 
-## Introduction
+### Overview
+This project is a **scheduler engine** designed to manage and execute source jobs efficiently.  
+It leverages **Apache Kafka** for real-time stream processing, ensuring scalability, fault tolerance, and high throughput in job execution workflows.
+```
+Process have 5 type of scheduler
+1. Mint (scheduler run mint ex => every 5 mint)
+2. Hr (scheduler run hr ex => every 1 hr)
+3. Daily (scheduler run daily base)
+4. Weekly (scheduler run base weekly)
+5. Monthly (scheduler run base monthly)
+```
 
-The ELT Schedule Management System is designed to streamline and automate the management and execution of ETL (Extract, Transform, Load) jobs. These jobs are essential in data processing pipelines, where data is extracted from various sources, transformed into the required format, and loaded into a target database or data warehouse. The system enhances the efficiency, reliability, and manageability of these processes.
-
-## Features
-
-- **Automate ETL Processes**: Schedule and execute ETL jobs automatically to ensure consistent data updates.
-- **Efficient Job Management**: Create, configure, and manage ETL jobs and tasks, ensuring organized workflows.
-- **Kafka Integration**: Utilize Kafka for reliable task communication and coordination.
-- **Flexible Execution**: Support both manual and automatic job execution.
-- **Job Monitoring and Logging**: Maintain detailed logs for monitoring, troubleshooting, and ensuring data integrity.
-- **User Control**: Run, skip, or cancel jobs as needed.
-- **Scalability and Reliability**: Handle large data volumes and concurrent users with high availability.
-- **Security and Compliance**: Enforce user authentication and role-based access control.
-- **Enhanced Data Quality**: Ensure regular, reliable data updates.
-- **Simplify Complex Workflows**: User-friendly interface for configuring and linking tasks.
-
-## System Overview
+### Features
+- **Job Scheduling** – Handles periodic, delayed, and priority-based job execution.
+- **Real-Time Stream Processing** – Uses Kafka producers and consumers to process jobs as messages.
+- **Scalability** – Distributed architecture for handling large volumes of jobs concurrently.
+- **Fault Tolerance** – Kafka ensures message durability and recovery in case of failures.
+- **Prioritized Task Execution** – Tasks can be queued and executed based on defined priorities.
+- **Thread Pool Execution** – Uses `ThreadPoolExecutor` with a `PriorityBlockingQueue` for efficient job handling.
 
 ### Architecture
+1. **Producer** – Sends job/task messages into Kafka topics.
+2. **Scheduler Engine** – Pulls tasks, applies scheduling logic, and enqueues them for execution.
+3. **Consumer** – Reads processed results or error events from Kafka.
+4. **Executor** – Uses a thread pool to run prioritized tasks concurrently.
 
-1. **Frontend (Angular)**: User interface for job management and monitoring.
-2. **Backend (Java, Spring Boot)**: Business logic, task management with Kafka, database interactions.
-3. **Database (PostgreSQL)**: Storage for users, jobs, tasks, logs, schedules.
+### Tech Stack
+- **Java / Spring Boot** – Core backend engine
+- **Apache Kafka** – Real-time messaging and stream processing
+- **PostgreSQL** – (Optional) Metadata and job tracking persistence
 
-### Key Components
+### Use Cases
+- ETL job scheduling and execution
+- Data pipeline orchestration
+- Real-time processing of streaming tasks
+- Event-driven workflows
 
-- **User Interface**: Dashboard, Job Management, Task Configuration, Logs.
-- **Job Scheduler**: Manual and automatic job execution.
-- **Task Manager**: Task configuration and linking using Kafka.
-- **Job Execution and Monitoring**: Real-time job monitoring, detailed logging.
-- **User Management**: Role-based access control, user profiles.
+### Running the Project
+```bash
+# Clone repository
+git clone https://github.com/NABEEL-AHMED-JAMIL/process/tree/split-mono-to-microservice
 
-### Functionalities
+# Navigate into project
+cd process
 
-- Create and manage ETL jobs.
-- Configure source tasks with Kafka.
-- Schedule jobs for automatic or manual execution.
-- Monitor jobs and maintain logs.
-- User control to run, skip, or cancel jobs.
+# Build project
+mvn clean install
 
-## System Benefits
+# Run application
+mvn spring-boot:run
+```
 
-- **Automation**: Reduces manual intervention by scheduling and executing ETL jobs automatically.
-- **Efficiency**: Streamlines job creation, configuration, and management.
-- **Integration**: Utilizes Kafka for task communication and PostgreSQL for data storage.
-- **Flexibility**: Supports both manual and automatic job execution.
-- **Monitoring**: Provides real-time job monitoring and detailed logging.
-- **User Control**: Allows users to run, skip, or cancel jobs.
-- **Scalability**: Designed to handle large data volumes and multiple concurrent users.
-- **Reliability**: Ensures high availability with minimal downtime.
-- **Security**: Enforces encrypted data and role-based access.
-- **Maintainability**: Features modular code and comprehensive documentation.
+### ETL WorkFlow diagram
+Below detail show the existing workflow of process.
 
-## Motivation
+#### 1. Old ETL Workflow diagram
+![alt text](ext-detail/old-etl.png)
+#### 2. New ETL Workflow diagram
+![alt text](ext-detail/new-etl.png)
 
-- **Efficiency**: Automates and streamlines ETL workflows.
-- **Reliability**: Ensures consistent, error-free data processing.
-- **Real-Time Monitoring**: Immediate oversight and detailed logging.
-- **Scalability**: Handles large data volumes and numerous concurrent users.
-- **Flexibility**: Offers manual and automatic job execution.
-- **High Availability**: Designed for 99.9% uptime.
-- **Security**: Implements encrypted data and role-based access control.
-- **User Control**: Empowers users to manage job execution.
-- **Integration**: Leverages Kafka and PostgreSQL.
-- **Operational Efficiency**: Enhances overall data integrity and efficiency.
 
-## Problem Statement
+## 2 Helping Query for view and run this project
+```
+Note :- Before run this project execute the below script.
+INSERT INTO lookup_data VALUES
+('1001','2021-03-31 22:09:43.244','This Scheduler use for send the sourceJob into the queue','2021-04-01T00:16:34.567','SCHEDULER_LAST_RUN_TIME'),
+('1002','2021-03-31 23:06:48.744','This Queue fetch size use to fetch the limit of data from db','25','QUEUE_FETCH_LIMIT');
 
-- **Manual ETL Processes**: Significant manual intervention is required, leading to inefficiencies and errors.
-- **Lack of Automation**: Limited automation capabilities hinder consistent and reliable ETL job execution.
-- **Poor Monitoring and Logging**: Difficult to track job status and troubleshoot issues.
-- **Scalability Issues**: Struggles to handle increasing data volumes and concurrent users.
-- **Inflexibility**: Difficulty adapting ETL schedules and execution methods.
-- **Inadequate Integration**: Challenges in integrating task management with Kafka.
-- **Security Concerns**: Risk of data breaches and unauthorized access.
+INSERT INTO source_task_type (source_task_type_id, description, queue_topic_partition, service_name)
+VALUES ('1000', '[consumer test]', 'topic=test-topic&partitions=[*]', 'Test');
 
-## Objectives
+```
 
-- **Automation**: Implement automated scheduling and execution of ETL jobs.
-- **Efficiency**: Streamline ETL workflows.
-- **Monitoring and Logging**: Enhance monitoring and logging capabilities.
-- **Scalability**: Handle increasing data volumes and concurrent users.
-- **Flexibility**: Allow flexible scheduling and execution options.
-- **Integration**: Integrate with Kafka.
-- **Security**: Implement stringent security measures.
-- **User Control**: Provide granular control over job execution.
+## Process Endpoint
+List of endpoint with detail of endpoint
+1. Endpoint use download batch file <br>
+   http://localhost:9098/api/v1/bulk.json/downloadBatchSchedulerTemplateFile
+2. Endpoint use upload batch file <br>
+   http://localhost:9098/api/v1/bulk.json/uploadBatchSchedulerFile
+3. Below image show the kafka structure which implement in the project.
+To run the kafka use the below cmd
+   1. Start Apache Zookeeper.<br>
+      .\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties (for window) <br>
+      ./zookeeper-server-start.sh ../config/zookeeper.properties
+   2. Start the Kafka server.<br>
+      .\bin\windows\kafka-server-start.bat .\config\server.properties (for window) <br>
+      .\bin\windows\kafka-server-start.bat .\config\server.properties
 
-## Project Scope
+To start the Kafka server.
+   1. To create the cluster for below detail download and install the 'Kafka Offset Explorer'.
+   ![alt text](ext-detail/Topic-Detail.png)
 
-- Develop a Scheduler Management System for ETL, integrating with Kafka and PostgreSQL.
-- Implement job creation, task configuration, scheduling, monitoring, and logging functionalities.
-- Ensure automation of ETL processes.
-- Focus on scalability and security measures.
-- Aim to streamline ETL workflows and maintain data integrity.
+### Process DB-UML
+Below image show the detail for database detail for process. <br>
+![alt text](ext-detail/new-dbdesing.png)
 
-## Assumptions and Dependencies
+### Monitoring app [Grafana and Paragraph]
+Spring Boot Actuator is enabled in this project to provide production-ready features such as monitoring, health checks, metrics, and system information.
+It exposes useful endpoints that allow developers and operators to observe the state of the application, debug issues, and integrate with monitoring tools like Prometheus and Grafana.
+The exposed endpoints include application health, metrics, configuration properties, environment details, loggers, Liquibase migration status, scheduled tasks, and request mappings.
+These endpoints make it easier to monitor application behavior in real-time and ensure smooth operation in production.
+```
+{
+  "_links": {
+    "self": {
+      "href": "http://localhost:9098/api/v1/actuator",
+      "templated": false
+    },
+    "beans": {
+      "href": "http://localhost:9098/api/v1/actuator/beans",
+      "templated": false
+    },
+    "caches-cache": {
+      "href": "http://localhost:9098/api/v1/actuator/caches/{cache}",
+      "templated": true
+    },
+    "caches": {
+      "href": "http://localhost:9098/api/v1/actuator/caches",
+      "templated": false
+    },
+    "health": {
+      "href": "http://localhost:9098/api/v1/actuator/health",
+      "templated": false
+    },
+    "info": {
+      "href": "http://localhost:9098/api/v1/actuator/info",
+      "templated": false
+    },
+    "conditions": {
+      "href": "http://localhost:9098/api/v1/actuator/conditions",
+      "templated": false
+    },
+    "shutdown": {
+      "href": "http://localhost:9098/api/v1/actuator/shutdown",
+      "templated": false
+    },
+    "configprops": {
+      "href": "http://localhost:9098/api/v1/actuator/configprops",
+      "templated": false
+    },
+    "env": {
+      "href": "http://localhost:9098/api/v1/actuator/env",
+      "templated": false
+    },
+    "liquibase": {
+      "href": "http://localhost:9098/api/v1/actuator/liquibase",
+      "templated": false
+    },
+    "loggers": {
+      "href": "http://localhost:9098/api/v1/actuator/loggers",
+      "templated": false
+    },
+    "heapdump": {
+      "href": "http://localhost:9098/api/v1/actuator/heapdump",
+      "templated": false
+    },
+    "threaddump": {
+      "href": "http://localhost:9098/api/v1/actuator/threaddump",
+      "templated": false
+    },
+    "prometheus": {
+      "href": "http://localhost:9098/api/v1/actuator/prometheus",
+      "templated": false
+    },
+    "metrics": {
+      "href": "http://localhost:9098/api/v1/actuator/metrics",
+      "templated": false
+    },
+    "scheduledtasks": {
+      "href": "http://localhost:9098/api/v1/actuator/scheduledtasks",
+      "templated": false
+    },
+    "mappings": {
+      "href": "http://localhost:9098/api/v1/actuator/mappings",
+      "templated": false
+    }
+  }
+}
+```
 
-- Users have access to a Kafka cluster and PostgreSQL database.
-- The system will be deployed in a secure network environment.

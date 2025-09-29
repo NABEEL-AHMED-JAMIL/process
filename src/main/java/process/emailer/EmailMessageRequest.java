@@ -27,6 +27,7 @@ public class EmailMessageRequest implements Serializable {
     public String getFromEmail() {
         return fromEmail;
     }
+
     public void setFromEmail(String fromEmail) {
         this.fromEmail = fromEmail;
     }
@@ -34,6 +35,7 @@ public class EmailMessageRequest implements Serializable {
     public String getRecipients() {
         return recipients;
     }
+
     public void setRecipients(String recipients) {
         this.recipients = recipients;
     }
@@ -41,6 +43,7 @@ public class EmailMessageRequest implements Serializable {
     public List<String> getRecipientsMulti() {
         return recipientsMulti;
     }
+
     public void setRecipientsMulti(List<String> recipientsMulti) {
         this.recipientsMulti = recipientsMulti;
     }
@@ -48,6 +51,7 @@ public class EmailMessageRequest implements Serializable {
     public String getSubject() {
         return subject;
     }
+
     public void setSubject(String subject) {
         this.subject = subject;
     }
@@ -55,6 +59,7 @@ public class EmailMessageRequest implements Serializable {
     public Map<String, Object> getBodyMap() {
         return bodyMap;
     }
+
     public void setBodyMap(Map<String, Object> bodyMap) {
         this.bodyMap = bodyMap;
     }
@@ -62,6 +67,7 @@ public class EmailMessageRequest implements Serializable {
     public TemplateType getEmailTemplateName() {
         return emailTemplateName;
     }
+
     public void setEmailTemplateName(TemplateType emailTemplateName) {
         this.emailTemplateName = emailTemplateName;
     }

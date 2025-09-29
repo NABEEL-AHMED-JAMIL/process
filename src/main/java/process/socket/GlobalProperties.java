@@ -33,12 +33,16 @@ public class GlobalProperties {
     }
 
     /**
-     * Method use to get the sessin by trasction id
+     * Method use to get the session by transaction id
      * @param transactionId
      * @return session
      * */
     public String getSessionId(String transactionId) {
         return this.transactionSessionMap.get(transactionId);
+    }
+
+    public boolean isSessionActive(String sessionId) {
+        return this.sessionTransactionMap.containsKey(sessionId);
     }
 
 }

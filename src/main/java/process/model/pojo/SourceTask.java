@@ -35,19 +35,32 @@ public class SourceTask {
     @Column(name = "task_name", nullable = false)
     private String taskName;
 
-    @Column(name = "status",nullable = false)
-    private Long status;
+    @Column(name = "task_status", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Status taskStatus;
+
+    @Column(name = "home_page_id")
+    private String homePageId;
+
+    /**
+     * pipeline id use to move the data to the
+     * right path if kafka topic using for multiple pipeline
+     * */
+    @Column(name = "pipeline_id")
+    private String pipelineId;
+
+    // save lob data for job detail
+    @Column(name = "task_payload",
+        columnDefinition = "text")
+    private String taskPayload;
 
     @ManyToOne
     @JoinColumn(name = "stt_id")
     private STT stt;
 
-    @ManyToOne
-    @JoinColumn(name="app_user_id")
-    private AppUser appUser;
-
-    @OneToMany(mappedBy = "sourceTask")
-    private List<SourceTaskData> sourceTaskData = new ArrayList<>();
+    @JoinColumn(name = "payload_id")
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SourceTaskPayload> sourceTaskPayload = new ArrayList<>();
 
     public SourceTask() {}
 

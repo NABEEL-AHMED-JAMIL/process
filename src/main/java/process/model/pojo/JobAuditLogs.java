@@ -45,7 +45,7 @@ public class JobAuditLogs {
     private JobQueue jobQueue;
 
     @Column(name = "log_detail",
-        nullable = false)
+        nullable = false, length = 2500)
     private String logsDetail;
 
     @Column(name = "date_created",
@@ -61,14 +61,6 @@ public class JobAuditLogs {
 
     public Long getJobAuditLogId() {
         return jobAuditLogId;
-    }
-
-    public AppUser getAppUser() {
-        return appUser;
-    }
-
-    public void setAppUser(AppUser appUser) {
-        this.appUser = appUser;
     }
 
     public void setJobAuditLogId(Long jobAuditLogId) {

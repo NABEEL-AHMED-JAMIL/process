@@ -20,9 +20,9 @@ public class PagingUtil {
     private static final Long DEFAULT_MAX_NO_OF_ROWS = 10l;
 
     public static Object convertEntityToPagingDTO(Long totalCount, Pageable page) {
-        PagingRequest pdto = new PagingRequest();
-        pdto.setPageSize(new Long(page.getPageSize()));
-        pdto.setCurrentPage(new Long(page.getPageNumber()+1));
+        PagingDto pdto = new PagingDto();
+        pdto.setPageSize(Long.valueOf(page.getPageSize()));
+        pdto.setCurrentPage(Long.valueOf(page.getPageNumber() + 1));
         pdto.setTotalRecord(totalCount);
         return pdto;
     }
