@@ -3,8 +3,10 @@ package process.emailer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import process.model.service.impl.LookupDataCacheService;
 import org.springframework.stereotype.Component;
 import process.model.dto.LookupDataDto;
 import process.model.dto.SourceJobQueueDto;
@@ -49,22 +51,28 @@ public class EmailMessagesFactory {
      * */
     public String sendSourceJobEmail(SourceJobQueueDto jobQueue, JobStatus jobStatus) {
         try {
-            LookupDataResponse senderEmail = this.lookupDataCacheService
-                .getParentLookupById(LookupDetailUtil.EMAIL_SENDER);
+            LookupDataDto lookupDataDto = this.lookupDataCacheService.getParentLookupById(ProcessUtil.EMAIL_RECEIVER);
             Map<String, Object> metaData = new HashMap<>();
-            metaData.put("username", signUpRequest.getUsername());
-            metaData.put("password", signUpRequest.getPassword());
-            metaData.put("role", signUpRequest.getRole());
-            metaData.put("timeZone", signUpRequest.getTimeZone());
-            // email object
-            EmailMessageRequest emailMessageRequest = new EmailMessageRequest();
-            emailMessageRequest.setFromEmail(senderEmail.getLookupValue());
-            emailMessageRequest.setRecipients(signUpRequest.getEmail());
-            emailMessageRequest.setSubject("User Registered");
-            emailMessageRequest.setEmailTemplateName(TemplateType.REGISTER_USER);
-            emailMessageRequest.setBodyMap(metaData);
-            logger.info("Email Send Status :- " + this.sendSimpleMail(emailMessageRequest));
-            return true;
+            metaData.put("job_id", jobQueue.getJobId());
+            metaData.put("event_id", jobQueue.getJobQueueId());
+            metaData.put("time_slot", jobQueue.getStartTime());
+            EmailMessageDto emailMessageDto = new EmailMessageDto();
+            emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
+            if (jobStatus.equals(JobStatus.Skip)) {
+                metaData.put("status", JobStatus.Skip);
+                emailMessageDto.setSubject("Source Job Skip");
+                emailMessageDto.setEmailTemplateName(TemplateType.SKIP_JOB);
+            } else if (jobStatus.equals(JobStatus.Completed)) {
+                metaData.put("status", JobStatus.Completed);
+                emailMessageDto.setSubject("Source Job Completed");
+                emailMessageDto.setEmailTemplateName(TemplateType.COMPLETE_JOB);
+            } else if (jobStatus.equals(JobStatus.Failed)) {
+                metaData.put("status", JobStatus.Failed);
+                emailMessageDto.setSubject("Source Job Failed");
+                emailMessageDto.setEmailTemplateName(TemplateType.FAIL_JOB);
+            }
+            emailMessageDto.setBodyMap(metaData);
+            return this.sendSimpleMail(emailMessageDto);
         } catch (Exception ex) {
             logger.error("Exception :- : {}.", ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
@@ -80,8 +88,8 @@ public class EmailMessagesFactory {
         try {
             MimeMessage mailMessage = this.javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mailMessage, UTF8);
-            helper.setFrom(emailContent.getFromEmail());
-            if (!isNull(emailContent.getRecipients())) {
+            helper.setFrom(sender);
+            if(!isNull(emailContent.getRecipients())) {
                 helper.setTo(emailContent.getRecipients());
                 if (emailContent.getRecipientsMulti() != null && !emailContent.getRecipientsMulti().isEmpty()) {
                     // * * * * * * * * *Send cc's* * * * * * * * *

@@ -62,14 +62,9 @@ public class JobQueue {
     @Enumerated(EnumType.STRING)
     private JobStatus jobStatus;
 
-    @ManyToOne
-    @JoinColumn(name = "job_id",
+    @Column(name = "job_id",
         nullable = false)
-    private SourceJob sourceJob;
-
-    @ManyToOne
-    @JoinColumn(name="app_user_id")
-    private AppUser appUser;
+    private Long jobId;
 
     @Column(name = "job_status_message", length = 2500)
     private String jobStatusMessage;

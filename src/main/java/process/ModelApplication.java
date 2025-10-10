@@ -9,6 +9,7 @@ import javax.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import process.model.service.impl.TransactionServiceImpl;
 
 /**
  * @author Nabeel Ahmed
@@ -17,6 +18,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class ModelApplication {
 
     private Logger logger = LoggerFactory.getLogger(ModelApplication.class);
+
+    @Autowired
+    private TransactionServiceImpl transactionService;
 
     /**
      * Method run the application
