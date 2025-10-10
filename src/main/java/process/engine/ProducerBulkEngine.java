@@ -1,7 +1,11 @@
 package process.engine;
 
+import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 import process.emailer.EmailMessagesFactory;
 import process.model.dto.SourceJobQueueDto;

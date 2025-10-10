@@ -45,4 +45,9 @@ public class ProcessCron {
         logger.info("*************************End-RunJob*********************************");
     }
 
+    @Override
+    public String toString() {
+        return new Gson().toJson(this);
+    }
+
 }

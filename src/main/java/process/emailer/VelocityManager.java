@@ -26,8 +26,6 @@ public class VelocityManager {
     /* now render the template into a StringWriter */
     private StringWriter writer;
 
-    public VelocityManager() { }
-
     @PostConstruct
     public void init() {
         logger.info("+================Velocity-Start====================+");
@@ -38,8 +36,9 @@ public class VelocityManager {
         logger.info("+================Velocity-End====================+");
     }
 
-    public String getResponseMessage(TemplateType templateType,
-        Map<String, Object> object) {
+    public VelocityManager() { }
+
+    public String getResponseMessage(TemplateType templateType, Map<String, Object> object) {
         String responseMessage;
         this.setWriter(new StringWriter());
         this.setContext(new VelocityContext());

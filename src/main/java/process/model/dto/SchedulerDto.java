@@ -1,89 +1,31 @@
-package process.model.pojo;
+package process.model.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import org.hibernate.annotations.GenericGenerator;
-import org.hibernate.annotations.Parameter;
-import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
- * Detail for scheduler
- * this class store the detail for scheduler
- * like
- * frequency => mint,hr,daily,weekly,monthly
- * date => start date to end date
- * timezone => user can set zone according the diff time zone
- * note :- end date optional if end date not define then
- * its run recurrence according to the frequency
- * */
-/**
  * @author Nabeel Ahmed
  */
-@Entity
-@Table(name = "scheduler")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class Scheduler {
+public class SchedulerDto {
 
-    @GenericGenerator(
-        name = "schedulerSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "scheduler_source_Seq"),
-            @Parameter(name = "initial_value", value = "1001"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
-    @Id
-    @Column(name = "scheduler_id")
-    @GeneratedValue(generator = "schedulerSequenceGenerator")
     private Long schedulerId;
-
-    @Column(name = "start_date",
-        nullable = false,
-        columnDefinition = "DATE")
     private LocalDate startDate;
-
-    @Column(name = "end_date",
-        columnDefinition = "DATE")
     private LocalDate endDate;
-
-    @Column(name = "start_time",
-        nullable = false,
-        columnDefinition = "TIME")
     private LocalTime startTime;
-
-    // mint,hr,daily,weekly,monthly
-    @Column(name = "frequency",
-        nullable = false)
     private String frequency;
-
-    // mint, hr entry
-    @Column(name = "recurrence")
     private String recurrence;
-
-    // like:- email notification job, so other job ect.
-    @Column(name = "job_id",
-        nullable = false)
     private Long jobId;
-
-    @Column(name = "date_created")
     private Timestamp dateCreated;
-
-    @Column(name = "recurrence_time")
     private LocalDateTime recurrenceTime;
 
-    public Scheduler() {}
-
-    @PrePersist
-    protected void onCreate() {
-        this.dateCreated = new Timestamp(System.currentTimeMillis());
-    }
+    public SchedulerDto() {}
 
     public Long getSchedulerId() {
         return schedulerId;
@@ -161,5 +103,4 @@ public class Scheduler {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 }

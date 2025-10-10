@@ -3,8 +3,7 @@ package process.util;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import process.payload.request.PagingRequest;
-
+import process.model.dto.PagingDto;
 import java.util.ArrayList;
 import java.util.List;
 

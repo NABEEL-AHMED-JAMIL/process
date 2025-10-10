@@ -7,6 +7,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
+import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -64,7 +65,7 @@ public class SourceJob {
 
     // status :- blank,queue,running,fail,complete
     @Column(name = "job_running_status")
-    @Enumerated(EnumType.ORDINAL)
+    @Enumerated(EnumType.STRING)
     private JobStatus jobRunningStatus;
 
     // describe the last job run
@@ -75,7 +76,6 @@ public class SourceJob {
     @Enumerated(EnumType.STRING)
     @Column(name = "execution",
         nullable = false)
-    @Enumerated(EnumType.ORDINAL)
     private Execution execution;
 
     @Column(name = "priority",
@@ -94,19 +94,6 @@ public class SourceJob {
 
     @Column(name = "skip_job")
     private boolean skipJob;
-
-    @OneToOne(mappedBy = "sourceJob",
-        cascade = CascadeType.ALL)
-    @PrimaryKeyJoinColumn
-    private Scheduler scheduler;
-
-    @ManyToOne
-    @JoinColumn(name="app_user_id")
-    private AppUser appUser;
-
-    @Column(name = "date_created",
-            nullable = false)
-    private Timestamp dateCreated;
 
     public SourceJob() {}
 
@@ -131,20 +118,20 @@ public class SourceJob {
         this.jobName = jobName;
     }
 
-    public SourceTask getSourceTask() {
+    public SourceTask getTaskDetail() {
         return sourceTask;
     }
 
-    public void setSourceTask(SourceTask sourceTask) {
+    public void setTaskDetail(SourceTask sourceTask) {
         this.sourceTask = sourceTask;
     }
 
-    public Long getStatus() {
-        return status;
+    public Status getJobStatus() {
+        return jobStatus;
     }
 
-    public void setStatus(Long status) {
-        this.status = status;
+    public void setJobStatus(Status jobStatus) {
+        this.jobStatus = jobStatus;
     }
 
     public JobStatus getJobRunningStatus() {
@@ -179,6 +166,14 @@ public class SourceJob {
         this.priority = priority;
     }
 
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
+    }
+
     public boolean isCompleteJob() {
         return completeJob;
     }
@@ -201,30 +196,6 @@ public class SourceJob {
 
     public void setSkipJob(boolean skipJob) {
         this.skipJob = skipJob;
-    }
-
-    public Scheduler getScheduler() {
-        return scheduler;
-    }
-
-    public void setScheduler(Scheduler scheduler) {
-        this.scheduler = scheduler;
-    }
-
-    public AppUser getAppUser() {
-        return appUser;
-    }
-
-    public void setAppUser(AppUser appUser) {
-        this.appUser = appUser;
-    }
-
-    public Timestamp getDateCreated() {
-        return dateCreated;
-    }
-
-    public void setDateCreated(Timestamp dateCreated) {
-        this.dateCreated = dateCreated;
     }
 
     @Override
