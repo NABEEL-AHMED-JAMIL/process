@@ -1,9 +1,26 @@
 databaseChangeLog:
   - changeSet:
-      id: 1
+      id: add-task-type-status-column-v3
       author: nabeel.amd93
-      comment: Create a shed
+      preConditions:
+        - not:
+            - columnExists:
+                tableName: source_task_type
+                columnName: task_type_status
+      changes:
+        - addColumn:
+            tableName: source_task_type
+            columns:
+              - column:
+                  name: task_type_status
+                  type: varchar(20)
+                  defaultValue: 'active'
+
+  - changeSet:
+      id: 2
+      author: nabeel.amd93
+      comment: Insert query for source task type
       changes:
         - sqlFile:
-            path: ../changelog-sets/V3.0-init/V3__insert_lookup_setting.sql
+            path: ../changelog-sets/V3.0-init/V3__insert_source_task_type.sql
             relativeToChangelogFile: true
