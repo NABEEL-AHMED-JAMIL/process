@@ -1,4 +1,8 @@
 
+# Ignore build output
+/target/
+
 logs/process.log
-.idea/misc.xml
-.idea/misc.xml
+
+# IDE files
+.idea/
