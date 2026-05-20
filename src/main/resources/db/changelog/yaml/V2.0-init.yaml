@@ -1,8 +1,8 @@
 databaseChangeLog:
   - changeSet:
-      id: 1
+      id: 2
       author: nabeel.amd93
-      comment: Create a shed
+      comment: Insert query for lookup
       changes:
         - sqlFile:
             path: ../changelog-sets/V2.0-init/V2__insert_lookup_setting.sql

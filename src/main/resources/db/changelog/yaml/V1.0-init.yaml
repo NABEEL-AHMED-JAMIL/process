@@ -2,7 +2,7 @@ databaseChangeLog:
   - changeSet:
       id: 1
       author: nabeel.amd93
-      comment: Create shedlock table
+      comment: Create shed lock table
       changes:
         - sqlFile:
             path: ../changelog-sets/V1.0-init/V1__creating_shedlock_schema.sql

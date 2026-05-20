@@ -5,6 +5,16 @@ networks:
       config:
         - subnet: 172.23.0.0/16
           gateway: 172.23.0.1
+  # Local infrastructure network for standalone runs. Uses a different subnet
+  # than the main infrastructure compose to avoid CIDR conflicts when running
+  # independently. When using the combined `docker-compose-all.yml` the
+  # combined compose will create the canonical networks instead.
+  infrastructure:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+          gateway: 172.24.0.1
 
 services:
   process_app:
@@ -16,3 +26,4 @@ services:
       - .env
     networks:
       - process
+      - infrastructure

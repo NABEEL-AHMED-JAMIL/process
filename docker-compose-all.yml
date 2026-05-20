@@ -98,6 +98,19 @@ services:
     networks:
       - infrastructure
 
+  process_app:
+    build: .
+    container_name: process_app
+    ports:
+      - "${SPRING_BOOT_PORT}:8080"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - infrastructure
+      - monitoring
+
   # ============================================
   # Monitoring Services (Prometheus Stack)
   # ============================================
@@ -142,8 +155,6 @@ services:
       - monitoring
     depends_on:
       - prometheus
-    environment:
-      - TZ=UTC
 
   node-exporter:
     image: prom/node-exporter:latest

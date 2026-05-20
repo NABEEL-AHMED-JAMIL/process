@@ -1,5 +1,5 @@
 # Use a lightweight OpenJDK image
-FROM openjdk:8-jdk-alpine
+FROM eclipse-temurin:17-jdk
 
 # Maintainer info
 LABEL maintainer="nabeel.amd93@gmail.com"
