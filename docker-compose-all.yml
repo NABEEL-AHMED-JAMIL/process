@@ -102,7 +102,7 @@ services:
     build: .
     container_name: process_app
     ports:
-      - "${SPRING_BOOT_PORT}:8080"
+      - "${SPRING_BOOT_PORT}:9098"
     env_file:
       - .env
     depends_on:
