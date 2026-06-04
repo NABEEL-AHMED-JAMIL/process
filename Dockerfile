@@ -1,11 +1,11 @@
-# Use a lightweight OpenJDK image
-FROM openjdk:8-jdk-alpine
+# Use a lightweight OpenJDK 17 image
+FROM eclipse-temurin:17-jdk
 
 # Maintainer info
 LABEL maintainer="nabeel.amd93@gmail.com"
 
-# Expose port
-EXPOSE 9098
+# Expose port for application
+EXPOSE 8080
 
 # Add a volume for temp files (optional)
 VOLUME /tmp

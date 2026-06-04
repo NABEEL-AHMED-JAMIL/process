@@ -1,4 +1,6 @@
-
+/target/
 logs/process.log
-.idea/misc.xml
-.idea/misc.xml
+.idea/
+.DS_Store
+*.iml
+*.class
