@@ -57,13 +57,6 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     ports:
       - "9092:9092"
-    depends_on:
-      - zookeeper
-    healthcheck:
-      test: ["CMD", "kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
 
   # Spring Boot Application
   process_app:
@@ -73,7 +66,7 @@ services:
     container_name: process_app
     restart: always
     ports:
-      - "9098:8080"
+      - "9098:9098"
     environment:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
@@ -94,12 +87,12 @@ services:
       postgres:
         condition: service_healthy
       kafka:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./logs:/app/logs
       - /tmp/efs:/tmp/efs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9098/api/v1/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5

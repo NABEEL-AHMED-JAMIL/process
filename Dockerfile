@@ -4,11 +4,18 @@ FROM eclipse-temurin:17-jdk
 # Maintainer info
 LABEL maintainer="nabeel.amd93@gmail.com"
 
-# Expose port for application
-EXPOSE 8080
+# Set working directory
+WORKDIR /app
 
-# Add a volume for temp files (optional)
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Expose port for application
+EXPOSE 9098
+
+# Add a volume for temp files
 VOLUME /tmp
+VOLUME /app/logs
 
 # Argument for the JAR file
 ARG JAR_FILE=target/process-1.0-0.jar
@@ -16,5 +23,8 @@ ARG JAR_FILE=target/process-1.0-0.jar
 # Copy the JAR into the container
 COPY ${JAR_FILE} app.jar
 
+# Create logs directory
+RUN mkdir -p /app/logs
+
 # Run the JAR
-ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

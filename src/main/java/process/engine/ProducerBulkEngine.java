@@ -90,28 +90,29 @@ public class ProducerBulkEngine {
             lookupData.setLookupValue(currentSchedulerTime.toString());
             this.transactionService.updateLookupDate(lookupData);
             if (!schedulerForToday.isEmpty()) {
-                schedulerForToday.parallelStream().forEach(scheduler -> {
-                    if (this.isScheduled(lastSchedulerRun, currentSchedulerTime, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
-                        // we have to check if job in the queue then send the detail of job as skip with message
-                        JobQueue jobQueue;
-                        if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
-                            // if the job in the skip state no need update the last run queue
-                            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
-                            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
-                            if (this.transactionService.findByJobId(scheduler.getJobId()).get().isSkipJob()) {
-                                this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Skip);
+                schedulerForToday.parallelStream()
+                    .forEach(scheduler -> {
+                        if (this.isScheduled(lastSchedulerRun, currentSchedulerTime, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
+                            // we have to check if job in the queue then send the detail of job as skip with message
+                            JobQueue jobQueue;
+                            if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
+                                // if the job in the skip state no need update the last run queue
+                                jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
+                                this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
+                                if (this.transactionService.findByJobId(scheduler.getJobId()).get().isSkipJob()) {
+                                    this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Skip);
+                                }
+                            } else {
+                                this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
+                                jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+                                this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
+                                this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
                             }
-                        } else {
-                            this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
-                            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
-                            this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
-                            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
+                            // update the next run in scheduler
+                            this.bulkAction.updateNextScheduler(scheduler);
+                            this.bulkAction.sendJobStatusNotification(scheduler.getJobId());
                         }
-                        // update the next run in scheduler
-                        this.bulkAction.updateNextScheduler(scheduler);
-                        this.bulkAction.sendJobStatusNotification(scheduler.getJobId());
-                    }
-                });
+                    });
                 return;
             }
             logger.info("addJobInQueue --> NO scheduler is set for this timestamp");
@@ -131,18 +132,19 @@ public class ProducerBulkEngine {
             List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(lookupData.getLookupValue()));
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
-                jobQueues.parallelStream().forEach(jobQueue -> {
-                    Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
-                    try {
-                        if (sourceJob.isPresent()) {
-                            this.pushMessageToQueue(sourceJob.get(), jobQueue);
-                        } else {
-                            this.changeStatusForLastJob(jobQueue, "Job %s fail in the queue due to main job either (delete|inactive).");
+                jobQueues.parallelStream()
+                    .forEach(jobQueue -> {
+                        Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
+                        try {
+                            if (sourceJob.isPresent()) {
+                                this.pushMessageToQueue(sourceJob.get(), jobQueue);
+                            } else {
+                                this.changeStatusForLastJob(jobQueue, "Job %s fail in the queue due to main job either (delete|inactive).");
+                            }
+                        } catch (Exception ex) {
+                            logger.error("Error In runJobInCurrentTimeSlot :- {}.", ExceptionUtil.getRootCauseMessage(ex));
                         }
-                    } catch (Exception ex) {
-                        logger.error("Error In runJobInCurrentTimeSlot :- {}.", ExceptionUtil.getRootCauseMessage(ex));
-                    }
-                });
+                    });
                 return;
             }
             logger.info("runJobInCurrentTimeSlot --> NO scheduler is set for this timestamp");

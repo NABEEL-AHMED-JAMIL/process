@@ -1,6 +1,38 @@
+# Maven
 /target/
-logs/process.log
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+.flattened-pom.xml
+
+# IDE
 .idea/
-.DS_Store
 *.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled Classes
 *.class
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Application specific
+/tmp/
+/logs/
+.env.local
+*.jks
+*.p12
+

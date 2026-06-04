@@ -2,8 +2,8 @@ databaseChangeLog:
   - changeSet:
       id: 1
       author: nabeel.amd93
-      comment: Create a shed
+      comment: Create a lookup setting
       changes:
         - sqlFile:
-            path: ../changelog-sets/V3.0-init/V3__insert_lookup_setting.sql
+            path: ../changelog-sets/V3.0-init/V3__insert_source_task_type.sql
             relativeToChangelogFile: true

@@ -38,6 +38,8 @@ Process have 5 type of scheduler
 - Event-driven workflows
 
 ### Running the Project
+
+#### Option 1: Local Development
 ```bash
 # Clone repository
 git clone https://github.com/NABEEL-AHMED-JAMIL/process/tree/split-mono-to-microservice
@@ -51,6 +53,28 @@ mvn clean install
 # Run application
 mvn spring-boot:run
 ```
+
+#### Option 2: Docker Compose (Recommended for Development)
+```bash
+# Build the JAR file first
+mvn clean package -DskipTests
+
+# Start all services (PostgreSQL, Kafka, Zookeeper, Application)
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Access the application
+# API: http://localhost:9098/api/v1
+# Swagger: http://localhost:9098/api/v1/swagger-ui.html
+# Health Check: http://localhost:9098/api/v1/actuator/health
+
+# Stop services
+docker-compose down
+```
+
+For detailed Docker setup instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md)
 
 ### ETL WorkFlow diagram
 Below detail show the existing workflow of process.
