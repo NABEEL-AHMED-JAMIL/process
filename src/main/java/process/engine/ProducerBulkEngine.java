@@ -3,7 +3,6 @@ package process.engine;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
@@ -30,17 +29,20 @@ public class ProducerBulkEngine {
     public Logger logger = LogManager.getLogger(ProducerBulkEngine.class);
 
     private final Pattern pattern;
-    @Autowired
-    private BulkAction bulkAction;
-    @Autowired
-    private TransactionServiceImpl transactionService;
-    @Autowired
-    private EmailMessagesFactory emailMessagesFactory;
-    @Autowired
-    private KafkaTemplate<String, String> kafkaTemplate;
+    private final BulkAction bulkAction;
+    private final TransactionServiceImpl transactionService;
+    private final EmailMessagesFactory emailMessagesFactory;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
-    public ProducerBulkEngine() {
+    public ProducerBulkEngine(BulkAction bulkAction,
+        TransactionServiceImpl transactionService,
+        EmailMessagesFactory emailMessagesFactory,
+        KafkaTemplate<String, String> kafkaTemplate) {
         this.pattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$");
+        this.bulkAction = bulkAction;
+        this.transactionService = transactionService;
+        this.emailMessagesFactory = emailMessagesFactory;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     /**
@@ -304,9 +306,10 @@ public class ProducerBulkEngine {
      * */
     private Map<String, String> fillPayloadDetail(SourceJob sourceJob, JobQueue jobQueue) {
         Map<String, String> payload = new HashMap<>();
-        payload.put(ProcessUtil.JOB_QUEUE, jobQueue.toString());
-        payload.put(ProcessUtil.TASK_DETAIL, sourceJob.getTaskDetail().toString());
-        payload.put(ProcessUtil.PRIORITY, sourceJob.getPriority().toString());
+        payload.put(ProcessUtil.TASK_ID, sourceJob.getJobId()+"-"+jobQueue.getJobId());
+        payload.put(ProcessUtil.JOB_QUEUE, String.valueOf(jobQueue));
+        payload.put(ProcessUtil.TASK_DETAIL, String.valueOf(sourceJob.getTaskDetail()));
+        payload.put(ProcessUtil.PRIORITY, String.valueOf(sourceJob.getPriority()));;
         return payload;
     }
 

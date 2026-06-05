@@ -3,7 +3,6 @@ package process.engine;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
@@ -26,10 +25,13 @@ public class BulkAction {
 
     public Logger logger = LogManager.getLogger(BulkAction.class);
 
-    @Autowired
-    private TransactionServiceImpl transactionService;
-    @Autowired
-    private NotificationService notificationService;
+    private final TransactionServiceImpl transactionService;
+    private final NotificationService notificationService;
+
+    public BulkAction(TransactionServiceImpl transactionService, NotificationService notificationService) {
+        this.transactionService = transactionService;
+        this.notificationService = notificationService;
+    }
 
     /**
      * This method use the change the status of main job

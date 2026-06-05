@@ -17,6 +17,7 @@ public class ProcessUtil {
     public static String QUEUE_FETCH_LIMIT = "QUEUE_FETCH_LIMIT";
     public static String SCHEDULER_LAST_RUN_TIME = "SCHEDULER_LAST_RUN_TIME";
     public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";
+    public static String TASK_ID = "taskId";
     public static String JOB_QUEUE = "jobQueue";
     public static String TASK_DETAIL = "taskDetail";
     public static String PRIORITY = "priority";

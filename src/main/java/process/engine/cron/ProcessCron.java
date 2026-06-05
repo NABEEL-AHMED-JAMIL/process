@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import process.engine.ProducerBulkEngine;
@@ -20,8 +19,11 @@ public class ProcessCron {
 
     public static final int SCHEDULER_CRON_TIME_IN_ONE_MINUTES=1;
 
-    @Autowired
-    private ProducerBulkEngine producerBulkEngine;
+    private final ProducerBulkEngine producerBulkEngine;
+
+    public ProcessCron(ProducerBulkEngine producerBulkEngine) {
+        this.producerBulkEngine = producerBulkEngine;
+    }
 
     /**
      * This addJobInQueue method run every 30 second and put the job into queue

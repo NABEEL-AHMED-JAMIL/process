@@ -8,8 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import process.model.dto.*;
-import process.model.enums.Execution;
-import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.SourceTaskPayload;
 import process.model.pojo.SourceTaskType;

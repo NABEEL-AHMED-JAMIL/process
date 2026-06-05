@@ -19,12 +19,12 @@ public class TransactionServiceImpl {
 
     private Logger logger = LoggerFactory.getLogger(TransactionServiceImpl.class);
 
-    private SourceJobRepository sourceJobRepository;
-    private SchedulerRepository schedulerRepository;
-    private JobQueueRepository jobQueueRepository;
-    private LookupDataRepository lookupDataRepository;
-    private JobAuditLogRepository jobAuditLogRepository;
-    private SourceTaskRepository sourceTaskRepository;
+    private final SourceJobRepository sourceJobRepository;
+    private final SchedulerRepository schedulerRepository;
+    private final JobQueueRepository jobQueueRepository;
+    private final LookupDataRepository lookupDataRepository;
+    private final JobAuditLogRepository jobAuditLogRepository;
+    private final SourceTaskRepository sourceTaskRepository;
 
     public TransactionServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,

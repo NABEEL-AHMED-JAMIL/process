@@ -29,13 +29,13 @@ public class SourceJobServiceImpl implements SourceJobService {
 
     private Logger logger = LoggerFactory.getLogger(SourceJobServiceImpl.class);
 
-    private SourceJobRepository sourceJobRepository;
-    private SchedulerRepository schedulerRepository;
-    private SourceTaskRepository sourceTaskRepository;
-    private JobAuditLogRepository jobAuditLogRepository;
-    private JobQueueRepository jobQueueRepository;
-    private LookupDataRepository lookupDataRepository;
-    private ProducerBulkEngine producerBulkEngine;
+    private final SourceJobRepository sourceJobRepository;
+    private final SchedulerRepository schedulerRepository;
+    private final SourceTaskRepository sourceTaskRepository;
+    private final JobAuditLogRepository jobAuditLogRepository;
+    private final JobQueueRepository jobQueueRepository;
+    private final LookupDataRepository lookupDataRepository;
+    private final ProducerBulkEngine producerBulkEngine;
 
     public SourceJobServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
