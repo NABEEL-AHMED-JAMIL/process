@@ -33,18 +33,18 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     @Query(value = "select sj.job_id as jobId, sj.job_status as jobStatus, sj.job_running_status as jobRunningStatus," +
         "sj.last_job_run as lastJobRun, sc.recurrence_time as recurrenceTime, sj.execution as execution\n" +
         "from source_job sj left join scheduler sc on sc.job_id = sj.job_id\n" +
-        "where sj.job_id in (?1) and sj.job_status = 'Active'", nativeQuery = true)
+        "where sj.job_id in (?1) and UPPER(sj.job_status) = 'ACTIVE'", nativeQuery = true)
     public List<SourceJobProjection> fetchRunningJobEvent(List<Long> jobIds);
 
     /**
      * Note :- Method use to change the source job link with source task type id
      * @param sourceTaskTypeId
-     * @return status
-     * @return int
+     * @param status Status enum value's name (must be uppercase - e.g., 'DELETE', 'INACTIVE')
+     * @return int count of updated records
      * */
     @Transactional
     @Modifying
-    @Query(value = "update source_job set job_status = ?2\n" +
+    @Query(value = "update source_job set job_status = UPPER(?2)\n" +
         "where task_detail_id in (select task_detail_id from source_task where source_task_type_id = ?1)",
         nativeQuery = true)
     public int statusChangeSourceJobLinkWithSourceTaskTypeId(Long sourceTaskTypeId, String status);
@@ -52,12 +52,12 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     /**
      * Note :- Method use to change status for source job with source task id
      * @param sourceTaskId
-     * @return status
-     * @return int
+     * @param status Status enum value's name (must be uppercase - e.g., 'DELETE', 'INACTIVE')
+     * @return int count of updated records
      * */
     @Transactional
     @Modifying
-    @Query(value = "update source_job set job_status = ?2 where task_detail_id = ?1", nativeQuery = true)
+    @Query(value = "update source_job set job_status = UPPER(?2) where task_detail_id = ?1", nativeQuery = true)
     public int statusChangeSourceJobWithSourceTaskId(Long sourceTaskId, String status);
 
 }

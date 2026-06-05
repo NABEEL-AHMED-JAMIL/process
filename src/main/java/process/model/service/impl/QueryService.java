@@ -203,10 +203,10 @@ public class QueryService {
      * @return string
      * */
     public String jobRunningStatistics() {
-        return "select job_running_status, count(job_id) as total_count\n" +
+        return "select UPPER(job_running_status) as job_running_status, count(job_id) as total_count\n" +
             "from source_job\n" +
-            "where job_running_status in ('Start', 'Running', 'Failed', 'Completed')\n" +
-            "group by job_running_status";
+            "where UPPER(job_running_status) in ('START', 'RUNNING', 'FAILED', 'COMPLETED')\n" +
+            "group by UPPER(job_running_status)";
     }
 
     /**
@@ -246,14 +246,14 @@ public class QueryService {
      * */
     public String weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) {
         return String.format("select job_queue.job_id, source_job.job_name,\n" +
-            "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
-            "count (case when job_queue.job_status = 'Start' then job_queue.job_id end) as Start,\n" +
-            "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
-            "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
-            "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
-            "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
-            "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
-            "count (case when job_queue.job_status = 'Interrupt' then job_queue.job_id end) as Interrupt,\n"+
+            "count (case when UPPER(job_queue.job_status) = 'QUEUE' then job_queue.job_id end) as Queue,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'START' then job_queue.job_id end) as Start,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'RUNNING' then job_queue.job_id end) as Running,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'FAILED' then job_queue.job_id end) as Failed,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'COMPLETED' then job_queue.job_id end) as Completed,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'STOP' then job_queue.job_id end) as Stop,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'SKIP' then job_queue.job_id end) as Skip,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'INTERRUPT' then job_queue.job_id end) as Interrupt,\n"+
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
@@ -261,14 +261,14 @@ public class QueryService {
             "group by job_queue.job_id, source_job.job_name\n" +
             "union\n" +
             "select null as job_id, null as job_name,\n" +
-            "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
-            "count (case when job_queue.job_status = 'Start' then job_queue.job_id end) as Start,\n" +
-            "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
-            "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
-            "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
-            "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
-            "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
-            "count (case when job_queue.job_status = 'Interrupt' then job_queue.job_id end) as Interrupt,\n"+
+            "count (case when UPPER(job_queue.job_status) = 'QUEUE' then job_queue.job_id end) as Queue,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'START' then job_queue.job_id end) as Start,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'RUNNING' then job_queue.job_id end) as Running,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'FAILED' then job_queue.job_id end) as Failed,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'COMPLETED' then job_queue.job_id end) as Completed,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'STOP' then job_queue.job_id end) as Stop,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'SKIP' then job_queue.job_id end) as Skip,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'INTERRUPT' then job_queue.job_id end) as Interrupt,\n"+
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
@@ -283,14 +283,14 @@ public class QueryService {
      * */
     public String statisticsBySourceJobId(Long jobId) {
         return String.format("select\n" +
-            "count (case when job_queue.job_status = 'Queue' then job_queue.job_id end) as Queue,\n" +
-            "count (case when job_queue.job_status = 'Start' then job_queue.job_id end) as Start,\n" +
-            "count (case when job_queue.job_status = 'Running' then job_queue.job_id end) as Running,\n" +
-            "count (case when job_queue.job_status = 'Failed' then job_queue.job_id end) as Failed,\n" +
-            "count (case when job_queue.job_status = 'Completed' then job_queue.job_id end) as Completed,\n" +
-            "count (case when job_queue.job_status = 'Stop' then job_queue.job_id end) as Stop,\n" +
-            "count (case when job_queue.job_status = 'Skip' then job_queue.job_id end) as Skip,\n" +
-            "count (case when job_queue.job_status = 'Interrupt' then job_queue.job_id end) as Interrupt,\n"+
+            "count (case when UPPER(job_queue.job_status) = 'QUEUE' then job_queue.job_id end) as Queue,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'START' then job_queue.job_id end) as Start,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'RUNNING' then job_queue.job_id end) as Running,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'FAILED' then job_queue.job_id end) as Failed,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'COMPLETED' then job_queue.job_id end) as Completed,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'STOP' then job_queue.job_id end) as Stop,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'SKIP' then job_queue.job_id end) as Skip,\n" +
+            "count (case when UPPER(job_queue.job_status) = 'INTERRUPT' then job_queue.job_id end) as Interrupt,\n"+
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
@@ -310,7 +310,7 @@ public class QueryService {
             query += String.format("and job_queue.job_id = %d\n", jobId);
         }
         if (!ProcessUtil.isNull(jobStatus)) {
-            query += String.format("and job_queue.job_status = '%s'\n", jobStatus);
+            query += String.format("and UPPER(job_queue.job_status) = UPPER('%s')\n", jobStatus);
         }
         query += "\norder by job_queue.job_queue_id desc";
         return query;
@@ -319,7 +319,7 @@ public class QueryService {
     public String fetchJobQLog(MessageQSearchDto messageQSearch, boolean isState) {
         String selectPortion;
         if (isState) {
-            selectPortion = "select job_status, count(*) as total_count \n";
+            selectPortion = "select UPPER(job_status) as job_status, count(*) as total_count \n";
         } else {
             selectPortion = "select * \n";
         }
@@ -337,12 +337,12 @@ public class QueryService {
             }
             if (!ProcessUtil.isNull(messageQSearch.getJobStatuses()) && !messageQSearch.getJobStatuses().isEmpty()) {
                 String jobStatus = messageQSearch.getJobStatuses().stream()
-                        .map(jobStatus1 -> "'" +jobStatus1.toString()+"',").collect(Collectors.joining());
-                query += String.format("and job_status in (%s)", jobStatus.substring(0,jobStatus.length()-1));
+                        .map(jobStatus1 -> "'" + jobStatus1.toString().toUpperCase() + "',").collect(Collectors.joining());
+                query += String.format("and UPPER(job_status) in (%s)", jobStatus.substring(0,jobStatus.length()-1));
             }
         }
         if (isState) {
-            query += "\ngroup by job_status";
+            query += "\ngroup by UPPER(job_status)";
         }
         if (!isState) {
             query += "\norder by job_queue_id desc";

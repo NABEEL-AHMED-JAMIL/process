@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: update-task-type-status-to-active
+      author: nabeel.amd93
+      changes:
+        - update:
+            tableName: source_task_type
+            columns:
+              - column:
+                  name: task_type_status
+                  value: ACTIVE
+          # This will update all source_task_type records to ACTIVE status
+
+  - changeSet:
+      id: update-specific-task-type-status
+      author: nabeel.amd93
+      changes:
+        - sql:
+            sql: "UPDATE source_task_type SET task_type_status = 'ACTIVE' WHERE source_task_type_id IN (1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010);"
+            comment: Update specific source task types to ACTIVE status
+

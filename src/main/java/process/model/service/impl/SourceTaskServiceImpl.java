@@ -21,6 +21,7 @@ import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceTaskService;
 import process.util.PagingUtil;
 import process.util.ProcessUtil;
+import process.util.EnumConverter;
 import process.util.excel.BulkExcel;
 import process.util.validation.SourceTaskValidation;
 import java.io.ByteArrayOutputStream;
@@ -237,7 +238,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskDto.setTaskStatus(Status.valueOf(String.valueOf(obj[index])));
+                        sourceTaskDto.setTaskStatus(EnumConverter.toStatus(String.valueOf(obj[index])));
                     }
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
                     index++;
@@ -246,7 +247,19 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskTypeDto.setDescription(String.valueOf(obj[index].toString()));
+                        sourceTaskTypeDto.setServiceName(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!ProcessUtil.isNull(obj[index])) {
+                        sourceTaskTypeDto.setDescription(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!ProcessUtil.isNull(obj[index])) {
+                        sourceTaskTypeDto.setQueueTopicPartition(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!ProcessUtil.isNull(obj[index])) {
+                        sourceTaskTypeDto.setStatus(EnumConverter.toStatus(obj[index].toString()));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
@@ -254,25 +267,13 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskTypeDto.setQueueTopicPartition(String.valueOf(obj[index].toString()));
+                        sourceTaskTypeDto.setSchemaPayload(String.valueOf(obj[index]));
                     }
-                    index++;
-                    if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskTypeDto.setSchemaPayload(String.valueOf(obj[index].toString()));
-                    }
-                    index++;
-                    if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskTypeDto.setServiceName(String.valueOf(obj[index].toString()));
-                    }
-                    index++;
-                    if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskTypeDto.setStatus(Status.valueOf(obj[index].toString()));
-                    }
-                    sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setTotalLinksJobs(Long.valueOf(obj[index].toString()));
                     }
+                    sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
                     sourceTaskDtoList.add(sourceTaskDto);
                 }
                 responseDto = new ResponseDto(SUCCESS, "SourceTask successfully ", sourceTaskDtoList,
@@ -320,15 +321,15 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setJobStatus(Status.valueOf(String.valueOf(obj[index])));
+                        sourceJobDto.setJobStatus(EnumConverter.toStatus(String.valueOf(obj[index])));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setExecution(Execution.valueOf(String.valueOf(obj[index])));
+                        sourceJobDto.setExecution(EnumConverter.toExecution(String.valueOf(obj[index])));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setJobRunningStatus(JobStatus.valueOf(String.valueOf(obj[index])));
+                        sourceJobDto.setJobRunningStatus(EnumConverter.toJobStatus(String.valueOf(obj[index])));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {

@@ -27,7 +27,8 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
      * Note :- Method use to find all soruce task type
      * @return List<SourceTaskTypeProjection>
      * */
-    @Query(value = "select source_task_type.source_task_type_id as sourceTaskTypeId, source_task_type.description as description, task_type_status as status,\n" +
+    @Query(value = "select source_task_type.source_task_type_id as sourceTaskTypeId, source_task_type.description as description, \n" +
+        "CONCAT(UPPER(SUBSTR(CAST(task_type_status as varchar), 1, 1)), LOWER(SUBSTR(CAST(task_type_status as varchar), 2))) as status,\n" +
         "source_task_type.queue_topic_partition as queueTopicPartition, source_task_type.service_name as serviceName,\n" +
         "count(source_task.source_task_type_id) as totalTaskLink, source_task_type.is_schema_register as schemaRegister, source_task_type.schema_payload as schemaPayload\n" +
         "from source_task_type\n" +
