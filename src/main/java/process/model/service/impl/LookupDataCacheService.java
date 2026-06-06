@@ -3,6 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.LookupDataDto;
 import process.model.pojo.LookupData;
 import process.model.repository.LookupDataRepository;
@@ -29,6 +30,15 @@ public class LookupDataCacheService {
 
     @PostConstruct
     public void initialize() {
+        try {
+            initializeCache();
+        } catch (Exception ex) {
+            logger.error("Failed to initialize lookup cache: {}", ex.getMessage());
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void initializeCache() {
         logger.info("****************Cache-Lookup-Start***************************");
         Iterable<LookupData> lookupDataList = this.lookupDataRepository.findByParentLookupIdIsNull();
         lookupDataList.forEach(lookupData -> {
