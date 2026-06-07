@@ -39,8 +39,7 @@ public class JobAuditLogs {
         nullable = false)
     private Long jobQueueId;
 
-    @Column(name = "log_detail",
-        nullable = false, length = 2500)
+    @Column(name = "log_detail", nullable = false, columnDefinition = "TEXT")
     private String logsDetail;
 
     @Column(name = "date_created",

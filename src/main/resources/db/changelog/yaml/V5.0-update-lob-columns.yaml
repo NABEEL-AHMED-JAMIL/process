@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 5001
+      author: nabeel.amd93
+      comment: Alter job_queue and job_audit_logs columns to use CLOB for large text storage
+      changes:
+        - modifyDataType:
+            tableName: job_queue
+            columnName: job_status_message
+            newDataType: CLOB
+        - modifyDataType:
+            tableName: job_audit_logs
+            columnName: log_detail
+            newDataType: CLOB
+
