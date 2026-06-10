@@ -52,7 +52,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to update the source task
      * @param sourceTaskDto
      * @return ResponseEntity<?>
@@ -68,7 +67,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to delete the source task in soft
      * @param sourceTaskDto
      * @return ResponseEntity<?>
@@ -84,7 +82,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to fetch the sourceTask detail with pagination
      * @param page
      * @param limit
@@ -114,7 +111,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to fetch link jobs with source task with pagination
      * @param page
      * @param limit
@@ -145,7 +141,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to fetch link task with source task type
      * @return ResponseEntity<?>
      * */
@@ -161,7 +156,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to fetch source task detail with id
      * @param sourceTaskId
      * @return ResponseEntity<?>
@@ -177,7 +171,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to download the list source task
      * @return ResponseEntity<?>
      * */
@@ -196,7 +189,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to download the template
      * @return ResponseEntity<?>
      * */
@@ -215,7 +207,6 @@ public class SourceTaskRestApi {
     }
 
     /**
-
      * Api use to upload the source task
      * @param fileUploadDto
      * @return ResponseEntity<?>

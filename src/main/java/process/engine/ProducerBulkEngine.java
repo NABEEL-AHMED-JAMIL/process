@@ -1,5 +1,6 @@
 package process.engine;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -30,16 +31,19 @@ public class ProducerBulkEngine {
 
     private final Pattern pattern;
     private final BulkAction bulkAction;
+    private final ObjectMapper objectMapper;
     private final TransactionServiceImpl transactionService;
     private final EmailMessagesFactory emailMessagesFactory;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public ProducerBulkEngine(BulkAction bulkAction,
+        ObjectMapper objectMapper,
         TransactionServiceImpl transactionService,
         EmailMessagesFactory emailMessagesFactory,
         KafkaTemplate<String, String> kafkaTemplate) {
         this.pattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$");
         this.bulkAction = bulkAction;
+        this.objectMapper = objectMapper;
         this.transactionService = transactionService;
         this.emailMessagesFactory = emailMessagesFactory;
         this.kafkaTemplate = kafkaTemplate;
@@ -175,19 +179,20 @@ public class ProducerBulkEngine {
                         String partition = matcher.group(2);
                         // random key for sending to partitions
                         String key = UUID.randomUUID().toString();
-                        Map<String, String> payload = fillPayloadDetail(sourceJob, jobQueue);
+                        String payload = this.objectMapper.writeValueAsString(
+                            this.fillPayloadDetail(sourceJob, jobQueue));
                         try {
                             if (partition.contains(ProcessUtil.START)) {
-                                this.kafkaTemplate.send(topic, key, payload.toString())
+                                this.kafkaTemplate.send(topic, key, payload)
                                     .addCallback(
-                                        result -> handleSendSuccess(result, payload, sourceJob, jobQueue),
-                                        ex -> handleSendFailure(ex, payload, sourceJob, jobQueue)
+                                        result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
+                                        ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
                                     );
                             } else {
-                                this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload.toString())
+                                this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload)
                                     .addCallback(
-                                        result -> handleSendSuccess(result, payload, sourceJob, jobQueue),
-                                        ex -> handleSendFailure(ex, payload, sourceJob, jobQueue)
+                                        result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
+                                        ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
                                     );
                             }
                         } catch (Exception ex) {
@@ -215,7 +220,7 @@ public class ProducerBulkEngine {
      * @param sourceJob
      * @param jobQueue
      * */
-    private void handleSendSuccess(SendResult<String, String> result, Map<String, String> payload, SourceJob sourceJob, JobQueue jobQueue) {
+    private void handleSendSuccess(SendResult<String, String> result, String payload, SourceJob sourceJob, JobQueue jobQueue) {
         long offset = result.getRecordMetadata().offset();
         logger.info("Sent message=[{}] with offset=[{}]", payload, offset);
         // Update job queue
@@ -236,7 +241,7 @@ public class ProducerBulkEngine {
      * @param sourceJob
      * @param jobQueue
      * */
-    private void handleSendFailure(Throwable ex, Map<String, String> payload, SourceJob sourceJob, JobQueue jobQueue) {
+    private void handleSendFailure(Throwable ex, String payload, SourceJob sourceJob, JobQueue jobQueue) {
         logger.error("Unable to send message=[{}] due to: {}", payload, ex.getMessage());
         // Update job queue on failure
         jobQueue.setJobSend(false);
@@ -302,14 +307,18 @@ public class ProducerBulkEngine {
      * Method use to fill the payload detail
      * @param sourceJob
      * @param jobQueue
-     * @return Map<String, String>
+     * @return Map<String, Object>
      * */
-    private Map<String, String> fillPayloadDetail(SourceJob sourceJob, JobQueue jobQueue) {
-        Map<String, String> payload = new HashMap<>();
-        payload.put(ProcessUtil.TASK_ID, sourceJob.getJobId()+"-"+jobQueue.getJobId());
-        payload.put(ProcessUtil.JOB_QUEUE, String.valueOf(jobQueue));
-        payload.put(ProcessUtil.TASK_DETAIL, String.valueOf(sourceJob.getTaskDetail()));
-        payload.put(ProcessUtil.PRIORITY, String.valueOf(sourceJob.getPriority()));;
+    private Map<String, Object> fillPayloadDetail(SourceJob sourceJob, JobQueue jobQueue) {
+        Map<String, Object> payload = new HashMap<>();
+        try {
+            payload.put(ProcessUtil.TASK_ID, sourceJob.getJobId() + "-" + jobQueue.getJobId());
+            payload.put(ProcessUtil.JOB_QUEUE, jobQueue);
+            payload.put(ProcessUtil.TASK_DETAIL, sourceJob.getTaskDetail());
+            payload.put(ProcessUtil.PRIORITY, sourceJob.getPriority());
+        } catch (Exception e) {
+            throw new RuntimeException("Error converting payload to JSON", e);
+        }
         return payload;
     }
 

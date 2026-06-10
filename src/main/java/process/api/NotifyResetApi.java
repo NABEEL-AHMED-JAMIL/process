@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
+import process.model.enums.JobStatus;
 import process.model.service.NotifyService;
 import process.socket.GlobalProperties;
 import process.socket.Message;
@@ -17,6 +18,9 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDateTime;
+import java.util.EnumSet;
 
 /**
  * Api use to perform crud operation on dashboard
@@ -61,35 +65,58 @@ public class NotifyResetApi {
         this.globalProperties.removeTransactionAndSession(message.getSessionId());
     }
 
-    // send email
     /**
-     * Method use to send the email to user
+     * Job status notify
      * @return ResponseEntity
      * */
-    @RequestMapping(value = "/sendEmail", method = RequestMethod.POST)
-    public ResponseEntity<?> sendEmail(@RequestBody SourceJobQueueDto sourceJobQueueDto) {
+    @RequestMapping(value = "/changeState/jobId/{jobId}/jobQueueId/{jobQueueId}/jobStatus/{jobStatus}", method = RequestMethod.POST)
+    public ResponseEntity<?> changeState(
+        @PathVariable("jobId") Long jobId,
+        @PathVariable("jobQueueId") Long jobQueueId,
+        @PathVariable("jobStatus") JobStatus jobStatus,
+        @RequestBody SourceJobQueueDto jobQueue) {
         try {
-            return new ResponseEntity<>(this.notifyService.sendEmail(sourceJobQueueDto), HttpStatus.OK);
+            jobQueue.setJobId(jobId);
+            jobQueue.setJobQueueId(jobQueueId);
+            jobQueue.setJobStatus(jobStatus);
+            // Validate job status and job status message
+            if (!EnumSet.of(JobStatus.Running, JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_INVALID, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
+            } else if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) { // Job status message
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
+            }
+            // Set end time when job status is Failed or Completed
+            if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
+                jobQueue.setEndTime(LocalDateTime.now());
+            }
+            return new ResponseEntity<>(this.notifyService.changeState(jobQueue), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while sendEmail ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while changeState ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
-     * Push notification method use to push the notification on ui
-     * @param jobId
+     * Job logs notify
      * @return ResponseEntity
      * */
-    @RequestMapping(value = "/sendJobStatusNotification", method = RequestMethod.GET)
-    public ResponseEntity<?> sendJobStatusNotification(@RequestParam Long jobId) {
+    @RequestMapping(value = "/addLogs/jobId/{jobId}/jobQueueId/{jobQueueId}", method = RequestMethod.POST)
+    public ResponseEntity<?> addLogs(
+            @PathVariable("jobId") Long jobId,
+            @PathVariable("jobQueueId") Long jobQueueId,
+            @RequestBody SourceJobQueueDto jobQueue) {
         try {
-            return new ResponseEntity<>(this.notifyService.sendJobStatusNotification(jobId), HttpStatus.OK);
+            jobQueue.setJobId(jobId);
+            jobQueue.setJobQueueId(jobQueueId);
+            // Validate job status and job status message
+            if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
+            }
+             return new ResponseEntity<>(this.notifyService.addLogs(jobQueue), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while sendJobStatusNotification ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while addLogs ", ExceptionUtil.getRootCause(ex));
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
-
 
 }

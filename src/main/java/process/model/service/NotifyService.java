@@ -8,8 +8,8 @@ import process.model.dto.SourceJobQueueDto;
  */
 public interface NotifyService {
 
-    public ResponseDto sendEmail(SourceJobQueueDto sourceJobQueueDto);
+    public ResponseDto changeState(SourceJobQueueDto jobQueue);
 
-    public ResponseDto sendJobStatusNotification(Long jobId);
+    public ResponseDto addLogs(SourceJobQueueDto jobQueueDto);
 
 }
