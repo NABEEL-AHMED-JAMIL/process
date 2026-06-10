@@ -112,7 +112,7 @@ public class QueryService {
             query += "left join lookup_data ld1 on cast(ld1.lookup_id as varchar(10)) = st.home_page_id\n";
             query += "left join lookup_data ld2 on cast(ld2.lookup_id as varchar(10)) = st.pipeline_id\n";
         }
-        query += "where 1=1 ";
+        query += "where st.task_status in ('Active', 'Inactive') ";
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
             if ((startDate != null && !startDate.isEmpty()) && (endDate != null && !endDate.isEmpty())) {
                 query += String.format("and cast(st.date_created as date) between '%s' and '%s' ", startDate, endDate);

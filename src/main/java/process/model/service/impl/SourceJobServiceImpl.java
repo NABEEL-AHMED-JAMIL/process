@@ -289,7 +289,8 @@ public class SourceJobServiceImpl implements SourceJobService {
      * */
     @Override
     public ResponseDto listSourceJob() throws Exception {
-        List<SourceJobDto> sourceJobDtoList = sourceJobRepository.findAll(Sort.by(Sort.Direction.ASC, "jobId"))
+        List<SourceJobDto> sourceJobDtoList = sourceJobRepository.findAllActiveAndInactiveJobs(
+            Status.Active, Status.Inactive, Sort.by(Sort.Direction.ASC, "jobId"))
             .stream()
             .map(job -> {
                 SourceJobDto dto = mapSourceJobToDto(job);

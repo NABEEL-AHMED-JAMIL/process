@@ -1,5 +1,6 @@
 package process.model.repository;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -24,6 +25,16 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      * @return Optional<Job>
      * */
     public Optional<SourceJob> findByJobIdAndJobStatus(Long jobId, Status status);
+
+    /**
+     * Note :- Method use to fetch active and inactive jobs with sorting
+     * @param activeStatus
+     * @param inactiveStatus
+     * @param sort
+     * @return List<SourceJob>
+     * */
+    @Query("SELECT sj FROM SourceJob sj WHERE sj.jobStatus IN (?1, ?2)")
+    public List<SourceJob> findAllActiveAndInactiveJobs(Status activeStatus, Status inactiveStatus, Sort sort);
 
     /**
      * Note :- Method use to get the job detail which use to update the view table

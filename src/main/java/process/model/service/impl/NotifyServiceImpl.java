@@ -3,6 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
 import process.model.dto.ResponseDto;
@@ -18,6 +19,7 @@ import static process.util.ProcessUtil.ERROR;
  * @author Nabeel Ahmed
  */
 @Service
+@Transactional
 public class NotifyServiceImpl implements NotifyService {
 
     private Logger logger = LoggerFactory.getLogger(NotifyServiceImpl.class);
