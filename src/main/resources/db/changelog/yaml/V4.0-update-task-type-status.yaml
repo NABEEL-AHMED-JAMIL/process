@@ -1,21 +1,53 @@
 databaseChangeLog:
   - changeSet:
-      id: update-task-type-status-to-active
-      author: nabeel.amd93
+      id: 4.0-update-status-enum-values
+      author: Nabeel Ahmed
+      description: "V4.0 - Establish PascalCase enum values (Active, Inactive, Delete) as standard across all tables"
       changes:
-        - update:
-            tableName: source_task_type
-            columns:
-              - column:
-                  name: task_type_status
-                  value: ACTIVE
-          # This will update all source_task_type records to ACTIVE status
+        - comment: "Ensure all Status enum columns use PascalCase format"
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Standardize source_task_type status column to use PascalCase
+              UPDATE source_task_type SET status = 'Active' WHERE status IS NULL;
+              UPDATE source_task_type SET status = 'Active' WHERE status IN ('ACTIVE', 'active', 'Active');
+              
+              -- Ensure default constraints are in place
+              ALTER TABLE source_task_type ALTER COLUMN status SET DEFAULT 'Active';
+              ALTER TABLE source_task ALTER COLUMN task_status SET DEFAULT 'Active';
+              ALTER TABLE source_job ALTER COLUMN job_status SET DEFAULT 'Active';
 
   - changeSet:
-      id: update-specific-task-type-status
-      author: nabeel.amd93
+      id: 4.0-standardize-jobstatus-enums
+      author: Nabeel Ahmed
+      description: "V4.0 - Standardize JobStatus enum values (Queue, Start, Running, Failed, Completed, Skip, Interrupt)"
       changes:
+        - comment: "Establish PascalCase JobStatus enum format"
         - sql:
-            sql: "UPDATE source_task_type SET task_type_status = 'ACTIVE' WHERE source_task_type_id IN (1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010);"
-            comment: Update specific source task types to ACTIVE status
+            dbms: postgresql
+            sql: |
+              -- Set default for job_queue status
+              ALTER TABLE job_queue ALTER COLUMN job_status SET DEFAULT 'Queue';
+              ALTER TABLE source_job ALTER COLUMN job_running_status SET DEFAULT 'Queue';
+              
+              -- Insert default job queue entry if needed
+              INSERT INTO job_queue (job_id, job_status, date_created) 
+              SELECT 1, 'Queue', NOW() 
+              WHERE NOT EXISTS (SELECT 1 FROM job_queue LIMIT 1);
+
+  - changeSet:
+      id: 4.0-standardize-execution-enums
+      author: Nabeel Ahmed
+      description: "V4.0 - Standardize Execution enum values (Auto, Manual)"
+      changes:
+        - comment: "Establish PascalCase Execution enum format"
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Set default for execution column
+              ALTER TABLE source_job ALTER COLUMN execution SET DEFAULT 'Auto';
+              
+              -- Update any existing records to use PascalCase
+              UPDATE source_job SET execution = 'Auto' WHERE execution IS NULL OR execution = '';
+
 

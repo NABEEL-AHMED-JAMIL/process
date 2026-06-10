@@ -91,7 +91,7 @@ public class NotifyResetApi {
             }
             return new ResponseEntity<>(this.notifyService.changeState(jobQueue), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while changeState ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while changeState ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -112,9 +112,9 @@ public class NotifyResetApi {
             if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
                 return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
             }
-             return new ResponseEntity<>(this.notifyService.addLogs(jobQueue), HttpStatus.OK);
+            return new ResponseEntity<>(this.notifyService.addLogs(jobQueue), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while addLogs ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while addLogs ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }

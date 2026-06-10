@@ -7,7 +7,7 @@ databaseChangeLog:
       file: db/changelog/yaml/V3.0-init.yaml
   - exclude:
       file: db/changelog/yaml/V4.0-update-task-type-status.yaml
-  - include:
+  - exclude:
       file: db/changelog/yaml/V5.0-update-lob-columns.yaml
-  - include:
+  - exclude:
       file: db/changelog/yaml/V6.0-fix-lob-to-text.yaml

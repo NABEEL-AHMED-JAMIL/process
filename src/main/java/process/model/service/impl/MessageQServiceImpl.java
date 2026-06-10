@@ -12,7 +12,7 @@ import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQService;
-import process.util.EnumConverter;
+import process.util.EnumUtils;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -91,8 +91,8 @@ public class MessageQServiceImpl implements MessageQService {
                     sourceJobQueue.setJobSend(Boolean.parseBoolean(obj[index].toString()));
                 }
                 index++;
-                if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueue.setJobStatus(EnumConverter.toJobStatus(String.valueOf(obj[index])));
+                    if (!ProcessUtil.isNull(obj[index])) {
+                    sourceJobQueue.setJobStatus(EnumUtils.parseEnum(JobStatus.class, String.valueOf(obj[index])));
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {

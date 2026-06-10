@@ -40,7 +40,7 @@ public class MessageQRestApi {
         try {
             return new ResponseEntity<>(this.messageQService.fetchLogs(messageQSearch), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while fetchLogs ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while fetchLogs ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -56,7 +56,7 @@ public class MessageQRestApi {
         try {
             return new ResponseEntity<>(this.messageQService.failJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while failJobLogs ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while failJobLogs ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -72,7 +72,7 @@ public class MessageQRestApi {
         try {
             return new ResponseEntity<>(this.messageQService.interruptJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while interruptJobLogs ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while interruptJobLogs ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -88,7 +88,7 @@ public class MessageQRestApi {
         try {
             return new ResponseEntity<>(this.messageQService.changeJobStatus(queueMessageStatus), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while changeJobStatus ", ExceptionUtil.getRootCause(ex));
+            logger.error("An error occurred while changeJobStatus ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }

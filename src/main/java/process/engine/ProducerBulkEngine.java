@@ -102,8 +102,8 @@ public class ProducerBulkEngine {
                             // we have to check if job in the queue then send the detail of job as skip with message
                             JobQueue jobQueue;
                             if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
-                                // if the job in the skip state no need update the last run queue
-                                jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
+                                 // if the job in the skip state no need update the last run queue
+                                    jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
                                 this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
                                 if (this.transactionService.findByJobId(scheduler.getJobId()).get().isSkipJob()) {
                                     this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Skip);

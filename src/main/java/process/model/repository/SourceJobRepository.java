@@ -52,12 +52,12 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     /**
      * Note :- Method use to change status for source job with source task id
      * @param sourceTaskId
-     * @param status Status enum value's name (must be uppercase - e.g., 'DELETE', 'INACTIVE')
+     * @param status Status enum value's name (PascalCase - e.g., 'Delete', 'Inactive')
      * @return int count of updated records
      * */
     @Transactional
     @Modifying
-    @Query(value = "update source_job set job_status = UPPER(?2) where task_detail_id = ?1", nativeQuery = true)
+    @Query(value = "update source_job set job_status = ?2 where task_detail_id = ?1", nativeQuery = true)
     public int statusChangeSourceJobWithSourceTaskId(Long sourceTaskId, String status);
 
 }
