@@ -7,6 +7,7 @@ import com.google.gson.GsonBuilder;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.JobStatus;
+import process.model.enums.Status;
 import process.util.LocalDateTimeAdapter;
 
 import javax.persistence.*;
@@ -82,11 +83,19 @@ public class JobQueue {
     @Column(name = "job_send")
     private boolean jobSend;
 
+    // record status (Active/Inactive/Delete) to manage logical deletion or disabling of queue rows
+    @Column(name = "status",
+        nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Status status;
     public JobQueue() {}
 
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
+        if (this.status == null) {
+            this.status = Status.Active;
+        }
     }
 
     public Long getJobQueueId() {
@@ -175,6 +184,14 @@ public class JobQueue {
 
     public void setJobSend(boolean jobSend) {
         this.jobSend = jobSend;
+    }
+
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        this.status = status;
     }
 
     @Override

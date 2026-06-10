@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
@@ -173,14 +174,28 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto deleteSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
         if (sourceJob.isPresent()) {
+            // mark the source job as deleted
             sourceJob.get().setJobStatus(Status.Delete);
             this.sourceJobRepository.save(sourceJob.get());
+
+            // mark related job_queue rows as deleted (logical delete) using a bulk update query
+            try {
+                int updated = this.jobQueueRepository.updateStatusByJobId(sourceJobDto.getJobId(), Status.Delete);
+                if (updated > 0) {
+                    // update audit log statuses for those queues in a single query
+                    this.jobAuditLogRepository.updateStatusByJobId(sourceJobDto.getJobId(), Status.Delete);
+                }
+            } catch (Exception ex) {
+                logger.error("An error occurred while updating related job queue/audit logs during deleteSourceJob :- {}.", ex);
+            }
+
             return new ResponseDto(SUCCESS, String.format("SourceJob successfully update with %d.", sourceJobDto.getJobId()));
         }
         return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));

@@ -108,7 +108,7 @@ public class QueryService {
         }
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n";
         if (!isCount) {
-            query += "left join source_job sj on sj.task_detail_id = st.task_detail_id\n";
+            query += "left join source_job sj on sj.task_detail_id = st.task_detail_id and sj.job_status in ('Active', 'Inactive')\n";
             query += "left join lookup_data ld1 on cast(ld1.lookup_id as varchar(10)) = st.home_page_id\n";
             query += "left join lookup_data ld2 on cast(ld2.lookup_id as varchar(10)) = st.pipeline_id\n";
         }
@@ -163,7 +163,7 @@ public class QueryService {
                 "cast(sj.last_job_run AS varchar), sj.priority, cast(sj.date_created AS varchar) ";
         }
         String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
-        query += "where st.task_status in ('Delete', 'Inactive', 'Active') ";
+        query += "where st.task_status in ('Active', 'Inactive') and sj.job_status in ('Active', 'Inactive') ";
         if (taskDetailId != null) {
             query += String.format(" and st.task_detail_id = %d ", taskDetailId);
         }
@@ -195,7 +195,12 @@ public class QueryService {
      * @return string
      * */
     public String jobStatusStatistics() {
-        return "select job_status, count(job_id) as total_count from source_job group by job_status";
+        // Return counts for Active and Inactive separately and a combined "All" (Active+Inactive) count.
+        // Exclude 'Delete' status from the counts for "All".
+        return "select job_status, count(job_id) as total_count from source_job\n" +
+            "where job_status in ('Active','Inactive') group by job_status\n" +
+            "union all\n" +
+            "select 'All' as job_status, count(job_id) as total_count from source_job where job_status in ('Active','Inactive')";
     }
 
     /**
@@ -203,9 +208,11 @@ public class QueryService {
      * @return string
      * */
     public String jobRunningStatistics() {
+        // Only consider jobs which are Active or Inactive (exclude Deleted) when generating running stats
         return "select UPPER(job_running_status) as job_running_status, count(job_id) as total_count\n" +
             "from source_job\n" +
             "where UPPER(job_running_status) in ('START', 'RUNNING', 'FAILED', 'COMPLETED')\n" +
+            "and UPPER(job_status) in ('ACTIVE','INACTIVE')\n" +
             "group by UPPER(job_running_status)";
     }
 
@@ -216,10 +223,11 @@ public class QueryService {
      * @return string
      * */
     public String weeklyRunningJobStatistics(String startDate, String endDate) {
+        // Only include job_queue entries for jobs that are Active or Inactive
         return String.format("select weekData.daycode, count(*) from (\n" +
-            "select job_queue_id, to_char(cast(date_created as date), 'Dy') as daycode,\n" +
-            "cast(date_created as date)\n" +
-            "from job_queue where date(date_created) between '%s' and '%s') as weekData\n" +
+            "select job_queue_id, to_char(cast(jq.date_created as date), 'Dy') as daycode,\n" +
+            "cast(jq.date_created as date)\n" +
+            "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created) between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')) as weekData\n" +
             "group by weekData.daycode", startDate, endDate);
     }
 
@@ -230,11 +238,12 @@ public class QueryService {
      * @return string
      * */
     public String weeklyHrsRunningJobStatistics(String startDate, String endDate) {
+        // Only include job_queue entries for jobs that are Active or Inactive
         return String.format("select weekData.daycode, weekData.hr, weekData.date, count(*)\n" +
-            "from (select job_queue_id, to_char(cast(date_created as date), 'Day') as daycode,\n" +
-            "cast(date_created as date) as date, cast(date_created as time) as time, \n" +
-            "extract(hour from cast(date_created as time)) as hr\n" +
-            "from job_queue where date(date_created) between '%s' and '%s') as weekData\n" +
+            "from (select job_queue_id, to_char(cast(jq.date_created as date), 'Day') as daycode,\n" +
+            "cast(jq.date_created as date) as date, cast(jq.date_created as time) as time, \n" +
+            "extract(hour from cast(jq.date_created as time)) as hr\n" +
+            "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created) between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')) as weekData\n" +
             "group by weekData.daycode, weekData.hr, weekData.date", startDate, endDate);
     }
 
@@ -245,6 +254,7 @@ public class QueryService {
      * @return string
      * */
     public String weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) {
+        // Only include job_queue entries for jobs that are Active or Inactive
         return String.format("select job_queue.job_id, source_job.job_name,\n" +
             "count (case when UPPER(job_queue.job_status) = 'QUEUE' then job_queue.job_id end) as Queue,\n" +
             "count (case when UPPER(job_queue.job_status) = 'START' then job_queue.job_id end) as Start,\n" +
@@ -257,7 +267,7 @@ public class QueryService {
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d\n" +
+            "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n" +
             "group by job_queue.job_id, source_job.job_name\n" +
             "union\n" +
             "select null as job_id, null as job_name,\n" +
@@ -272,7 +282,7 @@ public class QueryService {
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d\n" +
+            "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n" +
             "order by job_id asc\n", targetDate, targetHr, targetDate, targetHr);
     }
 
@@ -282,6 +292,7 @@ public class QueryService {
      * @return string
      * */
     public String statisticsBySourceJobId(Long jobId) {
+        // Only include job_queue entries for jobs that are Active or Inactive
         return String.format("select\n" +
             "count (case when UPPER(job_queue.job_status) = 'QUEUE' then job_queue.job_id end) as Queue,\n" +
             "count (case when UPPER(job_queue.job_status) = 'START' then job_queue.job_id end) as Start,\n" +
@@ -294,7 +305,7 @@ public class QueryService {
             "count (*) as total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where source_job.job_id = %d", jobId);
+            "where source_job.job_id = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')", jobId);
     }
 
     public String weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) {
@@ -311,6 +322,9 @@ public class QueryService {
         }
         if (!ProcessUtil.isNull(jobStatus)) {
             query += String.format("and UPPER(job_queue.job_status) = UPPER('%s')\n", jobStatus);
+        } else {
+            // when no specific jobStatus requested, only include source jobs that are Active or Inactive
+            query += "and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n";
         }
         query += "\norder by job_queue.job_queue_id desc";
         return query;
@@ -319,30 +333,36 @@ public class QueryService {
     public String fetchJobQLog(MessageQSearchDto messageQSearch, boolean isState) {
         String selectPortion;
         if (isState) {
-            selectPortion = "select UPPER(job_status) as job_status, count(*) as total_count \n";
+            // summarize by job_queue job_status (Queue/Start/Running/etc.)
+            selectPortion = "select UPPER(jq.job_status) as job_status, count(*) as total_count \n";
         } else {
-            selectPortion = "select * \n";
+            // Explicitly select job_queue columns only (use jq alias) to avoid duplicate column aliases from joining source_job
+            // Order must match the mapping in MessageQServiceImpl.fetchLogs
+            selectPortion = "select jq.job_queue_id, jq.date_created, jq.end_time, jq.job_id, jq.job_send, jq.job_status, jq.job_status_message, jq.run_manual, jq.skip_manual, jq.skip_time, jq.start_time \n";
         }
-        String query = selectPortion + "from job_queue \n";
+        // always join with source_job so we can filter by source job status (Active/Inactive)
+        String query = selectPortion + "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id \n";
         if (!isState) {
-            query += String.format("where cast(date_created as date) between '%s' and '%s' \n",
+            query += String.format("where cast(jq.date_created as date) between '%s' and '%s' \n",
                     messageQSearch.getFromDate(), messageQSearch.getToDate());
             if (!ProcessUtil.isNull(messageQSearch.getJobId()) && !messageQSearch.getJobId().isEmpty()) {
                 String jobId = messageQSearch.getJobId().toString();
-                query += String.format("and job_id in (%s) \n", jobId.substring(1, jobId.length()-1));
+                query += String.format("and jq.job_id in (%s) \n", jobId.substring(1, jobId.length()-1));
             }
             if (!ProcessUtil.isNull(messageQSearch.getJobQId()) && !messageQSearch.getJobQId().isEmpty()) {
                 String jobQId = messageQSearch.getJobQId().toString();
-                query += String.format("and job_queue_id in (%s) \n", jobQId.substring(1, jobQId.length()-1));
+                query += String.format("and jq.job_queue_id in (%s) \n", jobQId.substring(1, jobQId.length()-1));
             }
             if (!ProcessUtil.isNull(messageQSearch.getJobStatuses()) && !messageQSearch.getJobStatuses().isEmpty()) {
                 String jobStatus = messageQSearch.getJobStatuses().stream()
                         .map(jobStatus1 -> "'" + jobStatus1.toString().toUpperCase() + "',").collect(Collectors.joining());
-                query += String.format("and UPPER(job_status) in (%s)", jobStatus.substring(0,jobStatus.length()-1));
+                query += String.format("and UPPER(jq.job_status) in (%s)", jobStatus.substring(0,jobStatus.length()-1));
             }
         }
         if (isState) {
-            query += "\ngroup by UPPER(job_status)";
+            // For state summary, only include job_queue rows for source jobs that are Active or Inactive
+            query += "where UPPER(sj.job_status) in ('ACTIVE','INACTIVE')\n";
+            query += "\ngroup by UPPER(jq.job_status)";
         }
         if (!isState) {
             query += "\norder by job_queue_id desc";

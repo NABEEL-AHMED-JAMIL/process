@@ -7,6 +7,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import process.model.enums.Status;
 
 /**
  * Detail for job-audit-logs
@@ -46,11 +47,19 @@ public class JobAuditLogs {
         nullable = false)
     private Timestamp dateCreated;
 
+    @Column(name = "status",
+        nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
     public JobAuditLogs() {}
 
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
+        if (this.status == null) {
+            this.status = Status.Active;
+        }
     }
 
     public Long getJobAuditLogId() {
@@ -83,6 +92,14 @@ public class JobAuditLogs {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        this.status = status;
     }
 
     @Override

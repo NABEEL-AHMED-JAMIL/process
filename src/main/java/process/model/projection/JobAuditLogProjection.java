@@ -13,4 +13,6 @@ public interface JobAuditLogProjection {
 
     public String getDateCreated();
 
+    public String getStatus();
+
 }

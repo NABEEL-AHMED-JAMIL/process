@@ -3,6 +3,9 @@ package process;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.TimeZone;
 import process.util.ProcessUtil;
 import process.model.pojo.LookupData;
 import javax.annotation.PostConstruct;
@@ -28,6 +31,10 @@ public class ModelApplication {
      * */
     public static void main(String[] args) {
         try {
+            // set application default timezone to America/Chicago so all LocalDate/Time operations
+            // that rely on the system default will use the Chicago timezone
+            TimeZone.setDefault(TimeZone.getTimeZone("America/Chicago"));
+            LoggerFactory.getLogger(ModelApplication.class).info("Default TimeZone: {}", TimeZone.getDefault().getID());
             SpringApplication.run(ModelApplication.class, args);
         } catch (Exception e) {
             e.printStackTrace();
@@ -39,12 +46,23 @@ public class ModelApplication {
      * */
     @PostConstruct
     public void started() {
-        // default system timezone for application
-        LocalDateTime now = LocalDateTime.now();
-        LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
-        if (!ProcessUtil.isNull(lookupData)) {
-            lookupData.setLookupValue(now.toString());
-            this.transactionService.updateLookupDate(lookupData);
+        logger.info("========== @PostConstruct started() method called ==========");
+        try {
+            // default system timezone for application
+            // use ZonedDateTime with Chicago zone to be explicit when storing scheduler last run
+            ZonedDateTime znow = ZonedDateTime.now(ZoneId.of("America/Chicago"));
+            LocalDateTime now = znow.toLocalDateTime();
+            logger.info("=========Current Chicago Time: {} ==========", now);
+            LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
+            if (!ProcessUtil.isNull(lookupData)) {
+                lookupData.setLookupValue(now.toString());
+                this.transactionService.updateLookupDate(lookupData);
+                logger.info("=========Updated SCHEDULER_LAST_RUN_TIME to {} ==========", now);
+            } else {
+                logger.warn("=========SCHEDULER_LAST_RUN_TIME lookup_data is NULL ==========");
+            }
+        } catch (Exception e) {
+            logger.error("=========Error in @PostConstruct started() method: {} ==========", e.getMessage(), e);
         }
     }
 

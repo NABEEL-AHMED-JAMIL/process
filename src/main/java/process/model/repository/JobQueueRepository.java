@@ -1,9 +1,12 @@
 package process.model.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.JobQueue;
+import process.model.enums.Status;
 import java.util.List;
 
 /**
@@ -35,5 +38,24 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
      * */
     @Query(value = "select count(*) from job_queue where job_id = ?1", nativeQuery = true)
     public int getCountForJobByJobId(Long jobId);
+
+    /**
+     * Find all job_queue rows for a given job id
+     * @param jobId
+     * @return List<JobQueue>
+     */
+    public java.util.List<JobQueue> findAllByJobId(Long jobId);
+
+    /**
+     * Bulk update status for job_queue rows by job id
+     * @param jobId
+     * @param status
+     * @return number of rows updated
+     */
+    @Transactional
+    @Modifying
+    @Query(value = "update job_queue set status = ?2 where job_id = ?1", nativeQuery = true)
+    int updateStatusByJobId(Long jobId, Status status);
+
 
 }

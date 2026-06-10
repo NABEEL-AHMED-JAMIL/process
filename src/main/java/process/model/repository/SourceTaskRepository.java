@@ -19,17 +19,25 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
      * Note :- Method use to find the all source task
      * @return List<Long>
      * */
-    @Query(value = "select task_detail_id, task_name from source_task\n" +
+    @Query(value = "select task_detail_id from source_task\n" +
         "where task_status = 'Active'", nativeQuery = true)
-    public List<Long> findAllSourceTask();
+    List<Long> findAllSourceTask();
 
     /**
-     * Note :- Method use to find the task by task detai id and task status
+     * Note :- Method use to find the task by task detail id and task status
      * @param taskDetailId
      * @param taskStatus
      * @return Optional<SourceTask>
      * */
-    public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId, Status taskStatus);
+    Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId, Status taskStatus);
+
+    /**
+     * Note :- Method use to get the count of active and inactive tasks linked to a job
+     * @param taskDetailId
+     * @return int
+     * */
+    @Query(value = "select count(*) from source_task where task_detail_id = ?1 and task_status in ('Active', 'Inactive')", nativeQuery = true)
+    int getCountActiveInactiveTasksBySourceTaskId(Long taskDetailId);
 
     /**
      * Note :- Method use to find the download source task
