@@ -3,6 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import process.emailer.EmailMessagesFactory;
 import process.engine.BulkAction;
@@ -41,6 +42,7 @@ public class NotifyServiceImpl implements NotifyService {
      * Method use to change statue for job
      * @param jobQueue
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ResponseDto changeState(SourceJobQueueDto jobQueue) {
         logger.info("Received request to change job {} queue {} status to {}", jobQueue.getJobId(), jobQueue.getJobQueueId(), jobQueue.getJobStatus());
         Optional<SourceJob> job = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);

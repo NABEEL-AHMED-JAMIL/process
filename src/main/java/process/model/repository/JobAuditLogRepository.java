@@ -33,12 +33,12 @@ public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long>
     /**
      * Update status for audit logs belonging to job queues of a job
      * @param jobId
-     * @param status
+     * @param statusName the enum name as string (e.g., "Delete", "Active")
      * @return rows updated
      */
     @Transactional
     @Modifying
     @Query(value = "update job_audit_logs set status = ?2 where job_queue_id in (select job_queue_id from job_queue where job_id = ?1)", nativeQuery = true)
-    public int updateStatusByJobId(Long jobId, Status status);
+    public int updateStatusByJobId(Long jobId, String statusName);
 
 }

@@ -54,12 +54,18 @@ public class ModelApplication {
             LocalDateTime now = znow.toLocalDateTime();
             logger.info("=========Current Chicago Time: {} ==========", now);
             LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
-            if (!ProcessUtil.isNull(lookupData)) {
-                lookupData.setLookupValue(now.toString());
-                this.transactionService.updateLookupDate(lookupData);
-                logger.info("=========Updated SCHEDULER_LAST_RUN_TIME to {} ==========", now);
+            if (ProcessUtil.isNull(lookupData)) {
+                // Only initialize SCHEDULER_LAST_RUN_TIME if it doesn't exist
+                // Do not overwrite existing value on restart to preserve scheduler state
+                LookupData newLookupData = new LookupData();
+                newLookupData.setLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
+                newLookupData.setLookupValue(now.toString());
+                this.transactionService.updateLookupDate(newLookupData);
+                logger.info("=========Initialized SCHEDULER_LAST_RUN_TIME to {} ==========", now);
             } else {
-                logger.warn("=========SCHEDULER_LAST_RUN_TIME lookup_data is NULL ==========");
+                // SCHEDULER_LAST_RUN_TIME already exists, don't overwrite it on restart
+                // This preserves the scheduler state and prevents skipping scheduled jobs
+                logger.info("=========SCHEDULER_LAST_RUN_TIME already exists: {} (not overwriting on restart) ==========", lookupData.getLookupValue());
             }
         } catch (Exception e) {
             logger.error("=========Error in @PostConstruct started() method: {} ==========", e.getMessage(), e);

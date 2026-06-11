@@ -49,13 +49,13 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     /**
      * Bulk update status for job_queue rows by job id
      * @param jobId
-     * @param status
+     * @param statusName the enum name as string (e.g., "Delete", "Active")
      * @return number of rows updated
      */
     @Transactional
     @Modifying
     @Query(value = "update job_queue set status = ?2 where job_id = ?1", nativeQuery = true)
-    int updateStatusByJobId(Long jobId, Status status);
+    int updateStatusByJobId(Long jobId, String statusName);
 
 
 }

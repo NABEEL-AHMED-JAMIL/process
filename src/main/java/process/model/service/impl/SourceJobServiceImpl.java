@@ -187,10 +187,10 @@ public class SourceJobServiceImpl implements SourceJobService {
 
             // mark related job_queue rows as deleted (logical delete) using a bulk update query
             try {
-                int updated = this.jobQueueRepository.updateStatusByJobId(sourceJobDto.getJobId(), Status.Delete);
+                int updated = this.jobQueueRepository.updateStatusByJobId(sourceJobDto.getJobId(), Status.Delete.name());
                 if (updated > 0) {
                     // update audit log statuses for those queues in a single query
-                    this.jobAuditLogRepository.updateStatusByJobId(sourceJobDto.getJobId(), Status.Delete);
+                    this.jobAuditLogRepository.updateStatusByJobId(sourceJobDto.getJobId(), Status.Delete.name());
                 }
             } catch (Exception ex) {
                 logger.error("An error occurred while updating related job queue/audit logs during deleteSourceJob :- {}.", ex);
