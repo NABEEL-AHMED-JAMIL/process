@@ -22,7 +22,7 @@ public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long>
      * @return List<JobAuditLogProjection>
      * */
     @Query(value = "select job_audit_log_id as jobAuditLogId, job_queue_id as jobQueueId, log_detail as logsDetail, date_created as dateCreated, status as status " +
-        "from job_audit_logs where job_queue_id = ?", nativeQuery = true)
+        "from job_audit_logs where job_queue_id = ? order by date_created asc", nativeQuery = true)
     public List<JobAuditLogProjection> findAllByJobQueueIdV1(Long jobQueueId);
 
     /**

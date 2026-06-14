@@ -9,6 +9,7 @@ import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.pojo.SourceTaskType;
+import process.model.repository.JobQueueRepository;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
@@ -29,15 +30,18 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final QueryService queryService;
     private final SourceJobRepository sourceJobRepository;
+    private final JobQueueRepository jobQueueRepository;
     private final SchedulerRepository schedulerRepository;
     private final LookupDataRepository lookupDataRepository;
 
     public DashboardServiceImpl(QueryService queryService,
         SourceJobRepository sourceJobRepository,
+        JobQueueRepository jobQueueRepository,
         SchedulerRepository schedulerRepository,
         LookupDataRepository lookupDataRepository) {
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
+        this.jobQueueRepository = jobQueueRepository;
         this.schedulerRepository = schedulerRepository;
         this.lookupDataRepository = lookupDataRepository;
     }
@@ -136,13 +140,23 @@ public class DashboardServiceImpl implements DashboardService {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimension(targetDate, targetHr));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<WeeklyHrJobDimensionStatisticsDto> weeklyJobStatistics = new ArrayList<>();
-            for(Object[] obj : result) {
-                int index = 0;
-                weeklyJobStatistics.add(new WeeklyHrJobDimensionStatisticsDto(
-                    obj[index] != null ? Long.valueOf(obj[index].toString()) : null, String.valueOf(obj[++index]),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                    Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),Long.valueOf(obj[++index].toString())));
+            for (Object[] obj : result) {
+                int i = 0;
+                Long jobId = obj[i] != null ? Long.valueOf(obj[i].toString()) : null;
+                String jobName = obj[++i] != null ? obj[i].toString() : null;
+                Long queue = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long start = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long running = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long failed = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long completed = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long stop = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long skip = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long interrupt = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long total = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                weeklyJobStatistics.add(
+                    new WeeklyHrJobDimensionStatisticsDto(jobId, jobName,
+                        queue, start, running, failed, completed, stop, skip, interrupt, total)
+                );
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
         }

@@ -255,35 +255,50 @@ public class QueryService {
      * */
     public String weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) {
         // Only include job_queue entries for jobs that are Active or Inactive
-        return String.format("select job_queue.job_id, source_job.job_name,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'QUEUE' then job_queue.job_id end) as Queue,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'START' then job_queue.job_id end) as Start,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'RUNNING' then job_queue.job_id end) as Running,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'FAILED' then job_queue.job_id end) as Failed,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'COMPLETED' then job_queue.job_id end) as Completed,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'STOP' then job_queue.job_id end) as Stop,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'SKIP' then job_queue.job_id end) as Skip,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'INTERRUPT' then job_queue.job_id end) as Interrupt,\n"+
-            "count (*) as total\n" +
-            "from job_queue\n" +
-            "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n" +
-            "group by job_queue.job_id, source_job.job_name\n" +
-            "union\n" +
-            "select null as job_id, null as job_name,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'QUEUE' then job_queue.job_id end) as Queue,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'START' then job_queue.job_id end) as Start,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'RUNNING' then job_queue.job_id end) as Running,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'FAILED' then job_queue.job_id end) as Failed,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'COMPLETED' then job_queue.job_id end) as Completed,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'STOP' then job_queue.job_id end) as Stop,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'SKIP' then job_queue.job_id end) as Skip,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'INTERRUPT' then job_queue.job_id end) as Interrupt,\n"+
-            "count (*) as total\n" +
-            "from job_queue\n" +
-            "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where date(job_queue.date_created) = '%s' and extract(hour from cast(job_queue.date_created as time)) = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n" +
-            "order by job_id asc\n", targetDate, targetHr, targetDate, targetHr);
+        return String.format(
+            "SELECT * FROM (\n" +
+                "    SELECT \n" +
+                "        job_queue.job_id,\n" +
+                "        source_job.job_name,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'QUEUE' THEN 1 END) AS queue,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'START' THEN 1 END) AS start,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'RUNNING' THEN 1 END) AS running,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'FAILED' THEN 1 END) AS failed,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'COMPLETED' THEN 1 END) AS completed,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'STOP' THEN 1 END) AS stop,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'SKIP' THEN 1 END) AS skip,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'INTERRUPT' THEN 1 END) AS interrupt,\n" +
+                "        COUNT(*) AS total\n" +
+                "    FROM job_queue\n" +
+                "    INNER JOIN source_job ON source_job.job_id = job_queue.job_id\n" +
+                "    WHERE DATE(job_queue.date_created) = '%s'\n" +
+                "      AND EXTRACT(HOUR FROM job_queue.date_created) = %d\n" +
+                "      AND UPPER(source_job.job_status) IN ('ACTIVE','INACTIVE')\n" +
+                "    GROUP BY job_queue.job_id, source_job.job_name\n" +
+                "\n" +
+                "    UNION ALL\n" +
+                "\n" +
+                "    SELECT \n" +
+                "        NULL AS job_id,\n" +
+                "        'TOTAL' AS job_name,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'QUEUE' THEN 1 END),\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'START' THEN 1 END),\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'RUNNING' THEN 1 END),\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'FAILED' THEN 1 END),\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'COMPLETED' THEN 1 END),\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'STOP' THEN 1 END),\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'SKIP' THEN 1 END),\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'INTERRUPT' THEN 1 END),\n" +
+                "        COUNT(*)\n" +
+                "    FROM job_queue\n" +
+                "    INNER JOIN source_job ON source_job.job_id = job_queue.job_id\n" +
+                "    WHERE DATE(job_queue.date_created) = '%s'\n" +
+                "      AND EXTRACT(HOUR FROM job_queue.date_created) = %d\n" +
+                "      AND UPPER(source_job.job_status) IN ('ACTIVE','INACTIVE')\n" +
+                ") t\n" +
+                "ORDER BY job_id ASC NULLS LAST",
+                targetDate, targetHr, targetDate, targetHr
+        );
     }
 
     /**
@@ -293,19 +308,21 @@ public class QueryService {
      * */
     public String statisticsBySourceJobId(Long jobId) {
         // Only include job_queue entries for jobs that are Active or Inactive
-        return String.format("select\n" +
-            "count (case when UPPER(job_queue.job_status) = 'QUEUE' then job_queue.job_id end) as Queue,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'START' then job_queue.job_id end) as Start,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'RUNNING' then job_queue.job_id end) as Running,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'FAILED' then job_queue.job_id end) as Failed,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'COMPLETED' then job_queue.job_id end) as Completed,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'STOP' then job_queue.job_id end) as Stop,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'SKIP' then job_queue.job_id end) as Skip,\n" +
-            "count (case when UPPER(job_queue.job_status) = 'INTERRUPT' then job_queue.job_id end) as Interrupt,\n"+
-            "count (*) as total\n" +
+        return String.format(
+            "SELECT\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'QUEUE' THEN job_queue.job_id END) AS Queue,\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'START' THEN job_queue.job_id END) AS Start,\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'RUNNING' THEN job_queue.job_id END) AS Running,\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'FAILED' THEN job_queue.job_id END) AS Failed,\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'COMPLETED' THEN job_queue.job_id END) AS Completed,\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'STOP' THEN job_queue.job_id END) AS Stop,\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'SKIP' THEN job_queue.job_id END) AS Skip,\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'INTERRUPT' THEN job_queue.job_id END) AS Interrupt,\n" +
+            "COUNT(*) AS total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where source_job.job_id = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')", jobId);
+            "where source_job.job_id = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')", jobId
+        );
     }
 
     public String weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) {
