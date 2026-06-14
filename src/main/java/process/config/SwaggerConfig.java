@@ -31,8 +31,8 @@ public class SwaggerConfig {
     }
 
     private ApiInfo apiInfo() {
-        return new ApiInfo("Process API", "Basic IMR Api.","1.0", "Terms of service",
-            new Contact("Nabeel Ahmed", "www.process.com", "nabeel.amd93@gmail.com"), "License of API", "API license URL",
+        return new ApiInfo("Process API", "Basic ETL Api.","1.0", "Terms of service",
+            new Contact("Nabeel Ahmed Jamil", "www.process.com", "nabeel.amd93@gmail.com"), "License of API", "API license URL",
                 Collections.emptyList());
     }
 

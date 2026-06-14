@@ -97,8 +97,8 @@ public class EmailMessagesFactory {
                     helper.setCc(ccSendTo);
                 }
                 helper.setSubject(emailContent.getSubject());
-                helper.setText(this.velocityManager.getResponseMessage(
-                    emailContent.getEmailTemplateName(), emailContent.getBodyMap()), true);
+                String message = this.velocityManager.getResponseMessage(emailContent.getEmailTemplateName(), emailContent.getBodyMap());
+                helper.setText(message, true);
                 this.javaMailSender.send(mailMessage);
                 logger.info("Email Send Successfully Content :- {}.", emailContent.getBodyMap().toString());
             } else {

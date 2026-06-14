@@ -1,6 +1,5 @@
 package process.engine.cron;
 
-import com.google.gson.Gson;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -53,11 +52,6 @@ public class ProcessCron {
         } catch (Exception e) {
             logger.error("Error in startJobInCurrentTimeSlot scheduler: {}", e.getMessage(), e);
         }
-    }
-
-    @Override
-    public String toString() {
-        return new Gson().toJson(this);
     }
 
 }

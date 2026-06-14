@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.*;
 import process.model.dto.ResponseDto;
 import process.model.service.DashboardService;
 import process.util.ProcessUtil;
-import process.util.exception.ExceptionUtil;
 
 /**
  * Api use to perform crud operation on dashboard

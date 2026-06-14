@@ -10,7 +10,6 @@ import process.model.dto.QueueMessageStatusDto;
 import process.model.dto.ResponseDto;
 import process.model.service.MessageQService;
 import process.util.ProcessUtil;
-import process.util.exception.ExceptionUtil;
 
 /**
  * Api use to perform crud operation on dashboard

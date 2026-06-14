@@ -11,5 +11,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V5.0-update-lob-columns.yaml
   - exclude:
       file: db/changelog/yaml/V6.0-fix-lob-to-text.yaml
-  - include:
+  - exclude:
       file: db/changelog/yaml/V7.0-add-status.yaml

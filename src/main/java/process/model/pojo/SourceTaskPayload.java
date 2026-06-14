@@ -36,7 +36,7 @@ public class SourceTaskPayload {
     @Column(name = "tag_parent", nullable = true)
     private String tagParent;
 
-    @Column(name = "tag_value", nullable = true)
+    @Column(name = "tag_value", nullable = true, columnDefinition = "TEXT")
     private String tagValue;
 
     public SourceTaskPayload() {
