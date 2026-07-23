@@ -1,6 +1,5 @@
 package process.engine;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -8,6 +7,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 import process.emailer.EmailMessagesFactory;
+import process.engine.dto.JobPayloadDTO;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -31,19 +31,16 @@ public class ProducerBulkEngine {
 
     private final Pattern pattern;
     private final BulkAction bulkAction;
-    private final ObjectMapper objectMapper;
     private final TransactionServiceImpl transactionService;
     private final EmailMessagesFactory emailMessagesFactory;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public ProducerBulkEngine(BulkAction bulkAction,
-        ObjectMapper objectMapper,
         TransactionServiceImpl transactionService,
         EmailMessagesFactory emailMessagesFactory,
         KafkaTemplate<String, String> kafkaTemplate) {
         this.pattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$");
         this.bulkAction = bulkAction;
-        this.objectMapper = objectMapper;
         this.transactionService = transactionService;
         this.emailMessagesFactory = emailMessagesFactory;
         this.kafkaTemplate = kafkaTemplate;
@@ -184,8 +181,7 @@ public class ProducerBulkEngine {
                         String partition = matcher.group(2);
                         // random key for sending to partitions
                         String key = UUID.randomUUID().toString();
-                        String payload = this.objectMapper.writeValueAsString(
-                            this.fillPayloadDetail(sourceJob, jobQueue));
+                        String payload = this.getSourceJobDetail(sourceJob, jobQueue);
                         try {
                             if (partition.contains(ProcessUtil.START)) {
                                 this.kafkaTemplate.send(topic, key, payload)
@@ -314,17 +310,21 @@ public class ProducerBulkEngine {
      * @param jobQueue
      * @return Map<String, Object>
      * */
-    private Map<String, Object> fillPayloadDetail(SourceJob sourceJob, JobQueue jobQueue) {
-        Map<String, Object> payload = new HashMap<>();
-        try {
-            payload.put(ProcessUtil.TASK_ID, sourceJob.getJobId() + "-" + jobQueue.getJobId());
-            payload.put(ProcessUtil.JOB_QUEUE, jobQueue);
-            payload.put(ProcessUtil.TASK_DETAIL, sourceJob.getTaskDetail());
-            payload.put(ProcessUtil.PRIORITY, sourceJob.getPriority());
-        } catch (Exception e) {
-            throw new RuntimeException("Error converting payload to JSON", e);
+    private String getSourceJobDetail(SourceJob sourceJob, JobQueue jobQueue) {
+        JobPayloadDTO dto = new JobPayloadDTO();
+        dto.setJobQueueId(jobQueue.getJobQueueId());
+        dto.setJobId(jobQueue.getJobId());
+        if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
+            if (!ProcessUtil.isNull(sourceJob.getTaskDetail().getHomePageId())) {
+                dto.setHomePageId(this.transactionService.findLookupValueByLookupId(Long.valueOf(sourceJob.getTaskDetail().getHomePageId())));
+            }
+            if (!ProcessUtil.isNull(sourceJob.getTaskDetail().getPipelineId())) {
+                dto.setPipelineId(this.transactionService.findLookupValueByLookupId(Long.valueOf(sourceJob.getTaskDetail().getPipelineId())));
+            }
+            dto.setTaskPayload(sourceJob.getTaskDetail().getTaskPayload());
         }
-        return payload;
+        dto.setPriority(sourceJob.getPriority());
+        return dto.toString();
     }
 
     @Override

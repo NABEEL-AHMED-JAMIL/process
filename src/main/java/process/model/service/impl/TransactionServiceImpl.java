@@ -150,6 +150,15 @@ public class TransactionServiceImpl {
     }
 
     /**
+    * The method use to fine the lookup-data by lookup id
+    * @param lookupId
+    * @return String
+    */
+    public String findLookupValueByLookupId(Long lookupId) {
+        return this.lookupDataRepository.findById(lookupId).get().getLookupValue();
+    }
+
+    /**
      * Method use to fetch task detail by task status
      * @return Optional<SourceTask>
      */

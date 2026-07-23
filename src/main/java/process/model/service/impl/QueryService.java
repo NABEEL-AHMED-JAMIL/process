@@ -104,7 +104,9 @@ public class QueryService {
             selectPortion = "select count(*) as result\n";
         } else {
             selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, ld1.lookup_type as home_page_id, " +
-                "ld2.lookup_type as pipeline_id, st.task_status, stt.*, count(sj.job_id) as total_link_jobs\n";
+                "ld2.lookup_type as pipeline_id, st.task_status, stt.source_task_type_id, stt.service_name, " +
+                "stt.description, stt.queue_topic_partition, stt.task_type_status, stt.is_schema_register, " +
+                "stt.schema_payload, count(sj.job_id) as total_link_jobs\n";
         }
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n";
         if (!isCount) {
