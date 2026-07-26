@@ -52,6 +52,11 @@ public class LookupData {
         nullable = false)
     private Timestamp dateCreated;
 
+    /** When true, lookupValue holds ciphertext (see process.util.EncryptionUtil), not plain text. */
+    @Column(name = "is_encrypted", nullable = false,
+        columnDefinition = "boolean not null default false")
+    private Boolean encrypted = false;
+
     @ManyToOne
     @JoinColumn(name = "parentLookupId")
     protected LookupData parent;
@@ -104,6 +109,14 @@ public class LookupData {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Boolean getEncrypted() {
+        return encrypted;
+    }
+
+    public void setEncrypted(Boolean encrypted) {
+        this.encrypted = encrypted;
     }
 
     public LookupData getParent() {

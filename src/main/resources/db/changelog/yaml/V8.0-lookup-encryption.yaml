@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 8.0-add-lookup-encrypted-column
+      author: nabeel.amd93
+      description: "Add is_encrypted column to lookup_data (default FALSE)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V8.0-lookup-encryption/V8__add_lookup_encrypted_column.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Rollback: remove is_encrypted column (use with caution)
+              ALTER TABLE lookup_data DROP COLUMN IF EXISTS is_encrypted;

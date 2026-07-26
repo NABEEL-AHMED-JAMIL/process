@@ -13,3 +13,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V6.0-fix-lob-to-text.yaml
   - exclude:
       file: db/changelog/yaml/V7.0-add-status.yaml
+  - include:
+      file: db/changelog/yaml/V8.0-lookup-encryption.yaml

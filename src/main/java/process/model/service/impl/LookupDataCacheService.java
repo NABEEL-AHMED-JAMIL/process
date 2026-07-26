@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.LookupDataDto;
 import process.model.pojo.LookupData;
 import process.model.repository.LookupDataRepository;
+import process.util.EncryptionUtil;
 import javax.annotation.PostConstruct;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,9 +24,11 @@ public class LookupDataCacheService {
     private Map<String, LookupDataDto> lookupCacheMap = new HashMap<>();
 
     private final LookupDataRepository lookupDataRepository;
+    private final EncryptionUtil encryptionUtil;
 
-    public LookupDataCacheService(LookupDataRepository lookupDataRepository) {
+    public LookupDataCacheService(LookupDataRepository lookupDataRepository, EncryptionUtil encryptionUtil) {
         this.lookupDataRepository = lookupDataRepository;
+        this.encryptionUtil = encryptionUtil;
     }
 
     @PostConstruct
@@ -76,7 +79,9 @@ public class LookupDataCacheService {
     }
 
     /**
-     * Method use to convert lookup data dto to lookup data
+     * Method use to convert lookup data dto to lookup data. This cache is read internally by
+     * other backend code (e.g. QUEUE_FETCH_LIMIT, EMAIL_RECEIVER), never returned over the API,
+     * so encrypted values are decrypted here for consumers to use transparently.
      * @param lookupData
      * @return LookupDataDto
      * */
@@ -84,7 +89,10 @@ public class LookupDataCacheService {
         LookupDataDto lookupDataDto = new LookupDataDto();
         lookupDataDto.setLookupId(lookupData.getLookupId());
         lookupDataDto.setLookupType(lookupData.getLookupType());
-        lookupDataDto.setLookupValue(lookupData.getLookupValue());
+        lookupDataDto.setEncrypted(lookupData.getEncrypted());
+        lookupDataDto.setLookupValue(Boolean.TRUE.equals(lookupData.getEncrypted())
+            ? this.encryptionUtil.decrypt(lookupData.getLookupValue())
+            : lookupData.getLookupValue());
         lookupDataDto.setDescription(lookupData.getDescription());
         lookupDataDto.setDateCreated(lookupData.getDateCreated());
         return lookupDataDto;

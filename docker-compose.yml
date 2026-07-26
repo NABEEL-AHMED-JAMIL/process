@@ -72,6 +72,8 @@ services:
     restart: always
     ports:
       - "9098:9098"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
@@ -88,6 +90,20 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-35f35312703886}
       SOCKET_SESSION_ID: ${SOCKET_SESSION_ID:-0hw0dz34}
       SOCKET_TRANSACTION_ID: ${SOCKET_TRANSACTION_ID:-40ef-dd1d-bd9f-1d7f}
+      # Base64-encoded 256-bit AES key for encrypted lookup values (openssl rand -base64 32).
+      # Rotating this makes any already-encrypted lookup values undecryptable -- override via
+      # a real LOOKUP_ENCRYPTION_KEY env var rather than editing this fallback once real
+      # encrypted data exists.
+      LOOKUP_ENCRYPTION_KEY: ${LOOKUP_ENCRYPTION_KEY:-RACT0Saglm5Lastgky0Z3RgMXiZbSjxiNvgbnQDtMwc=}
+      # Bucket Browser storage (MinIO reached via the host, since it's a separate compose
+      # project's container; only required if a bucket in the BUCKET_LIST lookup uses it)
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://host.docker.internal:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      AWS_S3_ACCESS_KEY: ${AWS_S3_ACCESS_KEY:-}
+      AWS_S3_SECRET_KEY: ${AWS_S3_SECRET_KEY:-}
+      AWS_S3_REGION: ${AWS_S3_REGION:-us-east-1}
+      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING:-}
     depends_on:
       postgres:
         condition: service_healthy

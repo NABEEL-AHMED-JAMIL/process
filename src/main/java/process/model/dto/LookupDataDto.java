@@ -18,6 +18,7 @@ public class LookupDataDto {
     private String lookupType;
     private String description;
     private Timestamp dateCreated;
+    private Boolean encrypted;
     private Long parentLookupId;
     protected LookupDataDto parent;
     protected Set<LookupDataDto> children;
@@ -62,6 +63,14 @@ public class LookupDataDto {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public Boolean getEncrypted() {
+        return encrypted;
+    }
+
+    public void setEncrypted(Boolean encrypted) {
+        this.encrypted = encrypted;
     }
 
     public Long getParentLookupId() {

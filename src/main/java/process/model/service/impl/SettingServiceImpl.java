@@ -14,6 +14,7 @@ import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.service.SettingService;
+import process.util.EncryptionUtil;
 import java.util.*;
 import static process.util.ProcessUtil.*;
 
@@ -28,20 +29,25 @@ public class SettingServiceImpl implements SettingService {
     private final String PARENT_LOOKUP_DATA = "parentLookupData";
     private final String LOOKUP_DATA = "lookupDatas";
     private final String SOURCE_TASK_TYPE = "sourceTaskTypes";
+    /** Shown to the UI in place of an encrypted lookup's real value — never send plaintext back over the API. */
+    private final String MASKED_LOOKUP_VALUE = "••••••••";
 
     private final LookupDataRepository lookupDataRepository;
     private final SourceJobRepository sourceJobRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final QueryService queryService;
+    private final EncryptionUtil encryptionUtil;
 
     public SettingServiceImpl(LookupDataRepository lookupDataRepository,
         SourceJobRepository sourceJobRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
-        QueryService queryService) {
+        QueryService queryService,
+        EncryptionUtil encryptionUtil) {
         this.lookupDataRepository = lookupDataRepository;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.queryService = queryService;
+        this.encryptionUtil = encryptionUtil;
     }
 
     /**
@@ -165,13 +171,17 @@ public class SettingServiceImpl implements SettingService {
      * */
     @Override
     public ResponseDto addLookupData(LookupDataDto tempLookupData) throws Exception {
-        if (isNull(tempLookupData.getLookupValue())) {
+        if (isNull(tempLookupData.getLookupValue()) || tempLookupData.getLookupValue().trim().isEmpty()) {
             return new ResponseDto(ERROR, "LookupData value missing.");
         } else if (isNull(tempLookupData.getLookupType())) {
             return new ResponseDto(ERROR, "LookupData type missing.");
         }
+        boolean encrypted = Boolean.TRUE.equals(tempLookupData.getEncrypted());
         LookupData lookupData = new LookupData();
-        lookupData.setLookupValue(tempLookupData.getLookupValue());
+        lookupData.setLookupValue(encrypted
+            ? this.encryptionUtil.encrypt(tempLookupData.getLookupValue())
+            : tempLookupData.getLookupValue());
+        lookupData.setEncrypted(encrypted);
         lookupData.setLookupType(tempLookupData.getLookupType());
         if (!isNull(tempLookupData.getDescription())) {
             lookupData.setDescription(tempLookupData.getDescription());
@@ -193,26 +203,45 @@ public class SettingServiceImpl implements SettingService {
     public ResponseDto updateLookupData(LookupDataDto tempLookupData) throws Exception {
         if (isNull(tempLookupData.getLookupId())) {
             return new ResponseDto(ERROR, "LookupData id missing.");
-        } else if (isNull(tempLookupData.getLookupValue())) {
-            return new ResponseDto(ERROR, "LookupData value missing.");
         } else if (isNull(tempLookupData.getLookupType())) {
             return new ResponseDto(ERROR, "LookupData type missing.");
         }
-        Optional<LookupData> lookupData = this.lookupDataRepository.findById(tempLookupData.getLookupId());
-        if (lookupData.isPresent()) {
-            lookupData.get().setLookupValue(tempLookupData.getLookupValue());
-            lookupData.get().setLookupType(tempLookupData.getLookupType());
-            if (!isNull(tempLookupData.getDescription())) {
-                lookupData.get().setDescription(tempLookupData.getDescription());
-            }
-            if (!isNull(tempLookupData.getParentLookupId())) {
-                Optional<LookupData> parentLookupData = this.lookupDataRepository.findById(tempLookupData.getParentLookupId());
-                parentLookupData.ifPresent(data -> lookupData.get().setParent(data));
-            }
-            this.lookupDataRepository.save(lookupData.get());
-            return new ResponseDto(SUCCESS, String.format("LookupData update with %d.", tempLookupData.getLookupId()));
+        Optional<LookupData> lookupDataOpt = this.lookupDataRepository.findById(tempLookupData.getLookupId());
+        if (!lookupDataOpt.isPresent()) {
+            return new ResponseDto(ERROR, String.format("LookupData not found with %d.", tempLookupData.getLookupId()));
         }
-        return new ResponseDto(ERROR, String.format("LookupData not found with %d.", tempLookupData.getLookupId()));
+        LookupData lookupData = lookupDataOpt.get();
+        boolean wasEncrypted = Boolean.TRUE.equals(lookupData.getEncrypted());
+        boolean nowEncrypted = !isNull(tempLookupData.getEncrypted()) ? tempLookupData.getEncrypted() : wasEncrypted;
+        boolean hasNewValue = !isNull(tempLookupData.getLookupValue()) && !tempLookupData.getLookupValue().trim().isEmpty();
+        /**
+         * Note :- lookupValue is only required when there's no existing encrypted value to fall
+         * back to. An already-encrypted lookup can be saved with lookupValue left blank in the
+         * UI (masked, never sent back as plaintext) to keep its current value unchanged.
+         * */
+        if (!wasEncrypted && !hasNewValue) {
+            return new ResponseDto(ERROR, "LookupData value missing.");
+        }
+        if (hasNewValue) {
+            lookupData.setLookupValue(nowEncrypted
+                ? this.encryptionUtil.encrypt(tempLookupData.getLookupValue())
+                : tempLookupData.getLookupValue());
+        } else if (wasEncrypted && !nowEncrypted) {
+            // Turning encryption off without a new value -- decrypt the existing value and store it as plain text.
+            lookupData.setLookupValue(this.encryptionUtil.decrypt(lookupData.getLookupValue()));
+        }
+        // else: no new value and still encrypted -- keep the existing ciphertext untouched.
+        lookupData.setEncrypted(nowEncrypted);
+        lookupData.setLookupType(tempLookupData.getLookupType());
+        if (!isNull(tempLookupData.getDescription())) {
+            lookupData.setDescription(tempLookupData.getDescription());
+        }
+        if (!isNull(tempLookupData.getParentLookupId())) {
+            Optional<LookupData> parentLookupData = this.lookupDataRepository.findById(tempLookupData.getParentLookupId());
+            parentLookupData.ifPresent(lookupData::setParent);
+        }
+        this.lookupDataRepository.save(lookupData);
+        return new ResponseDto(SUCCESS, String.format("LookupData update with %d.", tempLookupData.getLookupId()));
     }
 
     /**
@@ -266,7 +295,11 @@ public class SettingServiceImpl implements SettingService {
      * */
     private void fillLookupDateDto(LookupData lookupData, LookupDataDto lookupDataDto) {
         lookupDataDto.setLookupId(lookupData.getLookupId());
-        lookupDataDto.setLookupValue(lookupData.getLookupValue());
+        lookupDataDto.setEncrypted(lookupData.getEncrypted());
+        // Never send an encrypted value's plaintext (or ciphertext) back to the UI over the API.
+        lookupDataDto.setLookupValue(Boolean.TRUE.equals(lookupData.getEncrypted())
+            ? MASKED_LOOKUP_VALUE
+            : lookupData.getLookupValue());
         lookupDataDto.setLookupType(lookupData.getLookupType());
         lookupDataDto.setDescription(lookupData.getDescription());
         lookupDataDto.setDateCreated(lookupData.getDateCreated());
