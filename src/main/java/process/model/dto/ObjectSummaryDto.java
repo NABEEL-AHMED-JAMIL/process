@@ -17,15 +17,24 @@ public class ObjectSummaryDto {
     private boolean folder;
     private Long size;
     private String lastModified;
+    private String etag;
+    private String contentType;
 
     public ObjectSummaryDto() {}
 
     public ObjectSummaryDto(String name, String key, boolean folder, Long size, String lastModified) {
+        this(name, key, folder, size, lastModified, null, null);
+    }
+
+    public ObjectSummaryDto(String name, String key, boolean folder, Long size, String lastModified,
+            String etag, String contentType) {
         this.name = name;
         this.key = key;
         this.folder = folder;
         this.size = size;
         this.lastModified = lastModified;
+        this.etag = etag;
+        this.contentType = contentType;
     }
 
     public String getName() {
@@ -66,6 +75,22 @@ public class ObjectSummaryDto {
 
     public void setLastModified(String lastModified) {
         this.lastModified = lastModified;
+    }
+
+    public String getEtag() {
+        return etag;
+    }
+
+    public void setEtag(String etag) {
+        this.etag = etag;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
     }
 
     @Override

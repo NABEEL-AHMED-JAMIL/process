@@ -214,8 +214,20 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
             key,
             isFolder,
             isFolder ? null : item.size(),
-            isFolder || item.lastModified() == null ? null : item.lastModified().toString()
+            isFolder || item.lastModified() == null ? null : item.lastModified().toString(),
+            isFolder ? null : this.stripQuotes(item.etag()),
+            isFolder ? null : ContentTypeUtil.contentTypeFor(key)
         );
+    }
+
+    /**
+     * Method use to strip the surrounding double-quotes MinIO's list API includes in the raw
+     * ETag XML element (unlike statObject's etag(), which comes back already unquoted)
+     * @param etag
+     * @return String
+     * */
+    private String stripQuotes(String etag) {
+        return etag != null ? etag.replace("\"", "") : null;
     }
 
     /**

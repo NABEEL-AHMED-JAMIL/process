@@ -201,7 +201,18 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
         String lastModified = isFolder || item.getProperties() == null || item.getProperties().getLastModified() == null
             ? null
             : item.getProperties().getLastModified().toString();
-        return new ObjectSummaryDto(this.fileNameOf(trimmedKey), name, isFolder, size, lastModified);
+        String etag = isFolder || item.getProperties() == null ? null : this.stripQuotes(item.getProperties().getETag());
+        String contentType = isFolder ? null : ContentTypeUtil.contentTypeFor(name);
+        return new ObjectSummaryDto(this.fileNameOf(trimmedKey), name, isFolder, size, lastModified, etag, contentType);
+    }
+
+    /**
+     * Method use to strip the surrounding double-quotes Azure's ETag can include
+     * @param etag
+     * @return String
+     * */
+    private String stripQuotes(String etag) {
+        return etag != null ? etag.replace("\"", "") : null;
     }
 
     /**

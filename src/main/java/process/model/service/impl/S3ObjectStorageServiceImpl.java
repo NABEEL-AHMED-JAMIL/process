@@ -77,7 +77,9 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
                     key,
                     false,
                     s3Object.size(),
-                    s3Object.lastModified() != null ? s3Object.lastModified().toString() : null
+                    s3Object.lastModified() != null ? s3Object.lastModified().toString() : null,
+                    this.stripQuotes(s3Object.eTag()),
+                    ContentTypeUtil.contentTypeFor(key)
                 ));
             }
             String nextToken = Boolean.TRUE.equals(response.isTruncated()) ? response.nextContinuationToken() : null;
@@ -214,6 +216,16 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
      * */
     private String fileNameOf(String key) {
         return key.contains("/") ? key.substring(key.lastIndexOf('/') + 1) : key;
+    }
+
+    /**
+     * Method use to strip the surrounding double-quotes S3's list API includes in the raw
+     * ETag element
+     * @param etag
+     * @return String
+     * */
+    private String stripQuotes(String etag) {
+        return etag != null ? etag.replace("\"", "") : null;
     }
 
 }

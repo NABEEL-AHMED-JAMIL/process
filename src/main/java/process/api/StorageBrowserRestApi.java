@@ -105,7 +105,7 @@ public class StorageBrowserRestApi {
     }
 
     /**
-     * Api use to stream an object's content inline for preview -- json/csv/pdf only
+     * Api use to stream an object's content inline for preview -- json/csv/txt/pdf only
      * @param bucket
      * @param key
      * @return ResponseEntity<?>

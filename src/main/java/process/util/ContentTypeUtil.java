@@ -8,7 +8,7 @@ import java.util.Set;
 
 /**
  * Utility use to map an object key's file extension to a content type and to decide whether
- * the Bucket Browser can preview it inline. Only json/csv/pdf are previewable for now --
+ * the Bucket Browser can preview it inline. Only json/csv/txt/pdf are previewable for now --
  * html and doc/docx (and anything else) are download-only.
  * @author Nabeel Ahmed
  */
@@ -20,6 +20,7 @@ public final class ContentTypeUtil {
     static {
         EXTENSION_CONTENT_TYPES.put("json", "application/json");
         EXTENSION_CONTENT_TYPES.put("csv", "text/csv");
+        EXTENSION_CONTENT_TYPES.put("txt", "text/plain");
         EXTENSION_CONTENT_TYPES.put("pdf", "application/pdf");
         EXTENSION_CONTENT_TYPES.put("html", "text/html");
         EXTENSION_CONTENT_TYPES.put("htm", "text/html");
@@ -27,7 +28,7 @@ public final class ContentTypeUtil {
         EXTENSION_CONTENT_TYPES.put("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     }
 
-    private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList("json", "csv", "pdf"));
+    private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList("json", "csv", "txt", "pdf"));
 
     /**
      * Method use to get the lower-cased file extension of an object key, empty if none
@@ -53,7 +54,7 @@ public final class ContentTypeUtil {
     }
 
     /**
-     * Method use to check if an object key can be previewed inline (json/csv/pdf only)
+     * Method use to check if an object key can be previewed inline (json/csv/txt/pdf only)
      * @param key
      * @return boolean
      * */

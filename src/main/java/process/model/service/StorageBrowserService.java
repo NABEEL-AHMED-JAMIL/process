@@ -41,7 +41,7 @@ public interface StorageBrowserService {
 
     /**
      * Method use to fetch an object's content for inline preview -- only for
-     * json/csv/pdf; throws for any other type
+     * json/csv/txt/pdf; throws for any other type
      * @param bucket
      * @param key
      * @return ObjectContentDto
