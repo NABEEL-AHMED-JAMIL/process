@@ -8,8 +8,9 @@ import java.util.Set;
 
 /**
  * Utility use to map an object key's file extension to a content type and to decide whether
- * the Bucket Browser can preview it inline. Only json/csv/txt/pdf are previewable for now --
- * html and doc/docx (and anything else) are download-only.
+ * the Bucket Browser can preview it inline. Only json/csv/txt/pdf/mp3/m4a/mp4/images
+ * (jpg/jpeg/png/gif/webp/svg/bmp) are previewable for now -- html and doc/docx (and anything
+ * else) are download-only.
  * @author Nabeel Ahmed
  */
 public final class ContentTypeUtil {
@@ -22,13 +23,25 @@ public final class ContentTypeUtil {
         EXTENSION_CONTENT_TYPES.put("csv", "text/csv");
         EXTENSION_CONTENT_TYPES.put("txt", "text/plain");
         EXTENSION_CONTENT_TYPES.put("pdf", "application/pdf");
+        EXTENSION_CONTENT_TYPES.put("mp3", "audio/mpeg");
+        EXTENSION_CONTENT_TYPES.put("m4a", "audio/mp4");
+        EXTENSION_CONTENT_TYPES.put("mp4", "video/mp4");
+        EXTENSION_CONTENT_TYPES.put("jpg", "image/jpeg");
+        EXTENSION_CONTENT_TYPES.put("jpeg", "image/jpeg");
+        EXTENSION_CONTENT_TYPES.put("png", "image/png");
+        EXTENSION_CONTENT_TYPES.put("gif", "image/gif");
+        EXTENSION_CONTENT_TYPES.put("webp", "image/webp");
+        EXTENSION_CONTENT_TYPES.put("svg", "image/svg+xml");
+        EXTENSION_CONTENT_TYPES.put("bmp", "image/bmp");
         EXTENSION_CONTENT_TYPES.put("html", "text/html");
         EXTENSION_CONTENT_TYPES.put("htm", "text/html");
         EXTENSION_CONTENT_TYPES.put("doc", "application/msword");
         EXTENSION_CONTENT_TYPES.put("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     }
 
-    private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList("json", "csv", "txt", "pdf"));
+    private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList(
+        "json", "csv", "txt", "pdf", "mp3", "m4a", "mp4",
+        "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"));
 
     /**
      * Method use to get the lower-cased file extension of an object key, empty if none
@@ -54,7 +67,7 @@ public final class ContentTypeUtil {
     }
 
     /**
-     * Method use to check if an object key can be previewed inline (json/csv/txt/pdf only)
+     * Method use to check if an object key can be previewed inline (json/csv/txt/pdf/mp3/m4a/mp4/image only)
      * @param key
      * @return boolean
      * */
