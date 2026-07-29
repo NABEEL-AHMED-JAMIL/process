@@ -108,12 +108,19 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
     }
 
     @Override
-    public ObjectContentDto getObjectContent(String bucket, String key) {
+    public ObjectContentDto getObjectContent(String bucket, String key, Long rangeStart, Long rangeEnd) {
         try {
-            ResponseInputStream<GetObjectResponse> response =
-                this.s3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build());
-            Long contentLength = response.response().contentLength();
-            return new ObjectContentDto(response, ContentTypeUtil.contentTypeFor(key), contentLength != null ? contentLength : 0L, this.fileNameOf(key));
+            HeadObjectResponse head = this.s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
+            long totalSize = head.contentLength() != null ? head.contentLength() : 0L;
+            GetObjectRequest.Builder requestBuilder = GetObjectRequest.builder().bucket(bucket).key(key);
+            long contentLength = totalSize;
+            if (rangeStart != null) {
+                long end = rangeEnd != null ? Math.min(rangeEnd, totalSize - 1) : totalSize - 1;
+                contentLength = end - rangeStart + 1;
+                requestBuilder.range("bytes=" + rangeStart + "-" + end);
+            }
+            ResponseInputStream<GetObjectResponse> response = this.s3Client.getObject(requestBuilder.build());
+            return new ObjectContentDto(response, ContentTypeUtil.contentTypeFor(key), contentLength, totalSize, this.fileNameOf(key));
         } catch (Exception e) {
             throw new RuntimeException("Could not fetch S3 object content " + bucket + "/" + key, e);
         }

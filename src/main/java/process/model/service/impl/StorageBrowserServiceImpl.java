@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -10,9 +12,13 @@ import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
 import process.model.service.ObjectStorageService;
 import process.model.service.StorageBrowserService;
+import process.util.AudioTranscodeUtil;
 import process.util.ContentTypeUtil;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,6 +35,7 @@ import java.util.stream.Collectors;
 @Service
 public class StorageBrowserServiceImpl implements StorageBrowserService {
 
+    private static final Logger logger = LoggerFactory.getLogger(StorageBrowserServiceImpl.class);
     private static final String BUCKET_LIST = "BUCKET_LIST";
     private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 500;
@@ -72,16 +79,16 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     }
 
     @Override
-    public ObjectContentDto previewObject(String bucket, String key) {
+    public ObjectContentDto previewObject(String bucket, String key, Long rangeStart, Long rangeEnd) {
         if (!ContentTypeUtil.isPreviewable(key)) {
             throw new IllegalArgumentException("Preview is not supported for this file type; use download instead.");
         }
-        return this.resolveService(bucket).getObjectContent(bucket, key);
+        return this.resolveService(bucket).getObjectContent(bucket, key, rangeStart, rangeEnd);
     }
 
     @Override
-    public ObjectContentDto downloadObject(String bucket, String key) {
-        return this.resolveService(bucket).getObjectContent(bucket, key);
+    public ObjectContentDto downloadObject(String bucket, String key, Long rangeStart, Long rangeEnd) {
+        return this.resolveService(bucket).getObjectContent(bucket, key, rangeStart, rangeEnd);
     }
 
     @Override
@@ -92,10 +99,33 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         // Basename only, so a crafted filename can't inject extra "/" segments into the object key.
         String safeFileName = Paths.get(file.getOriginalFilename()).getFileName().toString();
         String key = this.normalizedPrefix(prefix) + safeFileName;
+        String extension = ContentTypeUtil.extensionOf(safeFileName);
+        if (!AudioTranscodeUtil.isAudioExtension(extension)) {
+            try {
+                this.resolveService(bucket).uploadObject(bucket, key, file.getInputStream(), file.getSize(), file.getContentType());
+            } catch (IOException e) {
+                throw new UncheckedIOException("Could not read uploaded file " + safeFileName, e);
+            }
+            return;
+        }
+        // Audio uploads may be ALAC-encoded, which no major browser can decode for inline
+        // preview -- transcode to AAC (or leave alone if it's already browser-safe) before
+        // it lands in the bucket.
+        Path tempInput = null;
+        Path tempOutput = null;
         try {
-            this.resolveService(bucket).uploadObject(bucket, key, file.getInputStream(), file.getSize(), file.getContentType());
+            tempInput = Files.createTempFile("upload-", "." + extension);
+            file.transferTo(tempInput);
+            tempOutput = AudioTranscodeUtil.transcodeToAacIfNeeded(tempInput);
+            Path uploadSource = tempOutput != null ? tempOutput : tempInput;
+            try (InputStream in = Files.newInputStream(uploadSource)) {
+                this.resolveService(bucket).uploadObject(bucket, key, in, Files.size(uploadSource), ContentTypeUtil.contentTypeFor(key));
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read uploaded file " + safeFileName, e);
+        } finally {
+            AudioTranscodeUtil.deleteQuietly(tempInput);
+            AudioTranscodeUtil.deleteQuietly(tempOutput);
         }
     }
 

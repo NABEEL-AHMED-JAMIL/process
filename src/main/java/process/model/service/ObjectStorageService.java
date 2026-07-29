@@ -34,12 +34,16 @@ public interface ObjectStorageService {
     ObjectMetadataDto getObjectMetadata(String bucket, String key);
 
     /**
-     * Method use to fetch an object's raw content for preview/download
+     * Method use to fetch an object's raw content for preview/download, optionally scoped to a
+     * byte range so large media (audio/video) can be streamed with HTTP Range support instead
+     * of buffering the whole object.
      * @param bucket
      * @param key
+     * @param rangeStart inclusive start byte offset, null to start at the beginning
+     * @param rangeEnd inclusive end byte offset, null to go to the end of the object
      * @return ObjectContentDto
      * */
-    ObjectContentDto getObjectContent(String bucket, String key);
+    ObjectContentDto getObjectContent(String bucket, String key, Long rangeStart, Long rangeEnd);
 
     /**
      * Method use to upload a file's content to bucket/key

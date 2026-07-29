@@ -8,6 +8,7 @@ import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import com.azure.storage.blob.models.BlobItem;
 import com.azure.storage.blob.models.BlobProperties;
+import com.azure.storage.blob.models.BlobRange;
 import com.azure.storage.blob.models.ListBlobsOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -92,12 +93,20 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
     }
 
     @Override
-    public ObjectContentDto getObjectContent(String bucket, String key) {
+    public ObjectContentDto getObjectContent(String bucket, String key, Long rangeStart, Long rangeEnd) {
         try {
             BlobClient blobClient = this.blobClient(bucket, key);
-            long size = blobClient.getProperties().getBlobSize();
-            InputStream stream = blobClient.openInputStream();
-            return new ObjectContentDto(stream, ContentTypeUtil.contentTypeFor(key), size, this.fileNameOf(key));
+            long totalSize = blobClient.getProperties().getBlobSize();
+            long contentLength = totalSize;
+            InputStream stream;
+            if (rangeStart != null) {
+                long end = rangeEnd != null ? Math.min(rangeEnd, totalSize - 1) : totalSize - 1;
+                contentLength = end - rangeStart + 1;
+                stream = blobClient.openInputStream(new BlobRange(rangeStart, contentLength), null);
+            } else {
+                stream = blobClient.openInputStream();
+            }
+            return new ObjectContentDto(stream, ContentTypeUtil.contentTypeFor(key), contentLength, totalSize, this.fileNameOf(key));
         } catch (Exception e) {
             throw new RuntimeException("Could not fetch Azure blob content " + bucket + "/" + key, e);
         }

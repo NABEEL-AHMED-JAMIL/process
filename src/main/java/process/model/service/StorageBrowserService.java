@@ -41,20 +41,25 @@ public interface StorageBrowserService {
 
     /**
      * Method use to fetch an object's content for inline preview -- only for
-     * json/csv/txt/pdf/mp3/m4a/mp4/image; throws for any other type
+     * json/csv/txt/pdf/mp3/m4a/mp4/image; throws for any other type. Supports an optional byte
+     * range so large audio/video can be streamed (HTTP Range) instead of buffered whole.
      * @param bucket
      * @param key
+     * @param rangeStart inclusive start byte offset, null for the beginning of the object
+     * @param rangeEnd inclusive end byte offset, null for the end of the object
      * @return ObjectContentDto
      * */
-    ObjectContentDto previewObject(String bucket, String key);
+    ObjectContentDto previewObject(String bucket, String key, Long rangeStart, Long rangeEnd);
 
     /**
      * Method use to fetch an object's content for download -- any file type
      * @param bucket
      * @param key
+     * @param rangeStart inclusive start byte offset, null for the beginning of the object
+     * @param rangeEnd inclusive end byte offset, null for the end of the object
      * @return ObjectContentDto
      * */
-    ObjectContentDto downloadObject(String bucket, String key);
+    ObjectContentDto downloadObject(String bucket, String key, Long rangeStart, Long rangeEnd);
 
     /**
      * Method use to upload a file under prefix (the current folder)

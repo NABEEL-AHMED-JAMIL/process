@@ -1,8 +1,8 @@
 package process.api;
 
-import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -14,17 +14,20 @@ import process.model.dto.ObjectContentDto;
 import process.model.dto.ResponseDto;
 import process.model.service.StorageBrowserService;
 import process.util.ProcessUtil;
-import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.function.BiFunction;
 
 /**
  * Api use to browse buckets/objects across storage providers (MinIO / S3 / Azure Blob)
  * @author Nabeel Ahmed
  */
 @RestController
-@CrossOrigin(origins = "*")
+// exposedHeaders -- Range/Content-Range/Accept-Ranges aren't on the CORS response-header
+// safelist, so without this the browser's <audio>/<video> engine can't see them on a
+// cross-origin response and silently refuses to treat the stream as seekable/playable.
+@CrossOrigin(origins = "*", exposedHeaders = {
+    HttpHeaders.ACCEPT_RANGES, HttpHeaders.CONTENT_RANGE, HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH
+})
 @RequestMapping(value = "/storage.json")
 public class StorageBrowserRestApi {
 
@@ -105,29 +108,36 @@ public class StorageBrowserRestApi {
     }
 
     /**
-     * Api use to stream an object's content inline for preview -- json/csv/txt/pdf/mp3/m4a/mp4/image only
+     * Api use to stream an object's content inline for preview -- json/csv/txt/pdf/mp3/m4a/mp4/image only.
+     * Honors an incoming Range header (bytes=start-end) so large audio/video can be streamed and
+     * seeked in the browser's native player instead of buffering the whole object first.
      * @param bucket
      * @param key
+     * @param rangeHeader raw "Range" request header, e.g. "bytes=0-1023", null if not sent
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/previewObject", method = RequestMethod.GET)
     public ResponseEntity<?> previewObject(
         @RequestParam String bucket,
-        @RequestParam String key) {
-        return this.streamObject(bucket, key, "inline", this.storageBrowserService::previewObject);
+        @RequestParam String key,
+        @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader) {
+        return this.streamObject(bucket, key, "inline", rangeHeader, this.storageBrowserService::previewObject);
     }
 
     /**
-     * Api use to stream an object's content as a download -- any file type
+     * Api use to stream an object's content as a download -- any file type. Also honors an
+     * incoming Range header so paused/resumed downloads work.
      * @param bucket
      * @param key
+     * @param rangeHeader raw "Range" request header, e.g. "bytes=0-1023", null if not sent
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/downloadObject", method = RequestMethod.GET)
     public ResponseEntity<?> downloadObject(
         @RequestParam String bucket,
-        @RequestParam String key) {
-        return this.streamObject(bucket, key, "attachment", this.storageBrowserService::downloadObject);
+        @RequestParam String key,
+        @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader) {
+        return this.streamObject(bucket, key, "attachment", rangeHeader, this.storageBrowserService::downloadObject);
     }
 
     /**
@@ -271,25 +281,36 @@ public class StorageBrowserRestApi {
      * @param bucket
      * @param key
      * @param disposition "inline" or "attachment"
+     * @param rangeHeader raw "Range" request header, null if not sent
      * @param fetcher
      * @return ResponseEntity<?>
      * */
-    private ResponseEntity<?> streamObject(String bucket, String key, String disposition,
-        BiFunction<String, String, ObjectContentDto> fetcher) {
+    private ResponseEntity<?> streamObject(String bucket, String key, String disposition, String rangeHeader,
+        RangeContentFetcher fetcher) {
         try {
-            ObjectContentDto content = fetcher.apply(bucket, key);
-            byte[] bytes;
-            try (InputStream stream = content.getContent()) {
-                bytes = IOUtils.toByteArray(stream);
-            }
+            long[] parsedRange = this.parseRange(rangeHeader);
+            Long rangeStart = parsedRange != null ? parsedRange[0] : null;
+            Long rangeEnd = parsedRange != null && parsedRange[1] != -1 ? parsedRange[1] : null;
+            ObjectContentDto content = fetcher.fetch(bucket, key, rangeStart, rangeEnd);
             String encodedFileName = URLEncoder.encode(content.getFileName(), StandardCharsets.UTF_8.name()).replace("+", "%20");
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename*=UTF-8''" + encodedFileName);
+            headers.add(HttpHeaders.ACCEPT_RANGES, "bytes");
+            InputStreamResource body = new InputStreamResource(content.getContent());
+            if (rangeStart != null) {
+                long rangeEndInclusive = rangeStart + content.getSize() - 1;
+                headers.add(HttpHeaders.CONTENT_RANGE, "bytes " + rangeStart + "-" + rangeEndInclusive + "/" + content.getTotalSize());
+                return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                    .headers(headers)
+                    .contentType(MediaType.parseMediaType(content.getContentType()))
+                    .contentLength(content.getSize())
+                    .body(body);
+            }
             return ResponseEntity.ok()
                 .headers(headers)
                 .contentType(MediaType.parseMediaType(content.getContentType()))
-                .contentLength(bytes.length)
-                .body(bytes);
+                .contentLength(content.getSize())
+                .body(body);
         } catch (IllegalArgumentException | IllegalStateException ex) {
             logger.warn("streamObject rejected bucket={} key={}: {}", bucket, key, ex.getMessage());
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()), HttpStatus.BAD_REQUEST);
@@ -297,6 +318,45 @@ public class StorageBrowserRestApi {
             logger.error("An error occurred while streaming object bucket={} key={}", bucket, key, ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
+    }
+
+    /**
+     * Method use to parse a "Range: bytes=start-end" (or open-ended "bytes=start-") request
+     * header into a {startInclusive, endInclusive-or-null} pair. Returns null for anything
+     * missing, malformed, or of an unsupported unit -- callers then fall back to serving the
+     * whole object, same as if no Range header had been sent.
+     * @param rangeHeader
+     * @return long[]{start, end} (end may be -1 meaning "to the end"), or null
+     * */
+    private long[] parseRange(String rangeHeader) {
+        if (rangeHeader == null || !rangeHeader.startsWith("bytes=")) {
+            return null;
+        }
+        String spec = rangeHeader.substring("bytes=".length()).trim();
+        int dash = spec.indexOf('-');
+        if (dash <= 0) {
+            return null;
+        }
+        try {
+            long start = Long.parseLong(spec.substring(0, dash));
+            String endPart = spec.substring(dash + 1).trim();
+            long end = endPart.isEmpty() ? -1 : Long.parseLong(endPart);
+            if (start < 0 || (end != -1 && end < start)) {
+                return null;
+            }
+            return new long[]{start, end};
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * Functional interface use to fetch an object's content for a bucket/key, optionally scoped
+     * to a byte range -- lets previewObject/downloadObject share the same streamObject logic.
+     * */
+    @FunctionalInterface
+    private interface RangeContentFetcher {
+        ObjectContentDto fetch(String bucket, String key, Long rangeStart, Long rangeEnd);
     }
 
 }

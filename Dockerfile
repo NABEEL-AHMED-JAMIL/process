@@ -7,8 +7,8 @@ LABEL maintainer="nabeel.amd93@gmail.com"
 # Set working directory
 WORKDIR /app
 
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Install curl for health checks, ffmpeg for audio upload transcoding (ALAC -> AAC)
+RUN apt-get update && apt-get install -y curl ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Expose port for application
 EXPOSE 9098

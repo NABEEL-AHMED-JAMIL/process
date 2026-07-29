@@ -97,11 +97,19 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
     }
 
     @Override
-    public ObjectContentDto getObjectContent(String bucket, String key) {
+    public ObjectContentDto getObjectContent(String bucket, String key, Long rangeStart, Long rangeEnd) {
         try {
             StatObjectResponse stat = this.minioClient.statObject(StatObjectArgs.builder().bucket(bucket).object(key).build());
-            io.minio.GetObjectResponse response = this.minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build());
-            return new ObjectContentDto(response, ContentTypeUtil.contentTypeFor(key), stat.size(), this.fileNameOf(key));
+            long totalSize = stat.size();
+            GetObjectArgs.Builder argsBuilder = GetObjectArgs.builder().bucket(bucket).object(key);
+            long contentLength = totalSize;
+            if (rangeStart != null) {
+                long end = rangeEnd != null ? Math.min(rangeEnd, totalSize - 1) : totalSize - 1;
+                contentLength = end - rangeStart + 1;
+                argsBuilder.offset(rangeStart).length(contentLength);
+            }
+            io.minio.GetObjectResponse response = this.minioClient.getObject(argsBuilder.build());
+            return new ObjectContentDto(response, ContentTypeUtil.contentTypeFor(key), contentLength, totalSize, this.fileNameOf(key));
         } catch (Exception e) {
             throw new RuntimeException("Could not fetch MinIO object content " + bucket + "/" + key, e);
         }
