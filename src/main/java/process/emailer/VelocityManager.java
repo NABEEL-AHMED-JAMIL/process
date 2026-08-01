@@ -20,11 +20,10 @@ public class VelocityManager {
 
     private Logger logger = LogManager.getLogger(VelocityManager.class);
 
+    // VelocityEngine itself is documented as thread-safe once initialized, so it's fine to
+    // share across concurrent callers -- unlike the per-request context/writer that used to
+    // live here as instance fields (see below).
     private VelocityEngine engine;
-    /*  create a context and add data */
-    private VelocityContext context;
-    /* now render the template into a StringWriter */
-    private StringWriter writer;
 
     @PostConstruct
     public void init() {
@@ -38,44 +37,32 @@ public class VelocityManager {
 
     public VelocityManager() { }
 
+    /**
+     * Renders a template into a response string. This class is a singleton bean, and this
+     * method is invoked concurrently from multiple threads (Kafka callback threads, parallel
+     * job-scheduling streams, concurrent REST notify calls) -- context/writer are kept as
+     * local variables (not instance fields) so two concurrent renders can never see or
+     * overwrite each other's in-flight state, which previously could send one job's email
+     * with another job's content.
+     * */
     public String getResponseMessage(TemplateType templateType, Map<String, Object> object) {
-        String responseMessage;
-        this.setWriter(new StringWriter());
-        this.setContext(new VelocityContext());
-        //logger.info("Request Content :- " + object);
-        this.context.put("request", object);
-        responseMessage = this.getWriterResponse(templateType).toString();
-        return responseMessage;
+        VelocityContext context = new VelocityContext();
+        context.put("request", object);
+        StringWriter writer = new StringWriter();
+        return this.getWriterResponse(templateType, context, writer).toString();
     }
 
-    private StringWriter getWriterResponse(TemplateType templateType) throws NullPointerException {
+    private StringWriter getWriterResponse(TemplateType templateType, VelocityContext context, StringWriter writer) throws NullPointerException {
         Template template = this.engine.getTemplate(templateType.getTemplatePath());
         if (template != null) {
-            template.merge(this.getContext(), this.getWriter());
-            //logger.info("Response Content :- " + this.getWriter().toString().replaceAll("\\s+",""));
-            return this.getWriter();
+            template.merge(context, writer);
+            return writer;
         }
         throw new NullPointerException("Template Not Found");
     }
 
     private VelocityEngine getEngine() {
         return new VelocityEngine();
-    }
-
-    public VelocityContext getContext() {
-        return context;
-    }
-
-    public void setContext(VelocityContext context) {
-        this.context = context;
-    }
-
-    public StringWriter getWriter() {
-        return writer;
-    }
-
-    public void setWriter(StringWriter writer) {
-        this.writer = writer;
     }
 
 }

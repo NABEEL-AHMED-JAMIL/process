@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.JobStatus;
+import process.model.pojo.JobQueue;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +31,17 @@ public class SourceJobQueueDto {
     private List<JobStatusStatisticDto> jobStatusStatistic;
 
     public SourceJobQueueDto() {}
+
+    /** Builds the minimal DTO used for email-notification templates -- was previously
+     * duplicated identically in ProducerBulkEngine and MessageQServiceImpl. startTime resolves
+     * to skipTime when the job was skipped, since that's the timestamp the email should show. */
+    public static SourceJobQueueDto forEmailNotification(JobQueue jobQueue) {
+        SourceJobQueueDto dto = new SourceJobQueueDto();
+        dto.setJobId(jobQueue.getJobId());
+        dto.setJobQueueId(jobQueue.getJobQueueId());
+        dto.setStartTime(jobQueue.getJobStatus().equals(JobStatus.Skip) ? jobQueue.getSkipTime() : jobQueue.getStartTime());
+        return dto;
+    }
 
     public Long getJobQueueId() {
         return jobQueueId;

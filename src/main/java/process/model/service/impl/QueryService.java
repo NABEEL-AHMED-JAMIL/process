@@ -13,8 +13,11 @@ import process.model.projection.ItemResponse;
 import process.util.ProcessUtil;
 import javax.persistence.*;
 import javax.transaction.Transactional;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -117,30 +120,32 @@ public class QueryService {
         query += "where st.task_status in ('Active', 'Inactive') ";
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
             if ((startDate != null && !startDate.isEmpty()) && (endDate != null && !endDate.isEmpty())) {
-                query += String.format("and cast(st.date_created as date) between '%s' and '%s' ", startDate, endDate);
+                query += String.format("and cast(st.date_created as date) between '%s' and '%s' ",
+                    this.requireValidDate(startDate), this.requireValidDate(endDate));
             } else if (startDate != null && !startDate.isEmpty()) {
-                query += String.format("and cast(st.date_created as date) >= '%s' ", startDate);
+                query += String.format("and cast(st.date_created as date) >= '%s' ", this.requireValidDate(startDate));
             } else if (endDate != null && !endDate.isEmpty()) {
-                query += String.format("and cast(st.date_created as date) <= '%s' ", endDate);
+                query += String.format("and cast(st.date_created as date) <= '%s' ", this.requireValidDate(endDate));
             }
         }
         if (searchTextDto != null && (searchTextDto.getItemName() != null && searchTextDto.getItemValue() != null)) {
+            String itemValue = this.sqlEscape(searchTextDto.getItemValue());
             if (searchTextDto.getItemName().equalsIgnoreCase("task_detail_id")) {
-                query += "and cast(st.task_detail_id as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and cast(st.task_detail_id as varchar) like ('%" + itemValue + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("task_name")) {
-                query += "and upper(st.task_name) like upper('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and upper(st.task_name) like upper('%" + itemValue + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("task_status")) {
-                query += "and cast(st.task_status as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and cast(st.task_status as varchar) like ('%" + itemValue + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("source_task_type_id")) {
-                query += "and cast(stt.source_task_type_id as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and cast(stt.source_task_type_id as varchar) like ('%" + itemValue + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("service_name")) {
-                query += "and upper(stt.service_name) like upper('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and upper(stt.service_name) like upper('%" + itemValue + "%') ";
             }
         }
         if (!isCount) {
             query += "\ngroup by st.task_detail_id, stt.source_task_type_id, ld1.lookup_id, ld2.lookup_id\n";
             if (order != null && columnName != null) {
-                query += String.format("order by %s %s ", columnName, order);
+                query += String.format("order by %s %s ", this.sanitizeSortColumn(columnName), this.sanitizeSortOrder(order));
             }
         }
         return query;
@@ -171,50 +176,149 @@ public class QueryService {
         }
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
             if ((startDate != null && !startDate.isEmpty()) && (endDate != null && !endDate.isEmpty())) {
-                query += String.format("and cast(sj.date_created as date) between '%s' and '%s' ", startDate, endDate);
+                query += String.format("and cast(sj.date_created as date) between '%s' and '%s' ",
+                    this.requireValidDate(startDate), this.requireValidDate(endDate));
             } else if (startDate != null && !startDate.isEmpty()) {
-                query += String.format("and cast(sj.date_created as date) >= '%s' ", startDate);
+                query += String.format("and cast(sj.date_created as date) >= '%s' ", this.requireValidDate(startDate));
             } else if (endDate != null && !endDate.isEmpty()) {
-                query += String.format("and cast(sj.date_created as date) <= '%s' ", endDate);
+                query += String.format("and cast(sj.date_created as date) <= '%s' ", this.requireValidDate(endDate));
             }
         }
         if (searchTextDto != null && (searchTextDto.getItemName() != null && searchTextDto.getItemValue() != null)) {
+            String itemValue = this.sqlEscape(searchTextDto.getItemValue());
             if (searchTextDto.getItemName().equalsIgnoreCase("job_id")) {
-                query += "and cast(sj.job_id as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and cast(sj.job_id as varchar) like ('%" + itemValue + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("job_name")) {
-                query += "and upper(job_name) like upper('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and upper(job_name) like upper('%" + itemValue + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("job_status")) {
-                query += "and cast(sj.job_status as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and cast(sj.job_status as varchar) like ('%" + itemValue + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("date_created")) {
-                query += "and cast(sj.date_created as varchar) like ('%" + searchTextDto.getItemValue() + "%') ";
+                query += "and cast(sj.date_created as varchar) like ('%" + itemValue + "%') ";
             }
         }
         return query;
     }
 
     /**
-     * method use to fetch the job status statistics
+     * method use to build an optional 'and date(column) between startDate and endDate' clause.
+     * Returns an empty string (no filtering) when either bound is missing or not a valid yyyy-MM-dd date,
+     * so callers can safely append the result straight into a where clause.
+     * @param column
+     * @param startDate
+     * @param endDate
      * @return string
      * */
-    public String jobStatusStatistics() {
+    private String dateRangeFilter(String column, String startDate, String endDate) {
+        if (!isValidDate(startDate) || !isValidDate(endDate)) {
+            return "";
+        }
+        return String.format("and date(%s) between '%s' and '%s' ", column, startDate, endDate);
+    }
+
+    private boolean isValidDate(String date) {
+        return date != null && date.matches("\\d{4}-\\d{2}-\\d{2}");
+    }
+
+    /**
+     * Method use to reject a request-supplied date param that isn't a plain yyyy-MM-dd string
+     * before it's concatenated into a native SQL query -- every date-taking query builder in
+     * this class used to hand the raw value straight to String.format, so any client could
+     * inject arbitrary SQL through startDate/endDate/targetDate query params. Fails closed
+     * (throws) rather than silently dropping the filter, since a rejected value here means
+     * either a client bug or a real attack -- both deserve a visible error, not a query that
+     * quietly ran with no date filter at all.
+     * @param date
+     * @return String
+     * */
+    private String requireValidDate(String date) {
+        if (!this.isValidDate(date)) {
+            throw new IllegalArgumentException("Invalid date -- expected yyyy-MM-dd.");
+        }
+        return date;
+    }
+
+    /**
+     * Method use to safely embed free-text search input inside a single-quoted SQL string
+     * literal -- doubling embedded single quotes is the standard SQL escape and prevents the
+     * value from ever breaking out of the literal it's placed in, closing the injection hole
+     * on itemValue/jobStatus params that (unlike dates or numeric ids) can't be validated
+     * against a fixed shape or allow-list.
+     * @param value
+     * @return String
+     * */
+    private String sqlEscape(Object value) {
+        return value == null ? "" : value.toString().replace("'", "''");
+    }
+
+    /** Columns listSourceTaskQuery is actually able to sort by -- an identifier/keyword like a
+     * column name can't be passed as a JDBC bind parameter, so the only safe way to accept a
+     * client-supplied ORDER BY column is to check it against a fixed allow-list. */
+    private static final Set<String> SOURCE_TASK_SORT_COLUMNS = new HashSet<>(Arrays.asList(
+        "st.task_detail_id", "st.task_name", "st.task_status", "st.date_created",
+        "stt.source_task_type_id", "stt.service_name"
+    ));
+
+    /** Method use to validate a request-supplied ORDER BY column against the allow-list above,
+     * falling back to the default sort column for anything not explicitly recognized. */
+    private String sanitizeSortColumn(String columnName) {
+        return SOURCE_TASK_SORT_COLUMNS.contains(columnName) ? columnName : "st.task_detail_id";
+    }
+
+    /** Method use to validate a request-supplied sort direction, falling back to DESC for
+     * anything other than the two legal SQL directions. */
+    private String sanitizeSortOrder(String order) {
+        return "asc".equalsIgnoreCase(order) ? "asc" : "desc";
+    }
+
+    /** job_queue.job_status values this class's own queries compare against (see the CASE WHEN
+     * lists in weeklyHrRunningStatisticsDimension/statisticsBySourceJobId) -- deliberately NOT
+     * the JobStatus enum, which has no STOP constant even though job_queue rows can carry that
+     * status; using the enum here would reject a legitimate filter this class already handles
+     * elsewhere. */
+    private static final Set<String> JOB_QUEUE_STATUSES = new HashSet<>(Arrays.asList(
+        "QUEUE", "START", "RUNNING", "FAILED", "COMPLETED", "STOP", "SKIP", "INTERRUPT"
+    ));
+
+    /** Method use to validate a request-supplied job_queue status against the fixed set of
+     * legal values above before it's embedded in a query -- closes an injection hole, same as
+     * sqlEscape, but for a value that should only ever be one of a known set of statuses. */
+    private String sanitizeJobStatus(String jobStatus) {
+        if (jobStatus != null && JOB_QUEUE_STATUSES.contains(jobStatus.toUpperCase())) {
+            return jobStatus.toUpperCase();
+        }
+        throw new IllegalArgumentException("Invalid jobStatus -- expected one of " + JOB_QUEUE_STATUSES);
+    }
+
+    /**
+     * method use to fetch the job status statistics
+     * @param startDate
+     * @param endDate
+     * @return string
+     * */
+    public String jobStatusStatistics(String startDate, String endDate) {
         // Return counts for Active and Inactive separately and a combined "All" (Active+Inactive) count.
-        // Exclude 'Delete' status from the counts for "All".
+        // Exclude 'Delete' status from the counts for "All". Optionally scoped to a date_created range.
+        String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
         return "select job_status, count(job_id) as total_count from source_job\n" +
-            "where job_status in ('Active','Inactive') group by job_status\n" +
+            "where job_status in ('Active','Inactive') " + dateFilter + "group by job_status\n" +
             "union all\n" +
-            "select 'All' as job_status, count(job_id) as total_count from source_job where job_status in ('Active','Inactive')";
+            "select 'All' as job_status, count(job_id) as total_count from source_job where job_status in ('Active','Inactive') " + dateFilter;
     }
 
     /**
      * method use to fetch the job running statistics
+     * @param startDate
+     * @param endDate
      * @return string
      * */
-    public String jobRunningStatistics() {
-        // Only consider jobs which are Active or Inactive (exclude Deleted) when generating running stats
+    public String jobRunningStatistics(String startDate, String endDate) {
+        // Only consider jobs which are Active or Inactive (exclude Deleted) when generating running stats.
+        // Optionally scoped to a date_created range.
+        String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
         return "select UPPER(job_running_status) as job_running_status, count(job_id) as total_count\n" +
             "from source_job\n" +
             "where UPPER(job_running_status) in ('START', 'RUNNING', 'FAILED', 'COMPLETED')\n" +
-            "and UPPER(job_status) in ('ACTIVE','INACTIVE')\n" +
+            "and UPPER(job_status) in ('ACTIVE','INACTIVE') " + dateFilter + "\n" +
             "group by UPPER(job_running_status)";
     }
 
@@ -230,7 +334,7 @@ public class QueryService {
             "select job_queue_id, to_char(cast(jq.date_created as date), 'Dy') as daycode,\n" +
             "cast(jq.date_created as date)\n" +
             "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created) between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')) as weekData\n" +
-            "group by weekData.daycode", startDate, endDate);
+            "group by weekData.daycode", this.requireValidDate(startDate), this.requireValidDate(endDate));
     }
 
     /**
@@ -246,7 +350,7 @@ public class QueryService {
             "cast(jq.date_created as date) as date, cast(jq.date_created as time) as time, \n" +
             "extract(hour from cast(jq.date_created as time)) as hr\n" +
             "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created) between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')) as weekData\n" +
-            "group by weekData.daycode, weekData.hr, weekData.date", startDate, endDate);
+            "group by weekData.daycode, weekData.hr, weekData.date", this.requireValidDate(startDate), this.requireValidDate(endDate));
     }
 
     /**
@@ -257,6 +361,7 @@ public class QueryService {
      * */
     public String weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) {
         // Only include job_queue entries for jobs that are Active or Inactive
+        targetDate = this.requireValidDate(targetDate);
         return String.format(
             "SELECT * FROM (\n" +
                 "    SELECT \n" +
@@ -331,7 +436,7 @@ public class QueryService {
         String query = "select job_queue.* from job_queue\n" +
                 "inner join source_job on source_job.job_id = job_queue.job_id where 1=1\n";
         if (!ProcessUtil.isNull(targetDate)) {
-            query += String.format(" and date(job_queue.date_created) = '%s' \n", targetDate);
+            query += String.format(" and date(job_queue.date_created) = '%s' \n", this.requireValidDate(targetDate));
         }
         if (!ProcessUtil.isNull(targetHr)) {
             query += String.format(" and extract(hour from cast(job_queue.date_created as time)) = %d\n", targetHr);
@@ -340,7 +445,7 @@ public class QueryService {
             query += String.format("and job_queue.job_id = %d\n", jobId);
         }
         if (!ProcessUtil.isNull(jobStatus)) {
-            query += String.format("and UPPER(job_queue.job_status) = UPPER('%s')\n", jobStatus);
+            query += String.format("and UPPER(job_queue.job_status) = UPPER('%s')\n", this.sanitizeJobStatus(jobStatus));
         } else {
             // when no specific jobStatus requested, only include source jobs that are Active or Inactive
             query += "and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n";
@@ -363,7 +468,7 @@ public class QueryService {
         String query = selectPortion + "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id \n";
         if (!isState) {
             query += String.format("where cast(jq.date_created as date) between '%s' and '%s' \n",
-                    messageQSearch.getFromDate(), messageQSearch.getToDate());
+                    this.requireValidDate(messageQSearch.getFromDate()), this.requireValidDate(messageQSearch.getToDate()));
             if (!ProcessUtil.isNull(messageQSearch.getJobId()) && !messageQSearch.getJobId().isEmpty()) {
                 String jobId = messageQSearch.getJobId().toString();
                 query += String.format("and jq.job_id in (%s) \n", jobId.substring(1, jobId.length()-1));

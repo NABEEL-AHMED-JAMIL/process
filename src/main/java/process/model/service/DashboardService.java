@@ -7,9 +7,9 @@ import process.model.dto.ResponseDto;
  */
 public interface DashboardService {
 
-    public ResponseDto jobStatusStatistics() throws Exception;
+    public ResponseDto jobStatusStatistics(String startDate, String endDate) throws Exception;
 
-    public ResponseDto jobRunningStatistics() throws Exception;
+    public ResponseDto jobRunningStatistics(String startDate, String endDate) throws Exception;
 
     public ResponseDto weeklyRunningJobStatistics(String startDate, String endDate) throws Exception;
 

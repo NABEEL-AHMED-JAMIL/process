@@ -150,9 +150,11 @@ public class MessageQServiceImpl implements MessageQService {
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), String.format("Job %s fail by manual.", jobQueue.get().getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
-            SourceJob sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId()).get();
-            if (sourceJob.isSkipJob()) {
-                this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue.get()),JobStatus.Failed);
+            // the status change above already succeeded -- the job may have been deleted
+            // concurrently since, in which case there's simply no notification email to send
+            Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId());
+            if (sourceJob.isPresent() && sourceJob.get().isSkipJob()) {
+                this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue.get()),JobStatus.Failed);
             }
             return new ResponseDto(SUCCESS, "JobQueue successfully update.", jobQId);
         }
@@ -199,34 +201,20 @@ public class MessageQServiceImpl implements MessageQService {
             if (!isNull(queueMessageStatus.getEndTime())) {
                 this.bulkAction.changeJobQueueEndDate(queueMessageStatus.getJobQueueId(), queueMessageStatus.getEndTime());
             }
-            // if the user configure then send email
-            SourceJob sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId()).get();
+            // if the user configure then send email -- the status change above already
+            // succeeded, so a missing job/queue here just means no notification email goes out
+            Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId());
+            Optional<JobQueue> jobQueueForMail = this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId());
             JobStatus status = queueMessageStatus.getJobStatus();
-            boolean shouldSend = (sourceJob.isSkipJob() && status.equals(JobStatus.Skip)) ||
-                (sourceJob.isCompleteJob() && status.equals(JobStatus.Completed)) || (sourceJob.isFailJob() && status.equals(JobStatus.Failed));
+            boolean shouldSend = sourceJob.isPresent() && jobQueueForMail.isPresent() &&
+                ((sourceJob.get().isSkipJob() && status.equals(JobStatus.Skip)) ||
+                (sourceJob.get().isCompleteJob() && status.equals(JobStatus.Completed)) ||
+                (sourceJob.get().isFailJob() && status.equals(JobStatus.Failed)));
             if (shouldSend) {
-                this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(
-                    this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId()).get()), status);
+                this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueueForMail.get()), status);
             }
         }
         return new ResponseDto(SUCCESS, "QueueMessage successfully update.");
-    }
-
-    /**
-     * method use convert job queue to job dto
-     * @param jobQueue
-     * @return SourceJobQueueDto
-     * */
-    private SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
-        SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
-        sourceJobQueueDto.setJobId(jobQueue.getJobId());
-        sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
-        if (jobQueue.getJobStatus().equals(JobStatus.Skip)) {
-            sourceJobQueueDto.setStartTime(jobQueue.getSkipTime());
-        } else {
-            sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
-        }
-        return sourceJobQueueDto;
     }
 
 }

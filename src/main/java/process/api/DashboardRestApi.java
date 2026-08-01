@@ -32,9 +32,11 @@ public class DashboardRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/jobStatusStatistics", method = RequestMethod.GET)
-    public ResponseEntity<?> jobStatusStatistics() {
+    public ResponseEntity<?> jobStatusStatistics(
+        @RequestParam(name = "startDate", required = false) String startDate,
+        @RequestParam(name = "endDate", required = false) String endDate) {
         try {
-            return new ResponseEntity<>(this.dashboardService.jobStatusStatistics(), HttpStatus.OK);
+            return new ResponseEntity<>(this.dashboardService.jobStatusStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while jobStatusStatistics ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
@@ -47,9 +49,11 @@ public class DashboardRestApi {
      * @return ResponseEntity<?>
      * */
     @RequestMapping(value = "/jobRunningStatistics", method = RequestMethod.GET)
-    public ResponseEntity<?> jobRunningStatistics() {
+    public ResponseEntity<?> jobRunningStatistics(
+        @RequestParam(name = "startDate", required = false) String startDate,
+        @RequestParam(name = "endDate", required = false) String endDate) {
         try {
-            return new ResponseEntity<>(this.dashboardService.jobRunningStatistics(), HttpStatus.OK);
+            return new ResponseEntity<>(this.dashboardService.jobRunningStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while jobRunningStatistics ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);

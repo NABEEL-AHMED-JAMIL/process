@@ -70,37 +70,37 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
     public ByteArrayOutputStream downloadSourceJobTemplateFile() throws Exception {
         // template_url
         String basePath = this.tempFileStoreDirectory + File.separator;
-        // read the template
-        ClassLoader cl = this.getClass().getClassLoader();
-        InputStream inputStream = cl.getResourceAsStream(REAL_FILE_PATH);
         // temp file path
         String fileUploadPath = basePath + System.currentTimeMillis() + XLSX_EXTENSION;
-        // 1st copy template.
-        FileOutputStream fileOut = new FileOutputStream(fileUploadPath);
-        IOUtils.copy(inputStream, fileOut);
-        // after copy the stream into file close
-        inputStream.close();
-        // 2nd insert data to newly copied file. So that template couldn't be changed.
-        XSSFWorkbook wb = new XSSFWorkbook(new File(fileUploadPath));
-        XSSFSheet sheet = wb.getSheet(JOB_ADD);
-        /**Trigger Detail fetch from db as per user login*/
-        this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
-        this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.toArray(new String[0]));
-        // Priority
-        this.bulkExcel.fillDropDownValue(sheet,1,7, ProcessTimeUtil.priority.toArray(new String[0]));
-        this.bulkExcel.fillDropDownValue(sheet,1,8, ProcessTimeUtil.checked.toArray(new String[0]));
-        this.bulkExcel.fillDropDownValue(sheet,1,9, ProcessTimeUtil.checked.toArray(new String[0]));
-        this.bulkExcel.fillDropDownValue(sheet,1,10, ProcessTimeUtil.checked.toArray(new String[0]));
-        wb.write(fileOut);
-        fileOut.close();
-        wb.close();
-        // read the file
         File file = new File(fileUploadPath);
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        byteArrayOutputStream.write(FileUtils.readFileToByteArray(file));
-        // delete the file
-        file.delete();
-        return byteArrayOutputStream;
+        try {
+            // 1st copy template.
+            try (InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream(REAL_FILE_PATH);
+                 FileOutputStream fileOut = new FileOutputStream(fileUploadPath)) {
+                IOUtils.copy(inputStream, fileOut);
+            }
+            // 2nd insert data to newly copied file. So that template couldn't be changed.
+            try (XSSFWorkbook wb = new XSSFWorkbook(file);
+                 FileOutputStream fileOut = new FileOutputStream(fileUploadPath)) {
+                XSSFSheet sheet = wb.getSheet(JOB_ADD);
+                /**Trigger Detail fetch from db as per user login*/
+                this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
+                this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.toArray(new String[0]));
+                // Priority
+                this.bulkExcel.fillDropDownValue(sheet,1,7, ProcessTimeUtil.priority.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet,1,8, ProcessTimeUtil.checked.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet,1,9, ProcessTimeUtil.checked.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet,1,10, ProcessTimeUtil.checked.toArray(new String[0]));
+                wb.write(fileOut);
+            }
+            // read the file
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            byteArrayOutputStream.write(FileUtils.readFileToByteArray(file));
+            return byteArrayOutputStream;
+        } finally {
+            // delete the temp file regardless of success/failure above
+            file.delete();
+        }
     }
 
     /**
@@ -110,7 +110,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
     @Override
     public ByteArrayOutputStream downloadListSourceJob() throws Exception {
         List<SourceJob> sourceJobs = this.sourceJobRepository.findAll();
-        XSSFWorkbook workbook = new XSSFWorkbook();
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
         this.bulkExcel.setWb(workbook);
         XSSFSheet xssfSheet = workbook.createSheet(SourceJob);
         this.bulkExcel.setSheet(xssfSheet);
@@ -151,6 +151,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         workbook.write(outputStream);
         return outputStream;
+        }
     }
 
     /**
@@ -166,7 +167,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             return new ResponseDto(ERROR, "You can upload only .xlsx extension file.");
         }
         // fill the stream with file into work-book
-        XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream());
+        try (XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream())) {
         if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
         }
@@ -262,6 +263,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             this.transactionService.saveOrUpdateScheduler(scheduler);
         }
         return new ResponseDto(SUCCESS, String.format("Total %d Job Save Successfully", jobDetailValidations.size()));
+        }
     }
 
 }

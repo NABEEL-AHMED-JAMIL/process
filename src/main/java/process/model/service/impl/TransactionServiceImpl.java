@@ -155,7 +155,9 @@ public class TransactionServiceImpl {
     * @return String
     */
     public String findLookupValueByLookupId(Long lookupId) {
-        return this.lookupDataRepository.findById(lookupId).get().getLookupValue();
+        return this.lookupDataRepository.findById(lookupId)
+            .map(LookupData::getLookupValue)
+            .orElse(null);
     }
 
     /**

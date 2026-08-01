@@ -9,7 +9,6 @@ import org.springframework.util.StringUtils;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
 import process.model.enums.Execution;
-import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
@@ -69,10 +68,15 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, "SourceJob taskDetailId missing.");
         }
         // validation for scheduler list -> if any missing then
+        Optional<SourceTask> taskDetail = this.sourceTaskRepository.findById(
+             sourceJobDto.getTaskDetail().getTaskDetailId());
+        if (!taskDetail.isPresent()) {
+            return new ResponseDto(ERROR, String.format("SourceTask not found with %d.",
+                sourceJobDto.getTaskDetail().getTaskDetailId()));
+        }
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobName(sourceJobDto.getJobName());
-        sourceJob.setTaskDetail(this.sourceTaskRepository.findById(
-             sourceJobDto.getTaskDetail().getTaskDetailId()).get());
+        sourceJob.setTaskDetail(taskDetail.get());
         sourceJob.setJobStatus(Status.Active);
         sourceJob.setExecution(sourceJobDto.getExecution());
         sourceJob.setPriority(sourceJobDto.getPriority());
@@ -242,8 +246,13 @@ public class SourceJobServiceImpl implements SourceJobService {
         } else if (!sourceJob.get().getExecution().equals(Execution.Auto)) {
             return new ResponseDto(ERROR, "SourceJob skip only work with 'auto' source job.");
         }
-        Scheduler scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId()).get();
-        LocalDateTime nextJobRun = this.getLocalDateTime(scheduler);
+        Optional<Scheduler> schedulerOpt = this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId());
+        if (!schedulerOpt.isPresent()) {
+            // an Auto-execution job can legally have no Scheduler row (addSourceJob treats it as optional)
+            return new ResponseDto(ERROR, "SourceJob has no scheduler to skip.");
+        }
+        Scheduler scheduler = schedulerOpt.get();
+        LocalDateTime nextJobRun = ProcessTimeUtil.computeNextRun(scheduler);
         if (!ProcessUtil.isNull(scheduler.getEndDate())) {
             LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
             if (!ProcessUtil.isNull(nextJobRun) && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
@@ -421,20 +430,4 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @param scheduler
      * @return LocalDateTime
      * */
-    private LocalDateTime getLocalDateTime(Scheduler scheduler) {
-        LocalDateTime nextJobRun = null;
-        if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.parseLong(scheduler.getRecurrence()));
-        }
-        return nextJobRun;
-    }
-
 }

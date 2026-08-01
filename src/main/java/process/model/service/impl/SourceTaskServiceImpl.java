@@ -399,7 +399,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     @Override
     public ByteArrayOutputStream downloadListSourceTask() throws Exception {
         List<SourceTaskProjection> sourceTask = this.sourceTaskRepository.downloadListSourceTask();
-        XSSFWorkbook workbook = new XSSFWorkbook();
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
         this.bulkExcel.setWb(workbook);
         XSSFSheet xssfSheet = workbook.createSheet(ListSourceTask);
         this.bulkExcel.setSheet(xssfSheet);
@@ -422,6 +422,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         workbook.write(outputStream);
         return outputStream;
+        }
     }
 
     /**
@@ -430,7 +431,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * */
     @Override
     public ByteArrayOutputStream downloadSourceTaskTemplate() throws Exception {
-        XSSFWorkbook workbook = new XSSFWorkbook();
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
         this.bulkExcel.setWb(workbook);
         XSSFSheet xssfSheet = workbook.createSheet(ListSourceTask);
         this.bulkExcel.setSheet(xssfSheet);
@@ -439,6 +440,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         workbook.write(outputStream);
         return outputStream;
+        }
     }
 
     /**
@@ -454,7 +456,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(ERROR, "You can upload only .xlsx extension file.");
         }
         // fill the stream with file into work-book
-        XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream());
+        try (XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream())) {
         if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
         }
@@ -539,6 +541,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             this.sourceTaskRepository.save(sourceTask);
         });
         return new ResponseDto(SUCCESS, String.format("Total %d task save successfully", sourceTaskValidations.size()));
+        }
     }
 
     /**

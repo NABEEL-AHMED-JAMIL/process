@@ -108,6 +108,12 @@ public class NotifyServiceImpl implements NotifyService {
      **/
     private boolean isValidStatusTransition(JobStatus currentStatus, JobStatus newStatus) {
         switch (currentStatus) {
+            case Queue:
+                // a job's very first worker-reported status change is picking it up off the
+                // queue and starting it -- without this case, every job's first status report
+                // was rejected as an "invalid transition" since Queue had no case at all here
+                return newStatus == JobStatus.Start;
+
             case Start:
                 return newStatus == JobStatus.Start
                         || newStatus == JobStatus.Running;

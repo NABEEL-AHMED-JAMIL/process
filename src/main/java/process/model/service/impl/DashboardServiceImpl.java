@@ -48,12 +48,14 @@ public class DashboardServiceImpl implements DashboardService {
 
     /**
      * Method use to for get job status statistics
+     * @param startDate
+     * @param endDate
      * @return ResponseDto
      * */
     @Override
-    public ResponseDto jobStatusStatistics() throws Exception {
+    public ResponseDto jobStatusStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
-        List<Object[]> result = this.queryService.executeQuery(this.queryService.jobStatusStatistics());
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.jobStatusStatistics(startDate, endDate));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
@@ -67,12 +69,14 @@ public class DashboardServiceImpl implements DashboardService {
 
     /**
      * Method use to for get job running statistics
+     * @param startDate
+     * @param endDate
      * @return ResponseDto
      * */
     @Override
-    public ResponseDto jobRunningStatistics() throws Exception {
+    public ResponseDto jobRunningStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
-        List<Object[]> result = this.queryService.executeQuery(this.queryService.jobRunningStatistics());
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.jobRunningStatistics(startDate, endDate));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
             for(Object[] obj : result) {
@@ -287,12 +291,12 @@ public class DashboardServiceImpl implements DashboardService {
         sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
         sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
         if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
-            sourceTaskDto.setHomePageId(this.lookupDataRepository.findById(
-                Long.valueOf(sourceTask.getHomePageId())).get().getLookupValue());
+            this.lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId()))
+                .ifPresent(lookupData -> sourceTaskDto.setHomePageId(lookupData.getLookupValue()));
         }
         if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
-            sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(
-                Long.valueOf(sourceTask.getPipelineId())).get().getLookupValue());
+            this.lookupDataRepository.findById(Long.valueOf(sourceTask.getPipelineId()))
+                .ifPresent(lookupData -> sourceTaskDto.setPipelineId(lookupData.getLookupValue()));
         }
         if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
             sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask));

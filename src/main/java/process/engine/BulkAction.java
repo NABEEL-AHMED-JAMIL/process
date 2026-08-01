@@ -5,7 +5,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import process.model.enums.Frequency;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
@@ -14,6 +13,7 @@ import process.model.pojo.Scheduler;
 import process.model.projection.SourceJobProjection;
 import process.model.service.impl.TransactionServiceImpl;
 import process.socket.NotificationService;
+import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -42,6 +42,11 @@ public class BulkAction {
      * */
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
         Optional<SourceJob> sourceJob = this.transactionService.findByJobId(jobId);
+        if (!sourceJob.isPresent()) {
+            // job was deleted/removed concurrently with this status update -- nothing left to update
+            this.logger.warn("changeJobStatus: SourceJob not found with jobId {}, skipping.", jobId);
+            return;
+        }
         sourceJob.get().setJobRunningStatus(jobStatus);
         this.transactionService.saveOrUpdateJob(sourceJob.get());
     }
@@ -53,6 +58,10 @@ public class BulkAction {
      * */
     public void changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (!jobQueue.isPresent()) {
+            this.logger.warn("changeJobQueueStatus: JobQueue not found with jobQueueId {}, skipping.", jobQueueId);
+            return;
+        }
         jobQueue.get().setJobStatus(jobStatus);
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
@@ -64,6 +73,10 @@ public class BulkAction {
      * */
     public void changeJobQueueEndDate(Long jobQueueId, LocalDateTime endTime) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (!jobQueue.isPresent()) {
+            this.logger.warn("changeJobQueueEndDate: JobQueue not found with jobQueueId {}, skipping.", jobQueueId);
+            return;
+        }
         jobQueue.get().setEndTime(endTime);
         jobQueue.get().setJobStatusMessage(String.format("Job %s now complete.", jobQueue.get().getJobId()));
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
@@ -76,6 +89,10 @@ public class BulkAction {
      * */
     public void changeJobLastJobRun(Long jobId, LocalDateTime lastJobRun) {
         Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
+        if (!sourceJob.isPresent()) {
+            this.logger.warn("changeJobLastJobRun: active SourceJob not found with jobId {}, skipping.", jobId);
+            return;
+        }
         sourceJob.get().setLastJobRun(lastJobRun);
         this.transactionService.saveOrUpdateJob(sourceJob.get());
     }
@@ -154,18 +171,7 @@ public class BulkAction {
      * @param scheduler
      * */
     public void updateNextScheduler(Scheduler scheduler) {
-        LocalDateTime nextJobRun = null;
-        if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.parseLong(scheduler.getRecurrence()));
-        }
+        LocalDateTime nextJobRun = ProcessTimeUtil.computeNextRun(scheduler);
         if (scheduler.getEndDate() != null) {
             LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
             if (nextJobRun != null && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
@@ -209,9 +215,5 @@ public class BulkAction {
         }
         jsonObject.put("execution", sourceJobProjection.getExecution());
         return new Gson().toJson(jsonObject);
-    }
-
-    private static boolean isNull(String filed) {
-        return filed == null || filed.isEmpty();
     }
 }

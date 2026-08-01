@@ -3,6 +3,8 @@ package process.util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import process.model.enums.Frequency;
+import process.model.pojo.Scheduler;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -90,6 +92,33 @@ public class ProcessTimeUtil {
     public static LocalDateTime getRecurrenceTime(LocalDate date, String startTime) {
         String[] timeSplit = startTime.split(":");
         return date.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1]));
+    }
+
+    /**
+     * Method use to compute a scheduler's next run time by advancing its recurrenceTime by its
+     * recurrence amount, per its frequency unit -- was previously duplicated identically in
+     * BulkAction.updateNextScheduler and SourceJobServiceImpl.getLocalDateTime.
+     * @param scheduler
+     * @return LocalDateTime, or null if the scheduler has no recurrence set (or an unrecognized frequency)
+     * */
+    public static LocalDateTime computeNextRun(Scheduler scheduler) {
+        if (scheduler.getRecurrence() == null || scheduler.getRecurrence().isEmpty()) {
+            return null;
+        }
+        long recurrence = Long.parseLong(scheduler.getRecurrence());
+        LocalDateTime recurrenceTime = scheduler.getRecurrenceTime();
+        if (scheduler.getFrequency().equals(Frequency.Mint.name())) {
+            return recurrenceTime.plusMinutes(recurrence);
+        } else if (scheduler.getFrequency().equals(Frequency.Hr.name())) {
+            return recurrenceTime.plusHours(recurrence);
+        } else if (scheduler.getFrequency().equals(Frequency.Daily.name())) {
+            return recurrenceTime.plusDays(recurrence);
+        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name())) {
+            return recurrenceTime.plusWeeks(recurrence);
+        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name())) {
+            return recurrenceTime.plusMonths(recurrence);
+        }
+        return null;
     }
 
 }

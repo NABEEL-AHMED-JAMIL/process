@@ -39,7 +39,11 @@ public class ProducerBulkEngine {
         TransactionServiceImpl transactionService,
         EmailMessagesFactory emailMessagesFactory,
         KafkaTemplate<String, String> kafkaTemplate) {
-        this.pattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9*])\\]$");
+        // partition group must accept either a literal "*" (send to any partition, see
+        // ProcessUtil.START) or one-or-more digits (e.g. "10") -- a single-char class
+        // ([0-9*]) previously matched exactly one character, silently failing to match any
+        // multi-digit partition number and marking those jobs "Broker configuration wrong".
+        this.pattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9]+|\\*)\\]$");
         this.bulkAction = bulkAction;
         this.transactionService = transactionService;
         this.emailMessagesFactory = emailMessagesFactory;
@@ -70,8 +74,9 @@ public class ProducerBulkEngine {
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, by user action.", scheduler.getJobId()));
         // if the user fail the job manual need to send the mail
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
-        if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isSkipJob()) {
-            this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Skip);
+        Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(jobQueue.getJobId());
+        if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
+            this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
         }
     }
 
@@ -93,7 +98,15 @@ public class ProducerBulkEngine {
             lookupData.setLookupValue(currentSchedulerTime.toString());
             this.transactionService.updateLookupDate(lookupData);
             if (!schedulerForToday.isEmpty()) {
-                schedulerForToday.parallelStream()
+                // sequential on purpose: the queue-or-skip decision below is a check-then-act
+                // (getCountForInQueueJobByJobId, then create) with no synchronization, so
+                // running it concurrently (parallelStream) let two scheduler entries for the
+                // same job both see "not yet queued" and both create a queue row. This method
+                // itself can't overlap across invocations (fixedDelay + a distributed
+                // @SchedulerLock in ProcessCron), so sequential processing here is sufficient
+                // to make the whole batch race-free -- it also stops tying up the JVM-wide
+                // ForkJoinPool.commonPool() with a 50ms sleep per job.
+                schedulerForToday.stream()
                     .forEach(scheduler -> {
                         try {
                             Thread.sleep(50);
@@ -104,8 +117,9 @@ public class ProducerBulkEngine {
                                     // if the job in the skip state no need update the last run queue
                                     jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
                                     this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
-                                    if (this.transactionService.findByJobId(scheduler.getJobId()).get().isSkipJob()) {
-                                        this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Skip);
+                                    Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(scheduler.getJobId());
+                                    if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
+                                        this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
                                     }
                                 } else {
                                     this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
@@ -281,8 +295,9 @@ public class ProducerBulkEngine {
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(message, jobQueue.getJobId()));
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
-        if (this.transactionService.findByJobId(jobQueue.getJobId()).get().isFailJob()) {
-            this.emailMessagesFactory.sendSourceJobEmail(this.getSourceJobQueueDto(jobQueue), JobStatus.Failed);
+        Optional<SourceJob> sourceJobForFailMail = this.transactionService.findByJobId(jobQueue.getJobId());
+        if (sourceJobForFailMail.isPresent() && sourceJobForFailMail.get().isFailJob()) {
+            this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Failed);
         }
     }
 
@@ -291,19 +306,6 @@ public class ProducerBulkEngine {
      * @param jobQueue
      * @return SourceJobQueueDto
      * */
-    private SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
-        SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
-        sourceJobQueueDto.setJobId(jobQueue.getJobId());
-        sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
-        if (jobQueue.getJobStatus().equals(JobStatus.Skip)) {
-            sourceJobQueueDto.setStartTime(jobQueue.getSkipTime());
-        } else {
-            sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
-        }
-        return sourceJobQueueDto;
-    }
-
-
     /**
      * Method use to fill the payload detail
      * @param sourceJob
