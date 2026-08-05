@@ -1,9 +1,16 @@
 databaseChangeLog:
-  - exclude:
+  # V1-V3 create the baseline tables (shedlock/lookup_data/source_task_type, idempotent
+  # "IF NOT EXISTS") and seed their baseline rows -- required for a genuinely fresh database.
+  # V4-V7 are historical column/default fixups against schema states already superseded by
+  # the current JPA entity mappings (which Hibernate's ddl-auto=update applies directly when
+  # creating tables fresh), so including them here would just fail the same way V8 originally
+  # did (ALTER against tables/columns Hibernate hasn't created yet at Liquibase-run time) for
+  # no benefit -- they stay excluded.
+  - include:
       file: db/changelog/yaml/V1.0-init.yaml
-  - exclude:
+  - include:
       file: db/changelog/yaml/V2.0-init.yaml
-  - exclude:
+  - include:
       file: db/changelog/yaml/V3.0-init.yaml
   - exclude:
       file: db/changelog/yaml/V4.0-update-task-type-status.yaml
@@ -15,3 +22,7 @@ databaseChangeLog:
       file: db/changelog/yaml/V7.0-add-status.yaml
   - include:
       file: db/changelog/yaml/V8.0-lookup-encryption.yaml
+  - include:
+      file: db/changelog/yaml/V9.0-ai-provider-bucket-list.yaml
+  - include:
+      file: db/changelog/yaml/V10.0-fix-task-types-pipelines.yaml

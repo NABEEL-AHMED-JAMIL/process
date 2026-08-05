@@ -47,6 +47,17 @@ public class DynamicForm {
     @Column(name = "date_created")
     private Timestamp dateCreated;
 
+    /**
+     * Opaque id for the shareable fetch-by-uuid API -- deliberately separate from the
+     * sequential dynamicFormId so a shared/public link can't be used to enumerate other forms
+     * by incrementing the number. Nullable at the column level only so existing rows (created
+     * before this field existed) don't break the schema upgrade -- backfilled lazily the first
+     * time such a row is read (see DynamicFormServiceImpl#ensureUuid), same as every new form
+     * gets one on creation (see DynamicFormServiceImpl#addForm).
+     * */
+    @Column(name = "uuid", unique = true)
+    private String uuid;
+
     @JoinColumn(name = "dynamic_form_id")
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("fieldOrder asc")
@@ -92,6 +103,14 @@ public class DynamicForm {
 
     public void setDateCreated(Timestamp dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public String getUuid() {
+        return uuid;
+    }
+
+    public void setUuid(String uuid) {
+        this.uuid = uuid;
     }
 
     public List<DynamicFormField> getFields() {

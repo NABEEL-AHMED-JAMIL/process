@@ -17,4 +17,6 @@ public interface DynamicFormRepository extends JpaRepository<DynamicForm, Long> 
 
     public List<DynamicForm> findByStatusNotOrderByDynamicFormIdDesc(Status status);
 
+    public Optional<DynamicForm> findByUuid(String uuid);
+
 }

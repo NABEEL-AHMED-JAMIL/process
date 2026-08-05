@@ -26,8 +26,13 @@ public final class AudioTranscodeUtil {
 
     private AudioTranscodeUtil() {}
 
+    // Deliberately excludes "mp4" -- .m4a already covers the "audio recorded in an MP4
+    // container" case. A real .mp4 upload is a video file, and transcodeToAacIfNeeded()
+    // strips any non-browser-safe track with ffmpeg's -vn flag (audio-only re-encode) --
+    // if "mp4" were in this set, a video whose audio codec isn't AAC/MP3 (AC3, Opus, PCM,
+    // etc, all common) would have its video track silently discarded on upload.
     private static final Set<String> AUDIO_EXTENSIONS = new HashSet<>(Arrays.asList(
-        "m4a", "mp3", "mp4", "wav", "aac", "flac"));
+        "m4a", "mp3", "wav", "aac", "flac"));
 
     private static final Set<String> BROWSER_SAFE_CODECS = new HashSet<>(Arrays.asList(
         "aac", "mp3"));

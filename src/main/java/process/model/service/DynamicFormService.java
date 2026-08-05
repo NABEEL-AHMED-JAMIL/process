@@ -20,6 +20,8 @@ public interface DynamicFormService {
 
     public ResponseDto fetchFormByFormId(Long dynamicFormId) throws Exception;
 
+    public ResponseDto fetchFormByUuid(String uuid) throws Exception;
+
     public ResponseDto addField(Long dynamicFormId, DynamicFormFieldDto dynamicFormFieldDto) throws Exception;
 
     public ResponseDto updateField(DynamicFormFieldDto dynamicFormFieldDto) throws Exception;

@@ -71,6 +71,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         dynamicForm.setDescription(dynamicFormDto.getDescription());
         dynamicForm.setStatus(Status.Active);
         dynamicForm.setDateCreated(new Timestamp(System.currentTimeMillis()));
+        dynamicForm.setUuid(UUID.randomUUID().toString());
         dynamicForm = this.dynamicFormRepository.save(dynamicForm);
         return new ResponseDto(SUCCESS,
             String.format("Form saved with %s.", dynamicForm.getDynamicFormId()),
@@ -135,6 +136,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         List<DynamicForm> dynamicForms = this.dynamicFormRepository
             .findByStatusNotOrderByDynamicFormIdDesc(Status.Delete);
         List<DynamicFormDto> dynamicFormDtos = dynamicForms.stream()
+            .map(this::ensureUuid)
             .map(dynamicForm -> this.getDynamicFormDto(dynamicForm, false))
             .collect(Collectors.toList());
         return new ResponseDto(SUCCESS, "Data found.", dynamicFormDtos);
@@ -154,7 +156,41 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         if (!dynamicFormOpt.isPresent()) {
             return new ResponseDto(ERROR, String.format("Form not found with %s.", dynamicFormId));
         }
+        return new ResponseDto(SUCCESS, "Data found.", this.getDynamicFormDto(this.ensureUuid(dynamicFormOpt.get()), true));
+    }
+
+    /**
+     * Method use to fetch a single dynamic form (with its ordered fields) by its uuid instead
+     * of its sequential id -- the shareable, copy-and-send-anywhere lookup used by external
+     * callers (Postman, a source task, etc.), same idea as fetchSubmissionByUuid.
+     * @param uuid
+     * @return ResponseDto
+     * */
+    @Override
+    public ResponseDto fetchFormByUuid(String uuid) throws Exception {
+        if (isNull(uuid) || uuid.trim().isEmpty()) {
+            return new ResponseDto(ERROR, "Form uuid missing.");
+        }
+        Optional<DynamicForm> dynamicFormOpt = this.dynamicFormRepository.findByUuid(uuid.trim());
+        if (!dynamicFormOpt.isPresent() || dynamicFormOpt.get().getStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, String.format("Form not found with uuid %s.", uuid));
+        }
         return new ResponseDto(SUCCESS, "Data found.", this.getDynamicFormDto(dynamicFormOpt.get(), true));
+    }
+
+    /**
+     * Method use to lazily backfill uuid for forms saved before this field existed -- called
+     * wherever a form is read via the normal id-based paths, so every form ends up with one
+     * after being listed/opened once, with no manual migration needed.
+     * @param dynamicForm
+     * @return DynamicForm
+     * */
+    private DynamicForm ensureUuid(DynamicForm dynamicForm) {
+        if (isNull(dynamicForm.getUuid()) || dynamicForm.getUuid().trim().isEmpty()) {
+            dynamicForm.setUuid(UUID.randomUUID().toString());
+            dynamicForm = this.dynamicFormRepository.save(dynamicForm);
+        }
+        return dynamicForm;
     }
 
     /**
@@ -388,6 +424,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         dto.setDescription(dynamicForm.getDescription());
         dto.setStatus(dynamicForm.getStatus());
         dto.setDateCreated(dynamicForm.getDateCreated());
+        dto.setUuid(dynamicForm.getUuid());
         dto.setTotalFields(dynamicForm.getFields().size());
         if (includeFields) {
             dto.setFields(dynamicForm.getFields().stream()

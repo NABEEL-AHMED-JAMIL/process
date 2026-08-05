@@ -21,6 +21,9 @@ public class DynamicFormDto {
     private Timestamp dateCreated;
     private Integer totalFields;
     private List<DynamicFormFieldDto> fields;
+    /** Read-only -- server-generated, never accepted from the client. Used to build the
+     * "Copy API Link" URL on the frontend (fetchFormByUuid). */
+    private String uuid;
 
     public DynamicFormDto() {
     }
@@ -79,6 +82,14 @@ public class DynamicFormDto {
 
     public void setFields(List<DynamicFormFieldDto> fields) {
         this.fields = fields;
+    }
+
+    public String getUuid() {
+        return uuid;
+    }
+
+    public void setUuid(String uuid) {
+        this.uuid = uuid;
     }
 
     @Override

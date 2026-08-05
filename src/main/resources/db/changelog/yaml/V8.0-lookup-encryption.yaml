@@ -7,8 +7,9 @@ databaseChangeLog:
         - sqlFile:
             path: ../changelog-sets/V8.0-lookup-encryption/V8__add_lookup_encrypted_column.sql
             relativeToChangelogFile: true
-            splitStatements: true
-            endDelimiter: ;
+            # The file is a single DO $$ ... $$ block -- splitting on ";" (the default)
+            # breaks it apart at the block's internal semicolons.
+            splitStatements: false
       rollback:
         - sql:
             dbms: postgresql

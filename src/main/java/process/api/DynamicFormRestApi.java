@@ -104,6 +104,23 @@ public class DynamicFormRestApi {
     }
 
     /**
+     * Api use to fetch a single dynamic form (with its ordered fields) by its uuid -- the
+     * shareable link surfaced on the form list screen, meant to be copied into Postman, a
+     * source task config, etc. Same idea as fetchSubmissionByUuid.
+     * @param uuid
+     * @return ResponseEntity<?>
+     * */
+    @RequestMapping(value = "/fetchFormByUuid", method = RequestMethod.GET)
+    public ResponseEntity<?> fetchFormByUuid(@RequestParam String uuid) {
+        try {
+            return new ResponseEntity<>(this.dynamicFormService.fetchFormByUuid(uuid), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchFormByUuid ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
      * Api use to add a new field to a dynamic form
      * @param dynamicFormId
      * @param dynamicFormFieldDto
