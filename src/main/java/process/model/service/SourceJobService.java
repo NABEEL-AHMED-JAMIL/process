@@ -22,6 +22,8 @@ public interface SourceJobService {
 
     public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobId) throws Exception;
 
+    public ResponseDto fetchSourceJobQueueListWithJobId(Long jobId) throws Exception;
+
     public ResponseDto listSourceJob() throws Exception;
 
 }

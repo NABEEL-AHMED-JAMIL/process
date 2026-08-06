@@ -38,7 +38,10 @@ public class AiAgent {
     @Column(name = "agent_name", nullable = false)
     private String agentName;
 
-    @Column(name = "description")
+    /** TEXT, not a capped varchar -- Hibernate's default varchar(255) silently 500'd (Postgres
+     * "value too long") for any description past 255 chars, with no client-side warning to
+     * explain why saving just failed. */
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
     /** "OpenAI", "Anthropic", or "Custom" -- selects which request/response shape processText uses. */

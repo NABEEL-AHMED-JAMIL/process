@@ -308,6 +308,24 @@ public class SourceJobServiceImpl implements SourceJobService {
     }
 
     /**
+     * Method use to fetch the job queue (run history) list for a given source job id,
+     * most recent run first
+     * @param jobId
+     * @return ResponseDto
+     * */
+    @Override
+    public ResponseDto fetchSourceJobQueueListWithJobId(Long jobId) throws Exception {
+        List<SourceJobQueueDto> jobQueues = jobQueueRepository.findAllByJobId(jobId)
+            .stream()
+            .sorted(Comparator.comparing(JobQueue::getDateCreated, Comparator.nullsLast(Comparator.reverseOrder())))
+            .map(this::getSourceJobQueueDto)
+            .collect(Collectors.toList());
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("jobQueues", jobQueues);
+        return new ResponseDto(SUCCESS, String.format("SourceJobQueue found with %d.", jobId), payload);
+    }
+
+    /**
      * Method use the list source job
      * @return ResponseDto
      * */

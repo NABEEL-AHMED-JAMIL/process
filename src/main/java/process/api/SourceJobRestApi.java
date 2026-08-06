@@ -122,6 +122,23 @@ public class SourceJobRestApi {
     }
 
     /**
+     * Method uses to fetch the job queue (run history) list for a source job,
+     * used by the Job List card/table row expand view
+     * @param jobId
+     * @return ResponseEntity<?>
+     * */
+    @RequestMapping(value = "/fetchSourceJobQueueListWithJobId", method = RequestMethod.GET)
+    public ResponseEntity<?> fetchSourceJobQueueListWithJobId(
+        @RequestParam(value = "jobId") Long jobId) {
+        try {
+            return new ResponseEntity<>(this.sourceJobService.fetchSourceJobQueueListWithJobId(jobId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchSourceJobQueueListWithJobId :- {}.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
      * Method uses to runSourceJob manual
      * @param tempSourceJob
      * @return ResponseEntity<?>
