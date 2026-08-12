@@ -12,6 +12,7 @@ import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
 import process.model.service.ObjectStorageService;
 import process.model.service.StorageBrowserService;
+import process.security.TenantContext;
 import process.util.AudioTranscodeUtil;
 import process.util.ContentTypeUtil;
 import java.io.IOException;
@@ -24,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -62,7 +64,15 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (bucketListParent == null || bucketListParent.getChildren() == null) {
             return Collections.emptyList();
         }
+        // Every bucket child now carries the tenant it belongs to (see LookupData's javadoc) --
+        // PLATFORM_ADMIN still sees every bucket across every tenant (unscoped by design, same
+        // as every other entity in this codebase); a tenant user only sees buckets whose
+        // tenantId matches their own. Before this filter, any authenticated tenant user could
+        // browse -- and download/delete -- every other tenant's storage buckets.
+        boolean isPlatformAdmin = TenantContext.isPlatformAdmin();
+        Long callerTenantId = TenantContext.getTenantId();
         return bucketListParent.getChildren().stream()
+            .filter(child -> isPlatformAdmin || Objects.equals(child.getTenantId(), callerTenantId))
             .map(child -> new BucketSummaryDto(child.getLookupType(), child.getLookupValue(), child.getDescription()))
             .collect(Collectors.toList());
     }
@@ -127,6 +137,14 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             AudioTranscodeUtil.deleteQuietly(tempInput);
             AudioTranscodeUtil.deleteQuietly(tempOutput);
         }
+    }
+
+    @Override
+    public void uploadObject(String bucket, String key, InputStream inputStream, long size, String contentType) {
+        // resolveService(bucket) is the same tenant-scoped bucket-ownership check every other
+        // method here goes through (via listBuckets()) -- a query execution can only ever land
+        // its CSV in a bucket the caller's own tenant (or PLATFORM_ADMIN) actually owns.
+        this.resolveService(bucket).uploadObject(bucket, key, inputStream, size, contentType);
     }
 
     @Override

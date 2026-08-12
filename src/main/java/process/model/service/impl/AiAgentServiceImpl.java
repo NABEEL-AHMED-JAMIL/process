@@ -7,6 +7,7 @@ import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
 import process.model.dto.AiAgentToolDto;
@@ -16,10 +17,15 @@ import process.model.enums.Status;
 import process.model.pojo.AiAgent;
 import process.model.repository.AiAgentRepository;
 import process.model.service.AiAgentService;
+import process.security.TenantContext;
+import process.security.TenantFilterHelper;
 import process.util.EncryptionUtil;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -48,6 +54,7 @@ public class AiAgentServiceImpl implements AiAgentService {
 
     private final AiAgentRepository aiAgentRepository;
     private final EncryptionUtil encryptionUtil;
+    private final TenantFilterHelper tenantFilterHelper;
     private final Gson gson = new Gson();
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(Duration.ofSeconds(15))
@@ -56,9 +63,27 @@ public class AiAgentServiceImpl implements AiAgentService {
         .readTimeout(10, TimeUnit.MINUTES)
         .build();
 
-    public AiAgentServiceImpl(AiAgentRepository aiAgentRepository, EncryptionUtil encryptionUtil) {
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    public AiAgentServiceImpl(AiAgentRepository aiAgentRepository, EncryptionUtil encryptionUtil,
+        TenantFilterHelper tenantFilterHelper) {
         this.aiAgentRepository = aiAgentRepository;
         this.encryptionUtil = encryptionUtil;
+        this.tenantFilterHelper = tenantFilterHelper;
+    }
+
+    /**
+     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
+     * agent) is allowed to see/act on it -- same rationale as SourceJobServiceImpl.isOwnedByCaller.
+     * @param aiAgent
+     * @return boolean
+     * */
+    private boolean isOwnedByCaller(AiAgent aiAgent) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        return aiAgent != null && Objects.equals(aiAgent.getTenantId(), TenantContext.getTenantId());
     }
 
     /**
@@ -67,12 +92,14 @@ public class AiAgentServiceImpl implements AiAgentService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto addAgent(AiAgentDto aiAgentDto) throws Exception {
         ResponseDto validationError = this.validateAgent(aiAgentDto);
         if (validationError != null) {
             return validationError;
         }
         AiAgent aiAgent = new AiAgent();
+        aiAgent.setTenantId(TenantContext.getTenantId());
         this.applyAgentDto(aiAgent, aiAgentDto);
         aiAgent.setStatus(Status.Active);
         aiAgent.setDateCreated(new Timestamp(System.currentTimeMillis()));
@@ -90,6 +117,7 @@ public class AiAgentServiceImpl implements AiAgentService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto updateAgent(AiAgentDto aiAgentDto) throws Exception {
         if (isNull(aiAgentDto.getAiAgentId())) {
             return new ResponseDto(ERROR, "Agent aiAgentId missing.");
@@ -98,8 +126,9 @@ public class AiAgentServiceImpl implements AiAgentService {
         if (validationError != null) {
             return validationError;
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<AiAgent> aiAgentOpt = this.aiAgentRepository.findById(aiAgentDto.getAiAgentId());
-        if (!aiAgentOpt.isPresent()) {
+        if (!aiAgentOpt.isPresent() || !this.isOwnedByCaller(aiAgentOpt.get())) {
             return new ResponseDto(ERROR, String.format("Agent not found with %d.", aiAgentDto.getAiAgentId()));
         }
         AiAgent aiAgent = aiAgentOpt.get();
@@ -117,12 +146,14 @@ public class AiAgentServiceImpl implements AiAgentService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto deleteAgent(Long aiAgentId) throws Exception {
         if (isNull(aiAgentId)) {
             return new ResponseDto(ERROR, "Agent aiAgentId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<AiAgent> aiAgentOpt = this.aiAgentRepository.findById(aiAgentId);
-        if (!aiAgentOpt.isPresent()) {
+        if (!aiAgentOpt.isPresent() || !this.isOwnedByCaller(aiAgentOpt.get())) {
             return new ResponseDto(ERROR, String.format("Agent not found with %d.", aiAgentId));
         }
         AiAgent aiAgent = aiAgentOpt.get();
@@ -136,7 +167,9 @@ public class AiAgentServiceImpl implements AiAgentService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto fetchAllAgents() throws Exception {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<AiAgent> aiAgents = this.aiAgentRepository.findByStatusNotOrderByAiAgentIdDesc(Status.Delete);
         return new ResponseDto(SUCCESS, "Data found.",
             aiAgents.stream().map(this::ensureToolUuid).map(this::getAiAgentDto).collect(Collectors.toList()));
@@ -148,12 +181,14 @@ public class AiAgentServiceImpl implements AiAgentService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto fetchAgentByAgentId(Long aiAgentId) throws Exception {
         if (isNull(aiAgentId)) {
             return new ResponseDto(ERROR, "Agent aiAgentId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<AiAgent> aiAgentOpt = this.aiAgentRepository.findById(aiAgentId);
-        if (!aiAgentOpt.isPresent()) {
+        if (!aiAgentOpt.isPresent() || !this.isOwnedByCaller(aiAgentOpt.get())) {
             return new ResponseDto(ERROR, String.format("Agent not found with %d.", aiAgentId));
         }
         return new ResponseDto(SUCCESS, "Data found.", this.getAiAgentDto(this.ensureToolUuid(aiAgentOpt.get())));
@@ -197,6 +232,7 @@ public class AiAgentServiceImpl implements AiAgentService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto processText(ProcessTextRequestDto processTextRequestDto) throws Exception {
         boolean hasUuid = !isNull(processTextRequestDto.getAiAgentUuid())
             && !processTextRequestDto.getAiAgentUuid().trim().isEmpty();
@@ -208,12 +244,19 @@ public class AiAgentServiceImpl implements AiAgentService {
         }
         // aiAgentId (internal callers, e.g. the frontend) takes priority when both are supplied;
         // aiAgentUuid is the lookup an external consumer uses, since it only ever sees the
-        // public toolUuid from a "Copy Tool URL" link, never the internal sequence id.
-        Optional<AiAgent> aiAgentOpt = !isNull(processTextRequestDto.getAiAgentId())
+        // public toolUuid from a "Copy Tool URL" link, never the internal sequence id. The
+        // aiAgentId path is tenant-checked below (it runs the agent's real, possibly paid, API
+        // key -- a cross-tenant hit here would mean spending another tenant's provider budget);
+        // the toolUuid path is intentionally exempt, same as fetchToolByUuid, by design.
+        boolean isByInternalId = !isNull(processTextRequestDto.getAiAgentId());
+        if (isByInternalId) {
+            this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        }
+        Optional<AiAgent> aiAgentOpt = isByInternalId
             ? this.aiAgentRepository.findById(processTextRequestDto.getAiAgentId())
             : this.aiAgentRepository.findByToolUuid(processTextRequestDto.getAiAgentUuid().trim());
-        if (!aiAgentOpt.isPresent()) {
-            return new ResponseDto(ERROR, !isNull(processTextRequestDto.getAiAgentId())
+        if (!aiAgentOpt.isPresent() || (isByInternalId && !this.isOwnedByCaller(aiAgentOpt.get()))) {
+            return new ResponseDto(ERROR, isByInternalId
                 ? String.format("Agent not found with %d.", processTextRequestDto.getAiAgentId())
                 : "Agent not found for the given aiAgentUuid.");
         }

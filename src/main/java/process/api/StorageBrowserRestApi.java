@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import process.model.dto.BulkDeleteRequestDto;
@@ -18,7 +19,10 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Api use to browse buckets/objects across storage providers (MinIO / S3 / Azure Blob)
+ * Api use to browse buckets/objects across storage providers (MinIO / S3 / Azure Blob).
+ * Role policy: general-purpose file tool, TENANT_USER+ (including delete -- tightening this
+ * to TENANT_ADMIN-only for destructive actions is a reasonable later refinement, not done here
+ * to avoid changing today's actual file-management workflow for regular users).
  * @author Nabeel Ahmed
  */
 @RestController
@@ -29,6 +33,7 @@ import java.nio.charset.StandardCharsets;
     HttpHeaders.ACCEPT_RANGES, HttpHeaders.CONTENT_RANGE, HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH
 })
 @RequestMapping(value = "/storage.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class StorageBrowserRestApi {
 
     private Logger logger = LoggerFactory.getLogger(StorageBrowserRestApi.class);

@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
 import process.model.dto.ResponseDto;
@@ -13,19 +14,22 @@ import process.model.dto.SourceTaskDto;
 import process.model.service.SourceTaskService;
 import process.util.PagingUtil;
 import process.util.ProcessUtil;
-import process.util.exception.ExceptionUtil;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
 
 /**
- * Api use to perform crud operation on source-task
+ * Api use to perform crud operation on source-task. Role policy: task definitions are tenant
+ * configuration (TENANT_ADMIN+ to add/update/delete/upload), but any TENANT_USER can read them
+ * (they need to see/select tasks while working with jobs) -- see the read-only methods below,
+ * each explicitly relaxed back down to TENANT_USER.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/sourceTask.json")
+@PreAuthorize("hasRole('TENANT_ADMIN')")
 public class SourceTaskRestApi {
 
     private Logger logger = LoggerFactory.getLogger(SourceTaskRestApi.class);
@@ -92,6 +96,7 @@ public class SourceTaskRestApi {
      * @param searchTextDto
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/listSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> listSourceTask(
         @RequestParam(value = "page", required = false) Long page,
@@ -121,6 +126,7 @@ public class SourceTaskRestApi {
      * @param searchTextDto
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllLinkJobsWithSourceTaskId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchAllLinkJobsWithSourceTaskId(
         @RequestParam(value = "sourceTaskId") Long sourceTaskId,
@@ -144,6 +150,7 @@ public class SourceTaskRestApi {
      * Api use to fetch link task with source task type
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllLinkSourceTaskWithSourceTaskTypeId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllLinkSourceTaskWithSourceTaskTypeId(
         @RequestParam(value = "sourceTaskTypeId", required = false) Long sourceTaskTypeId) {
@@ -160,6 +167,7 @@ public class SourceTaskRestApi {
      * @param sourceTaskId
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchSourceTaskWithSourceTaskId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSourceTaskWithSourceTaskId(@RequestParam(value = "sourceTaskId") Long sourceTaskId) {
         try {

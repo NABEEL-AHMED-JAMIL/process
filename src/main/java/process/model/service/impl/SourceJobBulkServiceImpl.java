@@ -1,12 +1,9 @@
 package process.model.service.impl;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import process.model.dto.*;
@@ -17,6 +14,7 @@ import process.model.pojo.Scheduler;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.SourceJobBulkService;
+import process.security.TenantContext;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
@@ -36,9 +34,6 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
 
     private Logger logger = LoggerFactory.getLogger(SourceJobBulkServiceImpl.class);
 
-    // env-filed
-    @Value("${storage.efsFileDire}")
-    private String tempFileStoreDirectory;
     private final String SourceJob = "SourceJob";
 
     private final BulkExcel bulkExcel;
@@ -68,20 +63,21 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
      */
     @Override
     public ByteArrayOutputStream downloadSourceJobTemplateFile() throws Exception {
-        // template_url
-        String basePath = this.tempFileStoreDirectory + File.separator;
-        // temp file path
-        String fileUploadPath = basePath + System.currentTimeMillis() + XLSX_EXTENSION;
-        File file = new File(fileUploadPath);
-        try {
-            // 1st copy template.
-            try (InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream(REAL_FILE_PATH);
-                 FileOutputStream fileOut = new FileOutputStream(fileUploadPath)) {
-                IOUtils.copy(inputStream, fileOut);
+        // Used to copy the bundled template out to a temp file, then open THAT file for read
+        // (XSSFWorkbook) and, in the very same try-with-resources, open a second stream to the
+        // SAME path for write (FileOutputStream) -- opening a FileOutputStream truncates its
+        // target immediately, so the on-disk file was being zeroed out while the just-opened
+        // XSSFWorkbook still had unread parts to lazily pull from it, corrupting the zip (POI
+        // would blow up later with an EOFException while parsing docProps/app.xml). Reading the
+        // bundled resource straight into an in-memory XSSFWorkbook and writing straight back out
+        // to a ByteArrayOutputStream -- same pattern every other download method in this class
+        // already uses -- sidesteps the whole read/write-same-file hazard, with no temp file or
+        // cleanup needed at all.
+        try (InputStream templateStream = this.getClass().getClassLoader().getResourceAsStream(REAL_FILE_PATH)) {
+            if (templateStream == null) {
+                throw new IllegalStateException("Bundled job template resource not found: " + REAL_FILE_PATH);
             }
-            // 2nd insert data to newly copied file. So that template couldn't be changed.
-            try (XSSFWorkbook wb = new XSSFWorkbook(file);
-                 FileOutputStream fileOut = new FileOutputStream(fileUploadPath)) {
+            try (XSSFWorkbook wb = new XSSFWorkbook(templateStream)) {
                 XSSFSheet sheet = wb.getSheet(JOB_ADD);
                 /**Trigger Detail fetch from db as per user login*/
                 this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
@@ -91,15 +87,10 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
                 this.bulkExcel.fillDropDownValue(sheet,1,8, ProcessTimeUtil.checked.toArray(new String[0]));
                 this.bulkExcel.fillDropDownValue(sheet,1,9, ProcessTimeUtil.checked.toArray(new String[0]));
                 this.bulkExcel.fillDropDownValue(sheet,1,10, ProcessTimeUtil.checked.toArray(new String[0]));
-                wb.write(fileOut);
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                wb.write(byteArrayOutputStream);
+                return byteArrayOutputStream;
             }
-            // read the file
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            byteArrayOutputStream.write(FileUtils.readFileToByteArray(file));
-            return byteArrayOutputStream;
-        } finally {
-            // delete the temp file regardless of success/failure above
-            file.delete();
         }
     }
 
@@ -109,7 +100,13 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
      */
     @Override
     public ByteArrayOutputStream downloadListSourceJob() throws Exception {
-        List<SourceJob> sourceJobs = this.sourceJobRepository.findAll();
+        // findAll() has no tenant scoping of its own -- unfiltered, this exported every tenant's
+        // jobs into whichever tenant admin's Excel download, not just the caller's own.
+        // findByTenantId scopes it at the query level instead of pulling every tenant's rows
+        // into memory just to filter/discard most of them.
+        List<SourceJob> sourceJobs = TenantContext.isPlatformAdmin()
+            ? this.sourceJobRepository.findAll()
+            : this.sourceJobRepository.findByTenantId(TenantContext.getTenantId());
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
         this.bulkExcel.setWb(workbook);
         XSSFSheet xssfSheet = workbook.createSheet(SourceJob);
@@ -242,6 +239,12 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             sourceJob.setJobName(jobDetailValidation.getJobName());
             sourceJob.setTaskDetail(this.transactionService.findByTaskDetailIdAndTaskStatus(Long.valueOf(jobDetailValidation.getTaskId())).get());
             sourceJob.setJobStatus(Status.Active);
+            // These two were missing entirely -- a bulk-uploaded job silently had no tenant
+            // (invisible to its own tenant's scoped queries, see TenantFilterHelper) and no
+            // assignee (its run status never gets pushed to anyone, see
+            // BulkAction.sendJobStatusNotification). Matches SourceJobServiceImpl.addSourceJob.
+            sourceJob.setTenantId(TenantContext.getTenantId());
+            sourceJob.setAssignedUserId(TenantContext.getAppUserId());
             sourceJob.setPriority(Integer.valueOf(jobDetailValidation.getPriority()));
             sourceJob.setSkipJob(Boolean.parseBoolean(jobDetailValidation.getEmailJobSkip()));
             sourceJob.setFailJob(Boolean.parseBoolean(jobDetailValidation.getEmailJobFail()));

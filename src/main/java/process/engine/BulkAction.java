@@ -193,7 +193,13 @@ public class BulkAction {
     public void sendJobStatusNotification(Long jobId) {
         List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
         if (!sourceJob.isEmpty()) {
-            this.notificationService.sendNotificationToSpecificUser(this.getSourceJobDetail(sourceJob.get(0)));
+            String assignedUsername = sourceJob.get(0).getAssignedUsername();
+            // No assignee (job predates assignedUserId, or its assignee was deleted) -- nobody
+            // to target, so there's nothing to push. Not an error: the run is still visible via
+            // manual refresh/history either way.
+            if (assignedUsername != null) {
+                this.notificationService.sendNotificationToSpecificUser(assignedUsername, this.getSourceJobDetail(sourceJob.get(0)));
+            }
         }
     }
 

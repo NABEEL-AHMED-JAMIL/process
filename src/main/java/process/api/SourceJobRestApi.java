@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
 import process.model.dto.ResponseDto;
@@ -12,19 +13,20 @@ import process.model.dto.SourceJobDto;
 import process.model.service.SourceJobService;
 import process.model.service.SourceJobBulkService;
 import process.util.ProcessUtil;
-import process.util.exception.ExceptionUtil;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
 
 /**
- * Api use to perform crud operation on source job
+ * Api use to perform crud operation on source job. Role policy: jobs are the operational
+ * surface any tenant member works with day to day (create/run/view) -- TENANT_USER+.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/sourceJob.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class SourceJobRestApi {
 
     private Logger logger = LoggerFactory.getLogger(SourceJobRestApi.class);
@@ -203,7 +205,7 @@ public class SourceJobRestApi {
             return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkService.downloadSourceJobTemplateFile().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadSourceJobTemplateFile xlsx file :- {}.", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Sorry File Not Downland, Contact With Support"), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Sorry, the file could not be downloaded. Please contact support."), HttpStatus.BAD_REQUEST);
         }
     }
 

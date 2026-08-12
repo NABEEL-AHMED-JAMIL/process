@@ -70,6 +70,20 @@ public interface StorageBrowserService {
     void uploadObject(String bucket, String prefix, MultipartFile file);
 
     /**
+     * Method use to upload a file that didn't arrive as part of an HTTP multipart request --
+     * e.g. QueryExecutionServiceImpl uploading a locally-streamed CSV export. Same bucket ->
+     * provider resolution (and tenant-scoped bucket ownership check) as every other method
+     * here; just takes a plain InputStream+size+contentType instead of a MultipartFile since
+     * there's no servlet request part to wrap one around.
+     * @param bucket
+     * @param key full object key, e.g. "reports/daily/export_2026-08-10.csv"
+     * @param inputStream
+     * @param size
+     * @param contentType
+     * */
+    void uploadObject(String bucket, String key, java.io.InputStream inputStream, long size, String contentType);
+
+    /**
      * Method use to create a new sub-folder under prefix (the current folder)
      * @param bucket
      * @param prefix current folder, e.g. "" or "invoices/"

@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.ResponseDto;
 import process.model.dto.TextCleanRequestDto;
@@ -13,12 +14,15 @@ import process.util.TextCleanerUtil;
 /**
  * Api use to clean raw extracted text (PDF/OCR/copy-paste noise) into a tight, plain block --
  * stateless, no persistence. Callable from anywhere: the Content Cleaner UI, a Source Task, a
- * Dynamic Form, or an external caller such as the job-search Python listeners.
+ * Dynamic Form, or an external caller such as the job-search Python listeners (already required
+ * a valid JWT before this change too -- this endpoint was never in SecurityConfig's permitAll
+ * list, unlike /changeState and /addLogs). Role policy: self-service tool, TENANT_USER+.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/textCleaner.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class TextCleanerRestApi {
 
     private Logger logger = LoggerFactory.getLogger(TextCleanerRestApi.class);

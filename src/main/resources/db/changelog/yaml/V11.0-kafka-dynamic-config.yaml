@@ -1,0 +1,12 @@
+databaseChangeLog:
+  - changeSet:
+      id: 11.0-kafka-dynamic-config
+      author: nabeel.amd93
+      description: "Drop unused source_task_type schema fields; rename kafka_connection_profile.connection_active to is_default"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V11.0-kafka-dynamic-config/V11__drop_schema_fields.sql
+            relativeToChangelogFile: true
+            # The file is a single DO $$ ... $$ block -- splitting on ";" (the default)
+            # breaks it apart at the block's internal semicolons.
+            splitStatements: false

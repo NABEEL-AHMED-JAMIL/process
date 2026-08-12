@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
@@ -13,15 +14,18 @@ import process.model.projection.ItemResponse;
 import process.model.service.SettingService;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
-import process.util.exception.ExceptionUtil;
 
 /**
- * Api use to perform crud operation on setting
+ * Api use to perform crud operation on setting. Role policy: settings (source task types,
+ * lookups, kafka config surfaced elsewhere) are tenant configuration, so this whole controller
+ * requires TENANT_ADMIN+ -- dynamicQueryResponse tightens further to PLATFORM_ADMIN-only inside
+ * its own method body (raw native SQL bypasses the tenant Hibernate filter, see its javadoc).
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/setting.json")
+@PreAuthorize("hasRole('TENANT_ADMIN')")
 public class SettingRestApi {
 
     private Logger logger = LoggerFactory.getLogger(SettingRestApi.class);
@@ -108,6 +112,53 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.deleteSourceTaskType(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSourceTaskType ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Api use to fetch the caller's own tenant Kafka routing override for a source task type
+     * @param sourceTaskTypeId
+     * @return ResponseEntity<?>
+     * */
+    @RequestMapping(value = "/fetchKafkaRoute", method = RequestMethod.GET)
+    public ResponseEntity<?> fetchKafkaRoute(@RequestParam Long sourceTaskTypeId) {
+        try {
+            return new ResponseEntity<>(this.settingService.fetchKafkaRoute(sourceTaskTypeId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while fetchKafkaRoute ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Api use to create/replace the caller's own tenant Kafka routing override for a source
+     * task type
+     * @param sourceTaskTypeId
+     * @param kafkaConnectionProfileId
+     * @return ResponseEntity<?>
+     * */
+    @RequestMapping(value = "/setKafkaRoute", method = RequestMethod.PUT)
+    public ResponseEntity<?> setKafkaRoute(@RequestParam Long sourceTaskTypeId, @RequestParam Long kafkaConnectionProfileId) {
+        try {
+            return new ResponseEntity<>(this.settingService.setKafkaRoute(sourceTaskTypeId, kafkaConnectionProfileId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while setKafkaRoute ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Api use to remove the caller's own tenant Kafka routing override for a source task type
+     * @param sourceTaskTypeId
+     * @return ResponseEntity<?>
+     * */
+    @RequestMapping(value = "/deleteKafkaRoute", method = RequestMethod.DELETE)
+    public ResponseEntity<?> deleteKafkaRoute(@RequestParam Long sourceTaskTypeId) {
+        try {
+            return new ResponseEntity<>(this.settingService.deleteKafkaRoute(sourceTaskTypeId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while deleteKafkaRoute ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }

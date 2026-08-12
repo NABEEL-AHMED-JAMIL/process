@@ -5,6 +5,7 @@ import com.google.gson.reflect.TypeToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.DynamicFormDto;
 import process.model.dto.DynamicFormFieldDto;
 import process.model.dto.DynamicFormSubmissionDto;
@@ -17,6 +18,10 @@ import process.model.repository.DynamicFormFieldRepository;
 import process.model.repository.DynamicFormRepository;
 import process.model.repository.DynamicFormSubmissionRepository;
 import process.model.service.DynamicFormService;
+import process.security.TenantContext;
+import process.security.TenantFilterHelper;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
 import java.lang.reflect.Type;
 import java.sql.Timestamp;
 import java.util.*;
@@ -47,13 +52,32 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     private final DynamicFormRepository dynamicFormRepository;
     private final DynamicFormFieldRepository dynamicFormFieldRepository;
     private final DynamicFormSubmissionRepository dynamicFormSubmissionRepository;
+    private final TenantFilterHelper tenantFilterHelper;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public DynamicFormServiceImpl(DynamicFormRepository dynamicFormRepository,
         DynamicFormFieldRepository dynamicFormFieldRepository,
-        DynamicFormSubmissionRepository dynamicFormSubmissionRepository) {
+        DynamicFormSubmissionRepository dynamicFormSubmissionRepository,
+        TenantFilterHelper tenantFilterHelper) {
         this.dynamicFormRepository = dynamicFormRepository;
         this.dynamicFormFieldRepository = dynamicFormFieldRepository;
         this.dynamicFormSubmissionRepository = dynamicFormSubmissionRepository;
+        this.tenantFilterHelper = tenantFilterHelper;
+    }
+
+    /**
+     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
+     * form) is allowed to see/act on it -- same rationale as SourceJobServiceImpl.isOwnedByCaller.
+     * @param dynamicForm
+     * @return boolean
+     * */
+    private boolean isOwnedByCaller(DynamicForm dynamicForm) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        return dynamicForm != null && Objects.equals(dynamicForm.getTenantId(), TenantContext.getTenantId());
     }
 
     /**
@@ -67,6 +91,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             return new ResponseDto(ERROR, "Form name missing.");
         }
         DynamicForm dynamicForm = new DynamicForm();
+        dynamicForm.setTenantId(TenantContext.getTenantId());
         dynamicForm.setFormName(dynamicFormDto.getFormName());
         dynamicForm.setDescription(dynamicFormDto.getDescription());
         dynamicForm.setStatus(Status.Active);
@@ -84,6 +109,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto updateForm(DynamicFormDto dynamicFormDto) throws Exception {
         if (isNull(dynamicFormDto.getDynamicFormId())) {
             return new ResponseDto(ERROR, "Form dynamicFormId missing.");
@@ -91,8 +117,9 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         if (isNull(dynamicFormDto.getFormName()) || dynamicFormDto.getFormName().trim().isEmpty()) {
             return new ResponseDto(ERROR, "Form name missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DynamicForm> dynamicFormOpt = this.dynamicFormRepository.findById(dynamicFormDto.getDynamicFormId());
-        if (!dynamicFormOpt.isPresent()) {
+        if (!dynamicFormOpt.isPresent() || !this.isOwnedByCaller(dynamicFormOpt.get())) {
             return new ResponseDto(ERROR, String.format("Form not found with %s.", dynamicFormDto.getDynamicFormId()));
         }
         DynamicForm dynamicForm = dynamicFormOpt.get();
@@ -113,12 +140,14 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto deleteForm(Long dynamicFormId) throws Exception {
         if (isNull(dynamicFormId)) {
             return new ResponseDto(ERROR, "Form dynamicFormId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DynamicForm> dynamicFormOpt = this.dynamicFormRepository.findById(dynamicFormId);
-        if (!dynamicFormOpt.isPresent()) {
+        if (!dynamicFormOpt.isPresent() || !this.isOwnedByCaller(dynamicFormOpt.get())) {
             return new ResponseDto(ERROR, String.format("Form not found with %s.", dynamicFormId));
         }
         DynamicForm dynamicForm = dynamicFormOpt.get();
@@ -132,7 +161,9 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto fetchAllForms() throws Exception {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<DynamicForm> dynamicForms = this.dynamicFormRepository
             .findByStatusNotOrderByDynamicFormIdDesc(Status.Delete);
         List<DynamicFormDto> dynamicFormDtos = dynamicForms.stream()
@@ -148,12 +179,14 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto fetchFormByFormId(Long dynamicFormId) throws Exception {
         if (isNull(dynamicFormId)) {
             return new ResponseDto(ERROR, "Form dynamicFormId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DynamicForm> dynamicFormOpt = this.dynamicFormRepository.findById(dynamicFormId);
-        if (!dynamicFormOpt.isPresent()) {
+        if (!dynamicFormOpt.isPresent() || !this.isOwnedByCaller(dynamicFormOpt.get())) {
             return new ResponseDto(ERROR, String.format("Form not found with %s.", dynamicFormId));
         }
         return new ResponseDto(SUCCESS, "Data found.", this.getDynamicFormDto(this.ensureUuid(dynamicFormOpt.get()), true));
@@ -200,6 +233,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto addField(Long dynamicFormId, DynamicFormFieldDto dynamicFormFieldDto) throws Exception {
         if (isNull(dynamicFormId)) {
             return new ResponseDto(ERROR, "Form dynamicFormId missing.");
@@ -208,8 +242,9 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         if (validationError != null) {
             return validationError;
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DynamicForm> dynamicFormOpt = this.dynamicFormRepository.findById(dynamicFormId);
-        if (!dynamicFormOpt.isPresent()) {
+        if (!dynamicFormOpt.isPresent() || !this.isOwnedByCaller(dynamicFormOpt.get())) {
             return new ResponseDto(ERROR, String.format("Form not found with %s.", dynamicFormId));
         }
         DynamicForm dynamicForm = dynamicFormOpt.get();
@@ -228,6 +263,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto updateField(DynamicFormFieldDto dynamicFormFieldDto) throws Exception {
         if (isNull(dynamicFormFieldDto.getDynamicFormFieldId())) {
             return new ResponseDto(ERROR, "Field dynamicFormFieldId missing.");
@@ -236,9 +272,10 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         if (validationError != null) {
             return validationError;
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DynamicFormField> dynamicFormFieldOpt = this.dynamicFormFieldRepository
             .findById(dynamicFormFieldDto.getDynamicFormFieldId());
-        if (!dynamicFormFieldOpt.isPresent()) {
+        if (!dynamicFormFieldOpt.isPresent() || !this.isFieldOwnedByCaller(dynamicFormFieldDto.getDynamicFormFieldId())) {
             return new ResponseDto(ERROR, String.format("Field not found with %s.", dynamicFormFieldDto.getDynamicFormFieldId()));
         }
         DynamicFormField dynamicFormField = dynamicFormFieldOpt.get();
@@ -253,15 +290,37 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto deleteField(Long dynamicFormFieldId) throws Exception {
         if (isNull(dynamicFormFieldId)) {
             return new ResponseDto(ERROR, "Field dynamicFormFieldId missing.");
         }
-        if (!this.dynamicFormFieldRepository.existsById(dynamicFormFieldId)) {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        if (!this.dynamicFormFieldRepository.existsById(dynamicFormFieldId) || !this.isFieldOwnedByCaller(dynamicFormFieldId)) {
             return new ResponseDto(ERROR, String.format("Field not found with %s.", dynamicFormFieldId));
         }
         this.dynamicFormFieldRepository.deleteById(dynamicFormFieldId);
         return new ResponseDto(SUCCESS, String.format("Field deleted with %s.", dynamicFormFieldId));
+    }
+
+    /**
+     * Method use to check whether the caller owns the DynamicForm that a given field belongs
+     * to -- DynamicFormField carries no tenantId of its own (see DynamicFormFieldRepository.
+     * findOwningFormId's javadoc), so ownership is resolved by walking up to its parent form.
+     * @param dynamicFormFieldId
+     * @return boolean
+     * */
+    private boolean isFieldOwnedByCaller(Long dynamicFormFieldId) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        Long owningFormId = this.dynamicFormFieldRepository.findOwningFormId(dynamicFormFieldId);
+        if (owningFormId == null) {
+            return false;
+        }
+        return this.dynamicFormRepository.findById(owningFormId)
+            .map(this::isOwnedByCaller)
+            .orElse(false);
     }
 
     /**
@@ -270,6 +329,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto submitForm(DynamicFormSubmissionDto dynamicFormSubmissionDto) throws Exception {
         if (isNull(dynamicFormSubmissionDto.getDynamicFormId())) {
             return new ResponseDto(ERROR, "Submission dynamicFormId missing.");
@@ -277,9 +337,10 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         if (isNull(dynamicFormSubmissionDto.getPayload()) || dynamicFormSubmissionDto.getPayload().isEmpty()) {
             return new ResponseDto(ERROR, "Submission payload missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DynamicForm> dynamicFormOpt = this.dynamicFormRepository
             .findById(dynamicFormSubmissionDto.getDynamicFormId());
-        if (!dynamicFormOpt.isPresent()) {
+        if (!dynamicFormOpt.isPresent() || !this.isOwnedByCaller(dynamicFormOpt.get())) {
             return new ResponseDto(ERROR, String.format("Form not found with %s.", dynamicFormSubmissionDto.getDynamicFormId()));
         }
         DynamicFormSubmission dynamicFormSubmission = new DynamicFormSubmission();
@@ -299,6 +360,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto updateSubmission(DynamicFormSubmissionDto dynamicFormSubmissionDto) throws Exception {
         if (isNull(dynamicFormSubmissionDto.getDynamicFormSubmissionId())) {
             return new ResponseDto(ERROR, "Submission dynamicFormSubmissionId missing.");
@@ -306,9 +368,10 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         if (isNull(dynamicFormSubmissionDto.getPayload()) || dynamicFormSubmissionDto.getPayload().isEmpty()) {
             return new ResponseDto(ERROR, "Submission payload missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DynamicFormSubmission> dynamicFormSubmissionOpt = this.dynamicFormSubmissionRepository
             .findById(dynamicFormSubmissionDto.getDynamicFormSubmissionId());
-        if (!dynamicFormSubmissionOpt.isPresent()) {
+        if (!dynamicFormSubmissionOpt.isPresent() || !this.isSubmissionOwnedByCaller(dynamicFormSubmissionOpt.get())) {
             return new ResponseDto(ERROR, String.format("Submission not found with %s.", dynamicFormSubmissionDto.getDynamicFormSubmissionId()));
         }
         DynamicFormSubmission dynamicFormSubmission = dynamicFormSubmissionOpt.get();
@@ -325,15 +388,38 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto deleteSubmission(Long dynamicFormSubmissionId) throws Exception {
         if (isNull(dynamicFormSubmissionId)) {
             return new ResponseDto(ERROR, "Submission dynamicFormSubmissionId missing.");
         }
-        if (!this.dynamicFormSubmissionRepository.existsById(dynamicFormSubmissionId)) {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Optional<DynamicFormSubmission> dynamicFormSubmissionOpt = this.dynamicFormSubmissionRepository
+            .findById(dynamicFormSubmissionId);
+        if (!dynamicFormSubmissionOpt.isPresent() || !this.isSubmissionOwnedByCaller(dynamicFormSubmissionOpt.get())) {
             return new ResponseDto(ERROR, String.format("Submission not found with %s.", dynamicFormSubmissionId));
         }
         this.dynamicFormSubmissionRepository.deleteById(dynamicFormSubmissionId);
         return new ResponseDto(SUCCESS, String.format("Submission deleted with %s.", dynamicFormSubmissionId));
+    }
+
+    /**
+     * Method use to check whether the caller owns the DynamicForm a submission belongs to --
+     * DynamicFormSubmission carries no tenantId of its own, only the plain dynamicFormId column,
+     * so ownership is resolved by looking up that parent form.
+     * @param dynamicFormSubmission
+     * @return boolean
+     * */
+    private boolean isSubmissionOwnedByCaller(DynamicFormSubmission dynamicFormSubmission) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        if (dynamicFormSubmission == null || dynamicFormSubmission.getDynamicFormId() == null) {
+            return false;
+        }
+        return this.dynamicFormRepository.findById(dynamicFormSubmission.getDynamicFormId())
+            .map(this::isOwnedByCaller)
+            .orElse(false);
     }
 
     /**
@@ -342,9 +428,15 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto fetchSubmissionsByFormId(Long dynamicFormId) throws Exception {
         if (isNull(dynamicFormId)) {
             return new ResponseDto(ERROR, "Form dynamicFormId missing.");
+        }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Optional<DynamicForm> dynamicFormOpt = this.dynamicFormRepository.findById(dynamicFormId);
+        if (!dynamicFormOpt.isPresent() || !this.isOwnedByCaller(dynamicFormOpt.get())) {
+            return new ResponseDto(ERROR, String.format("Form not found with %s.", dynamicFormId));
         }
         List<DynamicFormSubmission> submissions = this.dynamicFormSubmissionRepository
             .findByDynamicFormIdOrderByDynamicFormSubmissionIdDesc(dynamicFormId);
@@ -360,13 +452,15 @@ public class DynamicFormServiceImpl implements DynamicFormService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto fetchSubmissionBySubmissionId(Long dynamicFormSubmissionId) throws Exception {
         if (isNull(dynamicFormSubmissionId)) {
             return new ResponseDto(ERROR, "Submission dynamicFormSubmissionId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DynamicFormSubmission> dynamicFormSubmissionOpt = this.dynamicFormSubmissionRepository
             .findById(dynamicFormSubmissionId);
-        if (!dynamicFormSubmissionOpt.isPresent()) {
+        if (!dynamicFormSubmissionOpt.isPresent() || !this.isSubmissionOwnedByCaller(dynamicFormSubmissionOpt.get())) {
             return new ResponseDto(ERROR, String.format("Submission not found with %s.", dynamicFormSubmissionId));
         }
         return new ResponseDto(SUCCESS, "Data found.", this.getDynamicFormSubmissionDto(dynamicFormSubmissionOpt.get()));

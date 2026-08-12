@@ -25,4 +25,8 @@ public interface SourceJobProjection {
 
     public String getExecution();
 
+    /** Who to push this job's live status to over WebSocket -- null if the job predates
+     * assignedUserId or its assignee has since been deleted. See BulkAction.sendJobStatusNotification. */
+    public String getAssignedUsername();
+
 }

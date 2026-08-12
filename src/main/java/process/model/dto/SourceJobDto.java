@@ -21,6 +21,11 @@ public class SourceJobDto {
     private Long jobId;
     private String jobName;
     private SourceTaskDto taskDetail;
+    /** Who this job's run notifications go to -- see SourceJob.assignedUserId. */
+    private Long assignedUserId;
+    /** Set on read (fetchSourceJobDetailWithSourceJobId) so the UI can show who it's assigned
+     * to without a separate lookup -- ignored on write, assignedUserId is what's saved. */
+    private String assignedUsername;
     private Status jobStatus;
     private JobStatus jobRunningStatus;
     private LocalDateTime lastJobRun;
@@ -59,6 +64,22 @@ public class SourceJobDto {
 
     public void setTaskDetail(SourceTaskDto taskDetail) {
         this.taskDetail = taskDetail;
+    }
+
+    public Long getAssignedUserId() {
+        return assignedUserId;
+    }
+
+    public void setAssignedUserId(Long assignedUserId) {
+        this.assignedUserId = assignedUserId;
+    }
+
+    public String getAssignedUsername() {
+        return assignedUsername;
+    }
+
+    public void setAssignedUsername(String assignedUsername) {
+        this.assignedUsername = assignedUsername;
     }
 
     public Status getJobStatus() {

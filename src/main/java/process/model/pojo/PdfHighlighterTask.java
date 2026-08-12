@@ -3,8 +3,11 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.HighlighterStatus;
 import process.model.enums.Status;
 import javax.persistence.*;
@@ -17,7 +20,11 @@ import java.sql.Timestamp;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "pdf_highlighter_task")
+@Table(name = "pdf_highlighter_task", indexes = {
+    @Index(name = "idx_pdf_highlighter_task_tenant_id", columnList = "tenant_id")
+})
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PdfHighlighterTask {
@@ -35,6 +42,11 @@ public class PdfHighlighterTask {
     @Column(name = "pdf_highlighter_task_id", unique = true, nullable = false)
     @GeneratedValue(generator = "pdfHighlighterTaskSequenceGenerator")
     private Long pdfHighlighterTaskId;
+
+    /** Owning tenant -- see Tenant/TenantContext. Nullable during the Phase 0 migration window
+     * (backfilled to the Default tenant by TenantSeedService on startup). */
+    @Column(name = "tenant_id")
+    private Long tenantId;
 
     @Column(name = "task_name",
         nullable = false)
@@ -76,6 +88,14 @@ public class PdfHighlighterTask {
 
     public Long getPdfHighlighterTaskId() {
         return pdfHighlighterTaskId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public void setPdfHighlighterTaskId(Long pdfHighlighterTaskId) {

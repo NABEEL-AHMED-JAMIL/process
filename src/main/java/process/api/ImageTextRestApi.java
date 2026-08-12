@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import process.model.dto.ResponseDto;
@@ -13,11 +14,13 @@ import process.util.ProcessUtil;
 /**
  * Api use to run an uploaded image (optionally cropped to a user-marked region) through the
  * ad-hoc OCR pipeline (proxies job-search's standalone Audio Extract Service, /extract/image).
+ * Role policy: self-service AI tool, TENANT_USER+.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/imageText.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class ImageTextRestApi {
 
     private Logger logger = LoggerFactory.getLogger(ImageTextRestApi.class);

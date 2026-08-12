@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
@@ -14,12 +15,15 @@ import process.util.ProcessUtil;
 
 /**
  * Api use to perform crud operation on AI agents, and to run an agent against extracted
- * file text (see ProcessTextRequestDto -- extraction itself happens client-side).
+ * file text (see ProcessTextRequestDto -- extraction itself happens client-side). Role policy:
+ * defining an agent (add/update/delete) is tenant configuration, TENANT_ADMIN+ -- using one
+ * (fetch/process*) is relaxed back down to TENANT_USER below.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/aiAgent.json")
+@PreAuthorize("hasRole('TENANT_ADMIN')")
 public class AiAgentRestApi {
 
     private Logger logger = LoggerFactory.getLogger(AiAgentRestApi.class);
@@ -79,6 +83,7 @@ public class AiAgentRestApi {
      * Api use to fetch every AI agent
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllAgents", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllAgents() {
         try {
@@ -94,6 +99,7 @@ public class AiAgentRestApi {
      * @param aiAgentId
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAgentByAgentId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAgentByAgentId(@RequestParam Long aiAgentId) {
         try {
@@ -111,6 +117,7 @@ public class AiAgentRestApi {
      * @param uuid
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchToolByUuid", method = RequestMethod.GET)
     public ResponseEntity<?> fetchToolByUuid(@RequestParam String uuid) {
         try {
@@ -126,6 +133,7 @@ public class AiAgentRestApi {
      * @param processTextRequestDto
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/processText", method = RequestMethod.POST)
     public ResponseEntity<?> processText(@RequestBody ProcessTextRequestDto processTextRequestDto) {
         try {
@@ -142,6 +150,7 @@ public class AiAgentRestApi {
      * @param adHocPromptRequestDto
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/processAdHoc", method = RequestMethod.POST)
     public ResponseEntity<?> processAdHoc(@RequestBody AdHocPromptRequestDto adHocPromptRequestDto) {
         try {

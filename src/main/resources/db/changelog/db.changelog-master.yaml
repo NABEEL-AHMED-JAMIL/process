@@ -26,3 +26,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V9.0-ai-provider-bucket-list.yaml
   - include:
       file: db/changelog/yaml/V10.0-fix-task-types-pipelines.yaml
+  - include:
+      file: db/changelog/yaml/V11.0-kafka-dynamic-config.yaml

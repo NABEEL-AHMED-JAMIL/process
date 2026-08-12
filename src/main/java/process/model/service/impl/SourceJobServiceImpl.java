@@ -11,11 +11,16 @@ import process.model.dto.*;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
+import process.model.enums.UserRole;
 import process.model.pojo.*;
 import process.model.repository.*;
 import process.model.service.SourceJobService;
+import process.security.TenantContext;
+import process.security.TenantFilterHelper;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -35,7 +40,12 @@ public class SourceJobServiceImpl implements SourceJobService {
     private final JobAuditLogRepository jobAuditLogRepository;
     private final JobQueueRepository jobQueueRepository;
     private final LookupDataRepository lookupDataRepository;
+    private final AppUserRepository appUserRepository;
     private final ProducerBulkEngine producerBulkEngine;
+    private final TenantFilterHelper tenantFilterHelper;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public SourceJobServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
@@ -43,22 +53,64 @@ public class SourceJobServiceImpl implements SourceJobService {
         JobAuditLogRepository jobAuditLogRepository,
         JobQueueRepository jobQueueRepository,
         LookupDataRepository lookupDataRepository,
-        ProducerBulkEngine producerBulkEngine) {
+        AppUserRepository appUserRepository,
+        ProducerBulkEngine producerBulkEngine,
+        TenantFilterHelper tenantFilterHelper) {
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.jobAuditLogRepository = jobAuditLogRepository;
         this.jobQueueRepository = jobQueueRepository;
         this.lookupDataRepository = lookupDataRepository;
+        this.appUserRepository = appUserRepository;
         this.producerBulkEngine = producerBulkEngine;
+        this.tenantFilterHelper = tenantFilterHelper;
     }
 
     /**
-     * Method use to add the source job
+     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
+     * job) is allowed to see/act on it -- the Hibernate filter (TenantFilterHelper) only
+     * protects list/query results; a by-id lookup like findById can still return a row outside
+     * the filter's reach if called incorrectly, so every by-id read/write path checks this
+     * explicitly too (belt and suspenders against IDOR: a tenant guessing/incrementing another
+     * tenant's job id).
+     * @param sourceJob
+     * @return boolean
+     * */
+    private boolean isOwnedByCaller(SourceJob sourceJob) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        return sourceJob != null && Objects.equals(sourceJob.getTenantId(), TenantContext.getTenantId());
+    }
+
+    /**
+     * Method use to check whether a SourceTask is linkable by the caller (PLATFORM_ADMIN, or
+     * the tenant that owns it) -- without this, addSourceJob/updateSourceJob would let any
+     * tenant user point a job at ANOTHER tenant's SourceTask just by guessing its
+     * taskDetailId, which then leaks that task's name/payload/queue-topic right back to the
+     * caller's own tenant through the job's mapped taskDetail (see mapSourceJobToDto).
+     * @param sourceTask
+     * @return boolean
+     * */
+    private boolean isOwnedByCaller(SourceTask sourceTask) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        return sourceTask != null && Objects.equals(sourceTask.getTenantId(), TenantContext.getTenantId());
+    }
+
+    /**
+     * Method use to add the source job. @Transactional so the SourceJob save and its Scheduler
+     * rows commit/roll back together -- without it, a failure partway through the schedulers
+     * forEach (e.g. a constraint violation on the second scheduler) left the already-flushed
+     * SourceJob (and any earlier scheduler) permanently committed with no rollback: an orphaned,
+     * half-scheduled job the UI shows as created but that never runs as configured.
      * @param sourceJobDto
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto addSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobName())) {
             return new ResponseDto(ERROR, "SourceJob jobName missing.");
@@ -70,12 +122,20 @@ public class SourceJobServiceImpl implements SourceJobService {
         // validation for scheduler list -> if any missing then
         Optional<SourceTask> taskDetail = this.sourceTaskRepository.findById(
              sourceJobDto.getTaskDetail().getTaskDetailId());
-        if (!taskDetail.isPresent()) {
+        if (!taskDetail.isPresent() || !this.isOwnedByCaller(taskDetail.get())) {
             return new ResponseDto(ERROR, String.format("SourceTask not found with %d.",
                 sourceJobDto.getTaskDetail().getTaskDetailId()));
         }
+        Long tenantId = TenantContext.getTenantId();
+        Long assignedUserId = !ProcessUtil.isNull(sourceJobDto.getAssignedUserId())
+            ? sourceJobDto.getAssignedUserId() : TenantContext.getAppUserId();
+        String assigneeError = this.validateAssignee(assignedUserId, tenantId);
+        if (assigneeError != null) {
+            return new ResponseDto(ERROR, assigneeError);
+        }
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobName(sourceJobDto.getJobName());
+        sourceJob.setTenantId(tenantId);
         sourceJob.setTaskDetail(taskDetail.get());
         sourceJob.setJobStatus(Status.Active);
         sourceJob.setExecution(sourceJobDto.getExecution());
@@ -83,6 +143,9 @@ public class SourceJobServiceImpl implements SourceJobService {
         sourceJob.setCompleteJob(sourceJobDto.isCompleteJob());
         sourceJob.setFailJob(sourceJobDto.isFailJob());
         sourceJob.setSkipJob(sourceJobDto.isSkipJob());
+        // Defaults to whoever created the job -- explicitly reassignable via updateSourceJob
+        // once there's a UI for it. This is who sendJobStatusNotification pushes run updates to.
+        sourceJob.setAssignedUserId(assignedUserId);
         this.sourceJobRepository.saveAndFlush(sourceJob);
         if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && !sourceJobDto.getSchedulers().isEmpty()) {
             sourceJobDto.getSchedulers()
@@ -112,6 +175,7 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto updateSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob job-id missing.");
@@ -122,13 +186,22 @@ public class SourceJobServiceImpl implements SourceJobService {
         } else if (ProcessUtil.isNull(sourceJobDto.getTaskDetail().getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceJob taskDetailId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
+        // findById is a primary-key lookup -- Hibernate's @Filter is known to not reliably
+        // apply to get()/load() by id (unlike list/criteria queries), so the explicit
+        // isOwnedByCaller check below is the real guard here, not just defense-in-depth.
+        if (sourceJob.isPresent() && !this.isOwnedByCaller(sourceJob.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
+        }
         if (sourceJob.isPresent()) {
             sourceJob.get().setJobName(sourceJobDto.getJobName());
             // check source active then allow to link
             Optional<SourceTask> sourceTask = this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(
                  sourceJobDto.getTaskDetail().getTaskDetailId(), Status.Active);
-            if (sourceTask.isPresent()) {
+            if (sourceTask.isPresent() && !this.isOwnedByCaller(sourceTask.get())) {
+                return new ResponseDto(ERROR, "Selected sourceTask not active.");
+            } else if (sourceTask.isPresent()) {
                 sourceJob.get().setTaskDetail(sourceTask.get());
             } else {
                 return new ResponseDto(ERROR, "Selected sourceTask not active.");
@@ -145,6 +218,13 @@ public class SourceJobServiceImpl implements SourceJobService {
             sourceJob.get().setCompleteJob(sourceJobDto.isCompleteJob());
             sourceJob.get().setFailJob(sourceJobDto.isFailJob());
             sourceJob.get().setSkipJob(sourceJobDto.isSkipJob());
+            if (!ProcessUtil.isNull(sourceJobDto.getAssignedUserId())) {
+                String assigneeError = this.validateAssignee(sourceJobDto.getAssignedUserId(), sourceJob.get().getTenantId());
+                if (assigneeError != null) {
+                    return new ResponseDto(ERROR, assigneeError);
+                }
+                sourceJob.get().setAssignedUserId(sourceJobDto.getAssignedUserId());
+            }
             this.sourceJobRepository.saveAndFlush(sourceJob.get());
             if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && !sourceJobDto.getSchedulers().isEmpty()) {
                 sourceJobDto.getSchedulers()
@@ -183,7 +263,11 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
+        if (sourceJob.isPresent() && !this.isOwnedByCaller(sourceJob.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
+        }
         if (sourceJob.isPresent()) {
             // mark the source job as deleted
             sourceJob.get().setJobStatus(Status.Delete);
@@ -211,12 +295,14 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto runSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
-        if (!sourceJob.isPresent()) {
+        if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");
         } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus()) && (sourceJob.get().getJobRunningStatus().equals(JobStatus.Queue) ||
             sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
@@ -233,12 +319,14 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto skipNextSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
-        if (!sourceJob.isPresent()) {
+        if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");
         } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus()) && (sourceJob.get().getJobRunningStatus().equals(JobStatus.Queue) ||
             sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
@@ -277,18 +365,27 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto findSourceJobAuditLog(Long jobQueueId, Long jobId) throws Exception {
         if (jobQueueId == null) {
             return new ResponseDto(ERROR, "JobQueueId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        // JobQueue/JobAuditLog have no tenantId column of their own -- they're only reachable
+        // scoped through the SourceJob that owns them, so gate on that job's ownership first
+        // rather than trusting jobQueueId/jobId to already belong to the same tenant.
+        Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
+        if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
+        }
         Map<String, Object> payload = new HashMap<>();
         payload.put("auditLogs", jobAuditLogRepository.findAllByJobQueueIdV1(jobQueueId));
-        sourceJobRepository.findById(jobId).ifPresent(sourceJob -> {
-            SourceJobDto sourceJobDto = mapSourceJobToDto(sourceJob);
-            schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> sourceJobDto.setScheduler(getSchedulerDto(s)));
-            payload.put("sourceJob", sourceJobDto);
-        });
-        jobQueueRepository.findById(jobQueueId).ifPresent(queue -> payload.put("sourceJobQueue", getSourceJobQueueDto(queue)));
+        SourceJobDto sourceJobDto = mapSourceJobToDto(sourceJobOpt.get());
+        schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> sourceJobDto.setScheduler(getSchedulerDto(s)));
+        payload.put("sourceJob", sourceJobDto);
+        jobQueueRepository.findById(jobQueueId)
+            .filter(queue -> jobId.equals(queue.getJobId()))
+            .ifPresent(queue -> payload.put("sourceJobQueue", getSourceJobQueueDto(queue)));
         return new ResponseDto(SUCCESS, "SourceJob skip successfully.", payload);
     }
 
@@ -298,8 +395,11 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobId) {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         return sourceJobRepository.findById(jobId)
+            .filter(this::isOwnedByCaller)
             .map(sourceJob -> {
                 SourceJobDto dto = mapSourceJobToDto(sourceJob);
                 schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
@@ -314,7 +414,14 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto fetchSourceJobQueueListWithJobId(Long jobId) throws Exception {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        // JobQueue has no tenantId of its own -- gate on the owning SourceJob's tenant first.
+        Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
+        if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
+        }
         List<SourceJobQueueDto> jobQueues = jobQueueRepository.findAllByJobId(jobId)
             .stream()
             .sorted(Comparator.comparing(JobQueue::getDateCreated, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -330,7 +437,9 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto listSourceJob() throws Exception {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<SourceJobDto> sourceJobDtoList = sourceJobRepository.findAllActiveAndInactiveJobs(
             Status.Active, Status.Inactive, Sort.by(Sort.Direction.ASC, "jobId"))
             .stream()
@@ -348,6 +457,32 @@ public class SourceJobServiceImpl implements SourceJobService {
      * @param sourceJob
      * @return SourceJobDto
      */
+    /**
+     * Method use to validate a job's assignedUserId before it's saved -- must be a real,
+     * non-deleted user in the same tenant as the job. Without this, addSourceJob/updateSourceJob
+     * (reachable by any TENANT_USER, not just admins) would accept an arbitrary id and
+     * BulkAction.sendJobStatusNotification would push this job's status/name to whoever that id
+     * happens to belong to, including a user in a different tenant entirely.
+     * @param assignedUserId
+     * @param tenantId
+     * @return String error message, or null if valid
+     * */
+    private String validateAssignee(Long assignedUserId, Long tenantId) {
+        Optional<AppUser> assignee = this.appUserRepository.findById(assignedUserId);
+        if (!assignee.isPresent() || assignee.get().getStatus() == Status.Delete) {
+            return String.format("Assigned user not found with %d.", assignedUserId);
+        }
+        // PLATFORM_ADMIN isn't bound to any tenant (tenantId==null) by design -- they operate
+        // across every tenant, so they're always a valid assignee regardless of whose job it is.
+        if (assignee.get().getUserRole() == UserRole.PLATFORM_ADMIN) {
+            return null;
+        }
+        if (!ProcessUtil.isNull(tenantId) && !tenantId.equals(assignee.get().getTenantId())) {
+            return "Assigned user must belong to the same tenant as this job.";
+        }
+        return null;
+    }
+
     private SourceJobDto mapSourceJobToDto(SourceJob sourceJob) {
         SourceJobDto dto = new SourceJobDto();
         dto.setJobId(sourceJob.getJobId());
@@ -363,6 +498,11 @@ public class SourceJobServiceImpl implements SourceJobService {
         dto.setSkipJob(sourceJob.isSkipJob());
         if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
             dto.setTaskDetail(mapSourceTaskToDto(sourceJob.getTaskDetail()));
+        }
+        if (!ProcessUtil.isNull(sourceJob.getAssignedUserId())) {
+            dto.setAssignedUserId(sourceJob.getAssignedUserId());
+            this.appUserRepository.findById(sourceJob.getAssignedUserId())
+                .ifPresent(appUser -> dto.setAssignedUsername(appUser.getUsername()));
         }
         return dto;
     }
@@ -403,8 +543,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
         sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
         sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
-        sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
-        sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
+        sourceTaskTypeDto.setKafkaConnectionProfileId(sourceTaskType.getKafkaConnectionProfileId());
         return sourceTaskTypeDto;
     }
 

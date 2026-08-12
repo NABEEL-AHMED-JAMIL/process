@@ -18,6 +18,7 @@ public class SourceTaskDto {
     private Status taskStatus;
     private String homePageId;
     private String pipelineId;
+    private String groupId;
     private String taskPayload;
     private SourceTaskTypeDto sourceTaskType;
     private List<ConfigurationMakerRequest.TagInfo> xmlTagsInfo;
@@ -63,6 +64,14 @@ public class SourceTaskDto {
 
     public void setPipelineId(String pipelineId) {
         this.pipelineId = pipelineId;
+    }
+
+    public String getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(String groupId) {
+        this.groupId = groupId;
     }
 
     public String getTaskPayload() {

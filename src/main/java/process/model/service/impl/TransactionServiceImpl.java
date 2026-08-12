@@ -7,6 +7,7 @@ import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.projection.SourceJobProjection;
 import process.model.repository.*;
+import process.security.TenantContext;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -161,11 +162,17 @@ public class TransactionServiceImpl {
     }
 
     /**
-     * Method use to fetch task detail by task status
+     * Method use to fetch task detail by task status -- scoped to the caller's own tenant (or
+     * unscoped for PLATFORM_ADMIN). Used by SourceJobBulkServiceImpl.uploadSourceJob to resolve
+     * the taskDetailId column of an uploaded batch file; without this check a tenant user could
+     * bulk-upload a job that links to another tenant's task just by naming its id in the sheet
+     * -- the row-level checks SourceJobServiceImpl.addSourceJob/updateSourceJob already do for
+     * the single-job form (see their own isOwnedByCaller calls) don't cover this bulk path at all.
      * @return Optional<SourceTask>
      */
     public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId) {
-        return this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(taskDetailId, Status.Active);
+        return this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(taskDetailId, Status.Active)
+            .filter(task -> TenantContext.isPlatformAdmin() || java.util.Objects.equals(task.getTenantId(), TenantContext.getTenantId()));
     }
 
     /**
@@ -173,7 +180,9 @@ public class TransactionServiceImpl {
      * @return List<Long>
      */
     public List<Long> findAllSourceTask() {
-        return this.sourceTaskRepository.findAllSourceTask();
+        return TenantContext.isPlatformAdmin()
+            ? this.sourceTaskRepository.findAllSourceTask()
+            : this.sourceTaskRepository.findAllSourceTaskForTenant(TenantContext.getTenantId());
     }
 
     public Integer getCountForInQueueJobByJobId(Long jobId) {

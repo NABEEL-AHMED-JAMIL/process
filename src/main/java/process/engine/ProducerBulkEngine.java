@@ -3,9 +3,10 @@ package process.engine;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
+import process.config.KafkaConnectionResolver;
+import process.config.KafkaTemplateProvider;
 import process.emailer.EmailMessagesFactory;
 import process.engine.dto.JobPayloadDTO;
 import process.model.dto.SourceJobQueueDto;
@@ -13,12 +14,11 @@ import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.service.impl.TransactionServiceImpl;
+import process.util.KafkaTopicPartitionUtil;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import static java.util.Objects.isNull;
 
 /**
@@ -29,25 +29,22 @@ public class ProducerBulkEngine {
 
     public Logger logger = LogManager.getLogger(ProducerBulkEngine.class);
 
-    private final Pattern pattern;
     private final BulkAction bulkAction;
     private final TransactionServiceImpl transactionService;
     private final EmailMessagesFactory emailMessagesFactory;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplateProvider kafkaTemplateProvider;
+    private final KafkaConnectionResolver kafkaConnectionResolver;
 
     public ProducerBulkEngine(BulkAction bulkAction,
         TransactionServiceImpl transactionService,
         EmailMessagesFactory emailMessagesFactory,
-        KafkaTemplate<String, String> kafkaTemplate) {
-        // partition group must accept either a literal "*" (send to any partition, see
-        // ProcessUtil.START) or one-or-more digits (e.g. "10") -- a single-char class
-        // ([0-9*]) previously matched exactly one character, silently failing to match any
-        // multi-digit partition number and marking those jobs "Broker configuration wrong".
-        this.pattern = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9]+|\\*)\\]$");
+        KafkaTemplateProvider kafkaTemplateProvider,
+        KafkaConnectionResolver kafkaConnectionResolver) {
         this.bulkAction = bulkAction;
         this.transactionService = transactionService;
         this.emailMessagesFactory = emailMessagesFactory;
-        this.kafkaTemplate = kafkaTemplate;
+        this.kafkaTemplateProvider = kafkaTemplateProvider;
+        this.kafkaConnectionResolver = kafkaConnectionResolver;
     }
 
     /**
@@ -188,23 +185,27 @@ public class ProducerBulkEngine {
                 SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
                 if (sourceTaskType.getStatus().equals(Status.Active)) {
                     String queueTopicPartition = sourceTaskType.getQueueTopicPartition();
-                    Matcher matcher = this.pattern.matcher(queueTopicPartition);
-                    boolean resultRegex = matcher.matches();
-                    if (resultRegex) {
-                        String topic = matcher.group(1);
-                        String partition = matcher.group(2);
+                    Optional<KafkaTopicPartitionUtil.Parsed> parsed = KafkaTopicPartitionUtil.parse(queueTopicPartition);
+                    if (parsed.isPresent()) {
+                        String topic = parsed.get().getTopic();
+                        String partition = parsed.get().getPartition();
                         // random key for sending to partitions
                         String key = UUID.randomUUID().toString();
                         String payload = this.getSourceJobDetail(sourceJob, jobQueue);
                         try {
+                            // Resolved per-publish, not cached on the job/task -- a profile can
+                            // be added/changed after this job was created, and the next run
+                            // should pick that up without needing the job re-saved.
+                            org.springframework.kafka.core.KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
+                                this.kafkaConnectionResolver.resolve(sourceJob.getTenantId(), sourceTaskType.getSourceTaskTypeId()));
                             if (partition.contains(ProcessUtil.START)) {
-                                this.kafkaTemplate.send(topic, key, payload)
+                                template.send(topic, key, payload)
                                     .addCallback(
                                         result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
                                         ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
                                     );
                             } else {
-                                this.kafkaTemplate.send(topic, Integer.valueOf(partition), key, payload)
+                                template.send(topic, Integer.valueOf(partition), key, payload)
                                     .addCallback(
                                         result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
                                         ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)

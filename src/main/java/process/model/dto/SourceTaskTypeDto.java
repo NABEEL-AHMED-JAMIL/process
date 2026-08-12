@@ -13,12 +13,18 @@ import process.model.enums.Status;
 public class SourceTaskTypeDto {
 
     private Long sourceTaskTypeId;
+    private Long tenantId;
     private String serviceName;
     private String description;
     private String queueTopicPartition;
     private Status status;
-    private boolean isSchemaRegister;
-    private String schemaPayload;
+    /** This type's default Kafka cluster -- null means "fall through to the tenant's own
+     * default" (see KafkaConnectionResolver). Settable by the caller. */
+    private Long kafkaConnectionProfileId;
+    /** Set on read only, for display -- the resolved profile's name (never sent back on write). */
+    private String kafkaConnectionProfileName;
+    /** Set on read only (appSetting) -- how many SourceTasks currently link to this type. */
+    private Long totalTaskLink;
 
     public SourceTaskTypeDto() {
     }
@@ -29,6 +35,14 @@ public class SourceTaskTypeDto {
 
     public void setSourceTaskTypeId(Long sourceTaskTypeId) {
         this.sourceTaskTypeId = sourceTaskTypeId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getServiceName() {
@@ -63,20 +77,28 @@ public class SourceTaskTypeDto {
         this.status = status;
     }
 
-    public boolean isSchemaRegister() {
-        return isSchemaRegister;
+    public Long getKafkaConnectionProfileId() {
+        return kafkaConnectionProfileId;
     }
 
-    public void setSchemaRegister(boolean schemaRegister) {
-        isSchemaRegister = schemaRegister;
+    public void setKafkaConnectionProfileId(Long kafkaConnectionProfileId) {
+        this.kafkaConnectionProfileId = kafkaConnectionProfileId;
     }
 
-    public String getSchemaPayload() {
-        return schemaPayload;
+    public String getKafkaConnectionProfileName() {
+        return kafkaConnectionProfileName;
     }
 
-    public void setSchemaPayload(String schemaPayload) {
-        this.schemaPayload = schemaPayload;
+    public void setKafkaConnectionProfileName(String kafkaConnectionProfileName) {
+        this.kafkaConnectionProfileName = kafkaConnectionProfileName;
+    }
+
+    public Long getTotalTaskLink() {
+        return totalTaskLink;
+    }
+
+    public void setTotalTaskLink(Long totalTaskLink) {
+        this.totalTaskLink = totalTaskLink;
     }
 
     @Override

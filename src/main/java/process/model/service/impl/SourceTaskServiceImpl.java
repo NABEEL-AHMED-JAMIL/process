@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.*;
 import process.model.enums.Status;
 import process.model.pojo.SourceTaskPayload;
@@ -17,11 +18,15 @@ import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceTaskService;
+import process.security.TenantContext;
+import process.security.TenantFilterHelper;
 import process.util.PagingUtil;
 import process.util.ProcessUtil;
 import process.util.EnumConverter;
 import process.util.excel.BulkExcel;
 import process.util.validation.SourceTaskValidation;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
 import java.io.ByteArrayOutputStream;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -44,17 +49,38 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private final SourceJobRepository sourceJobRepository;
     private final SourceTaskRepository sourceTaskRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
+    private final TenantFilterHelper tenantFilterHelper;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public SourceTaskServiceImpl(BulkExcel bulkExcel,
         QueryService queryService,
         SourceJobRepository sourceJobRepository,
         SourceTaskRepository sourceTaskRepository,
-        SourceTaskTypeRepository sourceTaskTypeRepository) {
+        SourceTaskTypeRepository sourceTaskTypeRepository,
+        TenantFilterHelper tenantFilterHelper) {
         this.bulkExcel = bulkExcel;
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
+        this.tenantFilterHelper = tenantFilterHelper;
+    }
+
+    /**
+     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
+     * task) is allowed to see/act on it -- same rationale as SourceJobServiceImpl.isOwnedByCaller:
+     * findById is a primary-key lookup that Hibernate's @Filter doesn't reliably scope, so
+     * every by-id read/write path checks ownership explicitly.
+     * @param sourceTask
+     * @return boolean
+     * */
+    private boolean isOwnedByCaller(SourceTask sourceTask) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        return sourceTask != null && Objects.equals(sourceTask.getTenantId(), TenantContext.getTenantId());
     }
 
     private final String ListSourceTask = "ListSourceTask";
@@ -73,6 +99,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto addSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
         if (ProcessUtil.isNull(sourceTaskDto.getTaskName())) {
             return new ResponseDto(ERROR, "SourceTask taskName missing.");
@@ -89,10 +116,12 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(ERROR, "Provided sourceTaskTypeId not found.");
         }
         SourceTask sourceTask = new SourceTask();
+        sourceTask.setTenantId(TenantContext.getTenantId());
         sourceTask.setTaskName(sourceTaskDto.getTaskName());
         sourceTask.setTaskPayload(sourceTaskDto.getTaskPayload());
         sourceTask.setHomePageId(sourceTaskDto.getHomePageId());
         sourceTask.setPipelineId(sourceTaskDto.getPipelineId());
+        sourceTask.setGroupId(sourceTaskDto.getGroupId());
         sourceTask.setTaskStatus(Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
         if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())) {
@@ -115,6 +144,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto updateSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
         if (ProcessUtil.isNull(sourceTaskDto.getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceTask taskDetailId missing.");
@@ -132,7 +162,11 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         if (!sourceTaskType.isPresent()) {
             return new ResponseDto(ERROR, "Active the linked sourceTaskType.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskDto.getTaskDetailId());
+        if (sourceTask.isPresent() && !this.isOwnedByCaller(sourceTask.get())) {
+            return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
+        }
         if (sourceTask.isPresent()) {
             if (!ProcessUtil.isNull(sourceTaskDto.getTaskName())) {
                 sourceTask.get().setTaskName(sourceTaskDto.getTaskName());
@@ -158,6 +192,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             }
             sourceTask.get().setHomePageId(sourceTaskDto.getHomePageId());
             sourceTask.get().setPipelineId(sourceTaskDto.getPipelineId());
+            sourceTask.get().setGroupId(sourceTaskDto.getGroupId());
             this.sourceTaskRepository.save(sourceTask.get());
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", sourceTaskDto.getTaskDetailId()));
         }
@@ -170,6 +205,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * @return ResponseDto
      * */
     @Override
+    @Transactional
     public ResponseDto deleteSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
         if (ProcessUtil.isNull(sourceTaskDto.getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceTask taskDetailId missing.");
@@ -178,7 +214,11 @@ public class SourceTaskServiceImpl implements SourceTaskService {
          * Note :- if the source task delete then delete all the source job link with source task
          * Use case :- if the source task type delete then only 'inactive or delete perform'
          * */
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskDto.getTaskDetailId());
+        if (sourceTask.isPresent() && !this.isOwnedByCaller(sourceTask.get())) {
+            return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
+        }
         if (sourceTask.isPresent()) {
             if (!ProcessUtil.isNull(sourceTaskDto.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(Status.Delete);
@@ -236,6 +276,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
+                        sourceTaskDto.setGroupId(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setTaskStatus(EnumConverter.toStatus(String.valueOf(obj[index])));
                     }
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
@@ -261,11 +305,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskTypeDto.setSchemaRegister(Boolean.parseBoolean(obj[index].toString()));
-                    }
-                    index++;
-                    if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskTypeDto.setSchemaPayload(String.valueOf(obj[index]));
+                        sourceTaskTypeDto.setKafkaConnectionProfileId(Long.valueOf(obj[index].toString()));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
@@ -354,8 +394,13 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * @param sourceTaskId
      * @return ResponseDto
      * */
+    @Transactional(readOnly = true)
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId) {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskId);
+        if (sourceTask.isPresent() && !this.isOwnedByCaller(sourceTask.get())) {
+            return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskId));
+        }
         if (sourceTask.isPresent()) {
             SourceTaskDto sourceTaskDto = new SourceTaskDto();
             sourceTaskDto.setTaskDetailId(sourceTask.get().getTaskDetailId());
@@ -363,6 +408,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             sourceTaskDto.setTaskStatus(sourceTask.get().getTaskStatus());
             sourceTaskDto.setHomePageId(sourceTask.get().getHomePageId());
             sourceTaskDto.setPipelineId(sourceTask.get().getPipelineId());
+            sourceTaskDto.setGroupId(sourceTask.get().getGroupId());
             sourceTaskDto.setTaskPayload(sourceTask.get().getTaskPayload());
             SourceTaskTypeDto sourceTaskTypeDto = this.getSourceTaskTypeDto(sourceTask.get().getSourceTaskType());
             sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
@@ -388,8 +434,14 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * */
     @Override
     public ResponseDto fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId) throws Exception {
+        Long tenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
+        // Two separate repository methods (unscoped vs. tenant-scoped), not one query with
+        // "tenantId is null" -- see fetchAllLinkSourceTaskWithSourceTaskTypeIdForTenant's javadoc.
+        List<SourceTaskProjection> sourceTasks = tenantId == null
+            ? this.sourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId)
+            : this.sourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeIdForTenant(sourceTaskTypeId, tenantId);
         return new ResponseDto(SUCCESS, String.format("SourceTask fetch with SourceTaskTypeId %d.", sourceTaskTypeId),
-            this.sourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId));
+            sourceTasks);
     }
 
     /**
@@ -398,7 +450,9 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * */
     @Override
     public ByteArrayOutputStream downloadListSourceTask() throws Exception {
-        List<SourceTaskProjection> sourceTask = this.sourceTaskRepository.downloadListSourceTask();
+        List<SourceTaskProjection> sourceTask = TenantContext.isPlatformAdmin()
+            ? this.sourceTaskRepository.downloadListSourceTask()
+            : this.sourceTaskRepository.downloadListSourceTaskForTenant(TenantContext.getTenantId());
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
         this.bulkExcel.setWb(workbook);
         XSSFSheet xssfSheet = workbook.createSheet(ListSourceTask);
@@ -522,8 +576,14 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         if (!errors.isEmpty()) {
             return new ResponseDto(ERROR, String.format("Total %d source task invalid.", errors.size()), errors);
         }
+        Long uploadTenantId = TenantContext.getTenantId();
         sourceTaskValidations.forEach(sourceTaskValidation -> {
             SourceTask sourceTask = new SourceTask();
+            // Same bug class fixed earlier in SourceJobBulkServiceImpl -- bulk-created rows must
+            // carry the uploader's tenantId or they end up owned by no tenant (invisible to any
+            // TENANT_ADMIN/TENANT_USER once the Hibernate tenant filter is enabled, since
+            // "tenant_id = :tenantId" never matches a NULL column).
+            sourceTask.setTenantId(uploadTenantId);
             sourceTask.setTaskName(sourceTaskValidation.getTaskName());
             sourceTask.setTaskPayload(sourceTaskValidation.getTaskPayload());
             sourceTask.setPipelineId(sourceTaskValidation.getPipelineId());
@@ -556,8 +616,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
         sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
         sourceTaskTypeDto.setStatus(sourceTaskType.getStatus());
-        sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
-        sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
+        sourceTaskTypeDto.setKafkaConnectionProfileId(sourceTaskType.getKafkaConnectionProfileId());
         return sourceTaskTypeDto;
     }
 }

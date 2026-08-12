@@ -14,6 +14,7 @@ import process.model.repository.LookupDataRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardService;
+import process.security.TenantContext;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -233,7 +234,12 @@ public class DashboardServiceImpl implements DashboardService {
             }
             objectDetail.put("sourceJobQueues", sourceJobQueues);
             if (!ProcessUtil.isNull(jobId)) {
-                Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId);
+                // The aggregate queries above are already tenant-scoped inside QueryService
+                // (see tenantClause), but this direct findById isn't -- without the ownership
+                // check, a tenant user could still pull another tenant's full job/task detail
+                // by supplying that job's id as the "drill into a cell" target.
+                Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId)
+                    .filter(job -> TenantContext.isPlatformAdmin() || java.util.Objects.equals(job.getTenantId(), TenantContext.getTenantId()));
                 if (sourceJob.isPresent()) {
                     SourceJobDto sourceJobDto = getSourceJobDto(sourceJob.get());
                     if (!ProcessUtil.isNull(sourceJob.get().getTaskDetail())) {

@@ -4,18 +4,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.ResponseDto;
 import process.model.service.DashboardService;
 import process.util.ProcessUtil;
 
 /**
- * Api use to perform crud operation on dashboard
+ * Api use to perform crud operation on dashboard. Role policy: read-only stats -- TENANT_USER+.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/dashboard.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class DashboardRestApi {
 
     private Logger logger = LoggerFactory.getLogger(DashboardRestApi.class);

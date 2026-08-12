@@ -112,15 +112,31 @@ public class BulkExcel {
         cell.setCellValue(value);
     }
 
+    // Reused across every getCellDetail() call -- DataFormatter itself recommends this (its
+    // internal caches make repeated construction meaningfully more expensive on a 1000-row sheet).
+    private final DataFormatter cellFormatter = new DataFormatter();
+
     /**
-     * This method use to get fetch the detail
+     * This method use to get fetch the detail -- reads whatever value the cell actually holds
+     * (text, number, date, formula result, ...) as its displayed string, without touching the
+     * cell's own type.
+     *
+     * This used to call currentCell.setCellType(CellType.STRING) first, which on this project's
+     * POI version (3.15) silently CLEARS an already-STRING cell's value instead of leaving it
+     * alone -- converting a numeric/blank cell in place worked fine, but any text cell (task
+     * name, task payload, job name, ...) came back empty every time. That meant every bulk
+     * upload of Source Job or Source Task -- both call this same method via
+     * SourceJobBulkServiceImpl / SourceTaskServiceImpl -- rejected every row with "should not be
+     * empty" for its text columns, regardless of what the uploaded sheet actually contained.
+     * DataFormatter reads the cell's displayed value without mutating it, sidestepping the bug
+     * entirely (and is the standard, version-safe way to do this regardless).
      * @param row
      * @param index
+     * @return String
      * */
     public String getCellDetail(Row row, Integer index) {
         Cell currentCell = row.getCell(index, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
-        currentCell.setCellType(CellType.STRING);
-        return currentCell.getStringCellValue();
+        return this.cellFormatter.formatCellValue(currentCell).trim();
     }
 
     /**

@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.DynamicFormDto;
 import process.model.dto.DynamicFormFieldDto;
@@ -13,12 +14,16 @@ import process.model.service.DynamicFormService;
 import process.util.ProcessUtil;
 
 /**
- * Api use to perform crud operation on dynamic forms (builder + fill-in submissions)
+ * Api use to perform crud operation on dynamic forms (builder + fill-in submissions). Role
+ * policy: building a form (add/update/delete form or field) is tenant configuration, so this
+ * whole controller defaults to TENANT_ADMIN+ -- every submission-related method (fill/view/edit
+ * a form someone else built) is relaxed back down to TENANT_USER below.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/dynamicForm.json")
+@PreAuthorize("hasRole('TENANT_ADMIN')")
 public class DynamicFormRestApi {
 
     private Logger logger = LoggerFactory.getLogger(DynamicFormRestApi.class);
@@ -78,6 +83,7 @@ public class DynamicFormRestApi {
      * Api use to fetch all the non-deleted dynamic forms
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllForms", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllForms() {
         try {
@@ -93,6 +99,7 @@ public class DynamicFormRestApi {
      * @param dynamicFormId
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchFormByFormId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchFormByFormId(@RequestParam Long dynamicFormId) {
         try {
@@ -110,6 +117,7 @@ public class DynamicFormRestApi {
      * @param uuid
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchFormByUuid", method = RequestMethod.GET)
     public ResponseEntity<?> fetchFormByUuid(@RequestParam String uuid) {
         try {
@@ -171,6 +179,7 @@ public class DynamicFormRestApi {
      * @param dynamicFormSubmissionDto
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/submitForm", method = RequestMethod.POST)
     public ResponseEntity<?> submitForm(@RequestBody DynamicFormSubmissionDto dynamicFormSubmissionDto) {
         try {
@@ -186,6 +195,7 @@ public class DynamicFormRestApi {
      * @param dynamicFormSubmissionDto
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/updateSubmission", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSubmission(@RequestBody DynamicFormSubmissionDto dynamicFormSubmissionDto) {
         try {
@@ -216,6 +226,7 @@ public class DynamicFormRestApi {
      * @param dynamicFormId
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchSubmissionsByFormId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSubmissionsByFormId(@RequestParam Long dynamicFormId) {
         try {
@@ -231,6 +242,7 @@ public class DynamicFormRestApi {
      * @param dynamicFormSubmissionId
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchSubmissionBySubmissionId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSubmissionBySubmissionId(@RequestParam Long dynamicFormSubmissionId) {
         try {
@@ -247,6 +259,7 @@ public class DynamicFormRestApi {
      * @param uuid
      * @return ResponseEntity<?>
      * */
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchSubmissionByUuid", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSubmissionByUuid(@RequestParam String uuid) {
         try {

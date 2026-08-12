@@ -8,7 +8,7 @@ import java.util.Set;
 
 /**
  * Utility use to map an object key's file extension to a content type and to decide whether
- * the Bucket Browser can preview it inline. Only json/csv/txt/xml/pdf/mp3/m4a/mp4/images
+ * the Bucket Browser can preview it inline. Only json/csv/txt/xml/md/pdf/mp3/m4a/mp4/images
  * (jpg/jpeg/png/gif/webp/svg/bmp) are previewable for now -- html and doc/docx (and anything
  * else) are download-only.
  * @author Nabeel Ahmed
@@ -23,6 +23,7 @@ public final class ContentTypeUtil {
         EXTENSION_CONTENT_TYPES.put("csv", "text/csv");
         EXTENSION_CONTENT_TYPES.put("txt", "text/plain");
         EXTENSION_CONTENT_TYPES.put("xml", "application/xml");
+        EXTENSION_CONTENT_TYPES.put("md", "text/markdown");
         EXTENSION_CONTENT_TYPES.put("pdf", "application/pdf");
         EXTENSION_CONTENT_TYPES.put("mp3", "audio/mpeg");
         EXTENSION_CONTENT_TYPES.put("m4a", "audio/mp4");
@@ -41,7 +42,7 @@ public final class ContentTypeUtil {
     }
 
     private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList(
-        "json", "csv", "txt", "xml", "pdf", "mp3", "m4a", "mp4",
+        "json", "csv", "txt", "xml", "md", "pdf", "mp3", "m4a", "mp4",
         "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"));
 
     /**
@@ -68,7 +69,7 @@ public final class ContentTypeUtil {
     }
 
     /**
-     * Method use to check if an object key can be previewed inline (json/csv/txt/pdf/mp3/m4a/mp4/image only)
+     * Method use to check if an object key can be previewed inline (json/csv/txt/md/pdf/mp3/m4a/mp4/image only)
      * @param key
      * @return boolean
      * */

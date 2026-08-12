@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import process.model.dto.ObjectContentDto;
@@ -19,12 +20,15 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Api use to perform crud operation on pdf highlighter task (+ its fields and stored PDF)
+ * Api use to perform crud operation on pdf highlighter task (+ its fields and stored PDF).
+ * Role policy: self-service AI tool (creating/editing a task IS the normal usage flow here,
+ * not a one-time admin config step like AiAgent/DynamicForm's builder) -- TENANT_USER+.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*", exposedHeaders = {HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH})
 @RequestMapping(value = "/pdfHighlighter.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class PdfHighlighterTaskRestApi {
 
     private Logger logger = LoggerFactory.getLogger(PdfHighlighterTaskRestApi.class);

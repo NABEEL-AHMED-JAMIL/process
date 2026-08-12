@@ -12,7 +12,10 @@ import javax.persistence.*;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "source_task_type")
+@Table(name = "source_task_type", indexes = {
+    @Index(name = "idx_stt_tenant_id", columnList = "tenant_id"),
+    @Index(name = "idx_stt_kafka_profile_id", columnList = "kafka_connection_profile_id")
+})
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskType {
@@ -30,6 +33,14 @@ public class SourceTaskType {
     @Column(name="source_task_type_id", unique=true, nullable=false)
     @GeneratedValue(generator = "sourceTaskTypeSequenceGenerator")
     private Long sourceTaskTypeId;
+
+    /** Owning tenant -- null means this is shared/global catalog data, reusable by every
+     * tenant (the pre-existing convention: every row before this column existed stays null,
+     * unchanged). A tenant may also own a private type of its own (tenant_id set). Kafka
+     * routing for a shared (null-tenant) type can still be overridden per tenant without
+     * duplicating this row -- see TenantTaskTypeKafkaRoute / KafkaConnectionResolver. */
+    @Column(name = "tenant_id")
+    private Long tenantId;
 
     @Column(name = "service_name",
         nullable = false)
@@ -52,12 +63,10 @@ public class SourceTaskType {
     @Enumerated(EnumType.STRING)
     private Status status;
 
-    @Column(name = "is_schema_register")
-    private boolean isSchemaRegister;
-
-    @Column(name = "schema_payload",
-        columnDefinition = "text")
-    private String schemaPayload;
+    /** This type's default Kafka cluster -- null falls through the rest of
+     * KafkaConnectionResolver's chain (tenant default -> platform default -> env fallback). */
+    @Column(name = "kafka_connection_profile_id")
+    private Long kafkaConnectionProfileId;
 
     public SourceTaskType() {}
 
@@ -80,6 +89,14 @@ public class SourceTaskType {
 
     public void setSourceTaskTypeId(Long sourceTaskTypeId) {
         this.sourceTaskTypeId = sourceTaskTypeId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getServiceName() {
@@ -114,20 +131,12 @@ public class SourceTaskType {
         this.status = status;
     }
 
-    public boolean isSchemaRegister() {
-        return isSchemaRegister;
+    public Long getKafkaConnectionProfileId() {
+        return kafkaConnectionProfileId;
     }
 
-    public void setSchemaRegister(boolean schemaRegister) {
-        isSchemaRegister = schemaRegister;
-    }
-
-    public String getSchemaPayload() {
-        return schemaPayload;
-    }
-
-    public void setSchemaPayload(String schemaPayload) {
-        this.schemaPayload = schemaPayload;
+    public void setKafkaConnectionProfileId(Long kafkaConnectionProfileId) {
+        this.kafkaConnectionProfileId = kafkaConnectionProfileId;
     }
 
     @Override

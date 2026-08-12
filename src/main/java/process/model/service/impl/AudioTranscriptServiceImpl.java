@@ -12,9 +12,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import process.model.dto.AudioExtractBucketRequestDto;
+import process.model.dto.BucketSummaryDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.YoutubeExtractRequestDto;
 import process.model.service.AudioTranscriptService;
+import process.model.service.StorageBrowserService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -41,6 +43,12 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
 
     @Value("${audio.extract.service.base.url:http://host.docker.internal:8100}")
     private String baseUrl;
+
+    private final StorageBrowserService storageBrowserService;
+
+    public AudioTranscriptServiceImpl(StorageBrowserService storageBrowserService) {
+        this.storageBrowserService = storageBrowserService;
+    }
 
     private final Gson gson = new Gson();
 
@@ -111,6 +119,17 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
         }
         if (!this.hasAudioExtension(request.getKey())) {
             return new ResponseDto(ERROR, "Unsupported file type -- expected .mp3 or .m4a.");
+        }
+        // Unlike the Object Browser's own read/write endpoints (which all funnel through
+        // StorageBrowserServiceImpl.resolveService, tenant-checked there), this proxies
+        // straight to the external Python service with a caller-supplied bucket name -- without
+        // this check a tenant user could transcribe (and get back the contents of) any other
+        // tenant's audio files just by naming their bucket/key.
+        boolean bucketOwnedByCaller = this.storageBrowserService.listBuckets().stream()
+            .map(BucketSummaryDto::getBucket)
+            .anyMatch(bucket -> bucket.equals(request.getBucket()));
+        if (!bucketOwnedByCaller) {
+            return new ResponseDto(ERROR, String.format("Unknown bucket: %s.", request.getBucket()));
         }
         JsonObject body = new JsonObject();
         body.addProperty("bucket", request.getBucket());

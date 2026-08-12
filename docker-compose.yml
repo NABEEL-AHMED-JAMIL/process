@@ -7,6 +7,7 @@ networks:
 volumes:
   postgres_data:
   kafka_data:
+  redis_data:
 
 services:
   # PostgreSQL Database
@@ -19,7 +20,12 @@ services:
       POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-admin}
       POSTGRES_DB: ${POSTGRES_DB:-etl_job}
     ports:
-      - "5432:5432"
+      # Host port 5433 -> container 5432 -- the host machine may already have its own Postgres
+      # on 5432 (e.g. a Homebrew/Postgres.app install for other projects); the app itself never
+      # uses this host mapping (SPRING_DATASOURCE_URL connects via the Docker network hostname
+      # "postgres:5432", not localhost), so this only affects external tools (a GUI client, psql
+      # from the host) -- point those at localhost:5433 instead.
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -63,6 +69,24 @@ services:
       - "9092:9092"
       - "9093:9093"
 
+  # Redis -- backs the per-user WebSocket presence registry (WebSocketPresenceService) and
+  # general read-heavy caching (CacheConfig). Persisted (appendonly) so presence/cache survive
+  # a container restart rather than silently going cold.
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Spring Boot Application
   process_app:
     build:
@@ -80,21 +104,22 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-admin}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
       EFS_FILE_DIRE: ${EFS_FILE_DIRE:-/tmp/efs}
-      TOPIC_TEST: ${TOPIC_TEST:-test-topic}
-      TOPIC_TRUCK: ${TOPIC_TRUCK:-truck-topic}
-      TOPIC_SCRAP: ${TOPIC_SCRAP:-scrapping-topic}
       MAIL_HOST: ${MAIL_HOST:-sandbox.smtp.mailtrap.io}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-ce545af2135fd6}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-35f35312703886}
-      SOCKET_SESSION_ID: ${SOCKET_SESSION_ID:-0hw0dz34}
-      SOCKET_TRANSACTION_ID: ${SOCKET_TRANSACTION_ID:-40ef-dd1d-bd9f-1d7f}
       # Base64-encoded 256-bit AES key for encrypted lookup values (openssl rand -base64 32).
       # Rotating this makes any already-encrypted lookup values undecryptable -- override via
       # a real LOOKUP_ENCRYPTION_KEY env var rather than editing this fallback once real
       # encrypted data exists.
       LOOKUP_ENCRYPTION_KEY: ${LOOKUP_ENCRYPTION_KEY:-RACT0Saglm5Lastgky0Z3RgMXiZbSjxiNvgbnQDtMwc=}
+      # Base64-encoded 256-bit HMAC key for signing JWTs (openssl rand -base64 32). Rotating
+      # this invalidates every already-issued token (everyone gets logged out) -- override via
+      # a real JWT_SECRET_KEY env var in any environment with real users.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-4z8qN3vW9pT2xR7mK5jL1sC6bF0yH8dQ4nE9tV2rU7w=}
       # Bucket Browser storage (MinIO reached via the host, since it's a separate compose
       # project's container; only required if a bucket in the BUCKET_LIST lookup uses it)
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://host.docker.internal:9000}
@@ -109,6 +134,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      redis:
+        condition: service_healthy
     volumes:
       - ./logs:/app/logs
       - /tmp/efs:/tmp/efs

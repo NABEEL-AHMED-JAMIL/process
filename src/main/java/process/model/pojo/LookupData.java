@@ -57,6 +57,17 @@ public class LookupData {
         columnDefinition = "boolean not null default false")
     private Boolean encrypted = false;
 
+    /** Owning tenant for lookups where per-tenant scoping actually makes sense (currently just
+     * BUCKET_LIST children -- see StorageBrowserServiceImpl) -- null for every other lookup
+     * type (HomePage/Pipeline/EMAIL_RECEIVER/QUEUE_FETCH_LIMIT/etc.), which stay global shared
+     * reference data read with no TenantContext by design (background jobs, dropdown options
+     * every tenant needs). Deliberately NOT a Hibernate @Filter like SourceJob/SourceTask --
+     * a global filter here would also scope those non-tenant lookups and silently break them
+     * for every non-platform-admin request. Null also for a PLATFORM_ADMIN-added bucket
+     * (mirrors AppUser/SourceJob: PLATFORM_ADMIN is never tenant-bound). */
+    @Column(name = "tenant_id")
+    private Long tenantId;
+
     @ManyToOne
     @JoinColumn(name = "parentLookupId")
     protected LookupData parent;
@@ -117,6 +128,14 @@ public class LookupData {
 
     public void setEncrypted(Boolean encrypted) {
         this.encrypted = encrypted;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public LookupData getParent() {

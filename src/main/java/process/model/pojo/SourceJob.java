@@ -3,8 +3,11 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -28,7 +31,16 @@ import java.time.LocalDateTime;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "source_job")
+@Table(name = "source_job", indexes = {
+    // Every tenant-scoped query filters on this (see TenantFilterHelper's Hibernate
+    // @Filter below) -- ddl-auto=update doesn't index plain @Column fields on its own, so
+    // without this every one of those queries was a full table scan.
+    @Index(name = "idx_source_job_tenant_id", columnList = "tenant_id"),
+    // Forward-looking: whoever builds a "My Jobs"/reassignment UI will query by this.
+    @Index(name = "idx_source_job_assigned_user_id", columnList = "assigned_user_id")
+})
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceJob {
@@ -46,6 +58,21 @@ public class SourceJob {
     @Column(name = "job_id")
     @GeneratedValue(generator = "sourceJobSequenceGenerator")
     private Long jobId;
+
+    /** Owning tenant -- see Tenant/TenantContext. Nullable during the Phase 0 migration window
+     * (backfilled to the Default tenant by TenantSeedService on startup). */
+    @Column(name = "tenant_id")
+    private Long tenantId;
+
+    /** Who this job's run notifications go to -- defaults to the creator on add (see
+     * SourceJobServiceImpl.addSourceJob), reassignable via update. Resolved to a username for
+     * the per-user WebSocket push in BulkAction.sendJobStatusNotification (see
+     * SourceJobRepository.fetchRunningJobEvent's app_user join / SourceJobProjection.
+     * getAssignedUsername). Nullable for jobs created before this field existed -- those just
+     * don't get a live push (still visible via manual refresh/history), same as an assignee
+     * with no active session. */
+    @Column(name = "assigned_user_id")
+    private Long assignedUserId;
 
     // job name should be unique
     @Column(name = "job_name",
@@ -104,6 +131,22 @@ public class SourceJob {
 
     public Long getJobId() {
         return jobId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public Long getAssignedUserId() {
+        return assignedUserId;
+    }
+
+    public void setAssignedUserId(Long assignedUserId) {
+        this.assignedUserId = assignedUserId;
     }
 
     public void setJobId(Long jobId) {

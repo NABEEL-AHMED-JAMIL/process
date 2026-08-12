@@ -3,8 +3,11 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 import javax.persistence.*;
 import java.util.ArrayList;
@@ -14,7 +17,11 @@ import java.util.List;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "source_task")
+@Table(name = "source_task", indexes = {
+    @Index(name = "idx_source_task_tenant_id", columnList = "tenant_id")
+})
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTask {
@@ -32,6 +39,11 @@ public class SourceTask {
     @Column(name = "task_detail_id")
     @GeneratedValue(generator = "taskDetailSequenceGenerator")
     private Long taskDetailId;
+
+    /** Owning tenant -- see Tenant/TenantContext. Nullable during the Phase 0 migration window
+     * (backfilled to the Default tenant by TenantSeedService on startup). */
+    @Column(name = "tenant_id")
+    private Long tenantId;
 
     @Column(name = "task_name",
         nullable = false)
@@ -51,6 +63,14 @@ public class SourceTask {
     @Column(name = "pipeline_id")
     private String pipelineId;
 
+    /**
+     * group this task belongs to -- same "lookup_id as varchar" convention as homePageId/
+     * pipelineId (a TASK_GROUPS parent lookup's child lookup_id), so tasks can be organized
+     * and browsed by group in the Task List and the Link Source Task picker.
+     * */
+    @Column(name = "group_id")
+    private String groupId;
+
     // save lob data for job detail
     @Column(name = "task_payload",
         columnDefinition = "text")
@@ -68,6 +88,14 @@ public class SourceTask {
 
     public Long getTaskDetailId() {
         return taskDetailId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public void setTaskDetailId(Long taskDetailId) {
@@ -104,6 +132,14 @@ public class SourceTask {
 
     public void setPipelineId(String pipelineId) {
         this.pipelineId = pipelineId;
+    }
+
+    public String getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(String groupId) {
+        this.groupId = groupId;
     }
 
     public String getTaskPayload() {

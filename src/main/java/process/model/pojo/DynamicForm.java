@@ -3,8 +3,11 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
@@ -15,7 +18,11 @@ import java.util.List;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "dynamic_form")
+@Table(name = "dynamic_form", indexes = {
+    @Index(name = "idx_dynamic_form_tenant_id", columnList = "tenant_id")
+})
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DynamicForm {
@@ -33,6 +40,11 @@ public class DynamicForm {
     @Column(name = "dynamic_form_id")
     @GeneratedValue(generator = "dynamicFormSequenceGenerator")
     private Long dynamicFormId;
+
+    /** Owning tenant -- see Tenant/TenantContext. Nullable during the Phase 0 migration window
+     * (backfilled to the Default tenant by TenantSeedService on startup). */
+    @Column(name = "tenant_id")
+    private Long tenantId;
 
     @Column(name = "form_name", nullable = false)
     private String formName;
@@ -67,6 +79,14 @@ public class DynamicForm {
 
     public Long getDynamicFormId() {
         return dynamicFormId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public void setDynamicFormId(Long dynamicFormId) {

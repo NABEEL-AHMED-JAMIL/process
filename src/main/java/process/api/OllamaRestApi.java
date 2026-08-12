@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.ResponseDto;
 import process.model.service.OllamaService;
@@ -12,12 +13,13 @@ import process.util.ProcessUtil;
 /**
  * Api use to manage models on the local Ollama container -- list what's pulled, pull a new
  * one, delete one. Backs the "Ollama Models" settings screen and feeds the model choices an
- * Ollama-provider AI Agent can be pointed at.
+ * Ollama-provider AI Agent can be pointed at. Role policy: infra/model management, TENANT_ADMIN+.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/ollama.json")
+@PreAuthorize("hasRole('TENANT_ADMIN')")
 public class OllamaRestApi {
 
     private Logger logger = LoggerFactory.getLogger(OllamaRestApi.class);

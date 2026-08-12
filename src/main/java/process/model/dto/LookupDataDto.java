@@ -19,6 +19,7 @@ public class LookupDataDto {
     private String description;
     private Timestamp dateCreated;
     private Boolean encrypted;
+    private Long tenantId;
     private Long parentLookupId;
     protected LookupDataDto parent;
     protected Set<LookupDataDto> children;
@@ -71,6 +72,14 @@ public class LookupDataDto {
 
     public void setEncrypted(Boolean encrypted) {
         this.encrypted = encrypted;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public Long getParentLookupId() {

@@ -3,8 +3,11 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
@@ -16,7 +19,11 @@ import java.sql.Timestamp;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "ai_agent")
+@Table(name = "ai_agent", indexes = {
+    @Index(name = "idx_ai_agent_tenant_id", columnList = "tenant_id")
+})
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AiAgent {
@@ -34,6 +41,11 @@ public class AiAgent {
     @Column(name = "ai_agent_id")
     @GeneratedValue(generator = "aiAgentSequenceGenerator")
     private Long aiAgentId;
+
+    /** Owning tenant -- see Tenant/TenantContext. Nullable during the Phase 0 migration window
+     * (backfilled to the Default tenant by TenantSeedService on startup). */
+    @Column(name = "tenant_id")
+    private Long tenantId;
 
     @Column(name = "agent_name", nullable = false)
     private String agentName;
@@ -92,6 +104,14 @@ public class AiAgent {
 
     public Long getAiAgentId() {
         return aiAgentId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public void setAiAgentId(Long aiAgentId) {

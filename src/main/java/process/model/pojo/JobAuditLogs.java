@@ -17,7 +17,13 @@ import process.model.enums.Status;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "job_audit_logs")
+// job_queue_id is how every audit-log lookup for a specific run is filtered (JobAuditLogRepository
+// findByJobQueueId, and the bulk status-update query joining through job_queue.job_id) but had no
+// supporting index -- just the primary key. Same reasoning as JobQueue's own index above: this
+// table has no archival job either, so it's the more consequential of the two to fix now.
+@Table(name = "job_audit_logs", indexes = {
+    @Index(name = "idx_job_audit_logs_job_queue_id", columnList = "job_queue_id")
+})
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class JobAuditLogs {

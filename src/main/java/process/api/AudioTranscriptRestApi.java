@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import process.model.dto.AudioExtractBucketRequestDto;
@@ -15,11 +16,13 @@ import process.util.ProcessUtil;
 /**
  * Api use to run an audio file (upload or an existing bucket object) through the ad-hoc
  * transcript-extraction pipeline (proxies job-search's standalone Audio Extract Service).
+ * Role policy: self-service AI tool, TENANT_USER+.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/audioTranscript.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class AudioTranscriptRestApi {
 
     private Logger logger = LoggerFactory.getLogger(AudioTranscriptRestApi.class);

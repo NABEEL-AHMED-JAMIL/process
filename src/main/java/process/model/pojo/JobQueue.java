@@ -27,7 +27,14 @@ import java.time.LocalDateTime;
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "job_queue")
+// job_id is queried constantly (JobQueueRepository's getCountForJobByJobId/findByJobId/
+// changeJobStatus, plus the N+1 in SourceJobServiceImpl.listSourceJob) but had no supporting
+// index -- just the primary key -- so every one of those was a full table scan. Harmless at a
+// handful of rows; becomes real query cost well within normal usage once this table's run
+// history accumulates (no archival job exists for it), long before it reaches millions of rows.
+@Table(name = "job_queue", indexes = {
+    @Index(name = "idx_job_queue_job_id", columnList = "job_id")
+})
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class JobQueue {

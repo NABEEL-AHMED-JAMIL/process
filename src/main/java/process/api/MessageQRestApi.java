@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.QueueMessageStatusDto;
@@ -12,12 +13,14 @@ import process.model.service.MessageQService;
 import process.util.ProcessUtil;
 
 /**
- * Api use to perform crud operation on dashboard
+ * Api use to perform crud operation on dashboard. Role policy: queue message viewing/control is
+ * operational (same surface as running a job) -- TENANT_USER+.
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/message.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class MessageQRestApi {
 
     private Logger logger = LoggerFactory.getLogger(MessageQRestApi.class);

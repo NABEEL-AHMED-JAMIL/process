@@ -90,6 +90,7 @@ public class LookupDataCacheService {
         lookupDataDto.setLookupId(lookupData.getLookupId());
         lookupDataDto.setLookupType(lookupData.getLookupType());
         lookupDataDto.setEncrypted(lookupData.getEncrypted());
+        lookupDataDto.setTenantId(lookupData.getTenantId());
         lookupDataDto.setLookupValue(Boolean.TRUE.equals(lookupData.getEncrypted())
             ? this.encryptionUtil.decrypt(lookupData.getLookupValue())
             : lookupData.getLookupValue());

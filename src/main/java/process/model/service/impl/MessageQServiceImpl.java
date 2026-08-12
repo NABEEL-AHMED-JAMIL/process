@@ -12,6 +12,7 @@ import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQService;
+import process.security.TenantContext;
 import process.util.EnumUtils;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
@@ -132,6 +133,25 @@ public class MessageQServiceImpl implements MessageQService {
     }
 
     /**
+     * Method use to check whether the SourceJob a job_queue row belongs to is owned by the
+     * caller (PLATFORM_ADMIN, or the tenant that owns the job) -- JobQueue has no tenantId of
+     * its own, so ownership is only knowable through its parent SourceJob. Without this,
+     * failJobLogs/interruptJobLogs/changeJobStatus below would let any authenticated tenant
+     * user fail, interrupt, or rewrite the audit trail of ANY tenant's running job just by
+     * guessing/incrementing a jobQueueId -- a write-side IDOR, not just a read leak.
+     * @param jobId
+     * @return boolean
+     * */
+    private boolean isJobOwnedByCaller(Long jobId) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        return this.sourceJobRepository.findById(jobId)
+            .map(job -> Objects.equals(job.getTenantId(), TenantContext.getTenantId()))
+            .orElse(false);
+    }
+
+    /**
      * Method use to fail the job
      * @param jobQId
      * @return ResponseDto
@@ -142,6 +162,9 @@ public class MessageQServiceImpl implements MessageQService {
             return new ResponseDto(ERROR, "JobQId missing.");
         }
         Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(jobQId);
+        if (jobQueue.isPresent() && !this.isJobOwnedByCaller(jobQueue.get().getJobId())) {
+            return new ResponseDto(ERROR, "JobQueue not found");
+        }
         if (jobQueue.isPresent()) {
             if (!jobQueue.get().getJobStatus().equals(JobStatus.Queue)) {
                 return new ResponseDto(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
@@ -172,6 +195,9 @@ public class MessageQServiceImpl implements MessageQService {
             return new ResponseDto(ERROR, "JobQId missing.");
         }
         Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(jobQId);
+        if (jobQueue.isPresent() && !this.isJobOwnedByCaller(jobQueue.get().getJobId())) {
+            return new ResponseDto(ERROR, "JobQueue not found");
+        }
         if (jobQueue.isPresent()) {
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt);
@@ -191,6 +217,13 @@ public class MessageQServiceImpl implements MessageQService {
     public ResponseDto changeJobStatus(QueueMessageStatusDto queueMessageStatus) {
         if (isNull(queueMessageStatus.getMessageType())) {
             return new ResponseDto(ERROR, "Message Type required for transaction.");
+        }
+        // TENANT_USER+ can hit this endpoint for any jobId/jobQueueId it names -- without this,
+        // a tenant user could write audit-log entries or flip another tenant's job status/queue
+        // just by supplying that job's id (same class of write-IDOR as failJobLogs above).
+        // Gate on jobId whenever the request carries one, regardless of messageType.
+        if (!isNull(queueMessageStatus.getJobId()) && !this.isJobOwnedByCaller(queueMessageStatus.getJobId())) {
+            return new ResponseDto(ERROR, "SourceJob not found.");
         }
         if (queueMessageStatus.getMessageType().equals(AUDIT_LOG)) {
             this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());

@@ -27,4 +27,6 @@ public interface SourceTaskProjection {
 
     public String getPipelineTaskId();
 
+    public String getGroupLabel();
+
 }
