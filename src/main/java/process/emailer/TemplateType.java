@@ -2,9 +2,6 @@ package process.emailer;
 
 import com.google.gson.Gson;
 
-/**
- * @author Nabeel Ahmed
- */
 public enum TemplateType {
 
     COMPLETE_JOB("COMPLETE_JOB", "templates/complete_job.vm"),

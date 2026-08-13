@@ -6,13 +6,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Unit tests for QueryValidator -- this is the actual security gate that decides which SQL a
- * tenant is allowed to save/run through the Query Engine (see the class's own javadoc), so it
- * is tested independently of any Spring context or database: every case here must be provable
- * from the AST alone.
- * @author Nabeel Ahmed
- */
 class QueryValidatorTest {
 
     private final QueryValidator queryValidator = new QueryValidator();
@@ -93,9 +86,7 @@ class QueryValidatorTest {
 
     @Test
     void rejectsNonSelectHiddenInsideAUnionBranch() {
-        // Every branch of a UNION must itself resolve to a plain SELECT -- JSqlParser's grammar
-        // cannot actually produce a non-Select branch under a Select node, so this mainly proves
-        // firstNonSelectReason really does walk every branch rather than just the first one.
+
         QueryValidator.ValidationResult result = this.queryValidator.validate(
             "SELECT id FROM a UNION SELECT id INTO leaked FROM b");
         assertThat(result.isValid()).isFalse();
@@ -105,9 +96,7 @@ class QueryValidatorTest {
     void cannotBeDefeatedByATrailingCommentHidingASecondStatement() {
         QueryValidator.ValidationResult result = this.queryValidator.validate(
             "SELECT * FROM customers -- ; DROP TABLE customers");
-        // The comment is part of the single SELECT statement's trailing text, not a second
-        // statement -- still valid, but the re-serialized SQL must not carry the comment forward
-        // as executable text an attacker could otherwise smuggle meaning into.
+
         assertThat(result.isValid()).isTrue();
     }
 }

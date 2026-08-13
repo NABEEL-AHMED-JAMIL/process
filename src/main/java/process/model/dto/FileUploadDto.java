@@ -8,9 +8,6 @@ import org.springframework.web.multipart.MultipartFile;
 import com.google.gson.Gson;
 import java.util.List;
 
-/**
- * @author Nabeel Ahmed
- */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({ "file", "files", "data" })
 public class FileUploadDto<T> {

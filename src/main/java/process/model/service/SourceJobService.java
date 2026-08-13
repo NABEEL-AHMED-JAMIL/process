@@ -3,9 +3,6 @@ package process.model.service;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobDto;
 
-/**
- * @author Nabeel Ahmed
- */
 public interface SourceJobService {
 
     public ResponseDto addSourceJob(SourceJobDto sourceJobDto) throws Exception;

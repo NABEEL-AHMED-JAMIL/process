@@ -11,12 +11,6 @@ import process.model.dto.ResponseDto;
 import process.model.service.ImageTextService;
 import process.util.ProcessUtil;
 
-/**
- * Api use to run an uploaded image (optionally cropped to a user-marked region) through the
- * ad-hoc OCR pipeline (proxies job-search's standalone Audio Extract Service, /extract/image).
- * Role policy: self-service AI tool, TENANT_USER+.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/imageText.json")
@@ -31,15 +25,6 @@ public class ImageTextRestApi {
         this.imageTextService = imageTextService;
     }
 
-    /**
-     * Api use to extract text (optionally just a marked region) from an uploaded image
-     * @param file
-     * @param x
-     * @param y
-     * @param width
-     * @param height
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/extractFromImage", method = RequestMethod.POST)
     public ResponseEntity<?> extractFromImage(
         @RequestParam("file") MultipartFile file,

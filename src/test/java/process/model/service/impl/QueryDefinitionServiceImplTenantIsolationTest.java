@@ -31,13 +31,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * A saved query belonging to Tenant A must never be readable, editable, deletable, validatable,
- * or previewable by Tenant B -- including indirectly, by Tenant B pointing a query it owns at
- * Tenant A's databaseConnectionProfileId. See ConnectionProfileServiceImplTenantIsolationTest
- * for the same guarantees on connection profiles themselves.
- * @author Nabeel Ahmed
- */
 @ExtendWith(MockitoExtension.class)
 class QueryDefinitionServiceImplTenantIsolationTest {
 
@@ -139,8 +132,7 @@ class QueryDefinitionServiceImplTenantIsolationTest {
 
     @Test
     void tenantBCannotValidateUsingTenantAsSavedQueryText() throws Exception {
-        // resolveQueryText must refuse to decrypt/return Tenant A's queryText for Tenant B, even
-        // though "validate" never touches the database and might look harmless to skip-check.
+
         when(this.queryDefinitionRepository.findById(700L)).thenReturn(Optional.of(this.queryOwnedBy(TENANT_A, 500L)));
 
         QueryDefinitionDto dto = new QueryDefinitionDto();
@@ -169,9 +161,7 @@ class QueryDefinitionServiceImplTenantIsolationTest {
 
     @Test
     void tenantCannotSaveANewQueryAgainstAConnectionProfileItDoesNotOwn() throws Exception {
-        // Tenant B owns nothing here -- attempting to create a query against Tenant A's
-        // connection profile id must fail even though the query itself would be brand new
-        // (never trust a client-supplied databaseConnectionProfileId, per the design review).
+
         when(this.databaseConnectionProfileRepository.findById(500L))
             .thenReturn(Optional.of(this.profileOwnedBy(TENANT_A)));
 

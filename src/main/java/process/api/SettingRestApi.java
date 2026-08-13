@@ -15,13 +15,6 @@ import process.model.service.SettingService;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
 
-/**
- * Api use to perform crud operation on setting. Role policy: settings (source task types,
- * lookups, kafka config surfaced elsewhere) are tenant configuration, so this whole controller
- * requires TENANT_ADMIN+ -- dynamicQueryResponse tightens further to PLATFORM_ADMIN-only inside
- * its own method body (raw native SQL bypasses the tenant Hibernate filter, see its javadoc).
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/setting.json")
@@ -39,10 +32,6 @@ public class SettingRestApi {
         this.xmlOutTagInfoUtil = xmlOutTagInfoUtil;
     }
 
-    /**
-     * Api use to fetch the app setting
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/dynamicQueryResponse", method = RequestMethod.POST)
     public ResponseEntity<?> dynamicQueryResponse(
         @RequestBody ItemResponse itemResponse) {
@@ -54,10 +43,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to fetch the app setting
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/appSetting", method = RequestMethod.GET)
     public ResponseEntity<?> appSetting() {
         try {
@@ -68,11 +53,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to add the sourceTaskType
-     * @param tempSourceTaskType
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/addSourceTaskType", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTaskType(
         @RequestBody SourceTaskTypeDto tempSourceTaskType) {
@@ -84,11 +64,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to update the sourceTaskType
-     * @param tempSourceTaskType
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/updateSourceTaskType", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceTaskType(
         @RequestBody SourceTaskTypeDto tempSourceTaskType) {
@@ -100,11 +75,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to delete the sourceTaskType
-     * @param sourceTaskTypeId
-     * @return ResponseEntity<?> deleteSourceTaskType
-     * */
     @RequestMapping(value = "/deleteSourceTaskType", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteSourceTaskType(
         @RequestParam Long sourceTaskTypeId) {
@@ -116,11 +86,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to fetch the caller's own tenant Kafka routing override for a source task type
-     * @param sourceTaskTypeId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/fetchKafkaRoute", method = RequestMethod.GET)
     public ResponseEntity<?> fetchKafkaRoute(@RequestParam Long sourceTaskTypeId) {
         try {
@@ -131,13 +96,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to create/replace the caller's own tenant Kafka routing override for a source
-     * task type
-     * @param sourceTaskTypeId
-     * @param kafkaConnectionProfileId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/setKafkaRoute", method = RequestMethod.PUT)
     public ResponseEntity<?> setKafkaRoute(@RequestParam Long sourceTaskTypeId, @RequestParam Long kafkaConnectionProfileId) {
         try {
@@ -148,11 +106,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to remove the caller's own tenant Kafka routing override for a source task type
-     * @param sourceTaskTypeId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deleteKafkaRoute", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteKafkaRoute(@RequestParam Long sourceTaskTypeId) {
         try {
@@ -163,11 +116,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to add the lookup data
-     * @param tempLookupData
-     * @return ResponseEntity<?> addLookupData
-     * */
     @RequestMapping(value = "/addLookupData", method = RequestMethod.POST)
     public ResponseEntity<?> addLookupData(
         @RequestBody LookupDataDto tempLookupData) {
@@ -179,11 +127,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to update the lookup data
-     * @param tempLookupData
-     * @return ResponseEntity<?> updateLookupData
-     * */
     @RequestMapping(value = "/updateLookupData", method = RequestMethod.PUT)
     public ResponseEntity<?> updateLookupData(
         @RequestBody LookupDataDto tempLookupData) {
@@ -195,11 +138,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to fetch the sub-Lookup by parent lookup id
-     * @param parentLookUpId
-     * @return ResponseEntity<?> fetchSubLookupByParentId
-     * */
     @RequestMapping(value = "/fetchSubLookupByParentId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSubLookupByParentId(
         @RequestParam Long parentLookUpId) {
@@ -211,11 +149,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to delete the lookup data
-     * @param tempLookupData
-     * @return ResponseEntity<?> deleteLookupData
-     * */
     @RequestMapping(value = "/deleteLookupData", method = RequestMethod.PUT)
     public ResponseEntity<?> deleteLookupData(
         @RequestBody LookupDataDto tempLookupData) {
@@ -227,11 +160,6 @@ public class SettingRestApi {
         }
     }
 
-    /**
-     * Api use to create the xml setting for source task
-     * @param xlmMakerRequest
-     * @return ResponseEntity<?> xmlCreateChecker
-     * */
     @RequestMapping(path = "xmlCreateChecker",  method = RequestMethod.POST)
     public ResponseEntity<?> xmlCreateChecker(
         @RequestBody ConfigurationMakerRequest xlmMakerRequest) {

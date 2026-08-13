@@ -8,29 +8,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * @author Nabeel Ahmed
- */
 @Repository
 public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
 
-    /**
-     * Note :- this method use to fetch the only this scheduler which are active and match with current
-     * time slot we give the current time from the system time zone bz on db timezone diff
-     * @param lastSchedulerRun
-     * @param currentSchedulerTime
-     * @return List<Scheduler>
-     * */
     @Query(value = "select scheduler.* from scheduler\n" +
         "inner join source_job on scheduler.job_id=source_job.job_id\n" +
         "where scheduler.recurrence_time between ?1 and ?2\n" +
         "and source_job.job_status = 'Active'", nativeQuery = true)
     public List<Scheduler> findAllSchedulerForToday(LocalDateTime lastSchedulerRun, LocalDateTime currentSchedulerTime);
 
-    /**
-     * Note :- Method use to get scheduler by job id
-     * @return List<Scheduler>
-     * */
     public Optional<Scheduler> findSchedulerByJobId(Long jobId);
 
 }

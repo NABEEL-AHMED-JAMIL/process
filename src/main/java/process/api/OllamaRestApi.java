@@ -10,12 +10,6 @@ import process.model.dto.ResponseDto;
 import process.model.service.OllamaService;
 import process.util.ProcessUtil;
 
-/**
- * Api use to manage models on the local Ollama container -- list what's pulled, pull a new
- * one, delete one. Backs the "Ollama Models" settings screen and feeds the model choices an
- * Ollama-provider AI Agent can be pointed at. Role policy: infra/model management, TENANT_ADMIN+.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/ollama.json")
@@ -30,10 +24,6 @@ public class OllamaRestApi {
         this.ollamaService = ollamaService;
     }
 
-    /**
-     * Api use to list every model currently pulled into the local Ollama container
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/listModels", method = RequestMethod.GET)
     public ResponseEntity<?> listModels() {
         try {
@@ -46,12 +36,6 @@ public class OllamaRestApi {
         }
     }
 
-    /**
-     * Api use to pull (download) a model into the local Ollama container -- blocks until the
-     * pull finishes, which can take a while for large models.
-     * @param name
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/pullModel", method = RequestMethod.POST)
     public ResponseEntity<?> pullModel(@RequestParam String name) {
         try {
@@ -65,11 +49,6 @@ public class OllamaRestApi {
         }
     }
 
-    /**
-     * Api use to delete a model from the local Ollama container
-     * @param name
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deleteModel", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteModel(@RequestParam String name) {
         try {

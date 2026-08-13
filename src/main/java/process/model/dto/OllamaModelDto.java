@@ -1,10 +1,5 @@
 package process.model.dto;
 
-/**
- * DTO use to represent a single model pulled into the local Ollama container (mirrors the
- * shape of one entry in Ollama's GET /api/tags response).
- * @author Nabeel Ahmed
- */
 public class OllamaModelDto {
 
     private String name;

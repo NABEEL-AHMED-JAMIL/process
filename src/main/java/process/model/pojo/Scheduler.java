@@ -11,19 +11,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
-/**
- * Detail for scheduler
- * this class store the detail for scheduler
- * like
- * frequency => mint,hr,daily,weekly,monthly
- * date => start date to end date
- * timezone => user can set zone according the diff time zone
- * note :- end date optional if end date not define then
- * its run recurrence according to the frequency
- * */
-/**
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "scheduler")
 @JsonIgnoreProperties(ignoreUnknown=true)
@@ -58,16 +45,13 @@ public class Scheduler {
         columnDefinition = "TIME")
     private LocalTime startTime;
 
-    // mint,hr,daily,weekly,monthly
     @Column(name = "frequency",
         nullable = false)
     private String frequency;
 
-    // mint, hr entry
     @Column(name = "recurrence")
     private String recurrence;
 
-    // like:- email notification job, so other job ect.
     @Column(name = "job_id",
         nullable = false)
     private Long jobId;

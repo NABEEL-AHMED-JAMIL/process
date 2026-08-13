@@ -6,12 +6,6 @@ import com.google.gson.Gson;
 import process.model.enums.Status;
 import java.sql.Timestamp;
 
-/**
- * queryText is only populated when this Dto represents a single fetch-by-id (opening a query to
- * view/edit it) -- fetchAllQueries maps to this same Dto with queryText left null, so the list
- * view's payload never carries every saved query's full SQL text over the wire at once.
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class QueryDefinitionDto {

@@ -19,9 +19,6 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.StringWriter;
 
-/**
- * @author Nabeel Ahmed
- */
 @Component
 public class XmlOutTagInfoUtil {
 
@@ -58,20 +55,20 @@ public class XmlOutTagInfoUtil {
                 String tagParent = tagInfo.getTagParent();
                 String tagValue = tagInfo.getTagValue();
                 org.w3c.dom.Element child;
-                // for first node
+
                 if(isParent) {
-                    // first time it's consider as root
+
                     child = xmlDoc.createElementNS(BLANK, tagKey);
                     addTagValue(xmlDoc, child, tagValue);
                     xmlDoc.appendChild(child);
                     isParent = false;
                 } else {
-                    // if parent not define then skip this one
+
                     if(tagParent != null && !tagParent.equals(BLANK)) {
-                        // first check if parent exist get the old parent else create the new once
+
                         NodeList nodeList = xmlDoc.getElementsByTagName(tagParent);
                         if(nodeList != null && nodeList.getLength() > 0) {
-                            // old tag which append value
+
                             Node node = nodeList.item(nodeList.getLength()-1);
                             if(node != null && (tagKey != null && !tagKey.equals(BLANK))) {
                                 child = xmlDoc.createElement(tagKey);
@@ -79,7 +76,7 @@ public class XmlOutTagInfoUtil {
                                 node.appendChild(child);
                             }
                         } else {
-                            // main second level child
+
                             Element parent = xmlDoc.createElement(tagParent);
                             if(tagKey != null && !tagKey.equals(BLANK)) {
                                 child = xmlDoc.createElement(tagKey);
@@ -89,14 +86,14 @@ public class XmlOutTagInfoUtil {
                             }
                         }
                     } else {
-                        // main root level child
+
                         child = xmlDoc.createElement(tagKey);
                         addTagValue(xmlDoc, child, tagValue);
                         xmlDoc.getDocumentElement().appendChild(child);
                     }
                 }
             }
-            // below line use after all root
+
             Transformer transformer = this.getTransformerFactory().newTransformer();
             transformer.setOutputProperty(OutputKeys.ENCODING, UTF8);
             transformer.setOutputProperty(OutputKeys.INDENT, YES);

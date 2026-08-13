@@ -5,9 +5,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.Status;
 
-/**
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskTypeDto {
@@ -18,12 +15,11 @@ public class SourceTaskTypeDto {
     private String description;
     private String queueTopicPartition;
     private Status status;
-    /** This type's default Kafka cluster -- null means "fall through to the tenant's own
-     * default" (see KafkaConnectionResolver). Settable by the caller. */
+
     private Long kafkaConnectionProfileId;
-    /** Set on read only, for display -- the resolved profile's name (never sent back on write). */
+
     private String kafkaConnectionProfileName;
-    /** Set on read only (appSetting) -- how many SourceTasks currently link to this type. */
+
     private Long totalTaskLink;
 
     public SourceTaskTypeDto() {

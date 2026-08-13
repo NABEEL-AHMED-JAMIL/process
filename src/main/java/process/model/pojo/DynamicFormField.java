@@ -7,13 +7,6 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 
-/**
- * A single field belonging to a DynamicForm.
- * fieldType/fieldOptions are plain strings -- the frontend owns the master
- * list of supported field types, the backend just persists and validates
- * against a small allow-list (see DynamicFormServiceImpl).
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "dynamic_form_field")
 @JsonIgnoreProperties(ignoreUnknown=true)
@@ -67,9 +60,6 @@ public class DynamicFormField {
     @Column(name = "field_width")
     private Integer fieldWidth;
 
-    /**
-     * JSON array of {label,value} -- only used for select/multi-select/radio/checkbox
-     * */
     @Column(name = "field_options", columnDefinition = "text")
     private String fieldOptions;
 

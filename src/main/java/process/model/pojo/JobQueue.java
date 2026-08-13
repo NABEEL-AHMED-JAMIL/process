@@ -14,24 +14,8 @@ import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 
-/**
- * Detail for job-queue
- * this class store the detail for job-queue
- * like
- * startTime => start time of the job
- * endTime => end time of the job
- * job-status => job status for job
- * job-status-message => job status message for job
- * */
-/**
- * @author Nabeel Ahmed
- */
 @Entity
-// job_id is queried constantly (JobQueueRepository's getCountForJobByJobId/findByJobId/
-// changeJobStatus, plus the N+1 in SourceJobServiceImpl.listSourceJob) but had no supporting
-// index -- just the primary key -- so every one of those was a full table scan. Harmless at a
-// handful of rows; becomes real query cost well within normal usage once this table's run
-// history accumulates (no archival job exists for it), long before it reaches millions of rows.
+
 @Table(name = "job_queue", indexes = {
     @Index(name = "idx_job_queue_job_id", columnList = "job_id")
 })
@@ -90,7 +74,6 @@ public class JobQueue {
     @Column(name = "job_send")
     private boolean jobSend;
 
-    // record status (Active/Inactive/Delete) to manage logical deletion or disabling of queue rows
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)

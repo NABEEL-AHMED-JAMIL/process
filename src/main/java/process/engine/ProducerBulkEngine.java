@@ -21,9 +21,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import static java.util.Objects.isNull;
 
-/**
- * @author Nabeel Ahmed
- */
 @Component
 public class ProducerBulkEngine {
 
@@ -47,10 +44,6 @@ public class ProducerBulkEngine {
         this.kafkaConnectionResolver = kafkaConnectionResolver;
     }
 
-    /**
-     * Method use to send the job int the queue by user action
-     * @param sourceJob
-     * */
     public void addManualJobInQueue(SourceJob sourceJob) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
@@ -60,16 +53,12 @@ public class ProducerBulkEngine {
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
     }
 
-    /**
-     * Method use to send the job int the queue as skip by user action
-     * @param scheduler
-     * */
     public void skipManualJobInQueue(Scheduler scheduler) {
-        // if the job in the skip state no need update the last run queue
+
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(scheduler.getJobId(),
             scheduler.getRecurrenceTime(), JobStatus.Skip, "Job %s skip, by user action.", true);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, by user action.", scheduler.getJobId()));
-        // if the user fail the job manual need to send the mail
+
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
         Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(jobQueue.getJobId());
         if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
@@ -77,41 +66,28 @@ public class ProducerBulkEngine {
         }
     }
 
-    /**
-     * This method use to fetch the detail from the scheduler and match the current running slot
-     * if the data match then push the source-job into the job-queue with the 'queue status' and put the logs too for the job-queue
-     * this method also update the next running detail if the next running date exist this will update into the
-     * scheduler table.
-     * */
     public void addJobInQueue() {
         try {
             logger.info("addJobInQueue --> FETCH Scheduler of current day STARTED ");
             LocalDateTime currentSchedulerTime = LocalDateTime.now();
             LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
             LocalDateTime lastSchedulerRun = LocalDateTime.parse(lookupData.getLookupValue());
-            // only the active job will move to the scheduler
+
             List<Scheduler> schedulerForToday = this.transactionService.findAllSchedulerForTodayV2(lastSchedulerRun, currentSchedulerTime);
             logger.info("addJobInQueue --> FETCHED Scheduler of current day: size {} ", schedulerForToday.size());
             lookupData.setLookupValue(currentSchedulerTime.toString());
             this.transactionService.updateLookupDate(lookupData);
             if (!schedulerForToday.isEmpty()) {
-                // sequential on purpose: the queue-or-skip decision below is a check-then-act
-                // (getCountForInQueueJobByJobId, then create) with no synchronization, so
-                // running it concurrently (parallelStream) let two scheduler entries for the
-                // same job both see "not yet queued" and both create a queue row. This method
-                // itself can't overlap across invocations (fixedDelay + a distributed
-                // @SchedulerLock in ProcessCron), so sequential processing here is sufficient
-                // to make the whole batch race-free -- it also stops tying up the JVM-wide
-                // ForkJoinPool.commonPool() with a 50ms sleep per job.
+
                 schedulerForToday.stream()
                     .forEach(scheduler -> {
                         try {
                             Thread.sleep(50);
                             if (this.isScheduled(lastSchedulerRun, currentSchedulerTime, scheduler.getJobId(), scheduler.getRecurrenceTime())) {
-                                // we have to check if job in the queue then send the detail of job as skip with message
+
                                 JobQueue jobQueue;
                                 if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
-                                    // if the job in the skip state no need update the last run queue
+
                                     jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
                                     this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
                                     Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(scheduler.getJobId());
@@ -124,7 +100,7 @@ public class ProducerBulkEngine {
                                     this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
                                     this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
                                 }
-                                // update the next run in scheduler
+
                                 this.bulkAction.updateNextScheduler(scheduler);
                                 this.bulkAction.sendJobStatusNotification(scheduler.getJobId());
                             }
@@ -140,10 +116,6 @@ public class ProducerBulkEngine {
         }
     }
 
-    /**
-     * This method fetch the job from job-queue and put into the thread-pool
-     * the thread pool send the detail to worker thread
-     * */
     public void startJobInCurrentTimeSlot() {
         try {
             logger.info("runJobInCurrentTimeSlot --> FETCH JobQueue of current day STARTED ");
@@ -172,12 +144,6 @@ public class ProducerBulkEngine {
         }
     }
 
-    /**
-     * Method use to push the data into the kafka queue per topic configuration
-     * @param sourceJob
-     * @param jobQueue
-     * @exception Exception
-     * */
     private void pushMessageToQueue(SourceJob sourceJob, JobQueue jobQueue) throws Exception {
         SourceTask sourceTask = sourceJob.getTaskDetail();
         if (!isNull(sourceTask.getSourceTaskType())) {
@@ -189,13 +155,11 @@ public class ProducerBulkEngine {
                     if (parsed.isPresent()) {
                         String topic = parsed.get().getTopic();
                         String partition = parsed.get().getPartition();
-                        // random key for sending to partitions
+
                         String key = UUID.randomUUID().toString();
                         String payload = this.getSourceJobDetail(sourceJob, jobQueue);
                         try {
-                            // Resolved per-publish, not cached on the job/task -- a profile can
-                            // be added/changed after this job was created, and the next run
-                            // should pick that up without needing the job re-saved.
+
                             org.springframework.kafka.core.KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
                                 this.kafkaConnectionResolver.resolve(sourceJob.getTenantId(), sourceTaskType.getSourceTaskTypeId()));
                             if (partition.contains(ProcessUtil.START)) {
@@ -229,50 +193,29 @@ public class ProducerBulkEngine {
         }
     }
 
-    /**
-     * Method use to handle send success
-     * @param result
-     * @param payload
-     * @param sourceJob
-     * @param jobQueue
-     * */
     private void handleSendSuccess(SendResult<String, String> result, String payload, SourceJob sourceJob, JobQueue jobQueue) {
         long offset = result.getRecordMetadata().offset();
         logger.info("Sent message=[{}] with offset=[{}]", payload, offset);
-        // Update job queue
+
         jobQueue.setJobSend(true);
         jobQueue.setJobStatus(JobStatus.Start);
         jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + offset + "]");
         this.transactionService.updateJobQueue(jobQueue);
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Start);
-        // Save audit logs
+
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s sent message=[%s] with offset=[%s]", sourceJob.getJobId(), payload, offset));
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
     }
 
-    /**
-     * Method use to handle send failure
-     * @param ex
-     * @param payload
-     * @param sourceJob
-     * @param jobQueue
-     * */
     private void handleSendFailure(Throwable ex, String payload, SourceJob sourceJob, JobQueue jobQueue) {
         logger.error("Unable to send message=[{}] due to: {}", payload, ex.getMessage());
-        // Update job queue on failure
+
         jobQueue.setJobSend(false);
         jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to: " + ex.getMessage());
-        // Optionally update last job status
+
         this.changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to: %s", sourceJob.getJobId(), payload, ex.getMessage()));
     }
 
-    /***
-     * This method check either the job is eligible to put into the queue or not
-     * @param lastSchedulerTime -> system scheduler run date
-     * @param currentSchedulerTime -> existing time of the application
-     * @param scheduledTime -> target time for run the scheduler
-     * @return boolean true|false
-     */
     private boolean isScheduled(LocalDateTime lastSchedulerTime, LocalDateTime currentSchedulerTime,
         Long jobId, LocalDateTime scheduledTime) {
         LocalDateTime target = LocalDateTime.of(currentSchedulerTime.toLocalDate(), scheduledTime.toLocalTime());
@@ -284,12 +227,6 @@ public class ProducerBulkEngine {
         return isExist;
     }
 
-    /**
-     * Method use to set the status of the job into db
-     * @param jobQueue
-     * @param message
-     * @return void
-     * */
     private void changeStatusForLastJob(JobQueue jobQueue, String message) {
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed);
@@ -302,17 +239,6 @@ public class ProducerBulkEngine {
         }
     }
 
-    /**
-     * method use convert job queue to job dto
-     * @param jobQueue
-     * @return SourceJobQueueDto
-     * */
-    /**
-     * Method use to fill the payload detail
-     * @param sourceJob
-     * @param jobQueue
-     * @return Map<String, Object>
-     * */
     private String getSourceJobDetail(SourceJob sourceJob, JobQueue jobQueue) {
         JobPayloadDTO dto = new JobPayloadDTO();
         dto.setJobQueueId(jobQueue.getJobQueueId());

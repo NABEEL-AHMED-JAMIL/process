@@ -18,17 +18,8 @@ import process.util.ProcessUtil;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
-/**
- * Api use to browse buckets/objects across storage providers (MinIO / S3 / Azure Blob).
- * Role policy: general-purpose file tool, TENANT_USER+ (including delete -- tightening this
- * to TENANT_ADMIN-only for destructive actions is a reasonable later refinement, not done here
- * to avoid changing today's actual file-management workflow for regular users).
- * @author Nabeel Ahmed
- */
 @RestController
-// exposedHeaders -- Range/Content-Range/Accept-Ranges aren't on the CORS response-header
-// safelist, so without this the browser's <audio>/<video> engine can't see them on a
-// cross-origin response and silently refuses to treat the stream as seekable/playable.
+
 @CrossOrigin(origins = "*", exposedHeaders = {
     HttpHeaders.ACCEPT_RANGES, HttpHeaders.CONTENT_RANGE, HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH
 })
@@ -44,10 +35,6 @@ public class StorageBrowserRestApi {
         this.storageBrowserService = storageBrowserService;
     }
 
-    /**
-     * Api use to list the buckets available to browse (from the BUCKET_LIST lookup)
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/buckets", method = RequestMethod.GET)
     public ResponseEntity<?> buckets() {
         try {
@@ -60,14 +47,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Api use to list the immediate folders/objects under prefix, one page at a time
-     * @param bucket
-     * @param prefix
-     * @param continuationToken cursor from a previous page's response, omit for the first page
-     * @param maxKeys page size (default 50)
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/listObjects", method = RequestMethod.GET)
     public ResponseEntity<?> listObjects(
         @RequestParam String bucket,
@@ -88,12 +67,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Api use to fetch a single object's metadata (side-panel "Object Info")
-     * @param bucket
-     * @param key
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/objectMetadata", method = RequestMethod.GET)
     public ResponseEntity<?> objectMetadata(
         @RequestParam String bucket,
@@ -112,15 +85,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Api use to stream an object's content inline for preview -- json/csv/txt/pdf/mp3/m4a/mp4/image only.
-     * Honors an incoming Range header (bytes=start-end) so large audio/video can be streamed and
-     * seeked in the browser's native player instead of buffering the whole object first.
-     * @param bucket
-     * @param key
-     * @param rangeHeader raw "Range" request header, e.g. "bytes=0-1023", null if not sent
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/previewObject", method = RequestMethod.GET)
     public ResponseEntity<?> previewObject(
         @RequestParam String bucket,
@@ -129,14 +93,6 @@ public class StorageBrowserRestApi {
         return this.streamObject(bucket, key, "inline", rangeHeader, this.storageBrowserService::previewObject);
     }
 
-    /**
-     * Api use to stream an object's content as a download -- any file type. Also honors an
-     * incoming Range header so paused/resumed downloads work.
-     * @param bucket
-     * @param key
-     * @param rangeHeader raw "Range" request header, e.g. "bytes=0-1023", null if not sent
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/downloadObject", method = RequestMethod.GET)
     public ResponseEntity<?> downloadObject(
         @RequestParam String bucket,
@@ -145,13 +101,6 @@ public class StorageBrowserRestApi {
         return this.streamObject(bucket, key, "attachment", rangeHeader, this.storageBrowserService::downloadObject);
     }
 
-    /**
-     * Api use to upload a file into the current folder
-     * @param bucket
-     * @param prefix current folder, omit/empty for the bucket root
-     * @param file
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/uploadObject", method = RequestMethod.POST)
     public ResponseEntity<?> uploadObject(
         @RequestParam String bucket,
@@ -169,13 +118,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Api use to create a new sub-folder in the current folder
-     * @param bucket
-     * @param prefix current folder, omit/empty for the bucket root
-     * @param folderName just the new folder's own name, not a path
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/createFolder", method = RequestMethod.POST)
     public ResponseEntity<?> createFolder(
         @RequestParam String bucket,
@@ -193,12 +135,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Api use to delete a single object
-     * @param bucket
-     * @param key
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deleteObject", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteObject(
         @RequestParam String bucket,
@@ -215,11 +151,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Api use to delete multiple objects in one call (multi-select delete)
-     * @param request
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deleteObjects", method = RequestMethod.POST)
     public ResponseEntity<?> deleteObjects(@RequestBody BulkDeleteRequestDto request) {
         try {
@@ -234,12 +165,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Api use to recursively delete a folder and everything inside it
-     * @param bucket
-     * @param key the folder's key, must end with "/"
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deleteFolder", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteFolder(
         @RequestParam String bucket,
@@ -256,13 +181,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Api use to rename a folder (recursive copy + delete under the hood)
-     * @param bucket
-     * @param key the folder's current key, must end with "/"
-     * @param newFolderName just the new name, not a path
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/renameFolder", method = RequestMethod.POST)
     public ResponseEntity<?> renameFolder(
         @RequestParam String bucket,
@@ -280,16 +198,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Method use to stream an object's bytes back with the right content-type/disposition
-     * headers, shared by previewObject and downloadObject
-     * @param bucket
-     * @param key
-     * @param disposition "inline" or "attachment"
-     * @param rangeHeader raw "Range" request header, null if not sent
-     * @param fetcher
-     * @return ResponseEntity<?>
-     * */
     private ResponseEntity<?> streamObject(String bucket, String key, String disposition, String rangeHeader,
         RangeContentFetcher fetcher) {
         try {
@@ -325,14 +233,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Method use to parse a "Range: bytes=start-end" (or open-ended "bytes=start-") request
-     * header into a {startInclusive, endInclusive-or-null} pair. Returns null for anything
-     * missing, malformed, or of an unsupported unit -- callers then fall back to serving the
-     * whole object, same as if no Range header had been sent.
-     * @param rangeHeader
-     * @return long[]{start, end} (end may be -1 meaning "to the end"), or null
-     * */
     private long[] parseRange(String rangeHeader) {
         if (rangeHeader == null || !rangeHeader.startsWith("bytes=")) {
             return null;
@@ -355,10 +255,6 @@ public class StorageBrowserRestApi {
         }
     }
 
-    /**
-     * Functional interface use to fetch an object's content for a bucket/key, optionally scoped
-     * to a byte range -- lets previewObject/downloadObject share the same streamObject logic.
-     * */
     @FunctionalInterface
     private interface RangeContentFetcher {
         ObjectContentDto fetch(String bucket, String key, Long rangeStart, Long rangeEnd);

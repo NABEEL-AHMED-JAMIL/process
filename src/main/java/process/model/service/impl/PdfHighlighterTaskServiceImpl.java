@@ -29,15 +29,11 @@ import java.util.Objects;
 import java.util.Optional;
 import static process.util.ProcessUtil.*;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService {
 
     private Logger logger = LoggerFactory.getLogger(PdfHighlighterTaskServiceImpl.class);
 
-    /** Files are stored in the shared ETL bucket under pdf-highlighter/{taskId}/ -- same bucket the Object Browser already browses. */
     private static final String BUCKET = "etl-bucket";
 
     private final PdfHighlighterTaskRepository pdfHighlighterTaskRepository;
@@ -58,12 +54,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         this.tenantFilterHelper = tenantFilterHelper;
     }
 
-    /**
-     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
-     * task) is allowed to see/act on it -- same rationale as SourceJobServiceImpl.isOwnedByCaller.
-     * @param pdfHighlighterTask
-     * @return boolean
-     * */
     private boolean isOwnedByCaller(PdfHighlighterTask pdfHighlighterTask) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
@@ -71,10 +61,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return pdfHighlighterTask != null && Objects.equals(pdfHighlighterTask.getTenantId(), TenantContext.getTenantId());
     }
 
-    /**
-     * Method use to fetch all the pdf highlighter task
-     * @return ResponseDto
-     * */
     @Override
     @Transactional(readOnly = true)
     public ResponseDto fetchAllPdfHighlighterTask() throws Exception {
@@ -84,11 +70,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return new ResponseDto(SUCCESS, "Data fetch successfully.", pdfHighlighterTasks);
     }
 
-    /**
-     * Method use to fetch a single pdf highlighter task by id
-     * @param pdfHighlighterTaskId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional(readOnly = true)
     public ResponseDto fetchPdfHighlighterTaskById(Long pdfHighlighterTaskId) throws Exception {
@@ -103,11 +84,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return new ResponseDto(ERROR, String.format("PdfHighlighterTask not found with %s.", pdfHighlighterTaskId));
     }
 
-    /**
-     * Method use to add the pdf highlighter task
-     * @param pdfHighlighterTaskDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto addPdfHighlighterTask(PdfHighlighterTaskDto pdfHighlighterTaskDto) throws Exception {
@@ -126,11 +102,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
             pdfHighlighterTask);
     }
 
-    /**
-     * Method use to update the pdf highlighter task
-     * @param pdfHighlighterTaskDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto updatePdfHighlighterTask(PdfHighlighterTaskDto pdfHighlighterTaskDto) throws Exception {
@@ -160,11 +131,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return new ResponseDto(ERROR, String.format("PdfHighlighterTask not found with %s.", pdfHighlighterTaskDto.getPdfHighlighterTaskId()));
     }
 
-    /**
-     * Method use to delete the pdf highlighter task
-     * @param pdfHighlighterTaskId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto deletePdfHighlighterTask(Long pdfHighlighterTaskId) throws Exception {
@@ -183,11 +149,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return new ResponseDto(SUCCESS, String.format("PdfHighlighterTask delete with %s.", pdfHighlighterTaskId));
     }
 
-    /**
-     * Method use to fetch the fields drawn for a pdf highlighter task, in display order
-     * @param pdfHighlighterTaskId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional(readOnly = true)
     public ResponseDto fetchPdfHighlighterFields(Long pdfHighlighterTaskId) throws Exception {
@@ -195,7 +156,7 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
             return new ResponseDto(ERROR, "PdfHighlighterTask pdfHighlighterTaskId missing.");
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        // PdfHighlighterField has no tenantId of its own -- gate on the owning task's tenant.
+
         Optional<PdfHighlighterTask> taskOpt = this.pdfHighlighterTaskRepository.findById(pdfHighlighterTaskId);
         if (!taskOpt.isPresent() || !this.isOwnedByCaller(taskOpt.get())) {
             return new ResponseDto(ERROR, String.format("PdfHighlighterTask not found with %s.", pdfHighlighterTaskId));
@@ -205,13 +166,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return new ResponseDto(SUCCESS, "Data fetch successfully.", fields);
     }
 
-    /**
-     * Method use to replace a task's entire field list in one call -- simpler and just as
-     * correct as diffing create/update/delete since fields have no identity the UI needs
-     * to preserve across saves (no submissions or external references point at a field id).
-     * @param request
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto syncPdfHighlighterFields(SyncPdfHighlighterFieldsRequestDto request) throws Exception {
@@ -249,13 +203,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return new ResponseDto(SUCCESS, String.format("%d field(s) saved for PdfHighlighterTask %s.", toSave.size(), request.getPdfHighlighterTaskId()));
     }
 
-    /**
-     * Method use to upload a PDF for a task -- stored in the shared ETL bucket under
-     * pdf-highlighter/{taskId}/, then the task's file metadata is updated to point at it.
-     * @param pdfHighlighterTaskId
-     * @param file
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto uploadPdfHighlighterFile(Long pdfHighlighterTaskId, MultipartFile file) throws Exception {
@@ -279,11 +226,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return new ResponseDto(SUCCESS, "File uploaded successfully.", pdfHighlighterTask.get());
     }
 
-    /**
-     * Method use to fetch the stored PDF's bytes for a task
-     * @param pdfHighlighterTaskId
-     * @return ObjectContentDto
-     * */
     @Override
     @Transactional(readOnly = true)
     public ObjectContentDto downloadPdfHighlighterFile(Long pdfHighlighterTaskId) throws Exception {
@@ -298,11 +240,6 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         return this.storageBrowserService.downloadObject(BUCKET, key, null, null);
     }
 
-    /**
-     * Method use to build the bucket key prefix a task's file lives under
-     * @param pdfHighlighterTaskId
-     * @return String
-     * */
     private String taskPrefix(Long pdfHighlighterTaskId) {
         return "pdf-highlighter/" + pdfHighlighterTaskId + "/";
     }

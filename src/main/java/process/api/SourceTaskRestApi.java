@@ -19,13 +19,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
 
-/**
- * Api use to perform crud operation on source-task. Role policy: task definitions are tenant
- * configuration (TENANT_ADMIN+ to add/update/delete/upload), but any TENANT_USER can read them
- * (they need to see/select tasks while working with jobs) -- see the read-only methods below,
- * each explicitly relaxed back down to TENANT_USER.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/sourceTask.json")
@@ -40,11 +33,6 @@ public class SourceTaskRestApi {
         this.sourceTaskService = sourceTaskService;
     }
 
-    /**
-     * Api use to add the source task
-     * @param sourceTaskDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/addSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
@@ -55,11 +43,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to update the source task
-     * @param sourceTaskDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/updateSourceTask", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
@@ -70,11 +53,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to delete the source task in soft
-     * @param sourceTaskDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deleteSourceTask", method = RequestMethod.PUT)
     public ResponseEntity<?> deleteSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
@@ -85,17 +63,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to fetch the sourceTask detail with pagination
-     * @param page
-     * @param limit
-     * @param startDate
-     * @param endDate
-     * @param columnName
-     * @param order
-     * @param searchTextDto
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/listSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> listSourceTask(
@@ -115,17 +82,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to fetch link jobs with source task with pagination
-     * @param page
-     * @param limit
-     * @param startDate
-     * @param endDate
-     * @param columnName
-     * @param order
-     * @param searchTextDto
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllLinkJobsWithSourceTaskId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchAllLinkJobsWithSourceTaskId(
@@ -146,10 +102,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to fetch link task with source task type
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllLinkSourceTaskWithSourceTaskTypeId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllLinkSourceTaskWithSourceTaskTypeId(
@@ -162,11 +114,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to fetch source task detail with id
-     * @param sourceTaskId
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchSourceTaskWithSourceTaskId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSourceTaskWithSourceTaskId(@RequestParam(value = "sourceTaskId") Long sourceTaskId) {
@@ -178,10 +125,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to download the list source task
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/downloadListSourceTask", method = RequestMethod.GET)
     public ResponseEntity<?> downloadListSourceTask() {
         try {
@@ -196,10 +139,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to download the template
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/downloadSourceTaskTemplate", method = RequestMethod.GET)
     public ResponseEntity<?> downloadSourceTaskTemplate() {
         try {
@@ -214,11 +153,6 @@ public class SourceTaskRestApi {
         }
     }
 
-    /**
-     * Api use to upload the source task
-     * @param fileUploadDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/uploadSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSourceTask(FileUploadDto fileUploadDto) {
         try {

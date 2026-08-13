@@ -27,12 +27,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * MinioObjectStorageServiceImpl - Bucket Browser's MinIO provider, talking to MinIO through
- * the shared {@link MinioClient} bean (lazy -- only initialized the first time a bucket
- * actually resolves to MINIO).
- * @author Nabeel Ahmed
- */
 @Service("minioObjectStorageService")
 public class MinioObjectStorageServiceImpl implements ObjectStorageService {
 
@@ -45,7 +39,7 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
     @Override
     public BrowseObjectsResponseDto listObjects(String bucket, String prefix, String continuationToken, int maxKeys) {
         try {
-            // Over-fetch by one so we can tell whether there's a next page without a second round trip.
+
             int fetchLimit = maxKeys + 1;
             ListObjectsArgs.Builder builder = ListObjectsArgs.builder()
                 .bucket(bucket)
@@ -67,7 +61,7 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
             boolean hasMore = items.size() > maxKeys;
             List<Item> page = hasMore ? items.subList(0, maxKeys) : items;
             List<ObjectSummaryDto> objects = page.stream()
-                // Skip the empty marker object a created folder leaves at exactly its own prefix.
+
                 .filter(item -> !item.objectName().equals(prefix))
                 .map(this::toObjectSummaryDto)
                 .collect(Collectors.toList());
@@ -189,12 +183,6 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
         }
     }
 
-    /**
-     * Method use to list every object key under prefix, recursively, across all pages
-     * @param bucket
-     * @param prefix
-     * @return List of full object keys
-     * */
     private List<String> listAllKeysUnderPrefix(String bucket, String prefix) {
         try {
             List<String> keys = new ArrayList<>();
@@ -208,11 +196,6 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
         }
     }
 
-    /**
-     * Method use to convert a MinIO Item (folder or object) into an ObjectSummaryDto
-     * @param item
-     * @return ObjectSummaryDto
-     * */
     private ObjectSummaryDto toObjectSummaryDto(Item item) {
         String key = item.objectName();
         boolean isFolder = item.isDir();
@@ -228,21 +211,10 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
         );
     }
 
-    /**
-     * Method use to strip the surrounding double-quotes MinIO's list API includes in the raw
-     * ETag XML element (unlike statObject's etag(), which comes back already unquoted)
-     * @param etag
-     * @return String
-     * */
     private String stripQuotes(String etag) {
         return etag != null ? etag.replace("\"", "") : null;
     }
 
-    /**
-     * Method use to get the last path segment of a key/prefix
-     * @param key
-     * @return String
-     * */
     private String fileNameOf(String key) {
         return key.contains("/") ? key.substring(key.lastIndexOf('/') + 1) : key;
     }

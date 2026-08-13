@@ -7,9 +7,6 @@ import process.model.dto.PagingDto;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * @author Nabeel Ahmed
- */
 public class PagingUtil {
 
     private static final String ID = "id";
@@ -26,12 +23,10 @@ public class PagingUtil {
         return pdto;
     }
 
-    /* Page = current page And size is Limit*/
     public static Pageable ApplyPaging(String orderBy, String direction, Long page, Long limit) {
         return ApplyPagingAndSorting(orderBy, direction, page != null ? page - 1 : 0l, limit);
     }
 
-    /* Apply If Needed */
     public static Pageable ApplyPagingAndSorting(String orderBy, String direction, Long page, Long limit) {
         List<Sort.Order> orders = new ArrayList<>();
         orders.add(new Sort.Order(getSortDirection(direction), orderBy != null ? orderBy: ID));
@@ -44,14 +39,6 @@ public class PagingUtil {
         return PageRequest.of(page.intValue(), limit.intValue(), Sort.by(orders));
     }
 
-    /**
-     * Method use to resolve a request-supplied sort direction -- several callers (e.g.
-     * fetchAllLinkJobsWithSourceTaskId) declare their "order" request param optional
-     * (required = false), so this must tolerate null rather than NPE; falls back to ASC for
-     * null or anything else unrecognized, same as it already did for an unrecognized value.
-     * @param direction
-     * @return Sort.Direction
-     * */
     private static Sort.Direction getSortDirection(String direction) {
         if (direction != null && direction.equalsIgnoreCase(DESC)) {
             return Sort.Direction.DESC;

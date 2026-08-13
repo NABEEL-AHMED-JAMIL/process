@@ -9,9 +9,6 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceJobQueueDto {
@@ -32,9 +29,6 @@ public class SourceJobQueueDto {
 
     public SourceJobQueueDto() {}
 
-    /** Builds the minimal DTO used for email-notification templates -- was previously
-     * duplicated identically in ProducerBulkEngine and MessageQServiceImpl. startTime resolves
-     * to skipTime when the job was skipped, since that's the timestamp the email should show. */
     public static SourceJobQueueDto forEmailNotification(JobQueue jobQueue) {
         SourceJobQueueDto dto = new SourceJobQueueDto();
         dto.setJobId(jobQueue.getJobId());

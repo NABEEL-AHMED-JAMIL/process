@@ -1,8 +1,5 @@
 package process.model.dto;
 
-/**
- * @author Nabeel Ahmed
- */
 public class LoginRequestDto {
 
     private String username;

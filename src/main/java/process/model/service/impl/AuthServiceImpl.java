@@ -23,9 +23,6 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class AuthServiceImpl implements AuthService {
 
@@ -51,8 +48,7 @@ public class AuthServiceImpl implements AuthService {
         }
         Optional<AppUser> userOpt = this.appUserRepository.findByUsernameAndStatusNot(
             loginRequestDto.getUsername().trim(), Status.Delete);
-        // Deliberately the same generic message whether the username doesn't exist or the
-        // password is wrong -- distinguishing the two lets an attacker enumerate valid usernames.
+
         String invalidCredentialsMessage = "Invalid username or password.";
         if (!userOpt.isPresent()) {
             return new ResponseDto(ERROR, invalidCredentialsMessage);
@@ -90,12 +86,7 @@ public class AuthServiceImpl implements AuthService {
             return new ResponseDto(ERROR, "Account no longer active -- please log in again.");
         }
         AppUser user = userOpt.get();
-        // Same check as login() -- without this, a user already holding a refresh token (valid
-        // for JWT_REFRESH_TOKEN_EXPIRY_DAYS, 7 by default) could keep minting fresh access
-        // tokens and stay logged in indefinitely even after their tenant is deleted/suspended,
-        // since deleting a tenant only changes the tenant row's own status (TenantServiceImpl.
-        // changeTenantStatus) -- it never touches app_user.status. A brand-new login was already
-        // correctly blocked; refresh was the gap that let an existing session outlive it.
+
         if (this.checkAccountAndTenantActive(user) != null) {
             return new ResponseDto(ERROR, "Account no longer active -- please log in again.");
         }
@@ -104,14 +95,6 @@ public class AuthServiceImpl implements AuthService {
         return new ResponseDto(SUCCESS, "Token refreshed.", response);
     }
 
-    /**
-     * Method use to check whether a user is allowed to authenticate/stay authenticated -- their
-     * own account must be Active, and (for a tenant-bound user; PLATFORM_ADMIN has tenantId==null
-     * and isn't scoped to any tenant) their tenant must also be Active. Shared by login() and
-     * refresh() so a deleted/suspended tenant is enforced consistently at both entry points.
-     * @param user
-     * @return String a user-facing reason if blocked, or null if the user may proceed
-     * */
     private String checkAccountAndTenantActive(AppUser user) {
         if (user.getStatus() != Status.Active) {
             return "This account is inactive. Contact your administrator.";

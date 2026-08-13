@@ -9,9 +9,6 @@ import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.usermodel.*;
 import org.springframework.stereotype.Component;
 
-/**
- * @author Nabeel Ahmed
- */
 @Component
 public class BulkExcel {
 
@@ -34,11 +31,6 @@ public class BulkExcel {
         this.sheet = sheet;
     }
 
-    /**
-     * This method use to fill the header in excel file
-     * @param rowCount
-     * @param HEADER_FILED_BATCH_FILE
-     * */
     public void fillBulkHeader(Integer rowCount, String[] HEADER_FILED_BATCH_FILE) {
         Row header = this.sheet.createRow(rowCount);
         CellStyle style = this.cellHeadingBackgroundColorStyle(IndexedColors.GREY_25_PERCENT.getIndex());
@@ -49,11 +41,6 @@ public class BulkExcel {
         }
     }
 
-    /**
-     * This method use to fill the body in excel file
-     * @param data
-     * @param rowCount
-     * */
     public void fillBulkBody(List<String> data, Integer rowCount) {
         Row body = this.sheet.createRow(rowCount);
         for(int i=0; i<data.size(); i++) {
@@ -61,11 +48,6 @@ public class BulkExcel {
         }
     }
 
-    /**
-     * This method use to fill the HeadingBackgroundColorStyle in excel file
-     * @param backgroundColor
-     * @return CellStyle
-     * */
     public CellStyle cellHeadingBackgroundColorStyle(short backgroundColor) {
         CellStyle style = this.wb.createCellStyle();
         style.setFont(this.getFont());
@@ -75,10 +57,6 @@ public class BulkExcel {
         return style;
     }
 
-    /**
-     * This method use to fill get the font for excel file
-     * @return Font
-     * */
     public Font getFont() {
         Font font = this.wb.createFont();
         font.setFontName("Calibre");
@@ -87,13 +65,6 @@ public class BulkExcel {
         return font;
     }
 
-    /**
-     * This method use to fill Heading for Excel file
-     * @param fillCellCount
-     * @param title
-     * @param style
-     * @param value
-     * */
     public void fillHeading(Integer fillCellCount, Row title, CellStyle style, String value) {
         Cell cell = title.createCell(fillCellCount);
         cell.setCellStyle(style);
@@ -101,51 +72,18 @@ public class BulkExcel {
         cell.setCellValue(value);
     }
 
-    /**
-     * This method use to fill cell value in excel file
-     * @param fillCellCount
-     * @param body
-     * @param value
-     * */
     public void fillCellValue(Integer fillCellCount, Row body, String value) {
         Cell cell = body.createCell(fillCellCount);
         cell.setCellValue(value);
     }
 
-    // Reused across every getCellDetail() call -- DataFormatter itself recommends this (its
-    // internal caches make repeated construction meaningfully more expensive on a 1000-row sheet).
     private final DataFormatter cellFormatter = new DataFormatter();
 
-    /**
-     * This method use to get fetch the detail -- reads whatever value the cell actually holds
-     * (text, number, date, formula result, ...) as its displayed string, without touching the
-     * cell's own type.
-     *
-     * This used to call currentCell.setCellType(CellType.STRING) first, which on this project's
-     * POI version (3.15) silently CLEARS an already-STRING cell's value instead of leaving it
-     * alone -- converting a numeric/blank cell in place worked fine, but any text cell (task
-     * name, task payload, job name, ...) came back empty every time. That meant every bulk
-     * upload of Source Job or Source Task -- both call this same method via
-     * SourceJobBulkServiceImpl / SourceTaskServiceImpl -- rejected every row with "should not be
-     * empty" for its text columns, regardless of what the uploaded sheet actually contained.
-     * DataFormatter reads the cell's displayed value without mutating it, sidestepping the bug
-     * entirely (and is the standard, version-safe way to do this regardless).
-     * @param row
-     * @param index
-     * @return String
-     * */
     public String getCellDetail(Row row, Integer index) {
         Cell currentCell = row.getCell(index, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
         return this.cellFormatter.formatCellValue(currentCell).trim();
     }
 
-    /**
-     * The fillDropDownValue use to fill the list in the cell
-     * @param sheet
-     * @param row
-     * @param col
-     * @param dropList
-     */
     public void fillDropDownValue(XSSFSheet sheet, Integer row, Integer col, String[] dropList) {
         XSSFDataValidationHelper dataValidationHelper = new XSSFDataValidationHelper(sheet);
         XSSFDataValidationConstraint dataValidationConstraint = (XSSFDataValidationConstraint)

@@ -9,14 +9,6 @@ import javax.crypto.SecretKey;
 import java.util.Base64;
 import java.util.Date;
 
-/**
- * Issues and validates JWTs -- access tokens are short-lived and sent on every request
- * (Authorization: Bearer ...), refresh tokens are longer-lived and only used to mint a new
- * access token (see AuthRestApi#refresh). The signing key comes from the JWT_SECRET_KEY
- * environment variable (base64-encoded, at least 32 bytes for HS256) -- never hardcoded.
- * Generate one locally with: openssl rand -base64 32
- * @author Nabeel Ahmed
- */
 @Component
 public class JwtUtil {
 
@@ -58,13 +50,6 @@ public class JwtUtil {
         return builder.compact();
     }
 
-    /**
-     * Method use to parse+validate a token, returning its claims -- throws JwtException
-     * (expired/malformed/bad signature) if invalid, which callers should treat as "not
-     * authenticated" rather than a 500.
-     * @param token
-     * @return Claims
-     * */
     public Claims parseClaims(String token) {
         return Jwts.parserBuilder()
             .setSigningKey(this.secretKey())

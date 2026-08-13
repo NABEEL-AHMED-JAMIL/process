@@ -13,13 +13,6 @@ import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.util.ProcessUtil;
 
-/**
- * Api use to perform crud operation on AI agents, and to run an agent against extracted
- * file text (see ProcessTextRequestDto -- extraction itself happens client-side). Role policy:
- * defining an agent (add/update/delete) is tenant configuration, TENANT_ADMIN+ -- using one
- * (fetch/process*) is relaxed back down to TENANT_USER below.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/aiAgent.json")
@@ -34,11 +27,6 @@ public class AiAgentRestApi {
         this.aiAgentService = aiAgentService;
     }
 
-    /**
-     * Api use to add a new AI agent
-     * @param aiAgentDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/addAgent", method = RequestMethod.POST)
     public ResponseEntity<?> addAgent(@RequestBody AiAgentDto aiAgentDto) {
         try {
@@ -49,11 +37,6 @@ public class AiAgentRestApi {
         }
     }
 
-    /**
-     * Api use to update an existing AI agent
-     * @param aiAgentDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/updateAgent", method = RequestMethod.PUT)
     public ResponseEntity<?> updateAgent(@RequestBody AiAgentDto aiAgentDto) {
         try {
@@ -64,11 +47,6 @@ public class AiAgentRestApi {
         }
     }
 
-    /**
-     * Api use to soft-delete an AI agent
-     * @param aiAgentId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deleteAgent", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteAgent(@RequestParam Long aiAgentId) {
         try {
@@ -79,10 +57,6 @@ public class AiAgentRestApi {
         }
     }
 
-    /**
-     * Api use to fetch every AI agent
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllAgents", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllAgents() {
@@ -94,11 +68,6 @@ public class AiAgentRestApi {
         }
     }
 
-    /**
-     * Api use to fetch a single AI agent by id
-     * @param aiAgentId
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAgentByAgentId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAgentByAgentId(@RequestParam Long aiAgentId) {
@@ -110,13 +79,6 @@ public class AiAgentRestApi {
         }
     }
 
-    /**
-     * Api use to fetch an agent's public tool configuration (provider/model/instructions,
-     * never apiKey/apiEndpoint) by its toolUuid -- meant for an external consumer, e.g. a
-     * Source Task XML "tool url" resolves here. Only Active agents are resolvable.
-     * @param uuid
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchToolByUuid", method = RequestMethod.GET)
     public ResponseEntity<?> fetchToolByUuid(@RequestParam String uuid) {
@@ -128,11 +90,6 @@ public class AiAgentRestApi {
         }
     }
 
-    /**
-     * Api use to run an agent against already-extracted file text
-     * @param processTextRequestDto
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/processText", method = RequestMethod.POST)
     public ResponseEntity<?> processText(@RequestBody ProcessTextRequestDto processTextRequestDto) {
@@ -144,12 +101,6 @@ public class AiAgentRestApi {
         }
     }
 
-    /**
-     * Api use to run a fully ad-hoc provider+model+prompt+text call, not tied to any saved
-     * AiAgent -- nothing here is persisted.
-     * @param adHocPromptRequestDto
-     * @return ResponseEntity<?>
-     * */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/processAdHoc", method = RequestMethod.POST)
     public ResponseEntity<?> processAdHoc(@RequestBody AdHocPromptRequestDto adHocPromptRequestDto) {

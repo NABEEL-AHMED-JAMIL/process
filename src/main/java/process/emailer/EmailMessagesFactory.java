@@ -17,9 +17,6 @@ import java.util.HashMap;
 import java.util.Map;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * @author Nabeel Ahmed
- */
 @Component
 public class EmailMessagesFactory {
 
@@ -42,12 +39,6 @@ public class EmailMessagesFactory {
         this.lookupDataCacheService = lookupDataCacheService;
     }
 
-    /**
-     * method using to send the mail
-     * @param jobQueue
-     * @param jobStatus
-     * @return String
-     * */
     public String sendSourceJobEmail(SourceJobQueueDto jobQueue, JobStatus jobStatus) {
         try {
             LookupDataDto lookupDataDto = this.lookupDataCacheService.getParentLookupById(ProcessUtil.EMAIL_RECEIVER);
@@ -78,11 +69,6 @@ public class EmailMessagesFactory {
         }
     }
 
-    /**
-     * method using to send the mail
-     * @param emailContent
-     * @return String
-     * */
     private String sendSimpleMail(EmailMessageDto emailContent) {
         try {
             MimeMessage mailMessage = this.javaMailSender.createMimeMessage();
@@ -91,7 +77,7 @@ public class EmailMessagesFactory {
             if(!isNull(emailContent.getRecipients())) {
                 helper.setTo(emailContent.getRecipients());
                 if (emailContent.getRecipientsMulti() != null && !emailContent.getRecipientsMulti().isEmpty()) {
-                    // * * * * * * * * *Send cc's* * * * * * * * *
+
                     String ccSendTo = emailContent.getRecipientsMulti().toString();
                     ccSendTo = ccSendTo.substring(1, ccSendTo.length()-1);
                     helper.setCc(ccSendTo);

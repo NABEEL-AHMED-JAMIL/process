@@ -29,16 +29,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * An execution record (and the "Run" action itself) belonging to Tenant A must never be
- * readable by, or runnable on behalf of, Tenant B -- including a manual "Run" request where
- * Tenant B supplies Tenant A's queryId directly (never trust a client-supplied resource id, per
- * the design review). executeForSchedule is exercised separately in
- * QueryScheduleServiceImplTenantIsolationTest's findDueSchedules test and ProcessCron's own
- * integration, since its tenant scoping comes from the caller (ProcessCron) pre-setting
- * TenantContext from the schedule row, not from anything checked inside this method itself.
- * @author Nabeel Ahmed
- */
 @ExtendWith(MockitoExtension.class)
 class QueryExecutionServiceImplTenantIsolationTest {
 
@@ -123,8 +113,7 @@ class QueryExecutionServiceImplTenantIsolationTest {
 
     @Test
     void tenantBCannotRunItsOwnQueryAgainstTenantAsConnectionProfileByOverridingIt() throws Exception {
-        // Tenant B owns the query itself but the request tries to override which connection
-        // profile executes it with Tenant A's id -- must still be rejected.
+
         when(this.queryDefinitionRepository.findById(700L)).thenReturn(Optional.of(this.queryOwnedBy(TENANT_B)));
         when(this.databaseConnectionProfileRepository.findById(500L)).thenReturn(Optional.of(this.profileOwnedBy(TENANT_A)));
 

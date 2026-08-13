@@ -11,12 +11,6 @@ import process.model.dto.TenantDto;
 import process.model.service.TenantService;
 import process.util.ProcessUtil;
 
-/**
- * Api use to provision and manage tenants (organizations). PLATFORM_ADMIN only -- a tenant is
- * the top of the whole data-scoping hierarchy, so creating/renaming/suspending one is
- * deliberately not delegated to TENANT_ADMIN.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/tenant.json")
@@ -31,10 +25,6 @@ public class TenantRestApi {
         this.tenantService = tenantService;
     }
 
-    /**
-     * Api use to list every tenant
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/listTenants", method = RequestMethod.GET)
     public ResponseEntity<?> listTenants() {
         try {
@@ -45,11 +35,6 @@ public class TenantRestApi {
         }
     }
 
-    /**
-     * Api use to provision a new tenant
-     * @param tenantDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/addTenant", method = RequestMethod.POST)
     public ResponseEntity<?> addTenant(@RequestBody TenantDto tenantDto) {
         try {
@@ -60,11 +45,6 @@ public class TenantRestApi {
         }
     }
 
-    /**
-     * Api use to rename a tenant
-     * @param tenantDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/updateTenant", method = RequestMethod.PUT)
     public ResponseEntity<?> updateTenant(@RequestBody TenantDto tenantDto) {
         try {
@@ -75,11 +55,6 @@ public class TenantRestApi {
         }
     }
 
-    /**
-     * Api use to activate/suspend/soft-delete a tenant
-     * @param tenantDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/changeTenantStatus", method = RequestMethod.PUT)
     public ResponseEntity<?> changeTenantStatus(@RequestBody TenantDto tenantDto) {
         try {

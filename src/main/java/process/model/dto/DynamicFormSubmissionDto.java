@@ -6,9 +6,6 @@ import com.google.gson.Gson;
 import java.sql.Timestamp;
 import java.util.Map;
 
-/**
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DynamicFormSubmissionDto {
@@ -17,11 +14,6 @@ public class DynamicFormSubmissionDto {
     private Long dynamicFormId;
     private String uuid;
 
-    /**
-     * Filled-in field values, keyed by DynamicFormField.fieldName.
-     * Accepted as a raw map on submit; the service serializes it to JSON for storage
-     * and parses it back out the same way when returning past submissions.
-     * */
     private Map<String, Object> payload;
 
     private Timestamp dateCreated;

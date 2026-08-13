@@ -8,15 +8,6 @@ import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * A tenant's override of which Kafka cluster to publish a given (usually shared/global)
- * SourceTaskType's messages to -- lets two tenants both use the same catalog task type (e.g.
- * "ETL Scrapping Pipeline") while publishing to two entirely different clusters, without
- * duplicating the SourceTaskType row itself. See KafkaConnectionResolver for exactly where this
- * fits in the overall resolution order (checked first, before the type's own default profile).
- * At most one route per (tenantId, sourceTaskTypeId) -- enforced by a unique constraint.
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "tenant_task_type_kafka_route",
     uniqueConstraints = @UniqueConstraint(name = "uq_tenant_task_type",

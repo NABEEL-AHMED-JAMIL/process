@@ -1,0 +1,8 @@
+# jodconverter-spring-boot-starter 4.4.7 only ships its autoconfiguration registration via
+# META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports, which is the
+# Spring Boot 2.7+/3.x mechanism. This project is on Spring Boot 2.3.2, which only reads the
+# older spring.factories format below -- without this file, JodConverterLocalAutoConfiguration
+# never runs and none of its beans (OfficeManager, DocumentFormatRegistry, DocumentConverter)
+# get created, even with jodconverter.local.enabled=true set. See DocumentConverterServiceImpl.
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+org.jodconverter.boot.autoconfigure.JodConverterLocalAutoConfiguration

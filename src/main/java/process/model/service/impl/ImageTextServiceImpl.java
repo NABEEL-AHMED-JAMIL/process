@@ -21,14 +21,6 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * Service use to proxy ad-hoc image-to-text (OCR) requests to the standalone Python
- * "Audio Extract Service" (job-search/etl/service/audio_extract_service.py, /extract/image --
- * same running service the audio/video/YouTube screen uses, just a different route) --
- * optionally cropping to a user-marked region (in the image's native pixel coordinates)
- * before running Tesseract, same "mark an area, extract just that" idea as PDF Highlighter.
- * @author Nabeel Ahmed
- */
 @Service
 public class ImageTextServiceImpl implements ImageTextService {
 
@@ -44,15 +36,6 @@ public class ImageTextServiceImpl implements ImageTextService {
         .readTimeout(2, TimeUnit.MINUTES)
         .build();
 
-    /**
-     * Method use to extract text (optionally just a marked region) from an uploaded image
-     * @param file
-     * @param x
-     * @param y
-     * @param width
-     * @param height
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto extractFromImage(MultipartFile file, Integer x, Integer y, Integer width, Integer height) throws Exception {
         if (file == null || file.isEmpty()) {
@@ -114,8 +97,6 @@ public class ImageTextServiceImpl implements ImageTextService {
         }
     }
 
-    /** FastAPI error responses are {"detail": "..."} -- surface just the message where
-     * possible instead of the raw JSON envelope. */
     private String extractDetail(String responseBody, int statusCode) {
         try {
             JsonObject json = this.gson.fromJson(responseBody, JsonObject.class);
@@ -123,7 +104,7 @@ public class ImageTextServiceImpl implements ImageTextService {
                 return json.get("detail").getAsString();
             }
         } catch (Exception ignored) {
-            // fall through to raw body below
+
         }
         return String.format("HTTP %d: %s", statusCode, responseBody);
     }

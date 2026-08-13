@@ -13,9 +13,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class LookupDataCacheService {
 
@@ -51,15 +48,10 @@ public class LookupDataCacheService {
                 this.lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
             }
         });
-        //logger.info(lookupCacheMap.toString());
+
         logger.info("***************Cache-Lookup-End********************************");
     }
 
-    /**
-     * Method use to get the lookup data detail
-     * @param lookupData
-     * @return LookupData
-     * */
     private LookupDataDto getLookupDataDetail(LookupData lookupData) {
         LookupDataDto parentLookupData = this.toLookupDataDto(lookupData);
         if (!lookupData.getChildren().isEmpty()) {
@@ -78,13 +70,6 @@ public class LookupDataCacheService {
         return lookupCacheMap;
     }
 
-    /**
-     * Method use to convert lookup data dto to lookup data. This cache is read internally by
-     * other backend code (e.g. QUEUE_FETCH_LIMIT, EMAIL_RECEIVER), never returned over the API,
-     * so encrypted values are decrypted here for consumers to use transparently.
-     * @param lookupData
-     * @return LookupDataDto
-     * */
     private LookupDataDto toLookupDataDto(LookupData lookupData) {
         LookupDataDto lookupDataDto = new LookupDataDto();
         lookupDataDto.setLookupId(lookupData.getLookupId());

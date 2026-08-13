@@ -7,9 +7,6 @@ import process.model.enums.Status;
 import java.sql.Timestamp;
 import java.util.List;
 
-/**
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DynamicFormDto {
@@ -21,8 +18,7 @@ public class DynamicFormDto {
     private Timestamp dateCreated;
     private Integer totalFields;
     private List<DynamicFormFieldDto> fields;
-    /** Read-only -- server-generated, never accepted from the client. Used to build the
-     * "Copy API Link" URL on the frontend (fetchFormByUuid). */
+
     private String uuid;
 
     public DynamicFormDto() {

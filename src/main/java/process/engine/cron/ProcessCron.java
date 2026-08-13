@@ -13,10 +13,6 @@ import process.security.TenantContext;
 import java.sql.Timestamp;
 import java.util.List;
 
-/**
- * @author Nabeel Ahmed
- * Class use to handle the all crons
- */
 @Component
 public class ProcessCron {
 
@@ -35,9 +31,6 @@ public class ProcessCron {
         this.queryExecutionService = queryExecutionService;
     }
 
-    /**
-     * This addJobInQueue method run every 30 second and put the job into queue
-     * */
     @Scheduled(initialDelay = 5000, fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     @SchedulerLock(name = "addJobInQueue", lockAtLeastFor = "5S", lockAtMostFor = "10M")
     public void addJobInQueue() {
@@ -50,9 +43,6 @@ public class ProcessCron {
         }
     }
 
-    /**
-     * This addJobInQueue method run every 30 second and put the job into the running state
-     * */
     @Scheduled(initialDelay = 5000, fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     @SchedulerLock(name = "startJobInCurrentTimeSlot", lockAtLeastFor = "5S", lockAtMostFor = "10M")
     public void startJobInCurrentTimeSlot() {
@@ -65,23 +55,6 @@ public class ProcessCron {
         }
     }
 
-    /**
-     * Polls query_schedule for due rows and runs each through QueryExecutionService --
-     * §8/§9 of the Query Engine design: the exact same execution path a manual "Run" click
-     * uses, just triggered here instead of an HTTP request. Same @Scheduled+@SchedulerLock
-     * pattern as addJobInQueue/startJobInCurrentTimeSlot above (only one node runs this per
-     * tick in a multi-instance deployment), deliberately not routed through Kafka/
-     * ProducerBulkEngine -- a query execution is a fast, self-contained, in-process JDBC-to-
-     * CSV-to-storage operation with no external worker to hand off to, unlike a SourceJob's
-     * pipeline dispatch.
-     *
-     * TenantContext is a per-HTTP-request ThreadLocal (populated by JwtAuthenticationFilter,
-     * cleared in its finally block) that every tenant-scoped service call in this app depends
-     * on -- this scheduler thread never goes through that filter, so each due schedule's own
-     * tenantId/createdBy is seeded here instead, immediately before that one schedule's
-     * execution, and cleared right after (mirrors the filter's own set/finally-clear shape) so
-     * one tenant's context can never leak into the next schedule processed in the same loop.
-     * */
     @Scheduled(initialDelay = 10000, fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     @SchedulerLock(name = "pollDueQuerySchedules", lockAtLeastFor = "5S", lockAtMostFor = "10M")
     public void pollDueQuerySchedules() {
@@ -101,9 +74,7 @@ public class ProcessCron {
                     schedule.getScheduleId(), schedule.getTenantId(), e.getMessage(), e);
             } finally {
                 TenantContext.clear();
-                // Advance nextRunAt regardless of success/failure -- see
-                // QueryScheduleService.advanceNextRun's own javadoc for why a persistently
-                // failing schedule must not stay "due" forever.
+
                 try {
                     this.queryScheduleService.advanceNextRun(schedule.getScheduleId());
                 } catch (Exception e) {

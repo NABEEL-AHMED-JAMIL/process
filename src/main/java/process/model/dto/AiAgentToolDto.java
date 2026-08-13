@@ -4,15 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 
-/**
- * Public-facing view of an AiAgent, returned to any external consumer (e.g. a Source Task's
- * XML "tool url") that fetches an agent's configuration by its toolUuid -- deliberately a
- * narrower field set than AiAgentDto: no apiKey and no apiEndpoint, since a consumer never
- * talks to the underlying provider directly. To actually run the agent, the consumer calls
- * AiAgentRestApi#processText with this toolUuid instead of an aiAgentId -- the apiKey stays
- * decrypted only in-memory on this server, exactly like the internal call path.
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AiAgentToolDto {
@@ -22,7 +13,7 @@ public class AiAgentToolDto {
     private String description;
     private String provider;
     private String model;
-    /** The agent's saved system prompt / task description. */
+
     private String instructions;
     private Boolean jsonMode;
     private String targetFileTypes;

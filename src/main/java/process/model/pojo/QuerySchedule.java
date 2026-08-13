@@ -12,14 +12,6 @@ import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * A reusable recurring-execution configuration for one QueryDefinition -- stores only
- * references (queryId, databaseConnectionProfileId, output location) plus a schedule, never a
- * copy of the query itself, so ProcessCron.pollDueQuerySchedules() and a manual "Run" click
- * both end up calling the exact same QueryExecutionService.execute(...) path (§8 of the design:
- * one execution engine, two triggers).
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "query_schedule", indexes = {
     @Index(name = "idx_query_schedule_tenant_id", columnList = "tenant_id"),
@@ -57,18 +49,12 @@ public class QuerySchedule {
     @Column(name = "output_bucket", nullable = false)
     private String outputBucket;
 
-    /** Key prefix, e.g. "reports/daily/" -- see ObjectStorageService.createFolder's own
-     * "key already ending in /" convention, reused as-is here. */
     @Column(name = "output_prefix", nullable = false)
     private String outputPrefix;
 
-    /** May contain simple date tokens (e.g. "{date}") resolved at execution time -- see
-     * QueryExecutionServiceImpl.resolveOutputFileName. */
     @Column(name = "output_file_name_template", nullable = false)
     private String outputFileNameTemplate;
 
-    /** Plain interval in minutes -- matches ProcessCron's own fixedDelay-polling style rather
-     * than introducing a cron-expression parser this app doesn't otherwise have. */
     @Column(name = "interval_minutes", nullable = false)
     private Integer intervalMinutes;
 

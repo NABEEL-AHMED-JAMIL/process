@@ -27,9 +27,6 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class ConnectionProfileServiceImpl implements ConnectionProfileService {
 
@@ -54,12 +51,6 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         this.databaseConnectionFactory = databaseConnectionFactory;
     }
 
-    /**
-     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
-     * profile) is allowed to see/act on it -- same rationale as AiAgentServiceImpl.isOwnedByCaller.
-     * @param profile
-     * @return boolean
-     * */
     private boolean isOwnedByCaller(DatabaseConnectionProfile profile) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
@@ -74,12 +65,7 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         if (validationError != null) {
             return validationError;
         }
-        // Connection profiles are tenant-owned business data (tenant_id NOT NULL -- unlike
-        // ai_agent's nullable column, there's no pre-existing-row migration reason to allow an
-        // orphaned one here). TenantContext.getTenantId() is null for a PLATFORM_ADMIN request
-        // by design (unscoped, not tied to any one tenant) -- without this check that null hit
-        // the NOT NULL column directly and surfaced as a raw Hibernate
-        // PropertyValueException/500 instead of a clear, actionable message.
+
         if (isNull(TenantContext.getTenantId())) {
             return new ResponseDto(ERROR, "A platform admin can't own a database connection directly -- log in as a tenant user to create one.");
         }
@@ -131,8 +117,7 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", databaseConnectionProfileId));
         }
-        // A query still pointing at this profile would fail at execution time with a confusing
-        // "profile not found" error otherwise -- reject the delete with a clear reason instead.
+
         long queriesStillUsingIt = this.queryDefinitionRepository
             .countByDatabaseConnectionProfileIdAndStatusNot(databaseConnectionProfileId, Status.Delete);
         if (queriesStillUsingIt > 0) {
@@ -174,10 +159,7 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
     @Transactional
     public ResponseDto testConnection(DatabaseConnectionProfileDto dto) throws Exception {
         DatabaseConnectionProfile profile;
-        // An existing saved profile (re-testing it, or testing it with fields left blank in the
-        // edit form) reuses its already-stored, ownership-checked credentials; a brand new
-        // draft (add-profile form, not saved yet) is validated and connected to directly from
-        // the dto without ever persisting it.
+
         if (!isNull(dto.getDatabaseConnectionProfileId())) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);
             Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(dto.getDatabaseConnectionProfileId());
@@ -185,9 +167,7 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
                 return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", dto.getDatabaseConnectionProfileId()));
             }
             profile = profileOpt.get();
-            // A password typed into the test form overrides the saved one for this test only
-            // (lets a user verify a new password before saving it) -- otherwise the saved,
-            // already-encrypted one is used as-is.
+
             if (!isNull(dto.getPassword()) && !dto.getPassword().trim().isEmpty()) {
                 profile.setPasswordEncrypted(this.encryptionUtil.encrypt(dto.getPassword()));
             }
@@ -208,8 +188,7 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
                 return new ResponseDto(ERROR, "Connected, but the database did not respond to a validity check in time.");
             }
         } catch (Exception ex) {
-            // Never surface the raw driver exception (can include host/port/schema details) --
-            // see the design review's "don't expose sensitive database details" requirement.
+
             logger.warn("Connection test failed for profile '{}' (tenant {}): {}",
                 dto.getProfileName(), TenantContext.getTenantId(), ex.getMessage());
             return new ResponseDto(ERROR, "Could not connect: " + this.sanitizeConnectionError(ex.getMessage()));
@@ -218,21 +197,11 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         return new ResponseDto(SUCCESS, String.format("Connected successfully (%d ms).", elapsedMs));
     }
 
-    /**
-     * Method use to strip anything that looks like a credential from a driver error message
-     * before it's returned to the frontend -- JDBC driver exceptions sometimes echo back
-     * connection parameters verbatim.
-     * @param rawMessage
-     * @return String
-     * */
     private String sanitizeConnectionError(String rawMessage) {
         if (isNull(rawMessage)) {
             return "connection failed.";
         }
-        // Postgres driver messages are already reasonably generic (e.g. "Connection refused",
-        // "password authentication failed", "database \"x\" does not exist") and don't echo the
-        // password back -- this is a defensive cap on length/newlines only, not a redaction regex
-        // that could itself be bypassed by a message shape nobody's tested.
+
         String firstLine = rawMessage.split("\n", 2)[0];
         return firstLine.length() > 200 ? firstLine.substring(0, 200) + "..." : firstLine;
     }
@@ -262,13 +231,6 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         return null;
     }
 
-    /**
-     * Method use to copy Dto values onto an entity -- encrypts+stores a new password only when
-     * a non-empty one was supplied, leaving the existing (already-encrypted) password untouched
-     * otherwise, same pattern as AiAgentServiceImpl.applyAgentDto.
-     * @param profile
-     * @param dto
-     * */
     private void applyDto(DatabaseConnectionProfile profile, DatabaseConnectionProfileDto dto) {
         profile.setProfileName(dto.getProfileName());
         profile.setDatabaseType(dto.getDatabaseType());
@@ -282,11 +244,6 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         profile.setAdditionalProperties(dto.getAdditionalProperties());
     }
 
-    /**
-     * Method use to map an entity to its Dto -- deliberately never sets password.
-     * @param profile
-     * @return DatabaseConnectionProfileDto
-     * */
     private DatabaseConnectionProfileDto toDto(DatabaseConnectionProfile profile) {
         DatabaseConnectionProfileDto dto = new DatabaseConnectionProfileDto();
         dto.setDatabaseConnectionProfileId(profile.getDatabaseConnectionProfileId());

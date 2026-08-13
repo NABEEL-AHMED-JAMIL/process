@@ -11,14 +11,6 @@ import process.model.dto.TextCleanRequestDto;
 import process.util.ProcessUtil;
 import process.util.TextCleanerUtil;
 
-/**
- * Api use to clean raw extracted text (PDF/OCR/copy-paste noise) into a tight, plain block --
- * stateless, no persistence. Callable from anywhere: the Content Cleaner UI, a Source Task, a
- * Dynamic Form, or an external caller such as the job-search Python listeners (already required
- * a valid JWT before this change too -- this endpoint was never in SecurityConfig's permitAll
- * list, unlike /changeState and /addLogs). Role policy: self-service tool, TENANT_USER+.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/textCleaner.json")
@@ -27,11 +19,6 @@ public class TextCleanerRestApi {
 
     private Logger logger = LoggerFactory.getLogger(TextCleanerRestApi.class);
 
-    /**
-     * Api use to clean raw text -- request { "text": "..." }, response data holds the cleaned string
-     * @param textCleanRequestDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/clean", method = RequestMethod.POST)
     public ResponseEntity<?> clean(@RequestBody TextCleanRequestDto textCleanRequestDto) {
         try {

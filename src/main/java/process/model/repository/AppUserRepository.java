@@ -7,9 +7,6 @@ import process.model.pojo.AppUser;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * @author Nabeel Ahmed
- */
 @Repository
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 

@@ -14,26 +14,11 @@ import javax.annotation.PostConstruct;
 import java.sql.Timestamp;
 import java.util.UUID;
 
-/**
- * Runs once per boot (idempotent -- checks before creating, same pattern as
- * ModelApplication#started's SCHEDULER_LAST_RUN_TIME seed) to establish the Phase 0 tenant
- * foundation on a database that predates it:
- *   1. A "Default" tenant, so existing (pre-multi-tenant) rows have somewhere to belong.
- *   2. A Platform Admin login, replacing the frontend's old hardcoded admin/admin.
- *   3. Backfills tenantId on every pre-existing tenant-owned row to the Default tenant.
- *   4. Backfills SourceJob.assignedUserId (added later, for per-user WebSocket run-status
- *      notifications) to the Platform Admin on every row that predates it -- without this an
- *      old job's status update has no one to push to and silently never arrives client-side.
- * Safe to leave running on every boot -- each step is a no-op once it's already done.
- * @author Nabeel Ahmed
- */
 @Component
 public class TenantSeedService {
 
     private final Logger logger = LoggerFactory.getLogger(TenantSeedService.class);
 
-    /** Matches the frontend's previous hardcoded demo login -- change this immediately after
-     * first login once there's a UI to do so (Phase 0 doesn't include a change-password screen). */
     private static final String PLATFORM_ADMIN_USERNAME = "admin@platform.local";
     private static final String PLATFORM_ADMIN_DEFAULT_PASSWORD = "admin";
     private static final String DEFAULT_TENANT_CODE = "default";
@@ -73,11 +58,7 @@ public class TenantSeedService {
             AppUser platformAdmin = this.ensurePlatformAdmin();
             this.backfillTenantIds(defaultTenant.getTenantId());
             this.backfillAssignedUserIds(platformAdmin.getAppUserId());
-            // LookupDataCacheService's own @PostConstruct is not guaranteed to run after this
-            // one -- if it already populated the cache from pre-backfill (tenantId still null)
-            // rows above, StorageBrowserServiceImpl would keep hiding every legacy bucket from
-            // its rightful tenant until the next unrelated cache refresh. Re-populate explicitly
-            // so this boot's cache always reflects the just-backfilled tenantId values.
+
             this.lookupDataCacheService.initializeCache();
         } catch (Exception ex) {
             this.logger.error("An error occurred while seeding tenant foundation: {}", ex.getMessage(), ex);

@@ -18,4 +18,3 @@ public class ExecutionConverter implements AttributeConverter<Execution, String>
         return EnumUtils.parseEnum(Execution.class, dbData);
     }
 }
-

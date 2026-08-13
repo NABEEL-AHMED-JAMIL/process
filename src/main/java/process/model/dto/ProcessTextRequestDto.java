@@ -4,27 +4,16 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 
-/**
- * Request body for AiAgentRestApi/processText -- the frontend has already extracted the
- * file's text (via pdf.js for PDFs, or a raw fetch for text-based types) before calling this,
- * so the backend never needs its own PDF-parsing dependency.
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProcessTextRequestDto {
 
     private Long aiAgentId;
-    /** Alternative to aiAgentId -- looked up via AiAgent#toolUuid instead of the internal
-     * sequence id. Used by external consumers (e.g. a Source Task's XML "tool url") that only
-     * ever see the public toolUuid, never the internal id. Either field resolves to the same
-     * agent; aiAgentId wins if both are supplied. */
+
     private String aiAgentUuid;
     private String fileName;
     private String text;
-    /** Optional -- when supplied, used in place of the saved agent's own instructions for
-     * this call only (nothing is persisted). Lets a caller reuse an agent's provider/model/
-     * apiKey while typing a one-off prompt, e.g. the Audio Transcript Extractor screen. */
+
     private String instructions;
 
     public ProcessTextRequestDto() {}

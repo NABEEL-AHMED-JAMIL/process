@@ -4,9 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 
-/**
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WeeklyHrJobDimensionStatisticsDto {
@@ -29,9 +26,7 @@ public class WeeklyHrJobDimensionStatisticsDto {
         Long queue, Long start, Long running, Long failed, Long completed,
         Long stop, Long skip, Long interrupt, Long total) {
         this.jobId = jobId;
-        // "null" (string) comes from a JOIN with no matching job name at the SQL layer; a real
-        // Java null happens when the query column itself is null -- guard against both without
-        // NPE-ing on the second case (jobName.equals("null") would throw when jobName is null).
+
         this.jobName = jobName == null || jobName.equals("null") ? "Total Count" : jobName;
         this.queue = queue;
         this.start = start;

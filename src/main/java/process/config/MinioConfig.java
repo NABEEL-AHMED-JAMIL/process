@@ -6,13 +6,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 
-/**
- * MinioConfig - builds the shared MinioClient bean used by the Bucket Browser's MinIO
- * provider. Credentials come from the environment (MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY),
- * never hardcoded. @Lazy so the app can start fine even if MinIO isn't configured, as long
- * as no bucket actually resolves to the MINIO provider.
- * @author Nabeel Ahmed
- */
 @Configuration
 public class MinioConfig {
 

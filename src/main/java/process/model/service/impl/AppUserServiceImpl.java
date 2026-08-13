@@ -22,19 +22,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 
-/**
- * Role policy enforced here (on top of AppUserRestApi's class-level TENANT_ADMIN+ @PreAuthorize,
- * which only gates "some kind of admin", not which tenant):
- *   - PLATFORM_ADMIN sees/manages users across every tenant, and is the only role that can
- *     create another PLATFORM_ADMIN or move a user between tenants.
- *   - TENANT_ADMIN is scoped to their own tenant (TenantContext.getTenantId()) for every
- *     operation -- list, add, update, status, password reset -- and can only assign
- *     TENANT_ADMIN/TENANT_USER, never PLATFORM_ADMIN. Any request naming a user outside their
- *     tenant is rejected with the same "not found" a nonexistent id would get, not a
- *     403/permission-denied -- so a TENANT_ADMIN probing ids can't distinguish "wrong tenant"
- *     from "doesn't exist" and enumerate other tenants' user ids.
- * @author Nabeel Ahmed
- */
 @Service
 public class AppUserServiceImpl implements AppUserService {
 
@@ -89,7 +76,7 @@ public class AppUserServiceImpl implements AppUserService {
             }
             targetTenantId = appUserDto.getTenantId();
         } else {
-            // TENANT_ADMIN -- always their own tenant, regardless of what the request claims.
+
             targetTenantId = TenantContext.getTenantId();
         }
         if (!isNull(targetTenantId) && !this.tenantRepository.findById(targetTenantId).isPresent()) {
@@ -130,9 +117,7 @@ public class AppUserServiceImpl implements AppUserService {
                 return new ResponseDto(ERROR, "Only a Platform Admin can grant the Platform Admin role.");
             }
         }
-        // Moving a user to a different tenant (or between tenant-bound and platform-wide) is a
-        // Platform Admin-only action. PLATFORM_ADMIN is never tenant-bound (mirrors AppUser's
-        // own javadoc/addUser's rule below) -- force null regardless of what tenantId was sent.
+
         Long effectiveTenantId;
         if (effectiveRole == UserRole.PLATFORM_ADMIN) {
             effectiveTenantId = null;
@@ -141,11 +126,7 @@ public class AppUserServiceImpl implements AppUserService {
         } else {
             effectiveTenantId = user.getTenantId();
         }
-        // A non-PLATFORM_ADMIN role with no tenant would leave TenantFilterHelper's tenant
-        // filter disabled for them (see its javadoc) -- i.e. unscoped, cross-tenant read access.
-        // This can only be reached by demoting a PLATFORM_ADMIN (tenantId==null) to a tenant
-        // role without assigning a tenant in the same request -- reject it outright rather than
-        // silently create that combination.
+
         if (effectiveRole != UserRole.PLATFORM_ADMIN && isNull(effectiveTenantId)) {
             return new ResponseDto(ERROR, "A tenant is required for this role -- assign one before removing Platform Admin.");
         }
@@ -197,13 +178,6 @@ public class AppUserServiceImpl implements AppUserService {
         return new ResponseDto(SUCCESS, String.format("Password reset for \"%s\".", user.getUsername()));
     }
 
-    /**
-     * Method use to look up a user by id, scoped to the caller: a Platform Admin can reach any
-     * user, a Tenant Admin only one within their own tenant (a PLATFORM_ADMIN target -- tenantId
-     * null -- is never reachable by a Tenant Admin either).
-     * @param appUserId
-     * @return Optional<AppUser>
-     * */
     private Optional<AppUser> scopedFind(Long appUserId) {
         Optional<AppUser> userOpt = this.appUserRepository.findById(appUserId);
         if (!userOpt.isPresent() || userOpt.get().getStatus() == Status.Delete) {
@@ -220,13 +194,6 @@ public class AppUserServiceImpl implements AppUserService {
         return userOpt;
     }
 
-    /**
-     * Method use to map a list of users to Dtos with ONE batch tenant-name lookup for the whole
-     * list, instead of mapToDto's own tenantRepository.findById per row -- listUsers() was
-     * issuing N extra round-trips (one per user) purely to resolve each user's tenant name.
-     * @param users
-     * @return List<AppUserDto>
-     * */
     private List<AppUserDto> mapToDtoList(List<AppUser> users) {
         java.util.Set<Long> tenantIds = users.stream().map(AppUser::getTenantId)
             .filter(tenantId -> !isNull(tenantId)).collect(Collectors.toSet());
@@ -242,8 +209,6 @@ public class AppUserServiceImpl implements AppUserService {
         }).collect(Collectors.toList());
     }
 
-    /** Single-item convenience overload -- one extra tenant lookup here is fine outside a
-     * list/loop context (contrast with mapToDtoList's batch lookup, used by listUsers()). */
     private AppUserDto mapToDto(AppUser user) {
         AppUserDto dto = this.mapToDtoWithoutTenantName(user);
         if (!isNull(user.getTenantId())) {
@@ -252,10 +217,6 @@ public class AppUserServiceImpl implements AppUserService {
         return dto;
     }
 
-    /** Method use to set tenantName/tenantActive on a Dto from an already-resolved Tenant (or
-     * null, if the tenant itself was deleted out from under a still-Active app_user row -- see
-     * AppUserDto.tenantActive's own javadoc for why this flag exists separately from the user's
-     * own status). */
     private void applyTenantInfo(AppUserDto dto, Tenant tenant) {
         if (tenant == null) {
             dto.setTenantActive(false);
@@ -276,7 +237,7 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setStatus(user.getStatus());
         dto.setDateCreated(user.getDateCreated());
         dto.setLastLoginAt(user.getLastLoginAt());
-        // password intentionally never set on read
+
         return dto;
     }
 

@@ -18,4 +18,3 @@ public class JobStatusConverter implements AttributeConverter<JobStatus, String>
         return EnumUtils.parseEnum(JobStatus.class, dbData);
     }
 }
-

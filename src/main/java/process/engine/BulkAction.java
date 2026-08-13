@@ -18,9 +18,6 @@ import process.util.ProcessUtil;
 import java.time.LocalDateTime;
 import java.util.*;
 
-/**
- * @author Nabeel Ahmed
- */
 @Component
 @Transactional
 public class BulkAction {
@@ -35,15 +32,10 @@ public class BulkAction {
         this.notificationService = notificationService;
     }
 
-    /**
-     * This method use the change the status of main job
-     * @param jobId
-     * @param jobStatus
-     * */
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
         Optional<SourceJob> sourceJob = this.transactionService.findByJobId(jobId);
         if (!sourceJob.isPresent()) {
-            // job was deleted/removed concurrently with this status update -- nothing left to update
+
             this.logger.warn("changeJobStatus: SourceJob not found with jobId {}, skipping.", jobId);
             return;
         }
@@ -51,11 +43,6 @@ public class BulkAction {
         this.transactionService.saveOrUpdateJob(sourceJob.get());
     }
 
-    /**
-     * This method use the change the status of sub job
-     * @param jobQueueId
-     * @param jobStatus
-     * */
     public void changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
         if (!jobQueue.isPresent()) {
@@ -66,11 +53,6 @@ public class BulkAction {
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
 
-    /**
-     * This method use the add the end date of running job
-     * @param jobQueueId
-     * @param endTime
-     * */
     public void changeJobQueueEndDate(Long jobQueueId, LocalDateTime endTime) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
         if (!jobQueue.isPresent()) {
@@ -82,11 +64,6 @@ public class BulkAction {
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
 
-    /**
-     * This method use to run the last job in the main job
-     * @param jobId
-     * @param lastJobRun
-     * */
     public void changeJobLastJobRun(Long jobId, LocalDateTime lastJobRun) {
         Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
         if (!sourceJob.isPresent()) {
@@ -97,16 +74,6 @@ public class BulkAction {
         this.transactionService.saveOrUpdateJob(sourceJob.get());
     }
 
-    /**
-     * This method use to add the job into the job-queue in the queue state
-     * the schedule pick the job from the job-queue and push into the queue
-     * @param jobId
-     * @param scheduledTime
-     * @param jobStatus
-     * @param message
-     * @param isSkip
-     * @return JobQueueDto
-     * */
     public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime,
         JobStatus jobStatus, String message, Boolean isSkip) {
         JobQueue jobQueue = new JobQueue();
@@ -122,16 +89,6 @@ public class BulkAction {
         return jobQueue;
     }
 
-    /**
-     * This method use to add the job into the job-queue in the queue state
-     * the schedule pick the job from the job-queue and push into the queue
-     * @param jobId
-     * @param scheduledTime
-     * @param jobStatus
-     * @param message
-     * @param isSkip
-     * @return JobQueueDto
-     * */
     public JobQueue createJobQueueV1(Long jobId, LocalDateTime scheduledTime,
         JobStatus jobStatus, String message, Boolean isSkip) {
         JobQueue jobQueue = new JobQueue();
@@ -149,27 +106,14 @@ public class BulkAction {
         return jobQueue;
     }
 
-    /**
-     * this method use to add the current job logs into the audit logs table
-     * @param jobQueueId
-     * @param logsDetail
-     * */
     public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
         this.transactionService.saveJobAuditLogs(jobQueueId, logsDetail);
     }
 
-    /**
-     * this method use to get the count of job which is inQueue
-     * @param jobId
-     * */
     public Integer getCountForInQueueJobByJobId(Long jobId) {
         return this.transactionService.getCountForInQueueJobByJobId(jobId);
     }
 
-    /**
-     * this method use to update the scheduler next running time
-     * @param scheduler
-     * */
     public void updateNextScheduler(Scheduler scheduler) {
         LocalDateTime nextJobRun = ProcessTimeUtil.computeNextRun(scheduler);
         if (scheduler.getEndDate() != null) {
@@ -186,28 +130,17 @@ public class BulkAction {
         }
     }
 
-    /**
-     * This method use the change the status of main job
-     * @param jobId
-     * */
     public void sendJobStatusNotification(Long jobId) {
         List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
         if (!sourceJob.isEmpty()) {
             String assignedUsername = sourceJob.get(0).getAssignedUsername();
-            // No assignee (job predates assignedUserId, or its assignee was deleted) -- nobody
-            // to target, so there's nothing to push. Not an error: the run is still visible via
-            // manual refresh/history either way.
+
             if (assignedUsername != null) {
                 this.notificationService.sendNotificationToSpecificUser(assignedUsername, this.getSourceJobDetail(sourceJob.get(0)));
             }
         }
     }
 
-    /**
-     * Method use to get the source job detail
-     * @param sourceJobProjection
-     * @return String
-     * */
     private String getSourceJobDetail(SourceJobProjection sourceJobProjection) {
         HashMap<String, Object> jsonObject = new HashMap<>();
         jsonObject.put("jobId", sourceJobProjection.getJobId());

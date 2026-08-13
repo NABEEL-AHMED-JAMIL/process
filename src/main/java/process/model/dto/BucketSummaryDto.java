@@ -4,12 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 
-/**
- * DTO for a bucket entry available in the Bucket Browser dropdown, sourced from the
- * BUCKET_LIST lookup: lookupType is the display label, lookupValue is the real bucket
- * name, description is the storage provider (MINIO/S3/AZURE).
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class BucketSummaryDto {

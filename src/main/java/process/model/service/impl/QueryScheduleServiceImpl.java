@@ -26,9 +26,6 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class QueryScheduleServiceImpl implements QueryScheduleService {
 
@@ -64,9 +61,7 @@ public class QueryScheduleServiceImpl implements QueryScheduleService {
         if (validationError != null) {
             return validationError;
         }
-        // See ConnectionProfileServiceImpl.addConnectionProfile's identical check -- schedules
-        // are tenant-owned (tenant_id NOT NULL), and TenantContext.getTenantId() is null for a
-        // PLATFORM_ADMIN request by design.
+
         if (isNull(TenantContext.getTenantId())) {
             return new ResponseDto(ERROR, "A platform admin can't own a schedule directly -- log in as a tenant user to create one.");
         }
@@ -161,12 +156,7 @@ public class QueryScheduleServiceImpl implements QueryScheduleService {
 
     @Override
     public List<QuerySchedule> findDueSchedules(Timestamp now) {
-        // Deliberately no tenantFilterHelper/TenantContext here -- ProcessCron's poller runs on
-        // a scheduler thread with no per-request tenant identity to scope against, same as
-        // SourceJobRepository's own "due jobs" queries. See QueryScheduleRepository.findDueSchedules'
-        // javadoc for why this is safe: it only decides *which* schedules are due, every row it
-        // returns still carries its own tenantId through untouched into the QueryExecution
-        // ProcessCron subsequently creates for it.
+
         return this.queryScheduleRepository.findDueSchedules(now);
     }
 

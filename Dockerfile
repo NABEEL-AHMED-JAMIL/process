@@ -7,8 +7,16 @@ LABEL maintainer="nabeel.amd93@gmail.com"
 # Set working directory
 WORKDIR /app
 
-# Install curl for health checks, ffmpeg for audio upload transcoding (ALAC -> AAC)
-RUN apt-get update && apt-get install -y curl ffmpeg && rm -rf /var/lib/apt/lists/*
+# Install curl for health checks, ffmpeg for audio upload transcoding (ALAC -> AAC), and a
+# headless LibreOffice for the Document Converter (JODConverter drives this same binary to do
+# every actual conversion -- see DocumentConverterServiceImpl). Targeted components (writer/
+# calc/impress/draw, not libreoffice-full) keep this from pulling in the GUI/help/every language
+# pack; --no-install-recommends trims it further. Still a large layer (LibreOffice itself is
+# a few hundred MB) -- that's the real cost of this feature, not something to optimize away.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl ffmpeg \
+        libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-draw \
+    && rm -rf /var/lib/apt/lists/*
 
 # Expose port for application
 EXPOSE 9098

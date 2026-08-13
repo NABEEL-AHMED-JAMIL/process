@@ -12,21 +12,6 @@ import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * A tenant-owned, saved SQL query. queryText is stored encrypted (see EncryptionUtil) in this
- * table's own row -- NOT as a .txt file in object storage. Reviewed both designs against the
- * project's own tooling: query text here is a few KB at most, so there's no size/performance
- * reason to keep it out of Postgres, and every property object storage would have to hand-roll
- * (concurrent-update safety, versioning, tenant isolation, transactional consistency with the
- * rest of this row, backup/recovery) Postgres already gives for free via @Version (optimistic
- * locking below) and the same tested tenantFilter this whole app relies on -- object storage
- * would only add a second system to keep in sync for no corresponding benefit at this size.
- * databaseConnectionProfileId is a plain FK column, not a JPA @ManyToOne -- the owning
- * connection profile is re-validated (same tenant, still exists) in the service layer on every
- * read/write anyway, so a lazy association would just be an extra round trip most callers don't
- * need.
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "query_definition", indexes = {
     @Index(name = "idx_query_definition_tenant_id", columnList = "tenant_id")
@@ -57,10 +42,6 @@ public class QueryDefinition {
     @Column(name = "query_name", nullable = false)
     private String queryName;
 
-    /** AES-256-GCM ciphertext (see EncryptionUtil) -- query text can embed schema/business
-     * logic, so it's encrypted at rest the same way credentials are, even though it isn't a
-     * secret in the same sense. Decrypted only in-process, immediately before execution/preview
-     * -- never returned to the frontend in list responses (see QueryDefinitionServiceImpl). */
     @Column(name = "query_text", columnDefinition = "TEXT", nullable = false)
     private String queryText;
 
@@ -71,9 +52,6 @@ public class QueryDefinition {
     @Enumerated(EnumType.STRING)
     private Status status;
 
-    /** Hibernate-managed optimistic-lock counter -- auto-incremented on every UPDATE, and a
-     * concurrent second update against the same original version throws
-     * OptimisticLockException instead of silently overwriting the first writer's change. */
     @Version
     @Column(name = "version")
     private Integer version;

@@ -9,15 +9,6 @@ import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import java.security.Principal;
 
-/**
- * Keeps WebSocketPresenceService in sync with the actual STOMP session lifecycle -- Spring
- * fires SessionConnectedEvent once CONNECT succeeds (by which point
- * StompAuthChannelInterceptor has already set the Principal, if the CONNECT frame carried a
- * valid JWT) and SessionDisconnectEvent whenever a session ends for any reason (client
- * disconnect, network drop, browser tab closed). Driving presence off these events instead of a
- * client-sent register/unregister message means it can't desync from a dropped/skipped message.
- * @author Nabeel Ahmed
- */
 @Component
 public class WebSocketEventListener {
 

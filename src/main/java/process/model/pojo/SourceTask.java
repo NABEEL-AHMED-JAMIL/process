@@ -13,9 +13,6 @@ import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "source_task", indexes = {
     @Index(name = "idx_source_task_tenant_id", columnList = "tenant_id")
@@ -40,8 +37,6 @@ public class SourceTask {
     @GeneratedValue(generator = "taskDetailSequenceGenerator")
     private Long taskDetailId;
 
-    /** Owning tenant -- see Tenant/TenantContext. Nullable during the Phase 0 migration window
-     * (backfilled to the Default tenant by TenantSeedService on startup). */
     @Column(name = "tenant_id")
     private Long tenantId;
 
@@ -56,22 +51,12 @@ public class SourceTask {
     @Column(name = "home_page_id")
     private String homePageId;
 
-    /**
-     * pipeline id use to move the data to the
-     * right path if kafka topic using for multiple pipeline
-     * */
     @Column(name = "pipeline_id")
     private String pipelineId;
 
-    /**
-     * group this task belongs to -- same "lookup_id as varchar" convention as homePageId/
-     * pipelineId (a TASK_GROUPS parent lookup's child lookup_id), so tasks can be organized
-     * and browsed by group in the Task List and the Link Source Task picker.
-     * */
     @Column(name = "group_id")
     private String groupId;
 
-    // save lob data for job detail
     @Column(name = "task_payload",
         columnDefinition = "text")
     private String taskPayload;

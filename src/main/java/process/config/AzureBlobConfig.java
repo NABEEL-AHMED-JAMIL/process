@@ -7,13 +7,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 
-/**
- * AzureBlobConfig - builds the shared BlobServiceClient bean used by the Bucket Browser's
- * Azure provider. Connection string comes from the environment
- * (AZURE_STORAGE_CONNECTION_STRING), never hardcoded. @Lazy so the app can start fine even
- * if Azure isn't configured, as long as no bucket actually resolves to the AZURE provider.
- * @author Nabeel Ahmed
- */
 @Configuration
 public class AzureBlobConfig {
 

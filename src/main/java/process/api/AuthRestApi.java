@@ -11,12 +11,6 @@ import process.model.service.AuthService;
 import process.util.ProcessUtil;
 import java.util.Map;
 
-/**
- * Api use to log in (username/password -> access+refresh JWT) and refresh an access token.
- * Both endpoints are public (see SecurityConfig's permitAll list) -- everything else requires
- * a valid "Authorization: Bearer <accessToken>" header.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/auth.json")

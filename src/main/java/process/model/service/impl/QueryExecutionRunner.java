@@ -26,17 +26,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * The actual "run one query end-to-end and persist a QueryExecution row regardless of outcome"
- * logic -- split out of QueryExecutionServiceImpl into its own bean specifically so its
- * @Transactional(REQUIRES_NEW) takes effect. Spring's proxy-based @Transactional is a no-op on
- * self-invocation (a bean method calling another method on `this`): the call never goes back
- * through the Spring-managed proxy that AOP advice is woven onto, so an annotation on a method
- * called via `this.otherMethod(...)` from within the same class is silently ignored. Since
- * QueryExecutionServiceImpl.execute()/executeForSchedule() both need to call this method, it
- * has to live on a different bean to actually get its own transaction.
- * @author Nabeel Ahmed
- */
 @Component
 public class QueryExecutionRunner {
 
@@ -60,19 +49,6 @@ public class QueryExecutionRunner {
         this.storageBrowserService = storageBrowserService;
     }
 
-    /**
-     * Method use to run query end-to-end (decrypt+re-validate SQL, execute against profile,
-     * stream to CSV, upload to bucket/prefix/fileName) and persist a QueryExecution row either
-     * way -- REQUIRES_NEW so this row is always committed on its own, even if the caller's
-     * surrounding transaction later fails/rolls back for an unrelated reason.
-     * @param query
-     * @param profile
-     * @param outputBucket
-     * @param outputPrefix
-     * @param outputFileName may contain a "{date}" token, resolved here
-     * @param scheduleId null for a manual run
-     * @return QueryExecution
-     * */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public QueryExecution runAndRecord(QueryDefinition query, DatabaseConnectionProfile profile,
         String outputBucket, String outputPrefix, String outputFileName, Long scheduleId) {
@@ -91,9 +67,7 @@ public class QueryExecutionRunner {
         CsvExportResult exportResult = null;
         try {
             String decryptedSql = this.encryptionUtil.decrypt(query.getQueryText());
-            // Defense in depth: re-validate immediately before execution, not just at save
-            // time -- cheap, and closes any gap between "saved as valid" and "actually run"
-            // however small.
+
             QueryValidator.ValidationResult sqlCheck = this.queryValidator.validate(decryptedSql);
             if (!sqlCheck.isValid()) {
                 throw new IllegalStateException("Saved query failed re-validation: " + sqlCheck.getReason());
@@ -118,8 +92,7 @@ public class QueryExecutionRunner {
             logger.error("Query execution {} failed (tenant {}, query {}): {}",
                 execution.getExecutionId(), query.getTenantId(), query.getQueryId(), ex.getMessage(), ex);
             execution.setStatus(QueryExecutionStatus.FAILED);
-            // Sanitized: never the raw JDBC/driver exception (can echo host/port/schema), and
-            // never the query text itself.
+
             execution.setErrorMessage(this.sanitizeError(ex.getMessage()));
         } finally {
             if (exportResult != null) {
@@ -146,13 +119,6 @@ public class QueryExecutionRunner {
         return safePrefix + safeFileName;
     }
 
-    /**
-     * Method use to resolve the "{date}" token in a file name template -- intentionally the one
-     * small piece of templating supported, rather than a general template engine nothing here
-     * otherwise needs. A no-op for a manual run's plain file name (no token to replace).
-     * @param template
-     * @return String
-     * */
     private String resolveFileNameTemplate(String template) {
         if (isNull(template) || !template.contains("{date}")) {
             return template;

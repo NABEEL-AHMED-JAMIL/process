@@ -8,9 +8,6 @@ import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import javax.persistence.*;
 
-/**
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "source_task_type", indexes = {
     @Index(name = "idx_stt_tenant_id", columnList = "tenant_id"),
@@ -34,11 +31,6 @@ public class SourceTaskType {
     @GeneratedValue(generator = "sourceTaskTypeSequenceGenerator")
     private Long sourceTaskTypeId;
 
-    /** Owning tenant -- null means this is shared/global catalog data, reusable by every
-     * tenant (the pre-existing convention: every row before this column existed stays null,
-     * unchanged). A tenant may also own a private type of its own (tenant_id set). Kafka
-     * routing for a shared (null-tenant) type can still be overridden per tenant without
-     * duplicating this row -- see TenantTaskTypeKafkaRoute / KafkaConnectionResolver. */
     @Column(name = "tenant_id")
     private Long tenantId;
 
@@ -50,21 +42,15 @@ public class SourceTaskType {
          nullable = false)
     private String description;
 
-    /**
-     * filed help to send the source job to the right queue
-     * */
     @Column(name = "queue_topic_partition",
          nullable = false)
     private String queueTopicPartition;
 
-    // status of job (active or disable or delete)
     @Column(name = "task_type_status",
         nullable = false)
     @Enumerated(EnumType.STRING)
     private Status status;
 
-    /** This type's default Kafka cluster -- null falls through the rest of
-     * KafkaConnectionResolver's chain (tenant default -> platform default -> env fallback). */
     @Column(name = "kafka_connection_profile_id")
     private Long kafkaConnectionProfileId;
 

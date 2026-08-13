@@ -1,12 +1,5 @@
 package process.security;
 
-/**
- * Per-request identity, populated by JwtAuthenticationFilter from the validated JWT's claims
- * and cleared at the end of every request (see JwtAuthenticationFilter's finally block) --
- * ThreadLocal, so it must never be read outside the thread handling the current request (no
- * @Async/manual thread hops without explicitly propagating it).
- * @author Nabeel Ahmed
- */
 public final class TenantContext {
 
     private static final ThreadLocal<Long> TENANT_ID = new ThreadLocal<>();
@@ -23,7 +16,6 @@ public final class TenantContext {
         USERNAME.set(username);
     }
 
-    /** Null for a PLATFORM_ADMIN request (not scoped to any tenant). */
     public static Long getTenantId() {
         return TENANT_ID.get();
     }

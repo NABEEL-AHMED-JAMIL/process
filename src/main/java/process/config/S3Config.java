@@ -9,13 +9,6 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
-/**
- * S3Config - builds the shared S3Client bean used by the Bucket Browser's S3 provider.
- * Credentials come from the environment (AWS_S3_ACCESS_KEY/SECRET_KEY/REGION), never
- * hardcoded. @Lazy so the app can start fine even if S3 isn't configured, as long as no
- * bucket actually resolves to the S3 provider.
- * @author Nabeel Ahmed
- */
 @Configuration
 public class S3Config {
 

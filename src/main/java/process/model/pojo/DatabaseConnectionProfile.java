@@ -13,15 +13,6 @@ import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * A tenant-owned, reusable connection to an external database that Query Engine queries can run
- * against. password is stored encrypted (see EncryptionUtil) and is never returned to the
- * frontend once saved -- same pattern as AiAgent.apiKey. Tenant-scoped via the same
- * tenantFilter Hibernate @Filter as AiAgent/SourceJob/SourceTask (NOT KafkaConnectionProfile's
- * shape -- that entity is a deliberate platform-wide singleton with no tenant_id at all, which
- * would silently let every tenant share one connection if copied here).
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "database_connection_profile", indexes = {
     @Index(name = "idx_db_connection_profile_tenant_id", columnList = "tenant_id")
@@ -46,9 +37,6 @@ public class DatabaseConnectionProfile {
     @GeneratedValue(generator = "databaseConnectionProfileSequenceGenerator")
     private Long databaseConnectionProfileId;
 
-    /** Owning tenant -- see Tenant/TenantContext. NOT NULL: this table has no pre-existing rows
-     * to migrate (unlike ai_agent's nullable-then-backfilled tenantId), so there's no reason to
-     * ever allow an unowned row here. */
     @Column(name = "tenant_id", nullable = false)
     private Long tenantId;
 
@@ -71,12 +59,9 @@ public class DatabaseConnectionProfile {
     @Column(name = "username", nullable = false)
     private String username;
 
-    /** AES-256-GCM ciphertext (see EncryptionUtil) -- never the plain password. */
     @Column(name = "password_encrypted", length = 1000)
     private String passwordEncrypted;
 
-    /** Free-form JSON (e.g. {"sslmode":"require"}) -- vendor-specific connection properties
-     * that don't warrant their own column. Parsed by DatabaseConnectionFactory per databaseType. */
     @Column(name = "additional_properties", columnDefinition = "TEXT")
     private String additionalProperties;
 

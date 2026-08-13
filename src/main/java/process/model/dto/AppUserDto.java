@@ -7,11 +7,6 @@ import process.model.enums.Status;
 import process.model.enums.UserRole;
 import java.sql.Timestamp;
 
-/**
- * password is write-only -- set on addUser/resetPassword, never populated back on a read (see
- * AppUserServiceImpl's mapping methods).
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AppUserDto {
@@ -19,15 +14,9 @@ public class AppUserDto {
     private Long appUserId;
     private String uuid;
     private Long tenantId;
-    /** Set on read only, alongside tenantId -- so the UI can show the tenant's name without a
-     * separate lookup. */
+
     private String tenantName;
-    /** Set on read only, alongside tenantId -- true unless the user's tenant itself has been
-     * deleted/suspended (Tenant.status != Active). Deleting a tenant does NOT change this user's
-     * own status field (TenantServiceImpl.changeTenantStatus only touches the tenant row), so
-     * without this flag a user under a deleted tenant still reads "Active" here even though
-     * login()/refresh() both actually block them -- see AuthServiceImpl.checkAccountAndTenantActive.
-     * Null for a PLATFORM_ADMIN (tenantId is null, not scoped to any tenant). */
+
     private Boolean tenantActive;
     private String username;
     private String password;

@@ -16,9 +16,6 @@ import process.model.service.NotifyService;
 import java.util.Optional;
 import static process.util.ProcessUtil.ERROR;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 @Transactional
 public class NotifyServiceImpl implements NotifyService {
@@ -38,10 +35,6 @@ public class NotifyServiceImpl implements NotifyService {
         this.transactionService = transactionService;
     }
 
-    /**
-     * Method use to change statue for job
-     * @param jobQueue
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ResponseDto changeState(SourceJobQueueDto jobQueue) {
         logger.info("Received request to change job {} queue {} status to {}", jobQueue.getJobId(), jobQueue.getJobQueueId(), jobQueue.getJobStatus());
@@ -101,17 +94,10 @@ public class NotifyServiceImpl implements NotifyService {
         return new ResponseDto(String.format("Logs added for job %s queue %s", jobQueue.getJobId(), jobQueue.getJobQueueId()), jobQueue);
     }
 
-    /**
-     * Method use to validate the status transition of the job-queue
-     * @param currentStatus
-     * @param newStatus
-     **/
     private boolean isValidStatusTransition(JobStatus currentStatus, JobStatus newStatus) {
         switch (currentStatus) {
             case Queue:
-                // a job's very first worker-reported status change is picking it up off the
-                // queue and starting it -- without this case, every job's first status report
-                // was rejected as an "invalid transition" since Queue had no case at all here
+
                 return newStatus == JobStatus.Start;
 
             case Start:

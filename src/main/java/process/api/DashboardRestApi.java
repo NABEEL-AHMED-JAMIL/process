@@ -10,10 +10,6 @@ import process.model.dto.ResponseDto;
 import process.model.service.DashboardService;
 import process.util.ProcessUtil;
 
-/**
- * Api use to perform crud operation on dashboard. Role policy: read-only stats -- TENANT_USER+.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/dashboard.json")
@@ -28,11 +24,6 @@ public class DashboardRestApi {
         this.dashboardService = dashboardService;
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to fetch the donat chart statistics
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/jobStatusStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> jobStatusStatistics(
         @RequestParam(name = "startDate", required = false) String startDate,
@@ -45,11 +36,6 @@ public class DashboardRestApi {
         }
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to fetch the circle chart statistics
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/jobRunningStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> jobRunningStatistics(
         @RequestParam(name = "startDate", required = false) String startDate,
@@ -62,11 +48,6 @@ public class DashboardRestApi {
         }
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to fetch the line chart statistics
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/weeklyRunningJobStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyRunningJobStatistics(
         @RequestParam(name = "startDate") String startDate,
@@ -79,11 +60,6 @@ public class DashboardRestApi {
         }
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to fetch the heat-map chart statistics
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/weeklyHrsRunningJobStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrsRunningJobStatistics(
         @RequestParam(name = "startDate") String startDate,
@@ -96,11 +72,6 @@ public class DashboardRestApi {
         }
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to fetch the weekly-hr-job dimension statistics
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimension", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrRunningStatisticsDimension(
         @RequestParam(name = "targetDate") String targetDate,
@@ -113,11 +84,6 @@ public class DashboardRestApi {
         }
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to fetch the weekly-hr-job dimension statistics detail
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimensionDetail", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrRunningStatisticsDimensionDetail(
         @RequestParam(name = "targetDate", required = false) String targetDate,

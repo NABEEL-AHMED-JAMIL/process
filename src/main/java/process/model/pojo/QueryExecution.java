@@ -12,13 +12,6 @@ import process.model.enums.QueryExecutionStatus;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * One record per query run (manual "Run" click or a QuerySchedule firing) -- the audit trail
- * and execution-history data source (§15 of the design). errorMessage is always a sanitized,
- * user-facing message (see QueryExecutionServiceImpl) -- never a raw JDBC/driver exception,
- * which can leak host/port/schema details.
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "query_execution", indexes = {
     @Index(name = "idx_query_execution_tenant_id", columnList = "tenant_id"),
@@ -53,8 +46,6 @@ public class QueryExecution {
     @Column(name = "database_connection_profile_id", nullable = false)
     private Long databaseConnectionProfileId;
 
-    /** Null until a QuerySchedule triggers this row -- distinguishes a manual run from a
-     * scheduled one in the execution-history UI. */
     @Column(name = "schedule_id")
     private Long scheduleId;
 
@@ -77,7 +68,6 @@ public class QueryExecution {
     @Column(name = "output_key")
     private String outputKey;
 
-    /** Always a sanitized, user-facing message -- see this class's javadoc. */
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 

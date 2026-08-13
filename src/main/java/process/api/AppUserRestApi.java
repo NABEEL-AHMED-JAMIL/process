@@ -11,13 +11,6 @@ import process.model.dto.ResponseDto;
 import process.model.service.AppUserService;
 import process.util.ProcessUtil;
 
-/**
- * Api use to manage user accounts. TENANT_ADMIN+ can reach every method here, but the actual
- * scoping (a Tenant Admin only sees/touches their own tenant's users, only a Platform Admin can
- * grant PLATFORM_ADMIN or move a user between tenants) is enforced in AppUserServiceImpl -- see
- * its class javadoc for the full policy.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/appUser.json")
@@ -32,10 +25,6 @@ public class AppUserRestApi {
         this.appUserService = appUserService;
     }
 
-    /**
-     * Api use to list users (scoped to the caller's tenant, or every tenant for a Platform Admin)
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/listUsers", method = RequestMethod.GET)
     public ResponseEntity<?> listUsers() {
         try {
@@ -46,11 +35,6 @@ public class AppUserRestApi {
         }
     }
 
-    /**
-     * Api use to create a user account
-     * @param appUserDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/addUser", method = RequestMethod.POST)
     public ResponseEntity<?> addUser(@RequestBody AppUserDto appUserDto) {
         try {
@@ -61,11 +45,6 @@ public class AppUserRestApi {
         }
     }
 
-    /**
-     * Api use to update a user's full name / role / (Platform Admin only) tenant
-     * @param appUserDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/updateUser", method = RequestMethod.PUT)
     public ResponseEntity<?> updateUser(@RequestBody AppUserDto appUserDto) {
         try {
@@ -76,11 +55,6 @@ public class AppUserRestApi {
         }
     }
 
-    /**
-     * Api use to activate/deactivate/soft-delete a user
-     * @param appUserDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/changeUserStatus", method = RequestMethod.PUT)
     public ResponseEntity<?> changeUserStatus(@RequestBody AppUserDto appUserDto) {
         try {
@@ -91,12 +65,6 @@ public class AppUserRestApi {
         }
     }
 
-    /**
-     * Api use to set a user's password (admin-initiated reset -- there's no self-service
-     * "forgot password" flow yet)
-     * @param appUserDto
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/resetPassword", method = RequestMethod.PUT)
     public ResponseEntity<?> resetPassword(@RequestBody AppUserDto appUserDto) {
         try {

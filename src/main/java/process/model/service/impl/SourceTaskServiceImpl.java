@@ -36,9 +36,6 @@ import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.ERROR;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class SourceTaskServiceImpl implements SourceTaskService {
 
@@ -68,14 +65,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         this.tenantFilterHelper = tenantFilterHelper;
     }
 
-    /**
-     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
-     * task) is allowed to see/act on it -- same rationale as SourceJobServiceImpl.isOwnedByCaller:
-     * findById is a primary-key lookup that Hibernate's @Filter doesn't reliably scope, so
-     * every by-id read/write path checks ownership explicitly.
-     * @param sourceTask
-     * @return boolean
-     * */
     private boolean isOwnedByCaller(SourceTask sourceTask) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
@@ -93,11 +82,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         "TaskTypeId", "Task Name", "Task Payload", "PipelineId", "HomePage"
     };
 
-    /**
-     * Method use to add source task
-     * @param sourceTaskDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto addSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
@@ -138,11 +122,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return new ResponseDto(SUCCESS, String.format("SourceTask successfully save with %d.", sourceTask.getTaskDetailId()));
     }
 
-    /**
-     * Method use update the source task
-     * @param
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto updateSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
@@ -199,21 +178,13 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
     }
 
-    /**
-     * Method use delete the source task
-     * @param sourceTaskDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto deleteSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
         if (ProcessUtil.isNull(sourceTaskDto.getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceTask taskDetailId missing.");
         }
-        /**
-         * Note :- if the source task delete then delete all the source job link with source task
-         * Use case :- if the source task type delete then only 'inactive or delete perform'
-         * */
+
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskDto.getTaskDetailId());
         if (sourceTask.isPresent() && !this.isOwnedByCaller(sourceTask.get())) {
@@ -230,16 +201,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
     }
 
-    /**
-     * Method use to fetch the list source task
-     * @param startDate
-     * @param endDate
-     * @param columnName
-     * @param order
-     * @param paging
-     * @param searchTextDto
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto listSourceTask(String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
@@ -247,7 +208,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         Object countQueryResult = this.queryService.executeQueryForSingleResult(this.queryService.listSourceTaskQuery(
         true, startDate, endDate, columnName, order, searchTextDto));
         if (!ProcessUtil.isNull(countQueryResult)) {
-            /* fetch Record According to Pagination*/
+
             List<Object[]> result = this.queryService.executeQuery(this.queryService.listSourceTaskQuery(
             false, startDate, endDate, columnName, order, searchTextDto), paging);
             if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
@@ -325,17 +286,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return responseDto;
     }
 
-    /**
-     * Method use to fetch all link job with source task id
-     * @param sourceTaskId
-     * @param startDate
-     * @param endDate
-     * @param columnName
-     * @param order
-     * @param paging
-     * @param searchTextDto
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
@@ -389,11 +339,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return responseDto;
     }
 
-    /**
-     * Method use to fetch source task with source task id
-     * @param sourceTaskId
-     * @return ResponseDto
-     * */
     @Transactional(readOnly = true)
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId) {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
@@ -427,16 +372,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskId));
     }
 
-    /**
-     * Method use to fetch all link source task with source task type id
-     * @param sourceTaskTypeId
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId) throws Exception {
         Long tenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
-        // Two separate repository methods (unscoped vs. tenant-scoped), not one query with
-        // "tenantId is null" -- see fetchAllLinkSourceTaskWithSourceTaskTypeIdForTenant's javadoc.
+
         List<SourceTaskProjection> sourceTasks = tenantId == null
             ? this.sourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId)
             : this.sourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeIdForTenant(sourceTaskTypeId, tenantId);
@@ -444,10 +383,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             sourceTasks);
     }
 
-    /**
-     * Method use to download list source task
-     * @return ByteArrayOutputStream
-     * */
     @Override
     public ByteArrayOutputStream downloadListSourceTask() throws Exception {
         List<SourceTaskProjection> sourceTask = TenantContext.isPlatformAdmin()
@@ -466,7 +401,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             dataCellValue.add(!isNull(sourceTaskProjection.getTaskName()) ? String.valueOf(sourceTaskProjection.getTaskName()) : "");
             dataCellValue.add(!isNull(sourceTaskProjection.getTaskPayload()) ? String.valueOf(sourceTaskProjection.getTaskPayload()) : "");
             dataCellValue.add(!isNull(sourceTaskProjection.getTaskStatus()) ? String.valueOf(sourceTaskProjection.getTaskStatus()) : "");
-            // page and pipeline detail
+
             dataCellValue.add(!isNull(sourceTaskProjection.getPipelineTaskId()) ? String.valueOf(sourceTaskProjection.getPipelineTaskId()) : "");
             dataCellValue.add(!isNull(sourceTaskProjection.getHomePage()) ? String.valueOf(sourceTaskProjection.getHomePage()) : "");
             dataCellValue.add(!isNull(sourceTaskProjection.getServiceName()) ? String.valueOf(sourceTaskProjection.getServiceName()) : "");
@@ -479,10 +414,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         }
     }
 
-    /**
-     * Method use to download source task template
-     * @return ByteArrayOutputStream
-     * */
     @Override
     public ByteArrayOutputStream downloadSourceTaskTemplate() throws Exception {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
@@ -497,11 +428,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         }
     }
 
-    /**
-     * Method use to upload source task
-     * @param object
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto uploadSourceTask(FileUploadDto object) throws Exception {
         logger.info("### Start bulk uploadSourceTask file!");
@@ -509,7 +435,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             logger.info("File Type " + object.getFile().getContentType());
             return new ResponseDto(ERROR, "You can upload only .xlsx extension file.");
         }
-        // fill the stream with file into work-book
+
         try (XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream())) {
         if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
@@ -525,12 +451,12 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         List<SourceTaskValidation> sourceTaskValidations = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         for (Row currentRow : sheet) {
-            // header validation check
+
             if (currentRow.getRowNum() == 0) {
                 if (currentRow.getPhysicalNumberOfCells() != 5) {
                     return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " heading missing.");
                 }
-                // loop on the header
+
                 for (int i = 0; i < this.UPLOAD_SOURCE_TASK_HEADER.length; i++) {
                     if (!currentRow.getCell(i).getStringCellValue().equals(this.UPLOAD_SOURCE_TASK_HEADER[i])) {
                         return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1)
@@ -538,10 +464,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
-                // data validation and save
+
                 SourceTaskValidation sourceTaskValidation = new SourceTaskValidation();
                 sourceTaskValidation.setRowCounter(currentRow.getRowNum() + 1);
-                // get the row data and add into job-dto
+
                 for (int i = 0; i < this.UPLOAD_SOURCE_TASK_HEADER.length; i++) {
                     if (i == 0) {
                         sourceTaskValidation.setSourceTaskTypeId(this.bulkExcel.getCellDetail(currentRow, i));
@@ -579,10 +505,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         Long uploadTenantId = TenantContext.getTenantId();
         sourceTaskValidations.forEach(sourceTaskValidation -> {
             SourceTask sourceTask = new SourceTask();
-            // Same bug class fixed earlier in SourceJobBulkServiceImpl -- bulk-created rows must
-            // carry the uploader's tenantId or they end up owned by no tenant (invisible to any
-            // TENANT_ADMIN/TENANT_USER once the Hibernate tenant filter is enabled, since
-            // "tenant_id = :tenantId" never matches a NULL column).
+
             sourceTask.setTenantId(uploadTenantId);
             sourceTask.setTaskName(sourceTaskValidation.getTaskName());
             sourceTask.setTaskPayload(sourceTaskValidation.getTaskPayload());
@@ -604,11 +527,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         }
     }
 
-    /**
-     * Method use to get source task type dto
-     * @param sourceTaskType
-     * @return SourceTaskTypeDto
-     * */
     private SourceTaskTypeDto getSourceTaskTypeDto(SourceTaskType sourceTaskType) {
         SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
         sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());

@@ -5,13 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 
-/**
- * Pushes a message to exactly one user's active WebSocket session(s) -- targeted by the real
- * authenticated username (StompAuthChannelInterceptor sets it as the STOMP Principal on
- * CONNECT), not the old fixed global sessionId/transactionId pair every browser tab used to
- * share (which made this, despite the method name, actually a broadcast-to-everyone channel).
- * @author Nabeel Ahmed
- */
 @Component
 public class NotificationService {
 
@@ -26,14 +19,6 @@ public class NotificationService {
         this.messagingTemplate = messagingTemplate;
     }
 
-    /**
-     * Method use to notify one specific user, iff they currently have a live WebSocket session.
-     * Spring's convertAndSendToUser would itself silently no-op for an offline user, but the
-     * presence check here is the actual "is anyone listening" logic this app owns (and gives a
-     * log line either way, rather than a send that just vanishes).
-     * @param username
-     * @param message
-     * */
     public void sendNotificationToSpecificUser(String username, String message) {
         if (username == null) {
             this.logger.debug("sendNotificationToSpecificUser called with no username -- nothing to target.");

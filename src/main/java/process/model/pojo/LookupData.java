@@ -9,14 +9,6 @@ import javax.persistence.*;
 import java.sql.Timestamp;
 import java.util.Set;
 
-/**
- * This LookupData use store the all scheduler detail
- * like last scheduler run
- * and how much chuck data fetch at 1 time
- * */
-/**
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "lookup_data")
 @JsonIgnoreProperties(ignoreUnknown=true)
@@ -52,19 +44,10 @@ public class LookupData {
         nullable = false)
     private Timestamp dateCreated;
 
-    /** When true, lookupValue holds ciphertext (see process.util.EncryptionUtil), not plain text. */
     @Column(name = "is_encrypted", nullable = false,
         columnDefinition = "boolean not null default false")
     private Boolean encrypted = false;
 
-    /** Owning tenant for lookups where per-tenant scoping actually makes sense (currently just
-     * BUCKET_LIST children -- see StorageBrowserServiceImpl) -- null for every other lookup
-     * type (HomePage/Pipeline/EMAIL_RECEIVER/QUEUE_FETCH_LIMIT/etc.), which stay global shared
-     * reference data read with no TenantContext by design (background jobs, dropdown options
-     * every tenant needs). Deliberately NOT a Hibernate @Filter like SourceJob/SourceTask --
-     * a global filter here would also scope those non-tenant lookups and silently break them
-     * for every non-platform-admin request. Null also for a PLATFORM_ADMIN-added bucket
-     * (mirrors AppUser/SourceJob: PLATFORM_ADMIN is never tenant-bound). */
     @Column(name = "tenant_id")
     private Long tenantId;
 

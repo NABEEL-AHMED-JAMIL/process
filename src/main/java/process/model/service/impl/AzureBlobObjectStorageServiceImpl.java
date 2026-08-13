@@ -24,14 +24,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * AzureBlobObjectStorageServiceImpl - Bucket Browser's Azure Blob provider, talking to Azure
- * through the shared {@link BlobServiceClient} bean, resolved on demand via ObjectProvider
- * so it's only actually created the first time a bucket resolves to AZURE. (BlobServiceClient
- * is a final class, so it can't use the @Lazy CGLIB-proxy approach the interface-typed
- * MinioClient/S3Client providers use.) Bucket = container name.
- * @author Nabeel Ahmed
- */
 @Service("azureBlobObjectStorageService")
 public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
 
@@ -63,7 +55,7 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
             }
             PagedResponse<BlobItem> page = pageIterator.next();
             List<ObjectSummaryDto> objects = page.getValue().stream()
-                // Skip the empty marker blob a created folder leaves at exactly its own prefix.
+
                 .filter(item -> !item.getName().equals(prefix))
                 .map(this::toObjectSummaryDto)
                 .collect(Collectors.toList());
@@ -166,8 +158,7 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
         try {
             for (String oldKey : oldKeys) {
                 String newKey = newPrefix + oldKey.substring(oldPrefix.length());
-                // No SAS-free server-side copy across arbitrary containers with this client setup --
-                // stream the content through instead of copyFromUrl().
+
                 try (InputStream stream = this.blobClient(bucket, oldKey).openInputStream()) {
                     this.blobClient(bucket, newKey).upload(stream);
                 }
@@ -178,12 +169,6 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
         this.deleteObjects(bucket, oldKeys);
     }
 
-    /**
-     * Method use to list every blob name under prefix, recursively, across all pages
-     * @param bucket
-     * @param prefix
-     * @return List of full blob names
-     * */
     private List<String> listAllKeysUnderPrefix(String bucket, String prefix) {
         try {
             ListBlobsOptions options = new ListBlobsOptions().setPrefix(prefix);
@@ -197,11 +182,6 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
         }
     }
 
-    /**
-     * Method use to convert an Azure BlobItem (folder or blob) into an ObjectSummaryDto
-     * @param item
-     * @return ObjectSummaryDto
-     * */
     private ObjectSummaryDto toObjectSummaryDto(BlobItem item) {
         String name = item.getName();
         boolean isFolder = Boolean.TRUE.equals(item.isPrefix());
@@ -215,20 +195,10 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
         return new ObjectSummaryDto(this.fileNameOf(trimmedKey), name, isFolder, size, lastModified, etag, contentType);
     }
 
-    /**
-     * Method use to strip the surrounding double-quotes Azure's ETag can include
-     * @param etag
-     * @return String
-     * */
     private String stripQuotes(String etag) {
         return etag != null ? etag.replace("\"", "") : null;
     }
 
-    /**
-     * Method use to get the last path segment of a key/prefix
-     * @param key
-     * @return String
-     * */
     private String fileNameOf(String key) {
         return key.contains("/") ? key.substring(key.lastIndexOf('/') + 1) : key;
     }

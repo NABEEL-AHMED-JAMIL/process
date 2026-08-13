@@ -12,11 +12,6 @@ import process.model.dto.ResponseDto;
 import process.model.service.MessageQService;
 import process.util.ProcessUtil;
 
-/**
- * Api use to perform crud operation on dashboard. Role policy: queue message viewing/control is
- * operational (same surface as running a job) -- TENANT_USER+.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/message.json")
@@ -31,11 +26,6 @@ public class MessageQRestApi {
         this.messageQService = messageQService;
     }
 
-    /**
-     * Fetch all message queue by create time (default week data)
-     * @param messageQSearch
-     * @return ResponseEntity
-     * */
     @RequestMapping(value = "/fetchLogs", method = RequestMethod.POST)
     public ResponseEntity<?> fetchLogs(
         @RequestBody MessageQSearchDto messageQSearch) {
@@ -47,11 +37,6 @@ public class MessageQRestApi {
         }
     }
 
-    /**
-     * Only the queue job be failed
-     * @param jobQId
-     * @return ResponseEntity
-     * */
     @RequestMapping(value = "/failJobLogs", method = RequestMethod.DELETE)
     public ResponseEntity<?> failJobLogs(
         @RequestParam Long jobQId) {
@@ -63,11 +48,6 @@ public class MessageQRestApi {
         }
     }
 
-    /**
-     * Only the queue job be interrupted
-     * @param jobQId
-     * @return ResponseEntity
-     * */
     @RequestMapping(value = "/interruptJobLogs", method = RequestMethod.DELETE)
     public ResponseEntity<?> interruptJobLogs(
         @RequestParam Long jobQId) {
@@ -79,11 +59,6 @@ public class MessageQRestApi {
         }
     }
 
-    /**
-     * Api use to change the status of running job
-     * @param queueMessageStatus
-     * @return ResponseEntity
-     * */
     @RequestMapping(value = "/changeJobStatus", method = RequestMethod.PUT)
     public ResponseEntity<?> changeJobStatus(
         @RequestBody QueueMessageStatusDto queueMessageStatus) {

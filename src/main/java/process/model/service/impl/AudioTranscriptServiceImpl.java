@@ -25,13 +25,6 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * Service use to proxy ad-hoc audio-to-text extraction requests to the standalone Python
- * "Audio Extract Service" (job-search/etl/service/audio_extract_service.py) -- that service
- * runs the same noise-reduction + Whisper pipeline as the F768927 batch job, but synchronously
- * against a single file supplied here (upload or an existing bucket object).
- * @author Nabeel Ahmed
- */
 @Service
 public class AudioTranscriptServiceImpl implements AudioTranscriptService {
 
@@ -52,25 +45,16 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
 
     private final Gson gson = new Gson();
 
-    /** Whisper transcription on CPU can take minutes for a real recording -- a much longer
-     * read timeout than any other proxied call this app makes. */
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(Duration.ofSeconds(15))
         .readTimeout(30, TimeUnit.MINUTES)
         .build();
 
-    /** Video extraction and YouTube download add real time on top of the Whisper allowance
-     * above (ffmpeg demux, or a full video/audio download) -- extra headroom for those two only. */
     private final OkHttpClient longRunningHttpClient = new OkHttpClient.Builder()
         .connectTimeout(Duration.ofSeconds(15))
         .readTimeout(45, TimeUnit.MINUTES)
         .build();
 
-    /**
-     * Method use to extract a transcript from an uploaded audio file
-     * @param file
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto extractFromUpload(MultipartFile file, boolean timestamps) throws Exception {
         if (file == null || file.isEmpty()) {
@@ -104,11 +88,6 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
         }
     }
 
-    /**
-     * Method use to extract a transcript from an audio file already sitting in a bucket
-     * @param request
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto extractFromBucket(AudioExtractBucketRequestDto request) throws Exception {
         if (isNull(request.getBucket()) || request.getBucket().trim().isEmpty()) {
@@ -120,11 +99,7 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
         if (!this.hasAudioExtension(request.getKey())) {
             return new ResponseDto(ERROR, "Unsupported file type -- expected .mp3 or .m4a.");
         }
-        // Unlike the Object Browser's own read/write endpoints (which all funnel through
-        // StorageBrowserServiceImpl.resolveService, tenant-checked there), this proxies
-        // straight to the external Python service with a caller-supplied bucket name -- without
-        // this check a tenant user could transcribe (and get back the contents of) any other
-        // tenant's audio files just by naming their bucket/key.
+
         boolean bucketOwnedByCaller = this.storageBrowserService.listBuckets().stream()
             .map(BucketSummaryDto::getBucket)
             .anyMatch(bucket -> bucket.equals(request.getBucket()));
@@ -143,11 +118,6 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
         return new ResponseDto(SUCCESS, "Transcript extracted.", transcript);
     }
 
-    /**
-     * Method use to extract a transcript from an uploaded video file (audio track only)
-     * @param file
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto extractFromVideoUpload(MultipartFile file, boolean timestamps) throws Exception {
         if (file == null || file.isEmpty()) {
@@ -181,11 +151,6 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
         }
     }
 
-    /**
-     * Method use to extract a transcript from a YouTube link
-     * @param request
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto extractFromYoutube(YoutubeExtractRequestDto request) throws Exception {
         if (isNull(request.getUrl()) || request.getUrl().trim().isEmpty()) {
@@ -234,8 +199,6 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
         }
     }
 
-    /** FastAPI error responses are {"detail": "..."} -- surface just the message where
-     * possible instead of the raw JSON envelope. */
     private String extractDetail(String responseBody, int statusCode) {
         try {
             JsonObject json = this.gson.fromJson(responseBody, JsonObject.class);
@@ -243,7 +206,7 @@ public class AudioTranscriptServiceImpl implements AudioTranscriptService {
                 return json.get("detail").getAsString();
             }
         } catch (Exception ignored) {
-            // fall through to raw body below
+
         }
         return String.format("HTTP %d: %s", statusCode, responseBody);
     }

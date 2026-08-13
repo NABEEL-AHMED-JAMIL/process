@@ -16,20 +16,6 @@ import process.util.JwtUtil;
 import java.security.Principal;
 import java.util.Collections;
 
-/**
- * Authenticates the STOMP CONNECT frame with the same JWT used for regular REST calls, and sets
- * the resulting username as the session's Principal -- that Principal is what
- * SimpMessagingTemplate.convertAndSendToUser(username, ...) matches against, which is what
- * makes per-user WebSocket push actually per-user (see NotificationService). Without this, a
- * STOMP session has no Principal at all and convertAndSendToUser can't target it.
- *
- * The HTTP handshake itself (/ws/**) stays permitAll in SecurityConfig -- auth happens here, on
- * the CONNECT frame, not the handshake. An invalid/missing/expired token is not a hard failure:
- * the connection still succeeds (SockJS/STOMP-level), it just has no Principal, so per-user
- * sends silently never reach it (mirrors JwtAuthenticationFilter's "leave unauthenticated,
- * don't reject" philosophy for the HTTP side).
- * @author Nabeel Ahmed
- */
 @Component
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 

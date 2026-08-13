@@ -13,15 +13,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import process.security.JwtAuthenticationFilter;
 import process.util.JwtUtil;
 
-/**
- * Phase 0 JWT auth. Public (no token required): login/refresh, the WebSocket handshake, the
- * external Kafka-consumer worker's status-callback endpoints (NotifyResetApi -- those are
- * called by a separate backend process, not the browser, so they can't carry a user's JWT),
- * health/swagger. Everything else requires a valid "Authorization: Bearer <accessToken>"
- * header, validated by JwtAuthenticationFilter (registered ahead of the standard
- * UsernamePasswordAuthenticationFilter since login here isn't form-based).
- * @author Nabeel Ahmed
- */
 @Configuration
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
@@ -43,6 +34,8 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/auth.json/**").permitAll()
                 .antMatchers("/ws/**").permitAll()
                 .antMatchers("/changeState/**", "/addLogs/**").permitAll()
+
+                .antMatchers("/dynamicForm.json/fetchFormByUuid", "/dynamicForm.json/fetchSubmissionByUuid").permitAll()
                 .antMatchers("/actuator/**").permitAll()
                 .antMatchers("/swagger-ui/**", "/swagger-ui.html", "/v2/api-docs",
                     "/swagger-resources/**", "/webjars/**").permitAll()
@@ -52,10 +45,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     @Override
     protected void configure(AuthenticationManagerBuilder auth) {
-        // No AuthenticationProvider registered -- login is handled entirely by AuthServiceImpl
-        // (manual PasswordEncoder.matches against AppUserRepository), not Spring Security's
-        // AuthenticationManager/UserDetailsService flow. This filter chain only validates
-        // already-issued JWTs (see JwtAuthenticationFilter).
+
     }
 
     @Bean

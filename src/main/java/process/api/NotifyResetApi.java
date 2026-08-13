@@ -16,10 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 
-/**
- * Api use to perform crud operation on dashboard
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 public class NotifyResetApi {
@@ -32,15 +28,6 @@ public class NotifyResetApi {
         this.notifyService = notifyService;
     }
 
-    // Session registration used to be a client-sent /register /unregister STOMP message
-    // (GlobalProperties, now removed) -- presence is now driven directly off Spring's own STOMP
-    // connect/disconnect lifecycle events instead (see WebSocketEventListener +
-    // WebSocketPresenceService), so there's nothing for the client to explicitly register anymore.
-
-    /**
-     * Job status notify
-     * @return ResponseEntity
-     * */
     @RequestMapping(value = "/changeState/jobId/{jobId}/jobQueueId/{jobQueueId}/jobStatus/{jobStatus}", method = RequestMethod.POST)
     public ResponseEntity<?> changeState(
         @PathVariable("jobId") Long jobId,
@@ -51,13 +38,13 @@ public class NotifyResetApi {
             jobQueue.setJobId(jobId);
             jobQueue.setJobQueueId(jobQueueId);
             jobQueue.setJobStatus(jobStatus);
-            // Validate job status and job status message
+
             if (!EnumSet.of(JobStatus.Running, JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
                 return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_INVALID, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
-            } else if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) { // Job status message
+            } else if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
                 return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
             }
-            // Set end time when job status is Failed or Completed
+
             if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
                 jobQueue.setEndTime(LocalDateTime.now());
             }
@@ -68,10 +55,6 @@ public class NotifyResetApi {
         }
     }
 
-    /**
-     * Job logs notify
-     * @return ResponseEntity
-     * */
     @RequestMapping(value = "/addLogs/jobId/{jobId}/jobQueueId/{jobQueueId}", method = RequestMethod.POST)
     public ResponseEntity<?> addLogs(
             @PathVariable("jobId") Long jobId,
@@ -80,7 +63,7 @@ public class NotifyResetApi {
         try {
             jobQueue.setJobId(jobId);
             jobQueue.setJobQueueId(jobQueueId);
-            // Validate job status and job status message
+
             if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
                 return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
             }

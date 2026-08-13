@@ -12,10 +12,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-/**
- * @author Nabeel Ahmed
- * This class use to handle the all-time realted procss
- */
 @Component
 public class ProcessTimeUtil {
 
@@ -25,7 +21,7 @@ public class ProcessTimeUtil {
     public static List<String> priority = Stream.concat(IntStream.rangeClosed(1, 9)
          .mapToObj(String::valueOf), Stream.of("99", "100")).collect(Collectors.toList());
     public static List<String> frequency = Arrays.asList("Mint", "Hr", "Daily", "Weekly", "Monthly");
-    // frequency-detail
+
     public static Map<String, List<?>> frequencyDetail = new HashMap<>();
 
     static {
@@ -36,34 +32,18 @@ public class ProcessTimeUtil {
         frequencyDetail.put("Monthly", getMonthly());
     }
 
-    /**
-     * this method return the mints for scheduler daily
-     * @return List getMints
-     * */
     private static List getMints() {
         return Arrays.asList(5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55);
     }
 
-    /**
-     * this method return the Hr for scheduler daily
-     * @return List getHr
-     * */
     private static List getHr() {
         return Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
     }
 
-    /**
-     * this method return the daily for scheduler daily
-     * @return List getDaily
-     * */
     private static List getDaily() {
         return Arrays.asList(1, 2, 3, 4, 5, 6);
     }
 
-    /**
-     * this method return the Week-day for scheduler
-     * @return List getWeekly
-     * */
     private static List getWeekly() {
         return Arrays.asList(
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
@@ -71,10 +51,6 @@ public class ProcessTimeUtil {
             21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31);
     }
 
-    /**
-     * this method return the Monthly-Day for scheduler
-     * @return List getMonthly
-     * */
     private static List getMonthly() {
         return Arrays.asList(
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
@@ -83,24 +59,11 @@ public class ProcessTimeUtil {
         );
     }
 
-    /**
-     * This method use to get the date and time
-     * @param date
-     * @param startTime
-     * @return LocalDateTime
-     * */
     public static LocalDateTime getRecurrenceTime(LocalDate date, String startTime) {
         String[] timeSplit = startTime.split(":");
         return date.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1]));
     }
 
-    /**
-     * Method use to compute a scheduler's next run time by advancing its recurrenceTime by its
-     * recurrence amount, per its frequency unit -- was previously duplicated identically in
-     * BulkAction.updateNextScheduler and SourceJobServiceImpl.getLocalDateTime.
-     * @param scheduler
-     * @return LocalDateTime, or null if the scheduler has no recurrence set (or an unrecognized frequency)
-     * */
     public static LocalDateTime computeNextRun(Scheduler scheduler) {
         if (scheduler.getRecurrence() == null || scheduler.getRecurrence().isEmpty()) {
             return null;

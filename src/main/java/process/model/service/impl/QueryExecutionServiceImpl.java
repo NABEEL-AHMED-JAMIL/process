@@ -28,15 +28,6 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * The Query Engine's execution entry points -- resolves + tenant-checks the query and
- * connection profile for a manual "Run" (execute) or a fired QuerySchedule
- * (executeForSchedule), then delegates the actual run to QueryExecutionRunner (a separate bean
- * on purpose -- see its own javadoc for why REQUIRES_NEW has to live there and not here). Both
- * entry points end up calling the exact same runner method, which is §8 of the design: one
- * execution engine, two triggers.
- * @author Nabeel Ahmed
- */
 @Service
 public class QueryExecutionServiceImpl implements QueryExecutionService {
 
@@ -80,8 +71,7 @@ public class QueryExecutionServiceImpl implements QueryExecutionService {
             return new ResponseDto(ERROR, String.format("Query not found with %d.", request.getQueryId()));
         }
         QueryDefinition query = queryOpt.get();
-        // A request-supplied connectionProfileId must still be the query's own profile or
-        // another profile the SAME caller owns -- never trusted as-is regardless of which.
+
         Long connectionProfileId = !isNull(request.getDatabaseConnectionProfileId())
             ? request.getDatabaseConnectionProfileId() : query.getDatabaseConnectionProfileId();
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(connectionProfileId);
@@ -99,12 +89,7 @@ public class QueryExecutionServiceImpl implements QueryExecutionService {
     @Override
     @Transactional
     public void executeForSchedule(QuerySchedule schedule) throws Exception {
-        // No enableIfNeeded/ownership re-check here beyond what a plain findById already is --
-        // the caller (ProcessCron's poller) has already set TenantContext to this exact
-        // schedule's own tenantId before calling in, so the tenantFilter -- once enabled --
-        // would scope to that same tenant anyway; the schedule row itself is the source of
-        // truth for which query/profile to run, not anything request-supplied (there is no
-        // request; this is a background trigger).
+
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(schedule.getQueryId());
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(schedule.getDatabaseConnectionProfileId());

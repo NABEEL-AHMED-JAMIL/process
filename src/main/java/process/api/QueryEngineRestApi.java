@@ -17,15 +17,6 @@ import process.model.service.QueryExecutionService;
 import process.model.service.QueryScheduleService;
 import process.util.ProcessUtil;
 
-/**
- * Query Engine API -- connection profiles, saved queries, and their execution/preview/history.
- * Role policy follows the same split as AiAgentRestApi/KafkaConnectionProfileRestApi:
- * defining/changing a connection profile or query is tenant configuration (TENANT_ADMIN+);
- * using one that's already configured (fetch/validate/preview/execute/execution history) is
- * relaxed to TENANT_USER below. Every method's actual tenant-ownership enforcement happens in
- * the service layer, not here -- this controller only decides who may call the method at all.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/queryEngine.json")
@@ -47,8 +38,6 @@ public class QueryEngineRestApi {
         this.queryExecutionService = queryExecutionService;
         this.queryScheduleService = queryScheduleService;
     }
-
-    // ---------------------------------------------------------------- connection profiles
 
     @RequestMapping(value = "/connections/add", method = RequestMethod.POST)
     public ResponseEntity<?> addConnectionProfile(@RequestBody DatabaseConnectionProfileDto dto) {
@@ -112,8 +101,6 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
-
-    // ---------------------------------------------------------------- queries
 
     @RequestMapping(value = "/queries/add", method = RequestMethod.POST)
     public ResponseEntity<?> addQuery(@RequestBody QueryDefinitionDto dto) {
@@ -189,8 +176,6 @@ public class QueryEngineRestApi {
         }
     }
 
-    // ---------------------------------------------------------------- execution
-
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/executions/execute", method = RequestMethod.POST)
     public ResponseEntity<?> execute(@RequestBody QueryExecutionRequestDto request) {
@@ -234,8 +219,6 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
-
-    // ---------------------------------------------------------------- schedules
 
     @RequestMapping(value = "/schedules/add", method = RequestMethod.POST)
     public ResponseEntity<?> addSchedule(@RequestBody QueryScheduleDto dto) {

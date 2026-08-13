@@ -26,9 +26,6 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import static process.util.ProcessUtil.*;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class SourceJobBulkServiceImpl implements SourceJobBulkService {
 
@@ -57,32 +54,19 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
 
     private String[] getHEADER_FILED_BATCH_DOWNLOAD_FILE() { return HEADER_FILED_BATCH_DOWNLOAD_FILE; }
 
-    /**
-     * The method used to download the template file for batch scheduler
-     * @return ByteArrayInputStream
-     */
     @Override
     public ByteArrayOutputStream downloadSourceJobTemplateFile() throws Exception {
-        // Used to copy the bundled template out to a temp file, then open THAT file for read
-        // (XSSFWorkbook) and, in the very same try-with-resources, open a second stream to the
-        // SAME path for write (FileOutputStream) -- opening a FileOutputStream truncates its
-        // target immediately, so the on-disk file was being zeroed out while the just-opened
-        // XSSFWorkbook still had unread parts to lazily pull from it, corrupting the zip (POI
-        // would blow up later with an EOFException while parsing docProps/app.xml). Reading the
-        // bundled resource straight into an in-memory XSSFWorkbook and writing straight back out
-        // to a ByteArrayOutputStream -- same pattern every other download method in this class
-        // already uses -- sidesteps the whole read/write-same-file hazard, with no temp file or
-        // cleanup needed at all.
+
         try (InputStream templateStream = this.getClass().getClassLoader().getResourceAsStream(REAL_FILE_PATH)) {
             if (templateStream == null) {
                 throw new IllegalStateException("Bundled job template resource not found: " + REAL_FILE_PATH);
             }
             try (XSSFWorkbook wb = new XSSFWorkbook(templateStream)) {
                 XSSFSheet sheet = wb.getSheet(JOB_ADD);
-                /**Trigger Detail fetch from db as per user login*/
+
                 this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
                 this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.toArray(new String[0]));
-                // Priority
+
                 this.bulkExcel.fillDropDownValue(sheet,1,7, ProcessTimeUtil.priority.toArray(new String[0]));
                 this.bulkExcel.fillDropDownValue(sheet,1,8, ProcessTimeUtil.checked.toArray(new String[0]));
                 this.bulkExcel.fillDropDownValue(sheet,1,9, ProcessTimeUtil.checked.toArray(new String[0]));
@@ -94,16 +78,9 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
         }
     }
 
-    /**
-     * The method used to download the template file for batch scheduler
-     * @return ByteArrayInputStream
-     */
     @Override
     public ByteArrayOutputStream downloadListSourceJob() throws Exception {
-        // findAll() has no tenant scoping of its own -- unfiltered, this exported every tenant's
-        // jobs into whichever tenant admin's Excel download, not just the caller's own.
-        // findByTenantId scopes it at the query level instead of pulling every tenant's rows
-        // into memory just to filter/discard most of them.
+
         List<SourceJob> sourceJobs = TenantContext.isPlatformAdmin()
             ? this.sourceJobRepository.findAll()
             : this.sourceJobRepository.findByTenantId(TenantContext.getTenantId());
@@ -122,7 +99,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             dataCellValue.add(String.valueOf(sourceJob.getPriority()));
             dataCellValue.add(String.valueOf(sourceJob.getJobStatus()));
             dataCellValue.add(String.valueOf(sourceJob.getDateCreated()));
-            // check the scheduler
+
             Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.getJobId());
             if (scheduler.isPresent()) {
                 dataCellValue.add(String.valueOf(scheduler.get().getStartDate()));
@@ -151,19 +128,13 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
         }
     }
 
-    /**
-     * The method use to process the batch file and upload the data into database
-     * max file have 1000 row if file have more than 1000 row it's will reject the process
-     * @param object
-     * @return ResponseDto
-     */
     public ResponseDto uploadSourceJob(FileUploadDto object) throws Exception {
         logger.info("### Start bulk uploading file!");
         if (!object.getFile().getContentType().equalsIgnoreCase(SHEET_NAME)) {
             logger.info("File Type " + object.getFile().getContentType());
             return new ResponseDto(ERROR, "You can upload only .xlsx extension file.");
         }
-        // fill the stream with file into work-book
+
         try (XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream())) {
         if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
@@ -179,9 +150,9 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
         List<JobDetailValidation> jobDetailValidations = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         for (Row currentRow : sheet) {
-            // header validation check
+
             if (currentRow.getRowNum() == 0) {
-                // loop on the header
+
                 for (int i = 0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
                     if (!currentRow.getCell(i).getStringCellValue().equals(this.getHEADER_FILED_BATCH_FILE()[i])) {
                         return new ResponseDto(ERROR, "File at row " + (currentRow.getRowNum() + 1) + " "
@@ -189,10 +160,10 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
                     }
                 }
             } else if (currentRow.getRowNum() > 0) {
-                // data validation and save
+
                 JobDetailValidation jobDetailValidation = new JobDetailValidation();
                 jobDetailValidation.setRowCounter(currentRow.getRowNum() + 1);
-                // get the row data and add into job-dto
+
                 for (int i = 0; i < this.getHEADER_FILED_BATCH_FILE().length; i++) {
                     if (i == 0) {
                         jobDetailValidation.setJobName(this.bulkExcel.getCellDetail(currentRow, i));
@@ -234,15 +205,12 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
         if (!errors.isEmpty()) {
             return new ResponseDto(ERROR, String.format("Total %d source jobs invalid.", errors.size()), errors);
         }
-        for (JobDetailValidation jobDetailValidation : jobDetailValidations) {// save the job and scheduler
+        for (JobDetailValidation jobDetailValidation : jobDetailValidations) {
             SourceJob sourceJob = new SourceJob();
             sourceJob.setJobName(jobDetailValidation.getJobName());
             sourceJob.setTaskDetail(this.transactionService.findByTaskDetailIdAndTaskStatus(Long.valueOf(jobDetailValidation.getTaskId())).get());
             sourceJob.setJobStatus(Status.Active);
-            // These two were missing entirely -- a bulk-uploaded job silently had no tenant
-            // (invisible to its own tenant's scoped queries, see TenantFilterHelper) and no
-            // assignee (its run status never gets pushed to anyone, see
-            // BulkAction.sendJobStatusNotification). Matches SourceJobServiceImpl.addSourceJob.
+
             sourceJob.setTenantId(TenantContext.getTenantId());
             sourceJob.setAssignedUserId(TenantContext.getAppUserId());
             sourceJob.setPriority(Integer.valueOf(jobDetailValidation.getPriority()));

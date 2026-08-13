@@ -30,12 +30,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * S3ObjectStorageServiceImpl - Bucket Browser's AWS S3 provider, talking to S3 through the
- * shared {@link S3Client} bean (lazy -- only initialized the first time a bucket actually
- * resolves to S3).
- * @author Nabeel Ahmed
- */
 @Service("s3ObjectStorageService")
 public class S3ObjectStorageServiceImpl implements ObjectStorageService {
 
@@ -69,7 +63,7 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
             for (S3Object s3Object : response.contents()) {
                 String key = s3Object.key();
                 if (key.equals(prefix)) {
-                    // Zero-byte "folder placeholder" object some tools create for the prefix itself.
+
                     continue;
                 }
                 objects.add(new ObjectSummaryDto(
@@ -158,7 +152,7 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
     @Override
     public void deleteObjects(String bucket, List<String> keys) {
         try {
-            // S3's DeleteObjects API rejects more than 1000 keys per request.
+
             for (int start = 0; start < keys.size(); start += 1000) {
                 List<String> batch = keys.subList(start, Math.min(start + 1000, keys.size()));
                 List<ObjectIdentifier> toDelete = batch.stream().map(key -> ObjectIdentifier.builder().key(key).build()).collect(Collectors.toList());
@@ -198,12 +192,6 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
         }
     }
 
-    /**
-     * Method use to list every object key under prefix, recursively, across all pages
-     * @param bucket
-     * @param prefix
-     * @return List of full object keys
-     * */
     private List<String> listAllKeysUnderPrefix(String bucket, String prefix) {
         try {
             List<String> keys = new ArrayList<>();
@@ -216,21 +204,10 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
         }
     }
 
-    /**
-     * Method use to get the last path segment of a key/prefix
-     * @param key
-     * @return String
-     * */
     private String fileNameOf(String key) {
         return key.contains("/") ? key.substring(key.lastIndexOf('/') + 1) : key;
     }
 
-    /**
-     * Method use to strip the surrounding double-quotes S3's list API includes in the raw
-     * ETag element
-     * @param etag
-     * @return String
-     * */
     private String stripQuotes(String etag) {
         return etag != null ? etag.replace("\"", "") : null;
     }

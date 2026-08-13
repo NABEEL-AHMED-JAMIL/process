@@ -5,12 +5,6 @@ import com.google.gson.Gson;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Result of QueryDefinitionServiceImpl.previewQuery -- server-enforced-bounded (see
- * QueryValidator.PREVIEW_ROW_LIMIT), never the full result set. truncated is true when the
- * underlying query could have returned more rows than the preview cap allowed through.
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class QueryPreviewResponseDto {
 

@@ -28,15 +28,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * A database connection belonging to Tenant A must never be readable, editable, deletable, or
- * runnable (via testConnection) by Tenant B -- these tests exercise ConnectionProfileServiceImpl
- * exactly the way the REST layer does (TenantContext populated per-call, never a
- * caller-supplied tenantId) and assert every cross-tenant path degrades to the same generic
- * "not found" ResponseDto a genuinely missing id would produce, never a raw exception or a
- * response that leaks whether the id exists at all.
- * @author Nabeel Ahmed
- */
 @ExtendWith(MockitoExtension.class)
 class ConnectionProfileServiceImplTenantIsolationTest {
 
@@ -60,10 +51,7 @@ class ConnectionProfileServiceImplTenantIsolationTest {
     void setUp() {
         this.service = new ConnectionProfileServiceImpl(this.databaseConnectionProfileRepository,
             this.queryDefinitionRepository, this.encryptionUtil, this.tenantFilterHelper, this.databaseConnectionFactory);
-        // TenantFilterHelper itself is exercised by its own logic in prod; here it's mocked
-        // to a no-op since these tests assert the SERVICE's own explicit isOwnedByCaller
-        // check, not Hibernate's row-level filter (that filter is a second, independent layer
-        // -- see TenantFilterHelper's javadoc -- not a substitute for this check).
+
         lenient().doNothing().when(this.tenantFilterHelper).enableIfNeeded(any());
     }
 
@@ -164,9 +152,7 @@ class ConnectionProfileServiceImplTenantIsolationTest {
 
     @Test
     void tenantBCannotTestConnectionAgainstTenantAsSavedProfile() throws Exception {
-        // Regression guard for the exact vector the design review called out: a tenant supplying
-        // someone else's databaseConnectionProfileId must never get to open a live connection
-        // using that profile's stored (decrypted) credentials.
+
         when(this.databaseConnectionProfileRepository.findById(500L))
             .thenReturn(Optional.of(this.profileOwnedBy(TENANT_A)));
 
@@ -200,8 +186,7 @@ class ConnectionProfileServiceImplTenantIsolationTest {
 
     @Test
     void addingAConnectionProfileAlwaysUsesTheCallersOwnTenantIdNeverAClientSuppliedOne() throws Exception {
-        // DatabaseConnectionProfileDto intentionally has no tenantId field at all -- this test
-        // documents *why*: the saved entity's tenantId can only ever come from TenantContext.
+
         when(this.encryptionUtil.encrypt(any())).thenReturn("cipher");
         when(this.databaseConnectionProfileRepository.save(any())).thenAnswer(invocation -> {
             DatabaseConnectionProfile saved = invocation.getArgument(0);

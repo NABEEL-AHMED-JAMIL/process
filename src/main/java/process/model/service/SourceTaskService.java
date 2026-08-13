@@ -7,9 +7,6 @@ import process.model.dto.SearchTextDto;
 import process.model.dto.SourceTaskDto;
 import java.io.ByteArrayOutputStream;
 
-/**
- * @author Nabeel Ahmed
- */
 public interface SourceTaskService {
 
     public ResponseDto addSourceTask(SourceTaskDto sourceTaskDto) throws Exception;

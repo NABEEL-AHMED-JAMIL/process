@@ -8,11 +8,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Unit tests for KafkaTopicPartitionUtil -- parsing, and the MAX_PARTITION_INDEX bound
- * SettingServiceImpl.addSourceTaskType/updateSourceTaskType enforce via exceedsMaxPartitionIndex().
- * @author Nabeel Ahmed
- */
 class KafkaTopicPartitionUtilTest {
 
     @Test

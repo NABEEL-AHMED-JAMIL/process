@@ -30,15 +30,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * A schedule belonging to Tenant A must never be readable, editable, or deletable by Tenant B --
- * and Tenant B must not be able to create a schedule pointing at Tenant A's query or connection
- * profile, even for a schedule Tenant B would otherwise own. findDueSchedules is deliberately
- * NOT tenant-scoped (see QueryScheduleServiceImpl's own javadoc) so it is covered separately,
- * asserting it returns schedules across tenants while each row still carries its own tenantId
- * for ProcessCron to scope the actual run by.
- * @author Nabeel Ahmed
- */
 @ExtendWith(MockitoExtension.class)
 class QueryScheduleServiceImplTenantIsolationTest {
 
@@ -163,8 +154,7 @@ class QueryScheduleServiceImplTenantIsolationTest {
 
     @Test
     void tenantBCannotCreateAScheduleAgainstTenantAsConnectionProfileEvenWithItsOwnQuery() throws Exception {
-        // Tenant B owns the query but points the schedule at Tenant A's connection profile --
-        // checkOwnership must verify BOTH independently, not assume one implies the other.
+
         when(this.queryDefinitionRepository.findById(700L)).thenReturn(Optional.of(this.queryOwnedBy(TENANT_B)));
         when(this.databaseConnectionProfileRepository.findById(500L)).thenReturn(Optional.of(this.profileOwnedBy(TENANT_A)));
 
@@ -205,17 +195,12 @@ class QueryScheduleServiceImplTenantIsolationTest {
 
     @Test
     void findDueSchedulesIsUnscopedByDesignButEachRowStillCarriesItsOwnTenantId() {
-        // This is the one Query Engine read path that is intentionally NOT filtered by
-        // TenantContext (ProcessCron's poller has no per-request tenant identity) -- the
-        // isolation guarantee here is that ProcessCron re-establishes TenantContext from each
-        // row's own tenantId before executing it (see QueryScheduleServiceImpl.findDueSchedules'
-        // javadoc), not that this query itself is scoped.
+
         QuerySchedule dueForA = this.scheduleOwnedBy(TENANT_A);
         QuerySchedule dueForB = this.scheduleOwnedBy(TENANT_B);
         dueForB.setScheduleId(801L);
         when(this.queryScheduleRepository.findDueSchedules(any())).thenReturn(java.util.Arrays.asList(dueForA, dueForB));
 
-        // No TenantContext set at all here -- simulating the scheduler thread ProcessCron runs on.
         java.util.List<QuerySchedule> due = this.service.findDueSchedules(new Timestamp(System.currentTimeMillis()));
 
         assertThat(due).extracting(QuerySchedule::getTenantId).containsExactlyInAnyOrder(TENANT_A, TENANT_B);

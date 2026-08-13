@@ -14,9 +14,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import process.model.service.impl.TransactionServiceImpl;
 
-/**
- * @author Nabeel Ahmed
- */
 @SpringBootApplication
 public class ModelApplication {
 
@@ -25,14 +22,9 @@ public class ModelApplication {
     @Autowired
     private TransactionServiceImpl transactionService;
 
-    /**
-     * Method run the application
-     * @param args
-     * */
     public static void main(String[] args) {
         try {
-            // set application default timezone to America/Chicago so all LocalDate/Time operations
-            // that rely on the system default will use the Chicago timezone
+
             TimeZone.setDefault(TimeZone.getTimeZone("America/Chicago"));
             LoggerFactory.getLogger(ModelApplication.class).info("Default TimeZone: {}", TimeZone.getDefault().getID());
             SpringApplication.run(ModelApplication.class, args);
@@ -41,30 +33,24 @@ public class ModelApplication {
         }
     }
 
-    /**
-     * Method run on the start to set the time
-     * */
     @PostConstruct
     public void started() {
         logger.info("========== @PostConstruct started() method called ==========");
         try {
-            // default system timezone for application
-            // use ZonedDateTime with Chicago zone to be explicit when storing scheduler last run
+
             ZonedDateTime znow = ZonedDateTime.now(ZoneId.of("America/Chicago"));
             LocalDateTime now = znow.toLocalDateTime();
             logger.info("=========Current Chicago Time: {} ==========", now);
             LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
             if (ProcessUtil.isNull(lookupData)) {
-                // Only initialize SCHEDULER_LAST_RUN_TIME if it doesn't exist
-                // Do not overwrite existing value on restart to preserve scheduler state
+
                 LookupData newLookupData = new LookupData();
                 newLookupData.setLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
                 newLookupData.setLookupValue(now.toString());
                 this.transactionService.updateLookupDate(newLookupData);
                 logger.info("=========Initialized SCHEDULER_LAST_RUN_TIME to {} ==========", now);
             } else {
-                // SCHEDULER_LAST_RUN_TIME already exists, don't overwrite it on restart
-                // This preserves the scheduler state and prevents skipping scheduled jobs
+
                 logger.info("=========SCHEDULER_LAST_RUN_TIME already exists: {} (not overwriting on restart) ==========", lookupData.getLookupValue());
             }
         } catch (Exception e) {

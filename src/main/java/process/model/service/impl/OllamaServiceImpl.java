@@ -17,11 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Service use to manage models on the local Ollama container (list what's already pulled,
- * pull a new one, delete one) -- proxies Ollama's own HTTP API, no auth needed.
- * @author Nabeel Ahmed
- */
 @Service
 public class OllamaServiceImpl implements OllamaService {
 
@@ -37,17 +32,11 @@ public class OllamaServiceImpl implements OllamaService {
         .readTimeout(30, TimeUnit.SECONDS)
         .build();
 
-    /** Pulling a model downloads several GB over the network -- needs a much longer timeout
-     * than any other Ollama call. Kept as a separate client so list/delete stay fast-failing. */
     private final OkHttpClient pullHttpClient = new OkHttpClient.Builder()
         .connectTimeout(Duration.ofSeconds(15))
         .readTimeout(30, TimeUnit.MINUTES)
         .build();
 
-    /**
-     * Method use to list every model currently pulled into the local Ollama container
-     * @return List<OllamaModelDto>
-     * */
     @Override
     public Object listModels() throws Exception {
         Request request = new Request.Builder()
@@ -75,12 +64,6 @@ public class OllamaServiceImpl implements OllamaService {
         return models;
     }
 
-    /**
-     * Method use to pull (download) a model into the local Ollama container -- blocks until
-     * the pull finishes or fails, since we call Ollama with stream:false.
-     * @param name
-     * @return Object
-     * */
     @Override
     public Object pullModel(String name) throws Exception {
         JsonObject body = new JsonObject();
@@ -93,11 +76,6 @@ public class OllamaServiceImpl implements OllamaService {
         return this.execute(this.pullHttpClient, request);
     }
 
-    /**
-     * Method use to delete a model from the local Ollama container
-     * @param name
-     * @return Object
-     * */
     @Override
     public Object deleteModel(String name) throws Exception {
         JsonObject body = new JsonObject();

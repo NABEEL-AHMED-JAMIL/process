@@ -4,9 +4,6 @@ import process.model.dto.MessageQSearchDto;
 import process.model.dto.QueueMessageStatusDto;
 import process.model.dto.ResponseDto;
 
-/**
- * @author Nabeel Ahmed
- */
 public interface MessageQService {
 
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch);

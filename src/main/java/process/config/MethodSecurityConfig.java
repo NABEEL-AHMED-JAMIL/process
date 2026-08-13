@@ -9,15 +9,6 @@ import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.method.configuration.GlobalMethodSecurityConfiguration;
 
-/**
- * Turns on @PreAuthorize across the *RestApi controllers (see each controller for its own
- * class/method-level annotations -- role policy is documented there, not here) and wires in a
- * role hierarchy so PLATFORM_ADMIN > TENANT_ADMIN > TENANT_USER: annotating a method with the
- * minimum role that should reach it (e.g. hasRole('TENANT_ADMIN')) automatically also admits
- * every role above it in the hierarchy, instead of every check needing to spell out
- * hasAnyRole('PLATFORM_ADMIN','TENANT_ADMIN').
- * @author Nabeel Ahmed
- */
 @Configuration
 @EnableGlobalMethodSecurity(prePostEnabled = true)
 public class MethodSecurityConfig extends GlobalMethodSecurityConfiguration {

@@ -7,12 +7,6 @@ import process.model.enums.DatabaseType;
 import process.model.enums.Status;
 import java.sql.Timestamp;
 
-/**
- * password is write-only -- set it to save/rotate the credential, but it is never populated
- * when this Dto is built from a saved profile (see passwordConfigured instead). Same pattern as
- * AiAgentDto.apiKey/apiKeyConfigured.
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DatabaseConnectionProfileDto {

@@ -13,12 +13,6 @@ import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * This PdfHighlighterTask holds the basic detail of a PDF highlighter task
- * (name + highlighter status + status) -- no organization/form linkage, that
- * lives on the io-frontend side of this feature.
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "pdf_highlighter_task", indexes = {
     @Index(name = "idx_pdf_highlighter_task_tenant_id", columnList = "tenant_id")
@@ -43,8 +37,6 @@ public class PdfHighlighterTask {
     @GeneratedValue(generator = "pdfHighlighterTaskSequenceGenerator")
     private Long pdfHighlighterTaskId;
 
-    /** Owning tenant -- see Tenant/TenantContext. Nullable during the Phase 0 migration window
-     * (backfilled to the Default tenant by TenantSeedService on startup). */
     @Column(name = "tenant_id")
     private Long tenantId;
 
@@ -60,7 +52,6 @@ public class PdfHighlighterTask {
     @Enumerated(EnumType.STRING)
     private HighlighterStatus highlighterStatus;
 
-    // status of task (active or disable or delete)
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)

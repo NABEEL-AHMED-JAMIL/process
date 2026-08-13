@@ -20,6 +20,9 @@
         <java.version>1.8</java.version>
         <commons-net.version>3.6</commons-net.version>
         <swagger.version>2.9.2</swagger.version>
+        <!-- 4.4.x is the last line supporting Spring Boot 2.x / Java 8; 5.x requires Spring
+             Boot 3 / Java 17+, which this project isn't on yet. -->
+        <jodconverter.version>4.4.7</jodconverter.version>
     </properties>
 
     <dependencies>
@@ -48,6 +51,24 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Document Converter: drives the LibreOffice binary installed in Dockerfile to
+             convert between office document formats. jodconverter-spring-boot-starter
+             autoconfigures the OfficeManager + DocumentFormatRegistry beans from the
+             jodconverter.local.* properties (see application-*.properties). -->
+        <dependency>
+            <groupId>org.jodconverter</groupId>
+            <artifactId>jodconverter-spring-boot-starter</artifactId>
+            <version>${jodconverter.version}</version>
+        </dependency>
+        <!-- The starter marks its actual engine implementation as optional; it only ships
+             autoconfiguration classes, so jodconverter-local (which pulls in jodconverter-core)
+             has to be declared explicitly to get the real conversion classes/OfficeManager. -->
+        <dependency>
+            <groupId>org.jodconverter</groupId>
+            <artifactId>jodconverter-local</artifactId>
+            <version>${jodconverter.version}</version>
         </dependency>
 
         <!-- Test (JUnit 5 + Mockito + AssertJ, versions managed by parent) -->

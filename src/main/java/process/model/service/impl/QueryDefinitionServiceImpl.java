@@ -36,17 +36,11 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class QueryDefinitionServiceImpl implements QueryDefinitionService {
 
     private static final Logger logger = LoggerFactory.getLogger(QueryDefinitionServiceImpl.class);
 
-    /** Preview is capped small enough that materializing it as List&lt;Map&gt; is fine -- this
-     * is the one place in the Query Engine that's true by design (see this class's own
-     * previewQuery javadoc and CsvExportService's javadoc for why real execution never does this). */
     private static final int PREVIEW_ROW_LIMIT = 100;
     private static final int PREVIEW_TIMEOUT_SECONDS = 15;
 
@@ -93,9 +87,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         if (validationError != null) {
             return validationError;
         }
-        // See ConnectionProfileServiceImpl.addConnectionProfile's identical check -- queries are
-        // tenant-owned (tenant_id NOT NULL), and TenantContext.getTenantId() is null for a
-        // PLATFORM_ADMIN request by design.
+
         if (isNull(TenantContext.getTenantId())) {
             return new ResponseDto(ERROR, "A platform admin can't own a query directly -- log in as a tenant user to create one.");
         }
@@ -144,10 +136,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
             return ownershipError;
         }
         QueryDefinition query = queryOpt.get();
-        // Optimistic-lock check: if the caller loaded this query before someone else's update
-        // landed, their own dto.version won't match the current row's version anymore -- reject
-        // rather than silently overwrite the other change. (Hibernate's @Version on the entity
-        // enforces this again independently at flush time regardless.)
+
         if (!isNull(dto.getVersion()) && !Objects.equals(dto.getVersion(), query.getVersion())) {
             return new ResponseDto(ERROR, "This query was changed by someone else since you opened it -- reload and try again.");
         }
@@ -224,7 +213,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
             return new ResponseDto(ERROR, "queryId or queryText is required.");
         }
         Long databaseConnectionProfileId = !isNull(dto.getQueryId())
-            ? null // resolved from the saved query below, ignoring whatever the dto sent
+            ? null
             : dto.getDatabaseConnectionProfileId();
         if (!isNull(dto.getQueryId())) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);
@@ -246,11 +235,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", databaseConnectionProfileId));
         }
-        // Wraps the validated, re-serialized statement as a subquery rather than string-editing
-        // (e.g. appending "LIMIT 100") -- caps the result regardless of what the inner query
-        // already does (its own LIMIT/OFFSET/ORDER BY are all preserved and still apply first),
-        // and can't be defeated by a trailing comment or anything else string concatenation
-        // would be vulnerable to.
+
         String wrappedSql = "SELECT * FROM (" + sqlCheck.getNormalizedSql() + ") AS query_preview_wrapper LIMIT "
             + (PREVIEW_ROW_LIMIT + 1);
         try (Connection connection = this.databaseConnectionFactory.openConnection(profileOpt.get())) {
@@ -264,9 +249,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
                         columns.add(metaData.getColumnLabel(i));
                     }
                     List<Map<String, Object>> rows = new ArrayList<>();
-                    // Fetches one extra row (PREVIEW_ROW_LIMIT + 1 above) purely to tell whether
-                    // the underlying query has more rows than the preview shows, without a
-                    // separate COUNT(*) query -- that extra row itself is never added to rows.
+
                     boolean truncated = false;
                     while (resultSet.next()) {
                         if (rows.size() >= PREVIEW_ROW_LIMIT) {
@@ -289,13 +272,6 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         }
     }
 
-    /**
-     * Method use to resolve the SQL text a validate/preview call should act on -- a saved
-     * query's own text (by queryId, ownership-checked, decrypted) takes priority when supplied;
-     * otherwise dto.queryText is used directly (drafting, before the query is ever saved).
-     * @param dto
-     * @return String or null when neither is available
-     * */
     private String resolveQueryText(QueryDefinitionDto dto) {
         if (!isNull(dto.getQueryId())) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);
@@ -340,7 +316,6 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         return firstLine.length() > 300 ? firstLine.substring(0, 300) + "..." : firstLine;
     }
 
-    /** List-view Dto -- queryText deliberately left null (see this class's own javadoc / QueryDefinitionDto's). */
     private QueryDefinitionDto toSummaryDto(QueryDefinition query) {
         QueryDefinitionDto dto = new QueryDefinitionDto();
         dto.setQueryId(query.getQueryId());
@@ -353,7 +328,6 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         return dto;
     }
 
-    /** Single-fetch Dto -- includes the decrypted queryText, for viewing/editing. */
     private QueryDefinitionDto toDetailDto(QueryDefinition query) {
         QueryDefinitionDto dto = this.toSummaryDto(query);
         dto.setQueryText(this.encryptionUtil.decrypt(query.getQueryText()));

@@ -9,12 +9,6 @@ import process.model.enums.TenantStatus;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * A tenant (organization) -- every tenant-owned row across the app (SourceJob, SourceTask,
- * DynamicForm, AiAgent, PdfHighlighterTask, and their AppUsers) carries this tenant's id.
- * Provisioned by a Platform Admin only (see TenantRestApi) -- no public signup.
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "tenant")
 @JsonIgnoreProperties(ignoreUnknown=true)
@@ -41,8 +35,6 @@ public class Tenant {
     @Column(name = "tenant_name", nullable = false)
     private String tenantName;
 
-    /** URL-safe unique short code, e.g. "acme-corp" -- not currently used in any route (no
-     * per-tenant subdomain/path routing yet), reserved for that later without a migration. */
     @Column(name = "tenant_code", nullable = false, unique = true)
     private String tenantCode;
 

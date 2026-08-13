@@ -21,9 +21,6 @@ import java.util.*;
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.SUCCESS;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class MessageQServiceImpl implements MessageQService {
 
@@ -52,11 +49,6 @@ public class MessageQServiceImpl implements MessageQService {
         this.emailMessagesFactory = emailMessagesFactory;
     }
 
-    /**
-     * Method use to fetch the logs
-     * @param messageQSearch
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch) {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
@@ -132,16 +124,6 @@ public class MessageQServiceImpl implements MessageQService {
         return responseDto;
     }
 
-    /**
-     * Method use to check whether the SourceJob a job_queue row belongs to is owned by the
-     * caller (PLATFORM_ADMIN, or the tenant that owns the job) -- JobQueue has no tenantId of
-     * its own, so ownership is only knowable through its parent SourceJob. Without this,
-     * failJobLogs/interruptJobLogs/changeJobStatus below would let any authenticated tenant
-     * user fail, interrupt, or rewrite the audit trail of ANY tenant's running job just by
-     * guessing/incrementing a jobQueueId -- a write-side IDOR, not just a read leak.
-     * @param jobId
-     * @return boolean
-     * */
     private boolean isJobOwnedByCaller(Long jobId) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
@@ -151,11 +133,6 @@ public class MessageQServiceImpl implements MessageQService {
             .orElse(false);
     }
 
-    /**
-     * Method use to fail the job
-     * @param jobQId
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto failJobLogs(Long jobQId) {
         if (isNull(jobQId)) {
@@ -173,8 +150,7 @@ public class MessageQServiceImpl implements MessageQService {
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), String.format("Job %s fail by manual.", jobQueue.get().getJobId()));
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
-            // the status change above already succeeded -- the job may have been deleted
-            // concurrently since, in which case there's simply no notification email to send
+
             Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId());
             if (sourceJob.isPresent() && sourceJob.get().isSkipJob()) {
                 this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue.get()),JobStatus.Failed);
@@ -184,11 +160,6 @@ public class MessageQServiceImpl implements MessageQService {
         return new ResponseDto(ERROR, "JobQueue not found");
     }
 
-    /**
-     * Method use to interrupt the job
-     * @param jobQId
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto interruptJobLogs(Long jobQId) {
         if (isNull(jobQId)) {
@@ -208,20 +179,12 @@ public class MessageQServiceImpl implements MessageQService {
         return new ResponseDto(ERROR, "JobQueue not found");
     }
 
-    /**
-     * Method use to method use to change the job status
-     * @param queueMessageStatus
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto changeJobStatus(QueueMessageStatusDto queueMessageStatus) {
         if (isNull(queueMessageStatus.getMessageType())) {
             return new ResponseDto(ERROR, "Message Type required for transaction.");
         }
-        // TENANT_USER+ can hit this endpoint for any jobId/jobQueueId it names -- without this,
-        // a tenant user could write audit-log entries or flip another tenant's job status/queue
-        // just by supplying that job's id (same class of write-IDOR as failJobLogs above).
-        // Gate on jobId whenever the request carries one, regardless of messageType.
+
         if (!isNull(queueMessageStatus.getJobId()) && !this.isJobOwnedByCaller(queueMessageStatus.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob not found.");
         }
@@ -234,8 +197,7 @@ public class MessageQServiceImpl implements MessageQService {
             if (!isNull(queueMessageStatus.getEndTime())) {
                 this.bulkAction.changeJobQueueEndDate(queueMessageStatus.getJobQueueId(), queueMessageStatus.getEndTime());
             }
-            // if the user configure then send email -- the status change above already
-            // succeeded, so a missing job/queue here just means no notification email goes out
+
             Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId());
             Optional<JobQueue> jobQueueForMail = this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId());
             JobStatus status = queueMessageStatus.getJobStatus();

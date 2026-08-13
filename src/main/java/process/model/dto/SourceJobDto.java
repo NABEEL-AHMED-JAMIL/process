@@ -11,9 +11,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
-/**
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceJobDto {
@@ -21,10 +18,9 @@ public class SourceJobDto {
     private Long jobId;
     private String jobName;
     private SourceTaskDto taskDetail;
-    /** Who this job's run notifications go to -- see SourceJob.assignedUserId. */
+
     private Long assignedUserId;
-    /** Set on read (fetchSourceJobDetailWithSourceJobId) so the UI can show who it's assigned
-     * to without a separate lookup -- ignored on write, assignedUserId is what's saved. */
+
     private String assignedUsername;
     private Status jobStatus;
     private JobStatus jobRunningStatus;

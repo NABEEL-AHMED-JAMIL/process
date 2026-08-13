@@ -28,23 +28,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class DynamicFormServiceImpl implements DynamicFormService {
 
     private Logger logger = LoggerFactory.getLogger(DynamicFormServiceImpl.class);
 
-    /** The frontend owns the canonical list -- this is just a server-side safety net. */
     private static final Set<String> ALLOWED_FIELD_TYPES = new HashSet<>(Arrays.asList(
         "text", "textarea", "number", "email", "password", "url", "tel",
         "date", "time", "month", "color", "select", "multi-select",
         "radio", "checkbox", "toggle", "section"
     ));
 
-    /** A "section" field is a non-input heading/divider used to group other fields -- it never
-     * collects a value, so it can never be mandatory regardless of what the client sends. */
     private static final String SECTION_FIELD_TYPE = "section";
 
     private final Gson gson = new Gson();
@@ -67,12 +61,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         this.tenantFilterHelper = tenantFilterHelper;
     }
 
-    /**
-     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
-     * form) is allowed to see/act on it -- same rationale as SourceJobServiceImpl.isOwnedByCaller.
-     * @param dynamicForm
-     * @return boolean
-     * */
     private boolean isOwnedByCaller(DynamicForm dynamicForm) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
@@ -80,11 +68,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return dynamicForm != null && Objects.equals(dynamicForm.getTenantId(), TenantContext.getTenantId());
     }
 
-    /**
-     * Method use to add a new dynamic form
-     * @param dynamicFormDto
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto addForm(DynamicFormDto dynamicFormDto) throws Exception {
         if (isNull(dynamicFormDto.getFormName()) || dynamicFormDto.getFormName().trim().isEmpty()) {
@@ -103,11 +86,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             this.getDynamicFormDto(dynamicForm, false));
     }
 
-    /**
-     * Method use to update an existing dynamic form's name/description/status
-     * @param dynamicFormDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto updateForm(DynamicFormDto dynamicFormDto) throws Exception {
@@ -134,11 +112,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             this.getDynamicFormDto(dynamicForm, false));
     }
 
-    /**
-     * Method use to soft delete a dynamic form
-     * @param dynamicFormId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto deleteForm(Long dynamicFormId) throws Exception {
@@ -156,10 +129,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, String.format("Form deleted with %s.", dynamicFormId));
     }
 
-    /**
-     * Method use to fetch all the non-deleted dynamic forms (list view -- fields not expanded)
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto fetchAllForms() throws Exception {
@@ -173,11 +142,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, "Data found.", dynamicFormDtos);
     }
 
-    /**
-     * Method use to fetch a single dynamic form with its ordered fields
-     * @param dynamicFormId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto fetchFormByFormId(Long dynamicFormId) throws Exception {
@@ -192,13 +156,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, "Data found.", this.getDynamicFormDto(this.ensureUuid(dynamicFormOpt.get()), true));
     }
 
-    /**
-     * Method use to fetch a single dynamic form (with its ordered fields) by its uuid instead
-     * of its sequential id -- the shareable, copy-and-send-anywhere lookup used by external
-     * callers (Postman, a source task, etc.), same idea as fetchSubmissionByUuid.
-     * @param uuid
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto fetchFormByUuid(String uuid) throws Exception {
         if (isNull(uuid) || uuid.trim().isEmpty()) {
@@ -211,13 +168,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, "Data found.", this.getDynamicFormDto(dynamicFormOpt.get(), true));
     }
 
-    /**
-     * Method use to lazily backfill uuid for forms saved before this field existed -- called
-     * wherever a form is read via the normal id-based paths, so every form ends up with one
-     * after being listed/opened once, with no manual migration needed.
-     * @param dynamicForm
-     * @return DynamicForm
-     * */
     private DynamicForm ensureUuid(DynamicForm dynamicForm) {
         if (isNull(dynamicForm.getUuid()) || dynamicForm.getUuid().trim().isEmpty()) {
             dynamicForm.setUuid(UUID.randomUUID().toString());
@@ -226,12 +176,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return dynamicForm;
     }
 
-    /**
-     * Method use to add a new field to a dynamic form
-     * @param dynamicFormId
-     * @param dynamicFormFieldDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto addField(Long dynamicFormId, DynamicFormFieldDto dynamicFormFieldDto) throws Exception {
@@ -257,11 +201,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, "Field added.", this.getDynamicFormDto(dynamicForm, true));
     }
 
-    /**
-     * Method use to update an existing field
-     * @param dynamicFormFieldDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto updateField(DynamicFormFieldDto dynamicFormFieldDto) throws Exception {
@@ -284,11 +223,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, String.format("Field saved with %s.", dynamicFormField.getDynamicFormFieldId()));
     }
 
-    /**
-     * Method use to remove a field from its form
-     * @param dynamicFormFieldId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto deleteField(Long dynamicFormFieldId) throws Exception {
@@ -303,13 +237,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, String.format("Field deleted with %s.", dynamicFormFieldId));
     }
 
-    /**
-     * Method use to check whether the caller owns the DynamicForm that a given field belongs
-     * to -- DynamicFormField carries no tenantId of its own (see DynamicFormFieldRepository.
-     * findOwningFormId's javadoc), so ownership is resolved by walking up to its parent form.
-     * @param dynamicFormFieldId
-     * @return boolean
-     * */
     private boolean isFieldOwnedByCaller(Long dynamicFormFieldId) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
@@ -323,11 +250,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             .orElse(false);
     }
 
-    /**
-     * Method use to save a filled-in copy of a form
-     * @param dynamicFormSubmissionDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto submitForm(DynamicFormSubmissionDto dynamicFormSubmissionDto) throws Exception {
@@ -354,11 +276,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             this.getDynamicFormSubmissionDto(dynamicFormSubmission));
     }
 
-    /**
-     * Method use to overwrite an existing submission's payload
-     * @param dynamicFormSubmissionDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto updateSubmission(DynamicFormSubmissionDto dynamicFormSubmissionDto) throws Exception {
@@ -382,11 +299,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             this.getDynamicFormSubmissionDto(dynamicFormSubmission));
     }
 
-    /**
-     * Method use to permanently remove a submission
-     * @param dynamicFormSubmissionId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto deleteSubmission(Long dynamicFormSubmissionId) throws Exception {
@@ -403,13 +315,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, String.format("Submission deleted with %s.", dynamicFormSubmissionId));
     }
 
-    /**
-     * Method use to check whether the caller owns the DynamicForm a submission belongs to --
-     * DynamicFormSubmission carries no tenantId of its own, only the plain dynamicFormId column,
-     * so ownership is resolved by looking up that parent form.
-     * @param dynamicFormSubmission
-     * @return boolean
-     * */
     private boolean isSubmissionOwnedByCaller(DynamicFormSubmission dynamicFormSubmission) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
@@ -422,11 +327,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             .orElse(false);
     }
 
-    /**
-     * Method use to fetch all submissions for a form, newest first
-     * @param dynamicFormId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional(readOnly = true)
     public ResponseDto fetchSubmissionsByFormId(Long dynamicFormId) throws Exception {
@@ -446,11 +346,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, "Data found.", submissionDtos);
     }
 
-    /**
-     * Method use to fetch a single submission -- used when the fill screen is opened directly in edit mode
-     * @param dynamicFormSubmissionId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional(readOnly = true)
     public ResponseDto fetchSubmissionBySubmissionId(Long dynamicFormSubmissionId) throws Exception {
@@ -466,14 +361,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, "Data found.", this.getDynamicFormSubmissionDto(dynamicFormSubmissionOpt.get()));
     }
 
-    /**
-     * Method use to fetch a single submission by its uuid instead of its sequential id --
-     * this is the shareable, copy-and-send-anywhere lookup used by external callers
-     * (Postman, a source task, etc.) so a submission can be fetched without a
-     * guessable/enumerable id in the URL.
-     * @param uuid
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto fetchSubmissionByUuid(String uuid) throws Exception {
         if (isNull(uuid) || uuid.trim().isEmpty()) {
@@ -487,11 +374,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return new ResponseDto(SUCCESS, "Data found.", this.getDynamicFormSubmissionDto(dynamicFormSubmissionOpt.get()));
     }
 
-    /**
-     * Method use to validate a field payload against the allowed field types
-     * @param dynamicFormFieldDto
-     * @return ResponseDto or null when valid
-     * */
     private ResponseDto validateField(DynamicFormFieldDto dynamicFormFieldDto) {
         if (isNull(dynamicFormFieldDto.getFieldType()) || !ALLOWED_FIELD_TYPES.contains(dynamicFormFieldDto.getFieldType())) {
             return new ResponseDto(ERROR, "Field fieldType missing or not supported.");
@@ -505,12 +387,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return null;
     }
 
-    /**
-     * Method use to map a DynamicForm entity to its Dto
-     * @param dynamicForm
-     * @param includeFields
-     * @return DynamicFormDto
-     * */
     private DynamicFormDto getDynamicFormDto(DynamicForm dynamicForm, boolean includeFields) {
         DynamicFormDto dto = new DynamicFormDto();
         dto.setDynamicFormId(dynamicForm.getDynamicFormId());
@@ -528,11 +404,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return dto;
     }
 
-    /**
-     * Method use to map a DynamicFormField entity to its Dto
-     * @param dynamicFormField
-     * @return DynamicFormFieldDto
-     * */
     private DynamicFormFieldDto getDynamicFormFieldDto(DynamicFormField dynamicFormField) {
         DynamicFormFieldDto dto = new DynamicFormFieldDto();
         dto.setDynamicFormFieldId(dynamicFormField.getDynamicFormFieldId());
@@ -551,22 +422,12 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         return dto;
     }
 
-    /**
-     * Method use to build a new DynamicFormField entity from its Dto
-     * @param dto
-     * @return DynamicFormField
-     * */
     private DynamicFormField getDynamicFormField(DynamicFormFieldDto dto) {
         DynamicFormField dynamicFormField = new DynamicFormField();
         this.applyFieldDto(dynamicFormField, dto);
         return dynamicFormField;
     }
 
-    /**
-     * Method use to copy Dto values onto an existing (or new) field entity
-     * @param dynamicFormField
-     * @param dto
-     * */
     private void applyFieldDto(DynamicFormField dynamicFormField, DynamicFormFieldDto dto) {
         dynamicFormField.setFieldOrder(dto.getFieldOrder());
         dynamicFormField.setFieldType(dto.getFieldType());
@@ -582,11 +443,6 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         dynamicFormField.setFieldOptions(dto.getFieldOptions());
     }
 
-    /**
-     * Method use to map a DynamicFormSubmission entity to its Dto, parsing the stored JSON payload back into a map
-     * @param dynamicFormSubmission
-     * @return DynamicFormSubmissionDto
-     * */
     private DynamicFormSubmissionDto getDynamicFormSubmissionDto(DynamicFormSubmission dynamicFormSubmission) {
         DynamicFormSubmissionDto dto = new DynamicFormSubmissionDto();
         dto.setDynamicFormSubmissionId(dynamicFormSubmission.getDynamicFormSubmissionId());

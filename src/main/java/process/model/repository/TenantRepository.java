@@ -7,9 +7,6 @@ import process.model.pojo.Tenant;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * @author Nabeel Ahmed
- */
 @Repository
 public interface TenantRepository extends JpaRepository<Tenant, Long> {
 

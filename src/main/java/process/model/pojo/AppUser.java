@@ -10,16 +10,9 @@ import process.model.enums.UserRole;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * A login-capable user. tenantId is null for PLATFORM_ADMIN (not scoped to any tenant) and
- * required for TENANT_ADMIN/TENANT_USER. password is a BCrypt hash (see PasswordEncoder bean
- * in SecurityConfig), never the plain password.
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "app_user", indexes = {
-    // Queried by AppUserServiceImpl.listUsers/scopedFind (findByTenantIdAndStatusNotOrderBy...,
-    // countByTenantIdAndStatusNot) on every Tenant Admin user-list load.
+
     @Index(name = "idx_app_user_tenant_id", columnList = "tenant_id")
 })
 @JsonIgnoreProperties(ignoreUnknown=true)
@@ -43,15 +36,12 @@ public class AppUser {
     @Column(name = "uuid", unique = true, length = 36)
     private String uuid;
 
-    /** Null for PLATFORM_ADMIN; required for TENANT_ADMIN/TENANT_USER. */
     @Column(name = "tenant_id")
     private Long tenantId;
 
-    /** Login identifier -- an email address, globally unique across all tenants. */
     @Column(name = "username", nullable = false, unique = true)
     private String username;
 
-    /** BCrypt hash (see PasswordEncoder) -- never the plain password. */
     @Column(name = "password", nullable = false)
     private String password;
 

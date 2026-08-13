@@ -18,11 +18,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
 
-/**
- * Api use to perform crud operation on source job. Role policy: jobs are the operational
- * surface any tenant member works with day to day (create/run/view) -- TENANT_USER+.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/sourceJob.json")
@@ -40,12 +35,6 @@ public class SourceJobRestApi {
         this.sourceJobBulkService = sourceJobBulkService;
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to add the source job
-     * @param tempSourceJob
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/addSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -57,12 +46,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to update the source job
-     * @param tempSourceJob
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/updateSourceJob", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -74,12 +57,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to delete the source job in soft
-     * @param tempSourceJob
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deleteSourceJob", method = RequestMethod.PUT)
     public ResponseEntity<?> deleteSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -91,11 +68,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * Integration Status :- done
-     * Api use to fetch the source job list
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/listSourceJob", method = RequestMethod.GET)
     public ResponseEntity<?> listSourceJob() {
         try {
@@ -106,12 +78,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * Method uses to get source job detail with id
-     * like :- json payload | validation detail |
-     * @param jobId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/fetchSourceJobDetailWithSourceJobId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSourceJobDetailWithSourceJobId(
         @RequestParam(value = "jobId") Long jobId) {
@@ -123,12 +89,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * Method uses to fetch the job queue (run history) list for a source job,
-     * used by the Job List card/table row expand view
-     * @param jobId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/fetchSourceJobQueueListWithJobId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSourceJobQueueListWithJobId(
         @RequestParam(value = "jobId") Long jobId) {
@@ -140,11 +100,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * Method uses to runSourceJob manual
-     * @param tempSourceJob
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/runSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> runSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -156,12 +111,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * Integration Status :- pending
-     * Method uses to skip the sourceJob
-     * @param tempSourceJob
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/skipNextSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> skipNextSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -173,11 +122,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * Method uses to skip the sourceJob
-     * @param jobQueueId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/findSourceJobAuditLog", method = RequestMethod.GET)
     public ResponseEntity<?> findSourceJobAuditLog(
         @RequestParam Long jobQueueId,
@@ -190,11 +134,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * The method used to download the template file for batch scheduler
-     * with the list of timezone and frequency or triggerDetail
-     * @return ResponseEntity<?>
-     */
     @RequestMapping(value = "/downloadSourceJobTemplateFile", method = RequestMethod.GET)
     public ResponseEntity<?> downloadSourceJobTemplateFile() {
         try {
@@ -209,10 +148,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * The method used to download the file for batch scheduler
-     * @return ResponseEntity<?>
-     */
     @RequestMapping(value = "/downloadListSourceJob", method = RequestMethod.GET)
     public ResponseEntity<?> downloadListSourceJob() {
         try {
@@ -227,13 +162,6 @@ public class SourceJobRestApi {
         }
     }
 
-    /**
-     * The method used to upload the batch file for batch scheduler
-     * note :- validation process may-fail the process of upload file
-     * and share the detail
-     * @param fileObject
-     * @return ResponseEntity<?>
-     */
     @RequestMapping(value = "/uploadSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSourceJob(
         FileUploadDto fileObject) {

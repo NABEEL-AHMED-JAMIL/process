@@ -2,9 +2,6 @@ package process.model.service;
 
 import process.model.dto.ResponseDto;
 
-/**
- * @author Nabeel Ahmed
- */
 public interface DashboardService {
 
     public ResponseDto jobStatusStatistics(String startDate, String endDate) throws Exception;

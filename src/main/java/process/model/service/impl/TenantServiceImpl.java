@@ -19,11 +19,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 
-/**
- * PLATFORM_ADMIN-only (see TenantRestApi's class-level @PreAuthorize) -- tenants are
- * provisioned by the platform operator, not self-service.
- * @author Nabeel Ahmed
- */
 @Service
 public class TenantServiceImpl implements TenantService {
 
@@ -37,10 +32,6 @@ public class TenantServiceImpl implements TenantService {
         this.appUserRepository = appUserRepository;
     }
 
-    /**
-     * Method use to list every non-deleted tenant, newest first, each with its live user count.
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto listTenants() throws Exception {
         List<Tenant> tenants = this.tenantRepository.findByStatusNotOrderByTenantIdDesc(TenantStatus.Delete);
@@ -52,11 +43,6 @@ public class TenantServiceImpl implements TenantService {
         return new ResponseDto(SUCCESS, "Tenants fetched successfully.", tenantDtos);
     }
 
-    /**
-     * Method use to provision a new tenant.
-     * @param tenantDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto addTenant(TenantDto tenantDto) throws Exception {
@@ -79,12 +65,6 @@ public class TenantServiceImpl implements TenantService {
         return new ResponseDto(SUCCESS, String.format("Tenant \"%s\" created.", tenant.getTenantName()), this.mapToDto(tenant));
     }
 
-    /**
-     * Method use to rename a tenant (tenantCode is immutable once created -- it's reserved for
-     * future per-tenant routing, changing it after the fact would be a breaking change then).
-     * @param tenantDto
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto updateTenant(TenantDto tenantDto) throws Exception {
         if (isNull(tenantDto.getTenantId())) {
@@ -102,12 +82,6 @@ public class TenantServiceImpl implements TenantService {
         return new ResponseDto(SUCCESS, String.format("Tenant \"%s\" updated.", tenant.getTenantName()), this.mapToDto(tenant));
     }
 
-    /**
-     * Method use to activate/suspend/soft-delete a tenant. Suspended blocks every user under it
-     * from logging in (see AuthServiceImpl.login); this does not cascade-delete its data.
-     * @param tenantDto
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto changeTenantStatus(TenantDto tenantDto) throws Exception {
         if (isNull(tenantDto.getTenantId())) {

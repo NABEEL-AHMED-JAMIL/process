@@ -10,13 +10,9 @@ import process.model.pojo.DynamicForm;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * @author Nabeel Ahmed
- */
 @Repository
 public interface DynamicFormRepository extends JpaRepository<DynamicForm, Long> {
 
-    /** Phase 0 migration backfill -- see TenantSeedService. */
     @Transactional
     @Modifying
     @Query("update DynamicForm d set d.tenantId = ?1 where d.tenantId is null")

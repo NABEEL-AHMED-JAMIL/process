@@ -8,11 +8,6 @@ import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
-/**
- * One filled-in copy of a DynamicForm -- the payload is the submitted
- * field values as a JSON object, keyed by DynamicFormField.fieldName.
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "dynamic_form_submission")
 @JsonIgnoreProperties(ignoreUnknown=true)
@@ -36,13 +31,6 @@ public class DynamicFormSubmission {
     @Column(name = "dynamic_form_id", nullable = false)
     private Long dynamicFormId;
 
-    /**
-     * Opaque id for the shareable fetch-by-uuid API -- deliberately separate from the
-     * sequential dynamicFormSubmissionId so a shared/public link can't be used to enumerate
-     * other submissions by incrementing the number. Nullable at the column level only so
-     * existing rows (created before this field existed) don't break the schema upgrade;
-     * every new submission always gets one (see DynamicFormServiceImpl#submitForm).
-     * */
     @Column(name = "uuid", unique = true)
     private String uuid;
 

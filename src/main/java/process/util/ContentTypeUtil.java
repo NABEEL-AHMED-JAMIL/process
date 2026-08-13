@@ -6,13 +6,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Utility use to map an object key's file extension to a content type and to decide whether
- * the Bucket Browser can preview it inline. Only json/csv/txt/xml/md/pdf/mp3/m4a/mp4/images
- * (jpg/jpeg/png/gif/webp/svg/bmp) are previewable for now -- html and doc/docx (and anything
- * else) are download-only.
- * @author Nabeel Ahmed
- */
 public final class ContentTypeUtil {
 
     private ContentTypeUtil() {}
@@ -39,17 +32,38 @@ public final class ContentTypeUtil {
         EXTENSION_CONTENT_TYPES.put("htm", "text/html");
         EXTENSION_CONTENT_TYPES.put("doc", "application/msword");
         EXTENSION_CONTENT_TYPES.put("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
+        EXTENSION_CONTENT_TYPES.put("odt", "application/vnd.oasis.opendocument.text");
+        EXTENSION_CONTENT_TYPES.put("ott", "application/vnd.oasis.opendocument.text-template");
+        EXTENSION_CONTENT_TYPES.put("dotx", "application/vnd.openxmlformats-officedocument.wordprocessingml.template");
+        EXTENSION_CONTENT_TYPES.put("rtf", "text/rtf");
+        EXTENSION_CONTENT_TYPES.put("ods", "application/vnd.oasis.opendocument.spreadsheet");
+        EXTENSION_CONTENT_TYPES.put("ots", "application/vnd.oasis.opendocument.spreadsheet-template");
+        EXTENSION_CONTENT_TYPES.put("xls", "application/vnd.ms-excel");
+        EXTENSION_CONTENT_TYPES.put("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        EXTENSION_CONTENT_TYPES.put("xltx", "application/vnd.openxmlformats-officedocument.spreadsheetml.template");
+        EXTENSION_CONTENT_TYPES.put("tsv", "text/tab-separated-values");
+        EXTENSION_CONTENT_TYPES.put("odp", "application/vnd.oasis.opendocument.presentation");
+        EXTENSION_CONTENT_TYPES.put("otp", "application/vnd.oasis.opendocument.presentation-template");
+        EXTENSION_CONTENT_TYPES.put("ppt", "application/vnd.ms-powerpoint");
+        EXTENSION_CONTENT_TYPES.put("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+        EXTENSION_CONTENT_TYPES.put("potx", "application/vnd.openxmlformats-officedocument.presentationml.template");
+        EXTENSION_CONTENT_TYPES.put("odg", "application/vnd.oasis.opendocument.graphics");
+        EXTENSION_CONTENT_TYPES.put("otg", "application/vnd.oasis.opendocument.graphics-template");
+
+        EXTENSION_CONTENT_TYPES.put("fodt", "application/vnd.oasis.opendocument.text-flat-xml");
+        EXTENSION_CONTENT_TYPES.put("fods", "application/vnd.oasis.opendocument.spreadsheet-flat-xml");
+        EXTENSION_CONTENT_TYPES.put("fodp", "application/vnd.oasis.opendocument.presentation-flat-xml");
+        EXTENSION_CONTENT_TYPES.put("fodg", "application/vnd.oasis.opendocument.graphics-flat-xml");
+        EXTENSION_CONTENT_TYPES.put("tif", "image/tiff");
+        EXTENSION_CONTENT_TYPES.put("tiff", "image/tiff");
+        EXTENSION_CONTENT_TYPES.put("vsd", "application/vnd.visio");
     }
 
     private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList(
         "json", "csv", "txt", "xml", "md", "pdf", "mp3", "m4a", "mp4",
         "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"));
 
-    /**
-     * Method use to get the lower-cased file extension of an object key, empty if none
-     * @param key
-     * @return String
-     * */
     public static String extensionOf(String key) {
         if (key == null) {
             return "";
@@ -58,21 +72,11 @@ public final class ContentTypeUtil {
         return dot >= 0 && dot < key.length() - 1 ? key.substring(dot + 1).toLowerCase() : "";
     }
 
-    /**
-     * Method use to get the content type to serve an object key with
-     * @param key
-     * @return String
-     * */
     public static String contentTypeFor(String key) {
         String contentType = EXTENSION_CONTENT_TYPES.get(extensionOf(key));
         return contentType != null ? contentType : "application/octet-stream";
     }
 
-    /**
-     * Method use to check if an object key can be previewed inline (json/csv/txt/md/pdf/mp3/m4a/mp4/image only)
-     * @param key
-     * @return boolean
-     * */
     public static boolean isPreviewable(String key) {
         return PREVIEWABLE_EXTENSIONS.contains(extensionOf(key));
     }

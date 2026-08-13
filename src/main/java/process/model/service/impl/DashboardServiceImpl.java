@@ -21,9 +21,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import static process.util.ProcessUtil.*;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class DashboardServiceImpl implements DashboardService {
 
@@ -47,12 +44,6 @@ public class DashboardServiceImpl implements DashboardService {
         this.lookupDataRepository = lookupDataRepository;
     }
 
-    /**
-     * Method use to for get job status statistics
-     * @param startDate
-     * @param endDate
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto jobStatusStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
@@ -68,12 +59,6 @@ public class DashboardServiceImpl implements DashboardService {
         return responseDto;
     }
 
-    /**
-     * Method use to for get job running statistics
-     * @param startDate
-     * @param endDate
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto jobRunningStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
@@ -89,12 +74,6 @@ public class DashboardServiceImpl implements DashboardService {
         return responseDto;
     }
 
-    /**
-     * Method use to for get weekly running job statistics
-     * @param startDate
-     * @param endDate
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto weeklyRunningJobStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
@@ -110,12 +89,6 @@ public class DashboardServiceImpl implements DashboardService {
         return responseDto;
     }
 
-    /**
-     * Method use to run weekly rs running job statistics
-     * @param startDate
-     * @param endDate
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto weeklyHrsRunningJobStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
@@ -133,12 +106,6 @@ public class DashboardServiceImpl implements DashboardService {
         return responseDto;
     }
 
-    /**
-     * Method use to get weekly hr running statistics dimension
-     * @param targetHr
-     * @param targetDate
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
@@ -168,14 +135,6 @@ public class DashboardServiceImpl implements DashboardService {
         return responseDto;
     }
 
-    /**
-     * Method use to get weekly hr running statistics dimension
-     * @param targetHr
-     * @param targetDate
-     * @param jobStatus
-     * @param jobId
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.");
@@ -234,10 +193,7 @@ public class DashboardServiceImpl implements DashboardService {
             }
             objectDetail.put("sourceJobQueues", sourceJobQueues);
             if (!ProcessUtil.isNull(jobId)) {
-                // The aggregate queries above are already tenant-scoped inside QueryService
-                // (see tenantClause), but this direct findById isn't -- without the ownership
-                // check, a tenant user could still pull another tenant's full job/task detail
-                // by supplying that job's id as the "drill into a cell" target.
+
                 Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId)
                     .filter(job -> TenantContext.isPlatformAdmin() || java.util.Objects.equals(job.getTenantId(), TenantContext.getTenantId()));
                 if (sourceJob.isPresent()) {
@@ -264,11 +220,6 @@ public class DashboardServiceImpl implements DashboardService {
         return responseDto;
     }
 
-    /**
-     * Method use get source job
-     * @param sourceJob
-     * @return SourceJobDto
-     * */
     private SourceJobDto getSourceJobDto(SourceJob sourceJob) {
         SourceJobDto sourceJobDto = new SourceJobDto();
         sourceJobDto.setJobId(sourceJob.getJobId());
@@ -285,11 +236,6 @@ public class DashboardServiceImpl implements DashboardService {
         return sourceJobDto;
     }
 
-    /**
-     * Method use get source task
-     * @param sourceTask
-     * @return SourceTaskDto
-     * */
     private SourceTaskDto getSourceTaskDto(SourceTask sourceTask) {
         SourceTaskDto sourceTaskDto = new SourceTaskDto();
         sourceTaskDto.setTaskDetailId(sourceTask.getTaskDetailId());
@@ -310,11 +256,6 @@ public class DashboardServiceImpl implements DashboardService {
         return sourceTaskDto;
     }
 
-    /**
-     * Method use get scheduler
-     * @param scheduler
-     * @return SchedulerDto
-     * */
     private SchedulerDto getSchedulerDto(Scheduler scheduler) {
         SchedulerDto schedulerDto = new SchedulerDto();
         schedulerDto.setSchedulerId(scheduler.getSchedulerId());
@@ -327,11 +268,6 @@ public class DashboardServiceImpl implements DashboardService {
         return schedulerDto;
     }
 
-    /**
-     * Method use get source task type
-     * @param sourceTask
-     * @return SourceTaskTypeDto
-     * */
     private SourceTaskTypeDto getSourceTaskTypeDto(SourceTask sourceTask) {
         SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
         SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();

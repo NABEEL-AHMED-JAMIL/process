@@ -32,9 +32,6 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfileService {
 
@@ -71,9 +68,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
             return validationError;
         }
         KafkaConnectionProfile profile = new KafkaConnectionProfile();
-        // Server-assigned, not client-supplied -- a TENANT_ADMIN can only ever create a profile
-        // for their own tenant; only PLATFORM_ADMIN can create a platform-wide/shared one
-        // (tenantId null), same convention as SourceTaskType/LookupData elsewhere in this app.
+
         profile.setTenantId(TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId());
         this.applyProfileDto(profile, dto);
         profile.setStatus(Status.Active);
@@ -101,8 +96,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         KafkaConnectionProfile profile = profileOpt.get();
         this.applyProfileDto(profile, dto);
         this.profileRepository.save(profile);
-        // A saved config change must take effect immediately, not on the next unrelated
-        // set-default/clear-default call -- invalidate this profile's own cached producer.
+
         this.kafkaTemplateProvider.invalidate(profile.getKafkaConnectionProfileId());
         return new ResponseDto(SUCCESS, String.format("Kafka connection profile saved with %d.",
             profile.getKafkaConnectionProfileId()));
@@ -117,8 +111,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         if (!profileOpt.isPresent()) {
             return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
         }
-        // Don't silently orphan a SourceTaskType/tenant route still pointing at this profile --
-        // same "can't delete what's in use" guard as SourceTaskServiceImpl.deleteSourceTask.
+
         boolean stillReferenced = this.sourceTaskTypeRepository.existsByKafkaConnectionProfileId(kafkaConnectionProfileId)
             || this.routeRepository.existsByKafkaConnectionProfileId(kafkaConnectionProfileId);
         if (stillReferenced) {
@@ -154,9 +147,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         if (profile.getStatus() != Status.Active) {
             return new ResponseDto(ERROR, "This profile is not active and cannot be selected as the default.");
         }
-        // A PLATFORM_ADMIN setting a platform-wide (tenantId null) profile as default clears
-        // every other null-tenant profile's default; a TENANT_ADMIN setting one of their own
-        // profiles as default only clears their own other profiles, never another tenant's.
+
         if (profile.getTenantId() == null) {
             this.profileRepository.clearPlatformDefaultExcept(kafkaConnectionProfileId);
         } else {
@@ -182,9 +173,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
     public ResponseDto testConnection(KafkaConnectionProfileDto dto) throws Exception {
         KafkaConnectionProfile profile;
         boolean persist = false;
-        // An already-saved profile can be re-tested by id (reuses its stored, still-encrypted
-        // secrets); a not-yet-saved one is tested from the full in-flight Dto instead, so the
-        // Test button works before the user has clicked Save at all.
+
         if (!isNull(dto.getKafkaConnectionProfileId())) {
             Optional<KafkaConnectionProfile> profileOpt = this.scopedFindReadOnly(dto.getKafkaConnectionProfileId());
             if (!profileOpt.isPresent()) {
@@ -210,13 +199,6 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         return result;
     }
 
-    /**
-     * Method use to actually exercise a profile's connectivity via a throwaway AdminClient,
-     * classifying the failure so the UI can show something actionable instead of a raw Kafka
-     * client exception message.
-     * @param profile
-     * @return ResponseDto
-     * */
     private ResponseDto doTestConnection(KafkaConnectionProfile profile) {
         try (AdminClient adminClient = AdminClient.create(this.kafkaTemplateProvider.commonClientProps(profile))) {
             DescribeClusterResult result = adminClient.describeCluster();
@@ -295,13 +277,6 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         return null;
     }
 
-    /**
-     * Method use to look up a profile by id, scoped to the caller: PLATFORM_ADMIN can reach any
-     * profile, a TENANT_ADMIN only their own tenant's profiles or a platform-wide/shared one
-     * (never another tenant's) -- same scoped-lookup pattern as AppUserServiceImpl.scopedFind.
-     * @param kafkaConnectionProfileId
-     * @return Optional<KafkaConnectionProfile>
-     * */
     private Optional<KafkaConnectionProfile> scopedFind(Long kafkaConnectionProfileId) {
         Optional<KafkaConnectionProfile> profileOpt = this.profileRepository.findById(kafkaConnectionProfileId);
         if (!profileOpt.isPresent() || profileOpt.get().getStatus() == Status.Delete) {
@@ -310,12 +285,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         if (TenantContext.isPlatformAdmin()) {
             return profileOpt;
         }
-        // A platform-wide (tenantId null) profile is never reachable here for a TENANT_ADMIN --
-        // same "null target = PLATFORM_ADMIN-only, never reachable by a Tenant Admin" convention
-        // as AppUserServiceImpl.scopedFind. This gates WRITE actions (update/delete/setAsDefault)
-        // -- a tenant admin editing or deleting the platform-wide shared default would affect
-        // every other tenant currently falling back to it. Read-only visibility of platform-wide
-        // profiles (fetchAllProfiles, and testConnection below) is intentionally more permissive.
+
         Long ownerTenantId = profileOpt.get().getTenantId();
         if (ownerTenantId == null || !ownerTenantId.equals(TenantContext.getTenantId())) {
             return Optional.empty();
@@ -323,14 +293,6 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         return profileOpt;
     }
 
-    /**
-     * Method use to look up a profile for a read-only diagnostic (testConnection) -- unlike
-     * scopedFind above, a TENANT_ADMIN MAY reach a platform-wide (tenantId null) profile here,
-     * since testing connectivity is harmless (no mutation) and is exactly how a tenant would
-     * verify the shared cluster KafkaConnectionResolver would fall back to for them anyway.
-     * @param kafkaConnectionProfileId
-     * @return Optional<KafkaConnectionProfile>
-     * */
     private Optional<KafkaConnectionProfile> scopedFindReadOnly(Long kafkaConnectionProfileId) {
         Optional<KafkaConnectionProfile> profileOpt = this.profileRepository.findById(kafkaConnectionProfileId);
         if (!profileOpt.isPresent() || profileOpt.get().getStatus() == Status.Delete) {
@@ -346,13 +308,6 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         return profileOpt;
     }
 
-    /**
-     * Method use to copy Dto values onto an entity -- encrypts+stores a new secret only when a
-     * non-empty one was supplied, leaving the existing (already-encrypted) one untouched
-     * otherwise, same pattern as AiAgentServiceImpl#applyAgentDto.
-     * @param profile
-     * @param dto
-     * */
     private void applyProfileDto(KafkaConnectionProfile profile, KafkaConnectionProfileDto dto) {
         profile.setProfileName(dto.getProfileName());
         profile.setEnvironmentLabel(dto.getEnvironmentLabel());
@@ -378,12 +333,6 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         profile.setAdditionalProperties(dto.getAdditionalProperties());
     }
 
-    /**
-     * Method use to map a KafkaConnectionProfile entity to its Dto -- deliberately never sets
-     * any secret value, only the matching *Configured boolean.
-     * @param profile
-     * @return KafkaConnectionProfileDto
-     * */
     private KafkaConnectionProfileDto getProfileDto(KafkaConnectionProfile profile) {
         KafkaConnectionProfileDto dto = new KafkaConnectionProfileDto();
         dto.setKafkaConnectionProfileId(profile.getKafkaConnectionProfileId());
@@ -404,8 +353,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         dto.setAdditionalProperties(profile.getAdditionalProperties());
         dto.setIsDefault(profile.getIsDefault());
         dto.setStatus(profile.getStatus());
-        // A row saved before this column existed reads back null (see the entity's own javadoc)
-        // -- treat that the same as a fresh, never-tested profile.
+
         dto.setConnectionStatus(!isNull(profile.getConnectionStatus()) ? profile.getConnectionStatus() : "UNTESTED");
         dto.setLastTestedAt(profile.getLastTestedAt());
         dto.setLastTestMessage(profile.getLastTestMessage());

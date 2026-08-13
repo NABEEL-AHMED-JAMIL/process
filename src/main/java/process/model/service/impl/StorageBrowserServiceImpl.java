@@ -28,12 +28,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/**
- * StorageBrowserServiceImpl - the Bucket Browser's entry point. Buckets are configured under
- * the BUCKET_LIST parent lookup: each child's lookupType is the display label, lookupValue is
- * the real bucket/container name, and description is the storage provider (MINIO/S3/AZURE).
- * @author Nabeel Ahmed
- */
 @Service
 public class StorageBrowserServiceImpl implements StorageBrowserService {
 
@@ -64,11 +58,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (bucketListParent == null || bucketListParent.getChildren() == null) {
             return Collections.emptyList();
         }
-        // Every bucket child now carries the tenant it belongs to (see LookupData's javadoc) --
-        // PLATFORM_ADMIN still sees every bucket across every tenant (unscoped by design, same
-        // as every other entity in this codebase); a tenant user only sees buckets whose
-        // tenantId matches their own. Before this filter, any authenticated tenant user could
-        // browse -- and download/delete -- every other tenant's storage buckets.
+
         boolean isPlatformAdmin = TenantContext.isPlatformAdmin();
         Long callerTenantId = TenantContext.getTenantId();
         return bucketListParent.getChildren().stream()
@@ -106,7 +96,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Uploaded file is empty.");
         }
-        // Basename only, so a crafted filename can't inject extra "/" segments into the object key.
+
         String safeFileName = Paths.get(file.getOriginalFilename()).getFileName().toString();
         String key = this.normalizedPrefix(prefix) + safeFileName;
         String extension = ContentTypeUtil.extensionOf(safeFileName);
@@ -118,9 +108,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             }
             return;
         }
-        // Audio uploads may be ALAC-encoded, which no major browser can decode for inline
-        // preview -- transcode to AAC (or leave alone if it's already browser-safe) before
-        // it lands in the bucket.
+
         Path tempInput = null;
         Path tempOutput = null;
         try {
@@ -141,9 +129,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
 
     @Override
     public void uploadObject(String bucket, String key, InputStream inputStream, long size, String contentType) {
-        // resolveService(bucket) is the same tenant-scoped bucket-ownership check every other
-        // method here goes through (via listBuckets()) -- a query execution can only ever land
-        // its CSV in a bucket the caller's own tenant (or PLATFORM_ADMIN) actually owns.
+
         this.resolveService(bucket).uploadObject(bucket, key, inputStream, size, contentType);
     }
 
@@ -152,7 +138,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (folderName == null || folderName.trim().isEmpty()) {
             throw new IllegalArgumentException("Folder name is required.");
         }
-        // A folder name is a single new segment, not a path -- strip slashes so it can't escape the current folder.
+
         String safeFolderName = folderName.trim().replace("/", "").replace("\\", "");
         if (safeFolderName.isEmpty()) {
             throw new IllegalArgumentException("Folder name is required.");
@@ -190,7 +176,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (safeNewName.isEmpty()) {
             throw new IllegalArgumentException("New folder name is required.");
         }
-        // Rename only changes the folder's own last segment -- keep the same parent.
+
         String trimmedKey = folderKey.substring(0, folderKey.length() - 1);
         int lastSlash = trimmedKey.lastIndexOf('/');
         String parentPrefix = lastSlash >= 0 ? trimmedKey.substring(0, lastSlash + 1) : "";
@@ -211,11 +197,6 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         return prefix == null ? "" : prefix;
     }
 
-    /**
-     * Method use to resolve a bucket to its configured ObjectStorageService provider
-     * @param bucket
-     * @return ObjectStorageService
-     * */
     private ObjectStorageService resolveService(String bucket) {
         BucketSummaryDto bucketSummary = this.listBuckets().stream()
             .filter(b -> bucket.equals(b.getBucket()))

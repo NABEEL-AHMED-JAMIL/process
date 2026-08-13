@@ -13,18 +13,6 @@ import org.springframework.kafka.core.ProducerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Builds the default/fallback producer (env-var-driven, SPRING_KAFKA_BOOTSTRAP_SERVERS) that
- * KafkaTemplateProvider falls back to when no KafkaConnectionProfile is active.
- *
- * Topics are NOT declared here anymore -- this used to hardcode a fixed NewTopic bean per topic
- * (test/truck/scrapping), so any Source TaskType pointed at a different topic silently had
- * nothing ensuring it existed. Topics are now provisioned generically from Source TaskType data
- * (queueTopicPartition) instead: see KafkaTemplateProvider.ensureTopicExists, called from
- * SettingServiceImpl on every Source TaskType add/update, and from KafkaTopicProvisioner once at
- * startup for every row that already exists.
- * @author Nabeel Ahmed
- */
 @Configuration
 public class KafkaProducerConfig {
 

@@ -2,9 +2,6 @@ package process.util;
 
 import java.time.format.DateTimeFormatter;
 
-/**
- * @author Nabeel Ahmed
- */
 public class ProcessUtil {
 
     public static String INTERNAL_ERROR_500 = "Some internal error occurred contact with support.";
@@ -43,26 +40,6 @@ public class ProcessUtil {
         "R-Status", "Email job complete", "Email job fail", "Email job skip"
     };
 
-    /**
-     * Method use to check whether a value is "empty" for this codebase's purposes -- null, or
-     * an empty string. Used to be "payload == ''", comparing object identity rather than
-     * content: that only matched a String literal from THIS class's own compiled bytecode (the
-     * JVM interns those into one shared instance), never a runtime-built empty string like the
-     * ones Apache POI's cell readers hand back for a blank spreadsheet cell (BulkExcel's
-     * getCellDetail, DataFormatter#formatCellValue) or String.trim()/substring() produce
-     * elsewhere -- those are distinct objects that happen to hold "", so "==" was always false
-     * for them. Every caller across the codebase relies on isNull() to treat that runtime ""
-     * the same as null (e.g. "skip validation/enrichment when this optional field is blank");
-     * with "==", those blank-but-not-null values silently passed every isNull() check as if
-     * they held real content -- for a bulk-uploaded SourceTask with an intentionally blank
-     * PipelineId/HomePageId column, that meant listSourceJob's DTO mapping went on to call
-     * Long.valueOf("") on it and threw NumberFormatException, a bug otherwise invisible until an
-     * actual end-to-end run through bulk upload -> list surfaced it. "".equals(payload) compares
-     * content (and is null-safe on the receiver side since it's called on the literal), fixing
-     * every one of isNull()'s callers at once.
-     * @param payload
-     * @return boolean
-     * */
     public static boolean isNull(Object payload) {
         return payload == null || "".equals(payload);
     }

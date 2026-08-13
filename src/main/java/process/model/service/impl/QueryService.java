@@ -21,9 +21,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 @Transactional
 public class QueryService {
@@ -33,34 +30,18 @@ public class QueryService {
     @PersistenceContext
     private EntityManager _em;
 
-    /**
-     * Method use to execute query response
-     * @param queryStr
-     * @return List<Object[]>
-     * */
     public Object executeQueryForSingleResult(String queryStr) {
         logger.info("Execute Query :- {}.", queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getSingleResult();
     }
 
-    /**
-     * Method use to execute query response
-     * @param queryStr
-     * @return List<Object[]>
-     * */
     public List<Object[]> executeQuery(String queryStr) {
         logger.info("Execute Query :- {}.", queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getResultList();
     }
 
-    /**
-     * Method use to execute query response
-     * @param queryStr
-     * @param paging
-     * @return List<Object[]>
-     * */
     public List<Object[]> executeQuery(String queryStr, Pageable paging) {
         logger.info("Execute Query :- {}.", queryStr);
         Query query = this._em.createNativeQuery(queryStr);
@@ -71,11 +52,6 @@ public class QueryService {
         return query.getResultList();
     }
 
-    /**
-     * Method use to execute query response
-     * @param queryString
-     * @return ItemResponse
-     * */
     public ItemResponse executeQueryResponse(String queryString) {
         logger.info("Execute Query :- {}. ", queryString);
         Query query = this._em.createNativeQuery(queryString);
@@ -91,16 +67,6 @@ public class QueryService {
         return itemResponse;
     }
 
-    /**
-     * Query:- query help to fetch the source task
-     * @param isCount
-     * @param startDate
-     * @param endDate
-     * @param columnName
-     * @param order
-     * @param searchTextDto
-     * @return string
-     * */
     public String listSourceTaskQuery(boolean isCount, String startDate, String endDate, String columnName,
         String order, SearchTextDto searchTextDto) {
         String selectPortion = "";
@@ -153,25 +119,13 @@ public class QueryService {
         return query;
     }
 
-    /**
-     * Query:- query help to fetch the jobs link with task
-     * @param isCount
-     * @param taskDetailId
-     * @param startDate
-     * @param endDate
-     * @param searchTextDto
-     * @return string
-     * */
     public String fetchAllLinkJobsWithSourceTaskQuery(boolean isCount, Long taskDetailId,
         String startDate, String endDate, SearchTextDto searchTextDto) {
         String selectPortion = "";
         if (isCount) {
             selectPortion = "select count(*) as result ";
         } else {
-            // last_job_run is formatted (not cast) to strip fractional seconds -- the caller
-            // parses this column with a fixed "yyyy-MM-dd HH:mm:ss" formatter (no fractional
-            // support), which threw DateTimeParseException on every real row since Postgres's
-            // own varchar cast of a timestamp includes microseconds (e.g. "...34.938328").
+
             selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, " +
                 "to_char(sj.last_job_run, 'YYYY-MM-DD HH24:MI:SS'), sj.priority, cast(sj.date_created AS varchar) ";
         }
@@ -205,15 +159,6 @@ public class QueryService {
         return query;
     }
 
-    /**
-     * method use to build an optional 'and date(column) between startDate and endDate' clause.
-     * Returns an empty string (no filtering) when either bound is missing or not a valid yyyy-MM-dd date,
-     * so callers can safely append the result straight into a where clause.
-     * @param column
-     * @param startDate
-     * @param endDate
-     * @return string
-     * */
     private String dateRangeFilter(String column, String startDate, String endDate) {
         if (!isValidDate(startDate) || !isValidDate(endDate)) {
             return "";
@@ -225,17 +170,6 @@ public class QueryService {
         return date != null && date.matches("\\d{4}-\\d{2}-\\d{2}");
     }
 
-    /**
-     * Method use to reject a request-supplied date param that isn't a plain yyyy-MM-dd string
-     * before it's concatenated into a native SQL query -- every date-taking query builder in
-     * this class used to hand the raw value straight to String.format, so any client could
-     * inject arbitrary SQL through startDate/endDate/targetDate query params. Fails closed
-     * (throws) rather than silently dropping the filter, since a rejected value here means
-     * either a client bug or a real attack -- both deserve a visible error, not a query that
-     * quietly ran with no date filter at all.
-     * @param date
-     * @return String
-     * */
     private String requireValidDate(String date) {
         if (!this.isValidDate(date)) {
             throw new IllegalArgumentException("Invalid date -- expected yyyy-MM-dd.");
@@ -243,51 +177,27 @@ public class QueryService {
         return date;
     }
 
-    /**
-     * Method use to safely embed free-text search input inside a single-quoted SQL string
-     * literal -- doubling embedded single quotes is the standard SQL escape and prevents the
-     * value from ever breaking out of the literal it's placed in, closing the injection hole
-     * on itemValue/jobStatus params that (unlike dates or numeric ids) can't be validated
-     * against a fixed shape or allow-list.
-     * @param value
-     * @return String
-     * */
     private String sqlEscape(Object value) {
         return value == null ? "" : value.toString().replace("'", "''");
     }
 
-    /** Columns listSourceTaskQuery is actually able to sort by -- an identifier/keyword like a
-     * column name can't be passed as a JDBC bind parameter, so the only safe way to accept a
-     * client-supplied ORDER BY column is to check it against a fixed allow-list. */
     private static final Set<String> SOURCE_TASK_SORT_COLUMNS = new HashSet<>(Arrays.asList(
         "st.task_detail_id", "st.task_name", "st.task_status", "st.date_created",
         "stt.source_task_type_id", "stt.service_name"
     ));
 
-    /** Method use to validate a request-supplied ORDER BY column against the allow-list above,
-     * falling back to the default sort column for anything not explicitly recognized. */
     private String sanitizeSortColumn(String columnName) {
         return SOURCE_TASK_SORT_COLUMNS.contains(columnName) ? columnName : "st.task_detail_id";
     }
 
-    /** Method use to validate a request-supplied sort direction, falling back to DESC for
-     * anything other than the two legal SQL directions. */
     private String sanitizeSortOrder(String order) {
         return "asc".equalsIgnoreCase(order) ? "asc" : "desc";
     }
 
-    /** job_queue.job_status values this class's own queries compare against (see the CASE WHEN
-     * lists in weeklyHrRunningStatisticsDimension/statisticsBySourceJobId) -- deliberately NOT
-     * the JobStatus enum, which has no STOP constant even though job_queue rows can carry that
-     * status; using the enum here would reject a legitimate filter this class already handles
-     * elsewhere. */
     private static final Set<String> JOB_QUEUE_STATUSES = new HashSet<>(Arrays.asList(
         "QUEUE", "START", "RUNNING", "FAILED", "COMPLETED", "STOP", "SKIP", "INTERRUPT"
     ));
 
-    /** Method use to validate a request-supplied job_queue status against the fixed set of
-     * legal values above before it's embedded in a query -- closes an injection hole, same as
-     * sqlEscape, but for a value that should only ever be one of a known set of statuses. */
     private String sanitizeJobStatus(String jobStatus) {
         if (jobStatus != null && JOB_QUEUE_STATUSES.contains(jobStatus.toUpperCase())) {
             return jobStatus.toUpperCase();
@@ -295,18 +205,6 @@ public class QueryService {
         throw new IllegalArgumentException("Invalid jobStatus -- expected one of " + JOB_QUEUE_STATUSES);
     }
 
-    /**
-     * Method use to build a native-SQL tenant scoping clause for the given source_task/
-     * source_job-table alias. Every query builder in this class is hand-built native SQL run
-     * via EntityManager.createNativeQuery -- that completely bypasses Hibernate's "tenantFilter"
-     * @Filter (TenantFilterHelper only affects JPQL/Criteria queries the ORM builds itself), so
-     * each one needs this appended explicitly wherever it touches source_task or source_job.
-     * Empty string for PLATFORM_ADMIN (unscoped across tenants by design) or when there's no
-     * tenant on the request context at all.
-     * @param tableAlias alias of the source_task or source_job table in the query (must carry
-     *        a tenant_id column)
-     * @return String
-     * */
     private String tenantClause(String tableAlias) {
         if (TenantContext.isPlatformAdmin() || ProcessUtil.isNull(TenantContext.getTenantId())) {
             return "";
@@ -314,15 +212,8 @@ public class QueryService {
         return String.format(" and %s.tenant_id = %d ", tableAlias, TenantContext.getTenantId());
     }
 
-    /**
-     * method use to fetch the job status statistics
-     * @param startDate
-     * @param endDate
-     * @return string
-     * */
     public String jobStatusStatistics(String startDate, String endDate) {
-        // Return counts for Active and Inactive separately and a combined "All" (Active+Inactive) count.
-        // Exclude 'Delete' status from the counts for "All". Optionally scoped to a date_created range.
+
         String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
         String tenantFilter = this.tenantClause("source_job");
         return "select job_status, count(job_id) as total_count from source_job\n" +
@@ -331,15 +222,8 @@ public class QueryService {
             "select 'All' as job_status, count(job_id) as total_count from source_job where job_status in ('Active','Inactive') " + dateFilter + tenantFilter;
     }
 
-    /**
-     * method use to fetch the job running statistics
-     * @param startDate
-     * @param endDate
-     * @return string
-     * */
     public String jobRunningStatistics(String startDate, String endDate) {
-        // Only consider jobs which are Active or Inactive (exclude Deleted) when generating running stats.
-        // Optionally scoped to a date_created range.
+
         String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
         return "select UPPER(job_running_status) as job_running_status, count(job_id) as total_count\n" +
             "from source_job\n" +
@@ -348,14 +232,8 @@ public class QueryService {
             "group by UPPER(job_running_status)";
     }
 
-    /**
-     * method use to fetch the job running statistics
-     * @param startDate
-     * @param endDate
-     * @return string
-     * */
     public String weeklyRunningJobStatistics(String startDate, String endDate) {
-        // Only include job_queue entries for jobs that are Active or Inactive
+
         return String.format("select weekData.daycode, count(*) from (\n" +
             "select job_queue_id, to_char(cast(jq.date_created as date), 'Dy') as daycode,\n" +
             "cast(jq.date_created as date)\n" +
@@ -364,14 +242,8 @@ public class QueryService {
             "group by weekData.daycode", this.requireValidDate(startDate), this.requireValidDate(endDate));
     }
 
-    /**
-     * method use to fetch the job running statistics
-     * @param startDate
-     * @param endDate
-     * @return string
-     * */
     public String weeklyHrsRunningJobStatistics(String startDate, String endDate) {
-        // Only include job_queue entries for jobs that are Active or Inactive
+
         return String.format("select weekData.daycode, weekData.hr, weekData.date, count(*)\n" +
             "from (select job_queue_id, to_char(cast(jq.date_created as date), 'Day') as daycode,\n" +
             "cast(jq.date_created as date) as date, cast(jq.date_created as time) as time, \n" +
@@ -381,14 +253,8 @@ public class QueryService {
             "group by weekData.daycode, weekData.hr, weekData.date", this.requireValidDate(startDate), this.requireValidDate(endDate));
     }
 
-    /**
-     * method use to fetch the view running job statistics
-     * @param targetDate
-     * @param targetHr
-     * @return string
-     * */
     public String weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) {
-        // Only include job_queue entries for jobs that are Active or Inactive
+
         targetDate = this.requireValidDate(targetDate);
         String tenantFilter = this.tenantClause("source_job");
         return String.format(
@@ -439,13 +305,8 @@ public class QueryService {
         );
     }
 
-    /**
-     * method use to fetch the job statistics by id
-     * @param jobId
-     * @return string
-     * */
     public String statisticsBySourceJobId(Long jobId) {
-        // Only include job_queue entries for jobs that are Active or Inactive
+
         return String.format(
             "SELECT\n" +
             "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'QUEUE' THEN job_queue.job_id END) AS Queue,\n" +
@@ -479,7 +340,7 @@ public class QueryService {
         if (!ProcessUtil.isNull(jobStatus)) {
             query += String.format("and UPPER(job_queue.job_status) = UPPER('%s')\n", this.sanitizeJobStatus(jobStatus));
         } else {
-            // when no specific jobStatus requested, only include source jobs that are Active or Inactive
+
             query += "and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n";
         }
         query += "\norder by job_queue.job_queue_id desc";
@@ -489,14 +350,13 @@ public class QueryService {
     public String fetchJobQLog(MessageQSearchDto messageQSearch, boolean isState) {
         String selectPortion;
         if (isState) {
-            // summarize by job_queue job_status (Queue/Start/Running/etc.)
+
             selectPortion = "select UPPER(jq.job_status) as job_status, count(*) as total_count \n";
         } else {
-            // Explicitly select job_queue columns only (use jq alias) to avoid duplicate column aliases from joining source_job
-            // Order must match the mapping in MessageQServiceImpl.fetchLogs
+
             selectPortion = "select jq.job_queue_id, jq.date_created, jq.end_time, jq.job_id, jq.job_send, jq.job_status, jq.job_status_message, jq.run_manual, jq.skip_manual, jq.skip_time, jq.start_time \n";
         }
-        // always join with source_job so we can filter by source job status (Active/Inactive)
+
         String query = selectPortion + "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id \n";
         if (!isState) {
             query += String.format("where cast(jq.date_created as date) between '%s' and '%s' \n",
@@ -517,7 +377,7 @@ public class QueryService {
             }
         }
         if (isState) {
-            // For state summary, only include job_queue rows for source jobs that are Active or Inactive
+
             query += "where UPPER(sj.job_status) in ('ACTIVE','INACTIVE') " + this.tenantClause("sj") + "\n";
             query += "\ngroup by UPPER(jq.job_status)";
         }
@@ -526,7 +386,6 @@ public class QueryService {
         }
         return query;
     }
-
 
     @Override
     public String toString() {

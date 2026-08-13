@@ -12,25 +12,12 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Utility use to make uploaded audio playable in every browser. Chrome/Firefox/Edge have no
- * ALAC decoder -- only Safari can play it -- so a bucket-browser preview of an ALAC-encoded
- * .m4a silently fails with MEDIA_ERR_SRC_NOT_SUPPORTED even though the file streams down fine.
- * Shells out to ffmpeg/ffprobe (must be on PATH) to re-encode such uploads to AAC, the codec
- * every major browser supports.
- * @author Nabeel Ahmed
- */
 public final class AudioTranscodeUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(AudioTranscodeUtil.class);
 
     private AudioTranscodeUtil() {}
 
-    // Deliberately excludes "mp4" -- .m4a already covers the "audio recorded in an MP4
-    // container" case. A real .mp4 upload is a video file, and transcodeToAacIfNeeded()
-    // strips any non-browser-safe track with ffmpeg's -vn flag (audio-only re-encode) --
-    // if "mp4" were in this set, a video whose audio codec isn't AAC/MP3 (AC3, Opus, PCM,
-    // etc, all common) would have its video track silently discarded on upload.
     private static final Set<String> AUDIO_EXTENSIONS = new HashSet<>(Arrays.asList(
         "m4a", "mp3", "wav", "aac", "flac"));
 
@@ -40,24 +27,10 @@ public final class AudioTranscodeUtil {
     private static final long PROBE_TIMEOUT_SECONDS = 30;
     private static final long TRANSCODE_TIMEOUT_MINUTES = 15;
 
-    /**
-     * Method use to check if a file extension is one this pipeline treats as audio and will
-     * consider transcoding
-     * @param extension lower-cased, no leading dot
-     * @return boolean
-     * */
     public static boolean isAudioExtension(String extension) {
         return AUDIO_EXTENSIONS.contains(extension);
     }
 
-    /**
-     * Method use to re-encode inputFile to AAC (in an .m4a container) if its audio codec isn't
-     * already browser-safe. Returns null (no-op, caller should upload inputFile as-is) when the
-     * codec is already fine, ffprobe/ffmpeg aren't available, or the codec can't be determined --
-     * transcoding is a nice-to-have for browser playback, never a reason to fail the upload.
-     * @param inputFile
-     * @return Path to a new temp AAC file the caller owns (must delete it), or null
-     * */
     public static Path transcodeToAacIfNeeded(Path inputFile) {
         String codec;
         try {
@@ -100,10 +73,6 @@ public final class AudioTranscodeUtil {
         }
     }
 
-    /**
-     * Method use to delete a temp file, swallowing any error since it's best-effort cleanup
-     * @param path
-     * */
     public static void deleteQuietly(Path path) {
         if (path == null) {
             return;

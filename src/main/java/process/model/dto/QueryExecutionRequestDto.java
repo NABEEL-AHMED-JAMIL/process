@@ -3,14 +3,6 @@ package process.model.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.google.gson.Gson;
 
-/**
- * The "execute" request body -- deliberately just IDs and output configuration, never a query
- * result or the query text itself. The backend loads the query and connection profile itself
- * (re-validating tenant ownership) rather than trusting anything about them from the frontend
- * beyond queryId/databaseConnectionProfileId -- see §5 of the design and
- * QueryExecutionServiceImpl.execute.
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class QueryExecutionRequestDto {
 

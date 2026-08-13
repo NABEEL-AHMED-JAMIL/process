@@ -6,12 +6,6 @@ import com.google.gson.Gson;
 import process.model.enums.Status;
 import java.sql.Timestamp;
 
-/**
- * apiKey is write-only -- set it to save/rotate the key, but it is never populated when this
- * Dto is built from a saved AiAgent (see apiKeyConfigured instead, a plain boolean the UI can
- * use to show "configured" vs "not set" without ever exposing the secret itself, even encrypted).
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AiAgentDto {
@@ -29,8 +23,7 @@ public class AiAgentDto {
     private Status status;
     private Boolean jsonMode;
     private Timestamp dateCreated;
-    /** Read-only -- server-generated, never accepted from the client (applyAgentDto never
-     * reads it). Used to build the public "Copy Tool URL" link on the frontend. */
+
     private String toolUuid;
 
     public AiAgentDto() {}

@@ -11,15 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 
-/**
- * Utility use to encrypt/decrypt sensitive lookup values (e.g. credentials) before they're
- * persisted, using AES-256-GCM. The key comes from the LOOKUP_ENCRYPTION_KEY environment
- * variable (a base64-encoded 32-byte key) -- it is never hardcoded or committed. Generate
- * one locally with: openssl rand -base64 32
- * Storage format is base64(IV || ciphertext+tag) -- a fresh random IV per call, since
- * reusing an IV with the same GCM key breaks its security guarantees.
- * @author Nabeel Ahmed
- */
 @Component
 public class EncryptionUtil {
 
@@ -30,11 +21,6 @@ public class EncryptionUtil {
     @Value("${lookup.encryption.key:}")
     private String base64Key;
 
-    /**
-     * Method use to encrypt a plain text lookup value
-     * @param plainText
-     * @return String
-     * */
     public String encrypt(String plainText) {
         try {
             byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
@@ -51,11 +37,6 @@ public class EncryptionUtil {
         }
     }
 
-    /**
-     * Method use to decrypt a previously encrypted lookup value
-     * @param cipherTextBase64
-     * @return String
-     * */
     public String decrypt(String cipherTextBase64) {
         try {
             byte[] ivAndCipherText = Base64.getDecoder().decode(cipherTextBase64);
@@ -72,11 +53,6 @@ public class EncryptionUtil {
         }
     }
 
-    /**
-     * Method use to build the AES key from LOOKUP_ENCRYPTION_KEY, failing clearly if it's
-     * not configured rather than silently falling back to an insecure default.
-     * @return SecretKey
-     * */
     private SecretKey secretKey() {
         if (this.base64Key == null || this.base64Key.trim().isEmpty()) {
             throw new IllegalStateException(

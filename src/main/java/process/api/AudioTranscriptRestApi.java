@@ -13,12 +13,6 @@ import process.model.dto.YoutubeExtractRequestDto;
 import process.model.service.AudioTranscriptService;
 import process.util.ProcessUtil;
 
-/**
- * Api use to run an audio file (upload or an existing bucket object) through the ad-hoc
- * transcript-extraction pipeline (proxies job-search's standalone Audio Extract Service).
- * Role policy: self-service AI tool, TENANT_USER+.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/audioTranscript.json")
@@ -33,11 +27,6 @@ public class AudioTranscriptRestApi {
         this.audioTranscriptService = audioTranscriptService;
     }
 
-    /**
-     * Api use to extract a transcript from an uploaded audio file
-     * @param file
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/extractFromUpload", method = RequestMethod.POST)
     public ResponseEntity<?> extractFromUpload(
         @RequestParam("file") MultipartFile file,
@@ -50,11 +39,6 @@ public class AudioTranscriptRestApi {
         }
     }
 
-    /**
-     * Api use to extract a transcript from an audio file already sitting in a bucket
-     * @param request
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/extractFromBucket", method = RequestMethod.POST)
     public ResponseEntity<?> extractFromBucket(@RequestBody AudioExtractBucketRequestDto request) {
         try {
@@ -65,11 +49,6 @@ public class AudioTranscriptRestApi {
         }
     }
 
-    /**
-     * Api use to extract a transcript from an uploaded video file (audio track only)
-     * @param file
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/extractFromVideoUpload", method = RequestMethod.POST)
     public ResponseEntity<?> extractFromVideoUpload(
         @RequestParam("file") MultipartFile file,
@@ -82,11 +61,6 @@ public class AudioTranscriptRestApi {
         }
     }
 
-    /**
-     * Api use to extract a transcript from a YouTube link
-     * @param request
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/extractFromYoutube", method = RequestMethod.POST)
     public ResponseEntity<?> extractFromYoutube(@RequestBody YoutubeExtractRequestDto request) {
         try {

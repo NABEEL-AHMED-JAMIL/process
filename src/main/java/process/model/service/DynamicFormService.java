@@ -5,9 +5,6 @@ import process.model.dto.DynamicFormFieldDto;
 import process.model.dto.DynamicFormSubmissionDto;
 import process.model.dto.ResponseDto;
 
-/**
- * @author Nabeel Ahmed
- */
 public interface DynamicFormService {
 
     public ResponseDto addForm(DynamicFormDto dynamicFormDto) throws Exception;

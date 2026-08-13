@@ -7,12 +7,6 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 
-/**
- * One drawn field region on a page of a PdfHighlighterTask's PDF -- label + bounding box
- * (PDF points, top-left origin), plus an optional text-anchored selector derived client-side
- * from the page's text layer (the PDF equivalent of an XPath).
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "pdf_highlighter_field")
 @JsonIgnoreProperties(ignoreUnknown=true)

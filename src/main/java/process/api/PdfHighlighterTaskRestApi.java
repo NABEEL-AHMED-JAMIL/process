@@ -19,12 +19,6 @@ import process.util.ProcessUtil;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
-/**
- * Api use to perform crud operation on pdf highlighter task (+ its fields and stored PDF).
- * Role policy: self-service AI tool (creating/editing a task IS the normal usage flow here,
- * not a one-time admin config step like AiAgent/DynamicForm's builder) -- TENANT_USER+.
- * @author Nabeel Ahmed
- */
 @RestController
 @CrossOrigin(origins = "*", exposedHeaders = {HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH})
 @RequestMapping(value = "/pdfHighlighter.json")
@@ -39,10 +33,6 @@ public class PdfHighlighterTaskRestApi {
         this.pdfHighlighterTaskService = pdfHighlighterTaskService;
     }
 
-    /**
-     * Api use to fetch all the pdf highlighter task
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/fetchAllPdfHighlighterTask", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllPdfHighlighterTask() {
         try {
@@ -53,11 +43,6 @@ public class PdfHighlighterTaskRestApi {
         }
     }
 
-    /**
-     * Api use to fetch a single pdf highlighter task by id
-     * @param pdfHighlighterTaskId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/fetchPdfHighlighterTaskById", method = RequestMethod.GET)
     public ResponseEntity<?> fetchPdfHighlighterTaskById(
         @RequestParam Long pdfHighlighterTaskId) {
@@ -69,11 +54,6 @@ public class PdfHighlighterTaskRestApi {
         }
     }
 
-    /**
-     * Api use to add the pdf highlighter task
-     * @param tempPdfHighlighterTask
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/addPdfHighlighterTask", method = RequestMethod.POST)
     public ResponseEntity<?> addPdfHighlighterTask(
         @RequestBody PdfHighlighterTaskDto tempPdfHighlighterTask) {
@@ -85,11 +65,6 @@ public class PdfHighlighterTaskRestApi {
         }
     }
 
-    /**
-     * Api use to update the pdf highlighter task
-     * @param tempPdfHighlighterTask
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/updatePdfHighlighterTask", method = RequestMethod.PUT)
     public ResponseEntity<?> updatePdfHighlighterTask(
         @RequestBody PdfHighlighterTaskDto tempPdfHighlighterTask) {
@@ -101,11 +76,6 @@ public class PdfHighlighterTaskRestApi {
         }
     }
 
-    /**
-     * Api use to delete the pdf highlighter task
-     * @param pdfHighlighterTaskId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/deletePdfHighlighterTask", method = RequestMethod.DELETE)
     public ResponseEntity<?> deletePdfHighlighterTask(
         @RequestParam Long pdfHighlighterTaskId) {
@@ -117,11 +87,6 @@ public class PdfHighlighterTaskRestApi {
         }
     }
 
-    /**
-     * Api use to fetch the fields drawn for a pdf highlighter task
-     * @param pdfHighlighterTaskId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/fetchPdfHighlighterFields", method = RequestMethod.GET)
     public ResponseEntity<?> fetchPdfHighlighterFields(
         @RequestParam Long pdfHighlighterTaskId) {
@@ -133,11 +98,6 @@ public class PdfHighlighterTaskRestApi {
         }
     }
 
-    /**
-     * Api use to replace a task's entire field list in one call
-     * @param request
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/syncPdfHighlighterFields", method = RequestMethod.POST)
     public ResponseEntity<?> syncPdfHighlighterFields(
         @RequestBody SyncPdfHighlighterFieldsRequestDto request) {
@@ -149,12 +109,6 @@ public class PdfHighlighterTaskRestApi {
         }
     }
 
-    /**
-     * Api use to upload a task's PDF file
-     * @param pdfHighlighterTaskId
-     * @param file
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/uploadPdfHighlighterFile", method = RequestMethod.POST)
     public ResponseEntity<?> uploadPdfHighlighterFile(
         @RequestParam Long pdfHighlighterTaskId,
@@ -167,11 +121,6 @@ public class PdfHighlighterTaskRestApi {
         }
     }
 
-    /**
-     * Api use to download a task's stored PDF file
-     * @param pdfHighlighterTaskId
-     * @return ResponseEntity<?>
-     * */
     @RequestMapping(value = "/downloadPdfHighlighterFile", method = RequestMethod.GET)
     public ResponseEntity<?> downloadPdfHighlighterFile(
         @RequestParam Long pdfHighlighterTaskId) {

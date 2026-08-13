@@ -16,11 +16,6 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
-/**
- * This SourceTaskValidation validate the information of the sheet
- * if the date not valid its stop the process and through the valid msg
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskValidation {
@@ -116,12 +111,6 @@ public class SourceTaskValidation {
         }
     }
 
-    /**
-     * This isValidJobDetail use to validate the
-     * job detail of the job valid return true
-     * if non-valid return false
-     * @return boolean true|false
-     * */
     public void isValidSourceTask() {
         if (isNull(this.sourceTaskTypeId)) {
             this.setErrorMsg(String.format("Task type id should not be empty at row %s.<br>", rowCounter));
@@ -141,11 +130,6 @@ public class SourceTaskValidation {
         }
     }
 
-    /**
-     * Method use to parse xml to request
-     * @param xml
-     * @return List<ConfigurationMakerRequest.TagInfo>
-     * */
     public List<ConfigurationMakerRequest.TagInfo> parseXmlToRequest(String xml) throws Exception {
         List<ConfigurationMakerRequest.TagInfo> tagInfos = new ArrayList<>();
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -157,17 +141,11 @@ public class SourceTaskValidation {
         return tagInfos;
     }
 
-    /**
-     * Method use to traverse the xml
-     * @param node
-     * @param parent
-     * @param tagInfos
-     * */
     private void traverseXml(Node node, String parent, List<ConfigurationMakerRequest.TagInfo> tagInfos) {
         if (node.getNodeType() != Node.ELEMENT_NODE) return;
         NodeList children = node.getChildNodes();
         boolean hasElementChild = false;
-        // check if node has element children
+
         for (int i = 0; i < children.getLength(); i++) {
             if (children.item(i).getNodeType() == Node.ELEMENT_NODE) {
                 hasElementChild = true;
@@ -178,13 +156,13 @@ public class SourceTaskValidation {
         if (!hasElementChild) {
             value = node.getTextContent() != null ? node.getTextContent().trim() : null;
         }
-        // Create TagInfo (tagKey is required, other fields can be null)
+
         ConfigurationMakerRequest.TagInfo tagInfo = new ConfigurationMakerRequest.TagInfo();
         tagInfo.setTagKey(node.getNodeName());
         tagInfo.setTagParent(parent);
         tagInfo.setTagValue(value);
         tagInfos.add(tagInfo);
-        // traverse children
+
         for (int i = 0; i < children.getLength(); i++) {
             Node child = children.item(i);
             if (child.getNodeType() == Node.ELEMENT_NODE) {

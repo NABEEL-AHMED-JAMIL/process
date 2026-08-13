@@ -10,13 +10,9 @@ import process.model.pojo.AiAgent;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * @author Nabeel Ahmed
- */
 @Repository
 public interface AiAgentRepository extends JpaRepository<AiAgent, Long> {
 
-    /** Phase 0 migration backfill -- see TenantSeedService. */
     @Transactional
     @Modifying
     @Query("update AiAgent a set a.tenantId = ?1 where a.tenantId is null")

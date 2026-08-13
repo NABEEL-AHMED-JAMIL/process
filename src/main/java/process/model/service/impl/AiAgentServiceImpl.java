@@ -34,22 +34,15 @@ import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
 
-/**
- * @author Nabeel Ahmed
- */
 @Service
 public class AiAgentServiceImpl implements AiAgentService {
 
     private Logger logger = LoggerFactory.getLogger(AiAgentServiceImpl.class);
 
-    /** Any single file's extracted text is capped here before being sent to the provider --
-     * keeps requests within typical context-window/cost limits regardless of source file size. */
     private static final int MAX_TEXT_CHARS = 60000;
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-    /** Ollama runs as a local Docker container with no auth -- reachable from the process
-     * container via the Docker Desktop host alias. Overridable per-agent via apiEndpoint. */
     private static final String OLLAMA_DEFAULT_BASE_URL = "http://host.docker.internal:11434";
 
     private final AiAgentRepository aiAgentRepository;
@@ -58,8 +51,7 @@ public class AiAgentServiceImpl implements AiAgentService {
     private final Gson gson = new Gson();
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(Duration.ofSeconds(15))
-        // local CPU inference (e.g. Ollama) can take much longer than a hosted API, especially
-        // when the model was idle and Ollama has to reload it from disk before generating
+
         .readTimeout(10, TimeUnit.MINUTES)
         .build();
 
@@ -73,12 +65,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         this.tenantFilterHelper = tenantFilterHelper;
     }
 
-    /**
-     * Method use to check whether the caller (PLATFORM_ADMIN, or the tenant that owns this
-     * agent) is allowed to see/act on it -- same rationale as SourceJobServiceImpl.isOwnedByCaller.
-     * @param aiAgent
-     * @return boolean
-     * */
     private boolean isOwnedByCaller(AiAgent aiAgent) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
@@ -86,11 +72,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return aiAgent != null && Objects.equals(aiAgent.getTenantId(), TenantContext.getTenantId());
     }
 
-    /**
-     * Method use to add a new AI agent
-     * @param aiAgentDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto addAgent(AiAgentDto aiAgentDto) throws Exception {
@@ -109,13 +90,6 @@ public class AiAgentServiceImpl implements AiAgentService {
             this.getAiAgentDto(aiAgent));
     }
 
-    /**
-     * Method use to update an existing AI agent -- apiKey is only overwritten when a new
-     * (non-empty) value is supplied, so callers can update other fields without re-sending
-     * (and re-encrypting) an unchanged key.
-     * @param aiAgentDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto updateAgent(AiAgentDto aiAgentDto) throws Exception {
@@ -140,11 +114,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return new ResponseDto(SUCCESS, String.format("Agent saved with %s.", aiAgent.getAiAgentId()));
     }
 
-    /**
-     * Method use to soft-delete an AI agent
-     * @param aiAgentId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto deleteAgent(Long aiAgentId) throws Exception {
@@ -162,10 +131,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return new ResponseDto(SUCCESS, String.format("Agent deleted with %s.", aiAgentId));
     }
 
-    /**
-     * Method use to fetch every non-deleted AI agent
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto fetchAllAgents() throws Exception {
@@ -175,11 +140,6 @@ public class AiAgentServiceImpl implements AiAgentService {
             aiAgents.stream().map(this::ensureToolUuid).map(this::getAiAgentDto).collect(Collectors.toList()));
     }
 
-    /**
-     * Method use to fetch a single AI agent by id
-     * @param aiAgentId
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto fetchAgentByAgentId(Long aiAgentId) throws Exception {
@@ -194,14 +154,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return new ResponseDto(SUCCESS, "Data found.", this.getAiAgentDto(this.ensureToolUuid(aiAgentOpt.get())));
     }
 
-    /**
-     * Method use to fetch the public-safe configuration (no apiKey/apiEndpoint) for a single
-     * agent by its toolUuid -- this is what a "Copy Tool URL" link resolves to, meant for an
-     * external consumer (e.g. a Source Task XML payload) to read before calling processText
-     * with the same toolUuid to actually run the agent. Only Active agents are resolvable here.
-     * @param toolUuid
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto fetchToolByUuid(String toolUuid) throws Exception {
         if (isNull(toolUuid) || toolUuid.trim().isEmpty()) {
@@ -224,13 +176,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return new ResponseDto(SUCCESS, "Data found.", dto);
     }
 
-    /**
-     * Method use to run an agent's instructions against a piece of already-extracted text
-     * (the frontend does PDF/CSV/etc. extraction before calling this) and return the
-     * provider's response -- nothing here is persisted, the result is purely returned to the caller.
-     * @param processTextRequestDto
-     * @return ResponseDto
-     * */
     @Override
     @Transactional
     public ResponseDto processText(ProcessTextRequestDto processTextRequestDto) throws Exception {
@@ -242,12 +187,7 @@ public class AiAgentServiceImpl implements AiAgentService {
         if (isNull(processTextRequestDto.getText()) || processTextRequestDto.getText().trim().isEmpty()) {
             return new ResponseDto(ERROR, "No text extracted from the file to process.");
         }
-        // aiAgentId (internal callers, e.g. the frontend) takes priority when both are supplied;
-        // aiAgentUuid is the lookup an external consumer uses, since it only ever sees the
-        // public toolUuid from a "Copy Tool URL" link, never the internal sequence id. The
-        // aiAgentId path is tenant-checked below (it runs the agent's real, possibly paid, API
-        // key -- a cross-tenant hit here would mean spending another tenant's provider budget);
-        // the toolUuid path is intentionally exempt, same as fetchToolByUuid, by design.
+
         boolean isByInternalId = !isNull(processTextRequestDto.getAiAgentId());
         if (isByInternalId) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);
@@ -264,7 +204,7 @@ public class AiAgentServiceImpl implements AiAgentService {
         if (aiAgent.getStatus() != Status.Active) {
             return new ResponseDto(ERROR, "This agent is not active.");
         }
-        // Ollama is local/unauthenticated -- every other provider needs a configured key
+
         if (!"Ollama".equals(aiAgent.getProvider()) && isNull(aiAgent.getApiKey())) {
             return new ResponseDto(ERROR, "This agent has no API key configured yet -- edit the agent and add one.");
         }
@@ -275,8 +215,7 @@ public class AiAgentServiceImpl implements AiAgentService {
         String apiKey = isNull(aiAgent.getApiKey()) ? null : this.encryptionUtil.decrypt(aiAgent.getApiKey());
         String fileLabel = isNull(processTextRequestDto.getFileName()) ? "the file" : processTextRequestDto.getFileName();
         String userMessage = String.format("File: %s\n\nContent:\n%s", fileLabel, text);
-        // an explicit instructions override lets the caller reuse this agent's provider/model/
-        // apiKey with a one-off prompt instead of the agent's saved instructions
+
         boolean hasOverride = !isNull(processTextRequestDto.getInstructions())
             && !processTextRequestDto.getInstructions().trim().isEmpty();
         String instructions = hasOverride ? processTextRequestDto.getInstructions() : aiAgent.getInstructions();
@@ -294,13 +233,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         }
     }
 
-    /**
-     * Method use to run a fully ad-hoc provider+model+prompt+text call, not tied to any saved
-     * AiAgent -- the caller supplies everything (including the API key, used in-memory for
-     * this call only) each time. Nothing here is persisted.
-     * @param dto
-     * @return ResponseDto
-     * */
     @Override
     public ResponseDto processAdHoc(AdHocPromptRequestDto dto) throws Exception {
         ResponseDto validationError = this.validateAdHoc(dto);
@@ -325,12 +257,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         }
     }
 
-    /**
-     * Method use to validate an ad-hoc prompt payload -- mirrors validateAgent() minus the
-     * DB-only fields (agentName, targetFileTypes), applied directly against the request.
-     * @param dto
-     * @return ResponseDto or null when valid
-     * */
     private ResponseDto validateAdHoc(AdHocPromptRequestDto dto) {
         if (isNull(dto.getProvider()) || dto.getProvider().trim().isEmpty()) {
             return new ResponseDto(ERROR, "provider missing.");
@@ -342,7 +268,7 @@ public class AiAgentServiceImpl implements AiAgentService {
             (isNull(dto.getApiEndpoint()) || dto.getApiEndpoint().trim().isEmpty())) {
             return new ResponseDto(ERROR, "This provider requires an apiEndpoint (only OpenAI/Anthropic/Ollama have a built-in one).");
         }
-        // Ollama is local/unauthenticated -- every other provider needs a key supplied
+
         if (!"Ollama".equals(dto.getProvider()) && (isNull(dto.getApiKey()) || dto.getApiKey().trim().isEmpty())) {
             return new ResponseDto(ERROR, "apiKey missing (required unless provider is Ollama).");
         }
@@ -358,24 +284,9 @@ public class AiAgentServiceImpl implements AiAgentService {
         return null;
     }
 
-    /**
-     * Method use to dispatch to the right request/response shape for the configured provider --
-     * shared by both the saved-agent path (processText) and the ad-hoc path (processAdHoc).
-     * @param provider
-     * @param apiKey
-     * @param apiEndpoint
-     * @param model
-     * @param instructions
-     * @param jsonMode
-     * @param userMessage
-     * @return String
-     * */
     private String callProvider(String provider, String apiKey, String apiEndpoint, String model,
         String instructions, boolean jsonMode, String userMessage) throws Exception {
-        // OpenAI and Anthropic get their own request/response shape; every other provider name
-        // (whatever the user has added under Settings > Lookup, type AI_PROVIDER) is treated as
-        // a generic OpenAI-compatible chat-completions endpoint -- covers Azure OpenAI, Groq,
-        // self-hosted proxies, etc. without needing a code change per provider.
+
         if ("OpenAI".equals(provider)) {
             return this.callOpenAi(apiKey, model, instructions, userMessage);
         } else if ("Anthropic".equals(provider)) {
@@ -386,8 +297,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return this.callGenericOpenAiCompatible(provider, apiKey, apiEndpoint, model, instructions, userMessage);
     }
 
-    /** Ollama's native /api/chat -- no auth header, base URL defaults to the local Docker
-     * container but can be overridden via apiEndpoint (e.g. a different host/port). */
     private String callOllama(String apiEndpoint, String model, String instructions, boolean jsonMode, String userMessage) throws Exception {
         String baseUrl = isNull(apiEndpoint) || apiEndpoint.trim().isEmpty()
             ? OLLAMA_DEFAULT_BASE_URL : apiEndpoint.trim().replaceAll("/+$", "");
@@ -398,18 +307,13 @@ public class AiAgentServiceImpl implements AiAgentService {
         body.addProperty("model", model);
         body.add("messages", messages);
         body.addProperty("stream", false);
-        // keep the model resident between calls -- Ollama's 5-minute default unload made
-        // every request after a short pause pay the full reload cost again
+
         body.addProperty("keep_alive", "30m");
-        // constrains token sampling so the response is guaranteed syntactically valid JSON --
-        // unlike a "respond with JSON only" instruction, this can't be ignored by the model
+
         if (jsonMode) {
             body.addProperty("format", "json");
         }
-        // Ollama's runtime context window defaults to a small value (often 4096 tokens)
-        // regardless of what the underlying model actually supports -- a real document plus
-        // this agent's system prompt can easily exceed that and fail with
-        // "exceeds the available context size". Request a larger window explicitly.
+
         JsonObject options = new JsonObject();
         options.addProperty("num_ctx", 16384);
         body.add("options", options);
@@ -456,8 +360,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return response.getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString();
     }
 
-    /** Generic OpenAI-compatible chat-completions call against a user-supplied endpoint --
-     * covers self-hosted/proxy setups (e.g. Azure OpenAI, LM Studio, vLLM) that speak the same API shape. */
     private String callGenericOpenAiCompatible(String provider, String apiKey, String apiEndpoint, String model,
         String instructions, String userMessage) throws Exception {
         if (isNull(apiEndpoint)) {
@@ -480,15 +382,6 @@ public class AiAgentServiceImpl implements AiAgentService {
             .getAsJsonObject("message").get("content").getAsString();
     }
 
-    /**
-     * Method use to strip a leading/trailing ```json ... ``` (or plain ``` ... ```) code fence
-     * and surrounding whitespace from a jsonMode agent's result -- Ollama's format:"json"
-     * constrains sampling to valid JSON, but some model/template combinations (observed with
-     * deepseek-r1) still wrap that JSON in a markdown fence, which a downstream JSON.parse()
-     * would otherwise choke on.
-     * @param text
-     * @return String
-     * */
     private String stripJsonCodeFences(String text) {
         if (isNull(text)) {
             return text;
@@ -521,11 +414,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         }
     }
 
-    /**
-     * Method use to validate an agent payload against the allowed providers/file types
-     * @param aiAgentDto
-     * @return ResponseDto or null when valid
-     * */
     private ResponseDto validateAgent(AiAgentDto aiAgentDto) {
         if (isNull(aiAgentDto.getAgentName()) || aiAgentDto.getAgentName().trim().isEmpty()) {
             return new ResponseDto(ERROR, "Agent agentName missing.");
@@ -533,10 +421,7 @@ public class AiAgentServiceImpl implements AiAgentService {
         if (isNull(aiAgentDto.getProvider()) || aiAgentDto.getProvider().trim().isEmpty()) {
             return new ResponseDto(ERROR, "Agent provider missing.");
         }
-        // provider names come from Settings > Lookup (type AI_PROVIDER) now, so any non-empty
-        // value is accepted here -- OpenAI/Anthropic/Ollama get a bespoke call shape (see
-        // callProvider) with a built-in default endpoint, every other name needs an
-        // apiEndpoint to reach a generic OpenAI-compatible completions API
+
         boolean isBuiltInProvider = "OpenAI".equals(aiAgentDto.getProvider())
             || "Anthropic".equals(aiAgentDto.getProvider())
             || "Ollama".equals(aiAgentDto.getProvider());
@@ -556,12 +441,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return null;
     }
 
-    /**
-     * Method use to copy Dto values onto an entity -- encrypts+stores a new apiKey only when a
-     * non-empty one was supplied, leaving the existing (already-encrypted) key untouched otherwise.
-     * @param aiAgent
-     * @param dto
-     * */
     private void applyAgentDto(AiAgent aiAgent, AiAgentDto dto) {
         aiAgent.setAgentName(dto.getAgentName());
         aiAgent.setDescription(dto.getDescription());
@@ -576,11 +455,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         aiAgent.setJsonMode(Boolean.TRUE.equals(dto.getJsonMode()));
     }
 
-    /**
-     * Method use to map an AiAgent entity to its Dto -- deliberately never sets apiKey
-     * @param aiAgent
-     * @return AiAgentDto
-     * */
     private AiAgentDto getAiAgentDto(AiAgent aiAgent) {
         AiAgentDto dto = new AiAgentDto();
         dto.setAiAgentId(aiAgent.getAiAgentId());
@@ -599,13 +473,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         return dto;
     }
 
-    /**
-     * Method use to lazily backfill toolUuid for agents saved before this field existed --
-     * called wherever an agent is read via the normal id-based paths, so every agent ends up
-     * with one after being listed/opened once, with no manual migration needed.
-     * @param aiAgent
-     * @return AiAgent
-     * */
     private AiAgent ensureToolUuid(AiAgent aiAgent) {
         if (isNull(aiAgent.getToolUuid()) || aiAgent.getToolUuid().trim().isEmpty()) {
             aiAgent.setToolUuid(UUID.randomUUID().toString());

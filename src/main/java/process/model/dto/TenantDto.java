@@ -6,9 +6,6 @@ import com.google.gson.Gson;
 import process.model.enums.TenantStatus;
 import java.sql.Timestamp;
 
-/**
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TenantDto {
@@ -19,7 +16,7 @@ public class TenantDto {
     private String tenantCode;
     private TenantStatus status;
     private Timestamp dateCreated;
-    /** Set on the list response only -- how many AppUsers currently belong to this tenant. */
+
     private Long userCount;
 
     public TenantDto() {}

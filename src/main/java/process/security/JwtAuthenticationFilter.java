@@ -15,15 +15,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
 
-/**
- * Validates the "Authorization: Bearer <token>" header on every request. On a valid access
- * token, populates both Spring Security's context (so SecurityConfig's authenticated() checks
- * pass) and TenantContext (so repositories/services can scope queries -- see Phase 0's
- * tenant-scoped data access work). An invalid/missing/expired token is NOT an error here --
- * it just leaves the request unauthenticated, and SecurityConfig's exception handling turns
- * that into a 401 for any endpoint that isn't in the public allowlist.
- * @author Nabeel Ahmed
- */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
@@ -54,7 +45,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         } catch (JwtException | IllegalArgumentException ex) {
-            // expired/malformed/bad-signature token -- leave unauthenticated, don't 500
+
             this.logger.debug("Rejected token on {}: {}", request.getRequestURI(), ex.getMessage());
         }
         try {

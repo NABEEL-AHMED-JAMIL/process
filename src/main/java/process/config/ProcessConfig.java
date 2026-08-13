@@ -12,21 +12,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-/**
- * @author Nabeel Ahmed
- */
 @Configuration
 @EnableAsync
 @EnableScheduling
 @EnableSchedulerLock(defaultLockAtMostFor = "10m")
 public class ProcessConfig {
 
-
     private Logger logger = LoggerFactory.getLogger(ProcessConfig.class);
 
-    /**
-     * Method use to look only the table
-     * */
     @Bean
     public LockProvider lockProvider(DataSource dataSource) {
         return new JdbcTemplateLockProvider(

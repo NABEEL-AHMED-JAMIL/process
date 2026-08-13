@@ -6,20 +6,12 @@ import com.google.gson.Gson;
 import process.model.enums.Status;
 import java.sql.Timestamp;
 
-/**
- * Secret fields (saslPassword, sslKeystorePassword, sslKeyPassword, sslTruststorePassword) are
- * write-only -- set one to save/rotate it, but it is never populated when this Dto is built from
- * a saved KafkaConnectionProfile (see the matching *Configured booleans instead), same pattern
- * as AiAgentDto.apiKey/apiKeyConfigured.
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class KafkaConnectionProfileDto {
 
     private Long kafkaConnectionProfileId;
-    /** Null on read for a platform-wide/shared profile; always the caller's own tenant on
-     * write (server-assigned, ignores whatever the client sends -- see service layer). */
+
     private Long tenantId;
     private String profileName;
     private String environmentLabel;
@@ -38,8 +30,7 @@ public class KafkaConnectionProfileDto {
     private String sslTruststorePassword;
     private Boolean sslTruststorePasswordConfigured;
     private String sslEndpointIdentificationAlgorithm;
-    /** Free-form JSON object string of non-secret Kafka client properties -- see
-     * KafkaConnectionProfile's own javadoc for the "never a secret in here" contract. */
+
     private String additionalProperties;
     private Boolean isDefault;
     private Status status;

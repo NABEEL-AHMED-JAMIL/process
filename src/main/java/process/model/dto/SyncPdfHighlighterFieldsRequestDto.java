@@ -4,10 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.google.gson.Gson;
 import java.util.List;
 
-/**
- * Request body for replacing a PdfHighlighterTask's entire field list in one call.
- * @author Nabeel Ahmed
- */
 @JsonIgnoreProperties(ignoreUnknown=true)
 public class SyncPdfHighlighterFieldsRequestDto {
 

@@ -14,9 +14,6 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * @author Nabeel Ahmed
- */
 @Entity
 @Table(name = "dynamic_form", indexes = {
     @Index(name = "idx_dynamic_form_tenant_id", columnList = "tenant_id")
@@ -41,8 +38,6 @@ public class DynamicForm {
     @GeneratedValue(generator = "dynamicFormSequenceGenerator")
     private Long dynamicFormId;
 
-    /** Owning tenant -- see Tenant/TenantContext. Nullable during the Phase 0 migration window
-     * (backfilled to the Default tenant by TenantSeedService on startup). */
     @Column(name = "tenant_id")
     private Long tenantId;
 
@@ -59,14 +54,6 @@ public class DynamicForm {
     @Column(name = "date_created")
     private Timestamp dateCreated;
 
-    /**
-     * Opaque id for the shareable fetch-by-uuid API -- deliberately separate from the
-     * sequential dynamicFormId so a shared/public link can't be used to enumerate other forms
-     * by incrementing the number. Nullable at the column level only so existing rows (created
-     * before this field existed) don't break the schema upgrade -- backfilled lazily the first
-     * time such a row is read (see DynamicFormServiceImpl#ensureUuid), same as every new form
-     * gets one on creation (see DynamicFormServiceImpl#addForm).
-     * */
     @Column(name = "uuid", unique = true)
     private String uuid;
 

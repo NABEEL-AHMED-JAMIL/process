@@ -2,11 +2,6 @@ package process.engine.query;
 
 import java.io.File;
 
-/**
- * Result of CsvExportService.streamToCsvFile -- file is a local temp file the caller must
- * delete once it's been uploaded (see QueryExecutionServiceImpl's finally block).
- * @author Nabeel Ahmed
- */
 public final class CsvExportResult {
 
     private final File file;
