@@ -5,6 +5,7 @@ import process.model.dto.BrowseObjectsResponseDto;
 import process.model.dto.BucketSummaryDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
+import java.io.InputStream;
 import java.util.List;
 
 public interface StorageBrowserService {
@@ -21,7 +22,7 @@ public interface StorageBrowserService {
 
     void uploadObject(String bucket, String prefix, MultipartFile file);
 
-    void uploadObject(String bucket, String key, java.io.InputStream inputStream, long size, String contentType);
+    void uploadObject(String bucket, String key, InputStream inputStream, long size, String contentType);
 
     void createFolder(String bucket, String prefix, String folderName);
 

@@ -45,8 +45,16 @@ public class SourceJob {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "assigned_user_id")
     private Long assignedUserId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_user_id", insertable = false, updatable = false)
+    private AppUser assignedUser;
 
     @Column(name = "job_name",
        length = 1000, nullable = false)
@@ -110,12 +118,20 @@ public class SourceJob {
         this.tenantId = tenantId;
     }
 
+    public Tenant getTenant() {
+        return tenant;
+    }
+
     public Long getAssignedUserId() {
         return assignedUserId;
     }
 
     public void setAssignedUserId(Long assignedUserId) {
         this.assignedUserId = assignedUserId;
+    }
+
+    public AppUser getAssignedUser() {
+        return assignedUser;
     }
 
     public void setJobId(Long jobId) {

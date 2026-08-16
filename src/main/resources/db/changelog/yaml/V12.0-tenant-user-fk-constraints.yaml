@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 12.0-add-tenant-user-fk-constraints
+      author: nabeel.amd93
+      description: "Add real DB-level FK constraints on every loose tenant_id/assigned_user_id/created_by/updated_by column (previously plain Longs with no referential integrity)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V12.0-tenant-user-fk-constraints/V12__add_tenant_user_fk_constraints.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE ai_agent DROP CONSTRAINT IF EXISTS fk_ai_agent_tenant;
+              ALTER TABLE database_connection_profile DROP CONSTRAINT IF EXISTS fk_database_connection_profile_tenant;
+              ALTER TABLE database_connection_profile DROP CONSTRAINT IF EXISTS fk_database_connection_profile_created_by;
+              ALTER TABLE database_connection_profile DROP CONSTRAINT IF EXISTS fk_database_connection_profile_updated_by;
+              ALTER TABLE document_converter_task DROP CONSTRAINT IF EXISTS fk_document_converter_task_tenant;
+              ALTER TABLE dynamic_form DROP CONSTRAINT IF EXISTS fk_dynamic_form_tenant;
+              ALTER TABLE kafka_connection_profile DROP CONSTRAINT IF EXISTS fk_kafka_connection_profile_tenant;
+              ALTER TABLE lookup_data DROP CONSTRAINT IF EXISTS fk_lookup_data_tenant;
+              ALTER TABLE pdf_highlighter_task DROP CONSTRAINT IF EXISTS fk_pdf_highlighter_task_tenant;
+              ALTER TABLE query_definition DROP CONSTRAINT IF EXISTS fk_query_definition_tenant;
+              ALTER TABLE query_definition DROP CONSTRAINT IF EXISTS fk_query_definition_created_by;
+              ALTER TABLE query_definition DROP CONSTRAINT IF EXISTS fk_query_definition_updated_by;
+              ALTER TABLE query_execution DROP CONSTRAINT IF EXISTS fk_query_execution_tenant;
+              ALTER TABLE query_execution DROP CONSTRAINT IF EXISTS fk_query_execution_created_by;
+              ALTER TABLE query_schedule DROP CONSTRAINT IF EXISTS fk_query_schedule_tenant;
+              ALTER TABLE query_schedule DROP CONSTRAINT IF EXISTS fk_query_schedule_created_by;
+              ALTER TABLE query_schedule DROP CONSTRAINT IF EXISTS fk_query_schedule_updated_by;
+              ALTER TABLE source_job DROP CONSTRAINT IF EXISTS fk_source_job_tenant;
+              ALTER TABLE source_job DROP CONSTRAINT IF EXISTS fk_source_job_assigned_user;
+              ALTER TABLE source_task DROP CONSTRAINT IF EXISTS fk_source_task_tenant;
+              ALTER TABLE source_task_type DROP CONSTRAINT IF EXISTS fk_source_task_type_tenant;
+              ALTER TABLE tenant_task_type_kafka_route DROP CONSTRAINT IF EXISTS fk_tenant_task_type_kafka_route_tenant;
+              ALTER TABLE app_user DROP CONSTRAINT IF EXISTS fk_app_user_tenant;

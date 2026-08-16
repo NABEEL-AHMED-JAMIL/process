@@ -8,9 +8,13 @@ import process.model.pojo.*;
 import process.model.projection.SourceJobProjection;
 import process.model.repository.*;
 import process.security.TenantContext;
+import process.util.OpenSearchAuditLogClient;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class TransactionServiceImpl {
@@ -23,22 +27,30 @@ public class TransactionServiceImpl {
     private final LookupDataRepository lookupDataRepository;
     private final JobAuditLogRepository jobAuditLogRepository;
     private final SourceTaskRepository sourceTaskRepository;
+    private final OpenSearchAuditLogClient openSearchAuditLogClient;
 
     public TransactionServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         JobQueueRepository jobQueueRepository,
         LookupDataRepository lookupDataRepository,
         JobAuditLogRepository jobAuditLogRepository,
-        SourceTaskRepository sourceTaskRepository) {
+        SourceTaskRepository sourceTaskRepository,
+        OpenSearchAuditLogClient openSearchAuditLogClient) {
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.jobQueueRepository = jobQueueRepository;
         this.lookupDataRepository = lookupDataRepository;
         this.jobAuditLogRepository = jobAuditLogRepository;
         this.sourceTaskRepository = sourceTaskRepository;
+        this.openSearchAuditLogClient = openSearchAuditLogClient;
     }
 
     public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        String externalId = UUID.randomUUID().toString();
+        if (this.openSearchAuditLogClient.index(externalId, jobQueueId, logsDetail, now)) {
+            return;
+        }
         JobAuditLogs jobAuditLogs = new JobAuditLogs();
         jobAuditLogs.setJobQueueId(jobQueueId);
         jobAuditLogs.setLogsDetail(logsDetail);
@@ -97,7 +109,7 @@ public class TransactionServiceImpl {
 
     public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId) {
         return this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(taskDetailId, Status.Active)
-            .filter(task -> TenantContext.isPlatformAdmin() || java.util.Objects.equals(task.getTenantId(), TenantContext.getTenantId()));
+            .filter(task -> TenantContext.isPlatformAdmin() || Objects.equals(task.getTenantId(), TenantContext.getTenantId()));
     }
 
     public List<Long> findAllSourceTask() {

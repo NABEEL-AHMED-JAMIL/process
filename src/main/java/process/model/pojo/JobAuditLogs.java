@@ -36,6 +36,13 @@ public class JobAuditLogs {
         nullable = false)
     private Long jobQueueId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "job_queue_id", insertable = false, updatable = false)
+    private JobQueue jobQueue;
+
+    @Column(name = "external_id", unique = true)
+    private String externalId;
+
     @Column(name = "log_detail", nullable = false, columnDefinition = "TEXT")
     private String logsDetail;
 
@@ -72,6 +79,10 @@ public class JobAuditLogs {
 
     public void setJobQueueId(Long jobQueueId) {
         this.jobQueueId = jobQueueId;
+    }
+
+    public JobQueue getJobQueue() {
+        return jobQueue;
     }
 
     public String getLogsDetail() {

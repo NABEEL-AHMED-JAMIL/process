@@ -125,10 +125,20 @@ services:
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://host.docker.internal:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      # Job audit logs (OpenSearchAuditLogClient) -- OpenSearch is a separate compose project's
+      # container (job-search), reached the same way MinIO is: via the published host port,
+      # since process_app isn't on that project's docker network.
+      OPENSEARCH_URL: ${OPENSEARCH_URL:-http://host.docker.internal:9200}
       AWS_S3_ACCESS_KEY: ${AWS_S3_ACCESS_KEY:-}
       AWS_S3_SECRET_KEY: ${AWS_S3_SECRET_KEY:-}
       AWS_S3_REGION: ${AWS_S3_REGION:-us-east-1}
       AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING:-}
+      # WebSocket (STOMP/SockJS) Origin allowlist -- application-{prod,stage}.properties already
+      # read this env var, but the "dev" profile active here has no properties file wiring it up,
+      # so it's supplied directly. Includes the LAN IP so phones/other laptops on the same
+      # network can open the live-job-updates socket via http://<lan-ip>/... (port 80, docker) and
+      # http://<lan-ip>:8084/... (webpack dev server) -- update if the host's LAN IP changes.
+      WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost,http://localhost:8080,http://10.0.0.248,http://10.0.0.248:8084}
     depends_on:
       postgres:
         condition: service_healthy

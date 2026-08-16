@@ -41,6 +41,10 @@ public class DynamicForm {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "form_name", nullable = false)
     private String formName;
 
@@ -74,6 +78,10 @@ public class DynamicForm {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public void setDynamicFormId(Long dynamicFormId) {

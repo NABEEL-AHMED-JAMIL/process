@@ -56,6 +56,10 @@ public class Scheduler {
         nullable = false)
     private Long jobId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "job_id", insertable = false, updatable = false)
+    private SourceJob sourceJob;
+
     @Column(name = "date_created")
     private Timestamp dateCreated;
 
@@ -123,6 +127,10 @@ public class Scheduler {
 
     public void setJobId(Long jobId) {
         this.jobId = jobId;
+    }
+
+    public SourceJob getSourceJob() {
+        return sourceJob;
     }
 
     public Timestamp getDateCreated() {

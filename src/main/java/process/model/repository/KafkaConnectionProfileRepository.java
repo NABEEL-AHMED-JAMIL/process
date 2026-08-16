@@ -24,6 +24,8 @@ public interface KafkaConnectionProfileRepository extends JpaRepository<KafkaCon
 
     Optional<KafkaConnectionProfile> findByTenantIdAndIsDefaultTrueAndStatus(Long tenantId, Status status);
 
+    long countByTenantIdAndStatusNot(Long tenantId, Status status);
+
     Optional<KafkaConnectionProfile> findByTenantIdIsNullAndIsDefaultTrueAndStatus(Status status);
 
     @Transactional

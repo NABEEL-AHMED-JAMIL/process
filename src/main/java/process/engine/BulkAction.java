@@ -85,6 +85,7 @@ public class BulkAction {
         jobQueue.setJobStatus(jobStatus);
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatusMessage(String.format(message, jobId));
+        this.applyBucketSnapshot(jobQueue, jobId);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
         return jobQueue;
     }
@@ -102,8 +103,23 @@ public class BulkAction {
         jobQueue.setJobStatus(jobStatus);
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatusMessage(String.format(message, jobId));
+        this.applyBucketSnapshot(jobQueue, jobId);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
         return jobQueue;
+    }
+
+    /**
+     * Snapshots the owning SourceJob's SourceTask.bucket/outputFolder onto the new job_queue row
+     * at the moment it's created -- see the field comments on JobQueue for why this has to be a
+     * snapshot rather than a live join at display time.
+     */
+    private void applyBucketSnapshot(JobQueue jobQueue, Long jobId) {
+        this.transactionService.findByJobId(jobId).ifPresent(sourceJob -> {
+            if (sourceJob.getTaskDetail() != null) {
+                jobQueue.setBucket(sourceJob.getTaskDetail().getBucket());
+                jobQueue.setOutputFolder(sourceJob.getTaskDetail().getOutputFolder());
+            }
+        });
     }
 
     public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {

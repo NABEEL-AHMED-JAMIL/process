@@ -23,8 +23,13 @@ import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.KafkaConnectionProfileService;
 import process.security.TenantContext;
 import process.util.EncryptionUtil;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import java.sql.Timestamp;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -38,7 +43,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
     private final Logger logger = LoggerFactory.getLogger(KafkaConnectionProfileServiceImpl.class);
 
     private static final List<String> VALID_SECURITY_PROTOCOLS =
-        java.util.Arrays.asList("PLAINTEXT", "SASL_PLAINTEXT", "SASL_SSL", "SSL");
+        Arrays.asList("PLAINTEXT", "SASL_PLAINTEXT", "SASL_SSL", "SSL");
 
     private final KafkaConnectionProfileRepository profileRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
@@ -230,10 +235,10 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         }
         Long tenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
         Optional<KafkaConnectionProfile> resolved = this.kafkaConnectionResolver.resolve(tenantId, null);
-        java.util.Map<String, Object> adminProps = resolved.map(this.kafkaTemplateProvider::commonClientProps)
+        Map<String, Object> adminProps = resolved.map(this.kafkaTemplateProvider::commonClientProps)
             .orElseGet(this.kafkaTemplateProvider::defaultAdminProps);
         try (AdminClient adminClient = AdminClient.create(adminProps)) {
-            DescribeTopicsResult result = adminClient.describeTopics(java.util.Collections.singleton(topicName));
+            DescribeTopicsResult result = adminClient.describeTopics(Collections.singleton(topicName));
             TopicDescription description = result.values().get(topicName).get(10, TimeUnit.SECONDS);
             return new ResponseDto(SUCCESS, String.format(
                 "Topic \"%s\" is reachable -- %d partition(s).", topicName, description.partitions().size()));
@@ -268,8 +273,8 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         }
         if (!isNull(dto.getAdditionalProperties()) && !dto.getAdditionalProperties().trim().isEmpty()) {
             try {
-                new com.google.gson.Gson().fromJson(dto.getAdditionalProperties(),
-                    new com.google.gson.reflect.TypeToken<java.util.Map<String, String>>() {}.getType());
+                new Gson().fromJson(dto.getAdditionalProperties(),
+                    new TypeToken<Map<String, String>>() {}.getType());
             } catch (Exception ex) {
                 return new ResponseDto(ERROR, "additionalProperties must be a valid JSON object of string properties.");
             }
@@ -318,6 +323,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         if (!isNull(dto.getSaslPassword()) && !dto.getSaslPassword().trim().isEmpty()) {
             profile.setSaslPassword(this.encryptionUtil.encrypt(dto.getSaslPassword()));
         }
+        profile.setSslKeystoreBucket(dto.getSslKeystoreBucket());
         profile.setSslKeystoreLocation(dto.getSslKeystoreLocation());
         if (!isNull(dto.getSslKeystorePassword()) && !dto.getSslKeystorePassword().trim().isEmpty()) {
             profile.setSslKeystorePasswordEnc(this.encryptionUtil.encrypt(dto.getSslKeystorePassword()));
@@ -325,6 +331,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         if (!isNull(dto.getSslKeyPassword()) && !dto.getSslKeyPassword().trim().isEmpty()) {
             profile.setSslKeyPasswordEnc(this.encryptionUtil.encrypt(dto.getSslKeyPassword()));
         }
+        profile.setSslTruststoreBucket(dto.getSslTruststoreBucket());
         profile.setSslTruststoreLocation(dto.getSslTruststoreLocation());
         if (!isNull(dto.getSslTruststorePassword()) && !dto.getSslTruststorePassword().trim().isEmpty()) {
             profile.setSslTruststorePasswordEnc(this.encryptionUtil.encrypt(dto.getSslTruststorePassword()));
@@ -344,9 +351,11 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         dto.setSaslMechanism(profile.getSaslMechanism());
         dto.setSaslUsername(profile.getSaslUsername());
         dto.setSaslPasswordConfigured(!isNull(profile.getSaslPassword()));
+        dto.setSslKeystoreBucket(profile.getSslKeystoreBucket());
         dto.setSslKeystoreLocation(profile.getSslKeystoreLocation());
         dto.setSslKeystorePasswordConfigured(!isNull(profile.getSslKeystorePasswordEnc()));
         dto.setSslKeyPasswordConfigured(!isNull(profile.getSslKeyPasswordEnc()));
+        dto.setSslTruststoreBucket(profile.getSslTruststoreBucket());
         dto.setSslTruststoreLocation(profile.getSslTruststoreLocation());
         dto.setSslTruststorePasswordConfigured(!isNull(profile.getSslTruststorePasswordEnc()));
         dto.setSslEndpointIdentificationAlgorithm(profile.getSslEndpointIdentificationAlgorithm());

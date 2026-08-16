@@ -38,11 +38,23 @@ public class TenantTaskTypeKafkaRoute {
     @Column(name = "tenant_id", nullable = false)
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "source_task_type_id", nullable = false)
     private Long sourceTaskTypeId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_task_type_id", insertable = false, updatable = false)
+    private SourceTaskType sourceTaskType;
+
     @Column(name = "kafka_connection_profile_id", nullable = false)
     private Long kafkaConnectionProfileId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "kafka_connection_profile_id", insertable = false, updatable = false)
+    private KafkaConnectionProfile kafkaConnectionProfile;
 
     @Column(name = "date_created")
     private Timestamp dateCreated;
@@ -70,6 +82,10 @@ public class TenantTaskTypeKafkaRoute {
         this.tenantId = tenantId;
     }
 
+    public Tenant getTenant() {
+        return tenant;
+    }
+
     public Long getSourceTaskTypeId() {
         return sourceTaskTypeId;
     }
@@ -78,12 +94,20 @@ public class TenantTaskTypeKafkaRoute {
         this.sourceTaskTypeId = sourceTaskTypeId;
     }
 
+    public SourceTaskType getSourceTaskType() {
+        return sourceTaskType;
+    }
+
     public Long getKafkaConnectionProfileId() {
         return kafkaConnectionProfileId;
     }
 
     public void setKafkaConnectionProfileId(Long kafkaConnectionProfileId) {
         this.kafkaConnectionProfileId = kafkaConnectionProfileId;
+    }
+
+    public KafkaConnectionProfile getKafkaConnectionProfile() {
+        return kafkaConnectionProfile;
     }
 
     public Timestamp getDateCreated() {

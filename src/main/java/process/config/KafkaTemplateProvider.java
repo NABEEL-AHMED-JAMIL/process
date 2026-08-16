@@ -16,8 +16,16 @@ import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+import process.model.dto.ObjectContentDto;
 import process.model.pojo.KafkaConnectionProfile;
+import process.model.service.StorageBrowserService;
 import process.util.EncryptionUtil;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,18 +40,22 @@ public class KafkaTemplateProvider {
 
     private final Logger logger = LoggerFactory.getLogger(KafkaTemplateProvider.class);
     private final Gson gson = new Gson();
+    private static final Path SECRET_CACHE_ROOT = Paths.get(System.getProperty("java.io.tmpdir"), "kafka-secrets-cache");
 
     private final EncryptionUtil encryptionUtil;
     private final KafkaTemplate<String, String> fallbackTemplate;
     private final KafkaProperties kafkaProperties;
+    private final StorageBrowserService storageBrowserService;
 
     private final Map<Long, CachedProducer> cache = new ConcurrentHashMap<>();
 
     public KafkaTemplateProvider(EncryptionUtil encryptionUtil,
-        KafkaTemplate<String, String> fallbackTemplate, KafkaProperties kafkaProperties) {
+        KafkaTemplate<String, String> fallbackTemplate, KafkaProperties kafkaProperties,
+        StorageBrowserService storageBrowserService) {
         this.encryptionUtil = encryptionUtil;
         this.fallbackTemplate = fallbackTemplate;
         this.kafkaProperties = kafkaProperties;
+        this.storageBrowserService = storageBrowserService;
     }
 
     public KafkaTemplate<String, String> getTemplate(Optional<KafkaConnectionProfile> profile) {
@@ -69,6 +81,7 @@ public class KafkaTemplateProvider {
                 this.logger.warn("Error closing Kafka producer factory for profile {}: {}", kafkaConnectionProfileId, ex.getMessage());
             }
         }
+        this.deleteQuietlyRecursive(SECRET_CACHE_ROOT.resolve(String.valueOf(kafkaConnectionProfileId)));
     }
 
     public Map<String, Object> commonClientProps(KafkaConnectionProfile profile) {
@@ -90,13 +103,17 @@ public class KafkaTemplateProvider {
         }
         if ("SSL".equals(securityProtocol) || "SASL_SSL".equals(securityProtocol)) {
             if (profile.getSslTruststoreLocation() != null && !profile.getSslTruststoreLocation().trim().isEmpty()) {
-                props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, profile.getSslTruststoreLocation());
+                String localPath = this.resolveLocalSecretFile(
+                    profile.getKafkaConnectionProfileId(), "truststore", profile.getSslTruststoreBucket(), profile.getSslTruststoreLocation());
+                props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, localPath);
                 if (profile.getSslTruststorePasswordEnc() != null) {
                     props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslTruststorePasswordEnc()));
                 }
             }
             if (profile.getSslKeystoreLocation() != null && !profile.getSslKeystoreLocation().trim().isEmpty()) {
-                props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, profile.getSslKeystoreLocation());
+                String localPath = this.resolveLocalSecretFile(
+                    profile.getKafkaConnectionProfileId(), "keystore", profile.getSslKeystoreBucket(), profile.getSslKeystoreLocation());
+                props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, localPath);
                 if (profile.getSslKeystorePasswordEnc() != null) {
                     props.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslKeystorePasswordEnc()));
                 }
@@ -111,6 +128,50 @@ public class KafkaTemplateProvider {
         }
         this.mergeAdditionalProperties(props, profile.getAdditionalProperties());
         return props;
+    }
+
+    private String resolveLocalSecretFile(Long profileId, String kind, String bucket, String objectKey) {
+        if (bucket == null || bucket.trim().isEmpty()) {
+            return objectKey;
+        }
+        Path localFile = SECRET_CACHE_ROOT.resolve(String.valueOf(profileId)).resolve(kind + this.extensionOf(objectKey));
+        if (Files.exists(localFile)) {
+            return localFile.toString();
+        }
+        try {
+            Files.createDirectories(localFile.getParent());
+            ObjectContentDto content = this.storageBrowserService.downloadObject(bucket, objectKey, null, null);
+            try (InputStream in = content.getContent()) {
+                Files.copy(in, localFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            this.logger.info("Cached {} for Kafka profile {} from bucket {}/{} -> {}", kind, profileId, bucket, objectKey, localFile);
+            return localFile.toString();
+        } catch (IOException | RuntimeException ex) {
+            throw new IllegalStateException(
+                "Could not download " + kind + " from bucket " + bucket + "/" + objectKey + " for Kafka profile " + profileId, ex);
+        }
+    }
+
+    private String extensionOf(String objectKey) {
+        int dot = objectKey.lastIndexOf('.');
+        return dot >= 0 ? objectKey.substring(dot) : "";
+    }
+
+    private void deleteQuietlyRecursive(Path dir) {
+        if (!Files.exists(dir)) {
+            return;
+        }
+        try (java.util.stream.Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.delete(p);
+                } catch (IOException ex) {
+                    this.logger.warn("Could not delete cached secret file {}: {}", p, ex.getMessage());
+                }
+            });
+        } catch (IOException ex) {
+            this.logger.warn("Could not walk cached secret dir {}: {}", dir, ex.getMessage());
+        }
     }
 
     private void mergeAdditionalProperties(Map<String, Object> props, String additionalPropertiesJson) {

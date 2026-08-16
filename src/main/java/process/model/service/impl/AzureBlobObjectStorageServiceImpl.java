@@ -18,6 +18,7 @@ import process.model.dto.ObjectMetadataDto;
 import process.model.dto.ObjectSummaryDto;
 import process.model.service.ObjectStorageService;
 import process.util.ContentTypeUtil;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -124,7 +125,7 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
     @Override
     public void createFolder(String bucket, String folderKey) {
         try {
-            this.blobClient(bucket, folderKey).upload(new java.io.ByteArrayInputStream(new byte[0]), 0, true);
+            this.blobClient(bucket, folderKey).upload(new ByteArrayInputStream(new byte[0]), 0, true);
         } catch (Exception e) {
             throw new RuntimeException("Could not create Azure folder " + bucket + "/" + folderKey, e);
         }

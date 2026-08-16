@@ -15,6 +15,8 @@ public interface LookupDataRepository extends CrudRepository<LookupData, Long> {
 
     public List<LookupData> findByParentLookupIdIsNull();
 
+    long countByTenantIdAndParent_LookupType(Long tenantId, String lookupType);
+
     @Transactional
     @Modifying
     @Query("update LookupData l set l.tenantId = ?1 where l.tenantId is null and l.parent.lookupId in "

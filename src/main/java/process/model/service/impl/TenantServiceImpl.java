@@ -10,6 +10,11 @@ import process.model.enums.Status;
 import process.model.enums.TenantStatus;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
+import process.model.repository.KafkaConnectionProfileRepository;
+import process.model.repository.LookupDataRepository;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.TenantService;
 import java.sql.Timestamp;
@@ -24,23 +29,46 @@ public class TenantServiceImpl implements TenantService {
 
     private final Logger logger = LoggerFactory.getLogger(TenantServiceImpl.class);
 
+    private static final String BUCKET_LIST = "BUCKET_LIST";
+
     private final TenantRepository tenantRepository;
     private final AppUserRepository appUserRepository;
+    private final KafkaConnectionProfileRepository kafkaConnectionProfileRepository;
+    private final LookupDataRepository lookupDataRepository;
+    private final SourceTaskTypeRepository sourceTaskTypeRepository;
+    private final SourceTaskRepository sourceTaskRepository;
+    private final SourceJobRepository sourceJobRepository;
 
-    public TenantServiceImpl(TenantRepository tenantRepository, AppUserRepository appUserRepository) {
+    public TenantServiceImpl(TenantRepository tenantRepository, AppUserRepository appUserRepository,
+        KafkaConnectionProfileRepository kafkaConnectionProfileRepository, LookupDataRepository lookupDataRepository,
+        SourceTaskTypeRepository sourceTaskTypeRepository, SourceTaskRepository sourceTaskRepository,
+        SourceJobRepository sourceJobRepository) {
         this.tenantRepository = tenantRepository;
         this.appUserRepository = appUserRepository;
+        this.kafkaConnectionProfileRepository = kafkaConnectionProfileRepository;
+        this.lookupDataRepository = lookupDataRepository;
+        this.sourceTaskTypeRepository = sourceTaskTypeRepository;
+        this.sourceTaskRepository = sourceTaskRepository;
+        this.sourceJobRepository = sourceJobRepository;
     }
 
     @Override
     public ResponseDto listTenants() throws Exception {
         List<Tenant> tenants = this.tenantRepository.findByStatusNotOrderByTenantIdDesc(TenantStatus.Delete);
-        List<TenantDto> tenantDtos = tenants.stream().map(tenant -> {
-            TenantDto dto = this.mapToDto(tenant);
-            dto.setUserCount(this.appUserRepository.countByTenantIdAndStatusNot(tenant.getTenantId(), Status.Delete));
-            return dto;
-        }).collect(Collectors.toList());
+        List<TenantDto> tenantDtos = tenants.stream().map(this::mapToDtoWithStats).collect(Collectors.toList());
         return new ResponseDto(SUCCESS, "Tenants fetched successfully.", tenantDtos);
+    }
+
+    private TenantDto mapToDtoWithStats(Tenant tenant) {
+        TenantDto dto = this.mapToDto(tenant);
+        Long tenantId = tenant.getTenantId();
+        dto.setUserCount(this.appUserRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
+        dto.setKafkaProfileCount(this.kafkaConnectionProfileRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
+        dto.setBucketCount(this.lookupDataRepository.countByTenantIdAndParent_LookupType(tenantId, BUCKET_LIST));
+        dto.setSourceTaskTypeCount(this.sourceTaskTypeRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
+        dto.setSourceTaskCount(this.sourceTaskRepository.countByTenantIdAndTaskStatusNot(tenantId, Status.Delete));
+        dto.setSourceJobCount(this.sourceJobRepository.countByTenantIdAndJobStatusNot(tenantId, Status.Delete));
+        return dto;
     }
 
     @Override

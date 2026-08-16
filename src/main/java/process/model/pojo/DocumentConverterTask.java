@@ -39,6 +39,10 @@ public class DocumentConverterTask {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "task_name", nullable = false)
     private String taskName;
 
@@ -107,6 +111,10 @@ public class DocumentConverterTask {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public String getTaskName() {

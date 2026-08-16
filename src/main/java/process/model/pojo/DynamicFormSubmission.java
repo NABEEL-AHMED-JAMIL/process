@@ -31,6 +31,10 @@ public class DynamicFormSubmission {
     @Column(name = "dynamic_form_id", nullable = false)
     private Long dynamicFormId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dynamic_form_id", insertable = false, updatable = false)
+    private DynamicForm dynamicForm;
+
     @Column(name = "uuid", unique = true)
     private String uuid;
 
@@ -56,6 +60,10 @@ public class DynamicFormSubmission {
 
     public void setDynamicFormId(Long dynamicFormId) {
         this.dynamicFormId = dynamicFormId;
+    }
+
+    public DynamicForm getDynamicForm() {
+        return dynamicForm;
     }
 
     public String getUuid() {

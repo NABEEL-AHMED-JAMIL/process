@@ -18,6 +18,11 @@ public class TenantDto {
     private Timestamp dateCreated;
 
     private Long userCount;
+    private Long kafkaProfileCount;
+    private Long bucketCount;
+    private Long sourceTaskTypeCount;
+    private Long sourceTaskCount;
+    private Long sourceJobCount;
 
     public TenantDto() {}
 
@@ -75,6 +80,46 @@ public class TenantDto {
 
     public void setUserCount(Long userCount) {
         this.userCount = userCount;
+    }
+
+    public Long getKafkaProfileCount() {
+        return kafkaProfileCount;
+    }
+
+    public void setKafkaProfileCount(Long kafkaProfileCount) {
+        this.kafkaProfileCount = kafkaProfileCount;
+    }
+
+    public Long getBucketCount() {
+        return bucketCount;
+    }
+
+    public void setBucketCount(Long bucketCount) {
+        this.bucketCount = bucketCount;
+    }
+
+    public Long getSourceTaskTypeCount() {
+        return sourceTaskTypeCount;
+    }
+
+    public void setSourceTaskTypeCount(Long sourceTaskTypeCount) {
+        this.sourceTaskTypeCount = sourceTaskTypeCount;
+    }
+
+    public Long getSourceTaskCount() {
+        return sourceTaskCount;
+    }
+
+    public void setSourceTaskCount(Long sourceTaskCount) {
+        this.sourceTaskCount = sourceTaskCount;
+    }
+
+    public Long getSourceJobCount() {
+        return sourceJobCount;
+    }
+
+    public void setSourceJobCount(Long sourceJobCount) {
+        this.sourceJobCount = sourceJobCount;
     }
 
     @Override

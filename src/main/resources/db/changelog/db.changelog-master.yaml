@@ -28,3 +28,9 @@ databaseChangeLog:
       file: db/changelog/yaml/V10.0-fix-task-types-pipelines.yaml
   - include:
       file: db/changelog/yaml/V11.0-kafka-dynamic-config.yaml
+  - include:
+      file: db/changelog/yaml/V12.0-tenant-user-fk-constraints.yaml
+  - include:
+      file: db/changelog/yaml/V13.0-job-fk-constraints.yaml
+  - include:
+      file: db/changelog/yaml/V14.0-remaining-fk-constraints.yaml

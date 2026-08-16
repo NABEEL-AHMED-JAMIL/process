@@ -3,6 +3,7 @@ package process.engine;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 import process.config.KafkaConnectionResolver;
@@ -160,7 +161,7 @@ public class ProducerBulkEngine {
                         String payload = this.getSourceJobDetail(sourceJob, jobQueue);
                         try {
 
-                            org.springframework.kafka.core.KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
+                            KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
                                 this.kafkaConnectionResolver.resolve(sourceJob.getTenantId(), sourceTaskType.getSourceTaskTypeId()));
                             if (partition.contains(ProcessUtil.START)) {
                                 template.send(topic, key, payload)

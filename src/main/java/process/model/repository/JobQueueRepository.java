@@ -3,6 +3,7 @@ package process.model.repository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.JobQueue;
@@ -20,7 +21,10 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "select count(*) from job_queue where job_id = ?1", nativeQuery = true)
     public int getCountForJobByJobId(Long jobId);
 
-    public java.util.List<JobQueue> findAllByJobId(Long jobId);
+    @Query(value = "select job_id, count(*) from job_queue where job_id in :jobIds group by job_id", nativeQuery = true)
+    public List<Object[]> countGroupByJobIds(@Param("jobIds") List<Long> jobIds);
+
+    public List<JobQueue> findAllByJobId(Long jobId);
 
     @Transactional
     @Modifying

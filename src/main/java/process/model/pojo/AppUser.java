@@ -39,6 +39,10 @@ public class AppUser {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "username", nullable = false, unique = true)
     private String username;
 
@@ -86,6 +90,10 @@ public class AppUser {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public String getUsername() {

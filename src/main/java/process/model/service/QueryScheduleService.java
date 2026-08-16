@@ -2,6 +2,7 @@ package process.model.service;
 
 import process.model.dto.QueryScheduleDto;
 import process.model.dto.ResponseDto;
+import process.model.pojo.QuerySchedule;
 import java.sql.Timestamp;
 import java.util.List;
 
@@ -17,7 +18,7 @@ public interface QueryScheduleService {
 
     public ResponseDto fetchScheduleById(Long scheduleId) throws Exception;
 
-    public List<process.model.pojo.QuerySchedule> findDueSchedules(Timestamp now);
+    public List<QuerySchedule> findDueSchedules(Timestamp now);
 
     public void advanceNextRun(Long scheduleId) throws Exception;
 

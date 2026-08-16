@@ -34,6 +34,10 @@ public class SourceTaskType {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "service_name",
         nullable = false)
     private String serviceName;
@@ -53,6 +57,10 @@ public class SourceTaskType {
 
     @Column(name = "kafka_connection_profile_id")
     private Long kafkaConnectionProfileId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "kafka_connection_profile_id", insertable = false, updatable = false)
+    private KafkaConnectionProfile kafkaConnectionProfile;
 
     public SourceTaskType() {}
 
@@ -83,6 +91,10 @@ public class SourceTaskType {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public String getServiceName() {
@@ -123,6 +135,10 @@ public class SourceTaskType {
 
     public void setKafkaConnectionProfileId(Long kafkaConnectionProfileId) {
         this.kafkaConnectionProfileId = kafkaConnectionProfileId;
+    }
+
+    public KafkaConnectionProfile getKafkaConnectionProfile() {
+        return kafkaConnectionProfile;
     }
 
     @Override

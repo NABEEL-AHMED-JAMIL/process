@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.AppUserDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
+import process.model.enums.TenantStatus;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
@@ -16,8 +17,11 @@ import process.model.repository.TenantRepository;
 import process.model.service.AppUserService;
 import process.security.TenantContext;
 import java.sql.Timestamp;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
@@ -195,9 +199,9 @@ public class AppUserServiceImpl implements AppUserService {
     }
 
     private List<AppUserDto> mapToDtoList(List<AppUser> users) {
-        java.util.Set<Long> tenantIds = users.stream().map(AppUser::getTenantId)
+        Set<Long> tenantIds = users.stream().map(AppUser::getTenantId)
             .filter(tenantId -> !isNull(tenantId)).collect(Collectors.toSet());
-        java.util.Map<Long, Tenant> tenantById = tenantIds.isEmpty() ? java.util.Collections.emptyMap()
+        Map<Long, Tenant> tenantById = tenantIds.isEmpty() ? Collections.emptyMap()
             : this.tenantRepository.findAllById(tenantIds).stream()
                 .collect(Collectors.toMap(Tenant::getTenantId, t -> t));
         return users.stream().map(user -> {
@@ -223,7 +227,7 @@ public class AppUserServiceImpl implements AppUserService {
             return;
         }
         dto.setTenantName(tenant.getTenantName());
-        dto.setTenantActive(tenant.getStatus() == process.model.enums.TenantStatus.Active);
+        dto.setTenantActive(tenant.getStatus() == TenantStatus.Active);
     }
 
     private AppUserDto mapToDtoWithoutTenantName(AppUser user) {

@@ -15,6 +15,8 @@ import java.util.Optional;
 @Repository
 public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
 
+    long countByTenantIdAndTaskStatusNot(Long tenantId, Status status);
+
     @Transactional
     @Modifying
     @Query("update SourceTask s set s.tenantId = ?1 where s.tenantId is null")

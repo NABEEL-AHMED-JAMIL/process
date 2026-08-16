@@ -34,6 +34,10 @@ public class KafkaConnectionProfile {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "profile_name", nullable = false)
     private String profileName;
 
@@ -55,6 +59,9 @@ public class KafkaConnectionProfile {
     @Column(name = "sasl_password", length = 1000)
     private String saslPassword;
 
+    @Column(name = "ssl_keystore_bucket")
+    private String sslKeystoreBucket;
+
     @Column(name = "ssl_keystore_location")
     private String sslKeystoreLocation;
 
@@ -63,6 +70,9 @@ public class KafkaConnectionProfile {
 
     @Column(name = "ssl_key_password_enc", length = 1000)
     private String sslKeyPasswordEnc;
+
+    @Column(name = "ssl_truststore_bucket")
+    private String sslTruststoreBucket;
 
     @Column(name = "ssl_truststore_location")
     private String sslTruststoreLocation;
@@ -111,6 +121,10 @@ public class KafkaConnectionProfile {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public String getProfileName() {
@@ -169,6 +183,14 @@ public class KafkaConnectionProfile {
         this.saslPassword = saslPassword;
     }
 
+    public String getSslKeystoreBucket() {
+        return sslKeystoreBucket;
+    }
+
+    public void setSslKeystoreBucket(String sslKeystoreBucket) {
+        this.sslKeystoreBucket = sslKeystoreBucket;
+    }
+
     public String getSslKeystoreLocation() {
         return sslKeystoreLocation;
     }
@@ -191,6 +213,14 @@ public class KafkaConnectionProfile {
 
     public void setSslKeyPasswordEnc(String sslKeyPasswordEnc) {
         this.sslKeyPasswordEnc = sslKeyPasswordEnc;
+    }
+
+    public String getSslTruststoreBucket() {
+        return sslTruststoreBucket;
+    }
+
+    public void setSslTruststoreBucket(String sslTruststoreBucket) {
+        this.sslTruststoreBucket = sslTruststoreBucket;
     }
 
     public String getSslTruststoreLocation() {

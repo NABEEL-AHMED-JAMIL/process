@@ -40,6 +40,10 @@ public class DatabaseConnectionProfile {
     @Column(name = "tenant_id", nullable = false)
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "profile_name", nullable = false)
     private String profileName;
 
@@ -72,11 +76,19 @@ public class DatabaseConnectionProfile {
     @Column(name = "created_by")
     private Long createdBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", insertable = false, updatable = false)
+    private AppUser createdByUser;
+
     @Column(name = "created_at")
     private Timestamp createdAt;
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "updated_by", insertable = false, updatable = false)
+    private AppUser updatedByUser;
 
     @Column(name = "updated_at")
     private Timestamp updatedAt;
@@ -97,6 +109,10 @@ public class DatabaseConnectionProfile {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public String getProfileName() {
@@ -179,6 +195,10 @@ public class DatabaseConnectionProfile {
         this.createdBy = createdBy;
     }
 
+    public AppUser getCreatedByUser() {
+        return createdByUser;
+    }
+
     public Timestamp getCreatedAt() {
         return createdAt;
     }
@@ -193,6 +213,10 @@ public class DatabaseConnectionProfile {
 
     public void setUpdatedBy(Long updatedBy) {
         this.updatedBy = updatedBy;
+    }
+
+    public AppUser getUpdatedByUser() {
+        return updatedByUser;
     }
 
     public Timestamp getUpdatedAt() {

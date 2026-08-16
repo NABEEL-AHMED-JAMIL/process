@@ -58,8 +58,18 @@ public class JobQueue {
         nullable = false)
     private Long jobId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "job_id", insertable = false, updatable = false)
+    private SourceJob sourceJob;
+
     @Column(name = "job_status_message", columnDefinition = "TEXT")
     private String jobStatusMessage;
+
+    @Column(name = "bucket")
+    private String bucket;
+
+    @Column(name = "output_folder")
+    private String outputFolder;
 
     @Column(name = "skip_manual")
     private Boolean skipManual;
@@ -136,12 +146,32 @@ public class JobQueue {
         this.jobId = jobId;
     }
 
+    public SourceJob getSourceJob() {
+        return sourceJob;
+    }
+
     public String getJobStatusMessage() {
         return jobStatusMessage;
     }
 
     public void setJobStatusMessage(String jobStatusMessage) {
         this.jobStatusMessage = jobStatusMessage;
+    }
+
+    public String getBucket() {
+        return bucket;
+    }
+
+    public void setBucket(String bucket) {
+        this.bucket = bucket;
+    }
+
+    public String getOutputFolder() {
+        return outputFolder;
+    }
+
+    public void setOutputFolder(String outputFolder) {
+        this.outputFolder = outputFolder;
     }
 
     public Boolean getSkipManual() {

@@ -62,7 +62,7 @@ public final class ContentTypeUtil {
 
     private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList(
         "json", "csv", "txt", "xml", "md", "pdf", "mp3", "m4a", "mp4",
-        "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"));
+        "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "doc", "docx"));
 
     public static String extensionOf(String key) {
         if (key == null) {

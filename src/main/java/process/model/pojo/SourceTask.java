@@ -40,6 +40,10 @@ public class SourceTask {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "task_name",
         nullable = false)
     private String taskName;
@@ -61,6 +65,15 @@ public class SourceTask {
         columnDefinition = "text")
     private String taskPayload;
 
+    @Column(name = "bucket")
+    private String bucket;
+
+    @Column(name = "input_folder")
+    private String inputFolder;
+
+    @Column(name = "output_folder")
+    private String outputFolder;
+
     @ManyToOne
     @JoinColumn(name = "source_task_type_id")
     private SourceTaskType sourceTaskType;
@@ -81,6 +94,10 @@ public class SourceTask {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public void setTaskDetailId(Long taskDetailId) {
@@ -133,6 +150,30 @@ public class SourceTask {
 
     public void setTaskPayload(String taskPayload) {
         this.taskPayload = taskPayload;
+    }
+
+    public String getBucket() {
+        return bucket;
+    }
+
+    public void setBucket(String bucket) {
+        this.bucket = bucket;
+    }
+
+    public String getInputFolder() {
+        return inputFolder;
+    }
+
+    public void setInputFolder(String inputFolder) {
+        this.inputFolder = inputFolder;
+    }
+
+    public String getOutputFolder() {
+        return outputFolder;
+    }
+
+    public void setOutputFolder(String outputFolder) {
+        this.outputFolder = outputFolder;
     }
 
     public SourceTaskType getSourceTaskType() {

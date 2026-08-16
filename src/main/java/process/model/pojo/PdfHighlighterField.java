@@ -31,6 +31,10 @@ public class PdfHighlighterField {
         nullable = false)
     private Long pdfHighlighterTaskId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pdf_highlighter_task_id", insertable = false, updatable = false)
+    private PdfHighlighterTask pdfHighlighterTask;
+
     @Column(name = "label",
         nullable = false)
     private String label;
@@ -88,6 +92,10 @@ public class PdfHighlighterField {
 
     public void setPdfHighlighterTaskId(Long pdfHighlighterTaskId) {
         this.pdfHighlighterTaskId = pdfHighlighterTaskId;
+    }
+
+    public PdfHighlighterTask getPdfHighlighterTask() {
+        return pdfHighlighterTask;
     }
 
     public String getLabel() {

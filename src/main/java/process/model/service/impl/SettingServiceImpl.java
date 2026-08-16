@@ -11,6 +11,7 @@ import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.enums.Status;
+import process.model.pojo.KafkaConnectionProfile;
 import process.model.pojo.LookupData;
 import process.model.pojo.SourceTaskType;
 import process.model.projection.ItemResponse;
@@ -108,13 +109,21 @@ public class SettingServiceImpl implements SettingService {
         List<SourceTaskTypeProjection> sourceTaskTypeProjections = TenantContext.isPlatformAdmin()
             ? this.sourceTaskTypeRepository.fetchAllSourceTaskType()
             : this.sourceTaskTypeRepository.fetchAllSourceTaskTypeForTenant(TenantContext.getTenantId());
+        List<Long> profileIds = sourceTaskTypeProjections.stream()
+            .map(SourceTaskTypeProjection::getKafkaConnectionProfileId)
+            .filter(id -> !isNull(id))
+            .distinct()
+            .collect(Collectors.toList());
+        Map<Long, String> profileNameById = profileIds.isEmpty() ? Collections.emptyMap()
+            : this.kafkaConnectionProfileRepository.findAllById(profileIds).stream()
+                .collect(Collectors.toMap(KafkaConnectionProfile::getKafkaConnectionProfileId, KafkaConnectionProfile::getProfileName));
         List<SourceTaskTypeDto> sourceTaskTypeList = sourceTaskTypeProjections
-            .stream().map(this::mapSourceTaskTypeProjectionToDto).collect(Collectors.toList());
+            .stream().map(projection -> this.mapSourceTaskTypeProjectionToDto(projection, profileNameById)).collect(Collectors.toList());
         appSettingDetail.put(SOURCE_TASK_TYPE, sourceTaskTypeList);
         return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
     }
 
-    private SourceTaskTypeDto mapSourceTaskTypeProjectionToDto(SourceTaskTypeProjection projection) {
+    private SourceTaskTypeDto mapSourceTaskTypeProjectionToDto(SourceTaskTypeProjection projection, Map<Long, String> profileNameById) {
         SourceTaskTypeDto dto = new SourceTaskTypeDto();
         dto.setSourceTaskTypeId(projection.getSourceTaskTypeId());
         dto.setServiceName(projection.getServiceName());
@@ -124,8 +133,7 @@ public class SettingServiceImpl implements SettingService {
         dto.setTotalTaskLink(projection.getTotalTaskLink());
         dto.setKafkaConnectionProfileId(projection.getKafkaConnectionProfileId());
         if (!isNull(projection.getKafkaConnectionProfileId())) {
-            this.kafkaConnectionProfileRepository.findById(projection.getKafkaConnectionProfileId())
-                .ifPresent(profile -> dto.setKafkaConnectionProfileName(profile.getProfileName()));
+            dto.setKafkaConnectionProfileName(profileNameById.get(projection.getKafkaConnectionProfileId()));
         }
         return dto;
     }
@@ -234,6 +242,13 @@ public class SettingServiceImpl implements SettingService {
         return Objects.equals(sourceTaskType.getTenantId(), TenantContext.getTenantId());
     }
 
+    private boolean isSourceTaskTypeVisibleToCaller(SourceTaskType sourceTaskType) {
+        if (TenantContext.isPlatformAdmin() || sourceTaskType.getTenantId() == null) {
+            return true;
+        }
+        return Objects.equals(sourceTaskType.getTenantId(), TenantContext.getTenantId());
+    }
+
     @Override
     public ResponseDto fetchKafkaRoute(Long sourceTaskTypeId) throws Exception {
         if (isNull(sourceTaskTypeId)) {
@@ -262,7 +277,8 @@ public class SettingServiceImpl implements SettingService {
         if (kafkaProfileError != null) {
             return new ResponseDto(ERROR, kafkaProfileError);
         }
-        if (!this.sourceTaskTypeRepository.existsById(sourceTaskTypeId)) {
+        Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(sourceTaskTypeId);
+        if (!sourceTaskType.isPresent() || !this.isSourceTaskTypeVisibleToCaller(sourceTaskType.get())) {
             return new ResponseDto(ERROR, String.format("SourceTaskType not found with %d.", sourceTaskTypeId));
         }
         TenantTaskTypeKafkaRoute route = this.tenantTaskTypeKafkaRouteRepository

@@ -51,6 +51,10 @@ public class LookupData {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @ManyToOne
     @JoinColumn(name = "parentLookupId")
     protected LookupData parent;
@@ -119,6 +123,10 @@ public class LookupData {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public LookupData getParent() {

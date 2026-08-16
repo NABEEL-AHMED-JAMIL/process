@@ -23,6 +23,7 @@ import process.security.TenantFilterHelper;
 import process.util.PagingUtil;
 import process.util.ProcessUtil;
 import process.util.EnumConverter;
+import process.util.TaskPayloadLocationUtil;
 import process.util.excel.BulkExcel;
 import process.util.validation.SourceTaskValidation;
 import javax.persistence.EntityManager;
@@ -47,6 +48,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private final SourceTaskRepository sourceTaskRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final TenantFilterHelper tenantFilterHelper;
+    private final TaskPayloadLocationUtil taskPayloadLocationUtil;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -56,13 +58,22 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         SourceJobRepository sourceJobRepository,
         SourceTaskRepository sourceTaskRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
-        TenantFilterHelper tenantFilterHelper) {
+        TenantFilterHelper tenantFilterHelper,
+        TaskPayloadLocationUtil taskPayloadLocationUtil) {
         this.bulkExcel = bulkExcel;
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.tenantFilterHelper = tenantFilterHelper;
+        this.taskPayloadLocationUtil = taskPayloadLocationUtil;
+    }
+
+    private void applyDerivedLocation(SourceTask sourceTask) {
+        TaskPayloadLocationUtil.Location location = this.taskPayloadLocationUtil.extract(sourceTask.getTaskPayload());
+        sourceTask.setBucket(location.getBucket());
+        sourceTask.setInputFolder(location.getInputFolder());
+        sourceTask.setOutputFolder(location.getOutputFolder());
     }
 
     private boolean isOwnedByCaller(SourceTask sourceTask) {
@@ -108,6 +119,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         sourceTask.setGroupId(sourceTaskDto.getGroupId());
         sourceTask.setTaskStatus(Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
+        this.applyDerivedLocation(sourceTask);
         if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())) {
             sourceTask.setSourceTaskPayload(sourceTaskDto.getXmlTagsInfo()
                 .stream().map(tagInfo -> {
@@ -152,6 +164,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             }
             if (!ProcessUtil.isNull(sourceTaskDto.getTaskPayload())) {
                 sourceTask.get().setTaskPayload(sourceTaskDto.getTaskPayload());
+                this.applyDerivedLocation(sourceTask.get());
             }
             if (!ProcessUtil.isNull(sourceTaskDto.getSourceTaskType())) {
                 sourceTask.get().setSourceTaskType(sourceTaskType.get());
@@ -513,6 +526,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             sourceTask.setHomePageId(sourceTaskValidation.getHomePageId());
             sourceTask.setTaskStatus(Status.Active);
             sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
+            this.applyDerivedLocation(sourceTask);
             sourceTask.setSourceTaskPayload(sourceTaskValidation.getXmlTagsInfo()
                 .stream().map(tagInfo -> {
                     SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();

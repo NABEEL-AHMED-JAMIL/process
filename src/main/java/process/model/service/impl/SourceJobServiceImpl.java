@@ -13,10 +13,12 @@ import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.pojo.*;
+import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
 import process.model.service.SourceJobService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.util.OpenSearchAuditLogClient;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import javax.persistence.EntityManager;
@@ -40,6 +42,7 @@ public class SourceJobServiceImpl implements SourceJobService {
     private final AppUserRepository appUserRepository;
     private final ProducerBulkEngine producerBulkEngine;
     private final TenantFilterHelper tenantFilterHelper;
+    private final OpenSearchAuditLogClient openSearchAuditLogClient;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -52,7 +55,8 @@ public class SourceJobServiceImpl implements SourceJobService {
         LookupDataRepository lookupDataRepository,
         AppUserRepository appUserRepository,
         ProducerBulkEngine producerBulkEngine,
-        TenantFilterHelper tenantFilterHelper) {
+        TenantFilterHelper tenantFilterHelper,
+        OpenSearchAuditLogClient openSearchAuditLogClient) {
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.sourceTaskRepository = sourceTaskRepository;
@@ -62,6 +66,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.appUserRepository = appUserRepository;
         this.producerBulkEngine = producerBulkEngine;
         this.tenantFilterHelper = tenantFilterHelper;
+        this.openSearchAuditLogClient = openSearchAuditLogClient;
     }
 
     private boolean isOwnedByCaller(SourceJob sourceJob) {
@@ -315,15 +320,42 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())) {
             return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
         }
+        Optional<JobQueue> jobQueueOpt = this.jobQueueRepository.findById(jobQueueId)
+            .filter(queue -> jobId.equals(queue.getJobId()));
+        if (!jobQueueOpt.isPresent()) {
+            return new ResponseDto(ERROR, String.format("JobQueue not found with %d for job %d.", jobQueueId, jobId));
+        }
         Map<String, Object> payload = new HashMap<>();
-        payload.put("auditLogs", jobAuditLogRepository.findAllByJobQueueIdV1(jobQueueId));
+
+        payload.put("auditLogs", mergeAuditLogs(
+            this.openSearchAuditLogClient.searchByJobQueueId(jobQueueId),
+            this.jobAuditLogRepository.findAllByJobQueueIdV1(jobQueueId)));
         SourceJobDto sourceJobDto = mapSourceJobToDto(sourceJobOpt.get());
         schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> sourceJobDto.setScheduler(getSchedulerDto(s)));
         payload.put("sourceJob", sourceJobDto);
-        jobQueueRepository.findById(jobQueueId)
-            .filter(queue -> jobId.equals(queue.getJobId()))
-            .ifPresent(queue -> payload.put("sourceJobQueue", getSourceJobQueueDto(queue)));
+        payload.put("sourceJobQueue", getSourceJobQueueDto(jobQueueOpt.get()));
         return new ResponseDto(SUCCESS, "SourceJob skip successfully.", payload);
+    }
+
+    private List<JobAuditLogProjection> mergeAuditLogs(
+        List<? extends JobAuditLogProjection> openSearchLogs,
+        List<? extends JobAuditLogProjection> dbLogs) {
+        LinkedHashMap<String, JobAuditLogProjection> byKey = new LinkedHashMap<>();
+        for (JobAuditLogProjection log : dbLogs) {
+            byKey.put(auditLogDedupeKey(log), log);
+        }
+        for (JobAuditLogProjection log : openSearchLogs) {
+            byKey.put(auditLogDedupeKey(log), log);
+        }
+        List<JobAuditLogProjection> merged = new ArrayList<>(byKey.values());
+        merged.sort(Comparator.comparing(JobAuditLogProjection::getDateCreated));
+        return merged;
+    }
+
+    private String auditLogDedupeKey(JobAuditLogProjection log) {
+        return !ProcessUtil.isNull(log.getExternalId())
+            ? "ext:" + log.getExternalId()
+            : "content:" + log.getJobQueueId() + "|" + log.getDateCreated() + "|" + log.getLogsDetail();
     }
 
     @Override
@@ -362,13 +394,21 @@ public class SourceJobServiceImpl implements SourceJobService {
     @Transactional(readOnly = true)
     public ResponseDto listSourceJob() throws Exception {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        List<SourceJobDto> sourceJobDtoList = sourceJobRepository.findAllActiveAndInactiveJobs(
-            Status.Active, Status.Inactive, Sort.by(Sort.Direction.ASC, "jobId"))
-            .stream()
+        List<SourceJob> jobs = sourceJobRepository.findAllActiveAndInactiveJobs(
+            Status.Active, Status.Inactive, Sort.by(Sort.Direction.ASC, "jobId"));
+        List<Long> jobIds = jobs.stream().map(SourceJob::getJobId).collect(Collectors.toList());
+        Map<Long, Scheduler> schedulerByJobId = jobIds.isEmpty() ? Collections.emptyMap()
+            : schedulerRepository.findByJobIdIn(jobIds).stream()
+                .collect(Collectors.toMap(Scheduler::getJobId, s -> s, (a, b) -> a));
+        Map<Long, Long> queueCountByJobId = jobIds.isEmpty() ? Collections.emptyMap()
+            : jobQueueRepository.countGroupByJobIds(jobIds).stream()
+                .collect(Collectors.toMap(row -> ((Number) row[0]).longValue(), row -> ((Number) row[1]).longValue()));
+
+        List<SourceJobDto> sourceJobDtoList = jobs.stream()
             .map(job -> {
                 SourceJobDto dto = mapSourceJobToDto(job);
-                schedulerRepository.findSchedulerByJobId(job.getJobId()).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
-                dto.setTabActive(jobQueueRepository.getCountForJobByJobId(job.getJobId()) > 0);
+                Optional.ofNullable(schedulerByJobId.get(job.getJobId())).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
+                dto.setTabActive(queueCountByJobId.getOrDefault(job.getJobId(), 0L) > 0);
                 return dto;
             }).collect(Collectors.toList());
         return new ResponseDto(SUCCESS, "Fetch source jobs.", sourceJobDtoList);
@@ -419,6 +459,9 @@ public class SourceJobServiceImpl implements SourceJobService {
         dto.setTaskName(sourceTask.getTaskName());
         dto.setTaskStatus(sourceTask.getTaskStatus());
         dto.setTaskPayload(sourceTask.getTaskPayload());
+        dto.setBucket(sourceTask.getBucket());
+        dto.setInputFolder(sourceTask.getInputFolder());
+        dto.setOutputFolder(sourceTask.getOutputFolder());
         if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
             dto.setHomePageId(lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId()))
                 .map(ld -> ld.getLookupType()).orElse(null));

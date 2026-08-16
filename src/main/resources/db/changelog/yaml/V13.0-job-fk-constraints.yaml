@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 13.0-add-job-fk-constraints
+      author: nabeel.amd93
+      description: "Add real DB-level FK constraints on job_queue.job_id, scheduler.job_id (-> source_job) and job_audit_logs.job_queue_id (-> job_queue)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V13.0-job-fk-constraints/V13__add_job_fk_constraints.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE job_queue DROP CONSTRAINT IF EXISTS fk_job_queue_source_job;
+              ALTER TABLE scheduler DROP CONSTRAINT IF EXISTS fk_scheduler_source_job;
+              ALTER TABLE job_audit_logs DROP CONSTRAINT IF EXISTS fk_job_audit_logs_job_queue;

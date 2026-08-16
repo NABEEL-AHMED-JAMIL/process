@@ -195,7 +195,7 @@ public class DashboardServiceImpl implements DashboardService {
             if (!ProcessUtil.isNull(jobId)) {
 
                 Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId)
-                    .filter(job -> TenantContext.isPlatformAdmin() || java.util.Objects.equals(job.getTenantId(), TenantContext.getTenantId()));
+                    .filter(job -> TenantContext.isPlatformAdmin() || Objects.equals(job.getTenantId(), TenantContext.getTenantId()));
                 if (sourceJob.isPresent()) {
                     SourceJobDto sourceJobDto = getSourceJobDto(sourceJob.get());
                     if (!ProcessUtil.isNull(sourceJob.get().getTaskDetail())) {
@@ -242,6 +242,9 @@ public class DashboardServiceImpl implements DashboardService {
         sourceTaskDto.setTaskName(sourceTask.getTaskName());
         sourceTaskDto.setTaskStatus(sourceTask.getTaskStatus());
         sourceTaskDto.setTaskPayload(sourceTask.getTaskPayload());
+        sourceTaskDto.setBucket(sourceTask.getBucket());
+        sourceTaskDto.setInputFolder(sourceTask.getInputFolder());
+        sourceTaskDto.setOutputFolder(sourceTask.getOutputFolder());
         if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
             this.lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId()))
                 .ifPresent(lookupData -> sourceTaskDto.setHomePageId(lookupData.getLookupValue()));

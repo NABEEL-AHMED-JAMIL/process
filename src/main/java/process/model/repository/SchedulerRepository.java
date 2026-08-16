@@ -19,4 +19,6 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
 
     public Optional<Scheduler> findSchedulerByJobId(Long jobId);
 
+    public List<Scheduler> findByJobIdIn(List<Long> jobIds);
+
 }

@@ -17,6 +17,9 @@ public class SourceTaskDto {
     private String pipelineId;
     private String groupId;
     private String taskPayload;
+    private String bucket;
+    private String inputFolder;
+    private String outputFolder;
     private SourceTaskTypeDto sourceTaskType;
     private List<ConfigurationMakerRequest.TagInfo> xmlTagsInfo;
     private Long totalLinksJobs;
@@ -77,6 +80,30 @@ public class SourceTaskDto {
 
     public void setTaskPayload(String taskPayload) {
         this.taskPayload = taskPayload;
+    }
+
+    public String getBucket() {
+        return bucket;
+    }
+
+    public void setBucket(String bucket) {
+        this.bucket = bucket;
+    }
+
+    public String getInputFolder() {
+        return inputFolder;
+    }
+
+    public void setInputFolder(String inputFolder) {
+        this.inputFolder = inputFolder;
+    }
+
+    public String getOutputFolder() {
+        return outputFolder;
+    }
+
+    public void setOutputFolder(String outputFolder) {
+        this.outputFolder = outputFolder;
     }
 
     public SourceTaskTypeDto getSourceTaskType() {

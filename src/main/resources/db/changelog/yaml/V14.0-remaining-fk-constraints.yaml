@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 14.0-add-remaining-fk-constraints
+      author: nabeel.amd93
+      description: "Add real DB-level FK constraints on every still-loose column found across the pojo layer: dynamic_form_submission, pdf_highlighter_field, the Query Engine's cross-references, and source_task_type/tenant_task_type_kafka_route's kafka_connection_profile_id"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V14.0-remaining-fk-constraints/V14__add_remaining_fk_constraints.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE dynamic_form_submission DROP CONSTRAINT IF EXISTS fk_dynamic_form_submission_dynamic_form;
+              ALTER TABLE pdf_highlighter_field DROP CONSTRAINT IF EXISTS fk_pdf_highlighter_field_task;
+              ALTER TABLE query_definition DROP CONSTRAINT IF EXISTS fk_query_definition_db_profile;
+              ALTER TABLE query_execution DROP CONSTRAINT IF EXISTS fk_query_execution_query_definition;
+              ALTER TABLE query_execution DROP CONSTRAINT IF EXISTS fk_query_execution_db_profile;
+              ALTER TABLE query_execution DROP CONSTRAINT IF EXISTS fk_query_execution_query_schedule;
+              ALTER TABLE query_schedule DROP CONSTRAINT IF EXISTS fk_query_schedule_query_definition;
+              ALTER TABLE query_schedule DROP CONSTRAINT IF EXISTS fk_query_schedule_db_profile;
+              ALTER TABLE source_task_type DROP CONSTRAINT IF EXISTS fk_source_task_type_kafka_profile;
+              ALTER TABLE tenant_task_type_kafka_route DROP CONSTRAINT IF EXISTS fk_ttkr_source_task_type;
+              ALTER TABLE tenant_task_type_kafka_route DROP CONSTRAINT IF EXISTS fk_ttkr_kafka_profile;

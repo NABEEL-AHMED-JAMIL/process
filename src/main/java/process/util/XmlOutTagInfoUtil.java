@@ -54,7 +54,7 @@ public class XmlOutTagInfoUtil {
                 String tagKey = tagInfo.getTagKey();
                 String tagParent = tagInfo.getTagParent();
                 String tagValue = tagInfo.getTagValue();
-                org.w3c.dom.Element child;
+                Element child;
 
                 if(isParent) {
 

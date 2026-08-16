@@ -24,7 +24,11 @@ import javax.persistence.PersistenceContext;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
@@ -138,12 +142,12 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         String outputContentType = ContentTypeUtil.contentTypeFor(outputFileName);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-        java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("doc-converter-");
-        java.nio.file.Path tempSourceFile = tempDir.resolve(safeFileName);
+        Path tempDir = Files.createTempDirectory("doc-converter-");
+        Path tempSourceFile = tempDir.resolve(safeFileName);
         try {
 
-            try (java.io.InputStream sourceInputStream = file.getInputStream()) {
-                java.nio.file.Files.copy(sourceInputStream, tempSourceFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            try (InputStream sourceInputStream = file.getInputStream()) {
+                Files.copy(sourceInputStream, tempSourceFile, StandardCopyOption.REPLACE_EXISTING);
             }
             this.documentConverter.convert(tempSourceFile.toFile()).as(sourceFormat).to(outputStream).as(targetFormat).execute();
         } catch (Exception conversionException) {
@@ -153,8 +157,8 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
                 + conversionException.getMessage());
         } finally {
             try {
-                java.nio.file.Files.deleteIfExists(tempSourceFile);
-                java.nio.file.Files.deleteIfExists(tempDir);
+                Files.deleteIfExists(tempSourceFile);
+                Files.deleteIfExists(tempDir);
             } catch (Exception cleanupException) {
                 logger.warn("Failed to clean up temp conversion file {}: {}", tempSourceFile, cleanupException.getMessage());
             }

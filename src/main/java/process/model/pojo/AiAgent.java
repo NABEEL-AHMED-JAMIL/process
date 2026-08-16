@@ -39,6 +39,10 @@ public class AiAgent {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "agent_name", nullable = false)
     private String agentName;
 
@@ -88,6 +92,10 @@ public class AiAgent {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public void setAiAgentId(Long aiAgentId) {

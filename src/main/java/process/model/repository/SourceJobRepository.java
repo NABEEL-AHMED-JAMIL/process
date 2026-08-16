@@ -15,6 +15,8 @@ import java.util.List;
 @Repository
 public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
 
+    long countByTenantIdAndJobStatusNot(Long tenantId, Status status);
+
     @Transactional
     @Modifying
     @Query("update SourceJob s set s.tenantId = ?1 where s.tenantId is null")

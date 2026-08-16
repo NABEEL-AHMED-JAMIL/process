@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 
 @Service
@@ -81,9 +82,11 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
     @Override
     public ByteArrayOutputStream downloadListSourceJob() throws Exception {
 
-        List<SourceJob> sourceJobs = TenantContext.isPlatformAdmin()
+        List<SourceJob> sourceJobs = (TenantContext.isPlatformAdmin()
             ? this.sourceJobRepository.findAll()
-            : this.sourceJobRepository.findByTenantId(TenantContext.getTenantId());
+            : this.sourceJobRepository.findByTenantId(TenantContext.getTenantId())).stream()
+            .filter(sourceJob -> sourceJob.getJobStatus() != Status.Delete)
+            .collect(Collectors.toList());
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
         this.bulkExcel.setWb(workbook);
         XSSFSheet xssfSheet = workbook.createSheet(SourceJob);

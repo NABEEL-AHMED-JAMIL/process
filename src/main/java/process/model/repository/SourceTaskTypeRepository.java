@@ -15,6 +15,8 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
 
     public Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
 
+    long countByTenantIdAndStatusNot(Long tenantId, Status status);
+
     public List<SourceTaskType> findByStatus(Status status);
 
     public boolean existsByKafkaConnectionProfileId(Long kafkaConnectionProfileId);

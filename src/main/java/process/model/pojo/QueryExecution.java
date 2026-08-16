@@ -40,14 +40,30 @@ public class QueryExecution {
     @Column(name = "tenant_id", nullable = false)
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "query_id", nullable = false)
     private Long queryId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "query_id", insertable = false, updatable = false)
+    private QueryDefinition queryDefinition;
 
     @Column(name = "database_connection_profile_id", nullable = false)
     private Long databaseConnectionProfileId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "database_connection_profile_id", insertable = false, updatable = false)
+    private DatabaseConnectionProfile databaseConnectionProfile;
+
     @Column(name = "schedule_id")
     private Long scheduleId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "schedule_id", insertable = false, updatable = false)
+    private QuerySchedule querySchedule;
 
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.STRING)
@@ -74,6 +90,10 @@ public class QueryExecution {
     @Column(name = "created_by")
     private Long createdBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", insertable = false, updatable = false)
+    private AppUser createdByUser;
+
     @Column(name = "created_at")
     private Timestamp createdAt;
 
@@ -95,12 +115,20 @@ public class QueryExecution {
         this.tenantId = tenantId;
     }
 
+    public Tenant getTenant() {
+        return tenant;
+    }
+
     public Long getQueryId() {
         return queryId;
     }
 
     public void setQueryId(Long queryId) {
         this.queryId = queryId;
+    }
+
+    public QueryDefinition getQueryDefinition() {
+        return queryDefinition;
     }
 
     public Long getDatabaseConnectionProfileId() {
@@ -111,12 +139,20 @@ public class QueryExecution {
         this.databaseConnectionProfileId = databaseConnectionProfileId;
     }
 
+    public DatabaseConnectionProfile getDatabaseConnectionProfile() {
+        return databaseConnectionProfile;
+    }
+
     public Long getScheduleId() {
         return scheduleId;
     }
 
     public void setScheduleId(Long scheduleId) {
         this.scheduleId = scheduleId;
+    }
+
+    public QuerySchedule getQuerySchedule() {
+        return querySchedule;
     }
 
     public QueryExecutionStatus getStatus() {
@@ -181,6 +217,10 @@ public class QueryExecution {
 
     public void setCreatedBy(Long createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public AppUser getCreatedByUser() {
+        return createdByUser;
     }
 
     public Timestamp getCreatedAt() {

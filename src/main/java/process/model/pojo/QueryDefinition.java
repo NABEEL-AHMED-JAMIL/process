@@ -39,6 +39,10 @@ public class QueryDefinition {
     @Column(name = "tenant_id", nullable = false)
     private Long tenantId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
     @Column(name = "query_name", nullable = false)
     private String queryName;
 
@@ -47,6 +51,10 @@ public class QueryDefinition {
 
     @Column(name = "database_connection_profile_id", nullable = false)
     private Long databaseConnectionProfileId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "database_connection_profile_id", insertable = false, updatable = false)
+    private DatabaseConnectionProfile databaseConnectionProfile;
 
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.STRING)
@@ -59,11 +67,19 @@ public class QueryDefinition {
     @Column(name = "created_by")
     private Long createdBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", insertable = false, updatable = false)
+    private AppUser createdByUser;
+
     @Column(name = "created_at")
     private Timestamp createdAt;
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "updated_by", insertable = false, updatable = false)
+    private AppUser updatedByUser;
 
     @Column(name = "updated_at")
     private Timestamp updatedAt;
@@ -84,6 +100,10 @@ public class QueryDefinition {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
     }
 
     public String getQueryName() {
@@ -110,6 +130,10 @@ public class QueryDefinition {
         this.databaseConnectionProfileId = databaseConnectionProfileId;
     }
 
+    public DatabaseConnectionProfile getDatabaseConnectionProfile() {
+        return databaseConnectionProfile;
+    }
+
     public Status getStatus() {
         return status;
     }
@@ -134,6 +158,10 @@ public class QueryDefinition {
         this.createdBy = createdBy;
     }
 
+    public AppUser getCreatedByUser() {
+        return createdByUser;
+    }
+
     public Timestamp getCreatedAt() {
         return createdAt;
     }
@@ -148,6 +176,10 @@ public class QueryDefinition {
 
     public void setUpdatedBy(Long updatedBy) {
         this.updatedBy = updatedBy;
+    }
+
+    public AppUser getUpdatedByUser() {
+        return updatedByUser;
     }
 
     public Timestamp getUpdatedAt() {

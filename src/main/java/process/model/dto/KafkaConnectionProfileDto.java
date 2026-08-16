@@ -21,11 +21,13 @@ public class KafkaConnectionProfileDto {
     private String saslUsername;
     private String saslPassword;
     private Boolean saslPasswordConfigured;
+    private String sslKeystoreBucket;
     private String sslKeystoreLocation;
     private String sslKeystorePassword;
     private Boolean sslKeystorePasswordConfigured;
     private String sslKeyPassword;
     private Boolean sslKeyPasswordConfigured;
+    private String sslTruststoreBucket;
     private String sslTruststoreLocation;
     private String sslTruststorePassword;
     private Boolean sslTruststorePasswordConfigured;
@@ -121,6 +123,14 @@ public class KafkaConnectionProfileDto {
         this.saslPasswordConfigured = saslPasswordConfigured;
     }
 
+    public String getSslKeystoreBucket() {
+        return sslKeystoreBucket;
+    }
+
+    public void setSslKeystoreBucket(String sslKeystoreBucket) {
+        this.sslKeystoreBucket = sslKeystoreBucket;
+    }
+
     public String getSslKeystoreLocation() {
         return sslKeystoreLocation;
     }
@@ -159,6 +169,14 @@ public class KafkaConnectionProfileDto {
 
     public void setSslKeyPasswordConfigured(Boolean sslKeyPasswordConfigured) {
         this.sslKeyPasswordConfigured = sslKeyPasswordConfigured;
+    }
+
+    public String getSslTruststoreBucket() {
+        return sslTruststoreBucket;
+    }
+
+    public void setSslTruststoreBucket(String sslTruststoreBucket) {
+        this.sslTruststoreBucket = sslTruststoreBucket;
     }
 
     public String getSslTruststoreLocation() {

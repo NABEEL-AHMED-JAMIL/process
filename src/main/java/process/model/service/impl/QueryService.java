@@ -339,10 +339,8 @@ public class QueryService {
         }
         if (!ProcessUtil.isNull(jobStatus)) {
             query += String.format("and UPPER(job_queue.job_status) = UPPER('%s')\n", this.sanitizeJobStatus(jobStatus));
-        } else {
-
-            query += "and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n";
         }
+        query += "and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')\n";
         query += "\norder by job_queue.job_queue_id desc";
         return query;
     }
@@ -361,6 +359,7 @@ public class QueryService {
         if (!isState) {
             query += String.format("where cast(jq.date_created as date) between '%s' and '%s' \n",
                     this.requireValidDate(messageQSearch.getFromDate()), this.requireValidDate(messageQSearch.getToDate()));
+            query += "and UPPER(sj.job_status) <> 'DELETE' and UPPER(jq.status) <> 'DELETE' \n";
             query += this.tenantClause("sj") + "\n";
             if (!ProcessUtil.isNull(messageQSearch.getJobId()) && !messageQSearch.getJobId().isEmpty()) {
                 String jobId = messageQSearch.getJobId().toString();

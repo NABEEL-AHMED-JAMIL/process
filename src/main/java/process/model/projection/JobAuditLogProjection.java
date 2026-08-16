@@ -12,4 +12,6 @@ public interface JobAuditLogProjection {
 
     public String getStatus();
 
+    public String getExternalId();
+
 }
