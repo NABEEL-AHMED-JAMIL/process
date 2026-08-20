@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
 import process.model.dto.AiAgentToolDto;
-import process.model.dto.ProcessTextRequestDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.AiAgent;
@@ -174,63 +173,6 @@ public class AiAgentServiceImpl implements AiAgentService {
         dto.setJsonMode(aiAgent.getJsonMode());
         dto.setTargetFileTypes(aiAgent.getTargetFileTypes());
         return new ResponseDto(SUCCESS, "Data found.", dto);
-    }
-
-    @Override
-    @Transactional
-    public ResponseDto processText(ProcessTextRequestDto processTextRequestDto) throws Exception {
-        boolean hasUuid = !isNull(processTextRequestDto.getAiAgentUuid())
-            && !processTextRequestDto.getAiAgentUuid().trim().isEmpty();
-        if (isNull(processTextRequestDto.getAiAgentId()) && !hasUuid) {
-            return new ResponseDto(ERROR, "aiAgentId or aiAgentUuid missing.");
-        }
-        if (isNull(processTextRequestDto.getText()) || processTextRequestDto.getText().trim().isEmpty()) {
-            return new ResponseDto(ERROR, "No text extracted from the file to process.");
-        }
-
-        boolean isByInternalId = !isNull(processTextRequestDto.getAiAgentId());
-        if (isByInternalId) {
-            this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        }
-        Optional<AiAgent> aiAgentOpt = isByInternalId
-            ? this.aiAgentRepository.findById(processTextRequestDto.getAiAgentId())
-            : this.aiAgentRepository.findByToolUuid(processTextRequestDto.getAiAgentUuid().trim());
-        if (!aiAgentOpt.isPresent() || (isByInternalId && !this.isOwnedByCaller(aiAgentOpt.get()))) {
-            return new ResponseDto(ERROR, isByInternalId
-                ? String.format("Agent not found with %d.", processTextRequestDto.getAiAgentId())
-                : "Agent not found for the given aiAgentUuid.");
-        }
-        AiAgent aiAgent = aiAgentOpt.get();
-        if (aiAgent.getStatus() != Status.Active) {
-            return new ResponseDto(ERROR, "This agent is not active.");
-        }
-
-        if (!"Ollama".equals(aiAgent.getProvider()) && isNull(aiAgent.getApiKey())) {
-            return new ResponseDto(ERROR, "This agent has no API key configured yet -- edit the agent and add one.");
-        }
-        String text = processTextRequestDto.getText();
-        if (text.length() > MAX_TEXT_CHARS) {
-            text = text.substring(0, MAX_TEXT_CHARS);
-        }
-        String apiKey = isNull(aiAgent.getApiKey()) ? null : this.encryptionUtil.decrypt(aiAgent.getApiKey());
-        String fileLabel = isNull(processTextRequestDto.getFileName()) ? "the file" : processTextRequestDto.getFileName();
-        String userMessage = String.format("File: %s\n\nContent:\n%s", fileLabel, text);
-
-        boolean hasOverride = !isNull(processTextRequestDto.getInstructions())
-            && !processTextRequestDto.getInstructions().trim().isEmpty();
-        String instructions = hasOverride ? processTextRequestDto.getInstructions() : aiAgent.getInstructions();
-        try {
-            String resultText = this.callProvider(aiAgent.getProvider(), apiKey, aiAgent.getApiEndpoint(),
-                aiAgent.getModel(), instructions, Boolean.TRUE.equals(aiAgent.getJsonMode()), userMessage);
-            if (Boolean.TRUE.equals(aiAgent.getJsonMode())) {
-                resultText = this.stripJsonCodeFences(resultText);
-            }
-            return new ResponseDto(SUCCESS, "Processed successfully.", resultText);
-        } catch (Exception ex) {
-            this.logger.error("An error occurred while calling the AI provider for agentId {}: {}",
-                aiAgent.getAiAgentId(), ex.getMessage());
-            return new ResponseDto(ERROR, "The AI provider request failed: " + ex.getMessage());
-        }
     }
 
     @Override

@@ -11,6 +11,7 @@ import java.util.List;
 public class SourceTaskDto {
 
     private Long taskDetailId;
+    private Long tenantId;
     private String taskName;
     private Status taskStatus;
     private String homePageId;
@@ -32,6 +33,14 @@ public class SourceTaskDto {
 
     public void setTaskDetailId(Long taskDetailId) {
         this.taskDetailId = taskDetailId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getTaskName() {

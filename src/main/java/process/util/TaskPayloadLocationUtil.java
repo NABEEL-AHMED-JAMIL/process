@@ -9,16 +9,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
-/**
- * Best-effort extraction of the bucket/input-folder/output-folder a SourceTask's pipeline reads
- * from or writes to, read straight out of its existing task_payload XML -- no changes to the XML
- * itself or to the Python pipelines that already parse it. Different pipelines were written with
- * different tag names for the same concept ({@code <bucket>}/{@code <folder>} for the hurricane
- * pipeline vs {@code <bucket_name>}/{@code <input_folder>}/{@code <output_folder>} for the audio
- * pipeline), so every known alias is checked. Purely additive/display-only: a SourceTask whose
- * payload has none of these tags (or isn't well-formed XML at all) just yields all-null, which
- * callers treat as "no bucket configured for this task" rather than an error.
- */
 @Component
 public class TaskPayloadLocationUtil {
 

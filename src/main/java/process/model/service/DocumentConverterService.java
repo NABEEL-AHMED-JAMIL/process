@@ -12,7 +12,7 @@ public interface DocumentConverterService {
 
     ResponseDto fetchTaskById(Long documentConverterTaskId) throws Exception;
 
-    ResponseDto convert(MultipartFile file, String outputFormat, String bucketName, String taskName, boolean save) throws Exception;
+    ResponseDto convert(MultipartFile file, String outputFormat, String bucketName, String targetFolder, String taskName, boolean save) throws Exception;
 
     ResponseDto deleteTask(Long documentConverterTaskId) throws Exception;
 

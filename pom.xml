@@ -71,6 +71,16 @@
             <version>${jodconverter.version}</version>
         </dependency>
 
+        <!-- File Chat: pulls the embedded text layer out of a PDF (Document Converter's own
+             output format for office docs) so it can be handed to the AI as plain text, and
+             rasterizes a page to an image for the vision-model fallback when there's no text
+             layer at all (scanned documents, image-only PDFs). -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.31</version>
+        </dependency>
+
         <!-- Test (JUnit 5 + Mockito + AssertJ, versions managed by parent) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -6,7 +6,8 @@ public enum TemplateType {
 
     COMPLETE_JOB("COMPLETE_JOB", "templates/complete_job.vm"),
     FAIL_JOB("FAIL_JOB", "templates/fail_job.vm"),
-    SKIP_JOB("SKIP_JOB", "templates/skip_job.vm");
+    SKIP_JOB("SKIP_JOB", "templates/skip_job.vm"),
+    FILE_SHARE("FILE_SHARE", "templates/file_share.vm");
 
     private String templateName;
     private String templatePath;

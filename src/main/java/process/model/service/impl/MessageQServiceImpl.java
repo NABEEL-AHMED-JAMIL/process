@@ -146,16 +146,17 @@ public class MessageQServiceImpl implements MessageQService {
             if (!jobQueue.get().getJobStatus().equals(JobStatus.Queue)) {
                 return new ResponseDto(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
             }
+            String failMessage = String.format("Job %s fail by manual.", jobQueue.get().getJobId());
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
-            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed);
-            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), String.format("Job %s fail by manual.", jobQueue.get().getJobId()));
+            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed, failMessage);
+            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), failMessage);
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
 
             Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId());
             if (sourceJob.isPresent() && sourceJob.get().isSkipJob()) {
                 this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue.get()),JobStatus.Failed);
             }
-            return new ResponseDto(SUCCESS, "JobQueue successfully update.", jobQId);
+            return new ResponseDto(SUCCESS, "JobQueue successfully updated.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");
     }
@@ -170,11 +171,12 @@ public class MessageQServiceImpl implements MessageQService {
             return new ResponseDto(ERROR, "JobQueue not found");
         }
         if (jobQueue.isPresent()) {
+            String interruptMessage = String.format("Job %s interrupted.", jobQueue.get().getJobId());
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
-            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt);
-            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), String.format("Job %s interrupted.", jobQueue.get().getJobId()));
+            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt, interruptMessage);
+            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), interruptMessage);
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
-            return new ResponseDto(SUCCESS, "JobQueue successfully update.", jobQId);
+            return new ResponseDto(SUCCESS, "JobQueue successfully updated.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");
     }
@@ -192,7 +194,7 @@ public class MessageQServiceImpl implements MessageQService {
             this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());
         } else if (queueMessageStatus.getMessageType().equals(QUEUE_DETAIL)) {
             this.bulkAction.changeJobStatus(queueMessageStatus.getJobId(), queueMessageStatus.getJobStatus());
-            this.bulkAction.changeJobQueueStatus(queueMessageStatus.getJobQueueId(), queueMessageStatus.getJobStatus());
+            this.bulkAction.changeJobQueueStatus(queueMessageStatus.getJobQueueId(), queueMessageStatus.getJobStatus(), queueMessageStatus.getLogsDetail());
             this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());
             if (!isNull(queueMessageStatus.getEndTime())) {
                 this.bulkAction.changeJobQueueEndDate(queueMessageStatus.getJobQueueId(), queueMessageStatus.getEndTime());
@@ -209,7 +211,7 @@ public class MessageQServiceImpl implements MessageQService {
                 this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueueForMail.get()), status);
             }
         }
-        return new ResponseDto(SUCCESS, "QueueMessage successfully update.");
+        return new ResponseDto(SUCCESS, "QueueMessage successfully updated.");
     }
 
 }

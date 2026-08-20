@@ -15,11 +15,20 @@ public class TenantFilterHelper {
 
     public void enableIfNeeded(EntityManager entityManager) {
         Long tenantId = TenantContext.getTenantId();
+        Session session;
+        try {
+            session = entityManager.unwrap(Session.class);
+        } catch (Exception ex) {
+            this.logger.error("Could not unwrap Hibernate Session: {}", ex.getMessage(), ex);
+            return;
+        }
         if (tenantId == null || TenantContext.isPlatformAdmin()) {
+            if (session.getEnabledFilter(FILTER_NAME) != null) {
+                session.disableFilter(FILTER_NAME);
+            }
             return;
         }
         try {
-            Session session = entityManager.unwrap(Session.class);
             session.enableFilter(FILTER_NAME).setParameter("tenantId", tenantId);
         } catch (Exception ex) {
             this.logger.error("Could not enable tenant filter for tenantId {}: {}", tenantId, ex.getMessage(), ex);

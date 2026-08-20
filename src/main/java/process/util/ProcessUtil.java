@@ -45,4 +45,15 @@ public class ProcessUtil {
         return payload == null || "".equals(payload);
     }
 
+    public static Long parseLongOrNull(String value) {
+        if (isNull(value)) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
 }

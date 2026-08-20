@@ -18,7 +18,7 @@ public interface SourceJobProjection {
 
     public LocalDateTime getLastJobRun();
 
-    public String getRecurrenceTime();
+    public String getNextRunAt();
 
     public String getExecution();
 

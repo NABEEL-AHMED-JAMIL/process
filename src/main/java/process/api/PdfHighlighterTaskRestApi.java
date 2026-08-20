@@ -38,7 +38,7 @@ public class PdfHighlighterTaskRestApi {
         try {
             return new ResponseEntity<>(this.pdfHighlighterTaskService.fetchAllPdfHighlighterTask(), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while fetchAllPdfHighlighterTask ", ex);
+            logger.error("An error occurred while fetchAllPdfHighlighterTask.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -49,7 +49,7 @@ public class PdfHighlighterTaskRestApi {
         try {
             return new ResponseEntity<>(this.pdfHighlighterTaskService.fetchPdfHighlighterTaskById(pdfHighlighterTaskId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while fetchPdfHighlighterTaskById ", ex);
+            logger.error("An error occurred while fetchPdfHighlighterTaskById.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -60,7 +60,7 @@ public class PdfHighlighterTaskRestApi {
         try {
             return new ResponseEntity<>(this.pdfHighlighterTaskService.addPdfHighlighterTask(tempPdfHighlighterTask), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while addPdfHighlighterTask ", ex);
+            logger.error("An error occurred while addPdfHighlighterTask.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -71,7 +71,7 @@ public class PdfHighlighterTaskRestApi {
         try {
             return new ResponseEntity<>(this.pdfHighlighterTaskService.updatePdfHighlighterTask(tempPdfHighlighterTask), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while updatePdfHighlighterTask ", ex);
+            logger.error("An error occurred while updatePdfHighlighterTask.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -82,7 +82,7 @@ public class PdfHighlighterTaskRestApi {
         try {
             return new ResponseEntity<>(this.pdfHighlighterTaskService.deletePdfHighlighterTask(pdfHighlighterTaskId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while deletePdfHighlighterTask ", ex);
+            logger.error("An error occurred while deletePdfHighlighterTask.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -93,7 +93,7 @@ public class PdfHighlighterTaskRestApi {
         try {
             return new ResponseEntity<>(this.pdfHighlighterTaskService.fetchPdfHighlighterFields(pdfHighlighterTaskId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while fetchPdfHighlighterFields ", ex);
+            logger.error("An error occurred while fetchPdfHighlighterFields.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -104,7 +104,7 @@ public class PdfHighlighterTaskRestApi {
         try {
             return new ResponseEntity<>(this.pdfHighlighterTaskService.syncPdfHighlighterFields(request), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while syncPdfHighlighterFields ", ex);
+            logger.error("An error occurred while syncPdfHighlighterFields.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -116,7 +116,7 @@ public class PdfHighlighterTaskRestApi {
         try {
             return new ResponseEntity<>(this.pdfHighlighterTaskService.uploadPdfHighlighterFile(pdfHighlighterTaskId, file), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while uploadPdfHighlighterFile ", ex);
+            logger.error("An error occurred while uploadPdfHighlighterFile.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }

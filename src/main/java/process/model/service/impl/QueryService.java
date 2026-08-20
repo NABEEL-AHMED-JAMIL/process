@@ -76,6 +76,7 @@ public class QueryService {
             selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, ld1.lookup_type as home_page_id, " +
                 "ld2.lookup_type as pipeline_id, ld3.lookup_type as group_id, st.task_status, stt.source_task_type_id, stt.service_name, " +
                 "stt.description, stt.queue_topic_partition, stt.task_type_status, stt.kafka_connection_profile_id, " +
+                "st.bucket, st.input_folder, st.output_folder, " +
                 "count(sj.job_id) as total_link_jobs\n";
         }
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n";
@@ -195,7 +196,7 @@ public class QueryService {
     }
 
     private static final Set<String> JOB_QUEUE_STATUSES = new HashSet<>(Arrays.asList(
-        "QUEUE", "START", "RUNNING", "FAILED", "COMPLETED", "STOP", "SKIP", "INTERRUPT"
+        "QUEUE", "START", "RUNNING", "FAILED", "COMPLETED", "STOP", "SKIP", "INTERRUPT", "MISSED"
     ));
 
     private String sanitizeJobStatus(String jobStatus) {
@@ -270,6 +271,7 @@ public class QueryService {
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'STOP' THEN 1 END) AS stop,\n" +
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'SKIP' THEN 1 END) AS skip,\n" +
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'INTERRUPT' THEN 1 END) AS interrupt,\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'MISSED' THEN 1 END) AS missed,\n" +
                 "        COUNT(*) AS total\n" +
                 "    FROM job_queue\n" +
                 "    INNER JOIN source_job ON source_job.job_id = job_queue.job_id\n" +
@@ -292,6 +294,7 @@ public class QueryService {
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'STOP' THEN 1 END),\n" +
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'SKIP' THEN 1 END),\n" +
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'INTERRUPT' THEN 1 END),\n" +
+                "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'MISSED' THEN 1 END),\n" +
                 "        COUNT(*)\n" +
                 "    FROM job_queue\n" +
                 "    INNER JOIN source_job ON source_job.job_id = job_queue.job_id\n" +
@@ -317,6 +320,7 @@ public class QueryService {
             "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'STOP' THEN job_queue.job_id END) AS Stop,\n" +
             "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'SKIP' THEN job_queue.job_id END) AS Skip,\n" +
             "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'INTERRUPT' THEN job_queue.job_id END) AS Interrupt,\n" +
+            "COUNT(CASE WHEN UPPER(job_queue.job_status) = 'MISSED' THEN job_queue.job_id END) AS Missed,\n" +
             "COUNT(*) AS total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +

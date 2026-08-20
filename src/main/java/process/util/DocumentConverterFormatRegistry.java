@@ -43,20 +43,24 @@ public final class DocumentConverterFormatRegistry {
     private static final Map<String, FormatFamily> FAMILIES = new LinkedHashMap<>();
     static {
         register("TEXT", "Text Document",
-            Arrays.asList("doc", "docx", "odt", "ott", "rtf", "txt"),
-            Arrays.asList("doc", "docx", "html", "jpg", "odt", "ott", "fodt", "pdf", "png", "rtf", "txt"));
+            Arrays.asList("doc", "docx", "dotx", "odt", "ott", "fodt", "rtf", "sxw", "txt", "wpd", "xhtml"),
+            Arrays.asList("doc", "docx", "dotx", "odt", "ott", "fodt", "html", "xhtml", "rtf", "sxw", "txt",
+                "jpg", "pdf", "png", "svg"));
         register("SPREADSHEET", "Spreadsheet",
-            Arrays.asList("csv", "ods", "ots", "tsv", "xls", "xlsx"),
-            Arrays.asList("csv", "html", "jpg", "ods", "ots", "fods", "pdf", "png", "tsv", "xls", "xlsx"));
+            Arrays.asList("csv", "fods", "ods", "ots", "sxc", "tsv", "xls", "xlsx", "xltx"),
+            Arrays.asList("csv", "fods", "html", "jpg", "ods", "ots", "pdf", "png", "svg", "sxc", "tsv",
+                "xhtml", "xls", "xlsx", "xltx"));
         register("PRESENTATION", "Presentation",
-            Arrays.asList("odp", "otp", "ppt", "pptx"),
-            Arrays.asList("gif", "html", "jpg", "odp", "otp", "fodp", "pdf", "png", "ppt", "pptx", "bmp"));
-        register("DRAWING", "Drawing",
-            Arrays.asList("odg", "otg"),
-            Arrays.asList("gif", "jpg", "odg", "otg", "fodg", "pdf", "png", "svg", "tif", "vsd", "bmp"));
+            Arrays.asList("fodp", "odp", "otp", "ppt", "pptx", "potx", "sxi"),
+            Arrays.asList("bmp", "fodp", "gif", "html", "jpg", "odp", "otp", "pdf", "png", "ppt", "pptx",
+                "potx", "svg", "swf", "sxi", "tif", "xhtml"));
+        register("DRAWING", "Drawing / Image",
+            Arrays.asList("bmp", "fodg", "gif", "jpg", "odg", "otg", "pdf", "png", "svg", "tif", "vsd", "vsdx"),
+            Arrays.asList("bmp", "fodg", "gif", "jpg", "odg", "otg", "pdf", "png", "svg", "swf", "tif", "vsd", "vsdx"));
         register("OTHER", "Other (HTML)",
-            Arrays.asList("html"),
-            Arrays.asList("doc", "docx", "html", "jpg", "odt", "ott", "fodt", "pdf", "png", "rtf", "txt"));
+            Arrays.asList("html", "htm"),
+            Arrays.asList("doc", "docx", "dotx", "odt", "ott", "fodt", "html", "xhtml", "rtf", "sxw", "txt",
+                "jpg", "pdf", "png", "svg"));
     }
 
     private static void register(String key, String label, List<String> inputFormats, List<String> outputFormats) {

@@ -3,6 +3,7 @@ package process.emailer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import process.model.service.impl.LookupDataCacheService;
@@ -64,7 +65,35 @@ public class EmailMessagesFactory {
             emailMessageDto.setBodyMap(metaData);
             return this.sendSimpleMail(emailMessageDto);
         } catch (Exception ex) {
-            logger.error("Exception :- : {}.", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An exception occurred: {}.", ExceptionUtil.getRootCauseMessage(ex));
+            return "Error while Sending Mail";
+        }
+    }
+
+    public String sendFileShareEmail(String recipientEmail, String senderName, String itemName, String itemType,
+        boolean zipped, String sizeLabel, String message, byte[] attachmentBytes, String attachmentFilename, String attachmentContentType) {
+        try {
+            Map<String, Object> metaData = new HashMap<>();
+            metaData.put("sender_name", senderName);
+            metaData.put("item_name", itemName);
+            metaData.put("item_type", itemType);
+            metaData.put("item_label", ("Folder".equals(itemType) ? "a folder" : "Selection".equals(itemType) ? "a selection" : "a file"));
+            metaData.put("size_label", sizeLabel);
+            metaData.put("message", message);
+            metaData.put("attachment_note", zipped
+                ? "It's attached below as a ZIP file."
+                : "It's attached below.");
+            EmailMessageDto emailMessageDto = new EmailMessageDto();
+            emailMessageDto.setRecipients(recipientEmail);
+            emailMessageDto.setSubject(senderName + " shared \"" + itemName + "\" with you");
+            emailMessageDto.setEmailTemplateName(TemplateType.FILE_SHARE);
+            emailMessageDto.setBodyMap(metaData);
+            emailMessageDto.setAttachmentBytes(attachmentBytes);
+            emailMessageDto.setAttachmentFilename(attachmentFilename);
+            emailMessageDto.setAttachmentContentType(attachmentContentType);
+            return this.sendSimpleMail(emailMessageDto);
+        } catch (Exception ex) {
+            logger.error("An exception occurred: {}.", ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
         }
     }
@@ -72,7 +101,7 @@ public class EmailMessagesFactory {
     private String sendSimpleMail(EmailMessageDto emailContent) {
         try {
             MimeMessage mailMessage = this.javaMailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mailMessage, UTF8);
+            MimeMessageHelper helper = new MimeMessageHelper(mailMessage, emailContent.getAttachmentBytes() != null, UTF8);
             helper.setFrom(sender);
             if(!isNull(emailContent.getRecipients())) {
                 helper.setTo(emailContent.getRecipients());
@@ -85,14 +114,18 @@ public class EmailMessagesFactory {
                 helper.setSubject(emailContent.getSubject());
                 String message = this.velocityManager.getResponseMessage(emailContent.getEmailTemplateName(), emailContent.getBodyMap());
                 helper.setText(message, true);
+                if (emailContent.getAttachmentBytes() != null) {
+                    helper.addAttachment(emailContent.getAttachmentFilename(),
+                        new ByteArrayResource(emailContent.getAttachmentBytes()), emailContent.getAttachmentContentType());
+                }
                 this.javaMailSender.send(mailMessage);
-                logger.info("Email Send Successfully Content :- {}.", emailContent.getBodyMap().toString());
+                logger.info("Email sent successfully. Content: {}.", emailContent.getBodyMap().toString());
             } else {
-                logger.error("Error :- Sent To Null Content :- {}.", emailContent.getBodyMap().toString());
+                logger.error("Error: recipient is null. Content: {}.", emailContent.getBodyMap().toString());
             }
-            return "Mail Sent Successfully...";
+            return "Mail sent successfully.";
         } catch (Exception ex) {
-            logger.error("Exception :- : {}.", ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("An exception occurred: {}.", ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
         }
     }

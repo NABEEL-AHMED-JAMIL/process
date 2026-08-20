@@ -68,9 +68,6 @@ public class AuditLogSyncCron {
                         maxSeen = dateCreated;
                     }
                 } catch (Exception ex) {
-                    // Don't let the bookmark advance past an unparseable hit -- if it did, the
-                    // next run's overlap window could shift past it and drop it for good. Keep
-                    // re-scanning (and re-logging) it every run until it's fixed instead.
                     hadParseFailure = true;
                     logger.error("Failed to sync one audit log hit externalId={}: {}", hit.getExternalId(), ex.getMessage(), ex);
                 }

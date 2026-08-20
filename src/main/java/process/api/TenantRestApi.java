@@ -30,7 +30,7 @@ public class TenantRestApi {
         try {
             return new ResponseEntity<>(this.tenantService.listTenants(), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while listTenants ", ex);
+            logger.error("An error occurred while listTenants.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -40,7 +40,7 @@ public class TenantRestApi {
         try {
             return new ResponseEntity<>(this.tenantService.addTenant(tenantDto), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while addTenant ", ex);
+            logger.error("An error occurred while addTenant.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -50,7 +50,7 @@ public class TenantRestApi {
         try {
             return new ResponseEntity<>(this.tenantService.updateTenant(tenantDto), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while updateTenant ", ex);
+            logger.error("An error occurred while updateTenant.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -60,7 +60,7 @@ public class TenantRestApi {
         try {
             return new ResponseEntity<>(this.tenantService.changeTenantStatus(tenantDto), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while changeTenantStatus ", ex);
+            logger.error("An error occurred while changeTenantStatus.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }

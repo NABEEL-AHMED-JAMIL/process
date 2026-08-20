@@ -49,8 +49,14 @@ public class Scheduler {
         nullable = false)
     private String frequency;
 
-    @Column(name = "recurrence")
-    private String recurrence;
+    @Column(name = "interval_value")
+    private String intervalValue;
+
+    @Column(name = "days_of_week")
+    private String daysOfWeek;
+
+    @Column(name = "day_of_month")
+    private Integer dayOfMonth;
 
     @Column(name = "job_id",
         nullable = false)
@@ -63,14 +69,26 @@ public class Scheduler {
     @Column(name = "date_created")
     private Timestamp dateCreated;
 
-    @Column(name = "recurrence_time")
-    private LocalDateTime recurrenceTime;
+    @Column(name = "date_updated")
+    private Timestamp dateUpdated;
+
+    @Column(name = "next_run_at")
+    private LocalDateTime nextRunAt;
+
+    @Column(name = "expired", nullable = false)
+    private boolean expired;
 
     public Scheduler() {}
 
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
+        this.dateUpdated = this.dateCreated;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.dateUpdated = new Timestamp(System.currentTimeMillis());
     }
 
     public Long getSchedulerId() {
@@ -113,12 +131,28 @@ public class Scheduler {
         this.frequency = frequency;
     }
 
-    public String getRecurrence() {
-        return recurrence;
+    public String getIntervalValue() {
+        return intervalValue;
     }
 
-    public void setRecurrence(String recurrence) {
-        this.recurrence = recurrence;
+    public void setIntervalValue(String intervalValue) {
+        this.intervalValue = intervalValue;
+    }
+
+    public String getDaysOfWeek() {
+        return daysOfWeek;
+    }
+
+    public void setDaysOfWeek(String daysOfWeek) {
+        this.daysOfWeek = daysOfWeek;
+    }
+
+    public Integer getDayOfMonth() {
+        return dayOfMonth;
+    }
+
+    public void setDayOfMonth(Integer dayOfMonth) {
+        this.dayOfMonth = dayOfMonth;
     }
 
     public Long getJobId() {
@@ -141,12 +175,28 @@ public class Scheduler {
         this.dateCreated = dateCreated;
     }
 
-    public LocalDateTime getRecurrenceTime() {
-        return recurrenceTime;
+    public Timestamp getDateUpdated() {
+        return dateUpdated;
     }
 
-    public void setRecurrenceTime(LocalDateTime recurrenceTime) {
-        this.recurrenceTime = recurrenceTime;
+    public void setDateUpdated(Timestamp dateUpdated) {
+        this.dateUpdated = dateUpdated;
+    }
+
+    public LocalDateTime getNextRunAt() {
+        return nextRunAt;
+    }
+
+    public void setNextRunAt(LocalDateTime nextRunAt) {
+        this.nextRunAt = nextRunAt;
+    }
+
+    public boolean isExpired() {
+        return expired;
+    }
+
+    public void setExpired(boolean expired) {
+        this.expired = expired;
     }
 
     @Override

@@ -15,6 +15,7 @@ import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardService;
 import process.security.TenantContext;
+import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -124,10 +125,11 @@ public class DashboardServiceImpl implements DashboardService {
                 Long stop = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
                 Long skip = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
                 Long interrupt = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
+                Long missed = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
                 Long total = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
                 weeklyJobStatistics.add(
                     new WeeklyHrJobDimensionStatisticsDto(jobId, jobName,
-                        queue, start, running, failed, completed, stop, skip, interrupt, total)
+                        queue, start, running, failed, completed, stop, skip, interrupt, missed, total)
                 );
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
@@ -211,7 +213,8 @@ public class DashboardServiceImpl implements DashboardService {
                         objectDetail.put("sourceJobStatistics", new WeeklyHrJobDimensionStatisticsDto(
                             Long.valueOf(obj[index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
                             Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
-                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString())));
+                            Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),
+                            Long.valueOf(obj[++index].toString())));
                     }
                 }
             }
@@ -245,13 +248,15 @@ public class DashboardServiceImpl implements DashboardService {
         sourceTaskDto.setBucket(sourceTask.getBucket());
         sourceTaskDto.setInputFolder(sourceTask.getInputFolder());
         sourceTaskDto.setOutputFolder(sourceTask.getOutputFolder());
-        if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
-            this.lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId()))
-                .ifPresent(lookupData -> sourceTaskDto.setHomePageId(lookupData.getLookupValue()));
+        Long homePageLookupId = ProcessUtil.parseLongOrNull(sourceTask.getHomePageId());
+        if (homePageLookupId != null) {
+            this.lookupDataRepository.findById(homePageLookupId)
+                .ifPresent(lookupData -> sourceTaskDto.setHomePageId(lookupData.getLookupType()));
         }
-        if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
-            this.lookupDataRepository.findById(Long.valueOf(sourceTask.getPipelineId()))
-                .ifPresent(lookupData -> sourceTaskDto.setPipelineId(lookupData.getLookupValue()));
+        Long pipelineLookupId = ProcessUtil.parseLongOrNull(sourceTask.getPipelineId());
+        if (pipelineLookupId != null) {
+            this.lookupDataRepository.findById(pipelineLookupId)
+                .ifPresent(lookupData -> sourceTaskDto.setPipelineId(lookupData.getLookupType()));
         }
         if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
             sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask));
@@ -266,8 +271,12 @@ public class DashboardServiceImpl implements DashboardService {
         schedulerDto.setEndDate(scheduler.getEndDate());
         schedulerDto.setStartTime(scheduler.getStartTime());
         schedulerDto.setFrequency(scheduler.getFrequency());
-        schedulerDto.setRecurrence(scheduler.getRecurrence());
-        schedulerDto.setRecurrenceTime(scheduler.getRecurrenceTime());
+        schedulerDto.setIntervalValue(scheduler.getIntervalValue());
+        schedulerDto.setDaysOfWeek(scheduler.getDaysOfWeek());
+        schedulerDto.setDayOfMonth(scheduler.getDayOfMonth());
+        schedulerDto.setNextRunAt(scheduler.getNextRunAt());
+        schedulerDto.setExpired(scheduler.isExpired());
+        schedulerDto.setLastFlight(!scheduler.isExpired() && ProcessTimeUtil.isLastFlight(scheduler));
         return schedulerDto;
     }
 

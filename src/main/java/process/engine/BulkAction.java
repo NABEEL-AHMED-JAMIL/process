@@ -44,12 +44,19 @@ public class BulkAction {
     }
 
     public void changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus) {
+        this.changeJobQueueStatus(jobQueueId, jobStatus, null);
+    }
+
+    public void changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus, String message) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
         if (!jobQueue.isPresent()) {
             this.logger.warn("changeJobQueueStatus: JobQueue not found with jobQueueId {}, skipping.", jobQueueId);
             return;
         }
         jobQueue.get().setJobStatus(jobStatus);
+        if (!ProcessUtil.isNull(message)) {
+            jobQueue.get().setJobStatusMessage(message);
+        }
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
 
@@ -60,7 +67,9 @@ public class BulkAction {
             return;
         }
         jobQueue.get().setEndTime(endTime);
-        jobQueue.get().setJobStatusMessage(String.format("Job %s now complete.", jobQueue.get().getJobId()));
+        if (ProcessUtil.isNull(jobQueue.get().getJobStatusMessage())) {
+            jobQueue.get().setJobStatusMessage(String.format("Job %s now complete.", jobQueue.get().getJobId()));
+        }
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
 
@@ -108,11 +117,6 @@ public class BulkAction {
         return jobQueue;
     }
 
-    /**
-     * Snapshots the owning SourceJob's SourceTask.bucket/outputFolder onto the new job_queue row
-     * at the moment it's created -- see the field comments on JobQueue for why this has to be a
-     * snapshot rather than a live join at display time.
-     */
     private void applyBucketSnapshot(JobQueue jobQueue, Long jobId) {
         this.transactionService.findByJobId(jobId).ifPresent(sourceJob -> {
             if (sourceJob.getTaskDetail() != null) {
@@ -131,19 +135,23 @@ public class BulkAction {
     }
 
     public void updateNextScheduler(Scheduler scheduler) {
-        LocalDateTime nextJobRun = ProcessTimeUtil.computeNextRun(scheduler);
-        if (scheduler.getEndDate() != null) {
-            LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
-            if (nextJobRun != null && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
-                scheduler.setRecurrenceTime(nextJobRun);
-                this.transactionService.saveOrUpdateScheduler(scheduler);
-                return;
-            }
-            logger.info("No More Nex Job for jobId :- {}.", scheduler.getJobId());
-        } else if (nextJobRun != null) {
-            scheduler.setRecurrenceTime(nextJobRun);
-            this.transactionService.saveOrUpdateScheduler(scheduler);
+        List<LocalDateTime> missedRuns = ProcessTimeUtil.computeMissedRuns(scheduler);
+        ProcessTimeUtil.applyNextRun(scheduler);
+        this.transactionService.saveOrUpdateScheduler(scheduler);
+        if (scheduler.isExpired()) {
+            logger.info("No more next job for jobId: {} -- schedule has expired.", scheduler.getJobId());
         }
+        for (LocalDateTime missedAt : missedRuns) {
+            this.recordMissedRun(scheduler.getJobId(), missedAt);
+        }
+    }
+
+    private void recordMissedRun(Long jobId, LocalDateTime missedAt) {
+        String template = "Job %s missed its scheduled run at " + missedAt + " -- the system was catching up after downtime.";
+        JobQueue jobQueue = this.createJobQueue(jobId, missedAt, JobStatus.Missed, template, true);
+        this.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(template, jobId));
+        this.sendJobStatusNotification(jobId);
+        logger.warn("Job {} missed its scheduled run at {}.", jobId, missedAt);
     }
 
     public void sendJobStatusNotification(Long jobId) {
@@ -165,8 +173,8 @@ public class BulkAction {
         if (!ProcessUtil.isNull(sourceJobProjection.getLastJobRun())) {
             jsonObject.put("lastJobRun", sourceJobProjection.getLastJobRun().toString());
         }
-        if (!ProcessUtil.isNull(sourceJobProjection.getRecurrenceTime())) {
-            jsonObject.put("recurrenceTime", sourceJobProjection.getRecurrenceTime().toString());
+        if (!ProcessUtil.isNull(sourceJobProjection.getNextRunAt())) {
+            jsonObject.put("nextRunAt", sourceJobProjection.getNextRunAt().toString());
         }
         jsonObject.put("execution", sourceJobProjection.getExecution());
         return new Gson().toJson(jsonObject);

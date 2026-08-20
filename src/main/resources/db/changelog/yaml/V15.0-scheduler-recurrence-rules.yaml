@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: 15.0-scheduler-recurrence-rules
+      author: nabeel.amd93
+      description: "Scheduler redesign: rename recurrence -> interval_value, add days_of_week/day_of_month/expired/date_updated, replace recurrence_time with an indexed next_run_at"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V15.0-scheduler-recurrence-rules/V15__scheduler_recurrence_rules.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE scheduler ADD COLUMN recurrence_time TIMESTAMP;
+              UPDATE scheduler SET recurrence_time = next_run_at;
+              DROP INDEX IF EXISTS idx_scheduler_next_run_at;
+              ALTER TABLE scheduler DROP COLUMN IF EXISTS days_of_week;
+              ALTER TABLE scheduler DROP COLUMN IF EXISTS day_of_month;
+              ALTER TABLE scheduler DROP COLUMN IF EXISTS next_run_at;
+              ALTER TABLE scheduler DROP COLUMN IF EXISTS expired;
+              ALTER TABLE scheduler DROP COLUMN IF EXISTS date_updated;
+              ALTER TABLE scheduler RENAME COLUMN interval_value TO recurrence;

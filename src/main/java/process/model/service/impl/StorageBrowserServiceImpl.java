@@ -3,6 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import process.model.dto.BrowseObjectsResponseDto;
@@ -76,6 +77,12 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     @Override
     public ObjectMetadataDto getObjectMetadata(String bucket, String key) {
         return this.resolveService(bucket).getObjectMetadata(bucket, key);
+    }
+
+    @Override
+    @Cacheable(value = "fileChatMetadata", key = "#bucket + ':' + #key")
+    public ObjectMetadataDto getObjectMetadataCached(String bucket, String key) {
+        return this.getObjectMetadata(bucket, key);
     }
 
     @Override

@@ -60,10 +60,11 @@ public class DocumentConverterRestApi {
         @RequestParam("file") MultipartFile file,
         @RequestParam String outputFormat,
         @RequestParam(required = false) String bucketName,
+        @RequestParam(required = false) String targetFolder,
         @RequestParam(required = false) String taskName,
         @RequestParam(defaultValue = "false") boolean save) {
         try {
-            return new ResponseEntity<>(this.documentConverterService.convert(file, outputFormat, bucketName, taskName, save), HttpStatus.OK);
+            return new ResponseEntity<>(this.documentConverterService.convert(file, outputFormat, bucketName, targetFolder, taskName, save), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while convert ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);

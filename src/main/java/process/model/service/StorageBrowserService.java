@@ -16,6 +16,8 @@ public interface StorageBrowserService {
 
     ObjectMetadataDto getObjectMetadata(String bucket, String key);
 
+    ObjectMetadataDto getObjectMetadataCached(String bucket, String key);
+
     ObjectContentDto previewObject(String bucket, String key, Long rangeStart, Long rangeEnd);
 
     ObjectContentDto downloadObject(String bucket, String key, Long rangeStart, Long rangeEnd);

@@ -22,6 +22,9 @@ public class FileUploadDto<T> {
     @JsonProperty("data")
     private T data;
 
+    @JsonProperty("tenantId")
+    private Long tenantId;
+
     public FileUploadDto() { }
 
     public FileUploadDto(T data) { this.data = data; }
@@ -58,6 +61,14 @@ public class FileUploadDto<T> {
 
     public void setData(T data) {
         this.data = data;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     @Override

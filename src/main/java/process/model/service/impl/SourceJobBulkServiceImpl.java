@@ -10,6 +10,7 @@ import process.model.dto.*;
 import process.model.enums.Execution;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
+import process.model.pojo.SourceTask;
 import process.model.pojo.Scheduler;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
@@ -65,13 +66,13 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             try (XSSFWorkbook wb = new XSSFWorkbook(templateStream)) {
                 XSSFSheet sheet = wb.getSheet(JOB_ADD);
 
-                this.bulkExcel.fillDropDownValue(sheet,1,1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
-                this.bulkExcel.fillDropDownValue(sheet,1,5, ProcessTimeUtil.frequency.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet,1,999,1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
+                this.bulkExcel.fillDropDownValue(sheet,1,999,5, ProcessTimeUtil.frequency.toArray(new String[0]));
 
-                this.bulkExcel.fillDropDownValue(sheet,1,7, ProcessTimeUtil.priority.toArray(new String[0]));
-                this.bulkExcel.fillDropDownValue(sheet,1,8, ProcessTimeUtil.checked.toArray(new String[0]));
-                this.bulkExcel.fillDropDownValue(sheet,1,9, ProcessTimeUtil.checked.toArray(new String[0]));
-                this.bulkExcel.fillDropDownValue(sheet,1,10, ProcessTimeUtil.checked.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet,1,999,7, ProcessTimeUtil.priority.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet,1,999,8, ProcessTimeUtil.checked.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet,1,999,9, ProcessTimeUtil.checked.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet,1,999,10, ProcessTimeUtil.checked.toArray(new String[0]));
                 ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                 wb.write(byteArrayOutputStream);
                 return byteArrayOutputStream;
@@ -115,7 +116,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             }
             dataCellValue.add(!ProcessUtil.isNull(sourceJob.getLastJobRun()) ? String.valueOf(sourceJob.getLastJobRun()) : "");
             if (scheduler.isPresent()) {
-                dataCellValue.add(!ProcessUtil.isNull(scheduler.get().getRecurrenceTime()) ? String.valueOf(scheduler.get().getRecurrenceTime()) : "");
+                dataCellValue.add(!ProcessUtil.isNull(scheduler.get().getNextRunAt()) ? String.valueOf(scheduler.get().getNextRunAt()) : "");
             } else {
                 dataCellValue.add("");
             }
@@ -140,13 +141,13 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream())) {
         if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
-            return new ResponseDto(ERROR,  "You uploaded empty file.");
+            return new ResponseDto(ERROR,  "You uploaded an empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(JOB_ADD);
         if(ProcessUtil.isNull(sheet)) {
             return new ResponseDto(ERROR, "Sheet not found with (Job-Add)");
         } else if (sheet.getLastRowNum() < 1) {
-            return new ResponseDto(ERROR,  "You can't upload empty file.");
+            return new ResponseDto(ERROR,  "You cannot upload an empty file.");
         } else if(sheet.getLastRowNum() > 1001) {
             return new ResponseDto(ERROR,"File support 1000 rows at a time.");
         }
@@ -195,7 +196,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
                 jobDetailValidation.isValidJobDetail();
                 if (!ProcessUtil.isNull(jobDetailValidation.getTaskId())) {
                     if (!this.transactionService.findByTaskDetailIdAndTaskStatus(Long.valueOf(jobDetailValidation.getTaskId())).isPresent()) {
-                        jobDetailValidation.setErrorMsg("Delete sourceTask not link with source job at row " + (currentRow.getRowNum() + 1) + ".\n");
+                        jobDetailValidation.setErrorMsg("Deleted sourceTask is not linked with source job at row " + (currentRow.getRowNum() + 1) + ".\n");
                     }
                 }
                 if (!ProcessUtil.isNull(jobDetailValidation.getErrorMsg())) {
@@ -211,10 +212,11 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
         for (JobDetailValidation jobDetailValidation : jobDetailValidations) {
             SourceJob sourceJob = new SourceJob();
             sourceJob.setJobName(jobDetailValidation.getJobName());
-            sourceJob.setTaskDetail(this.transactionService.findByTaskDetailIdAndTaskStatus(Long.valueOf(jobDetailValidation.getTaskId())).get());
+            SourceTask linkedTask = this.transactionService.findByTaskDetailIdAndTaskStatus(Long.valueOf(jobDetailValidation.getTaskId())).get();
+            sourceJob.setTaskDetail(linkedTask);
             sourceJob.setJobStatus(Status.Active);
 
-            sourceJob.setTenantId(TenantContext.getTenantId());
+            sourceJob.setTenantId(linkedTask.getTenantId());
             sourceJob.setAssignedUserId(TenantContext.getAppUserId());
             sourceJob.setPriority(Integer.valueOf(jobDetailValidation.getPriority()));
             sourceJob.setSkipJob(Boolean.parseBoolean(jobDetailValidation.getEmailJobSkip()));
@@ -230,13 +232,13 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             scheduler.setStartTime(LocalTime.parse(jobDetailValidation.getStartTime()));
             scheduler.setFrequency(jobDetailValidation.getFrequency());
             if (!StringUtils.isEmpty(jobDetailValidation.getRecurrence())) {
-                scheduler.setRecurrence(jobDetailValidation.getRecurrence());
+                scheduler.setIntervalValue(jobDetailValidation.getRecurrence());
             }
-            scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(LocalDate.parse(jobDetailValidation.getStartDate()), jobDetailValidation.getStartTime()));
+            ProcessTimeUtil.applyInitialSchedule(scheduler);
             scheduler.setJobId(sourceJob.getJobId());
             this.transactionService.saveOrUpdateScheduler(scheduler);
         }
-        return new ResponseDto(SUCCESS, String.format("Total %d Job Save Successfully", jobDetailValidations.size()));
+        return new ResponseDto(SUCCESS, String.format("Total %d jobs saved successfully.", jobDetailValidations.size()));
         }
     }
 

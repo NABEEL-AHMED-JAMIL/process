@@ -58,6 +58,14 @@ public final class ContentTypeUtil {
         EXTENSION_CONTENT_TYPES.put("tif", "image/tiff");
         EXTENSION_CONTENT_TYPES.put("tiff", "image/tiff");
         EXTENSION_CONTENT_TYPES.put("vsd", "application/vnd.visio");
+        EXTENSION_CONTENT_TYPES.put("vsdx", "application/vnd.ms-visio.drawing");
+
+        EXTENSION_CONTENT_TYPES.put("xhtml", "application/xhtml+xml");
+        EXTENSION_CONTENT_TYPES.put("sxw", "application/vnd.sun.xml.writer");
+        EXTENSION_CONTENT_TYPES.put("sxc", "application/vnd.sun.xml.calc");
+        EXTENSION_CONTENT_TYPES.put("sxi", "application/vnd.sun.xml.impress");
+        EXTENSION_CONTENT_TYPES.put("wpd", "application/wordperfect");
+        EXTENSION_CONTENT_TYPES.put("swf", "application/x-shockwave-flash");
     }
 
     private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList(

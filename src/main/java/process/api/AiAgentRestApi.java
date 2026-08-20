@@ -8,7 +8,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
-import process.model.dto.ProcessTextRequestDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.util.ProcessUtil;
@@ -86,17 +85,6 @@ public class AiAgentRestApi {
             return new ResponseEntity<>(this.aiAgentService.fetchToolByUuid(uuid), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchToolByUuid ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    @PreAuthorize("hasRole('TENANT_USER')")
-    @RequestMapping(value = "/processText", method = RequestMethod.POST)
-    public ResponseEntity<?> processText(@RequestBody ProcessTextRequestDto processTextRequestDto) {
-        try {
-            return new ResponseEntity<>(this.aiAgentService.processText(processTextRequestDto), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while processText ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }

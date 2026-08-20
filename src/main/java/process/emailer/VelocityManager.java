@@ -44,7 +44,7 @@ public class VelocityManager {
             template.merge(context, writer);
             return writer;
         }
-        throw new NullPointerException("Template Not Found");
+        throw new NullPointerException("Template not found.");
     }
 
     private VelocityEngine getEngine() {

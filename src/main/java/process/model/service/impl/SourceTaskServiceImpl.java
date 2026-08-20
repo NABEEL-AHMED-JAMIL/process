@@ -17,6 +17,7 @@ import process.model.projection.SourceTaskProjection;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
+import process.model.repository.TenantRepository;
 import process.model.service.SourceTaskService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -49,6 +50,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final TenantFilterHelper tenantFilterHelper;
     private final TaskPayloadLocationUtil taskPayloadLocationUtil;
+    private final TenantRepository tenantRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -59,7 +61,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         SourceTaskRepository sourceTaskRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
         TenantFilterHelper tenantFilterHelper,
-        TaskPayloadLocationUtil taskPayloadLocationUtil) {
+        TaskPayloadLocationUtil taskPayloadLocationUtil,
+        TenantRepository tenantRepository) {
         this.bulkExcel = bulkExcel;
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
@@ -67,6 +70,22 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.tenantFilterHelper = tenantFilterHelper;
         this.taskPayloadLocationUtil = taskPayloadLocationUtil;
+        this.tenantRepository = tenantRepository;
+    }
+
+    private ResponseDto resolveTenantIdForCreate(Long requestedTenantId, java.util.function.Consumer<Long> onResolved) {
+        if (!TenantContext.isPlatformAdmin()) {
+            onResolved.accept(TenantContext.getTenantId());
+            return null;
+        }
+        if (ProcessUtil.isNull(requestedTenantId)) {
+            return new ResponseDto(ERROR, "Tenant is required when creating a source task as Platform Admin.");
+        }
+        if (!this.tenantRepository.existsById(requestedTenantId)) {
+            return new ResponseDto(ERROR, "Selected tenant not found.");
+        }
+        onResolved.accept(requestedTenantId);
+        return null;
     }
 
     private void applyDerivedLocation(SourceTask sourceTask) {
@@ -111,7 +130,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(ERROR, "Provided sourceTaskTypeId not found.");
         }
         SourceTask sourceTask = new SourceTask();
-        sourceTask.setTenantId(TenantContext.getTenantId());
+        ResponseDto tenantError = this.resolveTenantIdForCreate(sourceTaskDto.getTenantId(), sourceTask::setTenantId);
+        if (tenantError != null) {
+            return tenantError;
+        }
         sourceTask.setTaskName(sourceTaskDto.getTaskName());
         sourceTask.setTaskPayload(sourceTaskDto.getTaskPayload());
         sourceTask.setHomePageId(sourceTaskDto.getHomePageId());
@@ -131,7 +153,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                 }).collect(Collectors.toList()));
         }
         this.sourceTaskRepository.save(sourceTask);
-        return new ResponseDto(SUCCESS, String.format("SourceTask successfully save with %d.", sourceTask.getTaskDetailId()));
+        return new ResponseDto(SUCCESS, String.format("SourceTask successfully saved with ID %d.", sourceTask.getTaskDetailId()));
     }
 
     @Override
@@ -186,7 +208,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             sourceTask.get().setPipelineId(sourceTaskDto.getPipelineId());
             sourceTask.get().setGroupId(sourceTaskDto.getGroupId());
             this.sourceTaskRepository.save(sourceTask.get());
-            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", sourceTaskDto.getTaskDetailId()));
+            return new ResponseDto(SUCCESS, String.format("SourceTask successfully updated with ID %d.", sourceTaskDto.getTaskDetailId()));
         }
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
     }
@@ -209,7 +231,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             }
             this.sourceTaskRepository.save(sourceTask.get());
             this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(sourceTaskDto.getTaskDetailId(), Status.Delete.name());
-            return new ResponseDto(SUCCESS, String.format("SourceTask successfully update with %d.", sourceTaskDto.getTaskDetailId()));
+            return new ResponseDto(SUCCESS, String.format("SourceTask successfully deleted with ID %d.", sourceTaskDto.getTaskDetailId()));
         }
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
     }
@@ -280,6 +302,18 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskTypeDto.setKafkaConnectionProfileId(Long.valueOf(obj[index].toString()));
+                    }
+                    index++;
+                    if (!ProcessUtil.isNull(obj[index])) {
+                        sourceTaskDto.setBucket(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!ProcessUtil.isNull(obj[index])) {
+                        sourceTaskDto.setInputFolder(String.valueOf(obj[index]));
+                    }
+                    index++;
+                    if (!ProcessUtil.isNull(obj[index])) {
+                        sourceTaskDto.setOutputFolder(String.valueOf(obj[index]));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
@@ -497,11 +531,11 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                 if (!ProcessUtil.isNull(sourceTaskValidation.getSourceTaskTypeId())) {
                     Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId()));
                     if (!sourceTaskType.isPresent()) {
-                        sourceTaskValidation.setErrorMsg("SourceTaskType not exist at row " + (currentRow.getRowNum() + 1) + ".\n");
+                        sourceTaskValidation.setErrorMsg("SourceTaskType does not exist at row " + (currentRow.getRowNum() + 1) + ".\n");
                     } else if (sourceTaskType.get().getStatus().equals(Status.Delete)) {
-                        sourceTaskValidation.setErrorMsg("Delete sourceTaskType not link with source task at row " + (currentRow.getRowNum() + 1) + ".\n");
+                        sourceTaskValidation.setErrorMsg("Deleted sourceTaskType is not linked with source task at row " + (currentRow.getRowNum() + 1) + ".\n");
                     } else if (sourceTaskType.get().getStatus().equals(Status.Inactive)) {
-                        sourceTaskValidation.setErrorMsg("Inactive sourceTaskType not link with source task at row " + (currentRow.getRowNum() + 1) + ".\n");
+                        sourceTaskValidation.setErrorMsg("Inactive sourceTaskType is not linked with source task at row " + (currentRow.getRowNum() + 1) + ".\n");
                     }
                 }
                 sourceTaskValidation.isValidSourceTask();
@@ -515,7 +549,12 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         if (!errors.isEmpty()) {
             return new ResponseDto(ERROR, String.format("Total %d source task invalid.", errors.size()), errors);
         }
-        Long uploadTenantId = TenantContext.getTenantId();
+        final Long[] uploadTenantIdHolder = new Long[1];
+        ResponseDto tenantError = this.resolveTenantIdForCreate(object.getTenantId(), id -> uploadTenantIdHolder[0] = id);
+        if (tenantError != null) {
+            return tenantError;
+        }
+        Long uploadTenantId = uploadTenantIdHolder[0];
         sourceTaskValidations.forEach(sourceTaskValidation -> {
             SourceTask sourceTask = new SourceTask();
 

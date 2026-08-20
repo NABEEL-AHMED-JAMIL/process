@@ -52,7 +52,7 @@ public class NotifyServiceImpl implements NotifyService {
         }
         logger.info("Updating status for job {} to {}", jobQueue.getJobId(), newStatus);
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), newStatus);
-        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus);
+        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
         if (newStatus == JobStatus.Failed || newStatus == JobStatus.Completed) {

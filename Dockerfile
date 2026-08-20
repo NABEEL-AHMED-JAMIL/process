@@ -13,9 +13,19 @@ WORKDIR /app
 # calc/impress/draw, not libreoffice-full) keep this from pulling in the GUI/help/every language
 # pack; --no-install-recommends trims it further. Still a large layer (LibreOffice itself is
 # a few hundred MB) -- that's the real cost of this feature, not something to optimize away.
+#
+# Fonts: eclipse-temurin ships with essentially none. Without them, LibreOffice silently
+# substitutes a fallback font for every Word/Excel/PowerPoint file that references Arial, Times
+# New Roman, Courier New, Calibri, or Cambria (the actual defaults in modern Office documents) --
+# converted output then reflows/paginates differently than the original. fonts-liberation is the
+# metric-compatible clone of the first three; fonts-crosextra-carlito/-caladea cover Calibri/
+# Cambria; fonts-dejavu-core is the general fallback. Same fix RAAD-Converter's Dockerfile
+# reaches for by bundling a Fonts/ folder -- these are the equivalent, freely-redistributable
+# packages instead of shipping unverified third-party font binaries.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl ffmpeg \
         libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-draw \
+        fonts-liberation fonts-crosextra-carlito fonts-crosextra-caladea fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Expose port for application

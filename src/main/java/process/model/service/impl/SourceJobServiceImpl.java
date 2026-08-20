@@ -100,7 +100,10 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, String.format("SourceTask not found with %d.",
                 sourceJobDto.getTaskDetail().getTaskDetailId()));
         }
-        Long tenantId = TenantContext.getTenantId();
+        Long tenantId = taskDetail.get().getTenantId();
+        if (ProcessUtil.isNull(tenantId)) {
+            return new ResponseDto(ERROR, "Selected sourceTask has no owning tenant -- fix its tenant before creating jobs against it.");
+        }
         Long assignedUserId = !ProcessUtil.isNull(sourceJobDto.getAssignedUserId())
             ? sourceJobDto.getAssignedUserId() : TenantContext.getAppUserId();
         String assigneeError = this.validateAssignee(assignedUserId, tenantId);
@@ -130,11 +133,12 @@ public class SourceJobServiceImpl implements SourceJobService {
                     }
                     scheduler.setStartTime(schedulerDto.getStartTime());
                     scheduler.setFrequency(schedulerDto.getFrequency());
-                    if (!StringUtils.isEmpty(schedulerDto.getRecurrence())) {
-                        scheduler.setRecurrence(schedulerDto.getRecurrence());
+                    if (!StringUtils.isEmpty(schedulerDto.getIntervalValue())) {
+                        scheduler.setIntervalValue(schedulerDto.getIntervalValue());
                     }
-                    scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
-                        schedulerDto.getStartDate(), schedulerDto.getStartTime().toString()));
+                    scheduler.setDaysOfWeek(schedulerDto.getDaysOfWeek());
+                    scheduler.setDayOfMonth(schedulerDto.getDayOfMonth());
+                    ProcessTimeUtil.applyInitialSchedule(scheduler);
                     scheduler.setJobId(sourceJob.getJobId());
                     this.schedulerRepository.save(scheduler);
                 });
@@ -203,11 +207,12 @@ public class SourceJobServiceImpl implements SourceJobService {
                             }
                             scheduler.get().setStartTime(schedulerDto.getStartTime());
                             scheduler.get().setFrequency(schedulerDto.getFrequency());
-                            if (!StringUtils.isEmpty(schedulerDto.getRecurrence())) {
-                                scheduler.get().setRecurrence(schedulerDto.getRecurrence());
+                            if (!StringUtils.isEmpty(schedulerDto.getIntervalValue())) {
+                                scheduler.get().setIntervalValue(schedulerDto.getIntervalValue());
                             }
-                            scheduler.get().setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
-                                schedulerDto.getStartDate(), schedulerDto.getStartTime().toString()));
+                            scheduler.get().setDaysOfWeek(schedulerDto.getDaysOfWeek());
+                            scheduler.get().setDayOfMonth(schedulerDto.getDayOfMonth());
+                            ProcessTimeUtil.applyInitialSchedule(scheduler.get());
                             scheduler.get().setJobId(sourceJob.get().getJobId());
                             this.schedulerRepository.save(scheduler.get());
                         }
@@ -244,9 +249,32 @@ public class SourceJobServiceImpl implements SourceJobService {
                 logger.error("An error occurred while updating related job queue/audit logs during deleteSourceJob :- {}.", ex);
             }
 
-            return new ResponseDto(SUCCESS, String.format("SourceJob successfully update with %d.", sourceJobDto.getJobId()));
+            return new ResponseDto(SUCCESS, String.format("SourceJob successfully updated with ID %d.", sourceJobDto.getJobId()));
         }
         return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto toggleSourceJobStatus(SourceJobDto sourceJobDto) throws Exception {
+        if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
+            return new ResponseDto(ERROR, "SourceJob jobId missing.");
+        }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
+        if (sourceJob.isPresent() && !this.isOwnedByCaller(sourceJob.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
+        }
+        if (!sourceJob.isPresent()) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
+        }
+        if (sourceJob.get().getJobStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, "Can't change status of a deleted job.");
+        }
+        Status newStatus = sourceJob.get().getJobStatus() == Status.Active ? Status.Inactive : Status.Active;
+        sourceJob.get().setJobStatus(newStatus);
+        this.sourceJobRepository.save(sourceJob.get());
+        return new ResponseDto(SUCCESS, String.format("Job %s.", newStatus == Status.Active ? "activated" : "deactivated"), newStatus.name());
     }
 
     @Override
@@ -291,21 +319,15 @@ public class SourceJobServiceImpl implements SourceJobService {
         }
         Scheduler scheduler = schedulerOpt.get();
         LocalDateTime nextJobRun = ProcessTimeUtil.computeNextRun(scheduler);
-        if (!ProcessUtil.isNull(scheduler.getEndDate())) {
-            LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
-            if (!ProcessUtil.isNull(nextJobRun) && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
-                this.producerBulkEngine.skipManualJobInQueue(scheduler);
-                scheduler.setRecurrenceTime(nextJobRun);
-                this.schedulerRepository.save(scheduler);
-                return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
-            }
-        } else if (!ProcessUtil.isNull(nextJobRun)) {
-            this.producerBulkEngine.skipManualJobInQueue(scheduler);
-            scheduler.setRecurrenceTime(nextJobRun);
-            this.schedulerRepository.save(scheduler);
-            return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
+        boolean stillHasMoreFlights = !ProcessUtil.isNull(nextJobRun) && (ProcessUtil.isNull(scheduler.getEndDate()) ||
+            !scheduler.getEndDate().atTime(scheduler.getStartTime()).isBefore(nextJobRun));
+        if (!stillHasMoreFlights) {
+            return new ResponseDto(ERROR, "No more flight skip.");
         }
-        return new ResponseDto(ERROR, "No more flight skip.");
+        this.producerBulkEngine.skipManualJobInQueue(scheduler);
+        ProcessTimeUtil.applyNextRun(scheduler);
+        this.schedulerRepository.save(scheduler);
+        return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
     }
 
     @Override
@@ -462,12 +484,14 @@ public class SourceJobServiceImpl implements SourceJobService {
         dto.setBucket(sourceTask.getBucket());
         dto.setInputFolder(sourceTask.getInputFolder());
         dto.setOutputFolder(sourceTask.getOutputFolder());
-        if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
-            dto.setHomePageId(lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId()))
+        Long homePageLookupId = ProcessUtil.parseLongOrNull(sourceTask.getHomePageId());
+        if (homePageLookupId != null) {
+            dto.setHomePageId(lookupDataRepository.findById(homePageLookupId)
                 .map(ld -> ld.getLookupType()).orElse(null));
         }
-        if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
-            dto.setPipelineId(lookupDataRepository.findById(Long.valueOf(sourceTask.getPipelineId()))
+        Long pipelineLookupId = ProcessUtil.parseLongOrNull(sourceTask.getPipelineId());
+        if (pipelineLookupId != null) {
+            dto.setPipelineId(lookupDataRepository.findById(pipelineLookupId)
                .map(ld -> ld.getLookupType()).orElse(null));
         }
         if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
@@ -493,8 +517,12 @@ public class SourceJobServiceImpl implements SourceJobService {
         schedulerDto.setEndDate(scheduler.getEndDate());
         schedulerDto.setStartTime(scheduler.getStartTime());
         schedulerDto.setFrequency(scheduler.getFrequency());
-        schedulerDto.setRecurrence(scheduler.getRecurrence());
-        schedulerDto.setRecurrenceTime(scheduler.getRecurrenceTime());
+        schedulerDto.setIntervalValue(scheduler.getIntervalValue());
+        schedulerDto.setDaysOfWeek(scheduler.getDaysOfWeek());
+        schedulerDto.setDayOfMonth(scheduler.getDayOfMonth());
+        schedulerDto.setNextRunAt(scheduler.getNextRunAt());
+        schedulerDto.setExpired(scheduler.isExpired());
+        schedulerDto.setLastFlight(!scheduler.isExpired() && ProcessTimeUtil.isLastFlight(scheduler));
         return schedulerDto;
     }
 

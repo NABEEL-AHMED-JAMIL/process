@@ -12,6 +12,8 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Configuration
 @EnableCaching
@@ -36,8 +38,15 @@ public class RedisConfig {
             .disableCachingNullValues()
             .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
             .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()));
+
+        Map<String, RedisCacheConfiguration> perCacheConfig = new HashMap<>();
+        perCacheConfig.put("fileChatExtract", config.entryTtl(Duration.ofDays(7)));
+
+        perCacheConfig.put("fileChatMetadata", config.entryTtl(Duration.ofSeconds(30)));
+
         return RedisCacheManager.builder(connectionFactory)
             .cacheDefaults(config)
+            .withInitialCacheConfigurations(perCacheConfig)
             .build();
     }
 

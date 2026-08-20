@@ -11,6 +11,8 @@ public interface SourceJobService {
 
     public ResponseDto deleteSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
+    public ResponseDto toggleSourceJobStatus(SourceJobDto sourceJobDto) throws Exception;
+
     public ResponseDto runSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
     public ResponseDto skipNextSourceJob(SourceJobDto sourceJobDto) throws Exception;

@@ -85,10 +85,14 @@ public class BulkExcel {
     }
 
     public void fillDropDownValue(XSSFSheet sheet, Integer row, Integer col, String[] dropList) {
+        this.fillDropDownValue(sheet, row, row, col, dropList);
+    }
+
+    public void fillDropDownValue(XSSFSheet sheet, Integer firstRow, Integer lastRow, Integer col, String[] dropList) {
         XSSFDataValidationHelper dataValidationHelper = new XSSFDataValidationHelper(sheet);
         XSSFDataValidationConstraint dataValidationConstraint = (XSSFDataValidationConstraint)
             dataValidationHelper.createExplicitListConstraint(dropList);
-        CellRangeAddressList rangeAddressList = new CellRangeAddressList(row, row, col, col);
+        CellRangeAddressList rangeAddressList = new CellRangeAddressList(firstRow, lastRow, col, col);
         XSSFDataValidation dataValidation = (XSSFDataValidation)
             dataValidationHelper.createValidation(dataValidationConstraint, rangeAddressList);
         dataValidation.setShowErrorBox(false);

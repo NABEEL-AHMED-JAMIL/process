@@ -35,7 +35,7 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     public List<SourceJob> findAllActiveAndInactiveJobs(Status activeStatus, Status inactiveStatus, Sort sort);
 
     @Query(value = "select sj.job_id as jobId, sj.job_status as jobStatus, sj.job_running_status as jobRunningStatus," +
-        "sj.last_job_run as lastJobRun, sc.recurrence_time as recurrenceTime, sj.execution as execution," +
+        "sj.last_job_run as lastJobRun, sc.next_run_at as nextRunAt, sj.execution as execution," +
         "au.username as assignedUsername\n" +
         "from source_job sj left join scheduler sc on sc.job_id = sj.job_id\n" +
         "left join app_user au on au.app_user_id = sj.assigned_user_id\n" +

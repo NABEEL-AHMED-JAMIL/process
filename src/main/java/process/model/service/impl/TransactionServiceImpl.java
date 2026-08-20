@@ -85,8 +85,8 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findById(jobQueueId);
     }
 
-    public List<Scheduler> findAllSchedulerForTodayV2(LocalDateTime lastSchedulerRun, LocalDateTime currentSchedulerTime) {
-        return this.schedulerRepository.findAllSchedulerForToday(lastSchedulerRun, currentSchedulerTime);
+    public List<Scheduler> findDueSchedulers(LocalDateTime now) {
+        return this.schedulerRepository.findDueSchedulers(now);
     }
 
     public List<JobQueue> findAllJobForTodayWithLimit(Long limit) {

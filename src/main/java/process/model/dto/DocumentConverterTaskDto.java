@@ -22,6 +22,7 @@ public class DocumentConverterTaskDto {
     private String outputContentType;
     private Long outputFileSize;
     private String bucketName;
+    private String targetFolder;
     private String inputStorageKey;
     private String outputStorageKey;
     private Status status;
@@ -120,6 +121,14 @@ public class DocumentConverterTaskDto {
 
     public void setBucketName(String bucketName) {
         this.bucketName = bucketName;
+    }
+
+    public String getTargetFolder() {
+        return targetFolder;
+    }
+
+    public void setTargetFolder(String targetFolder) {
+        this.targetFolder = targetFolder;
     }
 
     public String getInputStorageKey() {

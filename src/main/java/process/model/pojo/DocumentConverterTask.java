@@ -73,6 +73,9 @@ public class DocumentConverterTask {
     @Column(name = "bucket_name", nullable = false)
     private String bucketName;
 
+    @Column(name = "target_folder")
+    private String targetFolder;
+
     @Column(name = "input_storage_key", nullable = false)
     private String inputStorageKey;
 
@@ -195,6 +198,14 @@ public class DocumentConverterTask {
 
     public void setBucketName(String bucketName) {
         this.bucketName = bucketName;
+    }
+
+    public String getTargetFolder() {
+        return targetFolder;
+    }
+
+    public void setTargetFolder(String targetFolder) {
+        this.targetFolder = targetFolder;
     }
 
     public String getInputStorageKey() {

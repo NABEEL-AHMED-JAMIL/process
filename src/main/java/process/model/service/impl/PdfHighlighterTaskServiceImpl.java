@@ -67,7 +67,7 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<PdfHighlighterTask> pdfHighlighterTasks = this.pdfHighlighterTaskRepository
             .findByStatusNotOrderByPdfHighlighterTaskIdDesc(Status.Delete);
-        return new ResponseDto(SUCCESS, "Data fetch successfully.", pdfHighlighterTasks);
+        return new ResponseDto(SUCCESS, "Data fetched successfully.", pdfHighlighterTasks);
     }
 
     @Override
@@ -79,7 +79,7 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<PdfHighlighterTask> pdfHighlighterTask = this.pdfHighlighterTaskRepository.findById(pdfHighlighterTaskId);
         if (pdfHighlighterTask.isPresent() && this.isOwnedByCaller(pdfHighlighterTask.get())) {
-            return new ResponseDto(SUCCESS, "Data fetch successfully.", pdfHighlighterTask.get());
+            return new ResponseDto(SUCCESS, "Data fetched successfully.", pdfHighlighterTask.get());
         }
         return new ResponseDto(ERROR, String.format("PdfHighlighterTask not found with %s.", pdfHighlighterTaskId));
     }
@@ -98,7 +98,7 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
             ? pdfHighlighterTaskDto.getHighlighterStatus() : HighlighterStatus.Draft);
         pdfHighlighterTask.setStatus(Status.Active);
         this.pdfHighlighterTaskRepository.save(pdfHighlighterTask);
-        return new ResponseDto(SUCCESS, String.format("PdfHighlighterTask save with %s.", pdfHighlighterTask.getPdfHighlighterTaskId()),
+        return new ResponseDto(SUCCESS, String.format("PdfHighlighterTask saved with %s.", pdfHighlighterTask.getPdfHighlighterTaskId()),
             pdfHighlighterTask);
     }
 
@@ -126,7 +126,7 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
                 pdfHighlighterTask.get().setStatus(pdfHighlighterTaskDto.getStatus());
             }
             this.pdfHighlighterTaskRepository.save(pdfHighlighterTask.get());
-            return new ResponseDto(SUCCESS, String.format("PdfHighlighterTask save with %s.", pdfHighlighterTaskDto.getPdfHighlighterTaskId()));
+            return new ResponseDto(SUCCESS, String.format("PdfHighlighterTask saved with %s.", pdfHighlighterTaskDto.getPdfHighlighterTaskId()));
         }
         return new ResponseDto(ERROR, String.format("PdfHighlighterTask not found with %s.", pdfHighlighterTaskDto.getPdfHighlighterTaskId()));
     }
@@ -146,7 +146,7 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
             pdfHighlighterTask.get().setStatus(Status.Delete);
             this.pdfHighlighterTaskRepository.save(pdfHighlighterTask.get());
         }
-        return new ResponseDto(SUCCESS, String.format("PdfHighlighterTask delete with %s.", pdfHighlighterTaskId));
+        return new ResponseDto(SUCCESS, String.format("PdfHighlighterTask deleted with %s.", pdfHighlighterTaskId));
     }
 
     @Override
@@ -163,7 +163,7 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
         }
         List<PdfHighlighterField> fields = this.pdfHighlighterFieldRepository
             .findByPdfHighlighterTaskIdOrderByDisplayOrderAsc(pdfHighlighterTaskId);
-        return new ResponseDto(SUCCESS, "Data fetch successfully.", fields);
+        return new ResponseDto(SUCCESS, "Data fetched successfully.", fields);
     }
 
     @Override

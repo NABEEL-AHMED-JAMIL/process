@@ -30,7 +30,7 @@ public class AppUserRestApi {
         try {
             return new ResponseEntity<>(this.appUserService.listUsers(), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while listUsers ", ex);
+            logger.error("An error occurred while listUsers.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -40,7 +40,7 @@ public class AppUserRestApi {
         try {
             return new ResponseEntity<>(this.appUserService.addUser(appUserDto), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while addUser ", ex);
+            logger.error("An error occurred while addUser.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -50,7 +50,7 @@ public class AppUserRestApi {
         try {
             return new ResponseEntity<>(this.appUserService.updateUser(appUserDto), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while updateUser ", ex);
+            logger.error("An error occurred while updateUser.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -60,7 +60,7 @@ public class AppUserRestApi {
         try {
             return new ResponseEntity<>(this.appUserService.changeUserStatus(appUserDto), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while changeUserStatus ", ex);
+            logger.error("An error occurred while changeUserStatus.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }
@@ -70,7 +70,7 @@ public class AppUserRestApi {
         try {
             return new ResponseEntity<>(this.appUserService.resetPassword(appUserDto), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while resetPassword ", ex);
+            logger.error("An error occurred while resetPassword.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
         }
     }

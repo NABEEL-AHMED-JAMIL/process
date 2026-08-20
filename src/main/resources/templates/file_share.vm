@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <style>
+         table {
+             font-family: arial, sans-serif;
+             border-collapse: collapse;
+             width: 100%;
+         }
+         td, th {
+             border: 1px solid #dddddd;
+             text-align: left;
+             padding: 8px;
+         }
+         tr:nth-child(even) {
+             background-color: #dddddd;
+         }
+      </style>
+   </head>
+   <body>
+      <h4>Hello,</h4>
+      <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;$request.get("sender_name") has shared $request.get("item_label") with you. $request.get("attachment_note")
+      </p>
+      #if($request.get("message") && $request.get("message") != "")
+      <p style="padding: 10px; background-color: #f4f4f4; border-left: 3px solid #999999;">$request.get("message")</p>
+      #end
+      <table>
+         <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Size</th>
+         </tr>
+         <tr style="background-color: #dddddd;">
+            <td>$request.get("item_name")</td>
+            <td>$request.get("item_type")</td>
+            <td>$request.get("size_label")</td>
+         </tr>
+      </table>
+      <br>
+      Thanks,<br>
+      ETL Support Team.
+   </body>
+</html>

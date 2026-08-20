@@ -13,9 +13,10 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
 
     @Query(value = "select scheduler.* from scheduler\n" +
         "inner join source_job on scheduler.job_id=source_job.job_id\n" +
-        "where scheduler.recurrence_time between ?1 and ?2\n" +
+        "where scheduler.next_run_at <= ?1\n" +
+        "and scheduler.expired = false\n" +
         "and source_job.job_status = 'Active'", nativeQuery = true)
-    public List<Scheduler> findAllSchedulerForToday(LocalDateTime lastSchedulerRun, LocalDateTime currentSchedulerTime);
+    public List<Scheduler> findDueSchedulers(LocalDateTime now);
 
     public Optional<Scheduler> findSchedulerByJobId(Long jobId);
 

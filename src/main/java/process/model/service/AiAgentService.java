@@ -2,7 +2,6 @@ package process.model.service;
 
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
-import process.model.dto.ProcessTextRequestDto;
 import process.model.dto.ResponseDto;
 
 public interface AiAgentService {
@@ -18,8 +17,6 @@ public interface AiAgentService {
     public ResponseDto fetchAgentByAgentId(Long aiAgentId) throws Exception;
 
     public ResponseDto fetchToolByUuid(String toolUuid) throws Exception;
-
-    public ResponseDto processText(ProcessTextRequestDto processTextRequestDto) throws Exception;
 
     public ResponseDto processAdHoc(AdHocPromptRequestDto adHocPromptRequestDto) throws Exception;
 

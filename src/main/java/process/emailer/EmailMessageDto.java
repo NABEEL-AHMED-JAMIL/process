@@ -19,6 +19,10 @@ public class EmailMessageDto implements Serializable {
     private Map<String, Object> bodyMap;
     private TemplateType emailTemplateName;
 
+    private byte[] attachmentBytes;
+    private String attachmentFilename;
+    private String attachmentContentType;
+
     public EmailMessageDto() {}
 
     public String getFromEmail() {
@@ -67,6 +71,30 @@ public class EmailMessageDto implements Serializable {
 
     public void setEmailTemplateName(TemplateType emailTemplateName) {
         this.emailTemplateName = emailTemplateName;
+    }
+
+    public byte[] getAttachmentBytes() {
+        return attachmentBytes;
+    }
+
+    public void setAttachmentBytes(byte[] attachmentBytes) {
+        this.attachmentBytes = attachmentBytes;
+    }
+
+    public String getAttachmentFilename() {
+        return attachmentFilename;
+    }
+
+    public void setAttachmentFilename(String attachmentFilename) {
+        this.attachmentFilename = attachmentFilename;
+    }
+
+    public String getAttachmentContentType() {
+        return attachmentContentType;
+    }
+
+    public void setAttachmentContentType(String attachmentContentType) {
+        this.attachmentContentType = attachmentContentType;
     }
 
     @Override

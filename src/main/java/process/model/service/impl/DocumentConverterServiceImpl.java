@@ -80,7 +80,7 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<DocumentConverterTask> tasks = this.documentConverterTaskRepository
             .findByStatusNotOrderByDocumentConverterTaskIdDesc(Status.Delete);
-        return new ResponseDto(SUCCESS, "Data fetch successfully.", tasks);
+        return new ResponseDto(SUCCESS, "Data fetched successfully.", tasks);
     }
 
     @Override
@@ -92,14 +92,14 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DocumentConverterTask> task = this.documentConverterTaskRepository.findById(documentConverterTaskId);
         if (task.isPresent() && this.isOwnedByCaller(task.get())) {
-            return new ResponseDto(SUCCESS, "Data fetch successfully.", task.get());
+            return new ResponseDto(SUCCESS, "Data fetched successfully.", task.get());
         }
         return new ResponseDto(ERROR, String.format("DocumentConverterTask not found with %s.", documentConverterTaskId));
     }
 
     @Override
     @Transactional
-    public ResponseDto convert(MultipartFile file, String outputFormat, String bucketName, String taskName, boolean save) throws Exception {
+    public ResponseDto convert(MultipartFile file, String outputFormat, String bucketName, String targetFolder, String taskName, boolean save) throws Exception {
         if (file == null || file.isEmpty()) {
             return new ResponseDto(ERROR, "Uploaded file is empty.");
         }
@@ -178,6 +178,8 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         response.setSave(save);
 
         if (save) {
+            String folder = this.normalizeTargetFolder(targetFolder);
+
             DocumentConverterTask task = new DocumentConverterTask();
             task.setTenantId(TenantContext.getTenantId());
             task.setTaskName(taskName.trim());
@@ -190,13 +192,14 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
             task.setOutputContentType(outputContentType);
             task.setOutputFileSize((long) outputBytes.length);
             task.setBucketName(bucketName.trim());
+            task.setTargetFolder(folder);
 
             task.setInputStorageKey("pending");
             task.setOutputStorageKey("pending");
             task.setStatus(Status.Active);
             this.documentConverterTaskRepository.save(task);
 
-            String prefix = "document-converter/" + task.getDocumentConverterTaskId() + "/";
+            String prefix = folder + "/" + task.getDocumentConverterTaskId() + "/";
             String inputKey = prefix + "input/" + safeFileName;
             String outputKey = prefix + "output/" + outputFileName;
             this.storageBrowserService.uploadObject(bucketName.trim(), inputKey,
@@ -210,12 +213,21 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
 
             response.setDocumentConverterTaskId(task.getDocumentConverterTaskId());
             response.setBucketName(task.getBucketName());
+            response.setTargetFolder(folder);
             response.setInputStorageKey(inputKey);
             response.setOutputStorageKey(outputKey);
             response.setStatus(task.getStatus());
             response.setDateCreated(task.getDateCreated());
         }
         return new ResponseDto(SUCCESS, "Document converted successfully.", response);
+    }
+
+    private String normalizeTargetFolder(String targetFolder) {
+        if (isNull(targetFolder) || targetFolder.trim().isEmpty()) {
+            return "document-converter";
+        }
+        String folder = targetFolder.trim().replaceAll("^/+", "").replaceAll("/+$", "");
+        return folder.isEmpty() ? "document-converter" : folder;
     }
 
     @Override
@@ -233,7 +245,7 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
             task.get().setStatus(Status.Delete);
             this.documentConverterTaskRepository.save(task.get());
         }
-        return new ResponseDto(SUCCESS, String.format("DocumentConverterTask delete with %s.", documentConverterTaskId));
+        return new ResponseDto(SUCCESS, String.format("DocumentConverterTask deleted with %s.", documentConverterTaskId));
     }
 
     private String baseNameOf(String fileName) {
