@@ -87,7 +87,7 @@ public class TenantServiceImpl implements TenantService {
         tenant.setUuid(UUID.randomUUID().toString());
         tenant.setTenantName(tenantDto.getTenantName().trim());
         tenant.setTenantCode(tenantCode);
-        tenant.setStatus(TenantStatus.Active);
+        tenant.setStatus(isNull(tenantDto.getStatus()) ? TenantStatus.Active : tenantDto.getStatus());
         tenant.setDateCreated(new Timestamp(System.currentTimeMillis()));
         this.tenantRepository.save(tenant);
         return new ResponseDto(SUCCESS, String.format("Tenant \"%s\" created.", tenant.getTenantName()), this.mapToDto(tenant));
@@ -99,13 +99,24 @@ public class TenantServiceImpl implements TenantService {
             return new ResponseDto(ERROR, "Tenant id missing.");
         } else if (isNull(tenantDto.getTenantName()) || tenantDto.getTenantName().trim().isEmpty()) {
             return new ResponseDto(ERROR, "Tenant name missing.");
+        } else if (isNull(tenantDto.getTenantCode()) || tenantDto.getTenantCode().trim().isEmpty()) {
+            return new ResponseDto(ERROR, "Tenant code missing.");
         }
         Optional<Tenant> tenantOpt = this.tenantRepository.findById(tenantDto.getTenantId());
         if (!tenantOpt.isPresent()) {
             return new ResponseDto(ERROR, String.format("Tenant not found with %d.", tenantDto.getTenantId()));
         }
+        String tenantCode = this.normalizeCode(tenantDto.getTenantCode());
+        Optional<Tenant> codeOwner = this.tenantRepository.findByTenantCode(tenantCode);
+        if (codeOwner.isPresent() && !codeOwner.get().getTenantId().equals(tenantDto.getTenantId())) {
+            return new ResponseDto(ERROR, String.format("Tenant code \"%s\" is already in use.", tenantCode));
+        }
         Tenant tenant = tenantOpt.get();
         tenant.setTenantName(tenantDto.getTenantName().trim());
+        tenant.setTenantCode(tenantCode);
+        if (!isNull(tenantDto.getStatus())) {
+            tenant.setStatus(tenantDto.getStatus());
+        }
         this.tenantRepository.save(tenant);
         return new ResponseDto(SUCCESS, String.format("Tenant \"%s\" updated.", tenant.getTenantName()), this.mapToDto(tenant));
     }
