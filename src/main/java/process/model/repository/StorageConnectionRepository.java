@@ -18,4 +18,6 @@ public interface StorageConnectionRepository extends JpaRepository<StorageConnec
 
     List<StorageConnection> findByTenantIdAndStatus(Long tenantId, Status status);
 
+    long countByTenantIdAndStatusNot(Long tenantId, Status status);
+
 }
