@@ -28,6 +28,7 @@ import process.model.service.FileChatExtractionService;
 import process.model.service.StorageBrowserService;
 import process.util.ContentTypeUtil;
 import process.util.DocumentConverterFormatRegistry;
+import process.util.MarkdownDocumentFormat;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -84,12 +85,22 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
     }
 
     @Override
-    @Cacheable(value = "fileChatExtract", key = "#bucket + ':' + #key + ':' + #etag")
+    // unless=null: an unsupported file type legitimately extracts to null, and the cache is
+    // configured to reject nulls -- without this, that expected outcome throws instead of
+    // reaching the "can't read this file type" message the caller already handles.
+    @Cacheable(value = "fileChatExtract", key = "#bucket + ':' + #key + ':' + #etag",
+        unless = "#result == null")
     public String extractText(String bucket, String key, String etag) throws Exception {
         String extension = ContentTypeUtil.extensionOf(key);
 
         if (NATIVE_TEXT_EXTENSIONS.contains(extension)) {
             return this.truncate(new String(this.readAllBytes(bucket, key), StandardCharsets.UTF_8));
+        }
+        // Gzipped text is common in log storage -- CloudTrail writes every digest and log file
+        // as .json.gz -- so unwrap one layer and judge the file by what's inside it. Anything
+        // that isn't text once decompressed still falls through to the unsupported path below.
+        if ("gz".equals(extension)) {
+            return this.extractGzip(bucket, key);
         }
         if (AUDIO_EXTENSIONS.contains(extension)) {
             return this.transcribeAudio(bucket, key);
@@ -111,6 +122,38 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
         }
 
         return this.describeFirstPageViaVisionModel(pdfBytes);
+    }
+
+    /**
+     * Decompresses a .gz object and extracts whatever it turns out to contain, decided by the
+     * extension underneath (report.json.gz -> json). A file named only "*.gz" carries no inner
+     * hint, so it is read as plain text, which is right for the log formats this exists for.
+     */
+    private String extractGzip(String bucket, String key) throws Exception {
+        String innerName = key.substring(0, key.length() - ".gz".length());
+        String innerExtension = ContentTypeUtil.extensionOf(innerName);
+        byte[] compressed = this.readAllBytes(bucket, key);
+        byte[] decompressed;
+        try (java.util.zip.GZIPInputStream gzip =
+                 new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(compressed));
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            // Stop once there is comfortably more than truncate() will keep, so a multi-GB
+            // archive can't be pulled into memory just to throw most of it away.
+            while ((read = gzip.read(buffer)) != -1 && out.size() <= MAX_TEXT_CHARS * 4) {
+                out.write(buffer, 0, read);
+            }
+            decompressed = out.toByteArray();
+        } catch (java.util.zip.ZipException e) {
+            logger.warn("File Chat: {} has a .gz name but isn't valid gzip: {}", key, e.getMessage());
+            return null;
+        }
+        if (innerExtension.isEmpty() || NATIVE_TEXT_EXTENSIONS.contains(innerExtension)) {
+            return this.truncate(new String(decompressed, StandardCharsets.UTF_8));
+        }
+        logger.warn("File Chat: {} decompresses to .{}, which isn't a supported text type.", key, innerExtension);
+        return null;
     }
 
     private byte[] readAllBytes(String bucket, String key) throws Exception {
@@ -140,9 +183,17 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
         return this.convertBytes(content, sourceExtension, targetExtension, "chat export");
     }
 
+    /** Markdown isn't in JODConverter's registry -- see MarkdownDocumentFormat. */
+    private DocumentFormat resolveFormat(String extension) {
+        if (MarkdownDocumentFormat.isMarkdown(extension)) {
+            return MarkdownDocumentFormat.get();
+        }
+        return this.documentFormatRegistry.getFormatByExtension(extension);
+    }
+
     private byte[] convertBytes(byte[] sourceBytes, String sourceExtension, String targetExtension, String logLabel) throws Exception {
-        DocumentFormat sourceFormat = this.documentFormatRegistry.getFormatByExtension(sourceExtension);
-        DocumentFormat targetFormat = this.documentFormatRegistry.getFormatByExtension(targetExtension);
+        DocumentFormat sourceFormat = this.resolveFormat(sourceExtension);
+        DocumentFormat targetFormat = this.resolveFormat(targetExtension);
         if (sourceFormat == null || targetFormat == null) {
             logger.warn("File Chat: no JODConverter format registered for .{} -> .{}", sourceExtension, targetExtension);
             return null;

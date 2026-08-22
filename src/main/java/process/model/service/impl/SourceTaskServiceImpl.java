@@ -9,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.*;
+import process.model.enums.NotificationSeverity;
+import process.model.enums.NotificationType;
 import process.model.enums.Status;
 import process.model.pojo.SourceTaskPayload;
 import process.model.pojo.SourceTaskType;
@@ -18,6 +20,7 @@ import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.repository.TenantRepository;
+import process.model.service.NotificationCenterService;
 import process.model.service.SourceTaskService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -51,6 +54,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private final TenantFilterHelper tenantFilterHelper;
     private final TaskPayloadLocationUtil taskPayloadLocationUtil;
     private final TenantRepository tenantRepository;
+    private final NotificationCenterService notificationCenterService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -62,7 +66,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         SourceTaskTypeRepository sourceTaskTypeRepository,
         TenantFilterHelper tenantFilterHelper,
         TaskPayloadLocationUtil taskPayloadLocationUtil,
-        TenantRepository tenantRepository) {
+        TenantRepository tenantRepository,
+        NotificationCenterService notificationCenterService) {
         this.bulkExcel = bulkExcel;
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
@@ -71,6 +76,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         this.tenantFilterHelper = tenantFilterHelper;
         this.taskPayloadLocationUtil = taskPayloadLocationUtil;
         this.tenantRepository = tenantRepository;
+        this.notificationCenterService = notificationCenterService;
     }
 
     private ResponseDto resolveTenantIdForCreate(Long requestedTenantId, java.util.function.Consumer<Long> onResolved) {
@@ -576,6 +582,9 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                 }).collect(Collectors.toList()));
             this.sourceTaskRepository.save(sourceTask);
         });
+        this.notificationCenterService.create(TenantContext.getTenantId(), TenantContext.getAppUserId(),
+            NotificationType.BATCH_DONE, NotificationSeverity.INFO, "Batch upload finished",
+            String.format("Total %d tasks saved successfully.", sourceTaskValidations.size()), "/taskList");
         return new ResponseDto(SUCCESS, String.format("Total %d task save successfully", sourceTaskValidations.size()));
         }
     }

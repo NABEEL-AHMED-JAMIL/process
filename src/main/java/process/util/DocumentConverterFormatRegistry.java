@@ -42,9 +42,12 @@ public final class DocumentConverterFormatRegistry {
 
     private static final Map<String, FormatFamily> FAMILIES = new LinkedHashMap<>();
     static {
+        // "md" is served by MarkdownDocumentFormat rather than JODConverter's own registry,
+        // which has no Markdown entry (jodconverter/jodconverter#444). LibreOffice registers
+        // the filter against the Writer family only, so it belongs to TEXT and nowhere else.
         register("TEXT", "Text Document",
-            Arrays.asList("doc", "docx", "dotx", "odt", "ott", "fodt", "rtf", "sxw", "txt", "wpd", "xhtml"),
-            Arrays.asList("doc", "docx", "dotx", "odt", "ott", "fodt", "html", "xhtml", "rtf", "sxw", "txt",
+            Arrays.asList("doc", "docx", "dotx", "md", "odt", "ott", "fodt", "rtf", "sxw", "txt", "wpd", "xhtml"),
+            Arrays.asList("doc", "docx", "dotx", "md", "odt", "ott", "fodt", "html", "xhtml", "rtf", "sxw", "txt",
                 "jpg", "pdf", "png", "svg"));
         register("SPREADSHEET", "Spreadsheet",
             Arrays.asList("csv", "fods", "ods", "ots", "sxc", "tsv", "xls", "xlsx", "xltx"),

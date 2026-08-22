@@ -45,4 +45,9 @@ COPY ${JAR_FILE} app.jar
 RUN mkdir -p /app/logs
 
 # Run the JAR
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+# --add-opens lets SessionReusingFtpsClient prime the TLS session cache by reflection, which
+# FTPS servers that mandate data-channel session resumption require (see that class). JPMS
+# blocks reflection into sun.security.ssl (the session context) and sun.security.util (the
+# MemoryCache backing it) by default on JDK 17; without both the client
+# logs a warning and carries on, and only those servers fail.
+ENTRYPOINT ["java", "--add-opens", "java.base/sun.security.ssl=ALL-UNNAMED", "--add-opens", "java.base/sun.security.util=ALL-UNNAMED", "-jar", "/app/app.jar"]

@@ -34,7 +34,7 @@ public class FileChatRestApi {
                 this.fileChatService.prepareContext(requestDto.getBucket(), requestDto.getKey()), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while prepareContext ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -44,7 +44,7 @@ public class FileChatRestApi {
             return new ResponseEntity<>(this.fileChatService.sendMessage(requestDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while sendMessage ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -54,7 +54,7 @@ public class FileChatRestApi {
             return new ResponseEntity<>(this.fileChatService.exportFile(requestDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while exportFile ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

@@ -36,7 +36,7 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
 
     @Query(value = "select sj.job_id as jobId, sj.job_status as jobStatus, sj.job_running_status as jobRunningStatus," +
         "sj.last_job_run as lastJobRun, sc.next_run_at as nextRunAt, sj.execution as execution," +
-        "au.username as assignedUsername\n" +
+        "au.username as assignedUsername, sj.assigned_user_id as assignedUserId, sj.tenant_id as tenantId, sj.job_name as jobName\n" +
         "from source_job sj left join scheduler sc on sc.job_id = sj.job_id\n" +
         "left join app_user au on au.app_user_id = sj.assigned_user_id\n" +
         "where sj.job_id in (?1) and UPPER(sj.job_status) = 'ACTIVE'", nativeQuery = true)

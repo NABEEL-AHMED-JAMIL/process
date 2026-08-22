@@ -11,6 +11,10 @@ import process.model.dto.BucketSummaryDto;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
+import process.config.StorageClientFactory;
+import process.model.enums.Status;
+import process.model.pojo.StorageConnection;
+import process.model.repository.StorageConnectionRepository;
 import process.model.service.ObjectStorageService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
@@ -22,11 +26,12 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,16 +41,24 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     private static final String BUCKET_LIST = "BUCKET_LIST";
     private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 500;
+    /** Inflated-size ceiling for previewing a .gz; beyond this, download instead. */
+    private static final int MAX_GZIP_PREVIEW_BYTES = 8 * 1024 * 1024;
 
     private final LookupDataCacheService lookupDataCacheService;
+    private final StorageConnectionRepository storageConnectionRepository;
+    private final StorageClientFactory storageClientFactory;
     private final Map<String, ObjectStorageService> objectStorageServicesByProvider;
 
     public StorageBrowserServiceImpl(
         LookupDataCacheService lookupDataCacheService,
+        StorageConnectionRepository storageConnectionRepository,
+        StorageClientFactory storageClientFactory,
         @Qualifier("minioObjectStorageService") ObjectStorageService minioObjectStorageService,
         @Qualifier("s3ObjectStorageService") ObjectStorageService s3ObjectStorageService,
         @Qualifier("azureBlobObjectStorageService") ObjectStorageService azureBlobObjectStorageService) {
         this.lookupDataCacheService = lookupDataCacheService;
+        this.storageConnectionRepository = storageConnectionRepository;
+        this.storageClientFactory = storageClientFactory;
         Map<String, ObjectStorageService> byProvider = new HashMap<>();
         byProvider.put("MINIO", minioObjectStorageService);
         byProvider.put("S3", s3ObjectStorageService);
@@ -55,17 +68,36 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
 
     @Override
     public List<BucketSummaryDto> listBuckets() {
-        LookupDataDto bucketListParent = this.lookupDataCacheService.getParentLookupById(BUCKET_LIST);
-        if (bucketListParent == null || bucketListParent.getChildren() == null) {
-            return Collections.emptyList();
-        }
-
         boolean isPlatformAdmin = TenantContext.isPlatformAdmin();
         Long callerTenantId = TenantContext.getTenantId();
-        return bucketListParent.getChildren().stream()
-            .filter(child -> isPlatformAdmin || Objects.equals(child.getTenantId(), callerTenantId))
-            .map(child -> new BucketSummaryDto(child.getLookupType(), child.getLookupValue(), child.getDescription()))
-            .collect(Collectors.toList());
+        List<BucketSummaryDto> buckets = new ArrayList<>();
+
+        // Storage connections are the current mechanism -- S3/Azure/FTP/FTPS/MinIO, each with
+        // its own stored credentials. A connection with no tenant is a platform-wide shared
+        // one (only a PLATFORM_ADMIN can create it that way) and is offered to every tenant;
+        // anything created by a tenant admin carries their tenant id and stays private to them.
+        this.storageConnectionRepository.findByStatusNotOrderByStorageConnectionIdDesc(Status.Delete).stream()
+            .filter(connection -> connection.getStatus() == Status.Active)
+            .filter(connection -> isPlatformAdmin
+                || connection.getTenantId() == null
+                || Objects.equals(connection.getTenantId(), callerTenantId))
+            .forEach(connection -> buckets.add(new BucketSummaryDto(
+                connection.getConnectionName(),
+                connection.getAlias(),
+                connection.getProvider() == null ? null : connection.getProvider().name())));
+
+        // BUCKET_LIST lookups are the older mechanism, kept working so buckets configured that
+        // way (and the jobs already pointing at them) keep resolving. A storage connection with
+        // the same alias wins, which is what makes migrating one bucket at a time safe.
+        LookupDataDto bucketListParent = this.lookupDataCacheService.getParentLookupById(BUCKET_LIST);
+        if (bucketListParent != null && bucketListParent.getChildren() != null) {
+            bucketListParent.getChildren().stream()
+                .filter(child -> isPlatformAdmin || Objects.equals(child.getTenantId(), callerTenantId))
+                .filter(child -> buckets.stream().noneMatch(b -> b.getBucket().equals(child.getLookupValue())))
+                .forEach(child -> buckets.add(new BucketSummaryDto(
+                    child.getLookupType(), child.getLookupValue(), child.getDescription())));
+        }
+        return buckets;
     }
 
     @Override
@@ -80,7 +112,9 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     }
 
     @Override
-    @Cacheable(value = "fileChatMetadata", key = "#bucket + ':' + #key")
+    // Same guard as fileChatExtract: callers explicitly handle a null metadata result, and the
+    // cache rejects nulls, so without this an unreadable object throws instead of being reported.
+    @Cacheable(value = "fileChatMetadata", key = "#bucket + ':' + #key", unless = "#result == null")
     public ObjectMetadataDto getObjectMetadataCached(String bucket, String key) {
         return this.getObjectMetadata(bucket, key);
     }
@@ -90,7 +124,51 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (!ContentTypeUtil.isPreviewable(key)) {
             throw new IllegalArgumentException("Preview is not supported for this file type; use download instead.");
         }
+        if (ContentTypeUtil.isPreviewableGzip(key)) {
+            return this.previewGzip(bucket, key);
+        }
         return this.resolveService(bucket).getObjectContent(bucket, key, rangeStart, rangeEnd);
+    }
+
+    /**
+     * Serves a gzipped text file as its decompressed contents, typed by what's inside
+     * ("audit.json.gz" is delivered as JSON). Handing the browser the raw gzip bytes would just
+     * render as binary noise, and a byte range through a compressed stream is meaningless, so
+     * this reads and inflates whole rather than honouring range requests.
+     */
+    private ObjectContentDto previewGzip(String bucket, String key) {
+        ObjectContentDto compressed = this.resolveService(bucket).getObjectContent(bucket, key, null, null);
+        String innerName = key.substring(0, key.length() - ".gz".length());
+        try (java.util.zip.GZIPInputStream gzip = new java.util.zip.GZIPInputStream(compressed.getContent());
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = gzip.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+                if (out.size() > MAX_GZIP_PREVIEW_BYTES) {
+                    // A small archive can inflate to something enormous, so stop at a size the
+                    // browser can actually render instead of trying to hold all of it.
+                    throw new IllegalArgumentException(
+                        "This file is too large to preview once decompressed -- download it instead.");
+                }
+            }
+            byte[] decompressed = out.toByteArray();
+            return new ObjectContentDto(
+                new java.io.ByteArrayInputStream(decompressed),
+                ContentTypeUtil.contentTypeFor(innerName),
+                decompressed.length,
+                this.fileNameOf(innerName));
+        } catch (java.util.zip.ZipException e) {
+            throw new IllegalArgumentException(
+                "This file has a .gz name but isn't valid gzip data -- download it instead.");
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not decompress " + key, e);
+        }
+    }
+
+    private String fileNameOf(String key) {
+        int slash = key.lastIndexOf('/');
+        return slash >= 0 ? key.substring(slash + 1) : key;
     }
 
     @Override
@@ -205,11 +283,32 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     }
 
     private ObjectStorageService resolveService(String bucket) {
+        Optional<StorageConnection> connection = this.storageConnectionRepository.findByAliasAndStatus(bucket, Status.Active);
+        if (connection.isPresent()) {
+            StorageConnection storageConnection = connection.get();
+            if (!TenantContext.isPlatformAdmin()
+                && storageConnection.getTenantId() != null
+                && !Objects.equals(storageConnection.getTenantId(), TenantContext.getTenantId())) {
+                throw new IllegalArgumentException("Unknown bucket: " + bucket + ".");
+            }
+            ObjectStorageService service = this.storageClientFactory.serviceFor(storageConnection);
+            // FTP has no bucket concept, so there is nothing to rewrite; for the object stores
+            // the alias may differ from the real bucket/container name.
+            if (storageConnection.getProvider() != null && storageConnection.getProvider().isFtpFamily()) {
+                return service;
+            }
+            String realBucket = storageConnection.getBucketName() != null
+                && !storageConnection.getBucketName().trim().isEmpty()
+                    ? storageConnection.getBucketName().trim()
+                    : storageConnection.getAlias();
+            return realBucket.equals(bucket) ? service : new BucketRewritingStorageService(service, realBucket);
+        }
+
         BucketSummaryDto bucketSummary = this.listBuckets().stream()
             .filter(b -> bucket.equals(b.getBucket()))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException(
-                "Unknown bucket: " + bucket + ". Add it under the BUCKET_LIST lookup first."));
+                "Unknown bucket: " + bucket + ". Add a storage connection for it first."));
         String provider = bucketSummary.getProvider();
         ObjectStorageService service = provider != null
             ? this.objectStorageServicesByProvider.get(provider.trim().toUpperCase())
@@ -217,7 +316,8 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (service == null) {
             throw new IllegalStateException(
                 "Unsupported/missing storage provider '" + provider + "' for bucket " + bucket
-                    + ". Set the BUCKET_LIST lookup entry's description to MINIO, S3, or AZURE.");
+                    + ". Configure it as a storage connection, or set the BUCKET_LIST lookup entry's"
+                    + " description to MINIO, S3, or AZURE.");
         }
         return service;
     }

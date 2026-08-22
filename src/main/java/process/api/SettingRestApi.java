@@ -39,7 +39,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.dynamicQueryResponse(itemResponse), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while dynamicQueryResponse ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -49,7 +49,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.appSetting(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while appSetting ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -60,7 +60,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.addSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSourceTaskType ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -71,7 +71,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.updateSourceTaskType(tempSourceTaskType), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateSourceTaskType ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -82,7 +82,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.deleteSourceTaskType(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSourceTaskType ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -92,7 +92,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.fetchKafkaRoute(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchKafkaRoute ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -102,7 +102,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.setKafkaRoute(sourceTaskTypeId, kafkaConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while setKafkaRoute ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -112,7 +112,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.deleteKafkaRoute(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteKafkaRoute ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -123,7 +123,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.addLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addLookupData ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -134,7 +134,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.updateLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateLookupData ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -145,7 +145,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.fetchSubLookupByParentId(parentLookUpId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSubLookupByParentId ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -156,7 +156,7 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.deleteLookupData(tempLookupData), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteLookupData ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -172,7 +172,7 @@ public class SettingRestApi {
             }
         } catch (Exception ex) {
             logger.error("An error occurred while xmlCreateChecker ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

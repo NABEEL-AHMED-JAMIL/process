@@ -45,7 +45,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.connectionProfileService.addConnectionProfile(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addConnectionProfile ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -55,7 +55,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.connectionProfileService.updateConnectionProfile(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateConnectionProfile ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -65,7 +65,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.connectionProfileService.deleteConnectionProfile(databaseConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteConnectionProfile ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -76,7 +76,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.connectionProfileService.fetchAllConnectionProfiles(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllConnectionProfiles ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -87,7 +87,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.connectionProfileService.fetchConnectionProfileById(databaseConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchConnectionProfileById ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -98,7 +98,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.connectionProfileService.testConnection(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while testConnection ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -108,7 +108,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryDefinitionService.addQuery(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addQuery ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -118,7 +118,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryDefinitionService.updateQuery(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateQuery ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -128,7 +128,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryDefinitionService.deleteQuery(queryId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteQuery ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -139,7 +139,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryDefinitionService.fetchAllQueries(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllQueries ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -150,7 +150,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryDefinitionService.fetchQueryById(queryId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchQueryById ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -161,7 +161,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryDefinitionService.validateQuery(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while validateQuery ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -172,7 +172,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryDefinitionService.previewQuery(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while previewQuery ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -183,7 +183,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryExecutionService.execute(request), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while execute ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -194,7 +194,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryExecutionService.fetchAllExecutions(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllExecutions ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -205,7 +205,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryExecutionService.fetchExecutionById(executionId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchExecutionById ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -216,7 +216,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryExecutionService.fetchExecutionsByQueryId(queryId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchExecutionsByQueryId ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -226,7 +226,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryScheduleService.addSchedule(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addSchedule ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -236,7 +236,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryScheduleService.updateSchedule(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateSchedule ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -246,7 +246,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryScheduleService.deleteSchedule(scheduleId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSchedule ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -257,7 +257,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryScheduleService.fetchAllSchedules(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllSchedules ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -268,7 +268,7 @@ public class QueryEngineRestApi {
             return new ResponseEntity<>(this.queryScheduleService.fetchScheduleById(scheduleId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchScheduleById ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

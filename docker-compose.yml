@@ -120,11 +120,19 @@ services:
       # this invalidates every already-issued token (everyone gets logged out) -- override via
       # a real JWT_SECRET_KEY env var in any environment with real users.
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-4z8qN3vW9pT2xR7mK5jL1sC6bF0yH8dQ4nE9tV2rU7w=}
-      # Bucket Browser storage (MinIO reached via the host, since it's a separate compose
-      # project's container; only required if a bucket in the BUCKET_LIST lookup uses it)
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://host.docker.internal:9000}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      # Bucket Browser storage. Credentials now live in the storage_connection table
+      # (encrypted, managed under Settings > Storage Connections) -- StorageConnectionBootstrap
+      # copied whatever was configured here into that table on first startup. These are kept
+      # only as an unset passthrough so an existing deployment can still perform that one-time
+      # migration; nothing reads them once a bucket has a connection row. No inline defaults:
+      # a real secret written here ends up committed to the repository.
+      # Shared secret for the ETL worker callbacks (/changeState, /addLogs). No default on
+      # purpose -- generate one with `openssl rand -hex 32` and set the SAME value here and in
+      # the job-search workers' env. Left unset, those endpoints stay unauthenticated.
+      WORKER_CALLBACK_TOKEN: ${WORKER_CALLBACK_TOKEN:-}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}
       # Job audit logs (OpenSearchAuditLogClient) -- OpenSearch is a separate compose project's
       # container (job-search), reached the same way MinIO is: via the published host port,
       # since process_app isn't on that project's docker network.

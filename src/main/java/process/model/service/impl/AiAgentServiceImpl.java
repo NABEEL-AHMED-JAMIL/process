@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
+import process.model.dto.AiAgentRuntimeConfigDto;
 import process.model.dto.AiAgentToolDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
@@ -173,6 +174,32 @@ public class AiAgentServiceImpl implements AiAgentService {
         dto.setJsonMode(aiAgent.getJsonMode());
         dto.setTargetFileTypes(aiAgent.getTargetFileTypes());
         return new ResponseDto(SUCCESS, "Data found.", dto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ResponseDto resolveRuntimeConfig(Long aiAgentId) throws Exception {
+        if (isNull(aiAgentId)) {
+            return new ResponseDto(ERROR, "Agent aiAgentId missing.");
+        }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Optional<AiAgent> aiAgentOpt = this.aiAgentRepository.findById(aiAgentId);
+        if (!aiAgentOpt.isPresent() || !this.isOwnedByCaller(aiAgentOpt.get())) {
+            return new ResponseDto(ERROR, String.format("Agent not found with %d.", aiAgentId));
+        }
+        AiAgent aiAgent = aiAgentOpt.get();
+        if (aiAgent.getStatus() != Status.Active) {
+            return new ResponseDto(ERROR, "This agent isn't active.");
+        }
+        AiAgentRuntimeConfigDto config = new AiAgentRuntimeConfigDto();
+        config.setProvider(aiAgent.getProvider());
+        config.setModel(aiAgent.getModel());
+        config.setApiEndpoint(aiAgent.getApiEndpoint());
+        config.setJsonMode(aiAgent.getJsonMode());
+        if (!isNull(aiAgent.getApiKey())) {
+            config.setApiKey(this.encryptionUtil.decrypt(aiAgent.getApiKey()));
+        }
+        return new ResponseDto(SUCCESS, "Resolved.", config);
     }
 
     @Override

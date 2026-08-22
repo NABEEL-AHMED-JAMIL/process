@@ -85,8 +85,33 @@ public final class ContentTypeUtil {
         return contentType != null ? contentType : "application/octet-stream";
     }
 
+    /**
+     * The extension underneath a .gz wrapper -- "audit.json.gz" -> "json". Log storage is full
+     * of gzipped text (CloudTrail writes every file this way), and what matters for preview is
+     * what the file becomes once unwrapped, not the wrapper. Returns "" when there is no inner
+     * extension to read.
+     */
+    public static String innerExtensionOfGzip(String key) {
+        if (!"gz".equals(extensionOf(key))) {
+            return "";
+        }
+        return extensionOf(key.substring(0, key.length() - ".gz".length()));
+    }
+
+    public static boolean isGzip(String key) {
+        return "gz".equals(extensionOf(key));
+    }
+
+    /** Gzipped text can be previewed; gzipped anything-else can't. */
+    public static boolean isPreviewableGzip(String key) {
+        return isGzip(key) && GZIP_PREVIEWABLE_INNER.contains(innerExtensionOfGzip(key));
+    }
+
+    private static final Set<String> GZIP_PREVIEWABLE_INNER =
+        new HashSet<>(Arrays.asList("json", "csv", "txt", "xml", "md", "log", "tsv", "ndjson"));
+
     public static boolean isPreviewable(String key) {
-        return PREVIEWABLE_EXTENSIONS.contains(extensionOf(key));
+        return PREVIEWABLE_EXTENSIONS.contains(extensionOf(key)) || isPreviewableGzip(key);
     }
 
 }

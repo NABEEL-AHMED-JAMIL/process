@@ -11,7 +11,7 @@ public class FileChatMessageRequestDto {
 
     private String bucket;
     private String key;
-    private String model;
+    private Long aiAgentId;
     private String message;
     private List<FileChatHistoryItemDto> history;
 
@@ -33,12 +33,12 @@ public class FileChatMessageRequestDto {
         this.key = key;
     }
 
-    public String getModel() {
-        return model;
+    public Long getAiAgentId() {
+        return aiAgentId;
     }
 
-    public void setModel(String model) {
-        this.model = model;
+    public void setAiAgentId(Long aiAgentId) {
+        this.aiAgentId = aiAgentId;
     }
 
     public String getMessage() {

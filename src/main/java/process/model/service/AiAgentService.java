@@ -20,4 +20,10 @@ public interface AiAgentService {
 
     public ResponseDto processAdHoc(AdHocPromptRequestDto adHocPromptRequestDto) throws Exception;
 
+    // Looks up one agent (checking ownership/status like every other agent lookup here) and
+    // returns its provider/model/apiEndpoint plus the DECRYPTED api key, for another service
+    // (FileChatServiceImpl) to call the provider directly with -- distinct from
+    // fetchAgentByAgentId, whose AiAgentDto response only ever reports apiKeyConfigured.
+    public ResponseDto resolveRuntimeConfig(Long aiAgentId) throws Exception;
+
 }

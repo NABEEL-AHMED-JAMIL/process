@@ -11,6 +11,7 @@ import com.azure.storage.blob.models.BlobProperties;
 import com.azure.storage.blob.models.BlobRange;
 import com.azure.storage.blob.models.ListBlobsOptions;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.model.dto.BrowseObjectsResponseDto;
 import process.model.dto.ObjectContentDto;
@@ -20,6 +21,7 @@ import process.model.service.ObjectStorageService;
 import process.util.ContentTypeUtil;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.function.Supplier;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -28,14 +30,23 @@ import java.util.stream.Collectors;
 @Service("azureBlobObjectStorageService")
 public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
 
-    private final ObjectProvider<BlobServiceClient> blobServiceClientProvider;
+    private final Supplier<BlobServiceClient> blobServiceClientSupplier;
 
+    // @Autowired is required now that a second constructor exists -- with only one, Spring
+    // picks it implicitly, but with two it can't guess which is the injection point.
+    @Autowired
     public AzureBlobObjectStorageServiceImpl(ObjectProvider<BlobServiceClient> blobServiceClientProvider) {
-        this.blobServiceClientProvider = blobServiceClientProvider;
+        this.blobServiceClientSupplier = blobServiceClientProvider::getObject;
+    }
+
+    // Used by StorageClientFactory to bind this impl to one user-configured StorageConnection's
+    // own credentials, instead of the single global client the Spring bean above resolves to.
+    public AzureBlobObjectStorageServiceImpl(BlobServiceClient blobServiceClient) {
+        this.blobServiceClientSupplier = () -> blobServiceClient;
     }
 
     private BlobServiceClient blobServiceClient() {
-        return this.blobServiceClientProvider.getObject();
+        return this.blobServiceClientSupplier.get();
     }
 
     @Override

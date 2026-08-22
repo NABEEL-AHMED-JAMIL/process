@@ -31,7 +31,7 @@ public class DocumentConverterRestApi {
             return new ResponseEntity<>(this.documentConverterService.supportedFormats(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while supportedFormats ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -41,7 +41,7 @@ public class DocumentConverterRestApi {
             return new ResponseEntity<>(this.documentConverterService.fetchAllTasks(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllTasks ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -51,7 +51,7 @@ public class DocumentConverterRestApi {
             return new ResponseEntity<>(this.documentConverterService.fetchTaskById(documentConverterTaskId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchTaskById ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -67,7 +67,7 @@ public class DocumentConverterRestApi {
             return new ResponseEntity<>(this.documentConverterService.convert(file, outputFormat, bucketName, targetFolder, taskName, save), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while convert ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -77,7 +77,7 @@ public class DocumentConverterRestApi {
             return new ResponseEntity<>(this.documentConverterService.deleteTask(documentConverterTaskId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteTask ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

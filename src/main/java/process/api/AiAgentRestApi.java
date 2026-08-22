@@ -32,7 +32,7 @@ public class AiAgentRestApi {
             return new ResponseEntity<>(this.aiAgentService.addAgent(aiAgentDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addAgent ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -42,7 +42,7 @@ public class AiAgentRestApi {
             return new ResponseEntity<>(this.aiAgentService.updateAgent(aiAgentDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateAgent ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -52,7 +52,7 @@ public class AiAgentRestApi {
             return new ResponseEntity<>(this.aiAgentService.deleteAgent(aiAgentId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteAgent ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -63,7 +63,7 @@ public class AiAgentRestApi {
             return new ResponseEntity<>(this.aiAgentService.fetchAllAgents(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllAgents ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -74,7 +74,7 @@ public class AiAgentRestApi {
             return new ResponseEntity<>(this.aiAgentService.fetchAgentByAgentId(aiAgentId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAgentByAgentId ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -85,7 +85,7 @@ public class AiAgentRestApi {
             return new ResponseEntity<>(this.aiAgentService.fetchToolByUuid(uuid), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchToolByUuid ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -96,7 +96,7 @@ public class AiAgentRestApi {
             return new ResponseEntity<>(this.aiAgentService.processAdHoc(adHocPromptRequestDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while processAdHoc ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

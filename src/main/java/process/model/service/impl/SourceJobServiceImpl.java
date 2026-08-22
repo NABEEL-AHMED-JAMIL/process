@@ -10,11 +10,14 @@ import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
+import process.model.enums.NotificationSeverity;
+import process.model.enums.NotificationType;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.pojo.*;
 import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
+import process.model.service.NotificationCenterService;
 import process.model.service.SourceJobService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -43,6 +46,7 @@ public class SourceJobServiceImpl implements SourceJobService {
     private final ProducerBulkEngine producerBulkEngine;
     private final TenantFilterHelper tenantFilterHelper;
     private final OpenSearchAuditLogClient openSearchAuditLogClient;
+    private final NotificationCenterService notificationCenterService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -56,7 +60,8 @@ public class SourceJobServiceImpl implements SourceJobService {
         AppUserRepository appUserRepository,
         ProducerBulkEngine producerBulkEngine,
         TenantFilterHelper tenantFilterHelper,
-        OpenSearchAuditLogClient openSearchAuditLogClient) {
+        OpenSearchAuditLogClient openSearchAuditLogClient,
+        NotificationCenterService notificationCenterService) {
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.sourceTaskRepository = sourceTaskRepository;
@@ -67,6 +72,19 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.producerBulkEngine = producerBulkEngine;
         this.tenantFilterHelper = tenantFilterHelper;
         this.openSearchAuditLogClient = openSearchAuditLogClient;
+        this.notificationCenterService = notificationCenterService;
+    }
+
+    private void notifyTaskAssigned(SourceJob sourceJob, Long previousAssignedUserId) {
+        Long newAssignedUserId = sourceJob.getAssignedUserId();
+        if (newAssignedUserId == null || newAssignedUserId.equals(previousAssignedUserId)
+            || newAssignedUserId.equals(TenantContext.getAppUserId())) {
+            return;
+        }
+        this.notificationCenterService.create(sourceJob.getTenantId(), newAssignedUserId,
+            NotificationType.TASK_ASSIGNED, NotificationSeverity.INFO,
+            "Task assigned to you", sourceJob.getJobName() + " was assigned to you by " + TenantContext.getUsername() + ".",
+            "/jobList");
     }
 
     private boolean isOwnedByCaller(SourceJob sourceJob) {
@@ -123,6 +141,7 @@ public class SourceJobServiceImpl implements SourceJobService {
 
         sourceJob.setAssignedUserId(assignedUserId);
         this.sourceJobRepository.saveAndFlush(sourceJob);
+        this.notifyTaskAssigned(sourceJob, null);
         if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && !sourceJobDto.getSchedulers().isEmpty()) {
             sourceJobDto.getSchedulers()
                 .forEach(schedulerDto -> {
@@ -188,6 +207,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             sourceJob.get().setCompleteJob(sourceJobDto.isCompleteJob());
             sourceJob.get().setFailJob(sourceJobDto.isFailJob());
             sourceJob.get().setSkipJob(sourceJobDto.isSkipJob());
+            Long previousAssignedUserId = sourceJob.get().getAssignedUserId();
             if (!ProcessUtil.isNull(sourceJobDto.getAssignedUserId())) {
                 String assigneeError = this.validateAssignee(sourceJobDto.getAssignedUserId(), sourceJob.get().getTenantId());
                 if (assigneeError != null) {
@@ -196,6 +216,7 @@ public class SourceJobServiceImpl implements SourceJobService {
                 sourceJob.get().setAssignedUserId(sourceJobDto.getAssignedUserId());
             }
             this.sourceJobRepository.saveAndFlush(sourceJob.get());
+            this.notifyTaskAssigned(sourceJob.get(), previousAssignedUserId);
             if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && !sourceJobDto.getSchedulers().isEmpty()) {
                 sourceJobDto.getSchedulers()
                     .forEach(schedulerDto -> {

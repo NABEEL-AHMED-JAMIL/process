@@ -32,7 +32,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardService.jobStatusStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while jobStatusStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -44,7 +44,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardService.jobRunningStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while jobRunningStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -56,7 +56,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardService.weeklyRunningJobStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while weeklyJobRunningStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -68,7 +68,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardService.weeklyHrsRunningJobStatistics(startDate, endDate), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while weeklyHrsRunningJobStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -80,7 +80,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardService.weeklyHrRunningStatisticsDimension(targetDate, targetHr), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while weeklyHrRunningStatisticsDimension ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -94,7 +94,7 @@ public class DashboardRestApi {
             return new ResponseEntity<>(this.dashboardService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while weeklyHrRunningStatisticsDimensionDetail ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

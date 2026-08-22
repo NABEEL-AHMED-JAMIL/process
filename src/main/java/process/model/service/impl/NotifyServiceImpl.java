@@ -54,7 +54,7 @@ public class NotifyServiceImpl implements NotifyService {
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), newStatus);
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
-        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), currentStatus != newStatus);
         if (newStatus == JobStatus.Failed || newStatus == JobStatus.Completed) {
             logger.info("Setting end date for job {}", jobQueue.getJobId());
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), jobQueue.getEndTime());

@@ -24,4 +24,10 @@ public interface SourceJobProjection {
 
     public String getAssignedUsername();
 
+    public Long getAssignedUserId();
+
+    public Long getTenantId();
+
+    public String getJobName();
+
 }

@@ -5,6 +5,7 @@ import org.jodconverter.core.document.DocumentFormat;
 import org.jodconverter.core.document.DocumentFormatRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,6 +20,7 @@ import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.ContentTypeUtil;
 import process.util.DocumentConverterFormatRegistry;
+import process.util.MarkdownDocumentFormat;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.io.ByteArrayInputStream;
@@ -39,6 +41,14 @@ import static process.util.ProcessUtil.*;
 public class DocumentConverterServiceImpl implements DocumentConverterService {
 
     private Logger logger = LoggerFactory.getLogger(DocumentConverterServiceImpl.class);
+
+    // The converted bytes are base64-encoded into the JSON response, so a conversion holds
+    // roughly four times the file size in heap at once (input + output + base64 string +
+    // the serialised response). The global multipart limit is 500MB, which at that ratio
+    // would exhaust the heap on a single request -- this is the converter's own, much
+    // lower ceiling, with a message that says what to do instead.
+    @Value("${document.converter.max-file-size-mb:50}")
+    private int maxFileSizeMb;
 
     private final DocumentConverterTaskRepository documentConverterTaskRepository;
     private final StorageBrowserService storageBrowserService;
@@ -103,6 +113,12 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         if (file == null || file.isEmpty()) {
             return new ResponseDto(ERROR, "Uploaded file is empty.");
         }
+        long maxBytes = (long) this.maxFileSizeMb * 1024L * 1024L;
+        if (file.getSize() > maxBytes) {
+            return new ResponseDto(ERROR, String.format(
+                "That file is %.1f MB, over the %d MB conversion limit. Split it, or convert it outside the app.",
+                file.getSize() / (1024d * 1024d), this.maxFileSizeMb));
+        }
         if (isNull(outputFormat) || outputFormat.trim().isEmpty()) {
             return new ResponseDto(ERROR, "outputFormat missing.");
         }
@@ -128,8 +144,8 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
             }
         }
 
-        DocumentFormat sourceFormat = this.documentFormatRegistry.getFormatByExtension(inputExtension);
-        DocumentFormat targetFormat = this.documentFormatRegistry.getFormatByExtension(normalizedOutputFormat);
+        DocumentFormat sourceFormat = this.resolveFormat(inputExtension);
+        DocumentFormat targetFormat = this.resolveFormat(normalizedOutputFormat);
         if (sourceFormat == null || targetFormat == null) {
 
             logger.error("DocumentConverterFormatRegistry allowed {} -> {} but JODConverter's own registry doesn't recognize one of them.",
@@ -153,8 +169,13 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         } catch (Exception conversionException) {
             logger.warn("Document conversion failed for {} -> {}: {}", safeFileName, normalizedOutputFormat,
                 conversionException.getMessage());
+            String detail = conversionException.getMessage() == null ? "" : conversionException.getMessage();
+            if (detail.toLowerCase().contains("timeout") || detail.toLowerCase().contains("timed out")) {
+                return new ResponseDto(ERROR, "Conversion timed out. Conversions run one at a time, so a large "
+                    + "document already being converted can hold up the queue -- try again shortly.");
+            }
             return new ResponseDto(ERROR, "Conversion failed -- the file may be corrupt or password-protected: "
-                + conversionException.getMessage());
+                + detail);
         } finally {
             try {
                 Files.deleteIfExists(tempSourceFile);
@@ -220,6 +241,19 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
             response.setDateCreated(task.getDateCreated());
         }
         return new ResponseDto(SUCCESS, "Document converted successfully.", response);
+    }
+
+    /**
+     * JODConverter's registry has no Markdown entry, so getFormatByExtension("md") returns null
+     * and the conversion is rejected before LibreOffice ever sees it -- even though LibreOffice
+     * 26.2 handles Markdown in both directions. Fall back to our own definition for that one
+     * extension and leave every other format resolving exactly as before.
+     */
+    private DocumentFormat resolveFormat(String extension) {
+        if (MarkdownDocumentFormat.isMarkdown(extension)) {
+            return MarkdownDocumentFormat.get();
+        }
+        return this.documentFormatRegistry.getFormatByExtension(extension);
     }
 
     private String normalizeTargetFolder(String targetFolder) {

@@ -31,7 +31,7 @@ public class KafkaConnectionProfileRestApi {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.addProfile(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addProfile ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -41,7 +41,7 @@ public class KafkaConnectionProfileRestApi {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.updateProfile(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateProfile ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -51,7 +51,7 @@ public class KafkaConnectionProfileRestApi {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.deleteProfile(kafkaConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteProfile ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -61,7 +61,7 @@ public class KafkaConnectionProfileRestApi {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.fetchAllProfiles(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllProfiles ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -71,7 +71,7 @@ public class KafkaConnectionProfileRestApi {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.setAsDefault(kafkaConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while setAsDefault ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -81,7 +81,7 @@ public class KafkaConnectionProfileRestApi {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.clearDefault(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while clearDefault ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -91,7 +91,7 @@ public class KafkaConnectionProfileRestApi {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.testConnection(dto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while testConnection ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -101,7 +101,7 @@ public class KafkaConnectionProfileRestApi {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.testTopicConnection(topicName), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while testTopic ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

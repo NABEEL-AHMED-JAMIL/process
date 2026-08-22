@@ -11,7 +11,10 @@ import process.model.pojo.SourceJob;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
 import process.model.projection.SourceJobProjection;
+import process.model.service.NotificationCenterService;
 import process.model.service.impl.TransactionServiceImpl;
+import process.model.enums.NotificationSeverity;
+import process.model.enums.NotificationType;
 import process.socket.NotificationService;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
@@ -26,10 +29,13 @@ public class BulkAction {
 
     private final TransactionServiceImpl transactionService;
     private final NotificationService notificationService;
+    private final NotificationCenterService notificationCenterService;
 
-    public BulkAction(TransactionServiceImpl transactionService, NotificationService notificationService) {
+    public BulkAction(TransactionServiceImpl transactionService, NotificationService notificationService,
+        NotificationCenterService notificationCenterService) {
         this.transactionService = transactionService;
         this.notificationService = notificationService;
+        this.notificationCenterService = notificationCenterService;
     }
 
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
@@ -155,13 +161,38 @@ public class BulkAction {
     }
 
     public void sendJobStatusNotification(Long jobId) {
+        this.sendJobStatusNotification(jobId, true);
+    }
+
+    public void sendJobStatusNotification(Long jobId, boolean isNewTransition) {
         List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
         if (!sourceJob.isEmpty()) {
-            String assignedUsername = sourceJob.get(0).getAssignedUsername();
+            SourceJobProjection jobEvent = sourceJob.get(0);
+            String assignedUsername = jobEvent.getAssignedUsername();
 
             if (assignedUsername != null) {
-                this.notificationService.sendNotificationToSpecificUser(assignedUsername, this.getSourceJobDetail(sourceJob.get(0)));
+                this.notificationService.sendNotificationToSpecificUser(assignedUsername, this.getSourceJobDetail(jobEvent));
             }
+            if (isNewTransition) {
+                this.notifyJobOutcome(jobEvent);
+            }
+        }
+    }
+
+    private void notifyJobOutcome(SourceJobProjection jobEvent) {
+        JobStatus runningStatus = jobEvent.getJobRunningStatus();
+        if (runningStatus != JobStatus.Completed && runningStatus != JobStatus.Failed) {
+            return;
+        }
+        String jobName = jobEvent.getJobName() != null ? jobEvent.getJobName() : ("Job " + jobEvent.getJobId());
+        if (runningStatus == JobStatus.Completed) {
+            this.notificationCenterService.create(jobEvent.getTenantId(), jobEvent.getAssignedUserId(),
+                NotificationType.JOB_COMPLETED, NotificationSeverity.SUCCESS,
+                "Job completed", jobName + " finished successfully.", "/jobList");
+        } else {
+            this.notificationCenterService.create(jobEvent.getTenantId(), jobEvent.getAssignedUserId(),
+                NotificationType.JOB_FAILED, NotificationSeverity.ERROR,
+                "Job failed", jobName + " failed.", "/jobList");
         }
     }
 

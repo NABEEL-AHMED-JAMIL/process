@@ -30,7 +30,7 @@ public class AuthRestApi {
             return new ResponseEntity<>(this.authService.login(loginRequestDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while login ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -40,7 +40,7 @@ public class AuthRestApi {
             return new ResponseEntity<>(this.authService.refresh(body.get("refreshToken")), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while refresh ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

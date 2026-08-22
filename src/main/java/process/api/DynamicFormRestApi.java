@@ -33,7 +33,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.addForm(dynamicFormDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addForm ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -43,7 +43,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.updateForm(dynamicFormDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateForm ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -53,7 +53,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.deleteForm(dynamicFormId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteForm ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -64,7 +64,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.fetchAllForms(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllForms ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -75,7 +75,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.fetchFormByFormId(dynamicFormId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchFormByFormId ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -86,7 +86,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.fetchFormByUuid(uuid), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchFormByUuid ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -96,7 +96,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.addField(dynamicFormId, dynamicFormFieldDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addField ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -106,7 +106,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.updateField(dynamicFormFieldDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateField ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -116,7 +116,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.deleteField(dynamicFormFieldId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteField ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -127,7 +127,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.submitForm(dynamicFormSubmissionDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while submitForm ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -138,7 +138,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.updateSubmission(dynamicFormSubmissionDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while updateSubmission ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -148,7 +148,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.deleteSubmission(dynamicFormSubmissionId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteSubmission ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -159,7 +159,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.fetchSubmissionsByFormId(dynamicFormId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSubmissionsByFormId ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -170,7 +170,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.fetchSubmissionBySubmissionId(dynamicFormSubmissionId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSubmissionBySubmissionId ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -181,7 +181,7 @@ public class DynamicFormRestApi {
             return new ResponseEntity<>(this.dynamicFormService.fetchSubmissionByUuid(uuid), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSubmissionByUuid ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

@@ -44,6 +44,14 @@ public class RedisConfig {
 
         perCacheConfig.put("fileChatMetadata", config.entryTtl(Duration.ofSeconds(30)));
 
+        // Every FTP/FTPS operation pays a fresh TCP connect, login and (for FTPS) TLS handshake
+        // -- around 1.5s plain and 2.3s secured, against ~55ms for MinIO. A short TTL collapses
+        // the repeat listings a single folder view triggers (the browse call and the folder
+        // insights pass hit the same directory) without holding a stale view for long. Writes
+        // evict the affected connection immediately, so this only ever delays noticing a change
+        // made outside the app.
+        perCacheConfig.put("ftpListing", config.entryTtl(Duration.ofSeconds(45)));
+
         return RedisCacheManager.builder(connectionFactory)
             .cacheDefaults(config)
             .withInitialCacheConfigurations(perCacheConfig)
