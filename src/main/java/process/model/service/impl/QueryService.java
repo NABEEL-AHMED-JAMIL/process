@@ -235,12 +235,17 @@ public class QueryService {
 
     public String weeklyRunningJobStatistics(String startDate, String endDate) {
 
+        // Grouped and ordered by the date itself, not the day name. Without the ordering the
+        // aggregate came back in whatever order it was built -- the chart drew Fri, Mon, Thu,
+        // Tue, Wed -- and grouping on the name alone merged the same weekday from different
+        // weeks into one bar whenever the range ran longer than seven days.
         return String.format("select weekData.daycode, count(*) from (\n" +
             "select job_queue_id, to_char(cast(jq.date_created as date), 'Dy') as daycode,\n" +
-            "cast(jq.date_created as date)\n" +
+            "cast(jq.date_created as date) as runDate\n" +
             "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created) between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')" +
             this.tenantClause("sj") + ") as weekData\n" +
-            "group by weekData.daycode", this.requireValidDate(startDate), this.requireValidDate(endDate));
+            "group by weekData.runDate, weekData.daycode\n" +
+            "order by weekData.runDate", this.requireValidDate(startDate), this.requireValidDate(endDate));
     }
 
     public String weeklyHrsRunningJobStatistics(String startDate, String endDate) {
