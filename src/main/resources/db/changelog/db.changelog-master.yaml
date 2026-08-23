@@ -38,3 +38,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V15.0-scheduler-recurrence-rules.yaml
   - include:
       file: db/changelog/yaml/V16.0-fix-source-job-status-casing.yaml
+  - include:
+      file: db/changelog/yaml/V17.0-table-descriptions.yaml

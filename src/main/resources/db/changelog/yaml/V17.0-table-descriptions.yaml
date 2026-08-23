@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 17.0-table-descriptions
+      author: nabeel.amd93
+      description: "Describe every table, written from what each one actually holds -- which tables carry tenant_id and which inherit their tenant through a parent, which columns are misleadingly named (source_task_payload.payload_id is a foreign key to source_task), and which tables belong to Liquibase or ShedLock rather than to the application"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V17.0-table-descriptions/V17__table_descriptions.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Comments are documentation, not structure; dropping them restores nothing
+              -- worth having. No-op rollback.
+              SELECT 1;
