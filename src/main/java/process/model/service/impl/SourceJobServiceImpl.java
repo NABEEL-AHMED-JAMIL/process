@@ -557,6 +557,12 @@ public class SourceJobServiceImpl implements SourceJobService {
         sourceJobQueueDto.setJobStatusMessage(jobQueue.getJobStatusMessage());
         sourceJobQueueDto.setSkipTime(jobQueue.getSkipTime());
         sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
+        // These three were never copied, and jobSend is a primitive boolean on the DTO, so
+        // every row came back false regardless of what was stored -- 197 of job 1244's 210
+        // runs have job_send true in the database and the API reported none of them.
+        sourceJobQueueDto.setJobSend(jobQueue.isJobSend());
+        sourceJobQueueDto.setRunManual(jobQueue.getRunManual());
+        sourceJobQueueDto.setSkipManual(jobQueue.getSkipManual());
         return sourceJobQueueDto;
     }
 
