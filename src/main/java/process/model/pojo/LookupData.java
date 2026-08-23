@@ -7,6 +7,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.HashSet;
 import java.util.Set;
 
 @Entity
@@ -60,7 +61,7 @@ public class LookupData {
     protected LookupData parent;
 
     @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
-    protected Set<LookupData> children;
+    protected Set<LookupData> children = new HashSet<>();
 
     public LookupData() { }
 

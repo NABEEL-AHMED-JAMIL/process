@@ -3,6 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import process.config.KafkaConnectionResolver;
@@ -305,6 +306,15 @@ public class SettingServiceImpl implements SettingService {
     }
 
     @Override
+    /**
+     * Transactional so the save and the cache refresh share one flush.
+     *
+     * Without it the row was written by save(), and then the refresh -- which opens its own
+     * transaction over the same request-scoped session -- flushed the still-managed entity a
+     * second time and hit the unique constraint on lookup_type. The caller saw an error while
+     * the row had in fact been created, so a retry then failed forever on a duplicate key.
+     */
+    @Transactional
     @CacheEvict(value = "appSetting", allEntries = true)
     public ResponseDto addLookupData(LookupDataDto tempLookupData) throws Exception {
         if (isNull(tempLookupData.getLookupValue()) || tempLookupData.getLookupValue().trim().isEmpty()) {

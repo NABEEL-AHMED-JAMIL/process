@@ -19,7 +19,7 @@ import java.util.Date;
 import java.util.UUID;
 
 @RestController
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "*", exposedHeaders = {HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH})
 @RequestMapping(value = "/sourceJob.json")
 @PreAuthorize("hasRole('TENANT_USER')")
 public class SourceJobRestApi {

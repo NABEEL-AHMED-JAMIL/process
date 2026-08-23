@@ -54,7 +54,9 @@ public class LookupDataCacheService {
 
     private LookupDataDto getLookupDataDetail(LookupData lookupData) {
         LookupDataDto parentLookupData = this.toLookupDataDto(lookupData);
-        if (!lookupData.getChildren().isEmpty()) {
+        // A row that has just been saved has no children collection at all -- the association
+        // is lazy and was never initialised -- so this threw and every add returned a 500.
+        if (lookupData.getChildren() != null && !lookupData.getChildren().isEmpty()) {
             parentLookupData.setChildren(lookupData.getChildren()
                 .stream().map(this::toLookupDataDto)
                 .collect(Collectors.toSet()));

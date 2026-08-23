@@ -20,7 +20,7 @@ import java.util.Date;
 import java.util.UUID;
 
 @RestController
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "*", exposedHeaders = {HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH})
 @RequestMapping(value = "/sourceTask.json")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class SourceTaskRestApi {
