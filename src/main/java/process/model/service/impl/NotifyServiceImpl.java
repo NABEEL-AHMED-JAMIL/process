@@ -13,6 +13,7 @@ import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.service.NotifyService;
+import java.util.List;
 import java.util.Optional;
 import static process.util.ProcessUtil.ERROR;
 import process.socket.JobEventPublisher;
@@ -104,6 +105,28 @@ public class NotifyServiceImpl implements NotifyService {
             jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
         logger.info("Successfully added logs for job {} queue {}", jobQueue.getJobId(), jobQueue.getJobQueueId());
         return new ResponseDto(String.format("Logs added for job %s queue %s", jobQueue.getJobId(), jobQueue.getJobQueueId()), jobQueue);
+    }
+
+    /**
+     * Many log lines in one call.
+     *
+     * The per-line endpoint repeated an identical job lookup for every line -- fifty lookups
+     * and fifty round trips for a run that produced fifty lines. This resolves the job once
+     * and writes the lot. Each line is still announced individually, because the run-logs
+     * screen appends lines and would otherwise have to learn a second message shape.
+     */
+    public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, List<String> messages) {
+        Optional<SourceJob> job = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
+        if (!job.isPresent()) {
+            return new ResponseDto(ERROR, String.format("Job with id %s not found or not active", jobId));
+        }
+        this.bulkAction.saveJobAuditLogs(jobQueueId, messages);
+        for (String message : messages) {
+            this.jobEventPublisher.publishLog(job.get().getTenantId(), jobId, jobQueueId, message);
+        }
+        return new ResponseDto(
+            String.format("%s log line(s) added for job %s queue %s", messages.size(), jobId, jobQueueId),
+            messages.size());
     }
 
     private boolean isValidStatusTransition(JobStatus currentStatus, JobStatus newStatus) {

@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -65,6 +66,52 @@ public class OpenSearchAuditLogClient {
             return true;
         } catch (Exception ex) {
             logger.error("Failed to index audit log into OpenSearch externalId={} jobQueueId={}", externalId, jobQueueId, ex);
+            return false;
+        }
+    }
+
+    /**
+     * Index many lines in one request.
+     *
+     * A pipeline writing fifty log lines per run was making fifty round trips here, one per
+     * line. _bulk takes them all in a single call: the newline-delimited body pairs an action
+     * line with its document, and the trailing newline is required rather than cosmetic.
+     *
+     * Returns false if the whole call failed, so the caller can fall back to the database the
+     * same way the single-document path does. A partial failure inside the batch is logged --
+     * OpenSearch reports per-item errors in the response -- but is not worth failing the whole
+     * run over, since these are audit lines rather than the job's output.
+     */
+    public boolean indexAll(List<Object[]> entries) {
+        if (!isEnabled() || entries == null || entries.isEmpty()) {
+            return false;
+        }
+        try {
+            StringBuilder body = new StringBuilder();
+            for (Object[] entry : entries) {
+                String externalId = (String) entry[0];
+                Long jobQueueId = (Long) entry[1];
+                String logDetail = (String) entry[2];
+                Timestamp dateCreated = (Timestamp) entry[3];
+                body.append("{\"index\":{\"_index\":\"").append(INDEX_NAME)
+                    .append("\",\"_id\":\"").append(externalId).append("\"}}\n");
+                Map<String, Object> doc = new HashMap<>();
+                doc.put("jobQueueId", jobQueueId);
+                doc.put("logDetail", logDetail);
+                doc.put("dateCreated", dateCreated.toInstant().toString());
+                body.append(this.objectMapper.writeValueAsString(doc)).append("\n");
+            }
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/x-ndjson"));
+            ResponseEntity<String> response = this.restTemplate.exchange(
+                this.baseUrl + "/_bulk", HttpMethod.POST,
+                new HttpEntity<>(body.toString(), headers), String.class);
+            if (response.getBody() != null && response.getBody().contains("\"errors\":true")) {
+                logger.warn("Some audit lines were rejected by OpenSearch in a bulk of {}", entries.size());
+            }
+            return true;
+        } catch (Exception ex) {
+            logger.error("Failed to bulk index {} audit lines into OpenSearch", entries.size(), ex);
             return false;
         }
     }

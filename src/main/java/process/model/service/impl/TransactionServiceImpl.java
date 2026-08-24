@@ -11,6 +11,7 @@ import process.security.TenantContext;
 import process.util.OpenSearchAuditLogClient;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -55,6 +56,33 @@ public class TransactionServiceImpl {
         jobAuditLogs.setJobQueueId(jobQueueId);
         jobAuditLogs.setLogsDetail(logsDetail);
         this.jobAuditLogRepository.save(jobAuditLogs);
+    }
+
+    /**
+     * Many audit lines at once, for a worker that batches instead of posting per line.
+     *
+     * Same contract as the single-line path: OpenSearch first, the database only if that is
+     * unavailable. The fallback loops rather than bulk-inserting because it is the cold path
+     * -- if OpenSearch is down, a slower write is the least of the problems.
+     */
+    public void saveJobAuditLogs(Long jobQueueId, List<String> logDetails) {
+        if (logDetails == null || logDetails.isEmpty()) {
+            return;
+        }
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        List<Object[]> entries = new ArrayList<>();
+        for (String detail : logDetails) {
+            entries.add(new Object[]{ UUID.randomUUID().toString(), jobQueueId, detail, now });
+        }
+        if (this.openSearchAuditLogClient.indexAll(entries)) {
+            return;
+        }
+        for (String detail : logDetails) {
+            JobAuditLogs row = new JobAuditLogs();
+            row.setJobQueueId(jobQueueId);
+            row.setLogsDetail(detail);
+            this.jobAuditLogRepository.save(row);
+        }
     }
 
     public void saveOrUpdateJob(SourceJob sourceJob) {

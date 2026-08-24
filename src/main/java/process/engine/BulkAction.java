@@ -136,6 +136,11 @@ public class BulkAction {
         this.transactionService.saveJobAuditLogs(jobQueueId, logsDetail);
     }
 
+    /** Many lines at once, for a worker that buffers rather than posting per line. */
+    public void saveJobAuditLogs(Long jobQueueId, java.util.List<String> logDetails) {
+        this.transactionService.saveJobAuditLogs(jobQueueId, logDetails);
+    }
+
     public Integer getCountForInQueueJobByJobId(Long jobId) {
         return this.transactionService.getCountForInQueueJobByJobId(jobId);
     }

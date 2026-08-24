@@ -9,4 +9,6 @@ public interface NotifyService {
 
     public ResponseDto addLogs(SourceJobQueueDto jobQueueDto);
 
+    public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, java.util.List<String> messages);
+
 }
