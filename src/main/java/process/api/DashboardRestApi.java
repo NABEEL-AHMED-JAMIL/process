@@ -36,6 +36,19 @@ public class DashboardRestApi {
         }
     }
 
+    /** Per-user totals for the people dashboard: what each user owns and how it has gone. */
+    @RequestMapping(value = "/userStatistics", method = RequestMethod.GET)
+    public ResponseEntity<?> userStatistics(
+        @RequestParam(name = "startDate", required = false) String startDate,
+        @RequestParam(name = "endDate", required = false) String endDate) {
+        try {
+            return new ResponseEntity<>(this.dashboardService.userStatistics(startDate, endDate), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while userStatistics ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @RequestMapping(value = "/jobRunningStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> jobRunningStatistics(
         @RequestParam(name = "startDate", required = false) String startDate,

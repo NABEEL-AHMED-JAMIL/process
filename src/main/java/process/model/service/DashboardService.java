@@ -8,6 +8,8 @@ public interface DashboardService {
 
     public ResponseDto jobRunningStatistics(String startDate, String endDate) throws Exception;
 
+    public ResponseDto userStatistics(String startDate, String endDate) throws Exception;
+
     public ResponseDto weeklyRunningJobStatistics(String startDate, String endDate) throws Exception;
 
     public ResponseDto weeklyHrsRunningJobStatistics(String startDate, String endDate) throws Exception;

@@ -3,6 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import process.model.dto.UserStatisticDto;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
 import process.model.pojo.Scheduler;
@@ -58,6 +59,49 @@ public class DashboardServiceImpl implements DashboardService {
             responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
         }
         return responseDto;
+    }
+
+    @Override
+    public ResponseDto userStatistics(String startDate, String endDate) throws Exception {
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
+        List<Object[]> result = this.queryService.executeQuery(this.queryService.userStatistics(startDate, endDate));
+        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
+            List<UserStatisticDto> stats = new ArrayList<>();
+            for (Object[] obj : result) {
+                int index = 0;
+                UserStatisticDto dto = new UserStatisticDto();
+                dto.setAppUserId(asLong(obj[index]));
+                dto.setUsername(asText(obj[++index]));
+                dto.setFullName(asText(obj[++index]));
+                dto.setUserRole(asText(obj[++index]));
+                dto.setStatus(asText(obj[++index]));
+                dto.setAvatarBucket(asText(obj[++index]));
+                dto.setAvatarKey(asText(obj[++index]));
+                dto.setJobCount(asInt(obj[++index]));
+                dto.setActiveJobs(asInt(obj[++index]));
+                dto.setTaskCount(asInt(obj[++index]));
+                dto.setRunCount(asInt(obj[++index]));
+                dto.setCompletedCount(asInt(obj[++index]));
+                dto.setFailedCount(asInt(obj[++index]));
+                stats.add(dto);
+            }
+            responseDto = new ResponseDto(SUCCESS, "Data found.", stats);
+        }
+        return responseDto;
+    }
+
+    /* Null-tolerant readers: avatar columns and any count can come back null, and
+     * String.valueOf(null) yields the four-character string "null" rather than nothing. */
+    private static String asText(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static Integer asInt(Object value) {
+        return value == null ? 0 : Integer.valueOf(value.toString());
+    }
+
+    private static Long asLong(Object value) {
+        return value == null ? null : Long.valueOf(value.toString());
     }
 
     @Override

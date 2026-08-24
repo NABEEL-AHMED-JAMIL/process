@@ -9,6 +9,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
 import process.model.dto.ResponseDto;
+import process.model.dto.JobAssistantRequestDto;
+import process.model.service.impl.JobAssistantServiceImpl;
 import process.model.dto.SourceJobDto;
 import process.model.service.SourceJobService;
 import process.model.service.SourceJobBulkService;
@@ -28,11 +30,14 @@ public class SourceJobRestApi {
 
     private final SourceJobService sourceJobService;
     private final SourceJobBulkService sourceJobBulkService;
+    private final JobAssistantServiceImpl jobAssistantService;
 
     public SourceJobRestApi(SourceJobService sourceJobService,
-        SourceJobBulkService sourceJobBulkService) {
+        SourceJobBulkService sourceJobBulkService,
+        JobAssistantServiceImpl jobAssistantService) {
         this.sourceJobService = sourceJobService;
         this.sourceJobBulkService = sourceJobBulkService;
+        this.jobAssistantService = jobAssistantService;
     }
 
     @RequestMapping(value = "/addSourceJob", method = RequestMethod.POST)
@@ -129,6 +134,21 @@ public class SourceJobRestApi {
             return new ResponseEntity<>(this.sourceJobService.skipNextSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while skipNextSourceJob.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * A question about one job, answered by a configured AI agent. The job's facts are gathered
+     * server-side from the id, so a caller cannot supply another job's data as context, and the
+     * agent's key never leaves the server.
+     */
+    @RequestMapping(value = "/askAssistant", method = RequestMethod.POST)
+    public ResponseEntity<?> askAssistant(@RequestBody JobAssistantRequestDto requestDto) {
+        try {
+            return new ResponseEntity<>(this.jobAssistantService.ask(requestDto), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while askAssistant.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

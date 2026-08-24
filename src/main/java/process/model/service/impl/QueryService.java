@@ -223,6 +223,38 @@ public class QueryService {
             "select 'All' as job_status, count(job_id) as total_count from source_job where job_status in ('Active','Inactive') " + dateFilter + tenantFilter;
     }
 
+    /**
+     * Per-user totals, for "who owns what and how is it going".
+     *
+     * Jobs carry assigned_user_id so they attribute directly. Tasks do not carry an owner at
+     * all, so a user's task count is the distinct tasks their jobs point at rather than
+     * anything they are recorded as owning -- which is the honest reading of the schema.
+     *
+     * The left joins matter: a user with no jobs still belongs in the answer, at zero. An
+     * inner join would quietly drop everyone who has not been given work yet, which is
+     * exactly the group this is most often opened to find.
+     */
+    public String userStatistics(String startDate, String endDate) {
+
+        String dateFilter = this.dateRangeFilter("jq.date_created", startDate, endDate);
+        return "select u.app_user_id, u.username, u.full_name, u.user_role, u.status, "
+            + "u.avatar_bucket, u.avatar_key, "
+            + "count(distinct sj.job_id) as job_count, "
+            + "count(distinct sj.job_id) filter (where sj.job_status = 'Active') as active_jobs, "
+            + "count(distinct sj.task_detail_id) as task_count, "
+            + "count(jq.job_queue_id) as run_count, "
+            + "count(jq.job_queue_id) filter (where jq.job_status = 'Completed') as completed_count, "
+            + "count(jq.job_queue_id) filter (where jq.job_status = 'Failed') as failed_count "
+            + "from app_user u "
+            + "left join source_job sj on sj.assigned_user_id = u.app_user_id "
+            + "and sj.job_status in ('Active','Inactive') "
+            + "left join job_queue jq on jq.job_id = sj.job_id " + dateFilter
+            + "where u.status in ('Active','Inactive') " + this.tenantClause("u")
+            + "group by u.app_user_id, u.username, u.full_name, u.user_role, u.status, "
+            + "u.avatar_bucket, u.avatar_key "
+            + "order by job_count desc, u.full_name asc";
+    }
+
     public String jobRunningStatistics(String startDate, String endDate) {
 
         String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
