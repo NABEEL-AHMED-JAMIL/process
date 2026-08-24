@@ -146,7 +146,7 @@ services:
       # so it's supplied directly. Includes the LAN IP so phones/other laptops on the same
       # network can open the live-job-updates socket via http://<lan-ip>/... (port 80, docker) and
       # http://<lan-ip>:8084/... (webpack dev server) -- update if the host's LAN IP changes.
-      WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost,http://localhost:8080,http://10.0.0.248,http://10.0.0.248:8084}
+      WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost,http://localhost:8080,http://localhost:4400,http://10.0.0.248,http://10.0.0.248:8084}
     depends_on:
       postgres:
         condition: service_healthy

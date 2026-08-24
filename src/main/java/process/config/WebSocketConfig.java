@@ -35,7 +35,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/queue", "/user");
+        // /topic carries the per-tenant job feed; StompAuthChannelInterceptor checks that a
+        // subscriber's token matches the tenant named in the destination.
+        config.enableSimpleBroker("/queue", "/user", "/topic");
         config.setApplicationDestinationPrefixes("/api/v1");
     }
 

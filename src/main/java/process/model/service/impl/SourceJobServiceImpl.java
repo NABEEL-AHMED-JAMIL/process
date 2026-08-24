@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
+import process.socket.JobEventPublisher;
 
 @Service
 public class SourceJobServiceImpl implements SourceJobService {
@@ -40,6 +41,7 @@ public class SourceJobServiceImpl implements SourceJobService {
     private final SchedulerRepository schedulerRepository;
     private final SourceTaskRepository sourceTaskRepository;
     private final JobAuditLogRepository jobAuditLogRepository;
+    private final JobEventPublisher jobEventPublisher;
     private final JobQueueRepository jobQueueRepository;
     private final LookupDataRepository lookupDataRepository;
     private final AppUserRepository appUserRepository;
@@ -55,6 +57,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         SchedulerRepository schedulerRepository,
         SourceTaskRepository sourceTaskRepository,
         JobAuditLogRepository jobAuditLogRepository,
+        JobEventPublisher jobEventPublisher,
         JobQueueRepository jobQueueRepository,
         LookupDataRepository lookupDataRepository,
         AppUserRepository appUserRepository,
@@ -66,6 +69,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.schedulerRepository = schedulerRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.jobAuditLogRepository = jobAuditLogRepository;
+        this.jobEventPublisher = jobEventPublisher;
         this.jobQueueRepository = jobQueueRepository;
         this.lookupDataRepository = lookupDataRepository;
         this.appUserRepository = appUserRepository;

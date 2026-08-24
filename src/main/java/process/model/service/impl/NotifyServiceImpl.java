@@ -15,6 +15,7 @@ import process.model.pojo.SourceJob;
 import process.model.service.NotifyService;
 import java.util.Optional;
 import static process.util.ProcessUtil.ERROR;
+import process.socket.JobEventPublisher;
 
 @Service
 @Transactional
@@ -25,14 +26,17 @@ public class NotifyServiceImpl implements NotifyService {
     private final BulkAction bulkAction;
     private final EmailMessagesFactory emailMessagesFactory;
     private final TransactionServiceImpl transactionService;
+    private final JobEventPublisher jobEventPublisher;
 
     public NotifyServiceImpl(
         BulkAction bulkAction,
         EmailMessagesFactory emailMessagesFactory,
-        TransactionServiceImpl transactionService) {
+        TransactionServiceImpl transactionService,
+        JobEventPublisher jobEventPublisher) {
         this.bulkAction = bulkAction;
         this.emailMessagesFactory = emailMessagesFactory;
         this.transactionService = transactionService;
+        this.jobEventPublisher = jobEventPublisher;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -55,6 +59,10 @@ public class NotifyServiceImpl implements NotifyService {
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), currentStatus != newStatus);
+        // Push the new state to anyone watching this tenant's job list, so a running job
+        // updates in place instead of waiting for someone to hit Refresh.
+        this.jobEventPublisher.publishStatus(job.get().getTenantId(), jobQueue.getJobId(),
+            jobQueue.getJobQueueId(), newStatus.name(), jobQueue.getJobStatusMessage());
         if (newStatus == JobStatus.Failed || newStatus == JobStatus.Completed) {
             logger.info("Setting end date for job {}", jobQueue.getJobId());
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), jobQueue.getEndTime());
@@ -90,6 +98,10 @@ public class NotifyServiceImpl implements NotifyService {
         }
         logger.info("Adding logs for job {} queue {}", jobQueue.getJobId(), jobQueue.getJobQueueId());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
+        // The same pipeline callback that writes the line announces it, so an open run-logs
+        // screen appends it instead of polling every five seconds for one that may not come.
+        this.jobEventPublisher.publishLog(job.get().getTenantId(), jobQueue.getJobId(),
+            jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
         logger.info("Successfully added logs for job {} queue {}", jobQueue.getJobId(), jobQueue.getJobQueueId());
         return new ResponseDto(String.format("Logs added for job %s queue %s", jobQueue.getJobId(), jobQueue.getJobQueueId()), jobQueue);
     }
