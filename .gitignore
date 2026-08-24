@@ -32,7 +32,11 @@ logs/
 # Application specific
 /tmp/
 /logs/
+.env
 .env.local
+# .env holds real credentials -- the datasource and mail passwords were committed here
+# before this line existed. Keep secrets out of the repo; .env.example documents the keys.
+!.env.example
 *.jks
 *.p12
 
