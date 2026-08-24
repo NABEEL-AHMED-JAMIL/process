@@ -14,6 +14,9 @@ public class AuthResponseDto {
     private String userRole;
     private Long tenantId;
     private Long appUserId;
+    /** Carried at sign-in so the header can show the picture before anything else is fetched. */
+    private String avatarBucket;
+    private String avatarKey;
 
     public String getAccessToken() {
         return accessToken;
@@ -71,4 +74,20 @@ public class AuthResponseDto {
         this.appUserId = appUserId;
     }
 
+
+    public String getAvatarBucket() {
+        return avatarBucket;
+    }
+
+    public void setAvatarBucket(String avatarBucket) {
+        this.avatarBucket = avatarBucket;
+    }
+
+    public String getAvatarKey() {
+        return avatarKey;
+    }
+
+    public void setAvatarKey(String avatarKey) {
+        this.avatarKey = avatarKey;
+    }
 }

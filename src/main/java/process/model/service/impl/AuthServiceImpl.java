@@ -117,6 +117,10 @@ public class AuthServiceImpl implements AuthService {
         response.setUserRole(user.getUserRole().name());
         response.setTenantId(user.getTenantId());
         response.setAppUserId(user.getAppUserId());
+        // Without these the header showed initials until the profile screen happened to be
+        // opened, which is the only other thing that fetches them.
+        response.setAvatarBucket(user.getAvatarBucket());
+        response.setAvatarKey(user.getAvatarKey());
         return response;
     }
 
