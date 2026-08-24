@@ -15,4 +15,10 @@ public interface AppUserService {
 
     public ResponseDto resetPassword(AppUserDto appUserDto) throws Exception;
 
+    public ResponseDto currentUser() throws Exception;
+
+    public ResponseDto updateOwnProfile(AppUserDto appUserDto) throws Exception;
+
+    public ResponseDto updateOwnAvatar(AppUserDto appUserDto) throws Exception;
+
 }

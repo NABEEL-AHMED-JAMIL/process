@@ -68,6 +68,17 @@ public class AppUser {
     @Column(name = "last_login_at")
     private Timestamp lastLoginAt;
 
+    /**
+     * Where the user's picture lives. Both halves are stored because a bucket is reachable
+     * only through the storage connection that owns it -- a key on its own could not be
+     * resolved back to a provider.
+     */
+    @Column(name = "avatar_bucket")
+    private String avatarBucket;
+
+    @Column(name = "avatar_key")
+    private String avatarKey;
+
     public AppUser() {}
 
     public Long getAppUserId() {
@@ -159,4 +170,20 @@ public class AppUser {
         return new Gson().toJson(this);
     }
 
+
+    public String getAvatarBucket() {
+        return avatarBucket;
+    }
+
+    public void setAvatarBucket(String avatarBucket) {
+        this.avatarBucket = avatarBucket;
+    }
+
+    public String getAvatarKey() {
+        return avatarKey;
+    }
+
+    public void setAvatarKey(String avatarKey) {
+        this.avatarKey = avatarKey;
+    }
 }

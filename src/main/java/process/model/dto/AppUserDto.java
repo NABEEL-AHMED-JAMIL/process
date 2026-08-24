@@ -25,6 +25,8 @@ public class AppUserDto {
     private Status status;
     private Timestamp dateCreated;
     private Timestamp lastLoginAt;
+    private String avatarBucket;
+    private String avatarKey;
 
     public AppUserDto() {}
 
@@ -129,4 +131,20 @@ public class AppUserDto {
         return new Gson().toJson(this);
     }
 
+
+    public String getAvatarBucket() {
+        return avatarBucket;
+    }
+
+    public void setAvatarBucket(String avatarBucket) {
+        this.avatarBucket = avatarBucket;
+    }
+
+    public String getAvatarKey() {
+        return avatarKey;
+    }
+
+    public void setAvatarKey(String avatarKey) {
+        this.avatarKey = avatarKey;
+    }
 }

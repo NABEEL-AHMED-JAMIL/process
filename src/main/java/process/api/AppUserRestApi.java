@@ -75,4 +75,43 @@ public class AppUserRestApi {
         }
     }
 
+
+    /**
+     * Profile endpoints are the one part of this controller a plain tenant user reaches --
+     * the class requires TENANT_ADMIN, and these three override it down to TENANT_USER
+     * because everyone manages their own profile. Each derives the user from the token, so
+     * the override widens who can call them without widening what they can touch.
+     */
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/me", method = RequestMethod.GET)
+    public ResponseEntity<?> currentUser() {
+        try {
+            return new ResponseEntity<>(this.appUserService.currentUser(), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while currentUser.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/updateOwnProfile", method = RequestMethod.PUT)
+    public ResponseEntity<?> updateOwnProfile(@RequestBody AppUserDto appUserDto) {
+        try {
+            return new ResponseEntity<>(this.appUserService.updateOwnProfile(appUserDto), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while updateOwnProfile.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/updateOwnAvatar", method = RequestMethod.PUT)
+    public ResponseEntity<?> updateOwnAvatar(@RequestBody AppUserDto appUserDto) {
+        try {
+            return new ResponseEntity<>(this.appUserService.updateOwnAvatar(appUserDto), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while updateOwnAvatar.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 }

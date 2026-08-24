@@ -213,6 +213,79 @@ public class AppUserServiceImpl implements AppUserService {
         }).collect(Collectors.toList());
     }
 
+    /**
+     * The signed-in user's own record. Reads the id from the token, never from the request,
+     * so "me" cannot be pointed at somebody else.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ResponseDto currentUser() throws Exception {
+        Long appUserId = TenantContext.getAppUserId();
+        if (isNull(appUserId)) {
+            return new ResponseDto(ERROR, "No signed-in user.");
+        }
+        Optional<AppUser> user = this.appUserRepository.findById(appUserId);
+        if (!user.isPresent() || user.get().getStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, "User not found.");
+        }
+        return new ResponseDto(SUCCESS, "Profile found.", this.mapToDto(user.get()));
+    }
+
+    /**
+     * Lets someone change their own display name. Deliberately narrow: role, status and
+     * tenant are not editable here, or a tenant user could promote themselves by posting a
+     * fuller payload to their own profile.
+     */
+    @Override
+    @Transactional
+    public ResponseDto updateOwnProfile(AppUserDto appUserDto) throws Exception {
+        Long appUserId = TenantContext.getAppUserId();
+        if (isNull(appUserId)) {
+            return new ResponseDto(ERROR, "No signed-in user.");
+        }
+        if (isNull(appUserDto.getFullName()) || appUserDto.getFullName().trim().isEmpty()) {
+            return new ResponseDto(ERROR, "Full name is required.");
+        }
+        Optional<AppUser> found = this.appUserRepository.findById(appUserId);
+        if (!found.isPresent() || found.get().getStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, "User not found.");
+        }
+        AppUser user = found.get();
+        user.setFullName(appUserDto.getFullName().trim());
+        this.appUserRepository.save(user);
+        return new ResponseDto(SUCCESS, "Profile updated.", this.mapToDto(user));
+    }
+
+    /**
+     * Records where the picture was uploaded. The upload itself goes through the storage
+     * endpoints, which already enforce what the caller may write; this only stores the
+     * pointer. Passing no key clears the picture.
+     */
+    @Override
+    @Transactional
+    public ResponseDto updateOwnAvatar(AppUserDto appUserDto) throws Exception {
+        Long appUserId = TenantContext.getAppUserId();
+        if (isNull(appUserId)) {
+            return new ResponseDto(ERROR, "No signed-in user.");
+        }
+        Optional<AppUser> found = this.appUserRepository.findById(appUserId);
+        if (!found.isPresent() || found.get().getStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, "User not found.");
+        }
+        String bucket = appUserDto.getAvatarBucket();
+        String key = appUserDto.getAvatarKey();
+        boolean clearing = isNull(key) || key.trim().isEmpty();
+        if (!clearing && (isNull(bucket) || bucket.trim().isEmpty())) {
+            return new ResponseDto(ERROR, "Avatar bucket missing.");
+        }
+        AppUser user = found.get();
+        user.setAvatarBucket(clearing ? null : bucket.trim());
+        user.setAvatarKey(clearing ? null : key.trim());
+        this.appUserRepository.save(user);
+        return new ResponseDto(SUCCESS, clearing ? "Picture removed." : "Picture updated.",
+            this.mapToDto(user));
+    }
+
     private AppUserDto mapToDto(AppUser user) {
         AppUserDto dto = this.mapToDtoWithoutTenantName(user);
         if (!isNull(user.getTenantId())) {
@@ -239,6 +312,8 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setFullName(user.getFullName());
         dto.setUserRole(user.getUserRole());
         dto.setStatus(user.getStatus());
+        dto.setAvatarBucket(user.getAvatarBucket());
+        dto.setAvatarKey(user.getAvatarKey());
         dto.setDateCreated(user.getDateCreated());
         dto.setLastLoginAt(user.getLastLoginAt());
 
