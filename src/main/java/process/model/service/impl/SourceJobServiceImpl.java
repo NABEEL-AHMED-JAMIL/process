@@ -456,6 +456,13 @@ public class SourceJobServiceImpl implements SourceJobService {
                 SourceJobDto dto = mapSourceJobToDto(job);
                 Optional.ofNullable(schedulerByJobId.get(job.getJobId())).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
                 dto.setTabActive(queueCountByJobId.getOrDefault(job.getJobId(), 0L) > 0);
+                // The task's XML payload rides along at roughly 600 bytes a row and no list
+                // view shows it -- only the single-job detail call needs it. Dropping it here
+                // takes this response from 54KB to about 30KB for 41 jobs, and the saving
+                // grows with the list.
+                if (dto.getTaskDetail() != null) {
+                    dto.getTaskDetail().setTaskPayload(null);
+                }
                 return dto;
             }).collect(Collectors.toList());
         return new ResponseDto(SUCCESS, "Fetch source jobs.", sourceJobDtoList);
