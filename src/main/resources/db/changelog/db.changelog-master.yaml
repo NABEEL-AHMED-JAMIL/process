@@ -41,4 +41,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/yaml/V17.0-table-descriptions.yaml
   - include:
+      file: db/changelog/yaml/V18.0-foreign-key-indexes.yaml
+  - include:
       file: db/changelog/yaml/V18.0-user-avatar.yaml

@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 18.0-foreign-key-indexes
+      author: nabeel.amd93
+      description: "Index the foreign keys that sit on real query paths -- scheduler.job_id (read for every job on every list load), source_job.task_detail_id (the task-delete cascade), source_task.source_task_type_id, source_task_payload.payload_id, and the lookup and notification tenant columns. Postgres indexes the primary key but never the referencing side, so each of these was a sequential scan on a join the app runs routinely"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V18.0-foreign-key-indexes/V18__foreign_key_indexes.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP INDEX IF EXISTS idx_scheduler_job_id;
+              DROP INDEX IF EXISTS idx_source_job_task_detail_id;
+              DROP INDEX IF EXISTS idx_source_task_type_id;
+              DROP INDEX IF EXISTS idx_source_task_payload_task;
+              DROP INDEX IF EXISTS idx_lookup_data_parent;
+              DROP INDEX IF EXISTS idx_lookup_data_tenant_id;
+              DROP INDEX IF EXISTS idx_notification_tenant_id;
+              DROP INDEX IF EXISTS idx_notification_recipient;
