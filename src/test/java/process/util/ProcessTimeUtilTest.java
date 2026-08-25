@@ -267,4 +267,112 @@ class ProcessTimeUtilTest {
         ProcessTimeUtil.applyInitialSchedule(s);
         assertTrue(s.isExpired(), "a window that has already closed must not run");
     }
+
+    // -------- the first run has to obey the day rule, not just the start date -------------
+
+    @Test
+    void aWeeklyScheduleDoesNotTakeItsFirstRunOnAnUnselectedDay() {
+        // Created on a Tuesday, for a schedule that only runs Mon and Thu.
+        LocalDate tuesday = LocalDate.of(2026, 8, 25);
+        Scheduler scheduler = new Scheduler();
+        scheduler.setFrequency("Weekly");
+        scheduler.setIntervalValue("1");
+        scheduler.setDaysOfWeek("MON,THU");
+        scheduler.setStartDate(tuesday);
+        // Late enough that the seed is still ahead of "now" when the job is created.
+        scheduler.setStartTime(LocalTime.of(23, 0));
+
+        LocalDateTime first = ProcessTimeUtil.resolveInitialNextRun(scheduler);
+        assertNotEquals(DayOfWeek.TUESDAY, first.getDayOfWeek());
+        assertTrue(first.getDayOfWeek() == DayOfWeek.MONDAY || first.getDayOfWeek() == DayOfWeek.THURSDAY,
+            "first run landed on " + first.getDayOfWeek());
+    }
+
+    @Test
+    void aMonthlyScheduleDoesNotTakeItsFirstRunOnTheCreationDate() {
+        Scheduler scheduler = new Scheduler();
+        scheduler.setFrequency("Monthly");
+        scheduler.setIntervalValue("1");
+        scheduler.setDayOfMonth(1);
+        scheduler.setStartDate(LocalDate.of(2026, 8, 25));
+        scheduler.setStartTime(LocalTime.of(23, 0));
+
+        assertEquals(1, ProcessTimeUtil.resolveInitialNextRun(scheduler).getDayOfMonth());
+    }
+
+    @Test
+    void aLastDayScheduleStartsOnTheLastDay() {
+        Scheduler scheduler = new Scheduler();
+        scheduler.setFrequency("Monthly");
+        scheduler.setIntervalValue("1");
+        scheduler.setDayOfMonth(0);
+        scheduler.setStartDate(LocalDate.now());
+        scheduler.setStartTime(LocalTime.of(23, 0));
+
+        LocalDateTime first = ProcessTimeUtil.resolveInitialNextRun(scheduler);
+        assertEquals(first.toLocalDate().lengthOfMonth(), first.getDayOfMonth());
+    }
+
+    @Test
+    void theFirstRunIsTheEarliestValidSlotRatherThanTheNextPeriod() {
+        // Created on the 25th for a last-day schedule: the 31st is still ahead this month, so
+        // jumping to the end of next month would skip a run the schedule was entitled to.
+        LocalDate today = LocalDate.now();
+        Scheduler scheduler = new Scheduler();
+        scheduler.setFrequency("Monthly");
+        scheduler.setIntervalValue("1");
+        scheduler.setDayOfMonth(0);
+        scheduler.setStartDate(today);
+        scheduler.setStartTime(LocalTime.of(23, 59));
+
+        LocalDateTime first = ProcessTimeUtil.resolveInitialNextRun(scheduler);
+        // The last day of the current month, unless today already is it.
+        if (today.getDayOfMonth() < today.lengthOfMonth()) {
+            assertEquals(today.getMonth(), first.getMonth(),
+                "should have taken the slot still ahead this month");
+            assertEquals(today.lengthOfMonth(), first.getDayOfMonth());
+        }
+    }
+
+    @Test
+    void aWeeklyFirstRunTakesTheNextNamedDayNotNextWeek() {
+        // Every weekday named: the very next day qualifies, so a week must not be skipped.
+        Scheduler scheduler = new Scheduler();
+        scheduler.setFrequency("Weekly");
+        scheduler.setIntervalValue("1");
+        scheduler.setDaysOfWeek("MON,TUE,WED,THU,FRI,SAT,SUN");
+        scheduler.setStartDate(LocalDate.now());
+        scheduler.setStartTime(LocalTime.of(0, 1));   // already past today
+
+        LocalDateTime first = ProcessTimeUtil.resolveInitialNextRun(scheduler);
+        assertEquals(LocalDate.now().plusDays(1), first.toLocalDate());
+    }
+
+    @Test
+    void aDayOfMonthTooLargeForTheMonthStartsOnItsLastDay() {
+        // The 31st, starting in a 30-day month: it has to settle rather than spin.
+        Scheduler scheduler = new Scheduler();
+        scheduler.setFrequency("Monthly");
+        scheduler.setIntervalValue("1");
+        scheduler.setDayOfMonth(31);
+        scheduler.setStartDate(LocalDate.of(2026, 9, 10));
+        scheduler.setStartTime(LocalTime.of(23, 0));
+
+        LocalDateTime first = ProcessTimeUtil.resolveInitialNextRun(scheduler);
+        int lastDay = first.toLocalDate().lengthOfMonth();
+        assertEquals(Math.min(31, lastDay), first.getDayOfMonth());
+    }
+
+    @Test
+    void aFrequencyWithNoDayRuleStillStartsAtItsSeed() {
+        // Daily has no day rule, so a future seed must be left exactly where it is.
+        Scheduler scheduler = new Scheduler();
+        scheduler.setFrequency("Daily");
+        scheduler.setIntervalValue("1");
+        scheduler.setStartDate(LocalDate.now().plusDays(3));
+        scheduler.setStartTime(LocalTime.of(9, 0));
+
+        assertEquals(LocalDate.now().plusDays(3),
+            ProcessTimeUtil.resolveInitialNextRun(scheduler).toLocalDate());
+    }
 }

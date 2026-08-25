@@ -96,6 +96,7 @@ public class AppUserServiceImpl implements AppUserService {
         user.setPassword(this.passwordEncoder.encode(appUserDto.getPassword()));
         user.setFullName(appUserDto.getFullName().trim());
         user.setUserRole(appUserDto.getUserRole());
+        user.setPosition(trimToNull(appUserDto.getPosition()));
         user.setStatus(Status.Active);
         user.setDateCreated(new Timestamp(System.currentTimeMillis()));
         this.appUserRepository.save(user);
@@ -141,6 +142,7 @@ public class AppUserServiceImpl implements AppUserService {
         user.setUserRole(effectiveRole);
         user.setTenantId(effectiveTenantId);
         user.setFullName(appUserDto.getFullName().trim());
+        user.setPosition(trimToNull(appUserDto.getPosition()));
         this.appUserRepository.save(user);
         return new ResponseDto(SUCCESS, String.format("User \"%s\" updated.", user.getUsername()), this.mapToDto(user));
     }
@@ -252,6 +254,8 @@ public class AppUserServiceImpl implements AppUserService {
         }
         AppUser user = found.get();
         user.setFullName(appUserDto.getFullName().trim());
+        // Someone's own title is theirs to correct; the permission role is not.
+        user.setPosition(trimToNull(appUserDto.getPosition()));
         this.appUserRepository.save(user);
         return new ResponseDto(SUCCESS, "Profile updated.", this.mapToDto(user));
     }
@@ -311,6 +315,7 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setUsername(user.getUsername());
         dto.setFullName(user.getFullName());
         dto.setUserRole(user.getUserRole());
+        dto.setPosition(user.getPosition());
         dto.setStatus(user.getStatus());
         dto.setAvatarBucket(user.getAvatarBucket());
         dto.setAvatarKey(user.getAvatarKey());
@@ -320,4 +325,9 @@ public class AppUserServiceImpl implements AppUserService {
         return dto;
     }
 
+
+    /** A blank title is no title, so it is stored as null rather than an empty string. */
+    private static String trimToNull(String value) {
+        return (value == null || value.trim().isEmpty()) ? null : value.trim();
+    }
 }

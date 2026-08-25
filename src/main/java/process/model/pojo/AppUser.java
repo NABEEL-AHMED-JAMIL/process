@@ -73,6 +73,10 @@ public class AppUser {
      * only through the storage connection that owns it -- a key on its own could not be
      * resolved back to a provider.
      */
+    /** Job title, e.g. Software Engineer. Separate from userRole, which is the permission level. */
+    @Column(name = "position", length = 120)
+    private String position;
+
     @Column(name = "avatar_bucket")
     private String avatarBucket;
 
@@ -170,6 +174,14 @@ public class AppUser {
         return new Gson().toJson(this);
     }
 
+
+    public String getPosition() {
+        return position;
+    }
+
+    public void setPosition(String position) {
+        this.position = position;
+    }
 
     public String getAvatarBucket() {
         return avatarBucket;

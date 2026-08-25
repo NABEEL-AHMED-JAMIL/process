@@ -46,3 +46,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V18.0-user-avatar.yaml
   - include:
       file: db/changelog/yaml/V19.0-task-form-builder.yaml
+  - include:
+      file: db/changelog/yaml/V20.0-user-position.yaml

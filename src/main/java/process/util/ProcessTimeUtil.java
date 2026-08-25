@@ -125,10 +125,64 @@ public class ProcessTimeUtil {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime candidate = seed;
         int guard = 0;
+        // The start date says when a schedule begins, not which days it runs on. A seed already in
+        // the future was being accepted as-is, so a Mon/Thu schedule created on a Tuesday afternoon
+        // took its first run that Tuesday, and a "day 1 of the month" schedule took its first run
+        // on whatever date it happened to be created.
+        if (hasDayRule(scheduler)) {
+            // Walk a day at a time rather than stepping: the step for these frequencies jumps a
+            // whole week or month, which would skip a valid slot still ahead in the current one.
+            // Two years of days is far past any monthly or weekly rule that can be satisfied.
+            while ((!candidate.isAfter(now) || !matchesDayRule(scheduler, candidate)) && guard++ < 732) {
+                candidate = candidate.plusDays(1);
+            }
+            return candidate;
+        }
         while (!candidate.isAfter(now) && guard++ < 100000) {
             candidate = step.apply(candidate);
         }
         return candidate;
+    }
+
+    /** Whether this schedule names particular days, rather than just an interval. */
+    private static boolean hasDayRule(Scheduler scheduler) {
+        return (Frequency.Weekly.name().equals(scheduler.getFrequency())
+                   && !ProcessUtil.isNull(scheduler.getDaysOfWeek())
+                   && !parseDaysOfWeek(scheduler.getDaysOfWeek()).isEmpty())
+            || (Frequency.Monthly.name().equals(scheduler.getFrequency())
+                   && scheduler.getDayOfMonth() != null);
+    }
+
+    /**
+     * Whether a candidate falls on a day this schedule names. Frequencies that carry no day rule
+     * are unconstrained, so they always match.
+     */
+    private static boolean matchesDayRule(Scheduler scheduler, LocalDateTime candidate) {
+        if (Frequency.Weekly.name().equals(scheduler.getFrequency())
+            && !ProcessUtil.isNull(scheduler.getDaysOfWeek())) {
+            Set<DayOfWeek> selected = parseDaysOfWeek(scheduler.getDaysOfWeek());
+            // An unreadable list is no constraint at all; nextByDaysOfWeek falls back the same way.
+            return selected.isEmpty() || selected.contains(candidate.getDayOfWeek());
+        }
+        if (Frequency.Monthly.name().equals(scheduler.getFrequency())
+            && scheduler.getDayOfMonth() != null) {
+            // Compare against the day the rule resolves to in *this* month, not the raw setting:
+            // the 31st resolves to the 30th in September, and 0 means the last day.
+            int lastDay = candidate.toLocalDate().lengthOfMonth();
+            int wanted = scheduler.getDayOfMonth() <= 0
+                ? lastDay : Math.min(scheduler.getDayOfMonth(), lastDay);
+            return candidate.getDayOfMonth() == wanted;
+        }
+        return true;
+    }
+
+    private static Set<DayOfWeek> parseDaysOfWeek(String daysOfWeekCsv) {
+        return Arrays.stream(daysOfWeekCsv.split(","))
+            .map(String::trim)
+            .filter(code -> !code.isEmpty())
+            .map(code -> DAY_CODE_MAP.get(code.toUpperCase()))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
     }
 
     public static void applyInitialSchedule(Scheduler scheduler) {
@@ -157,12 +211,7 @@ public class ProcessTimeUtil {
     }
 
     private static LocalDateTime nextByDaysOfWeek(LocalDateTime from, String daysOfWeekCsv) {
-        Set<DayOfWeek> selected = Arrays.stream(daysOfWeekCsv.split(","))
-            .map(String::trim)
-            .filter(code -> !code.isEmpty())
-            .map(code -> DAY_CODE_MAP.get(code.toUpperCase()))
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
+        Set<DayOfWeek> selected = parseDaysOfWeek(daysOfWeekCsv);
         if (selected.isEmpty()) {
             return from.plusWeeks(1);
         }
