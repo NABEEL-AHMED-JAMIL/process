@@ -43,6 +43,27 @@ public class SettingServiceImpl implements SettingService {
 
     private final String BUCKET_LIST = "BUCKET_LIST";
 
+    /**
+     * Lookup families each tenant owns outright.
+     *
+     * A tenant admin may add to these and sees only their own entries; everything else stays
+     * platform-level reference data. Buckets worked this way already -- pipelines, their home
+     * pages and task groups are the same kind of thing: a tenant's own list of what it runs,
+     * not configuration shared across the platform.
+     *
+     * Note what is deliberately absent. SCHEDULER_LAST_RUN_TIME, QUEUE_FETCH_LIMIT and
+     * AUDIT_LOG_SYNC_LAST_RUN_TIME are single-instance engine state -- per-tenant copies would
+     * give the scheduler several different ideas of when it last ran -- and AI_PROVIDER names
+     * the providers the platform can reach at all.
+     */
+    private static final java.util.Set<String> TENANT_OWNED_LOOKUPS =
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS"));
+
+    private static boolean isTenantOwned(LookupData parent) {
+        return parent != null && TENANT_OWNED_LOOKUPS.contains(parent.getLookupType());
+    }
+
     private final String MASKED_LOOKUP_VALUE = "••••••••";
 
     private final LookupDataRepository lookupDataRepository;
@@ -336,10 +357,10 @@ public class SettingServiceImpl implements SettingService {
         }
         Optional<LookupData> parentLookupData = !isNull(tempLookupData.getParentLookupId())
             ? this.lookupDataRepository.findById(tempLookupData.getParentLookupId()) : Optional.empty();
-        boolean isBucketListChild = parentLookupData.isPresent() && BUCKET_LIST.equals(parentLookupData.get().getLookupType());
+        boolean isTenantOwnedChild = parentLookupData.isPresent() && isTenantOwned(parentLookupData.get());
 
-        if (!isBucketListChild && !TenantContext.isPlatformAdmin()) {
-            return new ResponseDto(ERROR, "Only a platform admin can add this kind of lookup entry -- it's shared reference data other tenants may depend on.");
+        if (!isTenantOwnedChild && !TenantContext.isPlatformAdmin()) {
+            return new ResponseDto(ERROR, "Only a platform admin can add this kind of lookup entry -- it is platform reference data other tenants depend on.");
         }
         boolean encrypted = Boolean.TRUE.equals(tempLookupData.getEncrypted());
         LookupData lookupData = new LookupData();
@@ -352,7 +373,7 @@ public class SettingServiceImpl implements SettingService {
             lookupData.setDescription(tempLookupData.getDescription());
         }
         parentLookupData.ifPresent(lookupData::setParent);
-        if (isBucketListChild) {
+        if (isTenantOwnedChild) {
             lookupData.setTenantId(TenantContext.getTenantId());
         }
         this.lookupDataRepository.save(lookupData);
@@ -417,12 +438,12 @@ public class SettingServiceImpl implements SettingService {
             this.fillLookupDateDto(parentLookup.get(), lookupDataDto);
             appSettingDetail.put(PARENT_LOOKUP_DATA, lookupDataDto);
 
-            boolean isBucketList = BUCKET_LIST.equals(parentLookup.get().getLookupType());
+            boolean isTenantOwnedList = isTenantOwned(parentLookup.get());
             boolean isPlatformAdmin = TenantContext.isPlatformAdmin();
             Long callerTenantId = TenantContext.getTenantId();
             if (!isNull(parentLookup.get().getChildren())) {
                 for (LookupData lookup: parentLookup.get().getChildren()) {
-                    if (isBucketList && !isPlatformAdmin && !Objects.equals(lookup.getTenantId(), callerTenantId)) {
+                    if (isTenantOwnedList && !isPlatformAdmin && !Objects.equals(lookup.getTenantId(), callerTenantId)) {
                         continue;
                     }
                     LookupDataDto lookupDataDto2 = new LookupDataDto();
