@@ -300,6 +300,19 @@ public class SourceJobServiceImpl implements SourceJobService {
         Status newStatus = sourceJob.get().getJobStatus() == Status.Active ? Status.Inactive : Status.Active;
         sourceJob.get().setJobStatus(newStatus);
         this.sourceJobRepository.save(sourceJob.get());
+
+        if (Status.Active.equals(newStatus)) {
+            // next_run_at only moves when a job is dispatched, and a paused job never is -- so it
+            // sits at whatever slot was next when the job was paused. Resuming without this, the
+            // job is overdue the instant it comes back: it fires immediately, and every slot that
+            // went by while it was deliberately paused is written down as Missed. A pause is a
+            // decision, not an outage, so the schedule is moved on to its next real slot instead.
+            this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId())
+                .ifPresent(scheduler -> {
+                    ProcessTimeUtil.applyInitialSchedule(scheduler);
+                    this.schedulerRepository.save(scheduler);
+                });
+        }
         return new ResponseDto(SUCCESS, String.format("Job %s.", newStatus == Status.Active ? "activated" : "deactivated"), newStatus.name());
     }
 
