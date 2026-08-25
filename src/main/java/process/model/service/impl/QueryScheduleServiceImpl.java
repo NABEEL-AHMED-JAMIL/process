@@ -12,6 +12,7 @@ import process.model.repository.DatabaseConnectionProfileRepository;
 import process.model.repository.QueryDefinitionRepository;
 import process.model.repository.QueryScheduleRepository;
 import process.model.service.QueryScheduleService;
+import process.util.UserNameResolver;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import javax.persistence.EntityManager;
@@ -34,17 +35,20 @@ public class QueryScheduleServiceImpl implements QueryScheduleService {
     private final DatabaseConnectionProfileRepository databaseConnectionProfileRepository;
     private final TenantFilterHelper tenantFilterHelper;
 
+    private final UserNameResolver userNameResolver;
     @PersistenceContext
     private EntityManager entityManager;
 
     public QueryScheduleServiceImpl(QueryScheduleRepository queryScheduleRepository,
         QueryDefinitionRepository queryDefinitionRepository,
         DatabaseConnectionProfileRepository databaseConnectionProfileRepository,
-        TenantFilterHelper tenantFilterHelper) {
+        TenantFilterHelper tenantFilterHelper,
+        UserNameResolver userNameResolver) {
         this.queryScheduleRepository = queryScheduleRepository;
         this.queryDefinitionRepository = queryDefinitionRepository;
         this.databaseConnectionProfileRepository = databaseConnectionProfileRepository;
         this.tenantFilterHelper = tenantFilterHelper;
+        this.userNameResolver = userNameResolver;
     }
 
     private boolean isOwnedByCaller(QuerySchedule schedule) {
@@ -229,6 +233,10 @@ public class QueryScheduleServiceImpl implements QueryScheduleService {
         dto.setIntervalMinutes(schedule.getIntervalMinutes());
         dto.setNextRunAt(schedule.getNextRunAt());
         dto.setStatus(schedule.getStatus());
+        dto.setCreatedBy(schedule.getCreatedBy());
+        dto.setCreatedByName(this.userNameResolver.nameFor(schedule.getCreatedBy()));
+        dto.setUpdatedBy(schedule.getUpdatedBy());
+        dto.setUpdatedByName(this.userNameResolver.nameFor(schedule.getUpdatedBy()));
         this.queryDefinitionRepository.findById(schedule.getQueryId()).ifPresent(q -> dto.setQueryName(q.getQueryName()));
         return dto;
     }

@@ -19,6 +19,7 @@ import process.model.repository.DatabaseConnectionProfileRepository;
 import process.model.repository.QueryDefinitionRepository;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.util.UserNameResolver;
 import process.util.EncryptionUtil;
 
 import java.util.Optional;
@@ -49,6 +50,8 @@ class QueryDefinitionServiceImplTenantIsolationTest {
     private QueryValidator queryValidator;
     @Mock
     private DatabaseConnectionFactory databaseConnectionFactory;
+    @Mock
+    private UserNameResolver userNameResolver;
 
     private QueryDefinitionServiceImpl service;
 
@@ -56,7 +59,7 @@ class QueryDefinitionServiceImplTenantIsolationTest {
     void setUp() {
         this.service = new QueryDefinitionServiceImpl(this.queryDefinitionRepository,
             this.databaseConnectionProfileRepository, this.encryptionUtil, this.tenantFilterHelper,
-            this.queryValidator, this.databaseConnectionFactory);
+            this.queryValidator, this.databaseConnectionFactory, this.userNameResolver);
         lenient().doNothing().when(this.tenantFilterHelper).enableIfNeeded(any());
         lenient().when(this.queryValidator.validate(anyString()))
             .thenReturn(QueryValidator.ValidationResult.valid("SELECT 1"));

@@ -16,6 +16,7 @@ import process.model.repository.DatabaseConnectionProfileRepository;
 import process.model.repository.QueryDefinitionRepository;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.util.UserNameResolver;
 import process.util.EncryptionUtil;
 
 import java.util.Optional;
@@ -45,12 +46,16 @@ class ConnectionProfileServiceImplTenantIsolationTest {
     @Mock
     private DatabaseConnectionFactory databaseConnectionFactory;
 
+    @Mock
+    private UserNameResolver userNameResolver;
+
     private ConnectionProfileServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new ConnectionProfileServiceImpl(this.databaseConnectionProfileRepository,
-            this.queryDefinitionRepository, this.encryptionUtil, this.tenantFilterHelper, this.databaseConnectionFactory);
+            this.queryDefinitionRepository, this.encryptionUtil, this.tenantFilterHelper,
+            this.databaseConnectionFactory, this.userNameResolver);
 
         lenient().doNothing().when(this.tenantFilterHelper).enableIfNeeded(any());
     }

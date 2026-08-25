@@ -22,6 +22,10 @@ public class QueryExecutionDto {
     private String outputKey;
     private String errorMessage;
 
+
+    private Long createdBy;
+    private String createdByName;
+
     public QueryExecutionDto() {}
 
     public Long getExecutionId() {
@@ -116,4 +120,10 @@ public class QueryExecutionDto {
     public String toString() {
         return new Gson().toJson(this);
     }
+
+    public Long getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+
+    public String getCreatedByName() { return createdByName; }
+    public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
 }

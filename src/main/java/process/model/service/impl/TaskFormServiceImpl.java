@@ -11,6 +11,7 @@ import process.model.pojo.TaskForm;
 import process.model.pojo.TaskFormField;
 import process.model.repository.TaskFormRepository;
 import process.security.TenantContext;
+import process.util.UserNameResolver;
 import process.util.exception.ExceptionUtil;
 import process.util.ProcessUtil;
 
@@ -37,8 +38,11 @@ public class TaskFormServiceImpl {
 
     private final TaskFormRepository taskFormRepository;
 
-    public TaskFormServiceImpl(TaskFormRepository taskFormRepository) {
+    private final UserNameResolver userNameResolver;
+
+    public TaskFormServiceImpl(TaskFormRepository taskFormRepository, UserNameResolver userNameResolver) {
         this.taskFormRepository = taskFormRepository;
+        this.userNameResolver = userNameResolver;
     }
 
     public ResponseDto listForms() {
@@ -48,6 +52,10 @@ public class TaskFormServiceImpl {
             Long tenantId = TenantContext.getTenantId();
             forms.removeIf(f -> f.getTenantId() != null && !f.getTenantId().equals(tenantId));
         }
+        // One lookup for the whole list rather than one per row.
+        java.util.Map<Long, String> authors = this.userNameResolver.namesFor(
+            forms.stream().map(TaskForm::getCreatedBy).collect(java.util.stream.Collectors.toList()));
+        forms.forEach(f -> f.setCreatedByName(authors.get(f.getCreatedBy())));
         return new ResponseDto(SUCCESS, String.format("%d form(s).", forms.size()), forms);
     }
 

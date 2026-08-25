@@ -15,6 +15,7 @@ import process.model.service.ConnectionProfileService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.EncryptionUtil;
+import process.util.UserNameResolver;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.sql.Connection;
@@ -37,18 +38,21 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
     private final EncryptionUtil encryptionUtil;
     private final TenantFilterHelper tenantFilterHelper;
     private final DatabaseConnectionFactory databaseConnectionFactory;
+    private final UserNameResolver userNameResolver;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public ConnectionProfileServiceImpl(DatabaseConnectionProfileRepository databaseConnectionProfileRepository,
         QueryDefinitionRepository queryDefinitionRepository, EncryptionUtil encryptionUtil,
-        TenantFilterHelper tenantFilterHelper, DatabaseConnectionFactory databaseConnectionFactory) {
+        TenantFilterHelper tenantFilterHelper, DatabaseConnectionFactory databaseConnectionFactory,
+        UserNameResolver userNameResolver) {
         this.databaseConnectionProfileRepository = databaseConnectionProfileRepository;
         this.queryDefinitionRepository = queryDefinitionRepository;
         this.encryptionUtil = encryptionUtil;
         this.tenantFilterHelper = tenantFilterHelper;
         this.databaseConnectionFactory = databaseConnectionFactory;
+        this.userNameResolver = userNameResolver;
     }
 
     private boolean isOwnedByCaller(DatabaseConnectionProfile profile) {
@@ -258,6 +262,10 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         dto.setStatus(profile.getStatus());
         dto.setCreatedAt(profile.getCreatedAt());
         dto.setUpdatedAt(profile.getUpdatedAt());
+        dto.setCreatedBy(profile.getCreatedBy());
+        dto.setCreatedByName(this.userNameResolver.nameFor(profile.getCreatedBy()));
+        dto.setUpdatedBy(profile.getUpdatedBy());
+        dto.setUpdatedByName(this.userNameResolver.nameFor(profile.getUpdatedBy()));
         return dto;
     }
 

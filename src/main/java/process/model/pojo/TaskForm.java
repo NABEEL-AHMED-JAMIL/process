@@ -58,6 +58,10 @@ public class TaskForm {
     @Column(name = "created_by")
     private Long createdBy;
 
+    /** Resolved for display only -- created_by holds the id, and an id tells a reader nothing. */
+    @Transient
+    private String createdByName;
+
     /**
      * Loaded with the form and replaced wholesale on save.
      *
@@ -95,4 +99,7 @@ public class TaskForm {
 
     public List<TaskFormField> getFields() { return fields; }
     public void setFields(List<TaskFormField> fields) { this.fields = fields; }
+
+    public String getCreatedByName() { return createdByName; }
+    public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
 }

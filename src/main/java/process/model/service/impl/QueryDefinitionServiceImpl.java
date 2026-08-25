@@ -18,6 +18,7 @@ import process.model.service.QueryDefinitionService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.EncryptionUtil;
+import process.util.UserNameResolver;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.sql.Connection;
@@ -50,6 +51,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
     private final TenantFilterHelper tenantFilterHelper;
     private final QueryValidator queryValidator;
     private final DatabaseConnectionFactory databaseConnectionFactory;
+    private final UserNameResolver userNameResolver;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -57,13 +59,14 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
     public QueryDefinitionServiceImpl(QueryDefinitionRepository queryDefinitionRepository,
         DatabaseConnectionProfileRepository databaseConnectionProfileRepository, EncryptionUtil encryptionUtil,
         TenantFilterHelper tenantFilterHelper, QueryValidator queryValidator,
-        DatabaseConnectionFactory databaseConnectionFactory) {
+        DatabaseConnectionFactory databaseConnectionFactory, UserNameResolver userNameResolver) {
         this.queryDefinitionRepository = queryDefinitionRepository;
         this.databaseConnectionProfileRepository = databaseConnectionProfileRepository;
         this.encryptionUtil = encryptionUtil;
         this.tenantFilterHelper = tenantFilterHelper;
         this.queryValidator = queryValidator;
         this.databaseConnectionFactory = databaseConnectionFactory;
+        this.userNameResolver = userNameResolver;
     }
 
     private boolean isOwnedByCaller(QueryDefinition query) {
@@ -325,6 +328,12 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         dto.setVersion(query.getVersion());
         dto.setCreatedAt(query.getCreatedAt());
         dto.setUpdatedAt(query.getUpdatedAt());
+        // The ids have been stored all along; without a name beside them every screen showed
+        // work with no author.
+        dto.setCreatedBy(query.getCreatedBy());
+        dto.setCreatedByName(this.userNameResolver.nameFor(query.getCreatedBy()));
+        dto.setUpdatedBy(query.getUpdatedBy());
+        dto.setUpdatedByName(this.userNameResolver.nameFor(query.getUpdatedBy()));
         return dto;
     }
 

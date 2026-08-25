@@ -25,6 +25,12 @@ public class DatabaseConnectionProfileDto {
     private Timestamp createdAt;
     private Timestamp updatedAt;
 
+
+    private Long createdBy;
+    private String createdByName;
+    private Long updatedBy;
+    private String updatedByName;
+
     public DatabaseConnectionProfileDto() {}
 
     public Long getDatabaseConnectionProfileId() {
@@ -135,4 +141,16 @@ public class DatabaseConnectionProfileDto {
     public String toString() {
         return new Gson().toJson(this);
     }
+
+    public Long getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+
+    public String getCreatedByName() { return createdByName; }
+    public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
+
+    public Long getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
+
+    public String getUpdatedByName() { return updatedByName; }
+    public void setUpdatedByName(String updatedByName) { this.updatedByName = updatedByName; }
 }

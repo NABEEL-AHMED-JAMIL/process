@@ -21,6 +21,12 @@ public class QueryScheduleDto {
     private Timestamp nextRunAt;
     private Status status;
 
+
+    private Long createdBy;
+    private String createdByName;
+    private Long updatedBy;
+    private String updatedByName;
+
     public QueryScheduleDto() {}
 
     public Long getScheduleId() {
@@ -107,4 +113,16 @@ public class QueryScheduleDto {
     public String toString() {
         return new Gson().toJson(this);
     }
+
+    public Long getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+
+    public String getCreatedByName() { return createdByName; }
+    public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
+
+    public Long getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
+
+    public String getUpdatedByName() { return updatedByName; }
+    public void setUpdatedByName(String updatedByName) { this.updatedByName = updatedByName; }
 }

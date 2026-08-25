@@ -19,6 +19,7 @@ import process.model.repository.QueryDefinitionRepository;
 import process.model.repository.QueryScheduleRepository;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.util.UserNameResolver;
 
 import java.sql.Timestamp;
 import java.util.Optional;
@@ -45,12 +46,15 @@ class QueryScheduleServiceImplTenantIsolationTest {
     @Mock
     private TenantFilterHelper tenantFilterHelper;
 
+    @Mock
+    private UserNameResolver userNameResolver;
+
     private QueryScheduleServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new QueryScheduleServiceImpl(this.queryScheduleRepository, this.queryDefinitionRepository,
-            this.databaseConnectionProfileRepository, this.tenantFilterHelper);
+            this.databaseConnectionProfileRepository, this.tenantFilterHelper, this.userNameResolver);
         lenient().doNothing().when(this.tenantFilterHelper).enableIfNeeded(any());
     }
 
