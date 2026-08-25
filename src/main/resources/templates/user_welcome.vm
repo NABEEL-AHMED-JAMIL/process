@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8" /></head>
+  <body style="margin:0;padding:24px;background:#f6f7fb;font-family:Arial,Helvetica,sans-serif;color:#171b2b;">
+    <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #dee1ee;border-radius:10px;padding:28px;">
+      <h1 style="margin:0 0 4px;font-size:19px;">You have an account on ETL Console</h1>
+      <p style="margin:0 0 20px;color:#4e5570;font-size:14px;line-height:1.6;">
+        Hello $request.get("full_name"), $request.get("created_by_name") has created an account
+        for you on <strong>$request.get("organisation_name")</strong>.
+      </p>
+
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr>
+          <td style="padding:8px 0;color:#6b7392;width:150px;">Sign in at</td>
+          <td style="padding:8px 0;">
+            <a href="$request.get("sign_in_url")" style="color:#4f46e5;">$request.get("sign_in_url")</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#6b7392;">Your username</td>
+          <td style="padding:8px 0;font-family:Consolas,Menlo,monospace;">$request.get("username")</td>
+        </tr>
+#if( $request.get("temporary_password") )
+        <tr>
+          <td style="padding:8px 0;color:#6b7392;">One-time password</td>
+          <td style="padding:8px 0;font-family:Consolas,Menlo,monospace;font-size:16px;">
+            <strong>$request.get("temporary_password")</strong>
+          </td>
+        </tr>
+#end
+        <tr>
+          <td style="padding:8px 0;color:#6b7392;">Your role</td>
+          <td style="padding:8px 0;">$request.get("role_label")</td>
+        </tr>
+      </table>
+
+#if( $request.get("temporary_password") )
+      <p style="margin:20px 0 0;color:#4e5570;font-size:14px;line-height:1.6;">
+        That password works once. You will be asked to choose your own the first time you sign
+        in, and you can change it again at any time from your profile.
+      </p>
+#else
+      <p style="margin:20px 0 0;color:#4e5570;font-size:14px;line-height:1.6;">
+        Your password was set for you when the account was created, so it is not repeated here.
+        Ask $request.get("created_by_name") for it if you do not have it, and change it from your
+        profile once you are in.
+      </p>
+#end
+
+      <p style="margin:20px 0 0;color:#6b7392;font-size:12px;line-height:1.6;">
+        If you were not expecting this, you can ignore this message -- the account cannot be used
+        until somebody signs in with it.
+      </p>
+    </div>
+  </body>
+</html>

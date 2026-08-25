@@ -16,6 +16,9 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AppUserService;
 import process.security.TenantContext;
+import process.emailer.EmailMessagesFactory;
+import process.util.TemporaryPassword;
+import org.springframework.beans.factory.annotation.Value;
 import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.List;
@@ -36,9 +39,14 @@ public class AppUserServiceImpl implements AppUserService {
     private final AppUserRepository appUserRepository;
     private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailMessagesFactory emailMessagesFactory;
+
+    @Value("${app.console.url:http://localhost:4400}")
+    private String consoleUrl;
 
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
-        PasswordEncoder passwordEncoder) {
+        PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory) {
+        this.emailMessagesFactory = emailMessagesFactory;
         this.appUserRepository = appUserRepository;
         this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
@@ -60,8 +68,6 @@ public class AppUserServiceImpl implements AppUserService {
     public ResponseDto addUser(AppUserDto appUserDto) throws Exception {
         if (isNull(appUserDto.getUsername()) || appUserDto.getUsername().trim().isEmpty()) {
             return new ResponseDto(ERROR, "Username missing.");
-        } else if (isNull(appUserDto.getPassword()) || appUserDto.getPassword().trim().isEmpty()) {
-            return new ResponseDto(ERROR, "Password missing.");
         } else if (isNull(appUserDto.getFullName()) || appUserDto.getFullName().trim().isEmpty()) {
             return new ResponseDto(ERROR, "Full name missing.");
         } else if (isNull(appUserDto.getUserRole())) {
@@ -89,18 +95,69 @@ public class AppUserServiceImpl implements AppUserService {
         if (this.appUserRepository.findByUsernameAndStatusNot(appUserDto.getUsername().trim(), Status.Delete).isPresent()) {
             return new ResponseDto(ERROR, String.format("Username \"%s\" is already in use.", appUserDto.getUsername().trim()));
         }
+        // Blank means the server picks one. That is the better path -- it is random, it is
+        // strong, and nobody but its owner ever reads it -- so the console leaves the field
+        // empty by default and only the new user learns the value.
+        boolean generated = isNull(appUserDto.getPassword()) || appUserDto.getPassword().trim().isEmpty();
+        String temporaryPassword = generated ? TemporaryPassword.generate() : appUserDto.getPassword();
+
         AppUser user = new AppUser();
         user.setUuid(UUID.randomUUID().toString());
         user.setTenantId(targetTenantId);
         user.setUsername(appUserDto.getUsername().trim());
-        user.setPassword(this.passwordEncoder.encode(appUserDto.getPassword()));
+        user.setPassword(this.passwordEncoder.encode(temporaryPassword));
         user.setFullName(appUserDto.getFullName().trim());
         user.setUserRole(appUserDto.getUserRole());
         user.setPosition(trimToNull(appUserDto.getPosition()));
         user.setStatus(Status.Active);
+        user.setMustChangePassword(generated);
         user.setDateCreated(new Timestamp(System.currentTimeMillis()));
         this.appUserRepository.save(user);
-        return new ResponseDto(SUCCESS, String.format("User \"%s\" created.", user.getUsername()), this.mapToDto(user));
+
+        String mailResult = notifyNewUser(user, generated ? temporaryPassword : null, targetTenantId);
+        if (mailResult != null && mailResult.startsWith("Error")) {
+            // The account exists either way. When the password was generated this was the only
+            // moment it was readable, so say plainly that it has to be reset rather than
+            // reporting a clean success.
+            logger.error("User {} was created but the welcome email could not be sent.", user.getAppUserId());
+            return new ResponseDto(SUCCESS, generated
+                ? String.format("User \"%s\" created, but the welcome email could not be sent. "
+                    + "Reset their password and pass it on another way.", user.getUsername())
+                : String.format("User \"%s\" created, but the welcome email could not be sent.",
+                    user.getUsername()),
+                this.mapToDto(user));
+        }
+        return new ResponseDto(SUCCESS, String.format(
+            "User \"%s\" created and emailed how to sign in.", user.getUsername()), this.mapToDto(user));
+    }
+
+    /**
+     * Tells the new user their account exists.
+     *
+     * The organisation name is what the recipient recognises, so a tenant's name is looked up
+     * rather than printing an id. A platform admin belongs to no tenant, hence the fallback.
+     */
+    private String notifyNewUser(AppUser user, String temporaryPassword, Long tenantId) {
+        String organisation = "ETL Console";
+        if (!isNull(tenantId)) {
+            organisation = this.tenantRepository.findById(tenantId)
+                .map(Tenant::getTenantName).orElse(organisation);
+        }
+        String createdBy = this.appUserRepository.findById(TenantContext.getAppUserId())
+            .map(AppUser::getFullName).orElse("An administrator");
+        return this.emailMessagesFactory.sendUserWelcomeEmail(user.getUsername(),
+            user.getFullName(), organisation, user.getUsername(), temporaryPassword,
+            roleLabel(user.getUserRole()), createdBy, this.consoleUrl + "/login");
+    }
+
+    /** The role as the recipient would say it, not as the enum spells it. */
+    private static String roleLabel(UserRole role) {
+        if (role == UserRole.PLATFORM_ADMIN) {
+            return "Platform admin";
+        } else if (role == UserRole.TENANT_ADMIN) {
+            return "Tenant admin";
+        }
+        return "Tenant user";
     }
 
     @Override

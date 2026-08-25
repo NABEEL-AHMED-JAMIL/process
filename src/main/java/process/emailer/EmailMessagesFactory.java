@@ -128,6 +128,41 @@ public class EmailMessagesFactory {
         }
     }
 
+    /**
+     * Tells somebody an account has been made for them.
+     *
+     * temporaryPassword is null when the administrator chose the password themselves -- then the
+     * message carries the username and the sign-in link but no credential, because a password
+     * somebody else picked is theirs to pass on however they like.
+     */
+    public String sendUserWelcomeEmail(String recipientEmail, String fullName,
+        String organisationName, String username, String temporaryPassword, String roleLabel,
+        String createdByName, String signInUrl) {
+        try {
+            Map<String, Object> metaData = new HashMap<>();
+            metaData.put("full_name", fullName);
+            metaData.put("organisation_name", organisationName);
+            metaData.put("username", username);
+            metaData.put("role_label", roleLabel);
+            metaData.put("created_by_name", createdByName);
+            metaData.put("sign_in_url", signInUrl);
+            if (temporaryPassword != null) {
+                metaData.put("temporary_password", temporaryPassword);
+            }
+            EmailMessageDto emailMessageDto = new EmailMessageDto();
+            emailMessageDto.setRecipients(recipientEmail);
+            emailMessageDto.setSubject("Your ETL Console account");
+            emailMessageDto.setEmailTemplateName(TemplateType.USER_WELCOME);
+            emailMessageDto.setBodyMap(metaData);
+            return this.sendSimpleMail(emailMessageDto);
+        } catch (Exception ex) {
+            // No exception message: a mail failure can echo the body, and the body may hold a
+            // password.
+            logger.error("An exception occurred while sending the user welcome email.");
+            return "Error while Sending Mail";
+        }
+    }
+
     private String sendSimpleMail(EmailMessageDto emailContent) {
         try {
             MimeMessage mailMessage = this.javaMailSender.createMimeMessage();

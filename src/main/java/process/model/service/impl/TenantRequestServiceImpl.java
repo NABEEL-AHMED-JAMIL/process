@@ -19,6 +19,7 @@ import process.model.repository.TenantRepository;
 import process.model.repository.TenantRequestRepository;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
+import process.util.TemporaryPassword;
 
 import java.security.SecureRandom;
 import java.sql.Timestamp;
@@ -165,7 +166,7 @@ public class TenantRequestServiceImpl {
         tenant.setDateCreated(new Timestamp(System.currentTimeMillis()));
         this.tenantRepository.save(tenant);
 
-        String temporaryPassword = generatePassword();
+        String temporaryPassword = TemporaryPassword.generate();
         AppUser admin = new AppUser();
         admin.setUuid(UUID.randomUUID().toString());
         admin.setTenantId(tenant.getTenantId());
@@ -231,14 +232,6 @@ public class TenantRequestServiceImpl {
         return safe(value).toLowerCase(Locale.ROOT)
             .replaceAll("[^a-z0-9]+", "-")
             .replaceAll("(^-+|-+$)", "");
-    }
-
-    private String generatePassword() {
-        StringBuilder out = new StringBuilder(GENERATED_PASSWORD_LENGTH);
-        for (int i = 0; i < GENERATED_PASSWORD_LENGTH; i++) {
-            out.append(PASSWORD_ALPHABET.charAt(this.random.nextInt(PASSWORD_ALPHABET.length())));
-        }
-        return out.toString();
     }
 
     private static boolean isBlank(String value) { return value == null || value.trim().isEmpty(); }
