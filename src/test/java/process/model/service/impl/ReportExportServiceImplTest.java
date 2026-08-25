@@ -23,7 +23,9 @@ class ReportExportServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ReportExportServiceImpl(null, null);
+        // Nulls are fine: these tests exercise the file and the guard, neither of which
+        // touches conversion, storage or the database.
+        service = new ReportExportServiceImpl(null, null, null);
     }
 
     private ResponseDto exportWith(ReportExportRequestDto dto) {

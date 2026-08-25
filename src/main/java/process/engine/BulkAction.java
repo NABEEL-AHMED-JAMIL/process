@@ -74,9 +74,39 @@ public class BulkAction {
         }
         jobQueue.get().setEndTime(endTime);
         if (ProcessUtil.isNull(jobQueue.get().getJobStatusMessage())) {
-            jobQueue.get().setJobStatusMessage(String.format("Job %s now complete.", jobQueue.get().getJobId()));
+            // The fallback has to follow the status. Assuming completion produced runs reading
+            // "Failed -- Job 1196 now complete.", which is not merely unhelpful but actively
+            // contradicts itself: the reason the run failed was never recorded, and the
+            // placeholder then claimed it had succeeded.
+            jobQueue.get().setJobStatusMessage(fallbackMessage(jobQueue.get()));
         }
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
+    }
+
+    /**
+     * What to say about a run that ended without saying anything.
+     *
+     * A missing message is itself information -- the worker stopped without reporting -- so
+     * the text says that rather than inventing an outcome.
+     */
+    private static String fallbackMessage(JobQueue jobQueue) {
+        Long jobId = jobQueue.getJobId();
+        JobStatus status = jobQueue.getJobStatus();
+        if (status == null) {
+            return String.format("Job %s ended without reporting a status.", jobId);
+        }
+        switch (status) {
+            case Completed:
+                return String.format("Job %s now complete.", jobId);
+            case Failed:
+                return String.format("Job %s failed without reporting a reason. Check its logs.", jobId);
+            case Interrupt:
+                return String.format("Job %s was interrupted before it finished.", jobId);
+            case Skip:
+                return String.format("Job %s was skipped.", jobId);
+            default:
+                return String.format("Job %s ended while marked %s.", jobId, status);
+        }
     }
 
     public void changeJobLastJobRun(Long jobId, LocalDateTime lastJobRun) {

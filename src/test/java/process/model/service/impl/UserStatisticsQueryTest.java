@@ -70,6 +70,47 @@ class UserStatisticsQueryTest {
             "the range belongs in the join, or the left join collapses to an inner one: " + sql);
     }
 
+    // ---- the report's own query ---------------------------------------------------------
+
+    @Test
+    @DisplayName("report rows are scoped to the caller's tenant")
+    void reportScopedForTenantUser() {
+        TenantContext.set(1004L, "TENANT_USER", 42L, "someone@tenant.test");
+        String sql = queryService.runReportRows(null, null);
+        assertTrue(sql.contains("sj.tenant_id = 1004"),
+            "a tenant user must not see another tenant's runs: " + sql);
+    }
+
+    @Test
+    @DisplayName("a platform admin sees every tenant's runs")
+    void reportUnscopedForPlatformAdmin() {
+        TenantContext.set(1000L, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        assertFalse(queryService.runReportRows(null, null).contains("tenant_id ="));
+    }
+
+    @Test
+    @DisplayName("a run with no end time reports -1 rather than a duration of zero")
+    void unfinishedRunsAreNotZero() {
+        String sql = queryService.runReportRows(null, null);
+        assertTrue(sql.contains("when q.end_time is null then -1"), sql);
+    }
+
+    @Test
+    @DisplayName("a task or owner that is gone does not drop the run")
+    void keepsRunsWithoutTaskOrOwner() {
+        String sql = queryService.runReportRows(null, null).toLowerCase();
+        assertTrue(sql.contains("left join source_task"), sql);
+        assertTrue(sql.contains("left join app_user"), sql);
+    }
+
+    @Test
+    @DisplayName("a malformed range is dropped rather than interpolated into the report query")
+    void reportRejectsMalformedDates() {
+        String sql = queryService.runReportRows("2026-01-01'; drop table job_queue; --", "x");
+        assertFalse(sql.contains("drop table"), sql);
+        assertFalse(sql.contains("date(q.start_time)"), sql);
+    }
+
     @Test
     @DisplayName("a malformed date is dropped rather than interpolated")
     void rejectsMalformedDates() {

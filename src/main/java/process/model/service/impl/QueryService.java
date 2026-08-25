@@ -234,6 +234,35 @@ public class QueryService {
      * inner join would quietly drop everyone who has not been given work yet, which is
      * exactly the group this is most often opened to find.
      */
+    /**
+     * Run rows for the report screen: one row per recorded run, with the dimensions it can be
+     * grouped by and the duration it can be measured on.
+     *
+     * Rows rather than an aggregate, because the point of the screen is that the reader picks
+     * the grouping. Aggregating here would mean a round trip for every change of dimension,
+     * and the pivot is cheap over a few thousand rows in the browser.
+     *
+     * A run with no end time contributes -1 rather than 0: it did not take no time, it did not
+     * finish, and the duration measures must exclude it rather than average it in.
+     */
+    public String runReportRows(String startDate, String endDate) {
+
+        String dateFilter = this.dateRangeFilter("q.start_time", startDate, endDate);
+        return "select coalesce(st.task_name, '(no task)') as task, "
+            + "q.job_status as status, "
+            + "coalesce(u.full_name, u.username, 'Unassigned') as owner, "
+            + "to_char(q.start_time, 'YYYY-MM-DD') as day, "
+            + "case when q.end_time is null then -1 "
+            + "else round(extract(epoch from (q.end_time - q.start_time))) end as seconds, "
+            + "sj.job_name as job, q.job_queue_id as run_id "
+            + "from job_queue q "
+            + "join source_job sj on sj.job_id = q.job_id "
+            + "left join source_task st on st.task_detail_id = sj.task_detail_id "
+            + "left join app_user u on u.app_user_id = sj.assigned_user_id "
+            + "where q.start_time is not null " + dateFilter + this.tenantClause("sj")
+            + "order by q.job_queue_id desc";
+    }
+
     public String userStatistics(String startDate, String endDate) {
 
         String dateFilter = this.dateRangeFilter("jq.date_created", startDate, endDate);

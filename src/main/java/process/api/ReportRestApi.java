@@ -33,6 +33,21 @@ public class ReportRestApi {
         this.reportExportService = reportExportService;
     }
 
+    /** The runs a report is built from. The grouping happens in the browser. */
+    @RequestMapping(value = "/runs", method = RequestMethod.GET)
+    public ResponseEntity<?> runs(
+        @RequestParam(name = "startDate", required = false) String startDate,
+        @RequestParam(name = "endDate", required = false) String endDate) {
+        try {
+            return new ResponseEntity<>(this.reportExportService.runRows(startDate, endDate), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while reading report runs", ex);
+            return new ResponseEntity<>(
+                new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500),
+                HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @RequestMapping(value = "/export", method = RequestMethod.POST)
     public ResponseEntity<?> export(@RequestBody ReportExportRequestDto requestDto) {
         try {

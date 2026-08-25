@@ -51,6 +51,7 @@ public class ReportExportServiceImpl {
 
     private final FileChatExtractionServiceImpl extractionService;
     private final StorageBrowserServiceImpl storageService;
+    private final QueryService queryService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     /**
@@ -64,9 +65,73 @@ public class ReportExportServiceImpl {
     private boolean allowInternalSubmit;
 
     public ReportExportServiceImpl(FileChatExtractionServiceImpl extractionService,
-                                   StorageBrowserServiceImpl storageService) {
+                                   StorageBrowserServiceImpl storageService,
+                                   QueryService queryService) {
         this.extractionService = extractionService;
         this.storageService = storageService;
+        this.queryService = queryService;
+    }
+
+    /**
+     * The rows the report screen pivots.
+     *
+     * Columnar rather than a list of objects: 1,500 rows of repeated key names is most of the
+     * payload, and the screen indexes into dictionaries anyway. Capped, because a report over
+     * an unbounded range is a question for a query tool rather than a browser.
+     */
+    public ResponseDto runRows(String startDate, String endDate) {
+        List<Object[]> result;
+        try {
+            result = this.queryService.executeQuery(this.queryService.runReportRows(startDate, endDate));
+        } catch (Exception ex) {
+            logger.error("Report: could not read run rows", ex);
+            return new ResponseDto(ERROR, "Could not read the runs for that range.");
+        }
+        if (result == null) result = Collections.emptyList();
+
+        boolean truncated = result.size() > MAX_ROWS;
+        if (truncated) result = result.subList(0, MAX_ROWS);
+
+        // dictionaries per dimension, rows as indexes into them
+        List<String> tasks = new ArrayList<>(), statuses = new ArrayList<>(),
+                     owners = new ArrayList<>(), days = new ArrayList<>();
+        Map<String,Integer> ti = new HashMap<>(), si = new HashMap<>(),
+                            oi = new HashMap<>(), di = new HashMap<>();
+        List<List<Object>> rows = new ArrayList<>();
+        for (Object[] r : result) {
+            rows.add(Arrays.asList(
+                intern(tasks, ti, text(r[0])),
+                intern(statuses, si, text(r[1])),
+                intern(owners, oi, text(r[2])),
+                intern(days, di, text(r[3])),
+                r[4] == null ? -1 : Integer.valueOf(String.valueOf(r[4])),
+                text(r[5]),
+                r[6] == null ? null : Long.valueOf(String.valueOf(r[6]))));
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("task", tasks);
+        data.put("status", statuses);
+        data.put("owner", owners);
+        data.put("day", days);
+        data.put("rows", rows);
+        data.put("truncated", truncated);
+        String message = truncated
+            ? String.format("Showing the most recent %,d runs; narrow the range to see the rest.", MAX_ROWS)
+            : String.format("%,d run(s).", rows.size());
+        return new ResponseDto(SUCCESS, message, data);
+    }
+
+    private static int intern(List<String> values, Map<String,Integer> index, String value) {
+        Integer at = index.get(value);
+        if (at != null) return at;
+        index.put(value, values.size());
+        values.add(value);
+        return values.size() - 1;
+    }
+
+    private static String text(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     public ResponseDto export(ReportExportRequestDto dto) {
