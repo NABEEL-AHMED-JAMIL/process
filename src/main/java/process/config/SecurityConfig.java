@@ -33,7 +33,10 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .antMatchers("/auth.json/**").permitAll()
                 .antMatchers("/ws/**").permitAll()
-                .antMatchers("/changeState/**", "/addLogs/**").permitAll()
+                // "/addLogs/**" does not cover "/addLogsBatch/..." -- an Ant pattern does not
+                // match across the segment boundary -- so every batched log line was rejected
+                // with a 401 and silently lost. The batch endpoint is listed in its own right.
+                .antMatchers("/changeState/**", "/addLogs/**", "/addLogsBatch/**").permitAll()
 
                 .antMatchers("/dynamicForm.json/fetchFormByUuid", "/dynamicForm.json/fetchSubmissionByUuid").permitAll()
                 .antMatchers("/actuator/**").permitAll()
