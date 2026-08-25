@@ -7,7 +7,12 @@ import process.model.enums.Status;
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceTaskTypeDto {
+public class SourceTaskTypeDto implements AuditNamed {
+    private Long createdBy;
+
+    private String createdByName;
+    private String updatedByName;
+
 
     private Long sourceTaskTypeId;
     private Long tenantId;
@@ -100,5 +105,37 @@ public class SourceTaskTypeDto {
     @Override
     public String toString() {
         return new Gson().toJson(this);
+    }
+
+    @Override
+    public Long auditKey() {
+        return sourceTaskTypeId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
     }
 }

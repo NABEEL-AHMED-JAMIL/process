@@ -8,7 +8,12 @@ import java.util.Set;
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class LookupDataDto {
+public class LookupDataDto implements AuditNamed {
+    private Long createdBy;
+
+    private String createdByName;
+    private String updatedByName;
+
 
     private Long lookupId;
     private String lookupValue;
@@ -106,5 +111,37 @@ public class LookupDataDto {
     @Override
     public String toString() {
         return new Gson().toJson(this);
+    }
+
+    @Override
+    public Long auditKey() {
+        return lookupId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
     }
 }

@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import com.google.gson.Gson;
+import process.util.UserNameResolver;
 import com.google.gson.reflect.TypeToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,10 +52,15 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final UserNameResolver userNameResolver;
+
+
     public DynamicFormServiceImpl(DynamicFormRepository dynamicFormRepository,
         DynamicFormFieldRepository dynamicFormFieldRepository,
         DynamicFormSubmissionRepository dynamicFormSubmissionRepository,
-        TenantFilterHelper tenantFilterHelper) {
+        TenantFilterHelper tenantFilterHelper,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.dynamicFormRepository = dynamicFormRepository;
         this.dynamicFormFieldRepository = dynamicFormFieldRepository;
         this.dynamicFormSubmissionRepository = dynamicFormSubmissionRepository;
@@ -139,6 +145,8 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             .map(this::ensureUuid)
             .map(dynamicForm -> this.getDynamicFormDto(dynamicForm, false))
             .collect(Collectors.toList());
+        this.userNameResolver.attachToDtos(dynamicFormDtos, this.dynamicFormRepository,
+            DynamicForm::getDynamicFormId);
         return new ResponseDto(SUCCESS, "Data found.", dynamicFormDtos);
     }
 

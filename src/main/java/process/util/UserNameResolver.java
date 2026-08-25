@@ -105,6 +105,7 @@ public class UserNameResolver {
             if (entity != null) {
                 dto.setCreatedByName(entity.getCreatedByName());
                 dto.setUpdatedByName(entity.getUpdatedByName());
+                dto.setCreatedBy(entity.getCreatedBy());
             }
         }
     }

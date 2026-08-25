@@ -10,6 +10,8 @@ import java.sql.Timestamp;
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AppUserDto implements AuditNamed {
+    private Long createdBy;
+
     private String createdByName;
     private String updatedByName;
 
@@ -185,5 +187,14 @@ public class AppUserDto implements AuditNamed {
     @Override
     public void setUpdatedByName(String updatedByName) {
         this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
     }
 }

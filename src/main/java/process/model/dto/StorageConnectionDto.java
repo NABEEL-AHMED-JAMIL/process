@@ -15,7 +15,12 @@ import java.sql.Timestamp;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class StorageConnectionDto {
+public class StorageConnectionDto implements AuditNamed {
+    private Long createdBy;
+
+    private String createdByName;
+    private String updatedByName;
+
 
     private Long storageConnectionId;
     private Long tenantId;
@@ -145,4 +150,36 @@ public class StorageConnectionDto {
         return new Gson().toJson(this);
     }
 
+
+    @Override
+    public Long auditKey() {
+        return storageConnectionId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
 }

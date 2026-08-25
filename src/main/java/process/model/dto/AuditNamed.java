@@ -15,4 +15,12 @@ public interface AuditNamed {
     void setCreatedByName(String createdByName);
 
     void setUpdatedByName(String updatedByName);
+
+    /**
+     * The author's id as well as their name.
+     *
+     * The name alone cannot answer "is this mine?" -- two people can share one, and a filter
+     * that matches on display text would quietly include somebody else's work.
+     */
+    void setCreatedBy(Long createdBy);
 }

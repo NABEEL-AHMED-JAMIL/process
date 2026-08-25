@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.slf4j.Logger;
+import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +56,9 @@ public class SettingServiceImpl implements SettingService {
     private final KafkaConnectionResolver kafkaConnectionResolver;
     private final LookupDataCacheService lookupDataCacheService;
 
+    private final UserNameResolver userNameResolver;
+
+
     public SettingServiceImpl(LookupDataRepository lookupDataRepository,
         SourceJobRepository sourceJobRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
@@ -64,7 +68,9 @@ public class SettingServiceImpl implements SettingService {
         EncryptionUtil encryptionUtil,
         KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
-        LookupDataCacheService lookupDataCacheService) {
+        LookupDataCacheService lookupDataCacheService,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.lookupDataRepository = lookupDataRepository;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
@@ -105,6 +111,8 @@ public class SettingServiceImpl implements SettingService {
             }
             lookupDataList.add(lookupDataDto);
         }
+        this.userNameResolver.attachToDtos(lookupDataList, this.lookupDataRepository,
+            LookupData::getLookupId);
         appSettingDetail.put(LOOKUP_DATA, lookupDataList);
 
         List<SourceTaskTypeProjection> sourceTaskTypeProjections = TenantContext.isPlatformAdmin()
@@ -120,6 +128,10 @@ public class SettingServiceImpl implements SettingService {
                 .collect(Collectors.toMap(KafkaConnectionProfile::getKafkaConnectionProfileId, KafkaConnectionProfile::getProfileName));
         List<SourceTaskTypeDto> sourceTaskTypeList = sourceTaskTypeProjections
             .stream().map(projection -> this.mapSourceTaskTypeProjectionToDto(projection, profileNameById)).collect(Collectors.toList());
+        // Projections carry only the columns the query names, so the audit ids are fetched
+        // separately by id rather than widening the projection interface.
+        this.userNameResolver.attachToDtos(sourceTaskTypeList, this.sourceTaskTypeRepository,
+            SourceTaskType::getSourceTaskTypeId);
         appSettingDetail.put(SOURCE_TASK_TYPE, sourceTaskTypeList);
         return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
     }

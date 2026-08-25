@@ -8,7 +8,12 @@ import java.sql.Timestamp;
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class KafkaConnectionProfileDto {
+public class KafkaConnectionProfileDto implements AuditNamed {
+    private Long createdBy;
+
+    private String createdByName;
+    private String updatedByName;
+
 
     private Long kafkaConnectionProfileId;
 
@@ -272,4 +277,36 @@ public class KafkaConnectionProfileDto {
         return new Gson().toJson(this);
     }
 
+
+    @Override
+    public Long auditKey() {
+        return kafkaConnectionProfileId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
 }

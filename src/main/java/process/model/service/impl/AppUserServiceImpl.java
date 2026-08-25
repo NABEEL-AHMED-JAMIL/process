@@ -387,6 +387,7 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setLastLoginAt(user.getLastLoginAt());
         dto.setCreatedByName(user.getCreatedByName());
         dto.setUpdatedByName(user.getUpdatedByName());
+        dto.setCreatedBy(user.getCreatedBy());
 
         return dto;
     }

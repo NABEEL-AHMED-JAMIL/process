@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.apache.kafka.clients.admin.AdminClient;
+import process.util.UserNameResolver;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -52,11 +53,16 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
 
+    private final UserNameResolver userNameResolver;
+
+
     public KafkaConnectionProfileServiceImpl(KafkaConnectionProfileRepository profileRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
         TenantTaskTypeKafkaRouteRepository routeRepository,
         EncryptionUtil encryptionUtil, KafkaTemplateProvider kafkaTemplateProvider,
-        KafkaConnectionResolver kafkaConnectionResolver) {
+        KafkaConnectionResolver kafkaConnectionResolver,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.profileRepository = profileRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.routeRepository = routeRepository;
@@ -136,6 +142,9 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
             ? this.profileRepository.findVisibleToPlatformAdmin(Status.Delete)
             : this.profileRepository.findVisibleToTenant(TenantContext.getTenantId(), Status.Delete);
         List<KafkaConnectionProfileDto> profiles = visible.stream().map(this::getProfileDto).collect(Collectors.toList());
+        // One lookup for the page rather than one per row.
+        this.userNameResolver.attachToDtos(profiles, this.profileRepository,
+            KafkaConnectionProfile::getKafkaConnectionProfileId);
         return new ResponseDto(SUCCESS, "Kafka connection profiles fetched successfully.", profiles);
     }
 

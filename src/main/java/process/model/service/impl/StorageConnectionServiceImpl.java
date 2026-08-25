@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.slf4j.Logger;
+import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,10 +41,15 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final UserNameResolver userNameResolver;
+
+
     public StorageConnectionServiceImpl(StorageConnectionRepository storageConnectionRepository,
         StorageClientFactory storageClientFactory,
         EncryptionUtil encryptionUtil,
-        TenantFilterHelper tenantFilterHelper) {
+        TenantFilterHelper tenantFilterHelper,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.storageConnectionRepository = storageConnectionRepository;
         this.storageClientFactory = storageClientFactory;
         this.encryptionUtil = encryptionUtil;
@@ -140,8 +146,10 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<StorageConnection> connections =
             this.storageConnectionRepository.findByStatusNotOrderByStorageConnectionIdDesc(Status.Delete);
-        return new ResponseDto(SUCCESS, "Data found.",
-            connections.stream().map(this::toDto).collect(Collectors.toList()));
+        List<StorageConnectionDto> dtos = connections.stream().map(this::toDto).collect(Collectors.toList());
+        this.userNameResolver.attachToDtos(dtos, this.storageConnectionRepository,
+            StorageConnection::getStorageConnectionId);
+        return new ResponseDto(SUCCESS, "Data found.", dtos);
     }
 
     @Override
