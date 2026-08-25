@@ -118,6 +118,13 @@ public class ProducerBulkEngine {
                     this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
                         "Run closed automatically: no update from the worker since %s.",
                         jobQueue.getStartTime()));
+                    // The job carries its own copy of the running status, and that is what the
+                    // console shows. Closing the queue row alone leaves the job reading Start for
+                    // ever -- the same symptom, one table across. Only clear it once the job has
+                    // genuinely nothing in flight, so a newer run that did start is left alone.
+                    if (this.bulkAction.getCountForInQueueJobByJobId(jobQueue.getJobId()) == 0) {
+                        this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Interrupt);
+                    }
                     this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
                 } catch (Exception ex) {
                     logger.error("Error closing stalled run {}: {}.", jobQueue.getJobQueueId(),
