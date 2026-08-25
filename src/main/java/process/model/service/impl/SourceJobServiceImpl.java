@@ -114,6 +114,11 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, "SourceJob taskDetail missing.");
         } else if (ProcessUtil.isNull(sourceJobDto.getTaskDetail().getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceJob taskDetailId missing.");
+        } else if (ProcessUtil.isNull(sourceJobDto.getExecution())) {
+            // Not-null in the database, so omitting it used to surface as a constraint violation
+            // at commit and reach the caller as "Some internal error occurred contact with
+            // support." Named here instead, like every other required field.
+            return new ResponseDto(ERROR, "SourceJob execution missing -- Auto or Manual.");
         }
 
         Optional<SourceTask> taskDetail = this.sourceTaskRepository.findById(
@@ -297,7 +302,16 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (sourceJob.get().getJobStatus() == Status.Delete) {
             return new ResponseDto(ERROR, "Can't change status of a deleted job.");
         }
-        Status newStatus = sourceJob.get().getJobStatus() == Status.Active ? Status.Inactive : Status.Active;
+        // Honour the state that was asked for when one is given, and only flip when it is not.
+        // Ignoring it made the call non-idempotent: a retry after a timeout, or a second click,
+        // put the job back exactly where it started with no way for the caller to tell.
+        Status requested = sourceJobDto.getJobStatus();
+        Status newStatus;
+        if (Status.Active.equals(requested) || Status.Inactive.equals(requested)) {
+            newStatus = requested;
+        } else {
+            newStatus = sourceJob.get().getJobStatus() == Status.Active ? Status.Inactive : Status.Active;
+        }
         sourceJob.get().setJobStatus(newStatus);
         this.sourceJobRepository.save(sourceJob.get());
 

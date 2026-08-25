@@ -94,6 +94,22 @@ public class ProcessTimeUtil {
         return null;
     }
 
+    /**
+     * How many slots a catch-up will write down before it stops counting.
+     *
+     * Every missed run becomes a queue row, an audit log line and a notification, all inside the
+     * scheduler tick that noticed. Uncapped, a five-minute job that was off for a fortnight came
+     * back with four thousand of them in one pass, holding a lock whose timeout is ten minutes.
+     * Fifty is enough to see that something was missed and roughly how much.
+     */
+    public static final int MAX_MISSED_RUNS_REPLAYED = 50;
+
+    /**
+     * The slots that went by unattended, oldest first, capped.
+     *
+     * When the cap bites, the most recent slots are the ones kept: after a long outage, what
+     * happened in the last hour is worth more than what happened on the first morning.
+     */
     public static List<LocalDateTime> computeMissedRuns(Scheduler scheduler) {
         if (ProcessUtil.isNull(scheduler.getIntervalValue()) || scheduler.getNextRunAt() == null) {
             return Collections.emptyList();
@@ -103,14 +119,19 @@ public class ProcessTimeUtil {
             return Collections.emptyList();
         }
         LocalDateTime now = LocalDateTime.now();
-        List<LocalDateTime> missed = new ArrayList<>();
+        // A ring of the last MAX_MISSED_RUNS_REPLAYED slots, so a long gap costs the walk but
+        // never the memory: the alternative built the whole list and then threw most of it away.
+        Deque<LocalDateTime> recent = new ArrayDeque<>();
         LocalDateTime candidate = step.apply(scheduler.getNextRunAt());
         int guard = 0;
         while (!candidate.isAfter(now) && guard++ < 100000) {
-            missed.add(candidate);
+            if (recent.size() == MAX_MISSED_RUNS_REPLAYED) {
+                recent.removeFirst();
+            }
+            recent.addLast(candidate);
             candidate = step.apply(candidate);
         }
-        return missed;
+        return new ArrayList<>(recent);
     }
 
     public static LocalDateTime resolveInitialNextRun(Scheduler scheduler) {
@@ -206,6 +227,19 @@ public class ProcessTimeUtil {
         int guard = 0;
         while (!next.isAfter(now) && guard++ < 100000) {
             next = step.apply(next);
+        }
+        if (!next.isAfter(now)) {
+            // The guard ran out before the walk caught up -- a five-minute schedule left alone
+            // for a year needs more than a hundred thousand steps. Returning what the walk had
+            // reached would put next_run_at in the past, so the job is due the moment it is
+            // written and due again on the next tick, for ever. Step forward from now instead:
+            // the schedule is resumed rather than left permanently overdue.
+            LocalDateTime fromNow = now;
+            int forward = 0;
+            while (!fromNow.isAfter(now) && forward++ < 1000) {
+                fromNow = step.apply(fromNow);
+            }
+            return fromNow.isAfter(now) ? fromNow : null;
         }
         return next;
     }

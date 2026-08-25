@@ -12,7 +12,10 @@ import java.util.List;
 @Repository
 public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
 
-    @Query(value = "select job_queue.* from job_queue where UPPER(job_status) = 'QUEUE' and job_send = false limit ?1 ", nativeQuery = true)
+    // Ordered by id: the fetch is capped, so without this which rows a busy queue hands over is
+    // whatever the planner returns, and a job can sit behind newer ones indefinitely.
+    @Query(value = "select job_queue.* from job_queue where UPPER(job_status) = 'QUEUE' and job_send = false "
+        + "order by job_queue_id asc limit ?1 ", nativeQuery = true)
     public List<JobQueue> findAllJobForTodayWithLimit(Long limit);
 
     @Query(value = "select count(*) from job_queue where job_id = ?1 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)

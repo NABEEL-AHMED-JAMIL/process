@@ -25,6 +25,13 @@ import static java.util.Objects.isNull;
 @Component
 public class ProducerBulkEngine {
 
+    /**
+     * How long one dispatch pass may take. The @SchedulerLock around it is ten minutes, and the
+     * work has to finish inside that or a second instance can claim the same rows. Seven leaves
+     * room for a slow broker without letting the pass outlive its lock.
+     */
+    private static final long DISPATCH_BUDGET_MS = 7 * 60 * 1000L;
+
     public Logger logger = LogManager.getLogger(ProducerBulkEngine.class);
 
     private final BulkAction bulkAction;
@@ -116,7 +123,21 @@ public class ProducerBulkEngine {
             List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(lookupData.getLookupValue()));
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
-                jobQueues.forEach(jobQueue -> {
+                // The lock this runs under lasts ten minutes, and the loop sleeps 100ms per job:
+                // a full fetch of 5,000 takes 8m20s, which leaves less than two minutes of room.
+                // Anything that slows a batch down -- a slow broker, a slow database -- takes it
+                // past the lock, at which point another instance may pick up the same rows and
+                // dispatch them twice. Stop before the deadline instead and leave the rest: this
+                // runs again in a minute, and the queue is ordered, so nothing is skipped.
+                long deadline = System.currentTimeMillis() + DISPATCH_BUDGET_MS;
+                int dispatched = 0;
+                for (JobQueue jobQueue : jobQueues) {
+                    if (System.currentTimeMillis() > deadline) {
+                        logger.warn("runJobInCurrentTimeSlot --> stopping at {} of {} to stay inside "
+                            + "the scheduler lock; the rest are picked up on the next run.",
+                            dispatched, jobQueues.size());
+                        break;
+                    }
                     Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
                     try {
                         Thread.sleep(100);
@@ -125,10 +146,11 @@ public class ProducerBulkEngine {
                         } else {
                             this.changeStatusForLastJob(jobQueue, "Job %s failed in the queue because the main job is deleted or inactive.");
                         }
+                        dispatched++;
                     } catch (Exception ex) {
                         logger.error("Error in runJobInCurrentTimeSlot: {}.", ExceptionUtil.getRootCauseMessage(ex));
                     }
-                });
+                }
                 return;
             }
             logger.info("runJobInCurrentTimeSlot --> NO scheduler is set for this timestamp");
