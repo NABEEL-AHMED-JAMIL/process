@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.JobQueue;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -26,6 +27,21 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
 
     @Query(value = "select job_id, count(*) from job_queue where job_id in :jobIds group by job_id", nativeQuery = true)
     public List<Object[]> countGroupByJobIds(@Param("jobIds") List<Long> jobIds);
+
+    /**
+     * Runs that say they are still going long after anything real would have finished.
+     *
+     * A worker that completes its work and then cannot report back -- a restart, a dropped
+     * connection -- leaves its row in Start for ever. That is not just a wrong row: the
+     * dispatcher counts anything in Queue, Start or Running when deciding whether a job is
+     * already busy, so one stranded run stops that job ever being scheduled again and it
+     * accumulates "already in queue" skips instead.
+     */
+    @Query(value = "select job_queue.* from job_queue "
+        + "where UPPER(job_status) in ('START', 'RUNNING') "
+        + "and start_time is not null and start_time < ?1 "
+        + "order by job_queue_id asc", nativeQuery = true)
+    public List<JobQueue> findStalledRuns(LocalDateTime startedBefore);
 
     public List<JobQueue> findAllByJobId(Long jobId);
 

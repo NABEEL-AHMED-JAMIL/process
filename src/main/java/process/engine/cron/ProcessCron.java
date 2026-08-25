@@ -55,6 +55,21 @@ public class ProcessCron {
         }
     }
 
+    /**
+     * Runs a quarter-hour apart rather than every minute: it exists to catch something that has
+     * already been stuck for six hours, so noticing within fifteen minutes is ample and it keeps
+     * a table scan off the minute cycle.
+     */
+    @Scheduled(initialDelay = 30000, fixedDelay = 15 * 60 * 1000)
+    @SchedulerLock(name = "reconcileStalledRuns", lockAtLeastFor = "5S", lockAtMostFor = "5M")
+    public void reconcileStalledRuns() {
+        try {
+            this.producerBulkEngine.reconcileStalledRuns();
+        } catch (Exception e) {
+            logger.error("Error in reconcileStalledRuns scheduler: {}", e.getMessage(), e);
+        }
+    }
+
     @Scheduled(initialDelay = 10000, fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
     @SchedulerLock(name = "pollDueQuerySchedules", lockAtLeastFor = "5S", lockAtMostFor = "10M")
     public void pollDueQuerySchedules() {

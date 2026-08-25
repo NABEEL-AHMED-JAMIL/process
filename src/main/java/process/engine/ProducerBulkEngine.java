@@ -74,6 +74,61 @@ public class ProducerBulkEngine {
         }
     }
 
+    /**
+     * How long a run may claim to be going before it is treated as dead.
+     *
+     * Measured against this environment: half of all runs finish inside three minutes and 99%
+     * inside thirty, with one five-hour outlier. Six hours is twelve times the 99th percentile
+     * and well past anything observed, because being wrong here costs a run that was still
+     * working -- while leaving a stranded run in place costs the job every future run it had.
+     */
+    private static final long STALLED_AFTER_MINUTES = 6 * 60;
+
+    /**
+     * Closes runs whose worker is never coming back.
+     *
+     * A worker that finishes its work and then cannot report -- a server restart mid-callback, a
+     * dropped connection -- leaves its row in Start for ever. The dispatcher counts anything in
+     * Queue, Start or Running when deciding whether a job is already busy, so a single stranded
+     * run quietly stops that job being scheduled again: it collects "already in queue" skips
+     * instead of running, and nothing says why.
+     *
+     * They are marked Interrupt rather than Completed or Failed on purpose. What the worker
+     * managed before it went quiet is not knowable from here, and a run recorded as finished
+     * when nobody knows whether it did is worse than one recorded as interrupted.
+     */
+    public void reconcileStalledRuns() {
+        try {
+            LocalDateTime cutoff = LocalDateTime.now().minusMinutes(STALLED_AFTER_MINUTES);
+            List<JobQueue> stalled = this.transactionService.findStalledRuns(cutoff);
+            if (stalled.isEmpty()) {
+                return;
+            }
+            logger.warn("reconcileStalledRuns --> {} run(s) have been in flight since before {}; "
+                + "closing them so their jobs can be scheduled again.", stalled.size(), cutoff);
+            for (JobQueue jobQueue : stalled) {
+                try {
+                    jobQueue.setJobStatus(JobStatus.Interrupt);
+                    jobQueue.setEndTime(LocalDateTime.now());
+                    jobQueue.setJobStatusMessage(String.format(
+                        "Job %s stopped reporting and was closed after %d hours. Its worker may "
+                        + "have finished the work -- check the output before running it again.",
+                        jobQueue.getJobId(), STALLED_AFTER_MINUTES / 60));
+                    this.transactionService.saveJobQueue(jobQueue);
+                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
+                        "Run closed automatically: no update from the worker since %s.",
+                        jobQueue.getStartTime()));
+                    this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
+                } catch (Exception ex) {
+                    logger.error("Error closing stalled run {}: {}.", jobQueue.getJobQueueId(),
+                        ExceptionUtil.getRootCauseMessage(ex));
+                }
+            }
+        } catch (Exception ex) {
+            logger.error("Error in reconcileStalledRuns: {}.", ExceptionUtil.getRootCauseMessage(ex));
+        }
+    }
+
     public void addJobInQueue() {
         try {
             logger.info("addJobInQueue --> FETCH due schedulers STARTED ");

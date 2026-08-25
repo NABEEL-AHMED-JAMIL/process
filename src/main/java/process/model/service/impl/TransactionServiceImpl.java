@@ -121,6 +121,14 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findAllJobForTodayWithLimit(limit);
     }
 
+    public List<JobQueue> findStalledRuns(LocalDateTime startedBefore) {
+        return this.jobQueueRepository.findStalledRuns(startedBefore);
+    }
+
+    public void saveJobQueue(JobQueue jobQueue) {
+        this.jobQueueRepository.save(jobQueue);
+    }
+
     public void updateJobQueue(JobQueue jobQueue) {
         this.jobQueueRepository.save(jobQueue);
     }
