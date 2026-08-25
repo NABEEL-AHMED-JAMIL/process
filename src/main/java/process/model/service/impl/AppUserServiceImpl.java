@@ -316,6 +316,7 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setFullName(user.getFullName());
         dto.setUserRole(user.getUserRole());
         dto.setPosition(user.getPosition());
+        dto.setMustChangePassword(user.isMustChangePassword());
         dto.setStatus(user.getStatus());
         dto.setAvatarBucket(user.getAvatarBucket());
         dto.setAvatarKey(user.getAvatarKey());
@@ -329,5 +330,44 @@ public class AppUserServiceImpl implements AppUserService {
     /** A blank title is no title, so it is stored as null rather than an empty string. */
     private static String trimToNull(String value) {
         return (value == null || value.trim().isEmpty()) ? null : value.trim();
+    }
+
+    /**
+     * Lets someone replace their own password.
+     *
+     * Separate from updateOwnProfile, which changes what a person is called rather than how they
+     * prove who they are. The current password is required even though the caller is already
+     * signed in: it is what stops a walk-up at an unlocked screen from taking the account, and
+     * an account created with a generated password proves it holds that generated one.
+     */
+    @Override
+    public ResponseDto changeOwnPassword(String currentPassword, String newPassword) throws Exception {
+        Long appUserId = TenantContext.getAppUserId();
+        if (isNull(appUserId)) {
+            return new ResponseDto(ERROR, "No signed-in user.");
+        }
+        if (isNull(currentPassword) || currentPassword.isEmpty()) {
+            return new ResponseDto(ERROR, "Enter your current password.");
+        }
+        if (isNull(newPassword) || newPassword.length() < 8) {
+            return new ResponseDto(ERROR, "Choose a new password of at least 8 characters.");
+        }
+        if (newPassword.equals(currentPassword)) {
+            return new ResponseDto(ERROR, "The new password has to differ from the current one.");
+        }
+        Optional<AppUser> found = this.appUserRepository.findById(appUserId);
+        if (!found.isPresent() || found.get().getStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, "User not found.");
+        }
+        AppUser user = found.get();
+        if (!this.passwordEncoder.matches(currentPassword, user.getPassword())) {
+            // Deliberately vague about which half was wrong.
+            return new ResponseDto(ERROR, "That is not your current password.");
+        }
+        user.setPassword(this.passwordEncoder.encode(newPassword));
+        // Whatever it was created with has now been replaced, so the account owes nothing.
+        user.setMustChangePassword(false);
+        this.appUserRepository.save(user);
+        return new ResponseDto(SUCCESS, "Your password has been changed.");
     }
 }

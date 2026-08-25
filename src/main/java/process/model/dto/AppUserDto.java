@@ -26,6 +26,7 @@ public class AppUserDto {
     private Timestamp dateCreated;
     private Timestamp lastLoginAt;
     private String position;
+    private boolean mustChangePassword;
     private String avatarBucket;
     private String avatarKey;
 
@@ -132,6 +133,9 @@ public class AppUserDto {
         return new Gson().toJson(this);
     }
 
+
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
 
     public String getPosition() {
         return position;

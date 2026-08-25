@@ -98,6 +98,36 @@ public class EmailMessagesFactory {
         }
     }
 
+    /**
+     * The one message that carries a credential.
+     *
+     * The password is passed in and used once, here; it is never logged and never returned, so
+     * the only place it exists in readable form is the message itself. Whoever approved the
+     * request does not see it either.
+     */
+    public String sendTenantWelcomeEmail(String recipientEmail, String contactName,
+        String organisationName, String username, String temporaryPassword, String signInUrl) {
+        try {
+            Map<String, Object> metaData = new HashMap<>();
+            metaData.put("contact_name", contactName);
+            metaData.put("organisation_name", organisationName);
+            metaData.put("username", username);
+            metaData.put("temporary_password", temporaryPassword);
+            metaData.put("sign_in_url", signInUrl);
+            EmailMessageDto emailMessageDto = new EmailMessageDto();
+            emailMessageDto.setRecipients(recipientEmail);
+            emailMessageDto.setSubject("Your " + organisationName + " workspace is ready");
+            emailMessageDto.setEmailTemplateName(TemplateType.TENANT_WELCOME);
+            emailMessageDto.setBodyMap(metaData);
+            return this.sendSimpleMail(emailMessageDto);
+        } catch (Exception ex) {
+            // Deliberately does not include the exception's message: a mail failure can echo the
+            // message body, and this body holds the password.
+            logger.error("An exception occurred while sending the tenant welcome email.");
+            return "Error while Sending Mail";
+        }
+    }
+
     private String sendSimpleMail(EmailMessageDto emailContent) {
         try {
             MimeMessage mailMessage = this.javaMailSender.createMimeMessage();

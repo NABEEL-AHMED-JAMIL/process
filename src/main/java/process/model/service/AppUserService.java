@@ -19,6 +19,8 @@ public interface AppUserService {
 
     public ResponseDto updateOwnProfile(AppUserDto appUserDto) throws Exception;
 
+    public ResponseDto changeOwnPassword(String currentPassword, String newPassword) throws Exception;
+
     public ResponseDto updateOwnAvatar(AppUserDto appUserDto) throws Exception;
 
 }

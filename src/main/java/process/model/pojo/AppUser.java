@@ -77,6 +77,13 @@ public class AppUser {
     @Column(name = "position", length = 120)
     private String position;
 
+    /**
+     * Set when the account was created with a generated password. Cleared the moment the person
+     * chooses their own, which is what makes the emailed credential a one-time one.
+     */
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
     @Column(name = "avatar_bucket")
     private String avatarBucket;
 
@@ -198,4 +205,7 @@ public class AppUser {
     public void setAvatarKey(String avatarKey) {
         this.avatarKey = avatarKey;
     }
+
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
 }

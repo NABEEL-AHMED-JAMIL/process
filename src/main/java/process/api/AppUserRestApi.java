@@ -104,6 +104,27 @@ public class AppUserRestApi {
         }
     }
 
+    /**
+     * Anyone signed in may change their own password -- including a tenant user, who cannot
+     * reach anything else on this controller. Hence the explicit role, which overrides the
+     * TENANT_ADMIN the class asks for.
+     */
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/changeOwnPassword", method = RequestMethod.PUT)
+    public ResponseEntity<?> changeOwnPassword(@RequestBody java.util.Map<String, String> body) {
+        try {
+            String current = body == null ? null : body.get("currentPassword");
+            String updated = body == null ? null : body.get("newPassword");
+            return new ResponseEntity<>(
+                this.appUserService.changeOwnPassword(current, updated), HttpStatus.OK);
+        } catch (Exception ex) {
+            // No request detail in the log line: this body holds two passwords.
+            logger.error("An error occurred while changing a password.");
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/updateOwnAvatar", method = RequestMethod.PUT)
     public ResponseEntity<?> updateOwnAvatar(@RequestBody AppUserDto appUserDto) {

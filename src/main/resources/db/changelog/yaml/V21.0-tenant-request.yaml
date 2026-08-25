@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 21.0-tenant-request
+      author: nabeel.amd93
+      description: "Add tenant_request so a workspace can be asked for from outside, and app_user.must_change_password so a generated password is spent on first use"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V21.0-tenant-request/V21__tenant_request.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE app_user DROP COLUMN IF EXISTS must_change_password;
+              DROP TABLE IF EXISTS tenant_request;
+              DROP SEQUENCE IF EXISTS tenant_request_seq;
