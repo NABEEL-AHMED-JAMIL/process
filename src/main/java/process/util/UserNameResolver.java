@@ -48,6 +48,74 @@ public class UserNameResolver {
         return names;
     }
 
+    /**
+     * Fills in the readable names on a whole list in one lookup.
+     *
+     * The obvious version -- resolve each row as it is mapped -- is a query per row, which on a
+     * few hundred jobs is a few hundred round trips. Both columns are gathered first, so a list
+     * costs exactly one query no matter how long it is.
+     */
+    public void attachNames(Collection<? extends process.model.pojo.Audited> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        Set<Long> ids = new HashSet<>();
+        for (process.model.pojo.Audited row : rows) {
+            if (row.getCreatedBy() != null) {
+                ids.add(row.getCreatedBy());
+            }
+            if (row.getUpdatedBy() != null) {
+                ids.add(row.getUpdatedBy());
+            }
+        }
+        Map<Long, String> names = namesFor(ids);
+        for (process.model.pojo.Audited row : rows) {
+            row.setCreatedByName(names.get(row.getCreatedBy()));
+            row.setUpdatedByName(names.get(row.getUpdatedBy()));
+        }
+    }
+
+    /**
+     * Attaches names to DTOs whose entities have to be fetched separately.
+     *
+     * Two queries for a whole page -- one for the rows, one for the people -- regardless of how
+     * many rows there are. A DTO whose entity has since been deleted simply keeps no name.
+     */
+    public <E extends process.model.pojo.Audited> void attachToDtos(
+        java.util.List<? extends process.model.dto.AuditNamed> dtos,
+        org.springframework.data.repository.CrudRepository<E, Long> repository,
+        java.util.function.Function<E, Long> idOf) {
+        if (dtos == null || dtos.isEmpty()) {
+            return;
+        }
+        Set<Long> ids = dtos.stream().map(process.model.dto.AuditNamed::auditKey)
+            .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return;
+        }
+        List<E> entities = new java.util.ArrayList<>();
+        repository.findAllById(ids).forEach(entities::add);
+        attachNames(entities);
+        Map<Long, E> byId = new HashMap<>();
+        for (E entity : entities) {
+            byId.put(idOf.apply(entity), entity);
+        }
+        for (process.model.dto.AuditNamed dto : dtos) {
+            E entity = byId.get(dto.auditKey());
+            if (entity != null) {
+                dto.setCreatedByName(entity.getCreatedByName());
+                dto.setUpdatedByName(entity.getUpdatedByName());
+            }
+        }
+    }
+
+    /** One row, for the single-record reads. */
+    public void attachNames(process.model.pojo.Audited row) {
+        if (row != null) {
+            attachNames(java.util.Collections.singletonList(row));
+        }
+    }
+
     /** One id, for the single-record reads where a batch would be overkill. */
     public String nameFor(Long userId) {
         if (userId == null) {

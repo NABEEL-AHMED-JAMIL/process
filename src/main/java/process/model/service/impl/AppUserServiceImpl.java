@@ -18,6 +18,7 @@ import process.model.service.AppUserService;
 import process.security.TenantContext;
 import process.emailer.EmailMessagesFactory;
 import process.util.TemporaryPassword;
+import process.util.UserNameResolver;
 import org.springframework.beans.factory.annotation.Value;
 import java.sql.Timestamp;
 import java.util.Collections;
@@ -40,13 +41,16 @@ public class AppUserServiceImpl implements AppUserService {
     private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailMessagesFactory emailMessagesFactory;
+    private final UserNameResolver userNameResolver;
 
     @Value("${app.console.url:http://localhost:4400}")
     private String consoleUrl;
 
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
-        PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory) {
+        PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory,
+        UserNameResolver userNameResolver) {
         this.emailMessagesFactory = emailMessagesFactory;
+        this.userNameResolver = userNameResolver;
         this.appUserRepository = appUserRepository;
         this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
@@ -59,6 +63,8 @@ public class AppUserServiceImpl implements AppUserService {
                 .filter(u -> u.getStatus() != Status.Delete)
                 .collect(Collectors.toList())
             : this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TenantContext.getTenantId(), Status.Delete);
+        // One lookup for the whole page rather than one per row.
+        this.userNameResolver.attachNames(users);
         List<AppUserDto> dtos = this.mapToDtoList(users);
         return new ResponseDto(SUCCESS, "Users fetched successfully.", dtos);
     }
@@ -379,6 +385,8 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setAvatarKey(user.getAvatarKey());
         dto.setDateCreated(user.getDateCreated());
         dto.setLastLoginAt(user.getLastLoginAt());
+        dto.setCreatedByName(user.getCreatedByName());
+        dto.setUpdatedByName(user.getUpdatedByName());
 
         return dto;
     }

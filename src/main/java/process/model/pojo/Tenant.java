@@ -13,7 +13,20 @@ import java.sql.Timestamp;
 @Table(name = "tenant")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class Tenant {
+@EntityListeners(AuditListener.class)
+public class Tenant implements Audited {
+    @Transient
+    private String createdByName;
+
+    @Transient
+    private String updatedByName;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
+
 
     @GenericGenerator(
         name = "tenantSequenceGenerator",
@@ -100,4 +113,44 @@ public class Tenant {
         return new Gson().toJson(this);
     }
 
+
+    @Override
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    @Override
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    @Override
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    @Override
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    @Override
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
 }

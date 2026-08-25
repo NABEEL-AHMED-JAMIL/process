@@ -21,7 +21,14 @@ import java.util.List;
 @Table(name = "task_form")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TaskForm {
+@EntityListeners(AuditListener.class)
+public class TaskForm implements Audited {
+    @Transient
+    private String updatedByName;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
+
 
     @GenericGenerator(
         name = "taskFormSequenceGenerator",
@@ -102,4 +109,24 @@ public class TaskForm {
 
     public String getCreatedByName() { return createdByName; }
     public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
+
+    @Override
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    @Override
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    @Override
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
 }

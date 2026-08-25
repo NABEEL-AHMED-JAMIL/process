@@ -9,7 +9,10 @@ import java.sql.Timestamp;
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class AppUserDto {
+public class AppUserDto implements AuditNamed {
+    private String createdByName;
+    private String updatedByName;
+
 
     private Long appUserId;
     private String uuid;
@@ -159,5 +162,28 @@ public class AppUserDto {
 
     public void setAvatarKey(String avatarKey) {
         this.avatarKey = avatarKey;
+    }
+
+    @Override
+    public Long auditKey() {
+        return appUserId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
     }
 }

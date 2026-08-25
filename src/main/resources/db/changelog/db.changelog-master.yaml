@@ -50,3 +50,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V20.0-user-position.yaml
   - include:
       file: db/changelog/yaml/V21.0-tenant-request.yaml
+  - include:
+      file: db/changelog/yaml/V22.0-audit-columns.yaml
