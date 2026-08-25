@@ -149,14 +149,39 @@ public class EmailMessagesFactory {
                         new ByteArrayResource(emailContent.getAttachmentBytes()), emailContent.getAttachmentContentType());
                 }
                 this.javaMailSender.send(mailMessage);
-                logger.info("Email sent successfully. Content: {}.", emailContent.getBodyMap().toString());
+                logger.info("Email sent successfully. Content: {}.", safeToLog(emailContent.getBodyMap()));
             } else {
-                logger.error("Error: recipient is null. Content: {}.", emailContent.getBodyMap().toString());
+                logger.error("Error: recipient is null. Content: {}.", safeToLog(emailContent.getBodyMap()));
             }
             return "Mail sent successfully.";
         } catch (Exception ex) {
             logger.error("An exception occurred: {}.", ExceptionUtil.getRootCauseMessage(ex));
             return "Error while Sending Mail";
         }
+    }
+
+    /**
+     * A mail body without its secrets.
+     *
+     * The welcome message carries a working temporary password, and logging the body map whole
+     * wrote that password into the container log in plain text -- readable by anyone with
+     * docker logs, and kept for as long as the logs are. The credential is meant to exist only
+     * in the recipient's inbox.
+     *
+     * Matching is on the key name so a body added later is covered without anyone remembering
+     * to come back here.
+     */
+    private static String safeToLog(java.util.Map<String, Object> bodyMap) {
+        if (bodyMap == null) {
+            return "{}";
+        }
+        java.util.Map<String, Object> safe = new java.util.LinkedHashMap<>();
+        bodyMap.forEach((key, value) -> {
+            String name = key == null ? "" : key.toLowerCase();
+            boolean secret = name.contains("password") || name.contains("token")
+                || name.contains("secret") || name.contains("credential") || name.endsWith("key");
+            safe.put(key, secret ? "****" : value);
+        });
+        return safe.toString();
     }
 }
