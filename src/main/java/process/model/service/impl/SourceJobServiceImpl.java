@@ -184,7 +184,8 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
 
-        if (sourceJob.isPresent() && !this.isOwnedByCaller(sourceJob.get())) {
+        if (sourceJob.isPresent() && (!this.isOwnedByCaller(sourceJob.get())
+            || Status.Delete.equals(sourceJob.get().getJobStatus()))) {
             return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
         }
         if (sourceJob.isPresent()) {
@@ -364,7 +365,8 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
 
         Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
-        if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())) {
+        if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())
+            || Status.Delete.equals(sourceJobOpt.get().getJobStatus())) {
             return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
         }
         Optional<JobQueue> jobQueueOpt = this.jobQueueRepository.findById(jobQueueId)
@@ -381,7 +383,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> sourceJobDto.setScheduler(getSchedulerDto(s)));
         payload.put("sourceJob", sourceJobDto);
         payload.put("sourceJobQueue", getSourceJobQueueDto(jobQueueOpt.get()));
-        return new ResponseDto(SUCCESS, "SourceJob skip successfully.", payload);
+        return new ResponseDto(SUCCESS, String.format("SourceJob audit log found with %d.", jobQueueId), payload);
     }
 
     private List<JobAuditLogProjection> mergeAuditLogs(
@@ -411,6 +413,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         return sourceJobRepository.findById(jobId)
             .filter(this::isOwnedByCaller)
+            .filter(sourceJob -> !Status.Delete.equals(sourceJob.getJobStatus()))
             .map(sourceJob -> {
                 SourceJobDto dto = mapSourceJobToDto(sourceJob);
                 schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
@@ -425,6 +428,12 @@ public class SourceJobServiceImpl implements SourceJobService {
 
         Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
         if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
+        }
+        // A deleted job has no history to show. It is gone from every list and every count, so
+        // serving its runs here would be the one place it survived -- reachable by anyone who
+        // still had the link.
+        if (Status.Delete.equals(sourceJobOpt.get().getJobStatus())) {
             return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
         }
         List<SourceJobQueueDto> jobQueues = jobQueueRepository.findAllByJobId(jobId)

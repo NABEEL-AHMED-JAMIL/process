@@ -259,7 +259,11 @@ public class QueryService {
             + "join source_job sj on sj.job_id = q.job_id "
             + "left join source_task st on st.task_detail_id = sj.task_detail_id "
             + "left join app_user u on u.app_user_id = sj.assigned_user_id "
-            + "where q.start_time is not null " + dateFilter + this.tenantClause("sj")
+            // A deleted job's runs are not history any more, and every other statistic here
+            // already leaves them out -- a report that counted them would disagree with the
+            // dashboard beside it, on the same data.
+            + "where q.start_time is not null and upper(sj.job_status) <> 'DELETE' "
+            + dateFilter + this.tenantClause("sj")
             + "order by q.job_queue_id desc";
     }
 
