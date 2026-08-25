@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.junit.jupiter.api.AfterEach;
+import process.util.UserNameResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +56,7 @@ class SourceJobServiceImplTenantIsolationTest {
     @Mock private OpenSearchAuditLogClient openSearchAuditLogClient;
     @Mock private NotificationCenterService notificationCenterService;
     @Mock private EntityManager entityManager;
+    @Mock private UserNameResolver userNameResolver;
 
     private SourceJobServiceImpl service;
 
@@ -64,7 +66,7 @@ class SourceJobServiceImplTenantIsolationTest {
             this.sourceTaskRepository, this.jobAuditLogRepository, this.jobEventPublisher,
             this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
-            this.notificationCenterService);
+            this.notificationCenterService, this.userNameResolver);
         // entityManager is injected, not constructor-supplied.
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);

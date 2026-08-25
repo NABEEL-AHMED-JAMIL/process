@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import com.google.gson.Gson;
+import process.util.UserNameResolver;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import okhttp3.*;
@@ -58,8 +59,13 @@ public class AiAgentServiceImpl implements AiAgentService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final UserNameResolver userNameResolver;
+
+
     public AiAgentServiceImpl(AiAgentRepository aiAgentRepository, EncryptionUtil encryptionUtil,
-        TenantFilterHelper tenantFilterHelper) {
+        TenantFilterHelper tenantFilterHelper,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.aiAgentRepository = aiAgentRepository;
         this.encryptionUtil = encryptionUtil;
         this.tenantFilterHelper = tenantFilterHelper;
@@ -136,8 +142,10 @@ public class AiAgentServiceImpl implements AiAgentService {
     public ResponseDto fetchAllAgents() throws Exception {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<AiAgent> aiAgents = this.aiAgentRepository.findByStatusNotOrderByAiAgentIdDesc(Status.Delete);
-        return new ResponseDto(SUCCESS, "Data found.",
-            aiAgents.stream().map(this::ensureToolUuid).map(this::getAiAgentDto).collect(Collectors.toList()));
+        List<AiAgentDto> agentDtos = aiAgents.stream().map(this::ensureToolUuid)
+            .map(this::getAiAgentDto).collect(Collectors.toList());
+        this.userNameResolver.attachToDtos(agentDtos, this.aiAgentRepository, AiAgent::getAiAgentId);
+        return new ResponseDto(SUCCESS, "Data found.", agentDtos);
     }
 
     @Override

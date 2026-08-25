@@ -8,7 +8,11 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceTaskDto {
+public class SourceTaskDto implements AuditNamed {
+    private String createdByName;
+    private String updatedByName;
+    private Long createdBy;
+
 
     private Long taskDetailId;
     private Long tenantId;
@@ -144,4 +148,36 @@ public class SourceTaskDto {
         return new Gson().toJson(this);
     }
 
+
+    @Override
+    public Long auditKey() {
+        return taskDetailId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
 }

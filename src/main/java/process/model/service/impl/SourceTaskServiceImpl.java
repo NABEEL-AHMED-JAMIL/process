@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.apache.poi.ss.usermodel.Row;
+import process.util.UserNameResolver;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
@@ -59,6 +60,9 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final UserNameResolver userNameResolver;
+
+
     public SourceTaskServiceImpl(BulkExcel bulkExcel,
         QueryService queryService,
         SourceJobRepository sourceJobRepository,
@@ -67,7 +71,9 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         TenantFilterHelper tenantFilterHelper,
         TaskPayloadLocationUtil taskPayloadLocationUtil,
         TenantRepository tenantRepository,
-        NotificationCenterService notificationCenterService) {
+        NotificationCenterService notificationCenterService,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.bulkExcel = bulkExcel;
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
@@ -344,6 +350,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
                     sourceTaskDtoList.add(sourceTaskDto);
                 }
+                this.userNameResolver.attachToDtos(sourceTaskDtoList, this.sourceTaskRepository,
+                    SourceTask::getTaskDetailId);
                 responseDto = new ResponseDto(SUCCESS, "SourceTask successfully ", sourceTaskDtoList,
                     PagingUtil.convertEntityToPagingDTO(Long.valueOf(countQueryResult.toString()), paging));
             } else {

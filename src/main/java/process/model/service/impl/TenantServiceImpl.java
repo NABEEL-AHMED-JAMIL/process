@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.slf4j.Logger;
+import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,11 +39,16 @@ public class TenantServiceImpl implements TenantService {
     private final SourceTaskRepository sourceTaskRepository;
     private final SourceJobRepository sourceJobRepository;
 
+    private final UserNameResolver userNameResolver;
+
+
     public TenantServiceImpl(TenantRepository tenantRepository, AppUserRepository appUserRepository,
         KafkaConnectionProfileRepository kafkaConnectionProfileRepository,
         StorageConnectionRepository storageConnectionRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository, SourceTaskRepository sourceTaskRepository,
-        SourceJobRepository sourceJobRepository) {
+        SourceJobRepository sourceJobRepository,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.tenantRepository = tenantRepository;
         this.appUserRepository = appUserRepository;
         this.kafkaConnectionProfileRepository = kafkaConnectionProfileRepository;
@@ -56,6 +62,7 @@ public class TenantServiceImpl implements TenantService {
     public ResponseDto listTenants() throws Exception {
         List<Tenant> tenants = this.tenantRepository.findByStatusNotOrderByTenantIdDesc(TenantStatus.Delete);
         List<TenantDto> tenantDtos = tenants.stream().map(this::mapToDtoWithStats).collect(Collectors.toList());
+        this.userNameResolver.attachToDtos(tenantDtos, this.tenantRepository, Tenant::getTenantId);
         return new ResponseDto(SUCCESS, "Tenants fetched successfully.", tenantDtos);
     }
 

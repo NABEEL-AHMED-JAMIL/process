@@ -8,7 +8,11 @@ import java.sql.Timestamp;
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class AiAgentDto {
+public class AiAgentDto implements AuditNamed {
+    private String createdByName;
+    private String updatedByName;
+    private Long createdBy;
+
 
     private Long aiAgentId;
     private String agentName;
@@ -143,5 +147,37 @@ public class AiAgentDto {
     @Override
     public String toString() {
         return new Gson().toJson(this);
+    }
+
+    @Override
+    public Long auditKey() {
+        return aiAgentId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
     }
 }

@@ -13,7 +13,11 @@ import java.util.Set;
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceJobDto {
+public class SourceJobDto implements AuditNamed {
+    private String createdByName;
+    private String updatedByName;
+    private Long createdBy;
+
 
     private Long jobId;
     private String jobName;
@@ -187,4 +191,36 @@ public class SourceJobDto {
         return new Gson().toJson(this);
     }
 
+
+    @Override
+    public Long auditKey() {
+        return jobId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
 }

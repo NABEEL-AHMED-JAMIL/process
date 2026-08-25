@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.slf4j.Logger;
+import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -53,6 +54,9 @@ public class SourceJobServiceImpl implements SourceJobService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final UserNameResolver userNameResolver;
+
+
     public SourceJobServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         SourceTaskRepository sourceTaskRepository,
@@ -64,7 +68,9 @@ public class SourceJobServiceImpl implements SourceJobService {
         ProducerBulkEngine producerBulkEngine,
         TenantFilterHelper tenantFilterHelper,
         OpenSearchAuditLogClient openSearchAuditLogClient,
-        NotificationCenterService notificationCenterService) {
+        NotificationCenterService notificationCenterService,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.sourceTaskRepository = sourceTaskRepository;
@@ -487,6 +493,8 @@ public class SourceJobServiceImpl implements SourceJobService {
             : jobQueueRepository.countGroupByJobIds(jobIds).stream()
                 .collect(Collectors.toMap(row -> ((Number) row[0]).longValue(), row -> ((Number) row[1]).longValue()));
 
+        // The entities are already in hand here, so the names cost one lookup and no re-fetch.
+        this.userNameResolver.attachNames(jobs);
         List<SourceJobDto> sourceJobDtoList = jobs.stream()
             .map(job -> {
                 SourceJobDto dto = mapSourceJobToDto(job);
@@ -526,6 +534,9 @@ public class SourceJobServiceImpl implements SourceJobService {
         dto.setJobRunningStatus(sourceJob.getJobRunningStatus());
         dto.setLastJobRun(sourceJob.getLastJobRun());
         dto.setJobName(sourceJob.getJobName());
+        dto.setCreatedByName(sourceJob.getCreatedByName());
+        dto.setUpdatedByName(sourceJob.getUpdatedByName());
+        dto.setCreatedBy(sourceJob.getCreatedBy());
         dto.setDateCreated(sourceJob.getDateCreated());
         dto.setPriority(sourceJob.getPriority());
         dto.setExecution(sourceJob.getExecution());
