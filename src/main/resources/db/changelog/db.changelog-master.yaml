@@ -44,3 +44,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V18.0-foreign-key-indexes.yaml
   - include:
       file: db/changelog/yaml/V18.0-user-avatar.yaml
+  - include:
+      file: db/changelog/yaml/V19.0-task-form-builder.yaml

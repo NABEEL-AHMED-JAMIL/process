@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 19.0-task-form-builder
+      author: nabeel.amd93
+      description: "Add task_form and task_form_field so a pipeline's payload can be described once and filled in as a form, instead of every task hand-writing the same XML"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V19.0-task-form-builder/V19__task_form_builder.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP TABLE IF EXISTS task_form_field;
+              DROP TABLE IF EXISTS task_form;
+              DROP SEQUENCE IF EXISTS task_form_source_seq;

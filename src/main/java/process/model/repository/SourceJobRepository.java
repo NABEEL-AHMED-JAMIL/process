@@ -54,4 +54,14 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     @Query(value = "update source_job set job_status = ?2 where task_detail_id = ?1", nativeQuery = true)
     public int statusChangeSourceJobWithSourceTaskId(Long sourceTaskId, String status);
 
+    /**
+     * Jobs still bound to a task and not themselves deleted.
+     *
+     * Deleting a task takes every job with it, so this is what stands between removing one
+     * unused task and quietly removing a few hundred jobs along with it.
+     */
+    @Query(value = "select count(*) from source_job where task_detail_id = ?1 "
+        + "and upper(job_status) <> 'DELETE'", nativeQuery = true)
+    public long countLiveJobsForTask(Long sourceTaskId);
+
 }

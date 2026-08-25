@@ -232,6 +232,22 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
         }
         if (sourceTask.isPresent()) {
+            /*
+             * A task in use cannot be deleted.
+             *
+             * Deleting one deletes every job bound to it -- the line below marks them all
+             * Delete -- so removing a task someone thought was unused would take a few hundred
+             * jobs with it and stop work nobody meant to stop. The jobs have to be moved to
+             * another task or deleted deliberately first, which makes that an explicit choice
+             * rather than a side effect.
+             */
+            long liveJobs = this.sourceJobRepository.countLiveJobsForTask(sourceTaskDto.getTaskDetailId());
+            if (liveJobs > 0) {
+                return new ResponseDto(ERROR, String.format(
+                    "\"%s\" still has %d job%s using it. Point those jobs at another task, or "
+                        + "delete them, before deleting this one.",
+                    sourceTask.get().getTaskName(), liveJobs, liveJobs == 1 ? "" : "s"));
+            }
             if (!ProcessUtil.isNull(sourceTaskDto.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(Status.Delete);
             }
