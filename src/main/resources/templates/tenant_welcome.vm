@@ -1,34 +1,40 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-<body style="margin:0;padding:24px;background:#f6f7fb;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#171b2b;">
-  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #dee1ee;border-radius:10px;padding:28px;">
-    <h1 style="margin:0 0 4px;font-size:19px;">Your workspace is ready</h1>
-    <p style="margin:0 0 20px;color:#4e5570;font-size:14px;line-height:1.6;">
-      Hello $contact_name, the workspace for <strong>$organisation_name</strong> has been set up.
-    </p>
+  <head><meta charset="utf-8" /></head>
+  <body style="margin:0;padding:24px;background:#f6f7fb;font-family:Arial,Helvetica,sans-serif;color:#171b2b;">
+    <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #dee1ee;border-radius:10px;padding:28px;">
+      <h1 style="margin:0 0 4px;font-size:19px;">Your workspace is ready</h1>
+      <p style="margin:0 0 20px;color:#4e5570;font-size:14px;line-height:1.6;">
+        Hello $request.get("contact_name"), the workspace for
+        <strong>$request.get("organisation_name")</strong> has been set up.
+      </p>
 
-    <table style="width:100%;border-collapse:collapse;font-size:14px;">
-      <tr>
-        <td style="padding:8px 0;color:#6b7392;width:150px;">Sign in at</td>
-        <td style="padding:8px 0;"><a href="$sign_in_url" style="color:#4f46e5;">$sign_in_url</a></td>
-      </tr>
-      <tr>
-        <td style="padding:8px 0;color:#6b7392;">Your username</td>
-        <td style="padding:8px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">$username</td>
-      </tr>
-      <tr>
-        <td style="padding:8px 0;color:#6b7392;">One-time password</td>
-        <td style="padding:8px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">$temporary_password</td>
-      </tr>
-    </table>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr>
+          <td style="padding:8px 0;color:#6b7392;width:150px;">Sign in at</td>
+          <td style="padding:8px 0;">
+            <a href="$request.get("sign_in_url")" style="color:#4f46e5;">$request.get("sign_in_url")</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#6b7392;">Your username</td>
+          <td style="padding:8px 0;font-family:Consolas,Menlo,monospace;">$request.get("username")</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#6b7392;">One-time password</td>
+          <td style="padding:8px 0;font-family:Consolas,Menlo,monospace;font-size:16px;">
+            <strong>$request.get("temporary_password")</strong>
+          </td>
+        </tr>
+      </table>
 
-    <p style="margin:20px 0 0;padding:12px 14px;background:#f4f6fa;border-radius:8px;color:#4e5570;font-size:13px;line-height:1.6;">
-      This password works once. The console will ask you to choose your own as soon as you sign
-      in, and this one stops working then. If you did not ask for this workspace, tell us and
-      ignore the message — nobody can use it without the address this was sent to.
-    </p>
+      <p style="margin:20px 0 0;padding:12px 14px;background:#f4f6fa;border-radius:8px;color:#4e5570;font-size:13px;line-height:1.6;">
+        This password works once. The console will ask you to choose your own as soon as you sign
+        in, and this one stops working then. If you did not ask for this workspace, please tell us
+        and ignore this message.
+      </p>
 
-    <p style="margin:20px 0 0;color:#6b7392;font-size:12px;">ETL Console</p>
-  </div>
-</body>
+      <p style="margin:20px 0 0;color:#6b7392;font-size:12px;">ETL Console</p>
+    </div>
+  </body>
 </html>

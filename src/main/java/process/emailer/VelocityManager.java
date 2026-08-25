@@ -25,6 +25,10 @@ public class VelocityManager {
         this.engine = getEngine();
         this.engine.setProperty(RuntimeConstants.RESOURCE_LOADER, "classpath");
         this.engine.setProperty("classpath.resource.loader.class", ClasspathResourceLoader.class.getName());
+        // Velocity reads a template as ISO-8859-1 unless told otherwise, so anything outside
+        // ASCII arrived mangled -- an em dash came through as three stray characters. The
+        // existing templates are pure ASCII, so this changes nothing for them.
+        this.engine.setProperty(RuntimeConstants.INPUT_ENCODING, "UTF-8");
         this.engine.init();
         logger.info("+================Velocity-End====================+");
     }
