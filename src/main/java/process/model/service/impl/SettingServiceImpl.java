@@ -64,6 +64,59 @@ public class SettingServiceImpl implements SettingService {
         new java.util.HashSet<>(java.util.Arrays.asList(
             "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS"));
 
+    /**
+     * Lookup families only a platform admin may see or touch.
+     *
+     * These are the engine's own dials and bookmarks, not settings anybody's workspace should
+     * be reading: two of them are the timestamps the scheduler and the audit sync resume from,
+     * one caps how much the dispatcher pulls per cycle, and one names where system mail goes.
+     * A tenant admin has no use for them and every reason not to be able to edit them.
+     */
+    private static final java.util.Set<String> PLATFORM_ONLY_LOOKUPS =
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "QUEUE_FETCH_LIMIT", "SCHEDULER_LAST_RUN_TIME",
+            "AUDIT_LOG_SYNC_LAST_RUN_TIME", "EMAIL_RECEIVER"));
+
+    /**
+     * The family a row belongs to: its parent's type for a child, its own for a top-level row.
+     * Children carry their own descriptive type, so asking the row alone gives the wrong answer.
+     */
+    private static String familyOf(LookupData lookupData) {
+        if (lookupData == null) {
+            return null;
+        }
+        return lookupData.getParent() != null
+            ? lookupData.getParent().getLookupType()
+            : lookupData.getLookupType();
+    }
+
+    private static boolean isPlatformOnly(LookupData lookupData) {
+        return PLATFORM_ONLY_LOOKUPS.contains(familyOf(lookupData));
+    }
+
+    /**
+     * Whether the caller may change this row.
+     *
+     * Update and delete took an id and did as they were told -- no role check at all -- so a
+     * tenant admin could edit SCHEDULER_LAST_RUN_TIME, or delete another tenant's bucket, by
+     * calling the endpoint directly. Hiding rows from a list is decoration while that is true.
+     */
+    private static String refuseModification(LookupData lookupData) {
+        if (TenantContext.isPlatformAdmin()) {
+            return null;
+        }
+        if (isPlatformOnly(lookupData)) {
+            return "Only a platform admin can change this entry -- it is engine configuration.";
+        }
+        if (!isTenantOwned(lookupData.getParent())) {
+            return "Only a platform admin can change this entry -- it is platform reference data.";
+        }
+        if (!java.util.Objects.equals(lookupData.getTenantId(), TenantContext.getTenantId())) {
+            return "That entry belongs to another workspace.";
+        }
+        return null;
+    }
+
     private static boolean isTenantOwned(LookupData parent) {
         return parent != null && TENANT_OWNED_LOOKUPS.contains(parent.getLookupType());
     }
@@ -126,7 +179,11 @@ public class SettingServiceImpl implements SettingService {
     public ResponseDto appSetting() throws Exception {
         Map<String, Object> appSettingDetail = new HashMap<>();
         List<LookupDataDto> lookupDataList = new ArrayList<>();
+        boolean callerIsPlatformAdmin = TenantContext.isPlatformAdmin();
         for (LookupData lookup: this.lookupDataRepository.findByParentLookupIdIsNull()) {
+            if (!callerIsPlatformAdmin && isPlatformOnly(lookup)) {
+                continue;
+            }
             LookupDataDto lookupDataDto = new LookupDataDto();
             this.fillLookupDateDto(lookup, lookupDataDto);
             if (!isNull(lookup.getParent())) {
@@ -399,6 +456,10 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, String.format("LookupData not found with %d.", tempLookupData.getLookupId()));
         }
         LookupData lookupData = lookupDataOpt.get();
+        String refusal = refuseModification(lookupData);
+        if (refusal != null) {
+            return new ResponseDto(ERROR, refusal);
+        }
         boolean wasEncrypted = Boolean.TRUE.equals(lookupData.getEncrypted());
         boolean nowEncrypted = !isNull(tempLookupData.getEncrypted()) ? tempLookupData.getEncrypted() : wasEncrypted;
         boolean hasNewValue = !isNull(tempLookupData.getLookupValue()) && !tempLookupData.getLookupValue().trim().isEmpty();
@@ -437,6 +498,12 @@ public class SettingServiceImpl implements SettingService {
         Map<String, Object> appSettingDetail = new HashMap<>();
         List<LookupDataDto> lookupDataList = new ArrayList<>();
         Optional<LookupData> parentLookup = this.lookupDataRepository.findById(parentLookUpId);
+        // Refused outright, not just left out of the list: hiding a row from the index while
+        // this endpoint still serves it by id protects nothing.
+        if (parentLookup.isPresent() && !TenantContext.isPlatformAdmin()
+            && isPlatformOnly(parentLookup.get())) {
+            return new ResponseDto(ERROR, "Only a platform admin can view this lookup.");
+        }
         if (parentLookup.isPresent()) {
             LookupDataDto lookupDataDto = new LookupDataDto();
             this.fillLookupDateDto(parentLookup.get(), lookupDataDto);

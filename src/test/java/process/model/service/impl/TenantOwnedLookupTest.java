@@ -46,6 +46,50 @@ public class TenantOwnedLookupTest {
         }
     }
 
+    private boolean isPlatformOnly(String lookupType) throws Exception {
+        LookupData row = new LookupData();
+        row.setLookupType(lookupType);
+        Method method = SettingServiceImpl.class
+            .getDeclaredMethod("isPlatformOnly", LookupData.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(null, row);
+    }
+
+    @Test
+    void engineDialsAreVisibleOnlyToThePlatformAdmin() throws Exception {
+        // Two are the timestamps the scheduler and audit sync resume from, one caps the
+        // dispatcher, one names where system mail goes. None is a workspace setting.
+        for (String type : new String[] {
+            "QUEUE_FETCH_LIMIT", "SCHEDULER_LAST_RUN_TIME",
+            "AUDIT_LOG_SYNC_LAST_RUN_TIME", "EMAIL_RECEIVER" }) {
+            assertTrue(isPlatformOnly(type), type + " should be platform-only");
+        }
+    }
+
+    @Test
+    void whatATenantWorksWithIsNotPlatformOnly() throws Exception {
+        for (String type : new String[] {
+            "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS", "AI_PROVIDER" }) {
+            assertFalse(isPlatformOnly(type), type + " should stay visible to a tenant");
+        }
+    }
+
+    @Test
+    void aChildIsJudgedByItsFamilyNotItsOwnLabel() throws Exception {
+        // A child carries its own descriptive type -- "Hurricane Data" under TASK_GROUPS -- so
+        // asking the row alone gives the wrong answer and would leak the parent's protection.
+        LookupData parent = new LookupData();
+        parent.setLookupType("SCHEDULER_LAST_RUN_TIME");
+        LookupData child = new LookupData();
+        child.setLookupType("some descriptive label");
+        child.setParent(parent);
+        Method method = SettingServiceImpl.class
+            .getDeclaredMethod("isPlatformOnly", LookupData.class);
+        method.setAccessible(true);
+        assertTrue((boolean) method.invoke(null, child),
+            "a child of a platform-only family is platform-only");
+    }
+
     @Test
     void anUnknownTypeIsNotTenantOwned() throws Exception {
         // Default deny: a family added later is platform-level until somebody decides otherwise.
