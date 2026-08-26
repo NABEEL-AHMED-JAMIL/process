@@ -1,6 +1,9 @@
 package process.model.pojo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.hibernate.annotations.ParamDef;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.Filter;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import org.hibernate.annotations.GenericGenerator;
@@ -28,6 +31,8 @@ import java.sql.Timestamp;
 }, uniqueConstraints = {
     @UniqueConstraint(name = "uq_storage_connection_alias", columnNames = { "alias" })
 })
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
