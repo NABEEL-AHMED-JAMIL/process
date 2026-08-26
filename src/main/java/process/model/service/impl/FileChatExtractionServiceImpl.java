@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import process.model.dto.AudioExtractBucketRequestDto;
 import process.model.dto.ObjectContentDto;
@@ -294,4 +295,23 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
         return text.length() > MAX_TEXT_CHARS ? text.substring(0, MAX_TEXT_CHARS) : text;
     }
 
+
+    /**
+     * Forgets the text extracted from one file.
+     *
+     * Called when a chat panel closes. The extraction is the only trace a chat leaves on the
+     * server -- nothing is written to the database and no transcript is logged -- and it is the
+     * whole readable content of whatever was opened, which for this platform means CVs, intake
+     * forms and anything else a tenant keeps in a bucket. Holding that for the cache's seven-day
+     * ceiling after the person has finished reading it is longer than the work requires.
+     *
+     * Evicting costs the next chat on the same file a re-extraction. That is the trade being
+     * made deliberately: the cache exists to make a conversation responsive, not to retain
+     * document contents between conversations.
+     */
+    @Override
+    @CacheEvict(value = "fileChatExtract", key = "#bucket + ':' + #key + ':' + #etag")
+    public void forgetExtraction(String bucket, String key, String etag) {
+        // The annotation does the work; the body stays empty on purpose.
+    }
 }

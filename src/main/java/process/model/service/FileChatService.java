@@ -12,4 +12,6 @@ public interface FileChatService {
 
     ResponseDto exportFile(FileChatExportRequestDto dto) throws Exception;
 
+
+    public ResponseDto endSession(String bucket, String key) throws Exception;
 }

@@ -38,6 +38,17 @@ public class FileChatRestApi {
         }
     }
 
+    @RequestMapping(value = "/endSession", method = RequestMethod.POST)
+    public ResponseEntity<?> endSession(@RequestBody FileChatPrepareRequestDto requestDto) {
+        try {
+            return new ResponseEntity<>(
+                this.fileChatService.endSession(requestDto.getBucket(), requestDto.getKey()), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while endSession ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @RequestMapping(value = "/sendMessage", method = RequestMethod.POST)
     public ResponseEntity<?> sendMessage(@RequestBody FileChatMessageRequestDto requestDto) {
         try {

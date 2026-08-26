@@ -60,6 +60,28 @@ public class FileChatServiceImpl implements FileChatService {
         this.aiAgentService = aiAgentService;
     }
 
+    /**
+     * Ends a chat: drops the file's extracted text from the cache.
+     *
+     * Goes through the same access check as opening one, so this cannot be used to evict a
+     * cache entry for a bucket the caller has no business touching.
+     *
+     * Succeeds when there was nothing cached. Closing a panel that never finished loading, or
+     * closing the same one twice, is ordinary behaviour rather than an error worth reporting.
+     */
+    @Override
+    public ResponseDto endSession(String bucket, String key) throws Exception {
+        ResponseDto validationError = this.validateBucketAccess(bucket, key);
+        if (validationError != null) {
+            return validationError;
+        }
+        ObjectMetadataDto metadata = this.storageBrowserService.getObjectMetadata(bucket, key);
+        if (!isNull(metadata) && !isNull(metadata.getEtag())) {
+            this.fileChatExtractionService.forgetExtraction(bucket, key, metadata.getEtag());
+        }
+        return new ResponseDto(SUCCESS, "Chat closed.");
+    }
+
     @Override
     public ResponseDto prepareContext(String bucket, String key) throws Exception {
         ResponseDto validationError = this.validateBucketAccess(bucket, key);

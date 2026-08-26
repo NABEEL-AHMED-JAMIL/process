@@ -6,4 +6,6 @@ public interface FileChatExtractionService {
 
     byte[] convertContent(byte[] content, String sourceExtension, String targetExtension) throws Exception;
 
+
+    public void forgetExtraction(String bucket, String key, String etag);
 }
