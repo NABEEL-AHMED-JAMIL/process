@@ -40,6 +40,17 @@ public class StorageConnectionRestApi {
         }
     }
 
+    @RequestMapping(value = "/cloneConnection", method = RequestMethod.POST)
+    public ResponseEntity<?> cloneConnection(@RequestParam Long sourceId,
+        @RequestBody StorageConnectionDto dto) {
+        try {
+            return new ResponseEntity<>(this.storageConnectionService.cloneConnection(sourceId, dto), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while cloneConnection.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @RequestMapping(value = "/updateConnection", method = RequestMethod.PUT)
     public ResponseEntity<?> updateConnection(@RequestBody StorageConnectionDto dto) {
         try {

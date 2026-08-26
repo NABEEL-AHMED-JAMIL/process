@@ -87,6 +87,75 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
             this.toDto(connection));
     }
 
+    /**
+     * Copies an existing connection, changing only what identifies it.
+     *
+     * Server-side because the secret never leaves the server: toDto withholds it deliberately,
+     * so a copy assembled in the browser would arrive with no credential and the new connection
+     * would fail its first test. Here the encrypted value moves across without being decrypted.
+     *
+     * Everything else -- provider, endpoint, region, host, port, TLS and passive flags -- comes
+     * from the source, which is the point: the caller only says what the new one is called and
+     * which bucket it points at.
+     */
+    @Override
+    @Transactional
+    public ResponseDto cloneConnection(Long sourceId, StorageConnectionDto dto) throws Exception {
+        if (isNull(sourceId)) {
+            return new ResponseDto(ERROR, "sourceId missing.");
+        }
+        Optional<StorageConnection> sourceOpt = this.storageConnectionRepository.findById(sourceId);
+        if (!sourceOpt.isPresent() || !this.isOwnedByCaller(sourceOpt.get())
+            || sourceOpt.get().getStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, String.format("Storage connection not found with %d.", sourceId));
+        }
+        if (isNull(dto) || isNull(dto.getAlias()) || dto.getAlias().trim().isEmpty()) {
+            return new ResponseDto(ERROR, "Alias missing.");
+        }
+        String alias = dto.getAlias().trim();
+        if (this.storageConnectionRepository.findByAlias(alias).isPresent()) {
+            return new ResponseDto(ERROR, String.format(
+                "A storage connection with the alias '%s' already exists -- aliases must be unique.", alias));
+        }
+        StorageConnection source = sourceOpt.get();
+        StorageConnection copy = new StorageConnection();
+        // The tenant is the caller's own, never the source's: a platform admin cloning a
+        // platform connection keeps it platform-level, and a tenant admin can only ever produce
+        // one that belongs to their own workspace.
+        copy.setTenantId(TenantContext.getTenantId());
+        copy.setAlias(alias);
+        copy.setConnectionName(isNull(dto.getConnectionName()) || dto.getConnectionName().trim().isEmpty()
+            ? source.getConnectionName() + " (copy)" : dto.getConnectionName().trim());
+        copy.setBucketName(isNull(dto.getBucketName()) || dto.getBucketName().trim().isEmpty()
+            ? source.getBucketName() : dto.getBucketName().trim());
+        copy.setDescription(isNull(dto.getDescription()) ? source.getDescription() : dto.getDescription());
+        copy.setProvider(source.getProvider());
+        copy.setEndpoint(source.getEndpoint());
+        copy.setRegion(source.getRegion());
+        copy.setBaseDirectory(source.getBaseDirectory());
+        copy.setHost(source.getHost());
+        copy.setPort(source.getPort());
+        copy.setUsername(source.getUsername());
+        copy.setImplicitTls(source.getImplicitTls());
+        copy.setPassiveMode(source.getPassiveMode());
+        copy.setAzureAccountName(source.getAzureAccountName());
+        // Encrypted values carried across as-is -- never decrypted, never returned.
+        copy.setAccessKey(source.getAccessKey());
+        copy.setSecretKeyEnc(source.getSecretKeyEnc());
+        copy.setPasswordEnc(source.getPasswordEnc());
+        copy.setAzureConnectionStringEnc(source.getAzureConnectionStringEnc());
+        copy.setIsDefault(false);
+        copy.setStatus(Status.Active);
+        // Untested on purpose: it points somewhere new, and inheriting the source's green tick
+        // would claim a bucket had been reached that nobody has reached yet.
+        copy.setConnectionStatus("UNTESTED");
+        copy.setDateCreated(new Timestamp(System.currentTimeMillis()));
+        copy = this.storageConnectionRepository.save(copy);
+        return new ResponseDto(SUCCESS,
+            String.format("Cloned to \"%s\". Test it before relying on it.", copy.getAlias()),
+            this.toDto(copy));
+    }
+
     @Override
     @Transactional
     public ResponseDto updateConnection(StorageConnectionDto dto) throws Exception {

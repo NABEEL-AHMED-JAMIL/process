@@ -19,4 +19,6 @@ public interface StorageConnectionService {
 
     ResponseDto discoverBuckets(StorageConnectionDto dto) throws Exception;
 
+
+    public ResponseDto cloneConnection(Long sourceId, StorageConnectionDto dto) throws Exception;
 }

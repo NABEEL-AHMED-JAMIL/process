@@ -73,13 +73,16 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         List<BucketSummaryDto> buckets = new ArrayList<>();
 
         // Storage connections are the current mechanism -- S3/Azure/FTP/FTPS/MinIO, each with
-        // its own stored credentials. A connection with no tenant is a platform-wide shared
-        // one (only a PLATFORM_ADMIN can create it that way) and is offered to every tenant;
-        // anything created by a tenant admin carries their tenant id and stays private to them.
+        // its own stored credentials. A tenant sees its own and nothing else.
+        //
+        // A connection with no tenant used to be treated as platform-wide and offered to every
+        // tenant, which is how etl-bucket and etl-avatar showed up in every workspace's object
+        // browser. Nothing is shared between tenants now, so those belong to the platform admin
+        // alone. Note the BUCKET_LIST branch below never allowed a null tenant to match -- the
+        // two halves of this method disagreed with each other.
         this.storageConnectionRepository.findByStatusNotOrderByStorageConnectionIdDesc(Status.Delete).stream()
             .filter(connection -> connection.getStatus() == Status.Active)
             .filter(connection -> isPlatformAdmin
-                || connection.getTenantId() == null
                 || Objects.equals(connection.getTenantId(), callerTenantId))
             .forEach(connection -> buckets.add(new BucketSummaryDto(
                 connection.getConnectionName(),
