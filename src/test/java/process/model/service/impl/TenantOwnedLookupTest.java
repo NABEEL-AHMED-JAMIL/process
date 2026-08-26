@@ -29,10 +29,10 @@ public class TenantOwnedLookupTest {
     }
 
     @Test
-    void aTenantOwnsItsBucketsPipelinesAndGroups() throws Exception {
+    void nothingInTheseFamiliesIsSharedBetweenTenants() throws Exception {
         for (String type : new String[] {
             "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS" }) {
-            assertTrue(isTenantOwned(type), type + " should belong to the tenant");
+            assertTrue(isTenantOwned(type), type + " should belong to the tenant that made it");
         }
     }
 

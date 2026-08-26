@@ -46,12 +46,16 @@ public class SettingServiceImpl implements SettingService {
     /**
      * Lookup families each tenant owns outright.
      *
-     * A tenant admin may add to these and sees only their own entries; everything else stays
-     * platform-level reference data. Buckets worked this way already -- pipelines, their home
-     * pages and task groups are the same kind of thing: a tenant's own list of what it runs,
-     * not configuration shared across the platform.
+     * A tenant admin may add to these and sees only their own entries; nothing in these families
+     * is shared between tenants. Buckets always worked this way; pipelines, their home pages and
+     * task groups now do too.
      *
-     * Note what is deliberately absent. SCHEDULER_LAST_RUN_TIME, QUEUE_FETCH_LIMIT and
+     * The rows that used to be shared were removed rather than split, so every tenant starts
+     * with an empty list and fills it in. Tasks created before that still hold the id of a row
+     * that no longer exists -- they keep running, since the id is stored on the task, but their
+     * pipeline no longer resolves to a name.
+     *
+     * Still platform-level: SCHEDULER_LAST_RUN_TIME, QUEUE_FETCH_LIMIT and
      * AUDIT_LOG_SYNC_LAST_RUN_TIME are single-instance engine state -- per-tenant copies would
      * give the scheduler several different ideas of when it last ran -- and AI_PROVIDER names
      * the providers the platform can reach at all.
