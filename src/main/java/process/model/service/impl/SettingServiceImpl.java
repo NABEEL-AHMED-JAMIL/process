@@ -65,6 +65,21 @@ public class SettingServiceImpl implements SettingService {
             "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS"));
 
     /**
+     * Families a tenant may add to without owning what is already there.
+     *
+     * AI_PROVIDER is the case this exists for. The providers the platform ships -- OpenAI,
+     * Anthropic, Ollama -- are reachable by everyone and belong to nobody's workspace, so a
+     * tenant sees them and can point a model at them, but must not be able to delete one out
+     * from under every other tenant. A tenant admin adding their own provider gets a row stamped
+     * with their tenant, which only they can see, change or remove.
+     *
+     * This is the difference from TENANT_OWNED_LOOKUPS above: there a tenant sees only its own
+     * rows, here it sees the platform's as well and may extend the list without editing it.
+     */
+    private static final java.util.Set<String> TENANT_EXTENDABLE_LOOKUPS =
+        new java.util.HashSet<>(java.util.Collections.singletonList("AI_PROVIDER"));
+
+    /**
      * Lookup families only a platform admin may see or touch.
      *
      * These are the engine's own dials and bookmarks, not settings anybody's workspace should
@@ -108,8 +123,16 @@ public class SettingServiceImpl implements SettingService {
         if (isPlatformOnly(lookupData)) {
             return "Only a platform admin can change this entry -- it is engine configuration.";
         }
-        if (!isTenantOwned(lookupData.getParent())) {
+        boolean owned = isTenantOwned(lookupData.getParent());
+        boolean extendable = isTenantExtendable(lookupData.getParent());
+        if (!owned && !extendable) {
             return "Only a platform admin can change this entry -- it is platform reference data.";
+        }
+        if (extendable && lookupData.getTenantId() == null) {
+            // The platform's own providers. Visible to everyone, removable by nobody but a
+            // platform admin -- deleting one would take it away from every other tenant too.
+            return "This provider belongs to the platform and is shared with every workspace. "
+                + "You can add your own, but not change this one.";
         }
         if (!java.util.Objects.equals(lookupData.getTenantId(), TenantContext.getTenantId())) {
             return "That entry belongs to another workspace.";
@@ -119,6 +142,10 @@ public class SettingServiceImpl implements SettingService {
 
     private static boolean isTenantOwned(LookupData parent) {
         return parent != null && TENANT_OWNED_LOOKUPS.contains(parent.getLookupType());
+    }
+
+    private static boolean isTenantExtendable(LookupData parent) {
+        return parent != null && TENANT_EXTENDABLE_LOOKUPS.contains(parent.getLookupType());
     }
 
     private final String MASKED_LOOKUP_VALUE = "••••••••";
@@ -418,7 +445,8 @@ public class SettingServiceImpl implements SettingService {
         }
         Optional<LookupData> parentLookupData = !isNull(tempLookupData.getParentLookupId())
             ? this.lookupDataRepository.findById(tempLookupData.getParentLookupId()) : Optional.empty();
-        boolean isTenantOwnedChild = parentLookupData.isPresent() && isTenantOwned(parentLookupData.get());
+        boolean isTenantOwnedChild = parentLookupData.isPresent()
+            && (isTenantOwned(parentLookupData.get()) || isTenantExtendable(parentLookupData.get()));
 
         if (!isTenantOwnedChild && !TenantContext.isPlatformAdmin()) {
             return new ResponseDto(ERROR, "Only a platform admin can add this kind of lookup entry -- it is platform reference data other tenants depend on.");
@@ -510,11 +538,19 @@ public class SettingServiceImpl implements SettingService {
             appSettingDetail.put(PARENT_LOOKUP_DATA, lookupDataDto);
 
             boolean isTenantOwnedList = isTenantOwned(parentLookup.get());
+            boolean isTenantExtendableList = isTenantExtendable(parentLookup.get());
             boolean isPlatformAdmin = TenantContext.isPlatformAdmin();
             Long callerTenantId = TenantContext.getTenantId();
             if (!isNull(parentLookup.get().getChildren())) {
                 for (LookupData lookup: parentLookup.get().getChildren()) {
-                    if (isTenantOwnedList && !isPlatformAdmin && !Objects.equals(lookup.getTenantId(), callerTenantId)) {
+                    // Owned: only the caller's own rows. Extendable: the platform's shared rows
+                    // as well, since those are what a tenant points its models at.
+                    if (!isPlatformAdmin && isTenantOwnedList
+                        && !Objects.equals(lookup.getTenantId(), callerTenantId)) {
+                        continue;
+                    }
+                    if (!isPlatformAdmin && isTenantExtendableList && lookup.getTenantId() != null
+                        && !Objects.equals(lookup.getTenantId(), callerTenantId)) {
                         continue;
                     }
                     LookupDataDto lookupDataDto2 = new LookupDataDto();
@@ -535,8 +571,14 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, "LookupData id missing.");
         }
         Optional<LookupData> lookupDataOpt = this.lookupDataRepository.findById(tempLookupData.getLookupId());
-        if (!lookupDataOpt.isPresent() || !this.isLookupOwnedByCaller(lookupDataOpt.get())) {
+        if (!lookupDataOpt.isPresent()) {
             return new ResponseDto(ERROR, String.format("LookupData not found with %d.", tempLookupData.getLookupId()));
+        }
+        // Says which rule stopped it. This used to answer "not found" for a row the caller could
+        // plainly see listed, which reads as a bug rather than a refusal.
+        String deleteRefusal = refuseModification(lookupDataOpt.get());
+        if (deleteRefusal != null) {
+            return new ResponseDto(ERROR, deleteRefusal);
         }
         this.lookupDataRepository.deleteById(tempLookupData.getLookupId());
         this.lookupDataCacheService.initializeCache();

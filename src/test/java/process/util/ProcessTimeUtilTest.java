@@ -150,19 +150,25 @@ class ProcessTimeUtilTest {
 
     @Test
     void passingTheEndDateExpiresTheSchedule() {
-        Scheduler s = scheduler("Daily", "1", LocalDateTime.now().minusHours(1));
-        s.setEndDate(LocalDate.now());
+        // Anchored to the last run rather than to today. An hour before midnight, "an hour ago"
+        // falls on the previous date, so the next daily run lands on today and an end date of
+        // LocalDate.now() is not yet passed -- the test failed only between 00:00 and 01:00.
+        LocalDateTime lastRun = LocalDateTime.now().minusHours(1);
+        Scheduler s = scheduler("Daily", "1", lastRun);
+        s.setEndDate(lastRun.toLocalDate());
         ProcessTimeUtil.applyNextRun(s);
-        assertTrue(s.isExpired(), "tomorrow is past an end date of today");
+        assertTrue(s.isExpired(), "the next daily run falls after the end date");
     }
 
     @Test
     void theEndDateItselfStillRuns() {
-        Scheduler s = scheduler("Daily", "1", LocalDateTime.now().minusHours(1));
-        s.setEndDate(LocalDate.now().plusDays(1));
+        LocalDateTime lastRun = LocalDateTime.now().minusHours(1);
+        LocalDate nextRunDay = lastRun.plusDays(1).toLocalDate();
+        Scheduler s = scheduler("Daily", "1", lastRun);
+        s.setEndDate(nextRunDay);
         ProcessTimeUtil.applyNextRun(s);
         assertFalse(s.isExpired());
-        assertEquals(LocalDate.now().plusDays(1), s.getNextRunAt().toLocalDate());
+        assertEquals(nextRunDay, s.getNextRunAt().toLocalDate());
     }
 
     @Test

@@ -90,6 +90,44 @@ public class TenantOwnedLookupTest {
             "a child of a platform-only family is platform-only");
     }
 
+    private boolean isTenantExtendable(String lookupType) throws Exception {
+        LookupData parent = new LookupData();
+        parent.setLookupType(lookupType);
+        Method method = SettingServiceImpl.class
+            .getDeclaredMethod("isTenantExtendable", LookupData.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(null, parent);
+    }
+
+    @Test
+    void aTenantMayAddItsOwnProviderWithoutOwningThePlatformsOnes() throws Exception {
+        // AI_PROVIDER sits between the other two categories: a tenant sees the platform's
+        // providers and can add its own beside them, but cannot edit or delete what is shared.
+        assertTrue(isTenantExtendable("AI_PROVIDER"));
+        assertFalse(isTenantOwned("AI_PROVIDER"),
+            "extendable is not the same as owned -- owned would hide the platform's providers");
+        assertFalse(isPlatformOnly("AI_PROVIDER"),
+            "a tenant has to be able to see the providers it points models at");
+    }
+
+    @Test
+    void ownedAndExtendableDoNotOverlap() throws Exception {
+        // A family in both sets would be contradictory: owned hides everything but your own,
+        // extendable deliberately shows the platform's.
+        for (String type : new String[] {
+            "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS" }) {
+            assertFalse(isTenantExtendable(type), type + " is owned outright, not extendable");
+        }
+    }
+
+    @Test
+    void engineStateIsNeitherOwnedNorExtendable() throws Exception {
+        for (String type : new String[] {
+            "SCHEDULER_LAST_RUN_TIME", "QUEUE_FETCH_LIMIT", "AUDIT_LOG_SYNC_LAST_RUN_TIME" }) {
+            assertFalse(isTenantExtendable(type), type + " must not be extendable");
+        }
+    }
+
     @Test
     void anUnknownTypeIsNotTenantOwned() throws Exception {
         // Default deny: a family added later is platform-level until somebody decides otherwise.
