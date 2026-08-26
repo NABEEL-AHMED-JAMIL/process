@@ -558,6 +558,10 @@ public class SettingServiceImpl implements SettingService {
                     lookupDataList.add(lookupDataDto2);
                 }
             }
+            // Children are built here rather than by the list endpoint, so they need the same
+            // author lookup -- without it every sub-entry showed a dash whoever made it.
+            this.userNameResolver.attachToDtos(lookupDataList, this.lookupDataRepository,
+                LookupData::getLookupId);
             appSettingDetail.put(LOOKUP_DATA, lookupDataList);
             return new ResponseDto(SUCCESS, "Data fetch successfully.", appSettingDetail);
         }
