@@ -47,6 +47,10 @@ public class EmailMessagesFactory {
             metaData.put("job_id", jobQueue.getJobId());
             metaData.put("event_id", jobQueue.getJobQueueId());
             metaData.put("time_slot", jobQueue.getStartTime());
+            // Both were on the DTO all along and neither reached the template, so every
+            // notification opened with "Your Source Job 1985" and a failure never said why.
+            metaData.put("job_name", jobQueue.getJobName());
+            metaData.put("status_message", jobQueue.getJobStatusMessage());
             EmailMessageDto emailMessageDto = new EmailMessageDto();
             emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
             if (jobStatus.equals(JobStatus.Skip)) {

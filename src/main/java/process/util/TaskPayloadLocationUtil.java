@@ -9,14 +9,17 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class TaskPayloadLocationUtil {
 
     private final Logger logger = LoggerFactory.getLogger(TaskPayloadLocationUtil.class);
 
-    private static final String[] BUCKET_TAGS = {"bucket", "bucket_name"};
-    private static final String[] INPUT_FOLDER_TAGS = {"input_folder" };
-    private static final String[] OUTPUT_FOLDER_TAGS = {"output_folder"};
+    private static final String[] BUCKET_TAGS = { "bucket", "bucket_name" };
+    private static final String[] INPUT_FOLDER_TAGS = { "input_folder" };
+    private static final String[] OUTPUT_FOLDER_TAGS = { "output_folder"};
 
     public static class Location {
         private final String bucket;

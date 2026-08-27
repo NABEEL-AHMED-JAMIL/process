@@ -73,11 +73,6 @@ public class SessionReusingFtpsClient extends FTPSClient {
                 .toLowerCase(Locale.ROOT);
             put.invoke(cache, hostAddressKey, controlSession);
         } catch (Exception e) {
-            // Deliberately non-fatal. On a JDK that blocks reflection into sun.security.ssl
-            // this is expected, and failing here would break every FTPS connection including
-            // the ones that never needed resumption. Without it the data connection still
-            // opens; only a server that mandates reuse refuses it, and that refusal now
-            // surfaces as a real error rather than an empty listing.
             if (!warnedOnce) {
                 warnedOnce = true;
                 LOGGER.warn("FTPS data connections can't reuse the control session on this JVM ({}). "

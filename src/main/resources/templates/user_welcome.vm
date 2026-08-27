@@ -1,56 +1,107 @@
 <!DOCTYPE html>
 <html>
-  <head><meta charset="utf-8" /></head>
-  <body style="margin:0;padding:24px;background:#f6f7fb;font-family:Arial,Helvetica,sans-serif;color:#171b2b;">
-    <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #dee1ee;border-radius:10px;padding:28px;">
-      <h1 style="margin:0 0 4px;font-size:19px;">You have an account on ETL Console</h1>
-      <p style="margin:0 0 20px;color:#4e5570;font-size:14px;line-height:1.6;">
-        Hello $request.get("full_name"), $request.get("created_by_name") has created an account
-        for you on <strong>$request.get("organisation_name")</strong>.
-      </p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light" />
+    <title>You have an account on ETL Console</title>
+  </head>
+  <!-- Layout is tables and inline styles on purpose: Outlook renders mail through Word, which
+       ignores <style> blocks, flexbox and grid. Everything here survives that. -->
+  <body style="margin:0;padding:0;background:#f6f7fb;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+           style="background:#f6f7fb;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"
+                 style="width:100%;max-width:560px;background:#ffffff;border:1px solid #dee1ee;
+                        border-radius:10px;font-family:Arial,Helvetica,sans-serif;color:#171b2b;">
 
-      <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        <tr>
-          <td style="padding:8px 0;color:#6b7392;width:150px;">Sign in at</td>
-          <td style="padding:8px 0;">
-            <a href="$request.get("sign_in_url")" style="color:#4f46e5;">$request.get("sign_in_url")</a>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;color:#6b7392;">Your username</td>
-          <td style="padding:8px 0;font-family:Consolas,Menlo,monospace;">$request.get("username")</td>
-        </tr>
+            <tr><td style="height:3px;background:#4f46e5;border-radius:10px 10px 0 0;
+                           font-size:0;line-height:0;">&nbsp;</td></tr>
+
+            <tr>
+              <td style="padding:26px 28px 0;">
+                <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;
+                            color:#8b92ab;font-weight:bold;">ETL Console</div>
+                <h1 style="margin:10px 0 0;font-size:19px;line-height:1.3;">You have an account on ETL Console</h1>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:16px 28px 0;font-size:14px;line-height:1.6;color:#4e5570;">
+                Hello $request.get("full_name"), $request.get("created_by_name") has created an account for you on <strong style="color:#171b2b;">$request.get("organisation_name")</strong>.
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:20px 28px 0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                       style="font-size:14px;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:9px 0;color:#6b7392;width:140px;border-bottom:1px solid #eef0f6;">Sign in at</td>
+                    <td style="padding:9px 0;border-bottom:1px solid #eef0f6;word-break:break-all;">
+                      <a href="$request.get("sign_in_url")" style="color:#4f46e5;">$request.get("sign_in_url")</a></td>
+                  </tr>
+                  <tr>
+                    <td style="padding:9px 0;color:#6b7392;border-bottom:1px solid #eef0f6;">Username</td>
+                    <td style="padding:9px 0;border-bottom:1px solid #eef0f6;word-break:break-all;
+                               font-family:Consolas,Menlo,monospace;">$request.get("username")</td>
+                  </tr>
 #if( $request.get("temporary_password") )
-        <tr>
-          <td style="padding:8px 0;color:#6b7392;">One-time password</td>
-          <td style="padding:8px 0;font-family:Consolas,Menlo,monospace;font-size:16px;">
-            <strong>$request.get("temporary_password")</strong>
-          </td>
-        </tr>
+                  <tr>
+                    <td style="padding:9px 0;color:#6b7392;border-bottom:1px solid #eef0f6;">One-time password</td>
+                    <td style="padding:9px 0;border-bottom:1px solid #eef0f6;
+                               font-family:Consolas,Menlo,monospace;font-size:16px;">
+                      <strong>$request.get("temporary_password")</strong></td>
+                  </tr>
 #end
-        <tr>
-          <td style="padding:8px 0;color:#6b7392;">Your role</td>
-          <td style="padding:8px 0;">$request.get("role_label")</td>
-        </tr>
-      </table>
-
+                  <tr>
+                    <td style="padding:9px 0;color:#6b7392;">Your role</td>
+                    <td style="padding:9px 0;">$request.get("role_label")</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
 #if( $request.get("temporary_password") )
-      <p style="margin:20px 0 0;color:#4e5570;font-size:14px;line-height:1.6;">
-        That password works once. You will be asked to choose your own the first time you sign
-        in, and you can change it again at any time from your profile.
-      </p>
+            <tr>
+              <td style="padding:18px 28px 0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding:12px 14px;background:#f7f8fb;border-left:3px solid #4f46e5;
+                               border-radius:0 6px 6px 0;font-size:13px;line-height:1.6;color:#4e5570;">
+                      That password works once. You will be asked to choose your own the first time you sign in, and you can change it again at any time from your profile.
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
 #else
-      <p style="margin:20px 0 0;color:#4e5570;font-size:14px;line-height:1.6;">
-        Your password was set for you when the account was created, so it is not repeated here.
-        Ask $request.get("created_by_name") for it if you do not have it, and change it from your
-        profile once you are in.
-      </p>
+            <tr>
+              <td style="padding:18px 28px 0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding:12px 14px;background:#f7f8fb;border-left:3px solid #4f46e5;
+                               border-radius:0 6px 6px 0;font-size:13px;line-height:1.6;color:#4e5570;">
+                      Your password was set for you when the account was created, so it is not repeated here. Ask $request.get("created_by_name") for it if you do not have it, and change it from your profile once you are in.
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
 #end
 
-      <p style="margin:20px 0 0;color:#6b7392;font-size:12px;line-height:1.6;">
-        If you were not expecting this, you can ignore this message -- the account cannot be used
-        until somebody signs in with it.
-      </p>
-    </div>
+            <tr>
+              <td style="padding:22px 28px 26px;">
+                <div style="border-top:1px solid #eef0f6;padding-top:16px;font-size:12px;color:#8b92ab;
+                            line-height:1.6;">
+                  If you were not expecting this, you can ignore this message &mdash; the account cannot be used until somebody signs in with it.
+                </div>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>

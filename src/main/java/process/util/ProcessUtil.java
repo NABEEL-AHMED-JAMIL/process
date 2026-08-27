@@ -2,6 +2,9 @@ package process.util;
 
 import java.time.format.DateTimeFormatter;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public class ProcessUtil {
 
     public static String INTERNAL_ERROR_500 = "Some internal error occurred contact with support.";
@@ -18,10 +21,6 @@ public class ProcessUtil {
     public static String JOB_STATUS_INVALID = "Job status must be Running, Failed, or Completed";
     public static String JOB_STATUS_MESSAGE_REQUIRED = "Job status message is required for failed and completed job.";
     public static String BAD_REQUEST_400 = "Bad request.";
-    public static String TASK_ID = "taskId";
-    public static String JOB_QUEUE = "jobQueue";
-    public static String TASK_DETAIL = "taskDetail";
-    public static String PRIORITY = "priority";
     public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     public static String REAL_FILE_PATH = "Scheduler.xlsx";
     public static String XLSX_EXTENSION = ".xlsx";

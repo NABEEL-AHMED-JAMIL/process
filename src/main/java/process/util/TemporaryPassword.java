@@ -9,7 +9,8 @@ import java.security.SecureRandom;
  * workspace request and an administrator adding a user -- produce the same strength and the
  * same alphabet. A generated value is emailed to its owner and is never logged, never returned
  * in a response, and never shown to whoever created the account.
- */
+ * @author Nabeel Ahmed
+ * */
 public final class TemporaryPassword {
 
     private static final int LENGTH = 16;
@@ -18,9 +19,7 @@ public final class TemporaryPassword {
      * No I, l, 1, O or 0. The password is read off a screen and typed by hand, and a character
      * someone mistypes is indistinguishable from a wrong password.
      */
-    private static final String ALPHABET =
-        "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-
+    private static final String ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private TemporaryPassword() {

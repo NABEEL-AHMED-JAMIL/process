@@ -1,41 +1,99 @@
 <!DOCTYPE html>
 <html>
-   <head>
-      <style>
-         table {
-             font-family: arial, sans-serif;
-             border-collapse: collapse;
-             width: 100%;
-         }
-         td, th {
-             border: 1px solid #dddddd;
-             text-align: left;
-             padding: 8px;
-         }
-         tr:nth-child(even) {
-             background-color: #dddddd;
-         }
-      </style>
-   </head>
-   <body>
-      <h4>Dear User,</h4>
-      <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Your Source Job $request.get("job_id") for $request.get("time_slot") time skip.
-         Please visit the site to view your job detail with queue event id $request.get("event_id").
-      </p>
-      <table>
-         <tr>
-            <th>Job Id</th>
-            <th>Queue Id</th>
-            <th>Status</th>
-         </tr>
-         <tr style="background-color: #dddddd;">
-            <td>$request.get("job_id")</td>
-            <td>$request.get("event_id")</td>
-            <td>$request.get("status")</td>
-         </tr>
-      </table>
-      <br>
-      Thanks,<br>
-      ETL Support Team.
-   </body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light" />
+    <title>A run was skipped</title>
+  </head>
+  <!-- Layout is tables and inline styles on purpose: Outlook renders mail through Word, which
+       ignores <style> blocks, flexbox and grid. Everything here survives that. -->
+  <body style="margin:0;padding:0;background:#f6f7fb;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+           style="background:#f6f7fb;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"
+                 style="width:100%;max-width:560px;background:#ffffff;border:1px solid #dee1ee;
+                        border-radius:10px;font-family:Arial,Helvetica,sans-serif;color:#171b2b;">
+
+            <!-- A 3px rule in the outcome's colour: the one thing readable before any text is. -->
+            <tr><td style="height:3px;background:#d97706;border-radius:10px 10px 0 0;
+                           font-size:0;line-height:0;">&nbsp;</td></tr>
+
+            <tr>
+              <td style="padding:26px 28px 0;">
+                <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;
+                            color:#8b92ab;font-weight:bold;">ETL Console</div>
+                <h1 style="margin:10px 0 0;font-size:19px;line-height:1.3;">A run was skipped</h1>
+                <div style="margin:12px 0 0;">
+                  <span style="display:inline-block;padding:3px 11px;border-radius:100px;
+                               font-size:12px;font-weight:bold;background:#fdf3e3;color:#8a4a06;">
+                    Skipped</span>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:18px 28px 0;font-size:14px;line-height:1.6;color:#4e5570;">
+                <!-- Falls back to the id when no name was recorded, rather than printing a gap. -->
+                #if( $request.get("job_name") )
+                <strong style="color:#171b2b;">$request.get("job_name")</strong>
+                #else
+                <strong style="color:#171b2b;">Job $request.get("job_id")</strong>
+                #end
+                was skipped and did not start.
+              </td>
+            </tr>
+
+            #if( $request.get("status_message") )
+            <tr>
+              <td style="padding:16px 28px 0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding:12px 14px;background:#f7f8fb;border-left:3px solid #d97706;
+                               border-radius:0 6px 6px 0;font-size:13px;line-height:1.6;color:#4e5570;">
+                      $request.get("status_message")
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            #end
+
+            <tr>
+              <td style="padding:20px 28px 0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                       style="font-size:14px;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:9px 0;color:#6b7392;width:140px;border-bottom:1px solid #eef0f6;">Job</td>
+                    <td style="padding:9px 0;border-bottom:1px solid #eef0f6;
+                               font-family:Consolas,Menlo,monospace;">$request.get("job_id")</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:9px 0;color:#6b7392;border-bottom:1px solid #eef0f6;">Run</td>
+                    <td style="padding:9px 0;border-bottom:1px solid #eef0f6;
+                               font-family:Consolas,Menlo,monospace;">$request.get("event_id")</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:9px 0;color:#6b7392;">Started</td>
+                    <td style="padding:9px 0;">$request.get("time_slot")</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:22px 28px 26px;">
+                <div style="border-top:1px solid #eef0f6;padding-top:16px;font-size:12px;color:#8b92ab;
+                            line-height:1.6;">
+                  Open the console to see this run's logs and output.
+                </div>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
 </html>

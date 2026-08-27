@@ -20,14 +20,11 @@
         <java.version>1.8</java.version>
         <commons-net.version>3.6</commons-net.version>
         <swagger.version>2.9.2</swagger.version>
-        <!-- 4.4.x is the last line supporting Spring Boot 2.x / Java 8; 5.x requires Spring
-             Boot 3 / Java 17+, which this project isn't on yet. -->
         <jodconverter.version>4.4.7</jodconverter.version>
     </properties>
 
     <dependencies>
 
-        <!-- Spring Boot Starters (versions managed by parent) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -53,80 +50,14 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Document Converter: drives the LibreOffice binary installed in Dockerfile to
-             convert between office document formats. jodconverter-spring-boot-starter
-             autoconfigures the OfficeManager + DocumentFormatRegistry beans from the
-             jodconverter.local.* properties (see application-*.properties). -->
-        <dependency>
-            <groupId>org.jodconverter</groupId>
-            <artifactId>jodconverter-spring-boot-starter</artifactId>
-            <version>${jodconverter.version}</version>
-        </dependency>
-        <!-- The starter marks its actual engine implementation as optional; it only ships
-             autoconfiguration classes, so jodconverter-local (which pulls in jodconverter-core)
-             has to be declared explicitly to get the real conversion classes/OfficeManager. -->
-        <dependency>
-            <groupId>org.jodconverter</groupId>
-            <artifactId>jodconverter-local</artifactId>
-            <version>${jodconverter.version}</version>
-        </dependency>
-
-        <!-- File Chat: pulls the embedded text layer out of a PDF (Document Converter's own
-             output format for office docs) so it can be handed to the AI as plain text, and
-             rasterizes a page to an image for the vision-model fallback when there's no text
-             layer at all (scanned documents, image-only PDFs). -->
-        <dependency>
-            <groupId>org.apache.pdfbox</groupId>
-            <artifactId>pdfbox</artifactId>
-            <version>2.0.31</version>
-        </dependency>
-
-        <!-- Test (JUnit 5 + Mockito + AssertJ, versions managed by parent) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- Auth (Phase 0: JWT auth + tenant foundation) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.11.5</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.11.5</version>
-            <scope>runtime</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.11.5</version>
-            <scope>runtime</scope>
-        </dependency>
-
-        <!-- Redis: backs the per-user WebSocket presence registry (see WebSocketPresenceService)
-             and general read-heavy caching (@EnableCaching / RedisCacheManager, see CacheConfig)
-        -->
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
-        </dependency>
-
-        <!-- Monitoring -->
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
-            <scope>runtime</scope>
         </dependency>
 
         <!-- Swagger -->
@@ -155,6 +86,62 @@
             <version>2.5.12.RELEASE</version>
         </dependency>
 
+        <!-- Document Converter: drives the LibreOffice binary installed in Dockerfile to
+             convert between office document formats. jodconverter-spring-boot-starter
+             autoconfigures the OfficeManager + DocumentFormatRegistry beans from the
+             jodconverter.local.* properties (see application-*.properties). -->
+        <dependency>
+            <groupId>org.jodconverter</groupId>
+            <artifactId>jodconverter-spring-boot-starter</artifactId>
+            <version>${jodconverter.version}</version>
+        </dependency>
+
+        <!-- The starter marks its actual engine implementation as optional; it only ships
+             autoconfiguration classes, so jodconverter-local (which pulls in jodconverter-core)
+             has to be declared explicitly to get the real conversion classes/OfficeManager. -->
+        <dependency>
+            <groupId>org.jodconverter</groupId>
+            <artifactId>jodconverter-local</artifactId>
+            <version>${jodconverter.version}</version>
+        </dependency>
+
+        <!-- File Chat: pulls the embedded text layer out of a PDF (Document Converter's own
+             output format for office docs) so it can be handed to the AI as plain text, and
+             rasterizes a page to an image for the vision-model fallback when there's no text
+             layer at all (scanned documents, image-only PDFs). -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.31</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Monitoring -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Database -->
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -175,6 +162,7 @@
             <artifactId>commons-csv</artifactId>
             <version>1.10.0</version>
         </dependency>
+
         <dependency>
             <groupId>com.github.jsqlparser</groupId>
             <artifactId>jsqlparser</artifactId>
@@ -267,6 +255,13 @@
             <groupId>com.azure</groupId>
             <artifactId>azure-storage-blob</artifactId>
             <version>12.25.3</version>
+        </dependency>
+
+        <!-- Test (JUnit 5 + Mockito + AssertJ, versions managed by parent) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
