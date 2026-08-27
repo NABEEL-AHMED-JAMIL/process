@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.slf4j.Logger;
+import java.util.Collections;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import process.model.dto.AdHocPromptRequestDto;
@@ -36,7 +37,59 @@ public class FileChatServiceImpl implements FileChatService {
 
     private static final int MAX_HISTORY_MESSAGES = 8;
 
-    private static final int MAX_PROMPT_FILE_CHARS = 30000;
+    /**
+     * How much of a file reaches the model, by provider.
+     *
+     * One global 30,000 was sized for 2022 context windows -- roughly 7,500 tokens, when the
+     * hosted models now take 128k to 200k. On this platform's own files that cut one in six of
+     * them off mid-document: average 12,299 characters, largest 61,866.
+     *
+     * The number is wrong in both directions from a single value, which is why it is per
+     * provider: a local Ollama is often built with an 8k window and would choke on what Claude
+     * reads comfortably. Roughly four characters to a token, then a wide margin for the
+     * instructions and the conversation that share the window.
+     */
+    private static final Map<String, Integer> PROMPT_FILE_CHARS_BY_PROVIDER;
+    static {
+        Map<String, Integer> limits = new HashMap<>();
+        limits.put("ANTHROPIC", 400000);
+        limits.put("OPENAI", 250000);
+        limits.put("AZURE-OPENAI", 250000);
+        limits.put("OLLAMA", 24000);
+        PROMPT_FILE_CHARS_BY_PROVIDER = Collections.unmodifiableMap(limits);
+    }
+
+    /** Used when the provider is unknown, and deliberately the smallest of them. */
+    private static final int DEFAULT_PROMPT_FILE_CHARS = 24000;
+
+    /**
+     * The provider behind an agent, or null when there is not one to ask.
+     *
+     * Never throws: this only decides which limit to report, and a readiness check failing
+     * because an agent lookup did would stop the panel opening at all.
+     */
+    private String providerFor(Long aiAgentId) {
+        if (isNull(aiAgentId)) {
+            return null;
+        }
+        try {
+            ResponseDto config = this.aiAgentService.resolveRuntimeConfig(aiAgentId);
+            if (config != null && SUCCESS.equals(config.getStatus()) && config.getData() != null) {
+                return ((AiAgentRuntimeConfigDto) config.getData()).getProvider();
+            }
+        } catch (Exception ex) {
+            logger.warn("Could not resolve provider for agent {}: {}", aiAgentId, ex.getMessage());
+        }
+        return null;
+    }
+
+    private static int promptFileCharsFor(String provider) {
+        if (provider == null) {
+            return DEFAULT_PROMPT_FILE_CHARS;
+        }
+        return PROMPT_FILE_CHARS_BY_PROVIDER.getOrDefault(
+            provider.trim().toUpperCase(), DEFAULT_PROMPT_FILE_CHARS);
+    }
 
     private static final int MAX_EXPORT_CONTENT_CHARS = 200000;
 
@@ -86,7 +139,7 @@ public class FileChatServiceImpl implements FileChatService {
     }
 
     @Override
-    public ResponseDto prepareContext(String bucket, String key) throws Exception {
+    public ResponseDto prepareContext(String bucket, String key, Long aiAgentId) throws Exception {
         ResponseDto validationError = this.validateBucketAccess(bucket, key);
         if (validationError != null) {
             return validationError;
@@ -99,13 +152,19 @@ public class FileChatServiceImpl implements FileChatService {
         if (isNull(text) || text.trim().isEmpty()) {
             return new ResponseDto(ERROR, this.unsupportedMessage(key));
         }
-        // Only the first MAX_PROMPT_FILE_CHARS reach the model. The prompt tells the model its
-        // view is cut short, but the person asking had no way to know their "summarise this"
-        // covered only the opening section -- report it so the UI can say so up front.
+        // The prompt tells the model its view is cut short, but the person asking had no way to
+        // know their "summarise this" covered only the opening section -- report it so the UI
+        // can say so before they ask rather than after.
+        //
+        // Against the chosen agent's provider where one is known. Without an agent the smallest
+        // limit is assumed, so the warning errs towards appearing when it might not be needed
+        // rather than staying silent when it is.
+        int limit = promptFileCharsFor(providerFor(aiAgentId));
         Map<String, Object> readiness = new HashMap<>();
-        readiness.put("truncated", text.length() > MAX_PROMPT_FILE_CHARS);
-        readiness.put("charsUsed", Math.min(text.length(), MAX_PROMPT_FILE_CHARS));
+        readiness.put("truncated", text.length() > limit);
+        readiness.put("charsUsed", Math.min(text.length(), limit));
         readiness.put("totalChars", text.length());
+        readiness.put("limit", limit);
         return new ResponseDto(SUCCESS, "Ready.", readiness);
     }
 
@@ -151,7 +210,7 @@ public class FileChatServiceImpl implements FileChatService {
             return new ResponseDto(ERROR, this.unsupportedMessage(dto.getKey()));
         }
 
-        String instructions = this.buildInstructions(dto.getBucket(), dto.getKey(), fileText, dto.getHistory());
+        String instructions = this.buildInstructions(dto.getBucket(), dto.getKey(), fileText, dto.getHistory(), provider);
 
         AdHocPromptRequestDto adHocPromptRequestDto = new AdHocPromptRequestDto();
         adHocPromptRequestDto.setProvider(provider);
@@ -202,9 +261,11 @@ public class FileChatServiceImpl implements FileChatService {
         }
     }
 
-    private String buildInstructions(String bucket, String key, String fileText, List<FileChatHistoryItemDto> history) {
-        boolean truncated = fileText.length() > MAX_PROMPT_FILE_CHARS;
-        String promptFileText = truncated ? fileText.substring(0, MAX_PROMPT_FILE_CHARS) : fileText;
+    private String buildInstructions(String bucket, String key, String fileText,
+        List<FileChatHistoryItemDto> history, String provider) {
+        int limit = promptFileCharsFor(provider);
+        boolean truncated = fileText.length() > limit;
+        String promptFileText = truncated ? fileText.substring(0, limit) : fileText;
         String sourceRef = bucket + "/" + key;
 
         StringBuilder instructions = new StringBuilder();

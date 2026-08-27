@@ -13,6 +13,9 @@ public class FileChatPrepareRequestDto {
 
     private String bucket;
     private String key;
+    /** Optional. Which agent will answer, so readiness reports that provider's limit
+        rather than a number that may not apply. */
+    private Long aiAgentId;
 
     public FileChatPrepareRequestDto() {}
 
@@ -35,5 +38,13 @@ public class FileChatPrepareRequestDto {
     @Override
     public String toString() {
         return new Gson().toJson(this);
+    }
+
+    public Long getAiAgentId() {
+        return aiAgentId;
+    }
+
+    public void setAiAgentId(Long aiAgentId) {
+        this.aiAgentId = aiAgentId;
     }
 }

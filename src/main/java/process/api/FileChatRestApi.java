@@ -34,7 +34,8 @@ public class FileChatRestApi {
     public ResponseEntity<?> prepareContext(@RequestBody FileChatPrepareRequestDto requestDto) {
         try {
             return new ResponseEntity<>(
-                this.fileChatService.prepareContext(requestDto.getBucket(), requestDto.getKey()), HttpStatus.OK);
+                this.fileChatService.prepareContext(requestDto.getBucket(), requestDto.getKey(),
+                    requestDto.getAiAgentId()), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while prepareContext ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

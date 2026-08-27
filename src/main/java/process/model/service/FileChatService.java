@@ -9,7 +9,7 @@ import process.model.dto.ResponseDto;
  * */
 public interface FileChatService {
 
-    ResponseDto prepareContext(String bucket, String key) throws Exception;
+    ResponseDto prepareContext(String bucket, String key, Long aiAgentId) throws Exception;
 
     ResponseDto sendMessage(FileChatMessageRequestDto dto) throws Exception;
 
