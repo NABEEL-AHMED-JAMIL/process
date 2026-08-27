@@ -13,6 +13,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import process.security.JwtAuthenticationFilter;
 import process.util.JwtUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Configuration
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 

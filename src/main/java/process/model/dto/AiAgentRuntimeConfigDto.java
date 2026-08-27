@@ -11,6 +11,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * built fresh per request and never sent back to a client, so no toString() override is
  * provided here -- deliberately, to keep an accidental log statement from ever serializing the
  * key the way a Gson-based toString() would.
+ *
+ * @author Nabeel Ahmed
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)

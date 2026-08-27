@@ -8,6 +8,9 @@ import process.model.pojo.QuerySchedule;
 import java.sql.Timestamp;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface QueryScheduleRepository extends JpaRepository<QuerySchedule, Long> {
 

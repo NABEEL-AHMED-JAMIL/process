@@ -9,6 +9,7 @@ import java.security.SecureRandom;
  * workspace request and an administrator adding a user -- produce the same strength and the
  * same alphabet. A generated value is emailed to its owner and is never logged, never returned
  * in a response, and never shown to whoever created the account.
+ *
  * @author Nabeel Ahmed
  * */
 public final class TemporaryPassword {

@@ -11,6 +11,9 @@ import process.model.dto.TextCleanRequestDto;
 import process.util.ProcessUtil;
 import process.util.TextCleanerUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/textCleaner.json")

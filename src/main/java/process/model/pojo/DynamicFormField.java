@@ -7,6 +7,9 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Entity
 @Table(name = "dynamic_form_field")
 @JsonIgnoreProperties(ignoreUnknown=true)

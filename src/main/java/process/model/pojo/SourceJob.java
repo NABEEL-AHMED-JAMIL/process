@@ -22,6 +22,9 @@ import java.time.LocalDateTime;
 
     @Index(name = "idx_source_job_assigned_user_id", columnList = "assigned_user_id")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown=true)

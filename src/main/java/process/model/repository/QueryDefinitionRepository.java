@@ -6,6 +6,9 @@ import process.model.enums.Status;
 import process.model.pojo.QueryDefinition;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface QueryDefinitionRepository extends JpaRepository<QueryDefinition, Long> {
 

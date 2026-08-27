@@ -264,6 +264,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Google's phone number metadata: the per-country digit rules, kept current by
+             upstream. Hand-rolled length checks go stale the moment a country adds a range, and
+             they cannot tell a valid mobile prefix from an invalid one at the same length. -->
+        <dependency>
+            <groupId>com.googlecode.libphonenumber</groupId>
+            <artifactId>libphonenumber</artifactId>
+            <version>8.13.50</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -11,6 +11,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class EncryptionUtil {
 

@@ -9,6 +9,9 @@ import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import java.security.Principal;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class WebSocketEventListener {
 

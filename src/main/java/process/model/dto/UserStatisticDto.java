@@ -6,6 +6,8 @@ package process.model.dto;
  * Jobs attribute directly through assigned_user_id. Tasks carry no owner in the schema, so
  * taskCount is the distinct tasks this user's jobs point at -- named plainly here so a reader
  * does not take it for something the user is recorded as owning.
+ *
+ * @author Nabeel Ahmed
  */
 public class UserStatisticDto {
 

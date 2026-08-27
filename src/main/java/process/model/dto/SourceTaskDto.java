@@ -6,6 +6,9 @@ import com.google.gson.Gson;
 import process.model.enums.Status;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskDto implements AuditNamed {

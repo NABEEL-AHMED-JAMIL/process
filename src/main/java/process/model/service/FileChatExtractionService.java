@@ -1,5 +1,8 @@
 package process.model.service;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface FileChatExtractionService {
 
     String extractText(String bucket, String key, String etag) throws Exception;

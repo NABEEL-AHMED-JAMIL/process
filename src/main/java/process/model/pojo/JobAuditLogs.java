@@ -14,6 +14,9 @@ import process.model.enums.Status;
 @Table(name = "job_audit_logs", indexes = {
     @Index(name = "idx_job_audit_logs_job_queue_id", columnList = "job_queue_id")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class JobAuditLogs {

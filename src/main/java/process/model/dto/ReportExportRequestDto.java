@@ -8,6 +8,8 @@ import java.util.List;
  * The grid is sent rather than re-queried because the user is exporting exactly what they are
  * looking at -- the dimensions, measure and filters they arrived at by clicking. Re-deriving it
  * from a query would risk exporting something subtly different from what is on screen.
+ *
+ * @author Nabeel Ahmed
  */
 public class ReportExportRequestDto {
 

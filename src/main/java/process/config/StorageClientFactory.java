@@ -33,6 +33,8 @@ import java.util.List;
  * is wasteful to repeat per request. The cache key includes a fingerprint of the connection's
  * settings so that editing a connection's credentials takes effect immediately instead of
  * serving a stale client built from the old values.
+ *
+ * @author Nabeel Ahmed
  */
 @Component
 public class StorageClientFactory {

@@ -12,6 +12,9 @@ import javax.annotation.PostConstruct;
 import java.io.StringWriter;
 import java.util.Map;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class VelocityManager {
 

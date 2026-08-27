@@ -12,6 +12,9 @@ import process.model.dto.ResponseDto;
 import process.model.service.AudioTranscriptService;
 import process.util.ProcessUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/audioTranscript.json")

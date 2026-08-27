@@ -17,6 +17,9 @@ import process.socket.JobEventPublisher;
 import java.security.Principal;
 import java.util.Collections;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 

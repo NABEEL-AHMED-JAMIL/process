@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.NotificationDto;
-import process.model.dto.PagingDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
@@ -31,6 +30,9 @@ import java.util.stream.Collectors;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Service
 public class NotificationCenterServiceImpl implements NotificationCenterService {
 

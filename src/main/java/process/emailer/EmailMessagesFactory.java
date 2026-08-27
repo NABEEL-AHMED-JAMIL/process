@@ -18,6 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 import static process.util.ProcessUtil.isNull;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class EmailMessagesFactory {
 

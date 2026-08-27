@@ -3,6 +3,9 @@ package process.model.service;
 import process.model.dto.QueryDefinitionDto;
 import process.model.dto.ResponseDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface QueryDefinitionService {
 
     public ResponseDto addQuery(QueryDefinitionDto dto) throws Exception;

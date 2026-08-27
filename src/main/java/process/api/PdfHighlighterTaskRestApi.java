@@ -19,6 +19,9 @@ import process.util.ProcessUtil;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*", exposedHeaders = {HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH})
 @RequestMapping(value = "/pdfHighlighter.json")

@@ -4,6 +4,9 @@ import javax.persistence.AttributeConverter;
 import javax.persistence.Converter;
 import process.model.enums.Status;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Converter(autoApply = true)
 public class StatusConverter implements AttributeConverter<Status, String> {
 

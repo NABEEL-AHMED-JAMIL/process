@@ -12,6 +12,9 @@ import process.model.dto.ResponseDto;
 import process.model.service.MessageQService;
 import process.util.ProcessUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/message.json")

@@ -21,6 +21,9 @@ import java.util.*;
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.SUCCESS;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Service
 public class MessageQServiceImpl implements MessageQService {
 

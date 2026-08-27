@@ -15,6 +15,8 @@ import javax.persistence.PreUpdate;
  * Nothing is stamped when there is no acting user. Scheduled work, Kafka callbacks and the
  * public workspace-request form all run with no one signed in, and a row those touch honestly
  * has no human author; writing an id there would be a lie that outlives the request.
+ *
+ * @author Nabeel Ahmed
  */
 public class AuditListener {
 

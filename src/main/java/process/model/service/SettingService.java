@@ -5,6 +5,9 @@ import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.projection.ItemResponse;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface SettingService {
 
     public ResponseDto dynamicQueryResponse(ItemResponse itemResponse);

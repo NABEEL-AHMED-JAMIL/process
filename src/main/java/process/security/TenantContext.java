@@ -1,5 +1,8 @@
 package process.security;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public final class TenantContext {
 
     private static final ThreadLocal<Long> TENANT_ID = new ThreadLocal<>();

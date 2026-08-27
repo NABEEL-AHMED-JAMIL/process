@@ -9,6 +9,9 @@ import org.springframework.context.annotation.Configuration;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Configuration
 public class DocumentConverterConfig {
 

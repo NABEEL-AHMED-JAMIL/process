@@ -21,6 +21,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Service
 @Transactional
 public class QueryService {

@@ -25,6 +25,8 @@ import java.util.Locale;
  * tracker itself documents (NET-408). If the internals aren't reachable on the running JDK
  * the socket is left as-is: the connection then behaves exactly as it did before, so a server
  * that doesn't require resumption is unaffected either way.
+ *
+ * @author Nabeel Ahmed
  */
 public class SessionReusingFtpsClient extends FTPSClient {
 

@@ -22,6 +22,8 @@ import process.util.ProcessUtil;
  * Submitting is open, because whoever is asking has no account yet -- that is the point. Reading
  * and deciding are for a platform administrator: a request carries someone's name and address,
  * and granting one creates a tenant.
+ *
+ * @author Nabeel Ahmed
  */
 @CrossOrigin(origins = "*")
 @RestController

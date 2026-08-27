@@ -8,6 +8,9 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.LookupData;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface LookupDataRepository extends CrudRepository<LookupData, Long> {
 

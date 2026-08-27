@@ -13,6 +13,9 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import process.model.dto.ResponseDto;
 import process.util.ProcessUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 

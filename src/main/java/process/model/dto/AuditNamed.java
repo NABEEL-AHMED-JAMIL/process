@@ -7,6 +7,8 @@ package process.model.dto;
  * a native query mapped by column position. Adding two columns to that SQL means renumbering
  * every index below them, which is exactly the kind of edit that silently shifts a field into
  * the wrong slot -- so the names are attached afterwards, by id, instead.
+ *
+ * @author Nabeel Ahmed
  */
 public interface AuditNamed {
 

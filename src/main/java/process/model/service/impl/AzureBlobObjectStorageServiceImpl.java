@@ -27,6 +27,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Service("azureBlobObjectStorageService")
 public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
 

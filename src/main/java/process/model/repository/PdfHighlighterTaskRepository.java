@@ -9,6 +9,9 @@ import process.model.enums.Status;
 import process.model.pojo.PdfHighlighterTask;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface PdfHighlighterTaskRepository extends JpaRepository<PdfHighlighterTask, Long> {
 

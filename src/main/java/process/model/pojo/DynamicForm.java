@@ -18,6 +18,9 @@ import java.util.List;
 @Table(name = "dynamic_form", indexes = {
     @Index(name = "idx_dynamic_form_tenant_id", columnList = "tenant_id")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown=true)

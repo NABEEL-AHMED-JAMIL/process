@@ -2,6 +2,9 @@ package process.model.dto;
 
 import java.io.InputStream;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public class ObjectContentDto {
 
     private InputStream content;

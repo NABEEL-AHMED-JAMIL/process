@@ -15,6 +15,8 @@ import java.util.List;
  * file chat, and every existing `bucket` parameter -- but it doesn't have to equal the actual
  * bucket name at the provider (and for FTP there is no bucket at all). Doing the swap in one
  * adapter keeps that translation out of all fifteen call sites in StorageBrowserServiceImpl.
+ *
+ * @author Nabeel Ahmed
  */
 class BucketRewritingStorageService implements ObjectStorageService {
 

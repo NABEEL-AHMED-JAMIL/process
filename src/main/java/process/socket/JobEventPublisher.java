@@ -19,6 +19,8 @@ import java.util.Map;
  *
  * The payload is deliberately small: enough to patch one row in place. A client that wants
  * the whole record still has fetchSourceJobDetailWithSourceJobId.
+ *
+ * @author Nabeel Ahmed
  */
 @Component
 public class JobEventPublisher {

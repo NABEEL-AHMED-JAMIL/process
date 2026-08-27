@@ -5,6 +5,9 @@ import org.springframework.stereotype.Repository;
 import process.model.pojo.QueryExecution;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface QueryExecutionRepository extends JpaRepository<QueryExecution, Long> {
 

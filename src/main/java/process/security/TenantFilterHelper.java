@@ -6,6 +6,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import javax.persistence.EntityManager;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class TenantFilterHelper {
 

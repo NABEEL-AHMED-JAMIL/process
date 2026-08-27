@@ -13,6 +13,9 @@ import org.springframework.kafka.core.ProducerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Configuration
 public class KafkaProducerConfig {
 

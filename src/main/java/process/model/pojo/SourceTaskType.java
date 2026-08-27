@@ -13,6 +13,9 @@ import javax.persistence.*;
     @Index(name = "idx_stt_tenant_id", columnList = "tenant_id"),
     @Index(name = "idx_stt_kafka_profile_id", columnList = "kafka_connection_profile_id")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)

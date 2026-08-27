@@ -6,6 +6,9 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.TenantTaskTypeKafkaRoute;
 import java.util.Optional;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface TenantTaskTypeKafkaRouteRepository extends JpaRepository<TenantTaskTypeKafkaRoute, Long> {
 

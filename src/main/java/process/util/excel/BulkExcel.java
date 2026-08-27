@@ -9,6 +9,9 @@ import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.usermodel.*;
 import org.springframework.stereotype.Component;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class BulkExcel {
 
@@ -82,10 +85,6 @@ public class BulkExcel {
     public String getCellDetail(Row row, Integer index) {
         Cell currentCell = row.getCell(index, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
         return this.cellFormatter.formatCellValue(currentCell).trim();
-    }
-
-    public void fillDropDownValue(XSSFSheet sheet, Integer row, Integer col, String[] dropList) {
-        this.fillDropDownValue(sheet, row, row, col, dropList);
     }
 
     public void fillDropDownValue(XSSFSheet sheet, Integer firstRow, Integer lastRow, Integer col, String[] dropList) {

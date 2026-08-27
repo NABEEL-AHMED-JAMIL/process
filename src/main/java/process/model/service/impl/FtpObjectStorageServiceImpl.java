@@ -34,6 +34,8 @@ import java.util.List;
  * connections are stateful (current working directory, transfer mode) and idle-timeout
  * aggressively on most servers, so a shared long-lived client would both leak state between
  * concurrent callers and break unpredictably after periods of inactivity.
+ *
+ * @author Nabeel Ahmed
  */
 public class FtpObjectStorageServiceImpl implements ObjectStorageService {
 

@@ -17,6 +17,8 @@ import org.jodconverter.core.document.DocumentFormat;
  * reproduces them. The filter is registered for the TEXT family only -- an HTML source loads
  * as Writer/Web instead and fails with "no export filter", which is why the family below is
  * TEXT rather than the input's own family.
+ *
+ * @author Nabeel Ahmed
  */
 public final class MarkdownDocumentFormat {
 

@@ -14,6 +14,9 @@ import javax.annotation.PostConstruct;
 import java.sql.Timestamp;
 import java.util.UUID;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class TenantSeedService {
 

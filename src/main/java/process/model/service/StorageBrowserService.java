@@ -8,6 +8,9 @@ import process.model.dto.ObjectMetadataDto;
 import java.io.InputStream;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface StorageBrowserService {
 
     List<BucketSummaryDto> listBuckets();

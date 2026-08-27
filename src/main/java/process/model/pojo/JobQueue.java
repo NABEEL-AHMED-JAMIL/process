@@ -19,6 +19,9 @@ import java.time.LocalDateTime;
 @Table(name = "job_queue", indexes = {
     @Index(name = "idx_job_queue_job_id", columnList = "job_id")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class JobQueue {

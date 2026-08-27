@@ -21,6 +21,9 @@ import process.util.ProcessUtil;
 import java.time.LocalDateTime;
 import java.util.*;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 @Transactional
 public class BulkAction {

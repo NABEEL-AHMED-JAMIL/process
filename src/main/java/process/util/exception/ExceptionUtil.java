@@ -5,6 +5,9 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public class ExceptionUtil {
 
     public Logger logger = LogManager.getLogger(ExceptionUtil.class);

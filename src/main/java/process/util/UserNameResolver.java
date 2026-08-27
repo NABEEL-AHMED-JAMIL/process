@@ -19,6 +19,8 @@ import java.util.stream.Collectors;
  * carried them, so every screen showed work with no author. Resolving them one at a time while
  * mapping a list would mean a query per row, so callers hand over every id at once and get a
  * lookup back.
+ *
+ * @author Nabeel Ahmed
  */
 @Component
 public class UserNameResolver {

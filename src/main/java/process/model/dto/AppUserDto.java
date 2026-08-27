@@ -7,9 +7,14 @@ import process.model.enums.Status;
 import process.model.enums.UserRole;
 import java.sql.Timestamp;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AppUserDto implements AuditNamed {
+    private String phoneNumber;
+
     private Long createdBy;
 
     private String createdByName;
@@ -196,5 +201,13 @@ public class AppUserDto implements AuditNamed {
     @Override
     public void setCreatedBy(Long createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 }

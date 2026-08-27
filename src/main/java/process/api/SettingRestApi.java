@@ -15,6 +15,9 @@ import process.model.service.SettingService;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/setting.json")

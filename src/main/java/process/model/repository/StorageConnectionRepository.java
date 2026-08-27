@@ -7,6 +7,9 @@ import process.model.pojo.StorageConnection;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface StorageConnectionRepository extends JpaRepository<StorageConnection, Long> {
 

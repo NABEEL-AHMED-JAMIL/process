@@ -15,6 +15,8 @@ import process.util.ProcessUtil;
  * Managing storage connections means handling credentials, so this whole controller is
  * TENANT_ADMIN-only -- ordinary TENANT_USERs still browse the resulting buckets through
  * StorageBrowserRestApi, they just can't see or change how those buckets are connected.
+ *
+ * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")

@@ -11,6 +11,9 @@ import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface KafkaConnectionProfileRepository extends JpaRepository<KafkaConnectionProfile, Long> {
 

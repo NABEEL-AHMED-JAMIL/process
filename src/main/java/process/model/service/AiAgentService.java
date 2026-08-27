@@ -4,6 +4,9 @@ import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
 import process.model.dto.ResponseDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface AiAgentService {
 
     public ResponseDto addAgent(AiAgentDto aiAgentDto) throws Exception;

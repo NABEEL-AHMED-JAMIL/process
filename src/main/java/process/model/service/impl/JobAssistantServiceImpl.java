@@ -8,7 +8,6 @@ import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentRuntimeConfigDto;
 import process.model.dto.JobAssistantRequestDto;
 import process.model.dto.ResponseDto;
-import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
@@ -24,7 +23,6 @@ import process.util.ProcessUtil;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -39,6 +37,8 @@ import java.util.stream.Collectors;
  *
  * The agent's API key is resolved and used here, never returned to the browser, following the
  * same path file chat uses.
+ *
+ * @author Nabeel Ahmed
  */
 @Service
 public class JobAssistantServiceImpl {

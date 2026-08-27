@@ -17,6 +17,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Service
 public class OllamaServiceImpl implements OllamaService {
 

@@ -6,6 +6,9 @@ import com.google.gson.Gson;
 import process.model.enums.TenantStatus;
 import java.sql.Timestamp;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TenantDto implements AuditNamed {

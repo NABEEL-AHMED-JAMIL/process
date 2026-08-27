@@ -8,6 +8,9 @@ import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Entity
 @Table(name = "dynamic_form_submission")
 @JsonIgnoreProperties(ignoreUnknown=true)

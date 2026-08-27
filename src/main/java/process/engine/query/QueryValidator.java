@@ -11,6 +11,9 @@ import net.sf.jsqlparser.statement.select.WithItem;
 import org.springframework.stereotype.Component;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class QueryValidator {
 

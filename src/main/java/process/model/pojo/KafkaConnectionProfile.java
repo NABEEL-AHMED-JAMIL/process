@@ -13,6 +13,9 @@ import java.sql.Timestamp;
 @Table(name = "kafka_connection_profile", indexes = {
     @Index(name = "idx_kcp_tenant_id", columnList = "tenant_id")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)

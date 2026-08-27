@@ -6,6 +6,9 @@ import process.model.enums.Status;
 import process.model.pojo.DatabaseConnectionProfile;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface DatabaseConnectionProfileRepository extends JpaRepository<DatabaseConnectionProfile, Long> {
 

@@ -3,6 +3,9 @@ package process.model.service;
 import process.model.dto.ResponseDto;
 import process.model.dto.TenantDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface TenantService {
 
     public ResponseDto listTenants() throws Exception;

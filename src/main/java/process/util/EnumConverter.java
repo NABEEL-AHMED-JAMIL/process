@@ -4,6 +4,9 @@ import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Deprecated
 public class EnumConverter {
 

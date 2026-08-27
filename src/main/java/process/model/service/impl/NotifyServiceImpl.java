@@ -18,6 +18,9 @@ import java.util.Optional;
 import static process.util.ProcessUtil.ERROR;
 import process.socket.JobEventPublisher;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Service
 @Transactional
 public class NotifyServiceImpl implements NotifyService {

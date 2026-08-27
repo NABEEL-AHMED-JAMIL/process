@@ -4,6 +4,9 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public class KafkaTopicPartitionUtil {
 
     private static final Pattern PATTERN = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9]+|\\*)\\]$");

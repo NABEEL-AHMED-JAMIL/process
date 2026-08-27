@@ -39,6 +39,8 @@ import static process.util.ProcessUtil.SUCCESS;
  * record and no more. The tenant, its first administrator and that account's password come into
  * existence only when a platform administrator approves, which is the point at which a person
  * has vouched for the claim.
+ *
+ * @author Nabeel Ahmed
  */
 @Service
 public class TenantRequestServiceImpl {

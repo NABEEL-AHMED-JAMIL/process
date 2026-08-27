@@ -7,6 +7,9 @@ import process.model.enums.DatabaseType;
 import process.model.enums.Status;
 import java.sql.Timestamp;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DatabaseConnectionProfileDto {

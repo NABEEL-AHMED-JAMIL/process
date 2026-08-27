@@ -17,6 +17,9 @@ import process.model.service.QueryExecutionService;
 import process.model.service.QueryScheduleService;
 import process.util.ProcessUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/queryEngine.json")

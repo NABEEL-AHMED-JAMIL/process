@@ -14,6 +14,9 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import process.model.service.impl.TransactionServiceImpl;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @SpringBootApplication
 public class ModelApplication {
 

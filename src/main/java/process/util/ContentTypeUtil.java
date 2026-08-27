@@ -6,6 +6,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public final class ContentTypeUtil {
 
     private ContentTypeUtil() {}

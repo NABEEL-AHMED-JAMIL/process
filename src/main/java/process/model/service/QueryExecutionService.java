@@ -4,6 +4,9 @@ import process.model.dto.QueryExecutionRequestDto;
 import process.model.dto.ResponseDto;
 import process.model.pojo.QuerySchedule;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface QueryExecutionService {
 
     public ResponseDto execute(QueryExecutionRequestDto request) throws Exception;

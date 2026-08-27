@@ -16,6 +16,8 @@ import java.util.List;
  *
  * Holds no payload of its own. A task's tags remain the only record of what it sends; this
  * describes what those tags mean. Delete a form and every task built with it keeps working.
+ *
+ * @author Nabeel Ahmed
  */
 @Entity
 @Table(name = "task_form")

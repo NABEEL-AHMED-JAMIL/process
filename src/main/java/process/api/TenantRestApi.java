@@ -11,6 +11,9 @@ import process.model.dto.TenantDto;
 import process.model.service.TenantService;
 import process.util.ProcessUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/tenant.json")

@@ -6,6 +6,8 @@ package process.model.pojo;
  * Implemented rather than inherited: these entities already have their own shape and their own
  * id fields, and a mapped superclass would have meant rewriting all of them. What this buys is
  * that {@link AuditListener} can stamp any of them without knowing which one it holds.
+ *
+ * @author Nabeel Ahmed
  */
 public interface Audited {
 

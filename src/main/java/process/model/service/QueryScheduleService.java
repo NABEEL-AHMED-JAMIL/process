@@ -6,6 +6,9 @@ import process.model.pojo.QuerySchedule;
 import java.sql.Timestamp;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface QueryScheduleService {
 
     public ResponseDto addSchedule(QueryScheduleDto dto) throws Exception;

@@ -1,5 +1,8 @@
 package process.model.dto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public class OllamaModelDto {
 
     private String name;

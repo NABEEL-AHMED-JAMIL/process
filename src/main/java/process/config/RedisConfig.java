@@ -15,6 +15,9 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Configuration
 @EnableCaching
 public class RedisConfig {

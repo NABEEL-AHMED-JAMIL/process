@@ -17,6 +17,9 @@ import java.sql.Timestamp;
     @Index(name = "idx_query_execution_tenant_id", columnList = "tenant_id"),
     @Index(name = "idx_query_execution_query_id", columnList = "query_id")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)

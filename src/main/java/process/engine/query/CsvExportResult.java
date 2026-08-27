@@ -2,6 +2,9 @@ package process.engine.query;
 
 import java.io.File;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public final class CsvExportResult {
 
     private final File file;

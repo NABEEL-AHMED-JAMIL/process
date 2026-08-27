@@ -23,6 +23,9 @@ import java.nio.charset.StandardCharsets;
 @CrossOrigin(origins = "*", exposedHeaders = {
     HttpHeaders.ACCEPT_RANGES, HttpHeaders.CONTENT_RANGE, HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @RequestMapping(value = "/storage.json")
 @PreAuthorize("hasRole('TENANT_USER')")
 public class StorageBrowserRestApi {

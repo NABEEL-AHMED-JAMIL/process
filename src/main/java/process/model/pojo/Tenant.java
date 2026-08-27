@@ -9,6 +9,9 @@ import process.model.enums.TenantStatus;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Entity
 @Table(name = "tenant")
 @JsonIgnoreProperties(ignoreUnknown=true)

@@ -1,5 +1,8 @@
 package process.util;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public class EnumUtils {
 
     public static <T extends Enum<T>> T parseEnum(Class<T> enumType, String value) {

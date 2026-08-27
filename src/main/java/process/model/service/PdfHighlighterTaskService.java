@@ -6,6 +6,9 @@ import process.model.dto.PdfHighlighterTaskDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SyncPdfHighlighterFieldsRequestDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface PdfHighlighterTaskService {
 
     public ResponseDto fetchAllPdfHighlighterTask() throws Exception;

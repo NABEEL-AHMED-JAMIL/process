@@ -9,6 +9,9 @@ import process.model.pojo.Notification;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class NotificationDto implements Serializable {

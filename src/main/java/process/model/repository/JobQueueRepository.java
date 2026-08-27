@@ -10,6 +10,9 @@ import process.model.pojo.JobQueue;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
 

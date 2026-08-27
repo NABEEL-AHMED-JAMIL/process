@@ -22,6 +22,9 @@ import java.time.LocalDateTime;
 import java.util.*;
 import static java.util.Objects.isNull;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class ProducerBulkEngine {
 

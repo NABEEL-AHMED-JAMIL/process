@@ -6,6 +6,9 @@ import process.model.dto.ObjectMetadataDto;
 import java.io.InputStream;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface ObjectStorageService {
 
     BrowseObjectsResponseDto listObjects(String bucket, String prefix, String continuationToken, int maxKeys);

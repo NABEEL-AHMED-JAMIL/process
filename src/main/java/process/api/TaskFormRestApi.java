@@ -17,6 +17,8 @@ import process.util.ProcessUtil;
  * Reading one is open to anyone who can configure a task, since the task screen needs it to
  * render. Defining one is an admin act: a form decides how everybody else configures that
  * pipeline, and a wrong tag name there produces tasks that fail at run time.
+ *
+ * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")

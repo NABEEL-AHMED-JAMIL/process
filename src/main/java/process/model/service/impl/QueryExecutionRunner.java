@@ -26,6 +26,9 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import static process.util.ProcessUtil.isNull;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class QueryExecutionRunner {
 

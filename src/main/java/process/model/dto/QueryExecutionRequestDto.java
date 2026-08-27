@@ -3,6 +3,9 @@ package process.model.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.google.gson.Gson;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class QueryExecutionRequestDto {
 

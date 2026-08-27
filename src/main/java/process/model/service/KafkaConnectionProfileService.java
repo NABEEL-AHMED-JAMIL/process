@@ -3,6 +3,9 @@ package process.model.service;
 import process.model.dto.KafkaConnectionProfileDto;
 import process.model.dto.ResponseDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface KafkaConnectionProfileService {
 
     public ResponseDto addProfile(KafkaConnectionProfileDto dto) throws Exception;

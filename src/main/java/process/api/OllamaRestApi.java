@@ -10,6 +10,9 @@ import process.model.dto.ResponseDto;
 import process.model.service.OllamaService;
 import process.util.ProcessUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/ollama.json")

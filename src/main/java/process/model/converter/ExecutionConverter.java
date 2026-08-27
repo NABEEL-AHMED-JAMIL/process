@@ -5,6 +5,9 @@ import javax.persistence.Converter;
 import process.model.enums.Execution;
 import process.util.EnumUtils;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Converter(autoApply = true)
 public class ExecutionConverter implements AttributeConverter<Execution, String> {
 

@@ -18,6 +18,8 @@ import process.util.ProcessUtil;
  * reachable from the server: a bucket write goes through the storage credentials the browser
  * never sees, and a submit posts from inside the deployment. Building the file server-side as
  * well means all three destinations carry byte-identical content.
+ *
+ * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")

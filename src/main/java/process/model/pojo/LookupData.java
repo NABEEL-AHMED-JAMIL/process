@@ -10,6 +10,9 @@ import java.sql.Timestamp;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Entity
 @Table(name = "lookup_data")
 @JsonIgnoreProperties(ignoreUnknown=true)

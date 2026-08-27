@@ -16,6 +16,8 @@ import java.sql.Timestamp;
  * platform administrator agrees, it is a claim about who someone is and what they want. The
  * tenant and its first administrator are created on approval, and this keeps a pointer to both
  * so a decision can be traced back afterwards.
+ *
+ * @author Nabeel Ahmed
  */
 @Entity
 @Table(name = "tenant_request")

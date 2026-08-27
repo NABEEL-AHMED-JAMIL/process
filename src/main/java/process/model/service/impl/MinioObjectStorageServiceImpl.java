@@ -27,6 +27,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Service("minioObjectStorageService")
 public class MinioObjectStorageServiceImpl implements ObjectStorageService {
 

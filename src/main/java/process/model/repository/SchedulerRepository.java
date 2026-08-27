@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
 

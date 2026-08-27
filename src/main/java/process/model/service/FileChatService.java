@@ -4,6 +4,9 @@ import process.model.dto.FileChatExportRequestDto;
 import process.model.dto.FileChatMessageRequestDto;
 import process.model.dto.ResponseDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface FileChatService {
 
     ResponseDto prepareContext(String bucket, String key) throws Exception;

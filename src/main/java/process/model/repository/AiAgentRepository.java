@@ -10,6 +10,9 @@ import process.model.pojo.AiAgent;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface AiAgentRepository extends JpaRepository<AiAgent, Long> {
 

@@ -1,5 +1,8 @@
 package process.model.service;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface OllamaService {
 
     Object listModels() throws Exception;

@@ -18,6 +18,7 @@ import process.model.service.AppUserService;
 import process.security.TenantContext;
 import process.emailer.EmailMessagesFactory;
 import process.util.TemporaryPassword;
+import process.util.PhoneNumberValidator;
 import process.util.UserNameResolver;
 import org.springframework.beans.factory.annotation.Value;
 import java.sql.Timestamp;
@@ -30,6 +31,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Service
 public class AppUserServiceImpl implements AppUserService {
 
@@ -79,6 +83,12 @@ public class AppUserServiceImpl implements AppUserService {
         } else if (isNull(appUserDto.getUserRole())) {
             return new ResponseDto(ERROR, "User role missing.");
         }
+        // Normalised before anything is written, so what lands in the column is always E.164 --
+        // never the spacing and brackets somebody pasted from their contacts.
+        PhoneNumberValidator.Result phone = PhoneNumberValidator.normalise(appUserDto.getPhoneNumber());
+        if (!phone.isValid()) {
+            return new ResponseDto(ERROR, phone.getError());
+        }
         boolean isPlatformAdminActor = TenantContext.isPlatformAdmin();
         if (!isPlatformAdminActor && appUserDto.getUserRole() == UserRole.PLATFORM_ADMIN) {
             return new ResponseDto(ERROR, "Only a Platform Admin can create another Platform Admin.");
@@ -114,6 +124,7 @@ public class AppUserServiceImpl implements AppUserService {
         user.setPassword(this.passwordEncoder.encode(temporaryPassword));
         user.setFullName(appUserDto.getFullName().trim());
         user.setUserRole(appUserDto.getUserRole());
+        user.setPhoneNumber(phone.getValue());
         user.setPosition(trimToNull(appUserDto.getPosition()));
         user.setStatus(Status.Active);
         user.setMustChangePassword(generated);
@@ -178,6 +189,12 @@ public class AppUserServiceImpl implements AppUserService {
             return new ResponseDto(ERROR, NOT_FOUND_MESSAGE);
         }
         AppUser user = userOpt.get();
+        // Normalised before anything is written, so what lands in the column is always E.164 --
+        // never the spacing and brackets somebody pasted from their contacts.
+        PhoneNumberValidator.Result phone = PhoneNumberValidator.normalise(appUserDto.getPhoneNumber());
+        if (!phone.isValid()) {
+            return new ResponseDto(ERROR, phone.getError());
+        }
         boolean isPlatformAdminActor = TenantContext.isPlatformAdmin();
         UserRole effectiveRole = !isNull(appUserDto.getUserRole()) ? appUserDto.getUserRole() : user.getUserRole();
         if (!isNull(appUserDto.getUserRole())) {
@@ -203,6 +220,7 @@ public class AppUserServiceImpl implements AppUserService {
             return new ResponseDto(ERROR, String.format("Tenant not found with %d.", effectiveTenantId));
         }
         user.setUserRole(effectiveRole);
+        user.setPhoneNumber(phone.getValue());
         user.setTenantId(effectiveTenantId);
         user.setFullName(appUserDto.getFullName().trim());
         user.setPosition(trimToNull(appUserDto.getPosition()));
@@ -385,6 +403,7 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setAvatarKey(user.getAvatarKey());
         dto.setDateCreated(user.getDateCreated());
         dto.setLastLoginAt(user.getLastLoginAt());
+        dto.setPhoneNumber(user.getPhoneNumber());
         dto.setCreatedByName(user.getCreatedByName());
         dto.setUpdatedByName(user.getUpdatedByName());
         dto.setCreatedBy(user.getCreatedBy());

@@ -17,6 +17,9 @@ import java.sql.Timestamp;
         @Index(name = "idx_ttkr_task_type_id", columnList = "source_task_type_id"),
         @Index(name = "idx_ttkr_profile_id", columnList = "kafka_connection_profile_id")
     })
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TenantTaskTypeKafkaRoute {

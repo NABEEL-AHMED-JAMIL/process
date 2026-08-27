@@ -5,6 +5,9 @@ import javax.persistence.Converter;
 import process.model.enums.JobStatus;
 import process.util.EnumUtils;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Converter(autoApply = true)
 public class JobStatusConverter implements AttributeConverter<JobStatus, String> {
 

@@ -16,6 +16,9 @@ import java.sql.Timestamp;
 
     @Index(name = "idx_app_user_tenant_id", columnList = "tenant_id")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
@@ -86,6 +89,10 @@ public class AppUser implements Audited {
      * only through the storage connection that owns it -- a key on its own could not be
      * resolved back to a provider.
      */
+    /** E.164, so the country code travels with the number rather than in a second column. */
+    @Column(name = "phone_number", length = 20)
+    private String phoneNumber;
+
     /** Job title, e.g. Software Engineer. Separate from userRole, which is the permission level. */
     @Column(name = "position", length = 120)
     private String position;
@@ -260,5 +267,13 @@ public class AppUser implements Audited {
     @Override
     public void setUpdatedByName(String updatedByName) {
         this.updatedByName = updatedByName;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 }

@@ -11,6 +11,9 @@ import process.model.service.AuthService;
 import process.util.ProcessUtil;
 import java.util.Map;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/auth.json")

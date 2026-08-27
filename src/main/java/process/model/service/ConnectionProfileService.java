@@ -3,6 +3,9 @@ package process.model.service;
 import process.model.dto.DatabaseConnectionProfileDto;
 import process.model.dto.ResponseDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface ConnectionProfileService {
 
     public ResponseDto addConnectionProfile(DatabaseConnectionProfileDto dto) throws Exception;

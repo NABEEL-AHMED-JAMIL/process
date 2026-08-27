@@ -11,6 +11,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Entity
 @Table(name = "scheduler")
 @JsonIgnoreProperties(ignoreUnknown=true)

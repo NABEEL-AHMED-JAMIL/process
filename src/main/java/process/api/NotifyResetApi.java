@@ -27,6 +27,8 @@ import java.util.EnumSet;
  * JWT chain (SecurityConfig permits them) because the workers are batch processes with no
  * user session -- so they authenticate instead with a shared secret in X-Worker-Token, without
  * which anyone able to reach this port could drive any job's status and audit log by id.
+ *
+ * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")

@@ -11,6 +11,9 @@ import process.model.dto.ResponseDto;
 import process.model.service.AppUserService;
 import process.util.ProcessUtil;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/appUser.json")

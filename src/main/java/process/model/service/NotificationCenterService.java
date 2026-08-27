@@ -4,6 +4,9 @@ import process.model.dto.ResponseDto;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface NotificationCenterService {
 
     void create(Long tenantId, Long recipientUserId, NotificationType type, NotificationSeverity severity,

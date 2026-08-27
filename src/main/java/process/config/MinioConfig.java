@@ -6,6 +6,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Configuration
 public class MinioConfig {
 

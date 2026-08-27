@@ -8,6 +8,9 @@ import process.model.pojo.TenantRequest;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface TenantRequestRepository extends JpaRepository<TenantRequest, Long> {
 

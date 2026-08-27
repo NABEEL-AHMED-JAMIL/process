@@ -10,6 +10,9 @@ import process.model.projection.JobAuditLogProjection;
 import java.sql.Timestamp;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long> {
 

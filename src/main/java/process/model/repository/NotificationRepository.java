@@ -10,6 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.Notification;
 import java.time.LocalDateTime;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 

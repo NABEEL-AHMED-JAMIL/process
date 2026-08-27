@@ -9,6 +9,9 @@ import org.hibernate.annotations.Parameter;
 import javax.persistence.*;
 
 /** One field of a task form: the XML tag it fills, and how it is presented. */
+/**
+ * @author Nabeel Ahmed
+ * */
 @Entity
 @Table(name = "task_form_field")
 @JsonIgnoreProperties(ignoreUnknown = true)

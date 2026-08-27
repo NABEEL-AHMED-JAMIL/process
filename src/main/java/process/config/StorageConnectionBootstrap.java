@@ -33,6 +33,8 @@ import java.util.Set;
  * It only ever creates rows that are missing -- an existing connection for an alias is left
  * exactly as it is, so this is safe to re-run and never overwrites credentials someone has
  * since changed through the UI.
+ *
+ * @author Nabeel Ahmed
  */
 @Component
 public class StorageConnectionBootstrap implements ApplicationRunner {

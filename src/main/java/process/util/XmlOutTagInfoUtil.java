@@ -115,10 +115,6 @@ public class XmlOutTagInfoUtil {
         return transformerFactory;
     }
 
-    private DocumentBuilderFactory getFactory() {
-        return factory;
-    }
-
     private DocumentBuilder getBuilder() {
         return builder;
     }

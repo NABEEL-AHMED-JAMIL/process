@@ -3,6 +3,9 @@ package process.model.service;
 import process.model.dto.AppUserDto;
 import process.model.dto.ResponseDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface AppUserService {
 
     public ResponseDto listUsers() throws Exception;

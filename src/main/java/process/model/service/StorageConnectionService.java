@@ -3,6 +3,9 @@ package process.model.service;
 import process.model.dto.ResponseDto;
 import process.model.dto.StorageConnectionDto;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public interface StorageConnectionService {
 
     ResponseDto addConnection(StorageConnectionDto dto) throws Exception;

@@ -7,6 +7,8 @@ import java.util.List;
  *
  * The job's data is gathered server-side from jobId -- the caller sends no facts of its own,
  * so it cannot smuggle another job's details into the context.
+ *
+ * @author Nabeel Ahmed
  */
 public class JobAssistantRequestDto {
 

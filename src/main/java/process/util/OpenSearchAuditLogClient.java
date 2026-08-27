@@ -23,12 +23,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Component
 public class OpenSearchAuditLogClient {
 
     private static final Logger logger = LoggerFactory.getLogger(OpenSearchAuditLogClient.class);
     private static final String INDEX_NAME = "job-audit-logs";
     private static final int MAX_HITS = 5000;
+
+    @Value("${opensearch.url:}")
+    private String baseUrl;
 
     private static final int CONNECT_TIMEOUT_MS = 3000;
     private static final int READ_TIMEOUT_MS = 5000;
@@ -42,9 +48,6 @@ public class OpenSearchAuditLogClient {
         factory.setReadTimeout(READ_TIMEOUT_MS);
         return new RestTemplate(factory);
     }
-
-    @Value("${opensearch.url:}")
-    private String baseUrl;
 
     public boolean isEnabled() {
         return this.baseUrl != null && !this.baseUrl.trim().isEmpty();

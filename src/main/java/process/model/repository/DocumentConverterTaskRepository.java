@@ -6,6 +6,9 @@ import process.model.enums.Status;
 import process.model.pojo.DocumentConverterTask;
 import java.util.List;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 @Repository
 public interface DocumentConverterTaskRepository extends JpaRepository<DocumentConverterTask, Long> {
 

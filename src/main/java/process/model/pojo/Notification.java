@@ -20,6 +20,9 @@ import java.time.LocalDateTime;
     @Index(name = "idx_notification_recipient", columnList = "recipient_user_id"),
     @Index(name = "idx_notification_recipient_read", columnList = "recipient_user_id, is_read")
 })
+/**
+ * @author Nabeel Ahmed
+ * */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Notification {

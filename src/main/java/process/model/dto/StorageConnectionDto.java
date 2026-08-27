@@ -12,6 +12,8 @@ import java.sql.Timestamp;
  * azureConnectionString, password) and reads back only the *Configured booleans, so a
  * stored credential can never be retrieved through the API once saved -- same contract
  * AiAgentDto uses for apiKey/apiKeyConfigured.
+ *
+ * @author Nabeel Ahmed
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)

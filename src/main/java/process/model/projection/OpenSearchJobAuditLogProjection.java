@@ -2,6 +2,9 @@ package process.model.projection;
 
 import java.util.UUID;
 
+/**
+ * @author Nabeel Ahmed
+ * */
 public class OpenSearchJobAuditLogProjection implements JobAuditLogProjection {
 
     private final String externalId;

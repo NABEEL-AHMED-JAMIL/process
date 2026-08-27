@@ -32,6 +32,8 @@ import static process.util.ProcessUtil.SUCCESS;
  * post it to a configured endpoint. The file itself is built once regardless -- CSV always,
  * converted to xlsx through the same LibreOffice route the document converter and the job
  * assistant already use, so there is one conversion implementation rather than three.
+ *
+ * @author Nabeel Ahmed
  */
 @Service
 public class ReportExportServiceImpl {
