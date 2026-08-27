@@ -8,6 +8,7 @@ volumes:
   postgres_data:
   kafka_data:
   redis_data:
+  redisinsight_data:
 
 services:
   # PostgreSQL Database
@@ -86,6 +87,40 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Browser UI for the broker: topics, partitions, consumer groups and lag, and a message
+  # browser. Reaches the broker on the INTERNAL listener because it is a container itself --
+  # localhost:9093 is the address for tools running on the host, not for its neighbours.
+  #
+  # Read-only by design: DYNAMIC_CONFIG_ENABLED is left off, so nothing here can create or
+  # delete a topic. Inspecting a broker and administering one are different jobs.
+  kafka_ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka_ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: etl-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: "false"
+
+  # Browser UI for Redis. Was started by hand with docker run, which meant it disappeared on
+  # compose down and never came back on up; here it is part of the project like everything else.
+  # The named volume keeps its saved connection, so the database only has to be added once.
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: redisinsight
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/data
 
   # Spring Boot Application
   process_app:
