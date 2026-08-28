@@ -47,6 +47,20 @@ public class AppUserServiceImpl implements AppUserService {
     private final EmailMessagesFactory emailMessagesFactory;
     private final UserNameResolver userNameResolver;
 
+    /**
+     * Where every profile picture goes, whichever workspace the person belongs to.
+     *
+     * One bucket rather than each tenant's own: a picture is the person's, not the workspace's,
+     * and a tenant created a minute ago has no storage of its own yet -- which used to leave its
+     * first user unable to upload at all.
+     *
+     * Safe despite the isolation rules because resolveService only refuses a connection owned by
+     * a *different* tenant; one with no tenant is reachable by everybody. And it stays out of
+     * listBuckets, so the bucket is writable without being browsable.
+     */
+    @Value("${app.avatar.bucket:etl-avatar}")
+    private String avatarBucket;
+
     @Value("${app.console.url:http://localhost:4400}")
     private String consoleUrl;
 
@@ -365,14 +379,14 @@ public class AppUserServiceImpl implements AppUserService {
         if (!found.isPresent() || found.get().getStatus() == Status.Delete) {
             return new ResponseDto(ERROR, "User not found.");
         }
-        String bucket = appUserDto.getAvatarBucket();
         String key = appUserDto.getAvatarKey();
         boolean clearing = isNull(key) || key.trim().isEmpty();
-        if (!clearing && (isNull(bucket) || bucket.trim().isEmpty())) {
-            return new ResponseDto(ERROR, "Avatar bucket missing.");
-        }
+        // The bucket is the server's decision, not the caller's. It used to be whatever the
+        // browser sent, which meant a client could record a picture as living anywhere it could
+        // name -- and meant the answer changed with whatever the bucket picker happened to
+        // offer. Every picture goes to the configured avatar bucket.
         AppUser user = found.get();
-        user.setAvatarBucket(clearing ? null : bucket.trim());
+        user.setAvatarBucket(clearing ? null : this.avatarBucket);
         user.setAvatarKey(clearing ? null : key.trim());
         this.appUserRepository.save(user);
         return new ResponseDto(SUCCESS, clearing ? "Picture removed." : "Picture updated.",
@@ -412,6 +426,9 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setDateCreated(user.getDateCreated());
         dto.setLastLoginAt(user.getLastLoginAt());
         dto.setPhoneNumber(user.getPhoneNumber());
+        // Told to every caller so nothing has to hardcode it, and so changing the property moves
+        // every future upload without a frontend release.
+        dto.setAvatarUploadBucket(this.avatarBucket);
         dto.setCreatedByName(user.getCreatedByName());
         dto.setUpdatedByName(user.getUpdatedByName());
         dto.setCreatedBy(user.getCreatedBy());

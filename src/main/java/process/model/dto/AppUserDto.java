@@ -14,6 +14,8 @@ import java.sql.Timestamp;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AppUserDto implements AuditNamed {
     private String phoneNumber;
+    /** Where this user should upload a picture to. Server-decided; see updateOwnAvatar. */
+    private String avatarUploadBucket;
 
     private Long createdBy;
 
@@ -209,5 +211,13 @@ public class AppUserDto implements AuditNamed {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public String getAvatarUploadBucket() {
+        return avatarUploadBucket;
+    }
+
+    public void setAvatarUploadBucket(String avatarUploadBucket) {
+        this.avatarUploadBucket = avatarUploadBucket;
     }
 }
