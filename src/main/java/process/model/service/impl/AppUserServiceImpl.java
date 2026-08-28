@@ -333,10 +333,18 @@ public class AppUserServiceImpl implements AppUserService {
         if (!found.isPresent() || found.get().getStatus() == Status.Delete) {
             return new ResponseDto(ERROR, "User not found.");
         }
+        // Validated through the same path addUser and updateUser use, so a number set here and
+        // one set by an administrator are held identically. Rejecting before anything is written
+        // means a bad number does not also lose the name change in the same request.
+        PhoneNumberValidator.Result phone = PhoneNumberValidator.normalise(appUserDto.getPhoneNumber());
+        if (!phone.isValid()) {
+            return new ResponseDto(ERROR, phone.getError());
+        }
         AppUser user = found.get();
         user.setFullName(appUserDto.getFullName().trim());
         // Someone's own title is theirs to correct; the permission role is not.
         user.setPosition(trimToNull(appUserDto.getPosition()));
+        user.setPhoneNumber(phone.getValue());
         this.appUserRepository.save(user);
         return new ResponseDto(SUCCESS, "Profile updated.", this.mapToDto(user));
     }
