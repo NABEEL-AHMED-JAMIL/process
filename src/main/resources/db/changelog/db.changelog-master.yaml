@@ -56,3 +56,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V23.0-avatar-key-layout.yaml
   - include:
       file: db/changelog/yaml/V24.0-user-phone.yaml
+  - include:
+      file: db/changelog/yaml/V25.0-drop-avatar-backup.yaml
