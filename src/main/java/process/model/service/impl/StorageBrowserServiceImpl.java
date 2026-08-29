@@ -108,7 +108,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     @Override
     public BrowseObjectsResponseDto listObjects(String bucket, String prefix, String continuationToken, int maxKeys) {
         int pageSize = maxKeys <= 0 ? DEFAULT_PAGE_SIZE : Math.min(maxKeys, MAX_PAGE_SIZE);
-        return this.resolveService(bucket).listObjects(bucket, prefix, continuationToken, pageSize);
+        return this.resolveServiceForManagement(bucket, null).listObjects(bucket, prefix, continuationToken, pageSize);
     }
 
     @Override
@@ -192,7 +192,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         String extension = ContentTypeUtil.extensionOf(safeFileName);
         if (!AudioTranscodeUtil.isAudioExtension(extension)) {
             try {
-                this.resolveService(bucket).uploadObject(bucket, key, file.getInputStream(), file.getSize(), file.getContentType());
+                this.resolveServiceForManagement(bucket, key).uploadObject(bucket, key, file.getInputStream(), file.getSize(), file.getContentType());
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not read uploaded file " + safeFileName, e);
             }
@@ -207,7 +207,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             tempOutput = AudioTranscodeUtil.transcodeToAacIfNeeded(tempInput);
             Path uploadSource = tempOutput != null ? tempOutput : tempInput;
             try (InputStream in = Files.newInputStream(uploadSource)) {
-                this.resolveService(bucket).uploadObject(bucket, key, in, Files.size(uploadSource), ContentTypeUtil.contentTypeFor(key));
+                this.resolveServiceForManagement(bucket, key).uploadObject(bucket, key, in, Files.size(uploadSource), ContentTypeUtil.contentTypeFor(key));
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read uploaded file " + safeFileName, e);
@@ -220,7 +220,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     @Override
     public void uploadObject(String bucket, String key, InputStream inputStream, long size, String contentType) {
 
-        this.resolveService(bucket).uploadObject(bucket, key, inputStream, size, contentType);
+        this.resolveServiceForManagement(bucket, key).uploadObject(bucket, key, inputStream, size, contentType);
     }
 
     @Override
@@ -234,12 +234,12 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             throw new IllegalArgumentException("Folder name is required.");
         }
         String folderKey = this.normalizedPrefix(prefix) + safeFolderName + "/";
-        this.resolveService(bucket).createFolder(bucket, folderKey);
+        this.resolveServiceForManagement(bucket, folderKey).createFolder(bucket, folderKey);
     }
 
     @Override
     public void deleteObject(String bucket, String key) {
-        this.resolveService(bucket).deleteObject(bucket, key);
+        this.resolveServiceForManagement(bucket, key).deleteObject(bucket, key);
     }
 
     @Override
@@ -247,7 +247,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (keys == null || keys.isEmpty()) {
             throw new IllegalArgumentException("No keys given to delete.");
         }
-        this.resolveService(bucket).deleteObjects(bucket, keys);
+        this.resolveServiceForManagement(bucket, null).deleteObjects(bucket, keys);
     }
 
     @Override
@@ -285,6 +285,42 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
 
     private String normalizedPrefix(String prefix) {
         return prefix == null ? "" : prefix;
+    }
+
+    /**
+     * Resolution for anything that changes or enumerates a bucket's contents.
+     *
+     * resolveService below deliberately lets a platform bucket through for everybody, because
+     * that is how a tenant user's own avatar renders out of etl-avatar. Reading one object by
+     * key is fine. Listing the bucket, or writing to it, is not: every user's picture now lives
+     * there, so an unguarded write path would let one tenant enumerate or delete another's.
+     */
+    private ObjectStorageService resolveServiceForManagement(String bucket, String key) {
+        Optional<StorageConnection> connection =
+            this.storageConnectionRepository.findByAliasAndStatus(bucket, Status.Active);
+        if (connection.isPresent() && connection.get().getTenantId() == null
+            && !TenantContext.isPlatformAdmin() && !isOwnProfileObject(key)) {
+            throw new IllegalArgumentException("Unknown bucket: " + bucket + ".");
+        }
+        return this.resolveService(bucket);
+    }
+
+    /**
+     * Whether a key is the caller's own profile picture.
+     *
+     * The one write a tenant user legitimately makes to a platform bucket: avatars all live in
+     * etl-avatar, under <appUserId>/profile/. Scoped to their own id, so this permits replacing
+     * their picture and nothing else -- not a neighbour's, and not anywhere outside the folder.
+     *
+     * A null key means the caller is listing rather than naming an object, which is never
+     * somebody's own profile object and so never allowed by this.
+     */
+    private boolean isOwnProfileObject(String key) {
+        Long callerId = TenantContext.getAppUserId();
+        if (key == null || callerId == null) {
+            return false;
+        }
+        return key.startsWith(callerId + "/profile/");
     }
 
     private ObjectStorageService resolveService(String bucket) {
