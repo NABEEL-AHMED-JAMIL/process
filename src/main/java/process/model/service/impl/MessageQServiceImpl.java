@@ -190,23 +190,37 @@ public class MessageQServiceImpl implements MessageQService {
             return new ResponseDto(ERROR, "Message Type required for transaction.");
         }
 
-        if (!isNull(queueMessageStatus.getJobId()) && !this.isJobOwnedByCaller(queueMessageStatus.getJobId())) {
-            return new ResponseDto(ERROR, "SourceJob not found.");
+        if (isNull(queueMessageStatus.getJobQueueId())) {
+            return new ResponseDto(ERROR, "JobQueueId required for transaction.");
         }
+        // Every write below lands on this queue row, so ownership is settled from the row and
+        // not from the optional jobId in the body -- leaving jobId out used to skip the check
+        // altogether. A jobId that is supplied has to agree with the row, or the request is
+        // pointing at one job while writing to another's run.
+        Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId());
+        if (!jobQueue.isPresent() || !this.isJobOwnedByCaller(jobQueue.get().getJobId())) {
+            return new ResponseDto(ERROR, "JobQueue not found.");
+        }
+        if (!isNull(queueMessageStatus.getJobId())
+            && !Objects.equals(jobQueue.get().getJobId(), queueMessageStatus.getJobId())) {
+            return new ResponseDto(ERROR, "JobQueue not found.");
+        }
+        Long jobId = jobQueue.get().getJobId();
         if (queueMessageStatus.getMessageType().equals(AUDIT_LOG)) {
-            this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());
+            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), queueMessageStatus.getLogsDetail());
         } else if (queueMessageStatus.getMessageType().equals(QUEUE_DETAIL)) {
-            this.bulkAction.changeJobStatus(queueMessageStatus.getJobId(), queueMessageStatus.getJobStatus());
-            this.bulkAction.changeJobQueueStatus(queueMessageStatus.getJobQueueId(), queueMessageStatus.getJobStatus(), queueMessageStatus.getLogsDetail());
-            this.bulkAction.saveJobAuditLogs(queueMessageStatus.getJobQueueId(), queueMessageStatus.getLogsDetail());
+            this.bulkAction.changeJobStatus(jobId, queueMessageStatus.getJobStatus());
+            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), queueMessageStatus.getJobStatus(), queueMessageStatus.getLogsDetail());
+            this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), queueMessageStatus.getLogsDetail());
             if (!isNull(queueMessageStatus.getEndTime())) {
-                this.bulkAction.changeJobQueueEndDate(queueMessageStatus.getJobQueueId(), queueMessageStatus.getEndTime());
+                this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), queueMessageStatus.getEndTime());
             }
 
-            Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(queueMessageStatus.getJobId());
-            Optional<JobQueue> jobQueueForMail = this.jobQueueRepository.findById(queueMessageStatus.getJobQueueId());
+            Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId);
+            // Re-read the queue row so the mail carries the status and message just written.
+            Optional<JobQueue> jobQueueForMail = this.jobQueueRepository.findById(jobQueue.get().getJobQueueId());
             JobStatus status = queueMessageStatus.getJobStatus();
-            boolean shouldSend = sourceJob.isPresent() && jobQueueForMail.isPresent() &&
+            boolean shouldSend = sourceJob.isPresent() && jobQueueForMail.isPresent() && !isNull(status) &&
                 ((sourceJob.get().isSkipJob() && status.equals(JobStatus.Skip)) ||
                 (sourceJob.get().isCompleteJob() && status.equals(JobStatus.Completed)) ||
                 (sourceJob.get().isFailJob() && status.equals(JobStatus.Failed)));

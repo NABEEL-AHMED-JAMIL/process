@@ -19,7 +19,7 @@ import java.util.List;
 @Component
 public class ProcessCron {
 
-    public Logger logger = LogManager.getLogger(ProcessCron.class);
+    private static final Logger logger = LogManager.getLogger(ProcessCron.class);
 
     public static final int SCHEDULER_CRON_TIME_IN_ONE_MINUTES=1;
 
@@ -83,24 +83,40 @@ public class ProcessCron {
             logger.error("Error polling due query schedules: {}", e.getMessage(), e);
             return;
         }
+        // Silent when nothing is due, which is the usual case on a minute cycle. The other crons
+        // can afford their banner every tick because they always have work to describe.
+        if (dueSchedules.isEmpty()) {
+            return;
+        }
+        logger.info("========================Start-PollDueQuerySchedules due={}========================",
+            dueSchedules.size());
+        int executed = 0;
         for (QuerySchedule schedule : dueSchedules) {
             try {
                 TenantContext.set(schedule.getTenantId(), "TENANT_USER", schedule.getCreatedBy(), "scheduler");
                 this.queryExecutionService.executeForSchedule(schedule);
+                executed++;
             } catch (Exception e) {
                 logger.error("Query schedule {} (tenant {}) failed to execute: {}",
                     schedule.getScheduleId(), schedule.getTenantId(), e.getMessage(), e);
             } finally {
+                // Cleared before nextRunAt is advanced, deliberately: AuditListener stamps
+                // updated_by from whoever is in context, and a run the scheduler started on its
+                // own has no human author to name.
                 TenantContext.clear();
 
                 try {
                     this.queryScheduleService.advanceNextRun(schedule.getScheduleId());
                 } catch (Exception e) {
+                    // Deliberately left un-advanced. nextRunAt stays in the past, so the schedule
+                    // is picked up again on the next tick instead of being silently skipped.
                     logger.error("Could not advance nextRunAt for query schedule {}: {}",
                         schedule.getScheduleId(), e.getMessage(), e);
                 }
             }
         }
+        logger.info("=========================End-PollDueQuerySchedules executed={}/{}=========================",
+            executed, dueSchedules.size());
     }
 
 }

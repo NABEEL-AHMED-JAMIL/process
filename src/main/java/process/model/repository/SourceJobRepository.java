@@ -34,7 +34,14 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
 
     public List<SourceJob> findByTenantId(Long tenantId);
 
-    @Query("SELECT sj FROM SourceJob sj WHERE sj.jobStatus IN (?1, ?2)")
+    /**
+     * The task and its type are both eager many-to-ones, so without the fetch joins Hibernate
+     * follows the root query with a select per distinct task and another per distinct type --
+     * a couple of thousand round trips on a tenant with a few hundred tasks. Both are
+     * to-one joins, so the row count is unchanged.
+     */
+    @Query("SELECT sj FROM SourceJob sj LEFT JOIN FETCH sj.sourceTask st "
+        + "LEFT JOIN FETCH st.sourceTaskType WHERE sj.jobStatus IN (?1, ?2)")
     public List<SourceJob> findAllActiveAndInactiveJobs(Status activeStatus, Status inactiveStatus, Sort sort);
 
     @Query(value = "select sj.job_id as jobId, sj.job_status as jobStatus, sj.job_running_status as jobRunningStatus," +
@@ -66,5 +73,31 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     @Query(value = "select count(*) from source_job where task_detail_id = ?1 "
         + "and upper(job_status) <> 'DELETE'", nativeQuery = true)
     public long countLiveJobsForTask(Long sourceTaskId);
+
+
+    /**
+     * How many jobs are in one person's name, and how many of those are switched on.
+     *
+     * Counted in the database rather than by fetching every job in the tenant and filtering in the
+     * browser, which is what the profile screen used to do -- the cost of showing somebody their
+     * own three jobs grew with the size of the whole workspace.
+     */
+    @Query(value = "select count(*), count(*) filter (where job_status = 'Active') "
+        + "from source_job where assigned_user_id = ?1 and job_status <> 'Delete'", nativeQuery = true)
+    List<Object[]> countAssignedTo(Long appUserId);
+
+
+    /**
+     * How that person's jobs last ran, grouped. Feeds the profile donut, which previously counted
+     * the same thing in the browser out of every job in the tenant.
+     *
+     * A job that has never run has a null running status, and it is grouped under its own label
+     * here rather than dropped -- five jobs nobody has run yet is exactly the sort of thing the
+     * chart should be showing.
+     */
+    @Query(value = "select coalesce(job_running_status, 'Not run') as outcome, count(*) "
+        + "from source_job where assigned_user_id = ?1 and job_status <> 'Delete' "
+        + "group by 1 order by 2 desc", nativeQuery = true)
+    List<Object[]> outcomesForAssignee(Long appUserId);
 
 }

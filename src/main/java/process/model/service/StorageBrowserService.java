@@ -39,4 +39,17 @@ public interface StorageBrowserService {
 
     void renameFolder(String bucket, String folderKey, String newFolderName);
 
+    /**
+     * The three below are for application workflows, and they are trusted: they skip the check
+     * that keeps a caller out of a platform bucket, because the workflow has already established
+     * that the row the key comes from is the caller's -- a PDF highlighter task it owns, a Kafka
+     * connection profile's truststore -- and builds the key itself from that row. Everything
+     * above scopes a bucket and key the caller named; these must never be handed one.
+     */
+    void uploadForWorkflow(String bucket, String prefix, MultipartFile file);
+
+    void uploadForWorkflow(String bucket, String key, InputStream inputStream, long size, String contentType);
+
+    ObjectContentDto readForWorkflow(String bucket, String key);
+
 }

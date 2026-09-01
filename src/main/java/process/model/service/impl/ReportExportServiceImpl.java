@@ -10,6 +10,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.core.io.ByteArrayResource;
 import process.model.dto.ReportExportRequestDto;
+import process.model.service.StorageBrowserService;
 import process.model.dto.ResponseDto;
 import process.util.ProcessUtil;
 
@@ -52,7 +53,7 @@ public class ReportExportServiceImpl {
     private static final Pattern FORMULA_LEAD = Pattern.compile("^[=+\\-@\\t\\r]");
 
     private final FileChatExtractionServiceImpl extractionService;
-    private final StorageBrowserServiceImpl storageService;
+    private final StorageBrowserService storageService;
     private final QueryService queryService;
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -67,7 +68,7 @@ public class ReportExportServiceImpl {
     private boolean allowInternalSubmit;
 
     public ReportExportServiceImpl(FileChatExtractionServiceImpl extractionService,
-                                   StorageBrowserServiceImpl storageService,
+                                   StorageBrowserService storageService,
                                    QueryService queryService) {
         this.extractionService = extractionService;
         this.storageService = storageService;

@@ -3,6 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.config.StorageClientFactory;
@@ -10,8 +11,11 @@ import process.model.dto.ResponseDto;
 import process.model.dto.StorageConnectionDto;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
+import process.model.pojo.KafkaConnectionProfile;
 import process.model.pojo.StorageConnection;
+import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.StorageConnectionRepository;
+import process.model.service.KafkaSecretService;
 import process.model.service.ObjectStorageService;
 import process.model.service.StorageConnectionService;
 import process.security.TenantContext;
@@ -20,6 +24,7 @@ import process.util.EncryptionUtil;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.sql.Timestamp;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -36,8 +41,21 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
 
     private static final Logger logger = LoggerFactory.getLogger(StorageConnectionServiceImpl.class);
 
+    /**
+     * Aliases are unique platform-wide, so the check has to look across every tenant -- but the
+     * answer must not say whose alias it collided with, or a tenant admin could sit on this
+     * endpoint and enumerate other tenants' bucket aliases one guess at a time. Naming nothing
+     * keeps the constraint and drops the oracle.
+     */
+    static final String ALIAS_UNAVAILABLE = "That alias isn't available. Choose another.";
+
+    /** The same property StorageBrowserServiceImpl guards the avatar bucket by. */
+    @Value("${app.avatar.bucket:etl-avatar}")
+    private String avatarBucket;
+
     private final StorageConnectionRepository storageConnectionRepository;
     private final StorageClientFactory storageClientFactory;
+    private final KafkaConnectionProfileRepository profileRepository;
     private final EncryptionUtil encryptionUtil;
     private final TenantFilterHelper tenantFilterHelper;
 
@@ -49,14 +67,76 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
 
     public StorageConnectionServiceImpl(StorageConnectionRepository storageConnectionRepository,
         StorageClientFactory storageClientFactory,
+        KafkaConnectionProfileRepository profileRepository,
         EncryptionUtil encryptionUtil,
         TenantFilterHelper tenantFilterHelper,
         UserNameResolver userNameResolver) {
         this.userNameResolver = userNameResolver;
         this.storageConnectionRepository = storageConnectionRepository;
         this.storageClientFactory = storageClientFactory;
+        this.profileRepository = profileRepository;
         this.encryptionUtil = encryptionUtil;
         this.tenantFilterHelper = tenantFilterHelper;
+    }
+
+    /**
+     * Names the Kafka profiles that load a keystore or truststore from an alias.
+     *
+     * A profile records the alias as plain text -- there is no foreign key -- so nothing at the
+     * schema level stops the connection being renamed, retired or deleted out from under it, and
+     * the profile only finds out at its next publish. Visibility deliberately mirrors
+     * fetchAllProfiles rather than reading the table raw: a tenant's own connection can only be
+     * resolved by that tenant, and a platform-level one is only editable by a platform admin, who
+     * sees every profile anyway -- so a reference the caller cannot see is one that could never
+     * have resolved.
+     */
+    private List<String> kafkaProfilesUsing(String alias) {
+        if (alias == null || alias.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        String wanted = alias.trim();
+        List<KafkaConnectionProfile> visible = TenantContext.isPlatformAdmin()
+            ? this.profileRepository.findVisibleToPlatformAdmin(Status.Delete)
+            : this.profileRepository.findVisibleToTenant(TenantContext.getTenantId(), Status.Delete);
+        return visible.stream()
+            .filter(profile -> wanted.equals(profile.getSslTruststoreBucket())
+                || wanted.equals(profile.getSslKeystoreBucket()))
+            .map(KafkaConnectionProfile::getProfileName)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Refused rather than warned, and named rather than counted.
+     *
+     * A warning has nowhere to land: the browser already asks kafkaProfilesUsing before it
+     * commits, so a warning only reaches the caller who skipped that dialog -- a script or a
+     * direct API call -- and there it is a line in a response body that nothing reads while a
+     * live Kafka producer loses its truststore at the next publish. Refusing matches
+     * deleteProfile's own SourceTaskType guard, and the names are what make it actionable:
+     * "still in use" with nothing to go on leaves the caller hunting the whole Kafka screen.
+     */
+    static String stillUsedByKafka(List<String> profileNames, String attemptedChange) {
+        boolean one = profileNames.size() == 1;
+        return String.format(
+            "This connection can't be %s: Kafka %s %s load a keystore or truststore from this alias. "
+                + "Point %s at another connection first.",
+            attemptedChange, one ? "profile" : "profiles", String.join(", ", profileNames),
+            one ? "it" : "them");
+    }
+
+    /**
+     * The aliases nobody but a platform admin may claim.
+     *
+     * Neither default bucket ships as a connection row -- etl-bucket is a BUCKET_LIST lookup
+     * entry, etl-avatar only a property -- so the name was free for a tenant admin to take. The
+     * object browser refuses those two buckets to a tenant by name, so such a connection could
+     * never be opened from the console; but the trusted workflow paths resolve a bucket by alias
+     * alone, and would have found it, quietly writing every Kafka store and every user's picture
+     * into storage whose credentials that tenant holds.
+     */
+    private boolean isReservedAlias(String alias) {
+        return KafkaSecretService.SECRET_BUCKET.equals(alias)
+            || (this.avatarBucket != null && this.avatarBucket.equals(alias));
     }
 
     private boolean isOwnedByCaller(StorageConnection connection) {
@@ -75,8 +155,7 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         }
         String alias = dto.getAlias().trim();
         if (this.storageConnectionRepository.findByAlias(alias).isPresent()) {
-            return new ResponseDto(ERROR, String.format(
-                "A storage connection with the alias '%s' already exists -- aliases must be unique.", alias));
+            return new ResponseDto(ERROR, ALIAS_UNAVAILABLE);
         }
         StorageConnection connection = new StorageConnection();
         connection.setTenantId(TenantContext.getTenantId());
@@ -116,9 +195,10 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
             return new ResponseDto(ERROR, "Alias missing.");
         }
         String alias = dto.getAlias().trim();
-        if (this.storageConnectionRepository.findByAlias(alias).isPresent()) {
-            return new ResponseDto(ERROR, String.format(
-                "A storage connection with the alias '%s' already exists -- aliases must be unique.", alias));
+        // Clone does not go through validate, so the reserved names have to be refused here too.
+        if (this.storageConnectionRepository.findByAlias(alias).isPresent()
+            || (!TenantContext.isPlatformAdmin() && this.isReservedAlias(alias))) {
+            return new ResponseDto(ERROR, ALIAS_UNAVAILABLE);
         }
         StorageConnection source = sourceOpt.get();
         StorageConnection copy = new StorageConnection();
@@ -169,20 +249,36 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         if (validationError != null) {
             return validationError;
         }
+        // Alias first, before the tenant filter goes on: uniqueness is enforced platform-wide by
+        // the unique index, so a check that can only see this tenant's rows would wave through a
+        // name already taken elsewhere and the collision would surface as a failed flush instead.
+        String alias = dto.getAlias().trim();
+        Optional<StorageConnection> aliasOwner = this.storageConnectionRepository.findByAlias(alias);
+        if (aliasOwner.isPresent()
+            && !Objects.equals(aliasOwner.get().getStorageConnectionId(), dto.getStorageConnectionId())) {
+            return new ResponseDto(ERROR, ALIAS_UNAVAILABLE);
+        }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<StorageConnection> existing = this.storageConnectionRepository.findById(dto.getStorageConnectionId());
         if (!existing.isPresent() || !this.isOwnedByCaller(existing.get())) {
             return new ResponseDto(ERROR,
                 String.format("Storage connection not found with %d.", dto.getStorageConnectionId()));
         }
-        String alias = dto.getAlias().trim();
-        Optional<StorageConnection> aliasOwner = this.storageConnectionRepository.findByAlias(alias);
-        if (aliasOwner.isPresent()
-            && !Objects.equals(aliasOwner.get().getStorageConnectionId(), dto.getStorageConnectionId())) {
-            return new ResponseDto(ERROR, String.format(
-                "A different storage connection already uses the alias '%s'.", alias));
-        }
         StorageConnection connection = existing.get();
+        // Only two edits actually break a profile bound to this alias: renaming it, since the
+        // profile stores the name and nothing else, and retiring it, since the download resolves
+        // Active connections only. Everything else -- endpoint, credentials, description --
+        // leaves the binding intact and must still go through, or a referenced connection could
+        // never have its expired keys rotated.
+        boolean renaming = !Objects.equals(connection.getAlias(), alias);
+        boolean retiring = !isNull(dto.getStatus()) && dto.getStatus() != Status.Active
+            && connection.getStatus() == Status.Active;
+        if (renaming || retiring) {
+            List<String> dependents = this.kafkaProfilesUsing(connection.getAlias());
+            if (!dependents.isEmpty()) {
+                return new ResponseDto(ERROR, stillUsedByKafka(dependents, renaming ? "renamed" : "retired"));
+            }
+        }
         this.applyDto(connection, dto);
         if (!isNull(dto.getStatus())) {
             connection.setStatus(dto.getStatus());
@@ -206,6 +302,10 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
             return new ResponseDto(ERROR, String.format("Storage connection not found with %d.", storageConnectionId));
         }
         StorageConnection connection = existing.get();
+        List<String> dependents = this.kafkaProfilesUsing(connection.getAlias());
+        if (!dependents.isEmpty()) {
+            return new ResponseDto(ERROR, stillUsedByKafka(dependents, "deleted"));
+        }
         connection.setStatus(Status.Delete);
         this.storageClientFactory.evict(connection);
         this.storageConnectionRepository.save(connection);
@@ -216,8 +316,14 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
     @Transactional(readOnly = true)
     public ResponseDto fetchAllConnections() throws Exception {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        // Filtered here as well as by the ORM, and this is not belt and braces: StorageConnection's
+        // tenantFilter admits the platform's own rows (tenant_id null) so that the avatar and Kafka
+        // workflows can resolve etl-avatar and etl-bucket by alias. That makes the filter alone the
+        // wrong answer for a listing -- every tenant was shown the platform's two connections on
+        // the storage screen. isOwnedByCaller is the same rule listBuckets already applies.
         List<StorageConnection> connections =
-            this.storageConnectionRepository.findByStatusNotOrderByStorageConnectionIdDesc(Status.Delete);
+            this.storageConnectionRepository.findByStatusNotOrderByStorageConnectionIdDesc(Status.Delete)
+                .stream().filter(this::isOwnedByCaller).collect(Collectors.toList());
         List<StorageConnectionDto> dtos = connections.stream().map(this::toDto).collect(Collectors.toList());
         this.userNameResolver.attachToDtos(dtos, this.storageConnectionRepository,
             StorageConnection::getStorageConnectionId);
@@ -304,6 +410,9 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
             return new ResponseDto(ERROR,
                 "alias may only contain letters, numbers, dots, dashes and underscores.");
         }
+        if (!TenantContext.isPlatformAdmin() && this.isReservedAlias(dto.getAlias().trim())) {
+            return new ResponseDto(ERROR, ALIAS_UNAVAILABLE);
+        }
         if (isNull(dto.getProvider())) {
             return new ResponseDto(ERROR, "provider missing (MINIO, S3, AZURE, FTP or FTPS).");
         }
@@ -329,6 +438,20 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         if (provider == StorageProvider.MINIO && (isNull(dto.getEndpoint()) || dto.getEndpoint().trim().isEmpty())) {
             return new ResponseDto(ERROR, "endpoint is required for a MinIO connection.");
         }
+        // An S3 connection has to carry its own keys. Left blank it would fall through to the
+        // AWS SDK's default chain and run as the platform's own IAM identity, which would put
+        // every bucket in the account within reach of whoever created the connection. The one
+        // exception is a platform-level connection on a deployment that opted into that.
+        if (provider == StorageProvider.S3
+            && !this.storageClientFactory.ambientCredentialsAllowed(TenantContext.getTenantId())) {
+            if (isNull(dto.getAccessKey()) || dto.getAccessKey().trim().isEmpty()) {
+                return new ResponseDto(ERROR, "an access key is required for an S3 connection.");
+            }
+            // As with the FTP password, a blank secret on update means "keep the stored one".
+            if (isCreate && (isNull(dto.getSecretKey()) || dto.getSecretKey().trim().isEmpty())) {
+                return new ResponseDto(ERROR, "a secret key is required for an S3 connection.");
+            }
+        }
         if (provider == StorageProvider.AZURE && isCreate
             && (isNull(dto.getAzureConnectionString()) || dto.getAzureConnectionString().trim().isEmpty())
             && (isNull(dto.getAzureAccountName()) || dto.getAzureAccountName().trim().isEmpty())) {
@@ -347,6 +470,10 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         // When editing an existing one the secret is deliberately never sent back to the
         // browser, so an absent secret means "reuse the stored one" rather than "no secret".
         StorageConnection probe = new StorageConnection();
+        // The probe is unsaved, and an unsaved row has no tenant of its own -- which would read
+        // as platform-level and could borrow the platform's IAM identity where that is allowed.
+        // Stamp the caller's tenant so discovery is held to the same rule as the saved thing.
+        probe.setTenantId(TenantContext.getTenantId());
         if (!isNull(dto.getStorageConnectionId())) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);
             Optional<StorageConnection> existing =
@@ -356,6 +483,8 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
                     String.format("Storage connection not found with %d.", dto.getStorageConnectionId()));
             }
             StorageConnection saved = existing.get();
+            probe.setTenantId(saved.getTenantId());
+            probe.setAzureAccountName(saved.getAzureAccountName());
             probe.setSecretKeyEnc(saved.getSecretKeyEnc());
             probe.setAzureConnectionStringEnc(saved.getAzureConnectionStringEnc());
             probe.setPasswordEnc(saved.getPasswordEnc());
@@ -367,6 +496,12 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         probe.setEndpoint(this.trimToNull(dto.getEndpoint()));
         probe.setRegion(this.trimToNull(dto.getRegion()));
         probe.setAccessKey(this.trimToNull(dto.getAccessKey()));
+        // Without this an Azure connection credentialled by account name plus key can never be
+        // discovered: the account key arrives (or is reused from the saved row) but the name it
+        // has to be paired with does not, and the probe reports a missing credential.
+        if (!isNull(dto.getAzureAccountName()) && !dto.getAzureAccountName().trim().isEmpty()) {
+            probe.setAzureAccountName(dto.getAzureAccountName().trim());
+        }
         if (!isNull(dto.getSecretKey()) && !dto.getSecretKey().trim().isEmpty()) {
             probe.setSecretKeyEnc(this.encryptionUtil.encrypt(dto.getSecretKey().trim()));
         }
@@ -404,7 +539,14 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         connection.setEndpoint(this.trimToNull(dto.getEndpoint()));
         connection.setRegion(this.trimToNull(dto.getRegion()));
         connection.setAccessKey(this.trimToNull(dto.getAccessKey()));
-        connection.setAzureAccountName(this.trimToNull(dto.getAzureAccountName()));
+        // The account name is half of the Azure credential pair -- the account key it goes with
+        // is one of the withheld secrets below -- so it is kept on the same "absent means leave
+        // it alone" footing. Written unconditionally, any client that posts an update without it
+        // (the dialog sends it, other API callers need not) strands the stored key with no
+        // account to use it against.
+        if (!isNull(dto.getAzureAccountName()) && !dto.getAzureAccountName().trim().isEmpty()) {
+            connection.setAzureAccountName(dto.getAzureAccountName().trim());
+        }
         connection.setHost(this.trimToNull(dto.getHost()));
         connection.setPort(dto.getPort());
         connection.setUsername(this.trimToNull(dto.getUsername()));

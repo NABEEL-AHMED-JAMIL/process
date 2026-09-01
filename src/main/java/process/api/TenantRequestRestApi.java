@@ -38,7 +38,15 @@ public class TenantRequestRestApi {
         this.tenantRequestService = tenantRequestService;
     }
 
-    /** Open to anyone. The service treats everything in the body as unverified. */
+    /**
+     * Open to anyone. The service treats everything in the body as unverified.
+     *
+     * Said here as well as in SecurityConfig because this is the only controller carrying a public
+     * endpoint that has no class-level role, and three of its four methods are platform admin's.
+     * Adding the class-level annotation that pattern invites would silently close sign-up; an
+     * explicit permitAll() on the method overrides it and keeps the form working.
+     */
+    @PreAuthorize("permitAll()")
     @RequestMapping(value = "/submit", method = RequestMethod.POST)
     public ResponseEntity<?> submit(@RequestBody TenantRequest tenantRequest) {
         try {

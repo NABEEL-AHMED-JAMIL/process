@@ -20,6 +20,16 @@ public class AuthResponseDto {
     /** Carried at sign-in so the header can show the picture before anything else is fetched. */
     private String avatarBucket;
     private String avatarKey;
+    /**
+     * Same flag the profile screen reads off AppUserDto, carried at sign-in so an account opened
+     * with a one-time password is asked to replace it there and then, rather than only when the
+     * user happens to open their profile.
+     *
+     * Boxed like every other field here because refresh answers with a partial response that the
+     * console merges over the session it already has: a primitive would send false on every
+     * refresh and quietly settle a debt the account still owes.
+     */
+    private Boolean mustChangePassword;
 
     public String getAccessToken() {
         return accessToken;
@@ -92,5 +102,13 @@ public class AuthResponseDto {
 
     public void setAvatarKey(String avatarKey) {
         this.avatarKey = avatarKey;
+    }
+
+    public Boolean getMustChangePassword() {
+        return mustChangePassword;
+    }
+
+    public void setMustChangePassword(Boolean mustChangePassword) {
+        this.mustChangePassword = mustChangePassword;
     }
 }

@@ -20,9 +20,12 @@ import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
@@ -70,7 +73,7 @@ public class QueryExecutionServiceImpl implements QueryExecutionService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(request.getQueryId());
-        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get())) {
+        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Query not found with %d.", request.getQueryId()));
         }
         QueryDefinition query = queryOpt.get();
@@ -78,7 +81,7 @@ public class QueryExecutionServiceImpl implements QueryExecutionService {
         Long connectionProfileId = !isNull(request.getDatabaseConnectionProfileId())
             ? request.getDatabaseConnectionProfileId() : query.getDatabaseConnectionProfileId();
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(connectionProfileId);
-        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
+        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", connectionProfileId));
         }
         String outputPrefix = isNull(request.getOutputPrefix()) ? "" : request.getOutputPrefix();
@@ -113,7 +116,7 @@ public class QueryExecutionServiceImpl implements QueryExecutionService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<QueryExecution> executionOpt = this.queryExecutionRepository.findById(executionId);
-        if (!executionOpt.isPresent() || !this.isOwnedByCaller(executionOpt.get())) {
+        if (!executionOpt.isPresent() || !this.isOwnedByCaller(executionOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Execution not found with %d.", executionId));
         }
         return new ResponseDto(SUCCESS, "Data found.", this.toDto(executionOpt.get()));
@@ -124,8 +127,7 @@ public class QueryExecutionServiceImpl implements QueryExecutionService {
     public ResponseDto fetchAllExecutions() throws Exception {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<QueryExecution> executions = this.queryExecutionRepository.findTop50ByOrderByExecutionIdDesc();
-        return new ResponseDto(SUCCESS, "Data found.",
-            executions.stream().map(this::toDto).collect(Collectors.toList()));
+        return new ResponseDto(SUCCESS, "Data found.", this.toDtoList(executions));
     }
 
     @Override
@@ -136,36 +138,46 @@ public class QueryExecutionServiceImpl implements QueryExecutionService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(queryId);
-        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get())) {
+        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Query not found with %d.", queryId));
         }
         List<QueryExecution> executions = this.queryExecutionRepository.findByQueryIdOrderByExecutionIdDesc(queryId);
-        return new ResponseDto(SUCCESS, "Data found.",
-            executions.stream().map(this::toDto).collect(Collectors.toList()));
+        return new ResponseDto(SUCCESS, "Data found.", this.toDtoList(executions));
     }
 
-    private boolean isOwnedByCaller(QueryDefinition query) {
+    private boolean isOwnedByCaller(Long ownerTenantId) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
         }
-        return query != null && Objects.equals(query.getTenantId(), TenantContext.getTenantId());
+        return Objects.equals(ownerTenantId, TenantContext.getTenantId());
     }
 
-    private boolean isOwnedByCaller(DatabaseConnectionProfile profile) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
+    private List<QueryExecutionDto> toDtoList(List<QueryExecution> executions) {
+        // The name is only a label on the history table, so it is read once for the whole page
+        // rather than once per row.
+        Set<Long> queryIds = executions.stream().map(QueryExecution::getQueryId)
+            .filter(queryId -> !isNull(queryId)).collect(Collectors.toSet());
+        Map<Long, String> queryNameById = new HashMap<>();
+        if (!queryIds.isEmpty()) {
+            for (QueryDefinition query : this.queryDefinitionRepository.findAllById(queryIds)) {
+                queryNameById.put(query.getQueryId(), query.getQueryName());
+            }
         }
-        return profile != null && Objects.equals(profile.getTenantId(), TenantContext.getTenantId());
-    }
-
-    private boolean isOwnedByCaller(QueryExecution execution) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return execution != null && Objects.equals(execution.getTenantId(), TenantContext.getTenantId());
+        return executions.stream().map(execution -> {
+            QueryExecutionDto dto = this.toDtoWithoutQueryName(execution);
+            dto.setQueryName(queryNameById.get(execution.getQueryId()));
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     private QueryExecutionDto toDto(QueryExecution execution) {
+        QueryExecutionDto dto = this.toDtoWithoutQueryName(execution);
+        this.queryDefinitionRepository.findById(execution.getQueryId())
+            .ifPresent(q -> dto.setQueryName(q.getQueryName()));
+        return dto;
+    }
+
+    private QueryExecutionDto toDtoWithoutQueryName(QueryExecution execution) {
         QueryExecutionDto dto = new QueryExecutionDto();
         dto.setExecutionId(execution.getExecutionId());
         dto.setQueryId(execution.getQueryId());
@@ -177,8 +189,6 @@ public class QueryExecutionServiceImpl implements QueryExecutionService {
         dto.setOutputBucket(execution.getOutputBucket());
         dto.setOutputKey(execution.getOutputKey());
         dto.setErrorMessage(execution.getErrorMessage());
-        this.queryDefinitionRepository.findById(execution.getQueryId())
-            .ifPresent(q -> dto.setQueryName(q.getQueryName()));
         return dto;
     }
 

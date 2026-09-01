@@ -21,6 +21,7 @@ import process.model.repository.DynamicFormSubmissionRepository;
 import process.model.service.DynamicFormService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TenantOwnership;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.lang.reflect.Type;
@@ -71,10 +72,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     }
 
     private boolean isOwnedByCaller(DynamicForm dynamicForm) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return dynamicForm != null && Objects.equals(dynamicForm.getTenantId(), TenantContext.getTenantId());
+        return dynamicForm != null && TenantOwnership.isOwnedByCaller(dynamicForm.getTenantId());
     }
 
     @Override

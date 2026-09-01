@@ -14,16 +14,20 @@ import process.util.ProcessUtil;
 /**
  * Form definitions for task payloads.
  *
- * Reading one is open to anyone who can configure a task, since the task screen needs it to
- * render. Defining one is an admin act: a form decides how everybody else configures that
- * pipeline, and a wrong tag name there produces tasks that fail at run time.
+ * Defining one is an admin act: a form decides how everybody else configures that pipeline, and
+ * a wrong tag name there produces tasks that fail at run time. So is browsing the set of them,
+ * which is a map of the tenant's whole pipeline surface and lives on an admin-only screen.
+ *
+ * The one exception is reading the single form for a pipeline the caller is already editing --
+ * the task screen needs it to render, and that screen is open to anyone who can configure a
+ * task. Hence a tenant-admin default with one method lowered rather than the other way round.
  *
  * @author Nabeel Ahmed
  */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/taskForm.json")
-@PreAuthorize("hasRole('TENANT_USER')")
+@PreAuthorize("hasRole('TENANT_ADMIN')")
 public class TaskFormRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(TaskFormRestApi.class);
@@ -44,6 +48,7 @@ public class TaskFormRestApi {
         }
     }
 
+    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/formForPipeline", method = RequestMethod.GET)
     public ResponseEntity<?> formForPipeline(@RequestParam String pipelineId) {
         try {

@@ -27,6 +27,12 @@ import java.nio.charset.StandardCharsets;
  * @author Nabeel Ahmed
  * */
 @RequestMapping(value = "/storage.json")
+// The role is only the floor: a signed-in user, because every user uploads their own picture
+// here and browses their own tenant's connections. Which bucket and which key they may actually
+// reach is not a question a role can answer, and is settled per request in StorageBrowserService
+// -- a platform-owned bucket (etl-avatar, etl-bucket) is refused to everyone but a platform
+// admin, their own avatar aside. Workflow reads and writes into those buckets do not come
+// through here at all; they use the service's readForWorkflow/uploadForWorkflow directly.
 @PreAuthorize("hasRole('TENANT_USER')")
 public class StorageBrowserRestApi {
 

@@ -6,6 +6,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.AppUserDto;
+import process.model.dto.ObjectContentDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.enums.TenantStatus;
@@ -15,7 +16,9 @@ import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AppUserService;
+import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
+import process.security.TenantOwnership;
 import process.emailer.EmailMessagesFactory;
 import process.util.TemporaryPassword;
 import process.util.PhoneNumberValidator;
@@ -40,6 +43,7 @@ public class AppUserServiceImpl implements AppUserService {
     private final Logger logger = LoggerFactory.getLogger(AppUserServiceImpl.class);
 
     private static final String NOT_FOUND_MESSAGE = "User not found.";
+    private static final String PEER_ADMIN_MESSAGE = "Only a Platform Admin can manage another Tenant Admin.";
 
     private final AppUserRepository appUserRepository;
     private final TenantRepository tenantRepository;
@@ -54,9 +58,11 @@ public class AppUserServiceImpl implements AppUserService {
      * and a tenant created a minute ago has no storage of its own yet -- which used to leave its
      * first user unable to upload at all.
      *
-     * Safe despite the isolation rules because resolveService only refuses a connection owned by
-     * a *different* tenant; one with no tenant is reachable by everybody. And it stays out of
-     * listBuckets, so the bucket is writable without being browsable.
+     * Reachable despite the isolation rules by exactly one route: the storage guard lets any
+     * caller act on its own <appUserId>/profile/ object in a platform bucket and refuses
+     * everything else there. Reading somebody ELSE's picture goes through readAvatar below rather
+     * than the object browser, because the browser would -- correctly -- refuse it. The bucket
+     * stays out of listBuckets either way, so it is usable without being browsable.
      */
     @Value("${app.avatar.bucket:etl-avatar}")
     private String avatarBucket;
@@ -64,14 +70,56 @@ public class AppUserServiceImpl implements AppUserService {
     @Value("${app.console.url:http://localhost:4400}")
     private String consoleUrl;
 
+    private final StorageBrowserService storageBrowserService;
+
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory,
-        UserNameResolver userNameResolver) {
+        UserNameResolver userNameResolver, StorageBrowserService storageBrowserService) {
+        this.storageBrowserService = storageBrowserService;
         this.emailMessagesFactory = emailMessagesFactory;
         this.userNameResolver = userNameResolver;
         this.appUserRepository = appUserRepository;
         this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
+    }
+
+    /**
+     * Somebody's profile picture, resolved from their id rather than from a key the browser names.
+     *
+     * The users screen shows a face per row, and it used to fetch each one straight from the object
+     * browser. Once platform buckets stopped being readable by anyone who could guess a key -- which
+     * is the whole point, since the ids in those keys run in sequence -- every avatar but the
+     * viewer's own stopped loading.
+     *
+     * So the question moved: the caller names a person, not an object. Whoever appears on their
+     * users screen is whose face they may see, which is the same scope listUsers already applies,
+     * and the key is read off that row rather than accepted from the request. That makes the
+     * trusted read sound here for the same reason it is sound elsewhere -- nothing about the
+     * destination came from the caller.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ObjectContentDto readAvatar(Long appUserId) {
+        if (isNull(appUserId)) {
+            return null;
+        }
+        Optional<AppUser> userOpt = this.appUserRepository.findById(appUserId);
+        if (!userOpt.isPresent() || userOpt.get().getStatus() == Status.Delete) {
+            return null;
+        }
+        AppUser user = userOpt.get();
+        // Asked through the shared rule rather than compared here. Comparing the two ids directly
+        // let one case fall open: a caller carrying no tenant of its own matched a platform
+        // admin's tenant-less row, because null equals null, and was handed that person's picture.
+        // TenantOwnership refuses a tenant-less caller and a platform-owned row alike, which is
+        // the same answer scopedFind below already gives.
+        if (!TenantOwnership.isOwnedByCaller(user.getTenantId())) {
+            return null;
+        }
+        if (isNull(user.getAvatarKey()) || isNull(user.getAvatarBucket())) {
+            return null;
+        }
+        return this.storageBrowserService.readForWorkflow(user.getAvatarBucket(), user.getAvatarKey());
     }
 
     @Override
@@ -106,6 +154,12 @@ public class AppUserServiceImpl implements AppUserService {
         boolean isPlatformAdminActor = TenantContext.isPlatformAdmin();
         if (!isPlatformAdminActor && appUserDto.getUserRole() == UserRole.PLATFORM_ADMIN) {
             return new ResponseDto(ERROR, "Only a Platform Admin can create another Platform Admin.");
+        }
+        // A tenant admin staffs its own workspace with tenant users. A second administrator is a
+        // second set of keys to everything the workspace holds, so who gets one is the platform's
+        // decision rather than something an admin can grant itself a colleague.
+        if (!isPlatformAdminActor && appUserDto.getUserRole() != UserRole.TENANT_USER) {
+            return new ResponseDto(ERROR, "Only a Platform Admin can create another Tenant Admin.");
         }
         Long targetTenantId;
         if (appUserDto.getUserRole() == UserRole.PLATFORM_ADMIN) {
@@ -200,7 +254,7 @@ public class AppUserServiceImpl implements AppUserService {
         }
         Optional<AppUser> userOpt = this.scopedFind(appUserDto.getAppUserId());
         if (!userOpt.isPresent()) {
-            return new ResponseDto(ERROR, NOT_FOUND_MESSAGE);
+            return new ResponseDto(ERROR, this.refusalFor(appUserDto.getAppUserId()));
         }
         AppUser user = userOpt.get();
         // Normalised before anything is written, so what lands in the column is always E.164 --
@@ -212,8 +266,25 @@ public class AppUserServiceImpl implements AppUserService {
         boolean isPlatformAdminActor = TenantContext.isPlatformAdmin();
         UserRole effectiveRole = !isNull(appUserDto.getUserRole()) ? appUserDto.getUserRole() : user.getUserRole();
         if (!isNull(appUserDto.getUserRole())) {
+            // The counterpart to changeUserStatus refusing to deactivate your own account. Your
+            // own row is reachable here so you can correct your name on it, and nothing stopped a
+            // different role riding along in the same form -- a platform admin that posts a lower
+            // one has no way back, because the screen that grants the role is the one it just
+            // lost. Resubmitting the role already held is not a change and stays allowed.
+            if (user.getAppUserId().equals(TenantContext.getAppUserId())
+                && appUserDto.getUserRole() != user.getUserRole()) {
+                return new ResponseDto(ERROR, "You cannot change your own role.");
+            }
             if (!isPlatformAdminActor && appUserDto.getUserRole() == UserRole.PLATFORM_ADMIN) {
                 return new ResponseDto(ERROR, "Only a Platform Admin can grant the Platform Admin role.");
+            }
+            // Same rule as addUser: a tenant admin may not hand out its own level. Resubmitting
+            // the role the row already carries is not granting anything, and the console sends
+            // the whole form back on every edit -- so that stays allowed, or an admin could no
+            // longer correct its own name here.
+            if (!isPlatformAdminActor && appUserDto.getUserRole() != UserRole.TENANT_USER
+                && appUserDto.getUserRole() != user.getUserRole()) {
+                return new ResponseDto(ERROR, "Only a Platform Admin can grant the Tenant Admin role.");
             }
         }
 
@@ -251,7 +322,7 @@ public class AppUserServiceImpl implements AppUserService {
         }
         Optional<AppUser> userOpt = this.scopedFind(appUserDto.getAppUserId());
         if (!userOpt.isPresent()) {
-            return new ResponseDto(ERROR, NOT_FOUND_MESSAGE);
+            return new ResponseDto(ERROR, this.refusalFor(appUserDto.getAppUserId()));
         }
         if (userOpt.get().getAppUserId().equals(TenantContext.getAppUserId()) && appUserDto.getStatus() != Status.Active) {
             return new ResponseDto(ERROR, "You cannot deactivate your own account.");
@@ -269,14 +340,35 @@ public class AppUserServiceImpl implements AppUserService {
         } else if (isNull(appUserDto.getPassword()) || appUserDto.getPassword().trim().isEmpty()) {
             return new ResponseDto(ERROR, "New password missing.");
         }
+        ResponseDto weakPassword = validateNewPassword(appUserDto.getPassword());
+        if (weakPassword != null) {
+            return weakPassword;
+        }
         Optional<AppUser> userOpt = this.scopedFind(appUserDto.getAppUserId());
         if (!userOpt.isPresent()) {
-            return new ResponseDto(ERROR, NOT_FOUND_MESSAGE);
+            return new ResponseDto(ERROR, this.refusalFor(appUserDto.getAppUserId()));
         }
         AppUser user = userOpt.get();
         user.setPassword(this.passwordEncoder.encode(appUserDto.getPassword()));
+        // The administrator who typed it knows it, so it is a temporary password like the one
+        // addUser generates -- the account owes a change before it is theirs alone again.
+        user.setMustChangePassword(true);
         this.appUserRepository.save(user);
         return new ResponseDto(SUCCESS, String.format("Password reset for \"%s\".", user.getUsername()));
+    }
+
+    /**
+     * The one length rule about a new password, wherever it is set.
+     *
+     * It used to live only in changeOwnPassword, which meant the path a person chose for
+     * themselves was held to eight characters and the path an administrator imposed on them was
+     * held to nothing at all. Returns null when the password is acceptable.
+     */
+    private static ResponseDto validateNewPassword(String newPassword) {
+        if (isNull(newPassword) || newPassword.length() < 8) {
+            return new ResponseDto(ERROR, "Choose a new password of at least 8 characters.");
+        }
+        return null;
     }
 
     private Optional<AppUser> scopedFind(Long appUserId) {
@@ -292,7 +384,39 @@ public class AppUserServiceImpl implements AppUserService {
         if (targetTenantId == null || !targetTenantId.equals(actorTenantId)) {
             return Optional.empty();
         }
+        // Sharing a tenant is not enough: a tenant admin manages tenant users, not its peers.
+        // Without this, resetPassword would hand one administrator a working password for
+        // another's account and defeat whatever two-person control the workspace thought it had.
+        // Their own row stays reachable so they can still edit themselves from this screen.
+        AppUser target = userOpt.get();
+        if (target.getUserRole() != UserRole.TENANT_USER
+            && !target.getAppUserId().equals(TenantContext.getAppUserId())) {
+            return Optional.empty();
+        }
         return userOpt;
+    }
+
+    /**
+     * Why a scoped lookup came back empty, said in words the caller can act on.
+     *
+     * A peer administrator is on the users screen -- fetchAllUsers returns the whole tenant --
+     * so answering "user not found" about a row somebody is looking at reads as a fault in the
+     * product rather than as the rule it is. Everything else keeps the flat not-found, which is
+     * what stops a caller learning who exists outside its own tenant.
+     */
+    private String refusalFor(Long appUserId) {
+        if (TenantContext.isPlatformAdmin()) {
+            return NOT_FOUND_MESSAGE;
+        }
+        Optional<AppUser> userOpt = this.appUserRepository.findById(appUserId);
+        if (!userOpt.isPresent() || userOpt.get().getStatus() == Status.Delete) {
+            return NOT_FOUND_MESSAGE;
+        }
+        Long targetTenantId = userOpt.get().getTenantId();
+        if (targetTenantId == null || !targetTenantId.equals(TenantContext.getTenantId())) {
+            return NOT_FOUND_MESSAGE;
+        }
+        return PEER_ADMIN_MESSAGE;
     }
 
     private List<AppUserDto> mapToDtoList(List<AppUser> users) {
@@ -367,6 +491,10 @@ public class AppUserServiceImpl implements AppUserService {
      * Records where the picture was uploaded. The upload itself goes through the storage
      * endpoints, which already enforce what the caller may write; this only stores the
      * pointer. Passing no key clears the picture.
+     *
+     * The pointer is checked here all the same. The storage rule covers who may *write* an
+     * object, and says nothing about which object somebody may claim as theirs -- so without
+     * this, naming a neighbour's key would put their face on your account everywhere it renders.
      */
     @Override
     @Transactional
@@ -381,6 +509,9 @@ public class AppUserServiceImpl implements AppUserService {
         }
         String key = appUserDto.getAvatarKey();
         boolean clearing = isNull(key) || key.trim().isEmpty();
+        if (!clearing && !isOwnProfileKey(appUserId, key.trim())) {
+            return new ResponseDto(ERROR, "That is not your own picture.");
+        }
         // The bucket is the server's decision, not the caller's. It used to be whatever the
         // browser sent, which meant a client could record a picture as living anywhere it could
         // name -- and meant the answer changed with whatever the bucket picker happened to
@@ -391,6 +522,23 @@ public class AppUserServiceImpl implements AppUserService {
         this.appUserRepository.save(user);
         return new ResponseDto(SUCCESS, clearing ? "Picture removed." : "Picture updated.",
             this.mapToDto(user));
+    }
+
+    /**
+     * Whether a key names an object in the caller's own profile folder.
+     *
+     * The same shape the storage side allows a tenant user to write -- <appUserId>/profile/ --
+     * with the file name required to be a plain one, so a key cannot climb back out of the
+     * folder it claims to be in.
+     */
+    private static boolean isOwnProfileKey(Long appUserId, String key) {
+        String prefix = appUserId + "/profile/";
+        if (!key.startsWith(prefix)) {
+            return false;
+        }
+        String fileName = key.substring(prefix.length());
+        return !fileName.isEmpty() && fileName.indexOf('/') < 0
+            && !".".equals(fileName) && !"..".equals(fileName);
     }
 
     private AppUserDto mapToDto(AppUser user) {
@@ -459,8 +607,9 @@ public class AppUserServiceImpl implements AppUserService {
         if (isNull(currentPassword) || currentPassword.isEmpty()) {
             return new ResponseDto(ERROR, "Enter your current password.");
         }
-        if (isNull(newPassword) || newPassword.length() < 8) {
-            return new ResponseDto(ERROR, "Choose a new password of at least 8 characters.");
+        ResponseDto weakPassword = validateNewPassword(newPassword);
+        if (weakPassword != null) {
+            return weakPassword;
         }
         if (newPassword.equals(currentPassword)) {
             return new ResponseDto(ERROR, "The new password has to differ from the current one.");

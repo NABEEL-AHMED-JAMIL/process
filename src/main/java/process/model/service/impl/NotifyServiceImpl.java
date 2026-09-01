@@ -11,6 +11,7 @@ import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
+import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.service.NotifyService;
 import java.util.List;
@@ -51,6 +52,11 @@ public class NotifyServiceImpl implements NotifyService {
             logger.warn("Job {} not found or not active", jobQueue.getJobId());
             return new ResponseDto(ERROR, String.format("Job with id %s not found or not active", jobQueue.getJobId()), jobQueue);
         }
+        if (!this.queueBelongsToJob(jobQueue.getJobId(), jobQueue.getJobQueueId())) {
+            logger.warn("Queue {} does not belong to job {}", jobQueue.getJobQueueId(), jobQueue.getJobId());
+            return new ResponseDto(ERROR, String.format("Queue with id %s does not belong to job %s",
+                jobQueue.getJobQueueId(), jobQueue.getJobId()), jobQueue);
+        }
         JobStatus currentStatus = job.get().getJobRunningStatus();
         JobStatus newStatus = jobQueue.getJobStatus();
         logger.info("Job {} current status: {}, requested status: {}", jobQueue.getJobId(), currentStatus, newStatus);
@@ -74,14 +80,14 @@ public class NotifyServiceImpl implements NotifyService {
         switch (newStatus) {
             case Failed:
                 logger.info("Job {} marked as Failed", jobQueue.getJobId());
-                if (job.get().isCompleteJob()) {
+                if (job.get().isFailJob()) {
                     logger.info("Sending failure notification email for job {}", jobQueue.getJobId());
                     this.emailMessagesFactory.sendSourceJobEmail(jobQueue, newStatus);
                 }
                 break;
             case Completed:
                 logger.info("Job {} marked as Completed", jobQueue.getJobId());
-                if (job.get().isFailJob()) {
+                if (job.get().isCompleteJob()) {
                     logger.info("Sending completion notification email for job {}", jobQueue.getJobId());
                     this.emailMessagesFactory.sendSourceJobEmail(jobQueue, newStatus);
                 }
@@ -99,6 +105,11 @@ public class NotifyServiceImpl implements NotifyService {
         if (!job.isPresent()) {
             logger.warn("Job {} not found or not active", jobQueue.getJobId());
             return new ResponseDto(ERROR, String.format("Job with id %s not found or not active", jobQueue.getJobId()), jobQueue);
+        }
+        if (!this.queueBelongsToJob(jobQueue.getJobId(), jobQueue.getJobQueueId())) {
+            logger.warn("Queue {} does not belong to job {}", jobQueue.getJobQueueId(), jobQueue.getJobId());
+            return new ResponseDto(ERROR, String.format("Queue with id %s does not belong to job %s",
+                jobQueue.getJobQueueId(), jobQueue.getJobId()), jobQueue);
         }
         logger.info("Adding logs for job {} queue {}", jobQueue.getJobId(), jobQueue.getJobQueueId());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
@@ -123,6 +134,9 @@ public class NotifyServiceImpl implements NotifyService {
         if (!job.isPresent()) {
             return new ResponseDto(ERROR, String.format("Job with id %s not found or not active", jobId));
         }
+        if (!this.queueBelongsToJob(jobId, jobQueueId)) {
+            return new ResponseDto(ERROR, String.format("Queue with id %s does not belong to job %s", jobQueueId, jobId));
+        }
         this.bulkAction.saveJobAuditLogs(jobQueueId, messages);
         for (String message : messages) {
             this.jobEventPublisher.publishLog(job.get().getTenantId(), jobId, jobQueueId, message);
@@ -130,6 +144,20 @@ public class NotifyServiceImpl implements NotifyService {
         return new ResponseDto(
             String.format("%s log line(s) added for job %s queue %s", messages.size(), jobId, jobQueueId),
             messages.size());
+    }
+
+    /**
+     * A callback names the job and the run separately in its path, and until now nothing tied
+     * the two together -- a caller holding the worker token could quote one job it is entitled
+     * to and any other tenant's queue id, and the write landed on the latter. The queue row is
+     * the only thing that knows which job it belongs to, so it is what decides.
+     */
+    private boolean queueBelongsToJob(Long jobId, Long jobQueueId) {
+        if (jobId == null || jobQueueId == null) {
+            return false;
+        }
+        Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        return jobQueue.isPresent() && jobId.equals(jobQueue.get().getJobId());
     }
 
     private boolean isValidStatusTransition(JobStatus currentStatus, JobStatus newStatus) {

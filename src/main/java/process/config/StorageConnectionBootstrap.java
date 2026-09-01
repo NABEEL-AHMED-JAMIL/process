@@ -8,6 +8,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
+import process.model.service.KafkaSecretService;
 import process.model.enums.StorageProvider;
 import process.model.pojo.LookupData;
 import process.model.pojo.StorageConnection;
@@ -58,6 +59,10 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
     @Value("${azure.storage.connection-string:}")
     private String azureConnectionString;
 
+    /** Where profile pictures live. Platform-owned, so it carries no tenant. */
+    @Value("${app.avatar.bucket:etl-avatar}")
+    private String avatarBucket;
+
     public StorageConnectionBootstrap(LookupDataRepository lookupDataRepository,
         StorageConnectionRepository storageConnectionRepository,
         EncryptionUtil encryptionUtil) {
@@ -70,6 +75,7 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         try {
+            this.ensureDefaultBuckets();
             this.migrateBucketLookups();
         } catch (Exception e) {
             // Never let a migration problem stop the application from starting -- the legacy
@@ -77,6 +83,66 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
             // keep using the environment credentials until this is looked at.
             logger.error("Storage connection bootstrap failed; leaving BUCKET_LIST lookups in place.", e);
         }
+    }
+
+    /**
+     * Creates the two buckets the application itself depends on, when they are missing.
+     *
+     * These are not a migration of anything -- they are the platform's own storage, named in the
+     * requirements as the two defaults, and nothing else creates them. Until now they existed only
+     * because somebody had inserted them by hand: on a freshly migrated database there was no
+     * storage_connection for either, so the first avatar upload and the first Kafka certificate
+     * upload both failed with "Unknown bucket", and the platform-bucket guard had no row to
+     * recognise and so protected nothing.
+     *
+     * Owned by the platform, meaning tenant_id stays null. That is what makes
+     * StorageBrowserServiceImpl treat them as platform buckets: only a PLATFORM_ADMIN may browse
+     * them, while everyone else reaches them through the avatar and Kafka workflows alone.
+     *
+     * Only ever creates what is absent, so an installation that has already configured either one
+     * -- pointed it at real S3, given it different credentials -- keeps exactly what it has.
+     */
+    private void ensureDefaultBuckets() {
+        String secretBucket = KafkaSecretService.SECRET_BUCKET;
+        this.ensurePlatformBucket(this.trimOr(this.avatarBucket, "etl-avatar"),
+            "ETL Avatars", "Profile pictures. Each user owns the folder under their own id.");
+        this.ensurePlatformBucket(secretBucket, "ETL Bucket",
+            "Application storage, including Kafka certificates under kafka-secrets/.");
+    }
+
+    private void ensurePlatformBucket(String alias, String connectionName, String description) {
+        if (this.storageConnectionRepository.findByAlias(alias).isPresent()) {
+            return;
+        }
+        if (this.isBlank(this.minioEndpoint)) {
+            // Left for the operator rather than guessed at: a connection pointing nowhere would
+            // look configured and fail at the first upload, which is worse than being absent.
+            logger.warn("Default bucket '{}' has no storage connection and MINIO_ENDPOINT is not "
+                + "set, so one cannot be created. Avatar and Kafka certificate uploads will fail "
+                + "until a connection for it exists.", alias);
+            return;
+        }
+        StorageConnection connection = new StorageConnection();
+        connection.setTenantId(null);
+        connection.setConnectionName(connectionName);
+        connection.setAlias(alias);
+        connection.setProvider(StorageProvider.MINIO);
+        connection.setBucketName(alias);
+        connection.setDescription(description);
+        connection.setStatus(Status.Active);
+        connection.setConnectionStatus("UNTESTED");
+        connection.setDateCreated(new Timestamp(System.currentTimeMillis()));
+        connection.setEndpoint(this.minioEndpoint.trim());
+        connection.setAccessKey(this.trimToNull(this.minioAccessKey));
+        if (!this.isBlank(this.minioSecretKey)) {
+            connection.setSecretKeyEnc(this.encryptionUtil.encrypt(this.minioSecretKey.trim()));
+        }
+        this.storageConnectionRepository.save(connection);
+        logger.info("Created the default platform storage connection '{}'.", alias);
+    }
+
+    private String trimOr(String value, String fallback) {
+        return this.isBlank(value) ? fallback : value.trim();
     }
 
     private void migrateBucketLookups() {

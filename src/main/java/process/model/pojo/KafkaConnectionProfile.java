@@ -3,8 +3,11 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 import javax.persistence.*;
 import java.sql.Timestamp;
@@ -16,6 +19,11 @@ import java.sql.Timestamp;
 /**
  * @author Nabeel Ahmed
  * */
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+// A profile with no tenant is the platform's shared one, which every tenant may route to and
+// which is the last-resort default when nothing else resolves, so the filter admits it as
+// findVisibleToTenant already does.
+@Filter(name = "tenantFilter", condition = "(tenant_id = :tenantId or tenant_id is null)")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)

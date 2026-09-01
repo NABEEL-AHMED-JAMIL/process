@@ -3,6 +3,10 @@ package process.api;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
+import org.springframework.core.io.InputStreamResource;
+import process.model.dto.ObjectContentDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -92,6 +96,34 @@ public class AppUserRestApi {
             return new ResponseEntity<>(this.appUserService.currentUser(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while currentUser.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * A user's picture by their id.
+     *
+     * TENANT_USER because a face beside a name is not privileged information, and everyone's
+     * screens show them -- the service decides which people the caller can see, and answers 404 for
+     * anyone outside that. Streams the bytes rather than returning a DTO so the browser can bind it
+     * straight to an img.
+     */
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/avatar", method = RequestMethod.GET)
+    public ResponseEntity<?> avatar(@RequestParam Long appUserId) {
+        try {
+            ObjectContentDto content = this.appUserService.readAvatar(appUserId);
+            if (content == null) {
+                // Not an error: most people have no picture, and the console falls back to initials.
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
+            return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, content.getContentType() == null
+                    ? MediaType.APPLICATION_OCTET_STREAM_VALUE : content.getContentType())
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=300")
+                .body(new InputStreamResource(content.getContent()));
+        } catch (Exception ex) {
+            logger.error("An error occurred while avatar.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

@@ -165,6 +165,11 @@ public class BulkAction {
         });
     }
 
+    /**
+     * For a caller that already holds the queue row -- it loaded it, or it just created it, so
+     * the run it is writing against is not in question. A caller that was given the job and the
+     * run as two separate values has to use the overload that takes both.
+     */
     public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
         this.transactionService.saveJobAuditLogs(jobQueueId, logsDetail);
     }
@@ -172,6 +177,21 @@ public class BulkAction {
     /** Many lines at once, for a worker that buffers rather than posting per line. */
     public void saveJobAuditLogs(Long jobQueueId, java.util.List<String> logDetails) {
         this.transactionService.saveJobAuditLogs(jobQueueId, logDetails);
+    }
+
+    /**
+     * For a caller holding a job id and a queue id that arrived independently -- a worker
+     * callback quotes both, and neither one proves anything about the other. The write refuses
+     * unless the queue row says it belongs to that job, so a caller naming a job it is entitled
+     * to cannot append to another tenant's run by quoting that run's queue id.
+     */
+    public void saveJobAuditLogs(Long jobId, Long jobQueueId, String logsDetail) {
+        this.transactionService.saveJobAuditLogs(jobId, jobQueueId, logsDetail);
+    }
+
+    /** The batched form of the checked write. */
+    public void saveJobAuditLogs(Long jobId, Long jobQueueId, java.util.List<String> logDetails) {
+        this.transactionService.saveJobAuditLogs(jobId, jobQueueId, logDetails);
     }
 
     public Integer getCountForInQueueJobByJobId(Long jobId) {

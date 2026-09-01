@@ -19,6 +19,11 @@ import process.util.ProcessUtil;
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/dynamicForm.json")
+// Authoring a form and reading what people answered are both administrative: the submissions
+// hold whatever the form asked for, which on a shared form is routinely personal. Only the two
+// submit endpoints and the two public uuid lookups sit below this, and each says so in its own
+// right -- an override here is never inherited, because @PreAuthorize is not repeatable and a
+// method-level one replaces the class-level one outright.
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class DynamicFormRestApi {
 
@@ -60,7 +65,6 @@ public class DynamicFormRestApi {
         }
     }
 
-    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllForms", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllForms() {
         try {
@@ -71,7 +75,6 @@ public class DynamicFormRestApi {
         }
     }
 
-    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchFormByFormId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchFormByFormId(@RequestParam Long dynamicFormId) {
         try {
@@ -123,6 +126,16 @@ public class DynamicFormRestApi {
         }
     }
 
+    /**
+     * Answering a form, unlike reading one, still needs an account.
+     *
+     * fetchFormByUuid above is permitAll so a share link opens for anyone, and the console
+     * already tells a visitor with only the link that they cannot answer. Opening this to match
+     * is a bigger change than an annotation: submitForm reads the tenant from TenantContext,
+     * which an anonymous caller has none of, and an unauthenticated write endpoint needs a rate
+     * limit and the permitAll matcher in SecurityConfig. Until all three are in place this stays
+     * closed rather than half open.
+     */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/submitForm", method = RequestMethod.POST)
     public ResponseEntity<?> submitForm(@RequestBody DynamicFormSubmissionDto dynamicFormSubmissionDto) {
@@ -155,7 +168,6 @@ public class DynamicFormRestApi {
         }
     }
 
-    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchSubmissionsByFormId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSubmissionsByFormId(@RequestParam Long dynamicFormId) {
         try {
@@ -166,7 +178,6 @@ public class DynamicFormRestApi {
         }
     }
 
-    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchSubmissionBySubmissionId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSubmissionBySubmissionId(@RequestParam Long dynamicFormSubmissionId) {
         try {

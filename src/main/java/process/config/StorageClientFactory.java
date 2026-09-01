@@ -6,6 +6,7 @@ import com.azure.storage.common.StorageSharedKeyCredential;
 import io.minio.MinioClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import process.model.pojo.StorageConnection;
 import process.model.service.ObjectStorageService;
@@ -46,6 +47,10 @@ public class StorageClientFactory {
 
     private final EncryptionUtil encryptionUtil;
     private final Map<String, ObjectStorageService> cache = new ConcurrentHashMap<>();
+
+    /** Opt-in, and off unless a deployment says otherwise; see ambientCredentialsAllowed. */
+    @Value("${storage.allow-instance-role:false}")
+    private boolean allowInstanceRole;
 
     public StorageClientFactory(EncryptionUtil encryptionUtil,
         org.springframework.cache.CacheManager cacheManager) {
@@ -143,6 +148,20 @@ public class StorageClientFactory {
         }
     }
 
+    /**
+     * Whether a connection carrying no keys of its own may fall through to the SDK's default
+     * credential chain -- that is, borrow whatever IAM identity the process itself runs as.
+     *
+     * Two conditions, both required. The deployment has to turn it on with
+     * storage.allow-instance-role, and the connection has to be platform-level (no tenant):
+     * a tenant's connection reaching for the platform's identity would let whoever created it
+     * read every bucket that identity can see, which is the whole S3 account rather than the
+     * one bucket the connection names.
+     */
+    public boolean ambientCredentialsAllowed(Long tenantId) {
+        return this.allowInstanceRole && tenantId == null;
+    }
+
     private String decrypt(String cipherText) {
         if (cipherText == null || cipherText.trim().isEmpty()) {
             return null;
@@ -175,10 +194,12 @@ public class StorageClientFactory {
         if (accessKey != null && !accessKey.trim().isEmpty() && secretKey != null) {
             builder.credentialsProvider(StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(accessKey.trim(), secretKey)));
+        } else if (!this.ambientCredentialsAllowed(connection.getTenantId())) {
+            throw new IllegalStateException("An S3 connection needs an access key and a secret key.");
         }
-        // No explicit keys means fall through to the SDK's default provider chain -- which is
-        // how an IAM role attached to the host/pod is picked up, so leaving them blank is a
-        // valid configuration rather than an error.
+        // Past that check with no keys, the SDK's default provider chain takes over -- which is
+        // how an IAM role attached to the host/pod is picked up.
+
         if (connection.getEndpoint() != null && !connection.getEndpoint().trim().isEmpty()) {
             builder.endpointOverride(URI.create(connection.getEndpoint().trim()));
             // S3-compatible endpoints (Wasabi, Ceph, MinIO-behind-S3-API) generally don't

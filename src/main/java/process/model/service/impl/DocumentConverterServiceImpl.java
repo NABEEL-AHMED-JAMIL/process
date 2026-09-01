@@ -18,6 +18,7 @@ import process.model.service.DocumentConverterService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TenantOwnership;
 import process.util.ContentTypeUtil;
 import process.util.DocumentConverterFormatRegistry;
 import process.util.MarkdownDocumentFormat;
@@ -33,7 +34,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Base64;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import static process.util.ProcessUtil.*;
 
@@ -75,10 +75,7 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
     }
 
     private boolean isOwnedByCaller(DocumentConverterTask documentConverterTask) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return documentConverterTask != null && Objects.equals(documentConverterTask.getTenantId(), TenantContext.getTenantId());
+        return documentConverterTask != null && TenantOwnership.isOwnedByCaller(documentConverterTask.getTenantId());
     }
 
     @Override

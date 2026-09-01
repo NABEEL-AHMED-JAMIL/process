@@ -14,6 +14,9 @@ import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.repository.*;
 import process.model.service.NotificationCenterService;
+import process.model.dto.UserActivityDto;
+import java.sql.Timestamp;
+import java.util.Collections;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.socket.JobEventPublisher;
@@ -189,4 +192,67 @@ class SourceJobServiceImplTenantIsolationTest {
         assertThat(response.getStatus()).isEqualTo("ERROR");
         verify(this.sourceJobRepository, never()).save(any());
     }
+
+    // ---- myActivity: scoped to the caller, never to a parameter ----------------------------
+
+    /**
+     * The screen used to fetch every job in the tenant and keep the ones whose assignedUsername
+     * matched the signed-in person. This asserts the replacement asks the database about one id --
+     * the caller's own, taken from the context rather than from the request.
+     */
+    @Test
+    void myActivityAsksOnlyAboutTheCallersOwnId() throws Exception {
+        TenantContext.set(5L, "TENANT_USER", 1000L, "someone@tenant.example");
+        when(this.sourceJobRepository.countAssignedTo(1000L))
+            .thenReturn(Collections.singletonList(new Object[] { 7L, 0L }));
+        when(this.jobQueueRepository.countRecentRunsForAssignee(eq(1000L), any()))
+            .thenReturn(Collections.singletonList(new Object[] { 2L, 0L }));
+        when(this.jobQueueRepository.findRecentRunsForAssignee(1000L, 8))
+            .thenReturn(Collections.singletonList(new Object[] {
+                5073L, 2004L, "Pacific hurricanes 2000-2004", "Completed",
+                Timestamp.valueOf("2026-08-27 12:25:03"), Timestamp.valueOf("2026-08-27 12:26:09"), "ok" }));
+        when(this.sourceJobRepository.outcomesForAssignee(1000L))
+            .thenReturn(Collections.singletonList(new Object[] { "Completed", 2L }));
+
+        ResponseDto response = this.service.fetchMyActivity(8, 7);
+        UserActivityDto activity = (UserActivityDto) response.getData();
+
+        assertThat(activity.getJobsAssigned()).isEqualTo(7L);
+        assertThat(activity.getRecentRuns()).isEqualTo(2L);
+        assertThat(activity.getWindowDays()).isEqualTo(7);
+        assertThat(activity.getRuns()).hasSize(1);
+        assertThat(activity.getRuns().get(0).getJobName()).isEqualTo("Pacific hurricanes 2000-2004");
+        assertThat(activity.getRuns().get(0).getStartTime()).isNotNull();
+        assertThat(activity.getOutcomes()).hasSize(1);
+        // No other id was ever asked about.
+        verify(this.sourceJobRepository, never()).countAssignedTo(argThat(id -> !Long.valueOf(1000L).equals(id)));
+    }
+
+    /** A completed run's message is noise on a profile; only a failure has something to explain. */
+    @Test
+    void onlyAFailedRunCarriesItsMessage() throws Exception {
+        TenantContext.set(5L, "TENANT_USER", 1000L, "someone@tenant.example");
+        when(this.jobQueueRepository.findRecentRunsForAssignee(1000L, 8)).thenReturn(java.util.Arrays.asList(
+            new Object[] { 1L, 2L, "Fine job", "Completed", Timestamp.valueOf("2026-08-27 12:00:00"),
+                Timestamp.valueOf("2026-08-27 12:01:00"), "finished cleanly" },
+            new Object[] { 2L, 3L, "Broken job", "Failed", Timestamp.valueOf("2026-08-27 13:00:00"),
+                Timestamp.valueOf("2026-08-27 13:00:30"), "connection refused" }));
+
+        UserActivityDto activity = (UserActivityDto) this.service.fetchMyActivity(8, 7).getData();
+
+        assertThat(activity.getRuns().get(0).getJobStatusMessage()).isNull();
+        assertThat(activity.getRuns().get(1).getJobStatusMessage()).isEqualTo("connection refused");
+    }
+
+    /** Nobody signed in is an empty card, not a failed page -- the activity is supplementary. */
+    @Test
+    void noSignedInUserYieldsAnEmptyActivityRatherThanAnError() throws Exception {
+        ResponseDto response = this.service.fetchMyActivity(8, 7);
+
+        UserActivityDto activity = (UserActivityDto) response.getData();
+        assertThat(activity.getJobsAssigned()).isZero();
+        assertThat(activity.getRuns()).isEmpty();
+        verifyNoInteractions(this.jobQueueRepository);
+    }
+
 }

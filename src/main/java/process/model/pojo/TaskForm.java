@@ -2,8 +2,11 @@ package process.model.pojo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 
 import javax.persistence.*;
@@ -21,6 +24,10 @@ import java.util.List;
  */
 @Entity
 @Table(name = "task_form")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+// The same rule listForms and findForPipeline already apply by hand: a tenant sees its own
+// definitions and the shared ones, which are the rows with no tenant.
+@Filter(name = "tenantFilter", condition = "(tenant_id = :tenantId or tenant_id is null)")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)

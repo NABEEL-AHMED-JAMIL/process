@@ -1,6 +1,7 @@
 package process.model.service;
 
 import process.model.dto.AppUserDto;
+import process.model.dto.ObjectContentDto;
 import process.model.dto.ResponseDto;
 
 /**
@@ -9,6 +10,9 @@ import process.model.dto.ResponseDto;
 public interface AppUserService {
 
     public ResponseDto listUsers() throws Exception;
+
+    /** A user's picture, or null when there is none or the caller may not see that person. */
+    public ObjectContentDto readAvatar(Long appUserId);
 
     public ResponseDto addUser(AppUserDto appUserDto) throws Exception;
 

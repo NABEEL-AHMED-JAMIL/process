@@ -9,7 +9,18 @@ import java.util.regex.Pattern;
  * */
 public class KafkaTopicPartitionUtil {
 
-    private static final Pattern PATTERN = Pattern.compile("^topic=([a-zA-Z-]*)&partitions=\\[([0-9]+|\\*)\\]$");
+    /**
+     * The topic half accepts what a Kafka broker itself accepts -- letters, digits, dot,
+     * underscore, hyphen, up to 249 characters. Letters and hyphens alone rejected the names
+     * brokers are actually given ("orders-v2", "etl.jobs", "job_events"), and a task type
+     * carrying one dispatched nothing: parse() returned empty and every run of that job failed
+     * with "Broker configuration is invalid".
+     *
+     * At least one character, where it used to be any number: an empty topic passed validation
+     * on save and then failed at send time, on the broker, once per run.
+     */
+    private static final Pattern PATTERN =
+        Pattern.compile("^topic=([a-zA-Z0-9._-]{1,249})&partitions=\\[([0-9]+|\\*)\\]$");
 
     public static final int MAX_PARTITION_INDEX = 10;
 

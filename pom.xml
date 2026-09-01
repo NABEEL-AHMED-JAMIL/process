@@ -280,6 +280,40 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+
+            <!--
+              Build and test on the JDK the application image ships, whatever JVM launched Maven.
+
+              Without this the two drifted: `mvn` ran on a JDK 25 while the image runs 17, so
+              surefire forked 25 and every Kafka SASL test failed locally on something that
+              cannot happen in production. kafka-clients 2.5 authenticates through
+              Subject.getSubject, which went away with the SecurityManager in JDK 24. A build
+              that disagrees with what is deployed misleads in both directions, and this is the
+              cheap end of fixing that.
+
+              Needs a jdk entry for 17 in ~/.m2/toolchains.xml. The build fails with a clear
+              message when there is none, which is the intended outcome: silently compiling
+              against the wrong JDK is what this exists to stop.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-toolchains-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>toolchain</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <toolchains>
+                        <jdk>
+                            <version>17</version>
+                        </jdk>
+                    </toolchains>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

@@ -10,6 +10,7 @@ import process.model.dto.QueryDefinitionDto;
 import process.model.dto.QueryPreviewResponseDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
+import process.model.enums.UserRole;
 import process.model.pojo.DatabaseConnectionProfile;
 import process.model.pojo.QueryDefinition;
 import process.model.repository.DatabaseConnectionProfileRepository;
@@ -72,18 +73,15 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         this.userNameResolver = userNameResolver;
     }
 
-    private boolean isOwnedByCaller(QueryDefinition query) {
+    private boolean isOwnedByCaller(Long ownerTenantId) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
         }
-        return query != null && Objects.equals(query.getTenantId(), TenantContext.getTenantId());
+        return Objects.equals(ownerTenantId, TenantContext.getTenantId());
     }
 
-    private boolean isOwnedByCaller(DatabaseConnectionProfile profile) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return profile != null && Objects.equals(profile.getTenantId(), TenantContext.getTenantId());
+    private boolean isTenantAdmin() {
+        return TenantContext.isPlatformAdmin() || UserRole.TENANT_ADMIN.name().equals(TenantContext.getUserRole());
     }
 
     @Override
@@ -134,7 +132,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(dto.getQueryId());
-        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get())) {
+        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Query not found with %d.", dto.getQueryId()));
         }
         ResponseDto ownershipError = this.checkConnectionProfileOwnership(dto.getDatabaseConnectionProfileId());
@@ -166,7 +164,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(queryId);
-        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get())) {
+        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Query not found with %d.", queryId));
         }
         QueryDefinition query = queryOpt.get();
@@ -192,7 +190,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(queryId);
-        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get())) {
+        if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Query not found with %d.", queryId));
         }
         return new ResponseDto(SUCCESS, "Data found.", this.toDetailDto(queryOpt.get()));
@@ -201,6 +199,10 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
     @Override
     @Transactional
     public ResponseDto validateQuery(QueryDefinitionDto dto) throws Exception {
+        ResponseDto adHocError = this.checkAdHocSqlAllowed(dto);
+        if (adHocError != null) {
+            return adHocError;
+        }
         String queryText = this.resolveQueryText(dto);
         if (queryText == null) {
             return new ResponseDto(ERROR, "queryId or queryText is required.");
@@ -214,6 +216,10 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
     @Override
     @Transactional
     public ResponseDto previewQuery(QueryDefinitionDto dto) throws Exception {
+        ResponseDto adHocError = this.checkAdHocSqlAllowed(dto);
+        if (adHocError != null) {
+            return adHocError;
+        }
         String queryText = this.resolveQueryText(dto);
         if (queryText == null) {
             return new ResponseDto(ERROR, "queryId or queryText is required.");
@@ -224,7 +230,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         if (!isNull(dto.getQueryId())) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);
             Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(dto.getQueryId());
-            if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get())) {
+            if (!queryOpt.isPresent() || !this.isOwnedByCaller(queryOpt.get().getTenantId())) {
                 return new ResponseDto(ERROR, String.format("Query not found with %d.", dto.getQueryId()));
             }
             databaseConnectionProfileId = queryOpt.get().getDatabaseConnectionProfileId();
@@ -238,7 +244,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(databaseConnectionProfileId);
-        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
+        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", databaseConnectionProfileId));
         }
 
@@ -278,11 +284,21 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
         }
     }
 
+    private ResponseDto checkAdHocSqlAllowed(QueryDefinitionDto dto) {
+        // Running SQL that came in on the request is the same power as authoring a saved query,
+        // which is a tenant admin's job. Without a queryId there is nothing else holding the text
+        // to the rows the caller is allowed to read.
+        if (isNull(dto.getQueryId()) && !this.isTenantAdmin()) {
+            return new ResponseDto(ERROR, "Only a tenant admin can run SQL that is not saved -- pick a saved query instead.");
+        }
+        return null;
+    }
+
     private String resolveQueryText(QueryDefinitionDto dto) {
         if (!isNull(dto.getQueryId())) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);
             Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(dto.getQueryId());
-            if (queryOpt.isPresent() && this.isOwnedByCaller(queryOpt.get())) {
+            if (queryOpt.isPresent() && this.isOwnedByCaller(queryOpt.get().getTenantId())) {
                 return this.encryptionUtil.decrypt(queryOpt.get().getQueryText());
             }
             return null;
@@ -295,7 +311,7 @@ public class QueryDefinitionServiceImpl implements QueryDefinitionService {
             return new ResponseDto(ERROR, "databaseConnectionProfileId missing.");
         }
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(databaseConnectionProfileId);
-        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
+        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", databaseConnectionProfileId));
         }
         return null;

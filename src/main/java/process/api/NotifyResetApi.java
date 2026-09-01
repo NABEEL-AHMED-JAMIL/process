@@ -47,21 +47,36 @@ public class NotifyResetApi {
         this.notifyService = notifyService;
     }
 
+    /**
+     * A blank token used to mean "leave the callbacks open", warned about in the log and
+     * otherwise ignored -- so a deploy that simply forgot the variable shipped three
+     * unauthenticated write endpoints. Refuse to start instead, the same way JwtUtil refuses
+     * to run without its signing key.
+     */
     @PostConstruct
-    public void warnIfUnsecured() {
-        if (ProcessUtil.isNull(this.workerCallbackToken) || this.workerCallbackToken.trim().isEmpty()) {
-            this.logger.warn("WORKER_CALLBACK_TOKEN is not set -- /changeState and /addLogs accept "
-                + "unauthenticated requests. Set it here and on the ETL workers to close that off.");
+    public void requireCallbackToken() {
+        if (isTokenUnset()) {
+            throw new IllegalStateException("WORKER_CALLBACK_TOKEN environment variable is not set; "
+                + "/changeState, /addLogs and /addLogsBatch would accept unauthenticated requests. "
+                + "Set it here and on the ETL workers.");
         }
+    }
+
+    private boolean isTokenUnset() {
+        return ProcessUtil.isNull(this.workerCallbackToken) || this.workerCallbackToken.trim().isEmpty();
     }
 
     /**
      * Returns null when the caller is allowed through. Comparison is constant-time so that a
      * wrong token can't be recovered a character at a time from response timing.
      */
-    private ResponseEntity<?> rejectIfUntrusted(String presentedToken) {
-        if (ProcessUtil.isNull(this.workerCallbackToken) || this.workerCallbackToken.trim().isEmpty()) {
-            return null;
+    ResponseEntity<?> rejectIfUntrusted(String presentedToken) {
+        if (isTokenUnset()) {
+            // Startup already refuses this, so reaching here means the field was cleared after
+            // the fact. Nothing to compare against is not a reason to let the caller in.
+            this.logger.error("Rejected worker callback: no worker callback token is configured.");
+            return new ResponseEntity<>(
+                new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Unauthorized worker callback."), HttpStatus.UNAUTHORIZED);
         }
         byte[] expected = this.workerCallbackToken.trim().getBytes(StandardCharsets.UTF_8);
         byte[] presented = presentedToken == null

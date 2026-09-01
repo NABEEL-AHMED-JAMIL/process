@@ -3,8 +3,11 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
@@ -20,6 +23,10 @@ import java.sql.Timestamp;
 /**
  * @author Nabeel Ahmed
  * */
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+// A route always belongs to one tenant -- the column is not nullable and there is no shared
+// row to admit -- so the plain condition is the whole rule here.
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TenantTaskTypeKafkaRoute {

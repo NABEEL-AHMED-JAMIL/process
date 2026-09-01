@@ -2,6 +2,7 @@ package process.model.service.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import process.model.enums.Status;
@@ -12,6 +13,7 @@ import process.model.pojo.Tenant;
 import process.model.repository.*;
 import javax.annotation.PostConstruct;
 import java.sql.Timestamp;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -23,7 +25,6 @@ public class TenantSeedService {
     private final Logger logger = LoggerFactory.getLogger(TenantSeedService.class);
 
     private static final String PLATFORM_ADMIN_USERNAME = "admin@platform.local";
-    private static final String PLATFORM_ADMIN_DEFAULT_PASSWORD = "admin";
     private static final String DEFAULT_TENANT_CODE = "default";
 
     private final TenantRepository tenantRepository;
@@ -36,6 +37,9 @@ public class TenantSeedService {
     private final PdfHighlighterTaskRepository pdfHighlighterTaskRepository;
     private final LookupDataRepository lookupDataRepository;
     private final LookupDataCacheService lookupDataCacheService;
+
+    @Value("${platform.admin.bootstrap-password:}")
+    private String platformAdminBootstrapPassword;
 
     public TenantSeedService(TenantRepository tenantRepository, AppUserRepository appUserRepository,
         PasswordEncoder passwordEncoder, SourceJobRepository sourceJobRepository,
@@ -60,7 +64,11 @@ public class TenantSeedService {
             Tenant defaultTenant = this.ensureDefaultTenant();
             AppUser platformAdmin = this.ensurePlatformAdmin();
             this.backfillTenantIds(defaultTenant.getTenantId());
-            this.backfillAssignedUserIds(platformAdmin.getAppUserId());
+            // No platform admin means no bootstrap password was configured; there is nobody to
+            // hand the orphaned jobs to, so leave them for the next boot that has one.
+            if (platformAdmin != null) {
+                this.backfillAssignedUserIds(platformAdmin.getAppUserId());
+            }
 
             this.lookupDataCacheService.initializeCache();
         } catch (Exception ex) {
@@ -83,23 +91,39 @@ public class TenantSeedService {
             });
     }
 
+    /**
+     * The first password used to be the compiled-in string "admin", so every instance that was
+     * deployed and never rotated it answered to a credential anyone could read off this file.
+     * It now comes from configuration with no default: with nothing configured there is simply
+     * no account to guess at, and the one that does get created cannot be used until whoever
+     * takes it over changes the password.
+     *
+     * Returns null when nothing was seeded, which is not an error -- it is the safe outcome.
+     */
     private AppUser ensurePlatformAdmin() {
-        return this.appUserRepository.findByUsernameAndStatusNot(PLATFORM_ADMIN_USERNAME, Status.Delete)
-            .orElseGet(() -> {
-                AppUser admin = new AppUser();
-                admin.setUuid(UUID.randomUUID().toString());
-                admin.setTenantId(null);
-                admin.setUsername(PLATFORM_ADMIN_USERNAME);
-                admin.setPassword(this.passwordEncoder.encode(PLATFORM_ADMIN_DEFAULT_PASSWORD));
-                admin.setFullName("Platform Admin");
-                admin.setUserRole(UserRole.PLATFORM_ADMIN);
-                admin.setStatus(Status.Active);
-                admin.setDateCreated(new Timestamp(System.currentTimeMillis()));
-                AppUser saved = this.appUserRepository.save(admin);
-                this.logger.info("=========Seeded Platform Admin user '{}' -- change its password after first login ==========",
-                    PLATFORM_ADMIN_USERNAME);
-                return saved;
-            });
+        Optional<AppUser> existing = this.appUserRepository.findByUsernameAndStatusNot(PLATFORM_ADMIN_USERNAME, Status.Delete);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        if (this.platformAdminBootstrapPassword == null || this.platformAdminBootstrapPassword.trim().isEmpty()) {
+            this.logger.error("=========No Platform Admin seeded: platform.admin.bootstrap-password is not set. "
+                + "Set it and restart to create '{}' ==========", PLATFORM_ADMIN_USERNAME);
+            return null;
+        }
+        AppUser admin = new AppUser();
+        admin.setUuid(UUID.randomUUID().toString());
+        admin.setTenantId(null);
+        admin.setUsername(PLATFORM_ADMIN_USERNAME);
+        admin.setPassword(this.passwordEncoder.encode(this.platformAdminBootstrapPassword));
+        admin.setFullName("Platform Admin");
+        admin.setUserRole(UserRole.PLATFORM_ADMIN);
+        admin.setStatus(Status.Active);
+        admin.setMustChangePassword(true);
+        admin.setDateCreated(new Timestamp(System.currentTimeMillis()));
+        AppUser saved = this.appUserRepository.save(admin);
+        this.logger.info("=========Seeded Platform Admin user '{}' -- it must change its password on first login ==========",
+            PLATFORM_ADMIN_USERNAME);
+        return saved;
     }
 
     private void backfillTenantIds(Long defaultTenantId) {

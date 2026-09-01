@@ -45,7 +45,11 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // Whoever is asking for a workspace has no account yet, which is the point of
                 // the request. Only submit is open; reading and deciding need a platform admin.
                 .antMatchers(HttpMethod.POST, "/tenantRequest.json/submit").permitAll()
-                .antMatchers("/actuator/**").permitAll()
+                // Liveness probes have no account, so health and info stay open. The rest --
+                // metrics and prometheus -- name every endpoint, its call rate and its 401/403
+                // rate, which is a map of the application for anyone who asks for it.
+                .antMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                .antMatchers("/actuator/**").hasRole("PLATFORM_ADMIN")
                 .antMatchers("/swagger-ui/**", "/swagger-ui.html", "/v2/api-docs",
                     "/swagger-resources/**", "/webjars/**").permitAll()
                 .anyRequest().authenticated().and()

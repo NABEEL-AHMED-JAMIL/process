@@ -28,6 +28,15 @@ public class MinioConfig {
             throw new IllegalStateException(
                 "MINIO_ENDPOINT is not configured; cannot use a bucket mapped to the MINIO provider.");
         }
+        // Handed to credentials() unchecked, a missing key builds an anonymous client instead of
+        // failing: the bucket then answers only if it is world-readable, and what surfaces is a
+        // 403 on the first object rather than the configuration mistake behind it. Say so here.
+        if (this.accessKey == null || this.accessKey.trim().isEmpty()
+            || this.secretKey == null || this.secretKey.trim().isEmpty()) {
+            throw new IllegalStateException(
+                "MINIO_ACCESS_KEY and MINIO_SECRET_KEY are not configured; the MINIO provider "
+                    + "will not fall back to an anonymous client.");
+        }
         return MinioClient.builder()
             .endpoint(this.endpoint)
             .credentials(this.accessKey, this.secretKey)

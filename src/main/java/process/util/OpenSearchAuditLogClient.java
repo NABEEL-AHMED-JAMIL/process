@@ -80,14 +80,31 @@ public class OpenSearchAuditLogClient {
      * line. _bulk takes them all in a single call: the newline-delimited body pairs an action
      * line with its document, and the trailing newline is required rather than cosmetic.
      *
-     * Returns false if the whole call failed, so the caller can fall back to the database the
-     * same way the single-document path does. A partial failure inside the batch is logged --
-     * OpenSearch reports per-item errors in the response -- but is not worth failing the whole
-     * run over, since these are audit lines rather than the job's output.
+     * Returns false unless every line in the batch was stored, so the caller can fall back to
+     * the database the same way the single-document path does. A partial rejection used to be
+     * logged and then reported as success, which left the rejected lines in neither store.
      */
     public boolean indexAll(List<Object[]> entries) {
         if (!isEnabled() || entries == null || entries.isEmpty()) {
             return false;
+        }
+        return this.indexAllReturningFailures(entries).isEmpty();
+    }
+
+    /**
+     * The same bulk write, handing back the entries OpenSearch would not take.
+     *
+     * A caller that can write the rejected lines somewhere else wants to know which ones they
+     * were rather than that something went wrong, so it can fall back for those alone instead
+     * of for the whole batch. Anything the response does not clearly account for counts as
+     * rejected: an audit line written twice can still be read, one that was dropped cannot.
+     */
+    public List<Object[]> indexAllReturningFailures(List<Object[]> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if (!isEnabled()) {
+            return entries;
         }
         try {
             StringBuilder body = new StringBuilder();
@@ -109,13 +126,60 @@ public class OpenSearchAuditLogClient {
             ResponseEntity<String> response = this.restTemplate.exchange(
                 this.baseUrl + "/_bulk", HttpMethod.POST,
                 new HttpEntity<>(body.toString(), headers), String.class);
-            if (response.getBody() != null && response.getBody().contains("\"errors\":true")) {
-                logger.warn("Some audit lines were rejected by OpenSearch in a bulk of {}", entries.size());
-            }
-            return true;
+            return this.rejectedEntries(response.getBody(), entries);
         } catch (Exception ex) {
             logger.error("Failed to bulk index {} audit lines into OpenSearch", entries.size(), ex);
-            return false;
+            return entries;
+        }
+    }
+
+    /**
+     * Which entries of a _bulk request the response says were not stored.
+     *
+     * The items array comes back in request order, one element per document, so position is
+     * what pairs a rejection with the line that caused it. A body that cannot be lined up
+     * against the request that way tells us nothing about which lines survived, so the whole
+     * batch is reported as rejected rather than assumed stored.
+     */
+    List<Object[]> rejectedEntries(String responseBody, List<Object[]> entries) {
+        if (responseBody == null) {
+            logger.warn("OpenSearch returned no body for a bulk of {} audit lines", entries.size());
+            return entries;
+        }
+        try {
+            JsonNode root = this.objectMapper.readTree(responseBody);
+            JsonNode errors = root.path("errors");
+            if (!errors.isBoolean()) {
+                logger.warn("OpenSearch answered a bulk of {} audit lines with a body that is not a bulk response",
+                    entries.size());
+                return entries;
+            }
+            if (!errors.booleanValue()) {
+                return Collections.emptyList();
+            }
+            JsonNode items = root.path("items");
+            if (!items.isArray() || items.size() != entries.size()) {
+                logger.warn("OpenSearch reported errors in a bulk of {} audit lines but returned {} items",
+                    entries.size(), items.isArray() ? items.size() : 0);
+                return entries;
+            }
+            List<Object[]> rejected = new ArrayList<>();
+            for (int index = 0; index < items.size(); index++) {
+                JsonNode result = items.get(index).path("index");
+                int status = result.path("status").asInt(0);
+                if (!result.path("error").isMissingNode() || status < 200 || status > 299) {
+                    rejected.add(entries.get(index));
+                }
+            }
+            if (rejected.isEmpty()) {
+                logger.warn("OpenSearch reported errors in a bulk of {} audit lines without naming any", entries.size());
+                return entries;
+            }
+            logger.warn("OpenSearch rejected {} of {} audit lines", rejected.size(), entries.size());
+            return rejected;
+        } catch (Exception ex) {
+            logger.error("Could not read the OpenSearch bulk response for {} audit lines", entries.size(), ex);
+            return entries;
         }
     }
 

@@ -35,7 +35,13 @@ import java.sql.Timestamp;
  * @author Nabeel Ahmed
  * */
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
-@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+// Admits the platform's own rows (tenant_id null) as SourceTaskType, TaskForm and
+// KafkaConnectionProfile already do. A strict condition hid etl-bucket and etl-avatar from the
+// alias lookup that resolves a bucket, which broke every workflow writing there AND silently
+// disabled the platform-bucket guard -- the guard can only refuse a connection it can see.
+// Who may USE a connection is decided explicitly in StorageBrowserServiceImpl, and listBuckets
+// filters on the tenant itself, so nothing here offers a platform bucket to a tenant.
+@Filter(name = "tenantFilter", condition = "(tenant_id = :tenantId or tenant_id is null)")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)

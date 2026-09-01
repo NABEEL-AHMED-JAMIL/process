@@ -22,6 +22,7 @@ import process.model.service.NotificationCenterService;
 import process.model.service.SourceJobService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TenantOwnership;
 import process.util.OpenSearchAuditLogClient;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
@@ -101,17 +102,11 @@ public class SourceJobServiceImpl implements SourceJobService {
     }
 
     private boolean isOwnedByCaller(SourceJob sourceJob) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return sourceJob != null && Objects.equals(sourceJob.getTenantId(), TenantContext.getTenantId());
+        return sourceJob != null && TenantOwnership.isOwnedByCaller(sourceJob.getTenantId());
     }
 
     private boolean isOwnedByCaller(SourceTask sourceTask) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return sourceTask != null && Objects.equals(sourceTask.getTenantId(), TenantContext.getTenantId());
+        return sourceTask != null && TenantOwnership.isOwnedByCaller(sourceTask.getTenantId());
     }
 
     @Override
@@ -625,6 +620,80 @@ public class SourceJobServiceImpl implements SourceJobService {
         sourceJobQueueDto.setRunManual(jobQueue.getRunManual());
         sourceJobQueueDto.setSkipManual(jobQueue.getSkipManual());
         return sourceJobQueueDto;
+    }
+
+
+    /**
+     * The profile screen's activity card, in one query pair instead of the whole job list.
+     *
+     * Scoped to the caller's own appUserId rather than to their tenant, so it needs no tenant
+     * filter to be safe: a job is either assigned to them or it is not, and the id comes from the
+     * token rather than the request. Nothing here can be asked on somebody else's behalf, which is
+     * why the endpoint takes no user parameter.
+     *
+     * Returns an empty shape rather than an error when nobody is signed in or nothing has run --
+     * this card is supplementary, and a profile that fails to load because a person has no jobs
+     * yet would be worse than one that says so.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ResponseDto fetchMyActivity(int limit, int windowDays) throws Exception {
+        UserActivityDto activity = new UserActivityDto();
+        activity.setWindowDays(windowDays);
+        Long callerId = TenantContext.getAppUserId();
+        if (callerId == null) {
+            return new ResponseDto(SUCCESS, "No activity.", activity);
+        }
+
+        List<Object[]> assigned = this.sourceJobRepository.countAssignedTo(callerId);
+        if (!assigned.isEmpty() && assigned.get(0) != null) {
+            activity.setJobsAssigned(this.asLong(assigned.get(0)[0]));
+            activity.setActiveJobs(this.asLong(assigned.get(0)[1]));
+        }
+
+        List<Object[]> counts = this.jobQueueRepository.countRecentRunsForAssignee(
+            callerId, LocalDateTime.now().minusDays(windowDays));
+        if (!counts.isEmpty() && counts.get(0) != null) {
+            activity.setRecentRuns(this.asLong(counts.get(0)[0]));
+            activity.setRecentFailures(this.asLong(counts.get(0)[1]));
+        }
+
+        for (Object[] row : this.jobQueueRepository.findRecentRunsForAssignee(callerId, limit)) {
+            UserActivityDto.Run run = new UserActivityDto.Run();
+            run.setJobQueueId(this.asLongOrNull(row[0]));
+            run.setJobId(this.asLongOrNull(row[1]));
+            run.setJobName((String) row[2]);
+            run.setJobStatus((String) row[3]);
+            run.setStartTime(this.asDateTime(row[4]));
+            run.setEndTime(this.asDateTime(row[5]));
+            // Only on a run that went wrong. A completed run's message says nothing worth a line
+            // on a profile page, and some of them are long.
+            if (row[3] != null && "FAILED".equalsIgnoreCase(String.valueOf(row[3]))) {
+                run.setJobStatusMessage((String) row[6]);
+            }
+            activity.getRuns().add(run);
+        }
+        for (Object[] row : this.sourceJobRepository.outcomesForAssignee(callerId)) {
+            activity.getOutcomes().add(new UserActivityDto.Outcome(
+                String.valueOf(row[0]), this.asLong(row[1])));
+        }
+        return new ResponseDto(SUCCESS, "Activity fetched successfully.", activity);
+    }
+
+    /** Native counts come back as whatever the driver picked -- Long, BigInteger, Integer. */
+    private long asLong(Object value) {
+        return value instanceof Number ? ((Number) value).longValue() : 0L;
+    }
+
+    private Long asLongOrNull(Object value) {
+        return value instanceof Number ? ((Number) value).longValue() : null;
+    }
+
+    private LocalDateTime asDateTime(Object value) {
+        if (value instanceof LocalDateTime) {
+            return (LocalDateTime) value;
+        }
+        return value instanceof java.sql.Timestamp ? ((java.sql.Timestamp) value).toLocalDateTime() : null;
     }
 
 }

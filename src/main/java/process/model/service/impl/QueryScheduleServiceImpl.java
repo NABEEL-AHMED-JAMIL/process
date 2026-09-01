@@ -15,6 +15,7 @@ import process.model.service.QueryScheduleService;
 import process.util.UserNameResolver;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TenantOwnership;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.sql.Timestamp;
@@ -55,10 +56,7 @@ public class QueryScheduleServiceImpl implements QueryScheduleService {
     }
 
     private boolean isOwnedByCaller(QuerySchedule schedule) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return schedule != null && Objects.equals(schedule.getTenantId(), TenantContext.getTenantId());
+        return schedule != null && TenantOwnership.isOwnedByCaller(schedule.getTenantId());
     }
 
     @Override
@@ -185,13 +183,11 @@ public class QueryScheduleServiceImpl implements QueryScheduleService {
 
     private ResponseDto checkOwnership(QueryScheduleDto dto) {
         Optional<QueryDefinition> queryOpt = this.queryDefinitionRepository.findById(dto.getQueryId());
-        if (!queryOpt.isPresent() || (!TenantContext.isPlatformAdmin()
-            && !Objects.equals(queryOpt.get().getTenantId(), TenantContext.getTenantId()))) {
+        if (!queryOpt.isPresent() || !TenantOwnership.isOwnedByCaller(queryOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Query not found with %d.", dto.getQueryId()));
         }
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(dto.getDatabaseConnectionProfileId());
-        if (!profileOpt.isPresent() || (!TenantContext.isPlatformAdmin()
-            && !Objects.equals(profileOpt.get().getTenantId(), TenantContext.getTenantId()))) {
+        if (!profileOpt.isPresent() || !TenantOwnership.isOwnedByCaller(profileOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", dto.getDatabaseConnectionProfileId()));
         }
         return null;

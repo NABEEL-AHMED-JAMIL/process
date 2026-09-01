@@ -35,6 +35,12 @@ public class SettingRestApi {
         this.xmlOutTagInfoUtil = xmlOutTagInfoUtil;
     }
 
+    /**
+     * Runs the query it is given, as given. The service refuses anyone but a platform admin, but
+     * a check in a method body is not what an auditor reads when asking who may call this -- so
+     * the annotation says it too, and the two now have to be removed together.
+     */
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/dynamicQueryResponse", method = RequestMethod.POST)
     public ResponseEntity<?> dynamicQueryResponse(
         @RequestBody ItemResponse itemResponse) {

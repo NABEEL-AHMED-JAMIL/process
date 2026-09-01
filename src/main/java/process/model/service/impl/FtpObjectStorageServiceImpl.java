@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -349,10 +350,20 @@ public class FtpObjectStorageServiceImpl implements ObjectStorageService {
         String path = this.requirePath(key);
         String name = this.fileNameOf(key);
         return this.withClient(client -> {
+            // A ranged read only ever holds the slice, so the size of the whole file has to come
+            // from a stat -- the caller puts it in Content-Range, and a total taken from the
+            // slice would claim a file smaller than the range it is answering. Only for a ranged
+            // read, since a whole-file read is its own total; and quietly, because servers that
+            // can't stat still serve the bytes perfectly well.
+            FTPFile stat = rangeStart != null ? this.statFileQuietly(client, path) : null;
             // Buffered into memory rather than streamed: the InputStream has to outlive this
             // method (the caller reads it after we return), but the FTP connection backing it
             // is closed in the finally block -- a live stream would be dead on arrival.
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            // FTP can say where to start but not where to stop, so a ranged read of a large
+            // file would otherwise buffer everything from the offset to the end of the file
+            // just to hand back the first few hundred KB of it.
+            CappedBuffer buffer = new CappedBuffer(rangeStart != null && rangeEnd != null
+                ? rangeEnd - rangeStart + 1 : Long.MAX_VALUE);
             if (rangeStart != null && rangeStart > 0) {
                 client.setRestartOffset(rangeStart);
             }
@@ -361,17 +372,48 @@ public class FtpObjectStorageServiceImpl implements ObjectStorageService {
                     "Could not read " + key + " from the FTP server: " + client.getReplyString());
             }
             byte[] bytes = buffer.toByteArray();
-            if (rangeEnd != null && rangeStart != null) {
-                int length = (int) Math.min(bytes.length, rangeEnd - rangeStart + 1);
-                if (length > 0 && length < bytes.length) {
-                    byte[] sliced = new byte[length];
-                    System.arraycopy(bytes, 0, sliced, 0, length);
-                    bytes = sliced;
-                }
-            }
+            long totalSize = stat != null && stat.getSize() >= 0
+                ? stat.getSize()
+                : (rangeStart == null ? bytes.length : rangeStart + bytes.length);
             return new ObjectContentDto(new ByteArrayInputStream(bytes),
-                ContentTypeUtil.contentTypeFor(name), bytes.length, bytes.length, name);
+                ContentTypeUtil.contentTypeFor(name), bytes.length, totalSize, name);
         });
+    }
+
+    /**
+     * Keeps the first `limit` bytes and drops the rest on the floor. The transfer still runs to
+     * the end of the file -- FTP has no way to ask for one -- but only the part the caller asked
+     * for is held in heap. Discarding rather than throwing on purpose: an exception out of the
+     * OutputStream would abort the transfer and make retrieveFile report failure.
+     */
+    private static final class CappedBuffer extends OutputStream {
+
+        private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        private final long limit;
+
+        private CappedBuffer(long limit) {
+            this.limit = limit;
+        }
+
+        @Override
+        public void write(int b) {
+            if (this.buffer.size() < this.limit) {
+                this.buffer.write(b);
+            }
+        }
+
+        @Override
+        public void write(byte[] bytes, int offset, int length) {
+            long room = this.limit - this.buffer.size();
+            if (room > 0) {
+                this.buffer.write(bytes, offset, (int) Math.min(room, length));
+            }
+        }
+
+        private byte[] toByteArray() {
+            return this.buffer.toByteArray();
+        }
+
     }
 
     @Override

@@ -53,4 +53,30 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "update job_queue set status = ?2 where job_id = ?1", nativeQuery = true)
     int updateStatusByJobId(Long jobId, String statusName);
 
+
+    /**
+     * The most recent runs of the jobs assigned to one person.
+     *
+     * Scoped by assigned_user_id, which is the caller's own id, so this cannot reach anybody
+     * else's work whatever the tenant filter is doing -- a user belongs to one tenant and the
+     * join only ever reaches jobs bearing their id.
+     *
+     * Ordered by start_time with the nulls last: a queued run that has not begun has no start
+     * time, and it belongs at the bottom rather than sorted as though it were the oldest thing
+     * there. job_queue_id breaks ties, since two runs of the same job can share a second.
+     */
+    @Query(value = "select q.job_queue_id, q.job_id, j.job_name, q.job_status, q.start_time, "
+        + "q.end_time, q.job_status_message "
+        + "from job_queue q join source_job j on j.job_id = q.job_id "
+        + "where j.assigned_user_id = ?1 "
+        + "order by q.start_time desc nulls last, q.job_queue_id desc limit ?2", nativeQuery = true)
+    List<Object[]> findRecentRunsForAssignee(Long appUserId, int limit);
+
+    /** How many of that person's runs started inside the window, and how many of those failed. */
+    @Query(value = "select count(*), "
+        + "count(*) filter (where UPPER(q.job_status) = 'FAILED') "
+        + "from job_queue q join source_job j on j.job_id = q.job_id "
+        + "where j.assigned_user_id = ?1 and q.start_time >= ?2", nativeQuery = true)
+    List<Object[]> countRecentRunsForAssignee(Long appUserId, LocalDateTime since);
+
 }

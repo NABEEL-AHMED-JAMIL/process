@@ -8,6 +8,7 @@ import process.engine.query.DatabaseConnectionFactory;
 import process.model.dto.DatabaseConnectionProfileDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
+import process.model.enums.UserRole;
 import process.model.pojo.DatabaseConnectionProfile;
 import process.model.repository.DatabaseConnectionProfileRepository;
 import process.model.repository.QueryDefinitionRepository;
@@ -58,11 +59,15 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         this.userNameResolver = userNameResolver;
     }
 
-    private boolean isOwnedByCaller(DatabaseConnectionProfile profile) {
+    private boolean isOwnedByCaller(Long ownerTenantId) {
         if (TenantContext.isPlatformAdmin()) {
             return true;
         }
-        return profile != null && Objects.equals(profile.getTenantId(), TenantContext.getTenantId());
+        return Objects.equals(ownerTenantId, TenantContext.getTenantId());
+    }
+
+    private boolean isTenantAdmin() {
+        return TenantContext.isPlatformAdmin() || UserRole.TENANT_ADMIN.name().equals(TenantContext.getUserRole());
     }
 
     @Override
@@ -99,7 +104,7 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(dto.getDatabaseConnectionProfileId());
-        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
+        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", dto.getDatabaseConnectionProfileId()));
         }
         DatabaseConnectionProfile profile = profileOpt.get();
@@ -121,7 +126,7 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(databaseConnectionProfileId);
-        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
+        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", databaseConnectionProfileId));
         }
 
@@ -156,7 +161,7 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(databaseConnectionProfileId);
-        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
+        if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get().getTenantId())) {
             return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", databaseConnectionProfileId));
         }
         return new ResponseDto(SUCCESS, "Data found.", this.toDto(profileOpt.get()));
@@ -170,18 +175,32 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
         if (!isNull(dto.getDatabaseConnectionProfileId())) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);
             Optional<DatabaseConnectionProfile> profileOpt = this.databaseConnectionProfileRepository.findById(dto.getDatabaseConnectionProfileId());
-            if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get())) {
+            if (!profileOpt.isPresent() || !this.isOwnedByCaller(profileOpt.get().getTenantId())) {
                 return new ResponseDto(ERROR, String.format("Connection profile not found with %d.", dto.getDatabaseConnectionProfileId()));
             }
-            profile = profileOpt.get();
+            DatabaseConnectionProfile storedProfile = profileOpt.get();
+            boolean overridesPassword = !isNull(dto.getPassword()) && !dto.getPassword().trim().isEmpty();
+            boolean overridesHost = !isNull(dto.getHost()) && !dto.getHost().equals(storedProfile.getHost());
 
-            if (!isNull(dto.getPassword()) && !dto.getPassword().trim().isEmpty()) {
+            // Testing a saved profile against a host or password other than the stored one dials
+            // somebody else's database with their credentials, so it takes the role that may edit
+            // the profile in the first place.
+            if ((overridesHost || overridesPassword) && !this.isTenantAdmin()) {
+                return new ResponseDto(ERROR, "Only a tenant admin can test a saved connection against a different host or password.");
+            }
+            // The probe runs against a throwaway copy. The loaded row is a managed entity, so a
+            // host or password written onto it here would be flushed when this transaction commits.
+            profile = this.probeCopyOf(storedProfile);
+            if (overridesPassword) {
                 profile.setPasswordEncrypted(this.encryptionUtil.encrypt(dto.getPassword()));
             }
-            if (!isNull(dto.getHost())) {
+            if (overridesHost) {
                 profile.setHost(dto.getHost());
             }
         } else {
+            if (!this.isTenantAdmin()) {
+                return new ResponseDto(ERROR, "Only a tenant admin can test a connection that is not saved yet.");
+            }
             ResponseDto validationError = this.validate(dto, true);
             if (validationError != null) {
                 return validationError;
@@ -249,6 +268,19 @@ public class ConnectionProfileServiceImpl implements ConnectionProfileService {
             profile.setPasswordEncrypted(this.encryptionUtil.encrypt(dto.getPassword()));
         }
         profile.setAdditionalProperties(dto.getAdditionalProperties());
+    }
+
+    private DatabaseConnectionProfile probeCopyOf(DatabaseConnectionProfile storedProfile) {
+        DatabaseConnectionProfile copy = new DatabaseConnectionProfile();
+        copy.setProfileName(storedProfile.getProfileName());
+        copy.setDatabaseType(storedProfile.getDatabaseType());
+        copy.setHost(storedProfile.getHost());
+        copy.setPort(storedProfile.getPort());
+        copy.setDatabaseName(storedProfile.getDatabaseName());
+        copy.setUsername(storedProfile.getUsername());
+        copy.setPasswordEncrypted(storedProfile.getPasswordEncrypted());
+        copy.setAdditionalProperties(storedProfile.getAdditionalProperties());
+        return copy;
     }
 
     private DatabaseConnectionProfileDto toDto(DatabaseConnectionProfile profile) {

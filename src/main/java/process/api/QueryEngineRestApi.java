@@ -94,6 +94,9 @@ public class QueryEngineRestApi {
         }
     }
 
+    // A tenant user may test a connection profile it can already see, but only as it stands:
+    // testing an unsaved profile, or a saved one against a different host or password, is held to
+    // TENANT_ADMIN inside ConnectionProfileService.
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/connections/testConnection", method = RequestMethod.POST)
     public ResponseEntity<?> testConnection(@RequestBody DatabaseConnectionProfileDto dto) {
@@ -157,6 +160,8 @@ public class QueryEngineRestApi {
         }
     }
 
+    // The lowered role covers validating a saved query by id. SQL supplied on the request is
+    // authoring, so QueryDefinitionService holds that branch to TENANT_ADMIN.
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/queries/validate", method = RequestMethod.POST)
     public ResponseEntity<?> validateQuery(@RequestBody QueryDefinitionDto dto) {
@@ -168,6 +173,8 @@ public class QueryEngineRestApi {
         }
     }
 
+    // Same split as /queries/validate: a saved query may be previewed by a tenant user, ad-hoc
+    // SQL only by a tenant admin.
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/queries/preview", method = RequestMethod.POST)
     public ResponseEntity<?> previewQuery(@RequestBody QueryDefinitionDto dto) {

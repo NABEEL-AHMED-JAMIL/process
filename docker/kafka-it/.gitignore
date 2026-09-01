@@ -1,0 +1,4 @@
+# Throwaway certificate material and passwords for the local Kafka security stack. Regenerate
+# with ./generate-certs.sh -- there is nothing here worth keeping or committing.
+secrets/
+.env

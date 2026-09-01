@@ -117,6 +117,19 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return sourceTask != null && Objects.equals(sourceTask.getTenantId(), TenantContext.getTenantId());
     }
 
+    /**
+     * A task type with no tenant is a platform-wide one and everybody may link to it; a
+     * tenant-owned one only belongs to its own tenant. The link is not cosmetic -- the type
+     * carries the Kafka topic and connection profile the job later publishes with, so binding
+     * a task to somebody else's type would hand over their topology and their broker.
+     */
+    private boolean isSourceTaskTypeVisibleToCaller(SourceTaskType sourceTaskType) {
+        if (TenantContext.isPlatformAdmin() || ProcessUtil.isNull(sourceTaskType.getTenantId())) {
+            return true;
+        }
+        return Objects.equals(sourceTaskType.getTenantId(), TenantContext.getTenantId());
+    }
+
     private final String ListSourceTask = "ListSourceTask";
     private final String SOURCE_TASK_HEADER[] = {
         "Task Id", "Task Name", "Task Payload",
@@ -141,7 +154,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findSourceTaskTypeBySourceTaskTypeIdAndStatus(
             sourceTaskDto.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
-        if (!sourceTaskType.isPresent()) {
+        // Same wording either way, so a refusal does not confirm the id exists.
+        if (!sourceTaskType.isPresent() || !this.isSourceTaskTypeVisibleToCaller(sourceTaskType.get())) {
             return new ResponseDto(ERROR, "Provided sourceTaskTypeId not found.");
         }
         SourceTask sourceTask = new SourceTask();
@@ -187,7 +201,9 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findSourceTaskTypeBySourceTaskTypeIdAndStatus(
             sourceTaskDto.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
-        if (!sourceTaskType.isPresent()) {
+        // A type the caller cannot see is refused with the wording used for a missing one, so
+        // the response is not an oracle for which ids exist in other tenants.
+        if (!sourceTaskType.isPresent() || !this.isSourceTaskTypeVisibleToCaller(sourceTaskType.get())) {
             return new ResponseDto(ERROR, "Active the linked sourceTaskType.");
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
@@ -563,7 +579,9 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                 }
                 if (!ProcessUtil.isNull(sourceTaskValidation.getSourceTaskTypeId())) {
                     Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId()));
-                    if (!sourceTaskType.isPresent()) {
+                    // Another tenant's type reads as absent here, exactly as it does on the
+                    // single-task path -- the spreadsheet must not become an id oracle either.
+                    if (!sourceTaskType.isPresent() || !this.isSourceTaskTypeVisibleToCaller(sourceTaskType.get())) {
                         sourceTaskValidation.setErrorMsg("SourceTaskType does not exist at row " + (currentRow.getRowNum() + 1) + ".\n");
                     } else if (sourceTaskType.get().getStatus().equals(Status.Delete)) {
                         sourceTaskValidation.setErrorMsg("Deleted sourceTaskType is not linked with source task at row " + (currentRow.getRowNum() + 1) + ".\n");

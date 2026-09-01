@@ -221,7 +221,12 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
             return new ResponseDto(ERROR, String.format("PdfHighlighterTask not found with %s.", pdfHighlighterTaskId));
         }
         String safeFileName = Paths.get(file.getOriginalFilename()).getFileName().toString();
-        this.storageBrowserService.uploadObject(BUCKET, this.taskPrefix(pdfHighlighterTaskId), file);
+        // The trusted write, not the browse one: etl-bucket is platform-owned, so the ordinary
+        // upload refuses everyone but a platform admin -- which would leave a tenant admin unable
+        // to attach a PDF to a task that is unambiguously theirs. What makes it safe is that the
+        // caller's ownership of the task was checked above and the key is built here from the task
+        // id, so nothing about the destination came from the request.
+        this.storageBrowserService.uploadForWorkflow(BUCKET, this.taskPrefix(pdfHighlighterTaskId), file);
         pdfHighlighterTask.get().setFileName(safeFileName);
         pdfHighlighterTask.get().setFileSize(file.getSize());
         pdfHighlighterTask.get().setFileContentType(file.getContentType());
@@ -240,7 +245,9 @@ public class PdfHighlighterTaskServiceImpl implements PdfHighlighterTaskService 
             throw new IllegalStateException("No file uploaded for this task yet.");
         }
         String key = this.taskPrefix(pdfHighlighterTaskId) + pdfHighlighterTask.getFileName();
-        return this.storageBrowserService.downloadObject(BUCKET, key, null, null);
+        // Trusted for the same reason as the upload: ownership is checked above, and the key is
+        // the task's own prefix plus the name recorded on the row.
+        return this.storageBrowserService.readForWorkflow(BUCKET, key);
     }
 
     private String taskPrefix(Long pdfHighlighterTaskId) {

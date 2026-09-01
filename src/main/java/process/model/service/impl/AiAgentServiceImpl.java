@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.AdHocPromptRequestDto;
@@ -23,11 +24,18 @@ import process.security.TenantFilterHelper;
 import process.util.EncryptionUtil;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.sql.Timestamp;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -49,6 +57,10 @@ public class AiAgentServiceImpl implements AiAgentService {
 
     private static final String OLLAMA_DEFAULT_BASE_URL = "http://host.docker.internal:11434";
 
+    /** Said the same way whichever rule refused, so the answer carries no map of the network. */
+    private static final String ENDPOINT_NOT_ALLOWED =
+        "That apiEndpoint is not an allowed AI provider address.";
+
     private final AiAgentRepository aiAgentRepository;
     private final EncryptionUtil encryptionUtil;
     private final TenantFilterHelper tenantFilterHelper;
@@ -58,6 +70,17 @@ public class AiAgentServiceImpl implements AiAgentService {
 
         .readTimeout(10, TimeUnit.MINUTES)
         .build();
+
+    /**
+     * Hosts the server will call over a private address or over plain http.
+     *
+     * Everything else has to be a public https host. The default is the one internal name the
+     * server already reaches by itself for Ollama, so trusting it grants nothing that
+     * OLLAMA_DEFAULT_BASE_URL did not already grant; a deployment whose model server lives
+     * somewhere else names that host here rather than the check being loosened for everybody.
+     */
+    @Value("${ai.allowed-endpoint-hosts:host.docker.internal}")
+    private String allowedEndpointHosts;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -165,13 +188,25 @@ public class AiAgentServiceImpl implements AiAgentService {
         return new ResponseDto(SUCCESS, "Data found.", this.getAiAgentDto(this.ensureToolUuid(aiAgentOpt.get())));
     }
 
+    /**
+     * The agent behind a tool uuid.
+     *
+     * Holding the uuid is not authorisation on its own. An agent's instructions are the tenant's
+     * own prompt engineering, and a uuid travels the way opaque identifiers do -- through a
+     * shared link, a proxy log, a support ticket -- so the tenant check every other read here
+     * makes is made here too. A refusal reads the same either way, so it never confirms that
+     * somebody else's uuid exists.
+     */
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto fetchToolByUuid(String toolUuid) throws Exception {
         if (isNull(toolUuid) || toolUuid.trim().isEmpty()) {
             return new ResponseDto(ERROR, "toolUuid missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<AiAgent> aiAgentOpt = this.aiAgentRepository.findByToolUuid(toolUuid.trim());
-        if (!aiAgentOpt.isPresent() || aiAgentOpt.get().getStatus() != Status.Active) {
+        if (!aiAgentOpt.isPresent() || aiAgentOpt.get().getStatus() != Status.Active
+            || !this.isOwnedByCaller(aiAgentOpt.get())) {
             return new ResponseDto(ERROR, "Tool not found or not active.");
         }
         AiAgent aiAgent = aiAgentOpt.get();
@@ -231,9 +266,12 @@ public class AiAgentServiceImpl implements AiAgentService {
             }
             return new ResponseDto(SUCCESS, "Processed successfully.", resultText);
         } catch (Exception ex) {
-            this.logger.error("An error occurred while calling the AI provider (ad-hoc, provider={}): {}",
-                dto.getProvider(), ex.getMessage());
-            return new ResponseDto(ERROR, "The AI provider request failed: " + ex.getMessage());
+            // The detail goes to the log, not to the caller. It carries the provider's own
+            // response body, which for anything other than a real model server is whatever the
+            // server managed to read at that address.
+            this.logger.error("An error occurred while calling the AI provider (ad-hoc, provider={})",
+                dto.getProvider(), ex);
+            return new ResponseDto(ERROR, "The AI provider request failed.");
         }
     }
 
@@ -261,7 +299,98 @@ public class AiAgentServiceImpl implements AiAgentService {
         if (isNull(dto.getText()) || dto.getText().trim().isEmpty()) {
             return new ResponseDto(ERROR, "text missing -- nothing to process.");
         }
+        // OpenAI and Anthropic ignore whatever endpoint arrives; the URL they are called on is a
+        // constant below. Only Ollama and the generic providers dial the one in the request, and
+        // a blank one means the server's own default rather than anything the caller chose.
+        boolean usesRequestedEndpoint = !"OpenAI".equals(dto.getProvider())
+            && !"Anthropic".equals(dto.getProvider());
+        if (usesRequestedEndpoint && !isNull(dto.getApiEndpoint()) && !dto.getApiEndpoint().trim().isEmpty()) {
+            return this.validateEndpoint(dto.getApiEndpoint());
+        }
         return null;
+    }
+
+    /**
+     * Whether the server is willing to make a request to this address on the caller's behalf.
+     *
+     * The endpoint arrives in the request body and the provider's answer is handed back, so
+     * unchecked it is a way to read whatever the application server can reach and the caller
+     * cannot -- an internal admin page, a cloud metadata service, or one port at a time until
+     * something answers. A public https host is the intended use; a private address or plain
+     * http has to be a host the operator named in ai.allowed-endpoint-hosts.
+     *
+     * Every address the name resolves to is checked, not just the first, since a name that
+     * resolves to both a public and a private address would otherwise pass on the public one.
+     *
+     * Returns null when the endpoint may be called.
+     */
+    private ResponseDto validateEndpoint(String apiEndpoint) {
+        URI uri;
+        try {
+            uri = new URI(apiEndpoint.trim());
+        } catch (URISyntaxException ex) {
+            return new ResponseDto(ERROR, "apiEndpoint is not a valid URL.");
+        }
+        String scheme = isNull(uri.getScheme()) ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        String host = uri.getHost();
+        if (isNull(host) || host.trim().isEmpty()
+            || (!"http".equals(scheme) && !"https".equals(scheme))) {
+            return new ResponseDto(ERROR, "apiEndpoint must be an http or https URL naming a host.");
+        }
+        if (this.allowedHosts().contains(host.toLowerCase(Locale.ROOT))) {
+            return null;
+        }
+        if (!"https".equals(scheme)) {
+            return new ResponseDto(ERROR, ENDPOINT_NOT_ALLOWED);
+        }
+        InetAddress[] addresses;
+        try {
+            addresses = InetAddress.getAllByName(host);
+        } catch (UnknownHostException ex) {
+            // A name the server cannot resolve is not a provider it can call either way.
+            return new ResponseDto(ERROR, ENDPOINT_NOT_ALLOWED);
+        }
+        for (int i = 0; i < addresses.length; i++) {
+            if (isInternalAddress(addresses[i])) {
+                return new ResponseDto(ERROR, ENDPOINT_NOT_ALLOWED);
+            }
+        }
+        return null;
+    }
+
+    private Set<String> allowedHosts() {
+        Set<String> hosts = new HashSet<>();
+        if (isNull(this.allowedEndpointHosts) || this.allowedEndpointHosts.trim().isEmpty()) {
+            return hosts;
+        }
+        for (String host : this.allowedEndpointHosts.split(",")) {
+            if (!host.trim().isEmpty()) {
+                hosts.add(host.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+        return hosts;
+    }
+
+    /**
+     * Whether an address belongs to the network rather than the internet.
+     *
+     * InetAddress covers loopback, link-local, the IPv4 private ranges and multicast; the two
+     * added by hand are carrier-grade NAT and the IPv6 unique-local range, which are private in
+     * practice and which it does not classify.
+     */
+    private static boolean isInternalAddress(InetAddress address) {
+        if (address.isLoopbackAddress() || address.isLinkLocalAddress()
+            || address.isSiteLocalAddress() || address.isAnyLocalAddress()
+            || address.isMulticastAddress()) {
+            return true;
+        }
+        byte[] octets = address.getAddress();
+        if (octets.length == 4) {
+            int first = octets[0] & 0xFF;
+            int second = octets[1] & 0xFF;
+            return first == 0 || (first == 100 && second >= 64 && second <= 127);
+        }
+        return octets.length == 16 && (octets[0] & 0xFE) == 0xFC;
     }
 
     private String callProvider(String provider, String apiKey, String apiEndpoint, String model,

@@ -124,6 +124,12 @@ public class AuthServiceImpl implements AuthService {
         // opened, which is the only other thing that fetches them.
         response.setAvatarBucket(user.getAvatarBucket());
         response.setAvatarKey(user.getAvatarKey());
+        // The seeded platform admin and every tenant-seeded admin are created owing a password
+        // change. Without it here the console only learned of the debt from the profile screen,
+        // so a one-time password could be used indefinitely by never opening that screen. Sign-in
+        // still succeeds -- the change is forced by the console, as it is for every other account
+        // carrying the flag.
+        response.setMustChangePassword(user.isMustChangePassword());
         return response;
     }
 

@@ -29,16 +29,42 @@ public class KafkaConnectionProfileDto implements AuditNamed {
     private String saslUsername;
     private String saslPassword;
     private Boolean saslPasswordConfigured;
+    // A blank password means "keep the stored one", which left no way at all to take a credential
+    // back out again -- these flags are that way.
+    private Boolean clearSaslPassword;
     private String sslKeystoreBucket;
     private String sslKeystoreLocation;
     private String sslKeystorePassword;
+    /**
+     * A store password that is ALREADY encrypted, as handed back by /kafkaSecret.json when the
+     * server built the store itself.
+     *
+     * It exists because the store is built in one request and the profile saved in another, and the
+     * password must not travel in the clear between them. Assigned to the column verbatim -- running
+     * the usual encrypt over it would store encrypt(ciphertext) and the store would never open.
+     * Write-only: it is never populated on the way out, so a caller can only ever echo back a value
+     * this server just gave them, and a value they invent decrypts to nothing and fails their own
+     * connection.
+     */
+    private String sslKeystorePasswordEnc;
     private Boolean sslKeystorePasswordConfigured;
+    private Boolean clearSslKeystorePassword;
     private String sslKeyPassword;
     private Boolean sslKeyPasswordConfigured;
+    private Boolean clearSslKeyPassword;
     private String sslTruststoreBucket;
     private String sslTruststoreLocation;
     private String sslTruststorePassword;
+    /** Its truststore counterpart. See the note on sslKeystorePasswordEnc. */
+    private String sslTruststorePasswordEnc;
+    /**
+     * And the key inside a generated keystore, which this server protects with the same password
+     * as the store. Without it a generated keystore could be attached but never opened: the store
+     * password came through encrypted and the key password did not come through at all.
+     */
+    private String sslKeyPasswordEnc;
     private Boolean sslTruststorePasswordConfigured;
+    private Boolean clearSslTruststorePassword;
     private String sslEndpointIdentificationAlgorithm;
 
     private String additionalProperties;
@@ -131,6 +157,14 @@ public class KafkaConnectionProfileDto implements AuditNamed {
         this.saslPasswordConfigured = saslPasswordConfigured;
     }
 
+    public Boolean getClearSaslPassword() {
+        return clearSaslPassword;
+    }
+
+    public void setClearSaslPassword(Boolean clearSaslPassword) {
+        this.clearSaslPassword = clearSaslPassword;
+    }
+
     public String getSslKeystoreBucket() {
         return sslKeystoreBucket;
     }
@@ -145,6 +179,30 @@ public class KafkaConnectionProfileDto implements AuditNamed {
 
     public void setSslKeystoreLocation(String sslKeystoreLocation) {
         this.sslKeystoreLocation = sslKeystoreLocation;
+    }
+
+    public String getSslKeystorePasswordEnc() {
+        return sslKeystorePasswordEnc;
+    }
+
+    public void setSslKeystorePasswordEnc(String sslKeystorePasswordEnc) {
+        this.sslKeystorePasswordEnc = sslKeystorePasswordEnc;
+    }
+
+    public String getSslKeyPasswordEnc() {
+        return sslKeyPasswordEnc;
+    }
+
+    public void setSslKeyPasswordEnc(String sslKeyPasswordEnc) {
+        this.sslKeyPasswordEnc = sslKeyPasswordEnc;
+    }
+
+    public String getSslTruststorePasswordEnc() {
+        return sslTruststorePasswordEnc;
+    }
+
+    public void setSslTruststorePasswordEnc(String sslTruststorePasswordEnc) {
+        this.sslTruststorePasswordEnc = sslTruststorePasswordEnc;
     }
 
     public String getSslKeystorePassword() {
@@ -163,6 +221,14 @@ public class KafkaConnectionProfileDto implements AuditNamed {
         this.sslKeystorePasswordConfigured = sslKeystorePasswordConfigured;
     }
 
+    public Boolean getClearSslKeystorePassword() {
+        return clearSslKeystorePassword;
+    }
+
+    public void setClearSslKeystorePassword(Boolean clearSslKeystorePassword) {
+        this.clearSslKeystorePassword = clearSslKeystorePassword;
+    }
+
     public String getSslKeyPassword() {
         return sslKeyPassword;
     }
@@ -177,6 +243,14 @@ public class KafkaConnectionProfileDto implements AuditNamed {
 
     public void setSslKeyPasswordConfigured(Boolean sslKeyPasswordConfigured) {
         this.sslKeyPasswordConfigured = sslKeyPasswordConfigured;
+    }
+
+    public Boolean getClearSslKeyPassword() {
+        return clearSslKeyPassword;
+    }
+
+    public void setClearSslKeyPassword(Boolean clearSslKeyPassword) {
+        this.clearSslKeyPassword = clearSslKeyPassword;
     }
 
     public String getSslTruststoreBucket() {
@@ -209,6 +283,14 @@ public class KafkaConnectionProfileDto implements AuditNamed {
 
     public void setSslTruststorePasswordConfigured(Boolean sslTruststorePasswordConfigured) {
         this.sslTruststorePasswordConfigured = sslTruststorePasswordConfigured;
+    }
+
+    public Boolean getClearSslTruststorePassword() {
+        return clearSslTruststorePassword;
+    }
+
+    public void setClearSslTruststorePassword(Boolean clearSslTruststorePassword) {
+        this.clearSslTruststorePassword = clearSslTruststorePassword;
     }
 
     public String getSslEndpointIdentificationAlgorithm() {

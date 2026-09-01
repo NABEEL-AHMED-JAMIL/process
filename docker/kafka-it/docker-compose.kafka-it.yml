@@ -1,0 +1,117 @@
+# A Kafka broker that answers on every security configuration the console can be asked to build,
+# so the client side can be tested against a real handshake rather than against a mock.
+#
+# One broker, seven listeners, one port each. Separate from the dev stack on 9092/9093 on purpose:
+# this one is started for a test run and thrown away, and nothing that depends on the dev broker
+# should notice it exists. Its zookeeper is its own for the same reason.
+#
+# Ports:
+#   19092  PLAINTEXT                      no security at all, the baseline
+#   19093  SSL                            server authenticates, client does not
+#   19094  SSL + client auth required     mutual TLS
+#   19095  SASL_PLAINTEXT / PLAIN         credentials in the clear, no TLS
+#   19096  SASL_SSL / PLAIN               credentials over TLS, the managed-cloud shape
+#   19097  SASL_PLAINTEXT / SCRAM-SHA-256
+#   19098  SASL_SSL / SCRAM-SHA-512
+#
+# Author: Nabeel Ahmed
+services:
+
+  zookeeper-it:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: kafka_it_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka-it:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka_it
+    depends_on:
+      - zookeeper-it
+    ports:
+      - "19092:19092"
+      - "19093:19093"
+      - "19094:19094"
+      - "19095:19095"
+      - "19096:19096"
+      - "19097:19097"
+      - "19098:19098"
+    volumes:
+      - ./secrets:/etc/kafka/secrets:ro
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-it:2181
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+      # Listener names carry no underscores: this image turns an underscore in an environment
+      # variable into a dot, so a listener called SASL_PLAIN produced the property
+      # listener.name.sasl.plain.* and the broker refused to start, unable to find its own JAAS
+      # entry. The escapes are positional: __ becomes an underscore and ___ becomes a hyphen,
+      # which is why SCRAM-SHA-256 is spelled SCRAM___SHA___256 below. Listener names without
+      # underscores keep the rest of it unambiguous.
+      #
+      # Advertised as host.docker.internal, not localhost: the application runs in a container and
+      # a client that bootstraps successfully then follows the ADVERTISED address, so "localhost"
+      # sent it back to itself. The app's compose gives it host.docker.internal:host-gateway, and
+      # the ports below are published, so this name reaches the broker from inside a container.
+      # The consequence is that the host cannot resolve it, so KafkaSecurityMatrixIT must now run
+      # inside a container too -- see start.sh.
+      #
+      # INTERNAL carries inter-broker traffic so the secured listeners are only ever exercised by
+      # the tests, and a broken TLS setting cannot stop the broker talking to itself.
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29092,PLAINTXT://0.0.0.0:19092,SSLONLY://0.0.0.0:19093,SSLMTLS://0.0.0.0:19094,SASLPLAIN://0.0.0.0:19095,SASLSSLPLAIN://0.0.0.0:19096,SASLSCRAM256://0.0.0.0:19097,SASLSSLSCRAM512://0.0.0.0:19098"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-it:29092,PLAINTXT://host.docker.internal:19092,SSLONLY://host.docker.internal:19093,SSLMTLS://host.docker.internal:19094,SASLPLAIN://host.docker.internal:19095,SASLSSLPLAIN://host.docker.internal:19096,SASLSCRAM256://host.docker.internal:19097,SASLSSLSCRAM512://host.docker.internal:19098"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,PLAINTXT:PLAINTEXT,SSLONLY:SSL,SSLMTLS:SSL,SASLPLAIN:SASL_PLAINTEXT,SASLSSLPLAIN:SASL_SSL,SASLSCRAM256:SASL_PLAINTEXT,SASLSSLSCRAM512:SASL_SSL"
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      # The real Kafka property names, not the image's _FILENAME/_CREDENTIALS convention: that
+      # convention was passed through verbatim into kafka.properties, so the broker ended up with
+      # ssl.keystore.filename (not a Kafka property) and no ssl.keystore.location at all. It then
+      # could not present a certificate, and every TLS listener answered handshake_failure while
+      # looking correctly configured.
+      #
+      # The passwords are in the environment and therefore visible to `docker inspect`. That is
+      # fine here and only here: this stack is generated per run, holds nothing but throwaway test
+      # certificates, and is torn down with stop.sh.
+      KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/broker.keystore.p12
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_PASSWORD: ${STORE_PASSWORD}
+      KAFKA_SSL_KEY_PASSWORD: ${STORE_PASSWORD}
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /etc/kafka/secrets/broker.truststore.jks
+      KAFKA_SSL_TRUSTSTORE_TYPE: JKS
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: ${STORE_PASSWORD}
+      # Off by default; only the mTLS listener turns it on, so the one-way listener stays one-way
+      # and the difference between the two is actually tested.
+      KAFKA_SSL_CLIENT_AUTH: none
+      KAFKA_LISTENER_NAME_SSLMTLS_SSL_CLIENT_AUTH: required
+
+      # The image refuses to start with SASL enabled unless KAFKA_OPTS is set -- its startup check
+      # assumes a static JAAS file. The per-listener JAAS entries below are the modern replacement
+      # for that file and do the actual work, so this only needs to be non-empty.
+      KAFKA_OPTS: "-Dkafka.security.stack=local-it"
+
+      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN,SCRAM-SHA-256,SCRAM-SHA-512
+      KAFKA_LISTENER_NAME_SASLPLAIN_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_LISTENER_NAME_SASLSSLPLAIN_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_LISTENER_NAME_SASLSCRAM256_SASL_ENABLED_MECHANISMS: SCRAM-SHA-256
+      KAFKA_LISTENER_NAME_SASLSSLSCRAM512_SASL_ENABLED_MECHANISMS: SCRAM-SHA-512
+
+      # PLAIN is a static list, so the account lives in the JAAS entry. SCRAM's lives in zookeeper
+      # and is created by start.sh once the broker is up.
+      KAFKA_LISTENER_NAME_SASLPLAIN_PLAIN_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="${SASL_USER}" password="${SASL_PASSWORD}"
+        user_${SASL_USER}="${SASL_PASSWORD}";
+      KAFKA_LISTENER_NAME_SASLSSLPLAIN_PLAIN_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="${SASL_USER}" password="${SASL_PASSWORD}"
+        user_${SASL_USER}="${SASL_PASSWORD}";
+      KAFKA_LISTENER_NAME_SASLSCRAM256_SCRAM___SHA___256_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.scram.ScramLoginModule required;
+      KAFKA_LISTENER_NAME_SASLSSLSCRAM512_SCRAM___SHA___512_SASL_JAAS_CONFIG: >-
+        org.apache.kafka.common.security.scram.ScramLoginModule required;

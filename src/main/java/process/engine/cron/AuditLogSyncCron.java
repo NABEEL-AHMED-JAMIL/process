@@ -26,7 +26,7 @@ public class AuditLogSyncCron {
 
     private static final Duration OVERLAP = Duration.ofMinutes(10);
 
-    public Logger logger = LogManager.getLogger(AuditLogSyncCron.class);
+    private static final Logger logger = LogManager.getLogger(AuditLogSyncCron.class);
 
     @Value("${audit.log.sync.initial-lookback-days:30}")
     private int initialLookbackDays;

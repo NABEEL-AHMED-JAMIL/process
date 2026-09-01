@@ -28,4 +28,7 @@ public interface SourceJobService {
 
     public ResponseDto listSourceJob() throws Exception;
 
+    /** What the signed-in person has been doing: their jobs, and how their recent runs went. */
+    public ResponseDto fetchMyActivity(int limit, int windowDays) throws Exception;
+
 }

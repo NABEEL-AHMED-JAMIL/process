@@ -87,6 +87,26 @@ public class SourceJobRestApi {
         }
     }
 
+    /**
+     * The signed-in person's own activity. Takes no user parameter on purpose -- the id comes from
+     * the token, so there is nothing here to point at somebody else.
+     */
+    @RequestMapping(value = "/myActivity", method = RequestMethod.GET)
+    public ResponseEntity<?> myActivity(
+        @RequestParam(required = false, defaultValue = "8") int limit,
+        @RequestParam(required = false, defaultValue = "7") int windowDays) {
+        try {
+            // Clamped rather than validated with an error: these come from a screen, not a person,
+            // and a silly value is worth ignoring rather than refusing.
+            int safeLimit = Math.max(1, Math.min(limit, 50));
+            int safeWindow = Math.max(1, Math.min(windowDays, 90));
+            return new ResponseEntity<>(this.sourceJobService.fetchMyActivity(safeLimit, safeWindow), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while myActivity.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @RequestMapping(value = "/listSourceJob", method = RequestMethod.GET)
     public ResponseEntity<?> listSourceJob() {
         try {

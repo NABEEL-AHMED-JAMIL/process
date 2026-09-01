@@ -3,8 +3,11 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 import javax.persistence.*;
 
@@ -16,6 +19,11 @@ import javax.persistence.*;
 /**
  * @author Nabeel Ahmed
  * */
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+// A task type with no tenant is the platform's, and every tenant is meant to use it -- the
+// listing query says the same thing in SQL -- so the filter has to let those rows through or
+// the shared task types would vanish from every tenant's screen.
+@Filter(name = "tenantFilter", condition = "(tenant_id = :tenantId or tenant_id is null)")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
