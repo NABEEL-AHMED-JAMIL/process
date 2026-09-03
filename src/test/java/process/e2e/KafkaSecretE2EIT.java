@@ -66,6 +66,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * encrypts its password, so without one every generate call is a 500 that says nothing. One is
  * generated per run and thrown away with the JVM rather than written down.
  *
+ * What that stubbed bucket costs, and where the missing half is asserted instead: a question about
+ * whether the storage guard REFUSES something cannot be answered here, because the refusal would
+ * come from the unstubbed mock rather than from the guard, and the test would keep passing with
+ * the guard deleted. So "can a tenant admin download a kafka-secrets file it can otherwise use?"
+ * lives in BucketAccessE2EIT, against real storage. This suite asserts what a caller may DO with
+ * such a file; that one asserts what it may READ.
+ *
  * @author Nabeel Ahmed
  * */
 class KafkaSecretE2EIT extends E2ESupport {
@@ -407,6 +414,7 @@ class KafkaSecretE2EIT extends E2ESupport {
      */
     @Test
     void aTenantAdminDoesNotSeeThePlatformsKafkaProfiles() throws Exception {
+        String platformProfile = this.addPlatformProfile(this.newPlatformAdmin());
         Tenant company = this.newTenant("ajwa");
         AppUser admin = this.newUser(UserRole.TENANT_ADMIN, company);
 
@@ -414,20 +422,45 @@ class KafkaSecretE2EIT extends E2ESupport {
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
 
-        // Every profile in the development database is platform-owned, so a correct answer for a
-        // brand-new tenant carries none of them.
-        assertThat(body).doesNotContain("Platform Local Broker");
+        assertThat(body).doesNotContain(platformProfile);
     }
 
     @Test
     void aPlatformAdminStillSeesThePlatformsKafkaProfiles() throws Exception {
         AppUser admin = this.newPlatformAdmin();
+        String platformProfile = this.addPlatformProfile(admin);
 
         String body = this.mvc.perform(this.getAs(admin, "/kafkaConnectionProfile.json/fetchAllProfiles"))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
 
-        assertThat(body).contains("Platform Local Broker");
+        assertThat(body).contains(platformProfile);
     }
+
+    /**
+     * A profile owned by the platform rather than by any tenant, which is what a platform admin's
+     * save produces -- addProfile files the row with no tenant when the caller has none.
+     *
+     * Made here rather than assumed. Both cases above used to name a profile in the development
+     * database, and nothing creates one: the row existed only because somebody had made it by
+     * hand. That left the negative case unable to fail on a database without it -- "the tenant
+     * cannot see the platform's profile" was satisfied by there being no platform profile at all,
+     * and would have stayed green with the tenant scoping removed. Its partner failing is not
+     * cover for that, because the two run independently.
+     */
+    private String addPlatformProfile(AppUser platformAdmin) throws Exception {
+        String profileName = "e2e-platform-broker-" + this.unique();
+        KafkaConnectionProfileDto dto = new KafkaConnectionProfileDto();
+        dto.setProfileName(profileName);
+        dto.setBootstrapServers("platform.kafka.example:9092");
+        dto.setSecurityProtocol("PLAINTEXT");
+
+        this.mvc.perform(this.postAs(platformAdmin, "/kafkaConnectionProfile.json/addProfile",
+                new Gson().toJson(dto)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("SUCCESS"));
+        return profileName;
+    }
+
 
 }

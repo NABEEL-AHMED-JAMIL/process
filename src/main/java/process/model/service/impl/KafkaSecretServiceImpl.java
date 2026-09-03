@@ -45,6 +45,10 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+    /** Said for a file that is gone and for a bucket that cannot be reached alike; both are true. */
+    private static final String UNREADABLE =
+        "That file could not be read from storage. Check it is still there, or upload it again.";
+
     /** Certificates and keys are a few kilobytes; a store is tens. Anything larger is a mistake. */
     @Value("${kafka.secret.max-file-size-kb:512}")
     private int maxFileSizeKb;
@@ -117,6 +121,11 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
 
         String password = this.newStorePassword();
         byte[] store = KafkaCertificateUtil.buildTruststore(certificates, password.toCharArray());
+        // Encrypted before the bytes are written, because the ciphertext is the only way back into
+        // the store: encrypt() fails outright where lookup.encryption.key is not configured, and
+        // doing it afterwards left a PKCS12 in the bucket on every attempt that nothing could open
+        // and no profile could ever point at.
+        String storePassword = this.encryptionUtil.encrypt(password);
         // Written beside the certificate it was built from, so the pair can be recognised later and
         // removed together when the CA is rotated.
         KafkaSecretPath source = KafkaSecretPath.parse(caObjectKeys.get(0));
@@ -126,7 +135,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
 
         KafkaSecretDto dto = new KafkaSecretDto();
         this.fill(dto, KafkaSecretKind.TRUSTSTORE, target, (long) store.length);
-        dto.setStorePasswordEnc(this.encryptionUtil.encrypt(password));
+        dto.setStorePasswordEnc(storePassword);
         this.logger.info("Built a truststore for user {} from {} certificate(s) at {}.",
             TenantContext.getAppUserId(), certificates.size(), target.key());
         return new ResponseDto(SUCCESS, String.format(
@@ -162,6 +171,8 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
 
         String password = this.newStorePassword();
         byte[] store = KafkaCertificateUtil.buildKeystore(privateKey, chain, password.toCharArray());
+        // Encrypted first, for the reason given in generateTruststore.
+        String storePassword = this.encryptionUtil.encrypt(password);
         KafkaSecretPath target = KafkaSecretPath.parse(certificateObjectKey)
             .sibling(generatedStoreName("keystore"));
         this.storageBrowserService.uploadForWorkflow(SECRET_BUCKET, target.key(),
@@ -169,7 +180,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
 
         KafkaSecretDto dto = new KafkaSecretDto();
         this.fill(dto, KafkaSecretKind.KEYSTORE, target, (long) store.length);
-        dto.setStorePasswordEnc(this.encryptionUtil.encrypt(password));
+        dto.setStorePasswordEnc(storePassword);
         this.logger.info("Built a keystore for user {} at {}.", TenantContext.getAppUserId(), target.key());
         return new ResponseDto(SUCCESS, "Keystore built from the certificate and key.", dto);
     }
@@ -250,8 +261,27 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         dto.setSizeBytes(size);
     }
 
+    /**
+     * Reads a stored file, or fails the way the rest of this class fails.
+     *
+     * canUseObject settles whose key it is; it says nothing about whether the object is still in
+     * the bucket. A certificate deleted underneath a console that still lists it comes back as the
+     * storage provider's own RuntimeException, and letting that out of here turned "that file is
+     * gone" into a 500 with no message on it -- for the one case the caller can actually fix.
+     */
     private byte[] read(String objectKey) throws Exception {
-        ObjectContentDto content = this.storageBrowserService.readForWorkflow(SECRET_BUCKET, objectKey);
+        ObjectContentDto content;
+        try {
+            content = this.storageBrowserService.readForWorkflow(SECRET_BUCKET, objectKey);
+        } catch (RuntimeException unreadable) {
+            // Logged rather than reported: a bucket that is unreachable and a file that is gone
+            // look the same from here, and only one of them is the caller's to do anything about.
+            this.logger.warn("Could not read Kafka secret {}/{}.", SECRET_BUCKET, objectKey, unreadable);
+            throw new IllegalArgumentException(UNREADABLE);
+        }
+        if (content == null || content.getContent() == null) {
+            throw new IllegalArgumentException(UNREADABLE);
+        }
         try (InputStream in = content.getContent()) {
             return this.drain(in);
         }

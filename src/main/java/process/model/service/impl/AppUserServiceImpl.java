@@ -24,6 +24,7 @@ import process.util.TemporaryPassword;
 import process.util.PhoneNumberValidator;
 import process.util.UserNameResolver;
 import org.springframework.beans.factory.annotation.Value;
+import process.config.StoragePropertyDefaults;
 import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.List;
@@ -64,7 +65,7 @@ public class AppUserServiceImpl implements AppUserService {
      * than the object browser, because the browser would -- correctly -- refuse it. The bucket
      * stays out of listBuckets either way, so it is usable without being browsable.
      */
-    @Value("${app.avatar.bucket:etl-avatar}")
+    @Value(StoragePropertyDefaults.AVATAR_BUCKET)
     private String avatarBucket;
 
     @Value("${app.console.url:http://localhost:4400}")

@@ -45,18 +45,33 @@ import static org.mockito.Mockito.when;
  *
  * So this builds a KafkaConnectionProfile of each shape, runs it through the real
  * KafkaTemplateProvider, and asks a real AdminClient to describe a real cluster. Seven listeners,
- * one per security configuration, from docker/kafka-it.
+ * one per security configuration, from kafka-it.
  *
  * Named *IT rather than *Test so the ordinary `mvn test` does not run it: it needs docker, and a
  * suite that fails because a container is not running teaches people to ignore failures. Start the
- * stack with docker/kafka-it/start.sh; without it every case skips.
+ * stack with kafka-it/start.sh; without it every case skips.
  *
  * @author Nabeel Ahmed
  * */
 class KafkaSecurityMatrixIT {
 
-    private static final Path SECRETS = Paths.get("docker/kafka-it/secrets");
-    private static final Path ENV = Paths.get("docker/kafka-it/.env");
+    private static final Path SECRETS = Paths.get("kafka-it/secrets");
+    private static final Path ENV = Paths.get("kafka-it/.env");
+    /**
+     * Where the broker answers, which is not the same name from every side of the Docker bridge.
+     *
+     * Every listener in docker-compose.kafka-it.yml is advertised as host.docker.internal, so
+     * that other containers on the network can reach it. A client on the host connects to
+     * localhost:1909x perfectly well, is then handed "host.docker.internal:1909x" as the node to
+     * actually talk to, and cannot resolve it -- the run fails with metadata timeouts that say
+     * nothing about names, and the few cases that never open a connection still pass. From inside
+     * a container the opposite is true: the advertised name resolves and localhost does not.
+     *
+     * So the host is a knob rather than a constant, defaulting to the value that works from a
+     * developer's own machine. run-kafka-matrix.sh sets the other one.
+     */
+    private static final String BROKER_HOST = System.getProperty("kafka.it.host", "localhost");
+
     private static final int PROBE_TIMEOUT_MS = 500;
     /** Long enough for a TLS handshake on a cold broker, short enough that a refusal is quick. */
     private static final int API_TIMEOUT_MS = 15000;
@@ -68,8 +83,8 @@ class KafkaSecurityMatrixIT {
     @BeforeAll
     static void loadStackSecrets() throws Exception {
         assumeTrue(Files.exists(SECRETS) && Files.exists(ENV),
-            "docker/kafka-it is not set up -- run docker/kafka-it/start.sh");
-        assumeTrue(listening(19092), "the kafka-it stack is not running -- run docker/kafka-it/start.sh");
+            "kafka-it is not set up -- run kafka-it/start.sh");
+        assumeTrue(listening(19092), "the kafka-it stack is not running -- run kafka-it/start.sh");
         // kafka-clients 2.5 authenticates through Subject.getSubject(AccessController.getContext()),
         // which throws UnsupportedOperationException once the SecurityManager is gone in JDK 24+.
         // The image runs JDK 17 so production is unaffected, but a developer whose default JDK is
@@ -102,7 +117,7 @@ class KafkaSecurityMatrixIT {
 
     private static boolean listening(int port) {
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress("localhost", port), PROBE_TIMEOUT_MS);
+            socket.connect(new InetSocketAddress(BROKER_HOST, port), PROBE_TIMEOUT_MS);
             return true;
         } catch (Exception ex) {
             return false;
@@ -144,7 +159,7 @@ class KafkaSecurityMatrixIT {
         KafkaConnectionProfile profile = new KafkaConnectionProfile();
         profile.setKafkaConnectionProfileId(id);
         profile.setProfileName("it-" + port);
-        profile.setBootstrapServers("localhost:" + port);
+        profile.setBootstrapServers(BROKER_HOST + ":" + port);
         profile.setSecurityProtocol(protocol);
         return profile;
     }

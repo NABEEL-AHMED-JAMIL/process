@@ -58,9 +58,11 @@ public class KafkaConnectionProfileDto implements AuditNamed {
     /** Its truststore counterpart. See the note on sslKeystorePasswordEnc. */
     private String sslTruststorePasswordEnc;
     /**
-     * And the key inside a generated keystore, which this server protects with the same password
-     * as the store. Without it a generated keystore could be attached but never opened: the store
-     * password came through encrypted and the key password did not come through at all.
+     * And the key inside a store, for a store whose key does not share the store's own password.
+     *
+     * A keystore this server generates never needs it -- key and store are given the same password,
+     * and a Kafka client handed no ssl.key.password falls back to the store's. The console leaves
+     * it empty for that reason, so anything arriving here was built with keytool somewhere else.
      */
     private String sslKeyPasswordEnc;
     private Boolean sslTruststorePasswordConfigured;

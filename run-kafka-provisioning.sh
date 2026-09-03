@@ -10,15 +10,33 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 if ! docker ps --format '{{.Names}}' | grep -qx kafka_it; then
-  echo "ERROR: the broker stack is not running -- start it with docker/kafka-it/start.sh" >&2
+  echo "ERROR: the broker stack is not running -- start it with kafka-it/start.sh" >&2
   exit 1
 fi
 
 CONTAINER="${PROCESS_CONTAINER:-process_app}"
+if ! docker ps --format '{{.Names}}' | grep -qx "${CONTAINER}"; then
+  echo "ERROR: container '${CONTAINER}' is not running -- this run reads the database" >&2
+  echo "       credentials and the encryption key from it. Start the stack first." >&2
+  exit 1
+fi
+
 export E2E_DATASOURCE_USERNAME="$(docker exec "${CONTAINER}" printenv SPRING_DATASOURCE_USERNAME)"
 export E2E_DATASOURCE_PASSWORD="$(docker exec "${CONTAINER}" printenv SPRING_DATASOURCE_PASSWORD)"
 # The application's own key: anything written here has to be decryptable by the running app.
 export E2E_LOOKUP_ENCRYPTION_KEY="$(docker exec "${CONTAINER}" printenv LOOKUP_ENCRYPTION_KEY)"
+
+# None of the three captures above can fail on its own: the exit status of `export X=$(...)` is
+# export's, not the substitution's, so a printenv that found nothing leaves an empty value and
+# `set -e` never fires. Empty matters more here than in run-e2e.sh, because this driver writes
+# rows that are meant to survive -- EncryptionUtil.secretKey() throws on a blank key, and the run
+# would fail partway through having already committed some of them.
+for required in E2E_DATASOURCE_USERNAME E2E_DATASOURCE_PASSWORD E2E_LOOKUP_ENCRYPTION_KEY; do
+  if [[ -z "${!required}" ]]; then
+    echo "ERROR: ${required} came back empty from container '${CONTAINER}'." >&2
+    exit 1
+  fi
+done
 
 # Runs inside a container on the application's own network, because that is the only place the
 # names resolve: the storage connection points at host.docker.internal:9000 and the broker

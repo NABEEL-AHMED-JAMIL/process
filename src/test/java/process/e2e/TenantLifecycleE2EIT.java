@@ -139,6 +139,12 @@ class TenantLifecycleE2EIT extends E2ESupport {
 
         assertEquals(ProcessUtil.ERROR, second.get("status").asText(),
             "a duplicate tenant code must be refused: " + second.toString());
+        // addTenant refuses a missing name and a missing code with an ERROR too, so a bare status
+        // check would have been satisfied by a payload this test never meant to send. The refusal
+        // has to name the code -- and the code it names is the normalised, lower-case one, which
+        // is the whole of what "whatever its casing" means here.
+        assertTrue(second.get("message").asText().contains(code),
+            "the refusal must be the duplicate-code one, naming the code that collided: " + second.toString());
     }
 
     // ---- what a TENANT_ADMIN may not do -------------------------------------------------------

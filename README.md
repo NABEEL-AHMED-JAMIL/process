@@ -1,206 +1,124 @@
-# Scheduler Engine
+# ETL Console — backend
 
-### Overview
-This project is a **scheduler engine** designed to manage and execute source jobs efficiently.  
-It leverages **Apache Kafka** for real-time stream processing, ensuring scalability, fault tolerance, and high throughput in job execution workflows.
+The server behind the ETL Console. It began as a Kafka-backed **scheduler engine**, and that is still its core, but it has grown well past it: 27 REST controllers now cover multi-tenancy, storage, AI agents, document and audio tooling, a query engine, dynamic forms and more.
+
+Its frontend lives in [`../scheduler1`](../scheduler1) — currently mid-rewrite, with an Angular 8 app deployed and an Angular 22 app replacing it.
+
+> The planning and per-feature scope for the current phase is in [`../.ai/`](../.ai/). Start with [`../.ai/project.md`](../.ai/project.md), and see [`../.ai/discovery/backend.md`](../.ai/discovery/backend.md) for the full endpoint and service inventory.
+
+## The scheduler
+
 ```
-Process have 5 type of scheduler
-1. Mint (scheduler run mint ex => every 5 mint)
-2. Hr (scheduler run hr ex => every 1 hr)
-3. Daily (scheduler run daily base)
-4. Weekly (scheduler run base weekly)
-5. Monthly (scheduler run base monthly)
+Process has 5 types of scheduler
+1. Mint    (runs on a minute interval,  e.g. every 5 minutes)
+2. Hr      (runs hourly,                e.g. every 1 hour)
+3. Daily
+4. Weekly
+5. Monthly
 ```
 
-### Features
-- **Job Scheduling** – Handles periodic, delayed, and priority-based job execution.
-- **Real-Time Stream Processing** – Uses Kafka producers and consumers to process jobs as messages.
-- **Scalability** – Distributed architecture for handling large volumes of jobs concurrently.
-- **Fault Tolerance** – Kafka ensures message durability and recovery in case of failures.
-- **Prioritized Task Execution** – Tasks can be queued and executed based on defined priorities.
-- **Thread Pool Execution** – Uses `ThreadPoolExecutor` with a `PriorityBlockingQueue` for efficient job handling.
+These are exactly the values of `process.model.enums.Frequency`.
 
 ### Architecture
-1. **Producer** – Sends job/task messages into Kafka topics.
-2. **Scheduler Engine** – Pulls tasks, applies scheduling logic, and enqueues them for execution.
-3. **Consumer** – Reads processed results or error events from Kafka.
-4. **Executor** – Uses a thread pool to run prioritized tasks concurrently.
 
-### Tech Stack
-- **Java / Spring Boot** – Core backend engine
-- **Apache Kafka** – Real-time messaging and stream processing
-- **PostgreSQL** – (Optional) Metadata and job tracking persistence
+1. **Producer** — sends job/task messages into Kafka topics
+2. **Scheduler engine** — pulls due jobs, applies scheduling logic, dispatches them
+3. **Consumer** — reads results and error events back off Kafka
+4. **Workers** — the Python services in [`../job-search`](../job-search) consume the topics and do the work
 
-### Use Cases
-- ETL job scheduling and execution
-- Data pipeline orchestration
-- Real-time processing of streaming tasks
-- Event-driven workflows
+Concurrency comes from Spring's own scheduling pool, sized by `spring.task.scheduling.pool.size`. (Earlier versions of this README described a `ThreadPoolExecutor` with a `PriorityBlockingQueue`; no such code exists today.)
 
-### Running the Project
+## Tech stack
 
-#### Option 1: Local Development
+| | |
+|---|---|
+| **Java / Spring Boot 2.3.2** | Core engine. Java 8 source level, JDK 17 runtime |
+| **Apache Kafka** (`cp-kafka` 7.5.0 + ZooKeeper) | Messaging and stream processing |
+| **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`, V1.0 → V25.0) |
+| **Redis** | Caching |
+| **MinIO** | Object storage; S3 and Azure Blob also supported per connection |
+| **jodconverter / LibreOffice** | Document conversion |
+| **Spring Security + JWT** | Three roles: `PLATFORM_ADMIN` > `TENANT_ADMIN` > `TENANT_USER` |
+
+`docker-compose.yml` additionally runs `kafka_ui` and `redisinsight`.
+
+## Running
+
+### Option 1 — local
+
 ```bash
-# Clone repository
-git clone https://github.com/NABEEL-AHMED-JAMIL/process/tree/split-mono-to-microservice
-
-# Navigate into project
+git clone https://github.com/NABEEL-AHMED-JAMIL/process.git
 cd process
-
-# Build project
-mvn clean install
-
-# Run application
-mvn spring-boot:run
+mvn clean package -DskipTests
+java -jar target/*.jar
 ```
 
-#### Option 2: Docker Compose (Recommended for Development)
+The branch this workspace is on is `new-screen-2026`.
+
+### Option 2 — Docker Compose (recommended)
+
 ```bash
-# Build the JAR file first
+# Build the JAR first — the Dockerfile COPYs a prebuilt jar rather than building one
 mvn clean package -DskipTests
 
-# Start all services (PostgreSQL, Kafka, Zookeeper, Application)
+# Start PostgreSQL, ZooKeeper, Kafka, Redis, Kafka UI, RedisInsight and the app
 docker-compose up -d
 
-# View logs
 docker-compose logs -f
-
-# Access the application
-# API: http://localhost:9098/api/v1
-# Swagger: http://localhost:9098/api/v1/swagger-ui.html
-# Health Check: http://localhost:9098/api/v1/actuator/health
-
-# Stop services
 docker-compose down
 ```
 
-For detailed Docker setup instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md)
+> **The Dockerfile copies a prebuilt jar.** `mvn test` does not write one, so a build run after only testing ships whatever jar was there before. If you are deploying a change, verify what actually shipped — compare the checksum of the jar inside the image against `target/`. This has silently shipped stale code more than once.
 
-### ETL WorkFlow diagram
-Below detail show the existing workflow of process.
+| | URL |
+|---|---|
+| API | `http://localhost:9098/api/v1` |
+| Swagger UI | `http://localhost:9098/api/v1/swagger-ui.html` |
+| Health | `http://localhost:9098/api/v1/actuator/health` |
 
-#### 1. Old ETL Workflow diagram
-![alt text](ext-detail/old-etl.png)
-#### 2. New ETL Workflow diagram
-![alt text](ext-detail/new-etl.png)
+Schema migration is automatic — Liquibase runs on startup, and `ModelApplication` seeds `SCHEDULER_LAST_RUN_TIME` if it is absent without overwriting an existing value. **No manual bootstrap SQL is needed;** the statements older versions of this README carried no longer match the tables.
 
-
-## 2 Helping Query for view and run this project
-```
-Note :- Before run this project execute the below script.
-INSERT INTO lookup_data VALUES
-('1001','2021-03-31 22:09:43.244','This Scheduler use for send the sourceJob into the queue','2021-04-01T00:16:34.567','SCHEDULER_LAST_RUN_TIME'),
-('1002','2021-03-31 23:06:48.744','This Queue fetch size use to fetch the limit of data from db','25','QUEUE_FETCH_LIMIT');
-
-INSERT INTO source_task_type (source_task_type_id, description, queue_topic_partition, service_name)
-VALUES ('1000', '[consumer test]', 'topic=test-topic&partitions=[*]', 'Test');
+## Bulk template endpoints
 
 ```
-
-## Process Endpoint
-List of endpoint with detail of endpoint
-1. Endpoint use download batch file <br>
-   http://localhost:9098/api/v1/bulk.json/downloadBatchSchedulerTemplateFile
-2. Endpoint use upload batch file <br>
-   http://localhost:9098/api/v1/bulk.json/uploadBatchSchedulerFile
-3. Below image show the kafka structure which implement in the project.
-To run the kafka use the below cmd
-   1. Start Apache Zookeeper.<br>
-      .\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties (for window) <br>
-      ./zookeeper-server-start.sh ../config/zookeeper.properties
-   2. Start the Kafka server.<br>
-      .\bin\windows\kafka-server-start.bat .\config\server.properties (for window) <br>
-      .\bin\windows\kafka-server-start.bat .\config\server.properties
-
-To start the Kafka server.
-   1. To create the cluster for below detail download and install the 'Kafka Offset Explorer'.
-   ![alt text](ext-detail/Topic-Detail.png)
-
-### Process DB-UML
-Below image show the detail for database detail for process. <br>
-![alt text](ext-detail/new-dbdesing.png)
-
-### Monitoring app [Grafana and Paragraph]
-Spring Boot Actuator is enabled in this project to provide production-ready features such as monitoring, health checks, metrics, and system information.
-It exposes useful endpoints that allow developers and operators to observe the state of the application, debug issues, and integrate with monitoring tools like Prometheus and Grafana.
-The exposed endpoints include application health, metrics, configuration properties, environment details, loggers, Liquibase migration status, scheduled tasks, and request mappings.
-These endpoints make it easier to monitor application behavior in real-time and ensure smooth operation in production.
-```
-{
-  "_links": {
-    "self": {
-      "href": "http://localhost:9098/api/v1/actuator",
-      "templated": false
-    },
-    "beans": {
-      "href": "http://localhost:9098/api/v1/actuator/beans",
-      "templated": false
-    },
-    "caches-cache": {
-      "href": "http://localhost:9098/api/v1/actuator/caches/{cache}",
-      "templated": true
-    },
-    "caches": {
-      "href": "http://localhost:9098/api/v1/actuator/caches",
-      "templated": false
-    },
-    "health": {
-      "href": "http://localhost:9098/api/v1/actuator/health",
-      "templated": false
-    },
-    "info": {
-      "href": "http://localhost:9098/api/v1/actuator/info",
-      "templated": false
-    },
-    "conditions": {
-      "href": "http://localhost:9098/api/v1/actuator/conditions",
-      "templated": false
-    },
-    "shutdown": {
-      "href": "http://localhost:9098/api/v1/actuator/shutdown",
-      "templated": false
-    },
-    "configprops": {
-      "href": "http://localhost:9098/api/v1/actuator/configprops",
-      "templated": false
-    },
-    "env": {
-      "href": "http://localhost:9098/api/v1/actuator/env",
-      "templated": false
-    },
-    "liquibase": {
-      "href": "http://localhost:9098/api/v1/actuator/liquibase",
-      "templated": false
-    },
-    "loggers": {
-      "href": "http://localhost:9098/api/v1/actuator/loggers",
-      "templated": false
-    },
-    "heapdump": {
-      "href": "http://localhost:9098/api/v1/actuator/heapdump",
-      "templated": false
-    },
-    "threaddump": {
-      "href": "http://localhost:9098/api/v1/actuator/threaddump",
-      "templated": false
-    },
-    "prometheus": {
-      "href": "http://localhost:9098/api/v1/actuator/prometheus",
-      "templated": false
-    },
-    "metrics": {
-      "href": "http://localhost:9098/api/v1/actuator/metrics",
-      "templated": false
-    },
-    "scheduledtasks": {
-      "href": "http://localhost:9098/api/v1/actuator/scheduledtasks",
-      "templated": false
-    },
-    "mappings": {
-      "href": "http://localhost:9098/api/v1/actuator/mappings",
-      "templated": false
-    }
-  }
-}
+GET  /api/v1/sourceJob.json/downloadSourceJobTemplateFile
+POST /api/v1/sourceJob.json/uploadSourceJob
+GET  /api/v1/sourceTask.json/downloadSourceTaskTemplate
+POST /api/v1/sourceTask.json/uploadSourceTask
 ```
 
+(These replace the `bulk.json` endpoints named in earlier versions of this file; that controller no longer exists.)
+
+## Tests
+
+| Suite | Command | Count |
+|---|---|---|
+| Unit | `mvn -o test` | 516 |
+| End-to-end, over real HTTP | `./run-e2e.sh` | 86 |
+| Kafka security matrix, real broker | `./run-kafka-matrix.sh` | 17 |
+
+`run-e2e.sh` reads the database credentials and the encryption key from the running `process_app` container, so the stack must be up. `run-kafka-matrix.sh` **must** run in a container — every listener on the test broker is advertised as `host.docker.internal`, which the host cannot resolve, and a host run fails with metadata timeouts that look nothing like the cause. Bring that broker up with `kafka-it/start.sh`.
+
+## Monitoring
+
+Spring Boot Actuator is enabled, deliberately narrowed to:
+
+```
+management.endpoints.web.exposure.include=health,info,metrics,prometheus
+management.endpoint.shutdown.enabled=false
+```
+
+The rest — `env`, `configprops`, `heapdump`, `threaddump`, `beans` and the others — are **off on purpose**: they leak configuration and secrets. `prometheus` is there for Grafana.
+
+## Diagrams
+
+| | |
+|---|---|
+| Old ETL workflow | ![old ETL workflow](ext-detail/old-etl.png) |
+| New ETL workflow | ![new ETL workflow](ext-detail/new-etl.png) |
+| Kafka topic structure | ![topic detail](ext-detail/Topic-Detail.png) |
+| Database UML | ![database design](ext-detail/new-dbdesing.png) |
+
+## Note on the wider documentation
+
+Five further markdown files exist under `ext-detail/md/` and `docs/design/` that are not linked from here and have not been verified. Treat them as unknown. The superseded content of this README — the bootstrap SQL and the actuator endpoint dump — is preserved in [`../.ai/old-scope/`](../.ai/old-scope/).

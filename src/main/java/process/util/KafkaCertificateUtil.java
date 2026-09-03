@@ -141,7 +141,15 @@ public final class KafkaCertificateUtil {
             for (X509Certificate certificate : certificates) {
                 // Alias from the subject where there is one: a person opening the generated file
                 // with keytool should see which CA each entry is, not "cert-0".
-                store.setCertificateEntry(aliasFor(certificate, "ca-" + index), certificate);
+                String alias = aliasFor(certificate, "ca-" + index);
+                // A renewed root keeps the common name of the one it replaces, and an alias
+                // already in the store is replaced rather than refused: two such certificates
+                // produced a store holding one of them while the caller was told it held both,
+                // and whichever chain needed the dropped CA failed at the handshake.
+                while (store.containsAlias(alias)) {
+                    alias = alias + "-" + index;
+                }
+                store.setCertificateEntry(alias, certificate);
                 index++;
             }
             return toBytes(store, password);

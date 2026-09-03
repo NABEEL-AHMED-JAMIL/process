@@ -35,7 +35,11 @@ printf '  %-6s %s\n' 19092 "PLAINTEXT" 19093 "SSL" 19094 "SSL + mutual TLS" \
   19095 "SASL_PLAINTEXT / PLAIN" 19096 "SASL_SSL / PLAIN" \
   19097 "SASL_PLAINTEXT / SCRAM-SHA-256" 19098 "SASL_SSL / SCRAM-SHA-512"
 echo
-echo "Run the tests with:  mvn -o test -Dtest=KafkaSecurityMatrixIT"
+# Not "mvn -Dtest=KafkaSecurityMatrixIT" from the host: every listener above is advertised as
+# host.docker.internal so other containers can reach the broker, and the host cannot resolve that
+# name. A run from here connects, is handed back an address it cannot look up, and fails with
+# thirteen metadata timeouts that look like a code regression. The script runs it in a container.
+echo "Run the tests with:  ../run-kafka-matrix.sh"
 # No JDK flag needed: maven-toolchains-plugin pins the build to 17, which is what the image runs.
 # kafka-clients 2.5 authenticates through an API removed in JDK 24, so a build that forked a newer
 # JVM failed every SASL case on something that cannot happen in production.

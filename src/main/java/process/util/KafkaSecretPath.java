@@ -89,28 +89,17 @@ public final class KafkaSecretPath {
             return null;
         }
         try {
-            return new KafkaSecretPath(Long.parseLong(parts[1]), parts[2],
+            KafkaSecretPath parsed = new KafkaSecretPath(Long.parseLong(parts[1]), parts[2],
                 LocalDate.parse(parts[3], DATE), parts[4]);
+            // Only the form this class writes counts as one of ours. Long.parseLong reads "+1248"
+            // and "01248" as 1248, so without this an ownership check would answer for a user
+            // whose folder is spelt differently from the key the storage backend will fetch --
+            // the same divergence between what is authorised and what is read that the traversal
+            // check above exists to prevent.
+            return parsed.key().equals(trimmed) ? parsed : null;
         } catch (Exception ex) {
             return null;
         }
-    }
-
-    /**
-     * Whether a stored key belongs to this user.
-     *
-     * Compares the parsed id numerically rather than testing the string prefix, because
-     * "12480/..." starts with "1248" and a prefix test would hand user 1248 another user's keys.
-     */
-    public static boolean isOwnedBy(String key, Long appUserId) {
-        KafkaSecretPath parsed = parse(key);
-        return parsed != null && appUserId != null && appUserId.equals(parsed.appUserId);
-    }
-
-    /** The id of whoever uploaded a stored key, or null when the key is not one of ours. */
-    public static Long ownerOf(String key) {
-        KafkaSecretPath parsed = parse(key);
-        return parsed == null ? null : parsed.appUserId;
     }
 
     /** Everything up to and including the trailing slash, for listing one upload. */
@@ -149,8 +138,9 @@ public final class KafkaSecretPath {
         String cleaned = lastSegment.replaceAll(SAFE_FILENAME, "_");
         // parse() refuses any key holding "..", and a dot is a permitted character, so a name
         // like "ca..pem" survived cleaning and stored perfectly well -- and then parsed as
-        // nobody's. isOwnedBy answered no to the very person who had just uploaded it, and the
-        // file could never be read, replaced or deleted again.
+        // nobody's. canUseObject reads the owner out of the parsed key, so it answered no to the
+        // very person who had just uploaded the file, and it could never be read, replaced or
+        // deleted again.
         cleaned = cleaned.replaceAll("\\.{2,}", ".");
         // A name of only dots would leave the key ending in a directory reference.
         while (cleaned.startsWith(".")) {

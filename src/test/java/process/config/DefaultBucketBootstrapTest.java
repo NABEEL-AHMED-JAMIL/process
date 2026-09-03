@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.ApplicationArguments;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
@@ -43,8 +44,12 @@ class DefaultBucketBootstrapTest {
 
     @BeforeEach
     void setUp() {
+        // A stub manager, because each step now runs in its own transaction through a
+        // TransactionTemplate rather than under an @Transactional run(). Nothing here asserts on
+        // transaction boundaries; the template simply has to have one to call.
         this.bootstrap = new StorageConnectionBootstrap(
-            this.lookupDataRepository, this.storageConnectionRepository, this.encryptionUtil);
+            this.lookupDataRepository, this.storageConnectionRepository, this.encryptionUtil,
+            mock(PlatformTransactionManager.class));
         ReflectionTestUtils.setField(this.bootstrap, "minioEndpoint", "http://minio:9000");
         ReflectionTestUtils.setField(this.bootstrap, "minioAccessKey", "probe-access");
         ReflectionTestUtils.setField(this.bootstrap, "minioSecretKey", "probe-secret");
@@ -132,4 +137,50 @@ class DefaultBucketBootstrapTest {
             .containsExactlyInAnyOrder("company-faces", KafkaSecretService.SECRET_BUCKET);
     }
 
+
+    /**
+     * The promise the catch block makes, tested where it is actually broken: at commit.
+     *
+     * run() used to be @Transactional with the try/catch inside it. StorageConnection's id comes
+     * from a sequence, so save() does not insert -- the INSERT and any constraint violation with
+     * it arrive at commit, which Spring performs after run() has returned and the catch is gone.
+     * The application then failed to start with "Failed to execute ApplicationRunner", which is
+     * exactly what the comment in that catch block said must never happen. Two instances starting
+     * against one database is enough: both see etl-avatar missing, both save, and one loses the
+     * unique index on the alias.
+     *
+     * Making the manager throw on commit reproduces that arrival point. It also pins the second
+     * half of the fix -- one failed step must not take the other down with it -- which is only
+     * true because each step now has its own transaction.
+     */
+    @Test
+    void aFailureArrivingAtCommitDoesNotStopTheApplicationStarting() {
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        java.util.concurrent.atomic.AtomicInteger commits = new java.util.concurrent.atomic.AtomicInteger();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            if (commits.incrementAndGet() == 1) {
+                throw new org.springframework.dao.DataIntegrityViolationException(
+                    "duplicate key value violates unique constraint \"uq_storage_connection_alias\"");
+            }
+            return null;
+        }).when(transactionManager).commit(org.mockito.ArgumentMatchers.any());
+
+        StorageConnectionBootstrap bootstrap = new StorageConnectionBootstrap(
+            this.lookupDataRepository, this.storageConnectionRepository, this.encryptionUtil,
+            transactionManager);
+        ReflectionTestUtils.setField(bootstrap, "minioEndpoint", "http://minio:9000");
+        ReflectionTestUtils.setField(bootstrap, "minioAccessKey", "probe-access");
+        ReflectionTestUtils.setField(bootstrap, "minioSecretKey", "probe-secret");
+        ReflectionTestUtils.setField(bootstrap, "avatarBucket", "etl-avatar");
+        when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> bootstrap.run(mock(ApplicationArguments.class)))
+            .as("a bootstrap failure must never stop the application from starting")
+            .doesNotThrowAnyException();
+
+        assertThat(commits.get())
+            .as("the second step must still be attempted after the first one failed, which is"
+                + " only true while each step has a transaction of its own")
+            .isEqualTo(2);
+    }
 }

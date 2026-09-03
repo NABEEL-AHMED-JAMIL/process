@@ -54,7 +54,7 @@ import static process.util.ProcessUtil.SUCCESS;
  * files land in the platform bucket for real and are NOT rolled back, because a profile pointing at
  * a truststore that no longer exists would be worse than useless.
  *
- * Needs docker/kafka-it running: docker/kafka-it/start.sh
+ * Needs kafka-it running: kafka-it/start.sh
  *
  * @author Nabeel Ahmed
  * */
@@ -63,8 +63,8 @@ import static process.util.ProcessUtil.SUCCESS;
 @EnabledIfSystemProperty(named = "provisionKafka", matches = "true")
 class AjwaKafkaProvisioningDriver {
 
-    private static final Path SECRETS = Paths.get("docker/kafka-it/secrets");
-    private static final Path STACK_ENV = Paths.get("docker/kafka-it/.env");
+    private static final Path SECRETS = Paths.get("kafka-it/secrets");
+    private static final Path STACK_ENV = Paths.get("kafka-it/.env");
     /** The application runs in a container, so it reaches the published ports by this name. */
     private static final String BROKER_HOST = "host.docker.internal";
     private static final String TENANT_NAME = "Ajwa LLC";
@@ -127,7 +127,7 @@ class AjwaKafkaProvisioningDriver {
 
     private void readStackCredentials() throws Exception {
         if (!Files.exists(STACK_ENV)) {
-            throw new IllegalStateException("docker/kafka-it is not set up -- run docker/kafka-it/start.sh");
+            throw new IllegalStateException("kafka-it is not set up -- run kafka-it/start.sh");
         }
         for (String line : Files.readAllLines(STACK_ENV)) {
             int equals = line.indexOf('=');
@@ -228,6 +228,13 @@ class AjwaKafkaProvisioningDriver {
             .map(process.model.pojo.KafkaConnectionProfile::getKafkaConnectionProfileId)
             .max(Long::compareTo)
             .orElse(null);
+        if (savedId == null) {
+            // Recorded rather than thrown, so the configurations after this one are still
+            // provisioned; report() is what turns it red at the end.
+            this.results.add(String.format("%-38s NO SAVED ROW: saved, but no row came back to"
+                + " record the connection test on", dto.getProfileName()));
+            return;
+        }
 
         KafkaConnectionProfileDto probe = new KafkaConnectionProfileDto();
         probe.setKafkaConnectionProfileId(savedId);
@@ -295,7 +302,16 @@ class AjwaKafkaProvisioningDriver {
         out.append("===========================================================\n");
         System.out.println(out);
 
+        // save() appends exactly one line per configuration, so counting them could never fail --
+        // it says only that the method ran to the end, which an exception would already have told
+        // us. What is worth failing on is whether each profile was actually provisioned: a broker
+        // that is down reads as FAILED above and is the stack's business, but a profile the
+        // application itself refused, or saved without a row to hang the result on, is the
+        // application's, and this driver exists to find that out.
         assertThat(this.results).as("every configuration should have been attempted").hasSize(7);
+        assertThat(this.results)
+            .as("every profile should have been saved -- see the report above")
+            .noneMatch(line -> line.contains("SAVE REFUSED") || line.contains("NO SAVED ROW"));
     }
 
 }

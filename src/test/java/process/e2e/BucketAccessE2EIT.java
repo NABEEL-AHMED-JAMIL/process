@@ -91,6 +91,7 @@ class BucketAccessE2EIT extends E2ESupport {
         Tenant tenant = this.newTenant("bucket-list-admin");
         AppUser tenantAdmin = this.newUser(UserRole.TENANT_ADMIN, tenant);
         String avatarBucket = this.avatarBucketFor(tenantAdmin);
+        this.requireBothPlatformBucketsConfigured(avatarBucket);
 
         this.mvc.perform(this.getAs(tenantAdmin, "/storage.json/buckets"))
             .andExpect(status().isOk())
@@ -103,6 +104,7 @@ class BucketAccessE2EIT extends E2ESupport {
         Tenant tenant = this.newTenant("bucket-list-user");
         AppUser tenantUser = this.newUser(UserRole.TENANT_USER, tenant);
         String avatarBucket = this.avatarBucketFor(tenantUser);
+        this.requireBothPlatformBucketsConfigured(avatarBucket);
 
         this.mvc.perform(this.getAs(tenantUser, "/storage.json/buckets"))
             .andExpect(status().isOk())
@@ -255,16 +257,20 @@ class BucketAccessE2EIT extends E2ESupport {
      * /appUser.json/updateOwnAvatar -- so if the guard closed over the whole avatar bucket, nobody
      * below a platform admin could ever set a picture.
      *
-     * Asserted as "the ownership guard did not refuse this", not as a 200, because whether the
-     * bytes land depends on a MinIO being up and an etl-avatar bucket being configured on it, and
-     * neither is part of what this suite is testing. The guard's own refusal is a distinct
-     * sentence, so it can be excluded exactly; see the class comment.
+     * Asserted as "nothing refused this", not as a 200, because whether the bytes land depends on
+     * a MinIO being up and an etl-avatar bucket being configured on it, and neither is part of
+     * what this suite is testing. Every refusal the service can reach this request with is either
+     * a 403 from the role floor or a 400 from one of the two checks in front of the client, and a
+     * storage backend that cannot be reached fails as a 500 -- so excluding both refusal codes
+     * says "admitted" without depending on the infrastructure. Excluding only the guard's own
+     * sentence would have let a traversal check that started refusing honest keys through.
      */
     @Test
     void aTenantUserMayUploadItsOwnPictureIntoTheAvatarBucket() throws Exception {
         Tenant tenant = this.newTenant("own-avatar");
         AppUser tenantUser = this.newUser(UserRole.TENANT_USER, tenant);
         String avatarBucket = this.avatarBucketFor(tenantUser);
+        String ownKey = tenantUser.getAppUserId() + "/profile/avatar.png";
 
         MvcResult result = this.mvc.perform(this.uploadAs(tenantUser, avatarBucket,
             tenantUser.getAppUserId() + "/profile/", "avatar.png")).andReturn();
@@ -272,9 +278,20 @@ class BucketAccessE2EIT extends E2ESupport {
         assertNotEquals(403, result.getResponse().getStatus(),
             "A user's own picture is the one thing the platform buckets are open for; the role"
                 + " floor on StorageBrowserRestApi must admit it.");
-        assertNotEquals(bucketRefusal(avatarBucket), messageOf(result),
-            "The ownership guard refused a user their own <appUserId>/profile/ prefix, which is"
-                + " the only prefix it is supposed to allow through.");
+        assertNotEquals(400, result.getResponse().getStatus(),
+            "Nothing in front of the storage client may refuse a user their own <appUserId>/profile/"
+                + " prefix -- neither the platform-bucket guard nor the key check. It answered: "
+                + messageOf(result));
+
+        // The one request in this suite that can reach a real bucket, and an object written there
+        // is outside the transaction that rolls the rest of this test back. Taken away again so a
+        // machine whose MinIO is actually reachable does not collect a stray picture per run,
+        // under an appUserId that no longer exists by the time the run ends.
+        if (result.getResponse().getStatus() == 200) {
+            this.mvc.perform(this.deleteAs(this.newPlatformAdmin(), "/storage.json/deleteObject")
+                .param("bucket", avatarBucket)
+                .param("key", ownKey));
+        }
     }
 
     /**
@@ -425,6 +442,24 @@ class BucketAccessE2EIT extends E2ESupport {
         return String.valueOf(bucket);
     }
 
+    /**
+     * The precondition the "a tenant sees neither default bucket" cases rest on: both buckets are
+     * actually configured on the installation the suite is pointed at.
+     *
+     * Without it those cases could not fail. StorageConnectionBootstrap creates neither connection
+     * when MINIO_ENDPOINT is unset -- it says so and carries on -- and on a database in that state
+     * "the tenant is not offered etl-bucket" is satisfied by nobody being offered it, so they
+     * would stay green with the whole tenant narrowing deleted. The two platform-admin cases above
+     * do assert the buckets exist, but they run independently: their failing is not what stops
+     * these from passing, so the check belongs here as well.
+     */
+    private void requireBothPlatformBucketsConfigured(String avatarBucket) throws Exception {
+        this.mvc.perform(this.getAs(this.newPlatformAdmin(), "/storage.json/buckets"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[*].bucket", hasItem(KAFKA_BUCKET)))
+            .andExpect(jsonPath("$.data[*].bucket", hasItem(avatarBucket)));
+    }
+
     /** A key of the shape kafka-secrets/{userid}/{uuid}/{date}/anyfile, for this caller's own id. */
     private String ownSecretKey(AppUser user) {
         return KAFKA_SECRET_FOLDER + user.getAppUserId()
@@ -493,6 +528,17 @@ class BucketAccessE2EIT extends E2ESupport {
         Tenant company = this.newTenant("ajwa");
         AppUser admin = this.newUser(UserRole.TENANT_ADMIN, company);
 
+        // Same precondition as requireBothPlatformBucketsConfigured, on the other listing: a
+        // database where these two rows were never created answers "no platform connections" to
+        // everybody, and doesNotContain would then hold with the narrowing removed.
+        String platform = this.mvc.perform(this.getAs(this.newPlatformAdmin(),
+                "/storageConnection.json/fetchAllConnections"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        assertThat(platform)
+            .as("the platform's two connections have to exist for hiding them to mean anything")
+            .contains("etl-avatar").contains("etl-bucket");
+
         String body = this.mvc.perform(this.getAs(admin, "/storageConnection.json/fetchAllConnections"))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
@@ -518,6 +564,34 @@ class BucketAccessE2EIT extends E2ESupport {
             .andReturn().getResponse().getContentAsString();
 
         assertThat(body).contains("etl-avatar").contains("etl-bucket");
+    }
+
+
+    /**
+     * Whether a tenant admin can read a Kafka certificate out of the bucket, as opposed to using it.
+     * The download tests above are all a tenant USER; this is the role that legitimately runs the
+     * certificate workflow, and so the one most likely to be handed the bucket by mistake.
+     *
+     * The guard refuses on the bucket before it ever looks for the object, so this holds whether or
+     * not the key names something real -- which is what lets it be asserted here, against the real
+     * storage service, without writing anything to MinIO that a rollback could not undo.
+     *
+     * Matched on the guard's own sentence rather than on the 400 alone. resolveService answers a
+     * bucket it has no connection for with a 400 too ("...Add a storage connection for it first."),
+     * and that is the answer a caller who was ADMITTED gets -- so on the status alone this would
+     * have gone on passing with the guard deleted, on any installation where the etl-bucket
+     * connection row is missing. StorageConnectionBootstrap leaves it missing whenever
+     * MINIO_ENDPOINT is unset, which is not a rare state on a developer's machine.
+     */
+    @Test
+    void aTenantAdminCannotDownloadAKafkaSecretEvenUnderItsOwnUserId() throws Exception {
+        Tenant company = this.newTenant("ajwa");
+        AppUser admin = this.newUser(UserRole.TENANT_ADMIN, company);
+        String ownKey = KAFKA_SECRET_FOLDER + admin.getAppUserId() + "/uuid/2026-09-01/ca.pem";
+
+        this.expectBucketRefused(this.getAs(admin, "/storage.json/downloadObject")
+            .param("bucket", KAFKA_BUCKET)
+            .param("key", ownKey), KAFKA_BUCKET);
     }
 
 }

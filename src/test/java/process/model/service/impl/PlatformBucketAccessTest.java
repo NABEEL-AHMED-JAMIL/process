@@ -1,9 +1,16 @@
 package process.model.service.impl;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+import process.model.repository.StorageConnectionRepository;
+import process.model.service.ObjectStorageService;
+import process.security.TenantContext;
+import process.config.StorageClientFactory;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 /**
  * The rule that lets a tenant user reach their own avatar in a platform bucket, and nothing else.
@@ -13,18 +20,43 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * keys are sequential. So the same scope now covers reading, writing and listing alike -- without
  * it a tenant could collect every user's picture, or overwrite somebody else's.
  *
+ * Every case below calls the real isOwnProfileObject on a real StorageBrowserServiceImpl. This
+ * class used to carry a private re-implementation of it instead -- "mirrors isOwnProfileObject
+ * without needing a Spring context around it" -- which meant ten passing tests that never loaded
+ * the file they are named after: the whole guard could be deleted from the service and this suite
+ * would still be green. The copy had already drifted, too. Production refuses a key ending in
+ * "/", which is the line that stops deleteFolder and renameFolder from using the avatar exception
+ * against the caller's own folder; the mirror had no such rule, so it answered true where the
+ * real code answers false. A copy of a security rule is not a test of it.
+ *
+ * Reflection rather than a public seam, because the method is private on purpose and widening it
+ * for a test would be a worse trade than reaching past the modifier here. Nothing else about the
+ * service is exercised, so its collaborators are bare mocks.
+ *
  * @author Nabeel Ahmed
  */
 public class PlatformBucketAccessTest {
 
     private static final String AVATAR_BUCKET = "etl-avatar";
 
-    /** Mirrors isOwnProfileObject without needing a Spring context around it. */
+    private final StorageBrowserServiceImpl service = new StorageBrowserServiceImpl(
+        mock(LookupDataCacheService.class),
+        mock(StorageConnectionRepository.class),
+        mock(StorageClientFactory.class),
+        mock(ObjectStorageService.class),
+        mock(ObjectStorageService.class),
+        mock(ObjectStorageService.class),
+        AVATAR_BUCKET);
+
+    /** The guard reads the caller from the thread, so a case is set up by becoming that caller. */
     private boolean ownProfile(Long callerId, String bucket, String key) {
-        if (key == null || callerId == null || !safeKey(key) || !AVATAR_BUCKET.equals(bucket)) {
-            return false;
+        TenantContext.clear();
+        if (callerId != null) {
+            TenantContext.set(7L, "TENANT_USER", callerId, "user-" + callerId);
         }
-        return key.startsWith(callerId + "/profile/");
+        Boolean answer = ReflectionTestUtils.invokeMethod(
+            this.service, "isOwnProfileObject", bucket, key);
+        return Boolean.TRUE.equals(answer);
     }
 
     /** Every case below is about the key, so it asks about the bucket the avatars are in. */
@@ -32,20 +64,9 @@ public class PlatformBucketAccessTest {
         return this.ownProfile(callerId, AVATAR_BUCKET, key);
     }
 
-    /** Mirrors isSafeKey: the traversal check the prefix test is only sound on top of. */
-    private boolean safeKey(String key) {
-        if (key == null || key.isEmpty()) {
-            return true;
-        }
-        if (key.indexOf('\\') >= 0 || key.startsWith("/")) {
-            return false;
-        }
-        for (String segment : key.split("/", -1)) {
-            if (".".equals(segment) || "..".equals(segment)) {
-                return false;
-            }
-        }
-        return true;
+    @AfterEach
+    void clearContext() {
+        TenantContext.clear();
     }
 
     @Test
@@ -81,6 +102,22 @@ public class PlatformBucketAccessTest {
         assertFalse(ownProfile(1248L, "1248/exports/payroll.csv"));
         assertFalse(ownProfile(1248L, "1248/avatar.jpg"));
         assertFalse(ownProfile(1248L, "avatars/1248/profile/avatar.jpg"));
+    }
+
+    /**
+     * The case the old mirror got wrong, and the reason a copy is not a test.
+     *
+     * A key ending in "/" is a prefix, not an object, and it is how deleteFolder and renameFolder
+     * arrive. "1248/profile/" starts with "1248/profile/", so on the prefix test alone the
+     * exception meant for putting one picture in a platform bucket would have let a user delete
+     * or rename their whole folder there.
+     */
+    @Test
+    void theCallersOwnFolderIsNotOneOfTheirObjects() {
+        assertFalse(ownProfile(1248L, "1248/profile/"),
+            "a trailing separator names a folder, which deleteFolder and renameFolder act on");
+        assertFalse(ownProfile(1248L, "1248/profile/holiday/"),
+            "a folder deeper inside their own is still a folder");
     }
 
     @Test

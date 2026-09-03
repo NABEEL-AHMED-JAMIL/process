@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import process.config.StoragePropertyDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.config.StorageClientFactory;
@@ -20,6 +21,7 @@ import process.model.service.ObjectStorageService;
 import process.model.service.StorageConnectionService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TenantOwnership;
 import process.util.EncryptionUtil;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
@@ -50,7 +52,7 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
     static final String ALIAS_UNAVAILABLE = "That alias isn't available. Choose another.";
 
     /** The same property StorageBrowserServiceImpl guards the avatar bucket by. */
-    @Value("${app.avatar.bucket:etl-avatar}")
+    @Value(StoragePropertyDefaults.AVATAR_BUCKET)
     private String avatarBucket;
 
     private final StorageConnectionRepository storageConnectionRepository;
@@ -139,16 +141,47 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
             || (this.avatarBucket != null && this.avatarBucket.equals(alias));
     }
 
+    /**
+     * Asked through the shared rule rather than compared here.
+     *
+     * On Objects.equals alone a caller carrying no tenant of its own -- a token minted without the
+     * claim, a role changed out from under the row -- matched every platform-owned connection,
+     * because null equals null. Among those rows are etl-avatar and etl-bucket, and owning one is
+     * being able to repoint the endpoint and credentials that every profile picture and every
+     * Kafka certificate is written through. TenantOwnership refuses a tenant-less caller, which
+     * is the same answer StorageBrowserServiceImpl.belongsToCaller already gives the bucket list.
+     */
     private boolean isOwnedByCaller(StorageConnection connection) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
+        return connection != null && TenantOwnership.isOwnedByCaller(connection.getTenantId());
+    }
+
+    /**
+     * The same answer on the way in, for the two paths that have no row to ask about.
+     *
+     * isOwnedByCaller refuses a tenant-less caller every connection that already exists. The two
+     * paths that do not read one -- creating a connection, and probing an unsaved one -- instead
+     * stamp TenantContext.getTenantId() onto a new object, and for that caller they stamp null,
+     * which is the platform. So the rule inverted itself precisely where it was not consulted:
+     * addConnection minted a platform-owned row its own author could then neither list, edit nor
+     * delete, and discoverBuckets handed the probe the platform's licence -- on a deployment that
+     * turned storage.allow-instance-role on, a keyless S3 probe ran as the process's own IAM
+     * identity and answered with every bucket name in the account.
+     */
+    private ResponseDto refuseCallerWithNoTenant() {
+        if (TenantContext.isPlatformAdmin() || !isNull(TenantContext.getTenantId())) {
+            return null;
         }
-        return connection != null && Objects.equals(connection.getTenantId(), TenantContext.getTenantId());
+        return new ResponseDto(ERROR,
+            "This account is not attached to a workspace, so it cannot own a storage connection.");
     }
 
     @Override
     @Transactional
     public ResponseDto addConnection(StorageConnectionDto dto) throws Exception {
+        ResponseDto refused = this.refuseCallerWithNoTenant();
+        if (refused != null) {
+            return refused;
+        }
         ResponseDto validationError = this.validate(dto, true);
         if (validationError != null) {
             return validationError;
@@ -466,13 +499,19 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         if (isNull(dto) || isNull(dto.getProvider())) {
             return new ResponseDto(ERROR, "Select a provider first.");
         }
+        ResponseDto refused = this.refuseCallerWithNoTenant();
+        if (refused != null) {
+            return refused;
+        }
         // Discovery runs before a connection is saved, so the credentials arrive on the DTO.
         // When editing an existing one the secret is deliberately never sent back to the
         // browser, so an absent secret means "reuse the stored one" rather than "no secret".
         StorageConnection probe = new StorageConnection();
         // The probe is unsaved, and an unsaved row has no tenant of its own -- which would read
         // as platform-level and could borrow the platform's IAM identity where that is allowed.
-        // Stamp the caller's tenant so discovery is held to the same rule as the saved thing.
+        // Stamp the caller's tenant so discovery is held to the same rule as the saved thing --
+        // which only holds because refuseCallerWithNoTenant above has already turned away the one
+        // caller for whom "the caller's tenant" is itself null.
         probe.setTenantId(TenantContext.getTenantId());
         if (!isNull(dto.getStorageConnectionId())) {
             this.tenantFilterHelper.enableIfNeeded(this.entityManager);

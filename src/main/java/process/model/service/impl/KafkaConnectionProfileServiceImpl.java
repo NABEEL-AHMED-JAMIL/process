@@ -242,8 +242,13 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
                 return new ResponseDto(ERROR, String.format("Profile not found with %d.", dto.getKafkaConnectionProfileId()));
             }
             stored = profileOpt.get();
-            // A tenant may test a profile the platform shares with it, but the outcome belongs to the
-            // platform's row: recording it there would let one tenant write what every tenant reads.
+            // Defence in depth, and unreachable as things stand: scopedFind above already refuses
+            // any row the caller does not own to anyone but a platform admin, and callerOwns is
+            // true for a platform admin, so this is never false today. It dates from when the
+            // platform's profiles were listed to every tenant, where a tenant could reach a shared
+            // row and recording its result would have let one tenant write what every tenant
+            // reads. Kept because it is the rule that makes the write safe if that listing is ever
+            // widened again -- not because anything currently depends on it.
             persist = this.callerOwns(stored);
             probe = this.copyForProbe(stored);
             if (persist && !isNull(dto.getBootstrapServers()) && !dto.getBootstrapServers().trim().isEmpty()) {
@@ -672,9 +677,22 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
             profile.setSaslPassword(null);
         }
         if (!"SSL".equals(securityProtocol) && !"SASL_SSL".equals(securityProtocol)) {
+            // The stores go with their passwords, for the same reason the SASL branch above drops
+            // the username alongside its password: half a credential is worse than none. Clearing
+            // only the passwords left the row pointing at a PKCS12 whose password had been thrown
+            // away, and the console read that surviving location as "keeping the truststore this
+            // profile was saved with" -- so a profile switched to PLAINTEXT and back looked intact
+            // on screen, saved without complaint, and failed at the handshake with no password to
+            // open the store it still named. getProfileDto takes the same view of a location as of
+            // a secret ("where the key material sits is as good as the key material"), so it is
+            // consistent that it does not outlive the protocol either.
             profile.setSslKeystorePasswordEnc(null);
             profile.setSslKeyPasswordEnc(null);
             profile.setSslTruststorePasswordEnc(null);
+            profile.setSslKeystoreBucket(null);
+            profile.setSslKeystoreLocation(null);
+            profile.setSslTruststoreBucket(null);
+            profile.setSslTruststoreLocation(null);
         }
     }
 

@@ -73,8 +73,12 @@ keytool -importcert -noprompt -alias ca -file "${OUT}/ca.crt" \
   -keystore "${OUT}/client.truststore.jks" -storetype JKS \
   -storepass "${PASS}" >/dev/null 2>&1
 
-# The broker reads its passwords from files rather than the environment, so they stay out of
-# `docker inspect` and the process list.
+# Written for the image's _CREDENTIALS convention, which this stack does not use: the compose file
+# passes the password as KAFKA_SSL_KEYSTORE_PASSWORD and friends (docker-compose.kafka-it.yml:81-87)
+# and says outright that it is therefore visible to `docker inspect`. Nothing reads these three
+# files. They are kept because the convention is what anyone adapting this compose file for a
+# broker that does read them will reach for -- but the comment that used to sit here, claiming the
+# broker read its passwords from files and kept them off the process list, was simply false.
 for f in keystore-creds key-creds truststore-creds; do echo "${PASS}" > "${OUT}/${f}"; done
 chmod 600 "${OUT}"/*creds "${OUT}"/*.key
 

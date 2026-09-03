@@ -35,10 +35,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * A Kafka profile the platform owns is listed to every tenant on purpose. What that must not carry
- * is the bucket and key of the client keystore, because the object browser will hand that file to
- * anyone who can name it -- and it must not be writable either, since a tenant testing a shared
- * profile would otherwise be recording a result the whole platform reads.
+ * What a tenant may reach of a Kafka profile it does not own, which is now nothing at all.
+ *
+ * The platform's profiles were once listed to every tenant on purpose, and the rules here were
+ * about limiting what came with them: not the bucket and key of the client keystore, because the
+ * object browser hands that file to anyone who can name it, and not a writable test result, since
+ * a tenant testing a shared profile would be recording an outcome the whole platform reads.
+ *
+ * findVisibleToTenant has since been narrowed to "tenantId = :tenantId", so a tenant no longer
+ * sees or reaches those rows in the first place and both of those questions are moot for it. The
+ * redaction and the write guard are kept as defence in depth and are still asserted below -- but
+ * as the platform admin's own case, which is the one that can actually reach a row it does not
+ * own. A test named for the old behaviour was removed rather than left to describe a rule the
+ * code no longer has.
  *
  * @author Nabeel Ahmed
  */
@@ -172,20 +181,6 @@ class KafkaConnectionProfileServiceImplTenantIsolationTest {
         assertThat(dto.getSslKeystorePassword()).isNull();
         assertThat(dto.getSslKeyPassword()).isNull();
         assertThat(dto.getSslTruststorePassword()).isNull();
-    }
-
-    @Test
-    void aTenantAdminMayTestThePlatformProfileButNotRecordTheResult() throws Exception {
-        when(this.profileRepository.findById(700L)).thenReturn(Optional.of(this.profileOwnedBy(null)));
-
-        KafkaConnectionProfileDto dto = new KafkaConnectionProfileDto();
-        dto.setKafkaConnectionProfileId(700L);
-
-        this.actAsTenant(TENANT_B);
-        ResponseDto response = this.service.testConnection(dto);
-
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
-        verify(this.profileRepository, never()).save(any());
     }
 
     /**

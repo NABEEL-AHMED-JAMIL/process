@@ -305,8 +305,11 @@ public class KafkaTemplateProvider {
         Path root = this.secretCacheRoot();
         try {
             if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
+                // Created and then judged like any other, rather than trusted for having just been
+                // made: createDirectories returns quietly on a directory that appeared between the
+                // two calls, and returning here would hand whoever won that race the parent of
+                // every profile's key material -- the one thing this method exists to prevent.
                 this.createPrivateDirectories(root);
-                return root;
             }
             if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IllegalStateException("The Kafka secret cache path must be a directory of its own, not a file or a link.");

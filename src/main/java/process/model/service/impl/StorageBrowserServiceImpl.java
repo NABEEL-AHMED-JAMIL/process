@@ -13,6 +13,7 @@ import process.model.dto.LookupDataDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
 import process.config.StorageClientFactory;
+import process.config.StoragePropertyDefaults;
 import process.model.enums.Status;
 import process.model.pojo.StorageConnection;
 import process.model.repository.StorageConnectionRepository;
@@ -64,7 +65,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         @Qualifier("minioObjectStorageService") ObjectStorageService minioObjectStorageService,
         @Qualifier("s3ObjectStorageService") ObjectStorageService s3ObjectStorageService,
         @Qualifier("azureBlobObjectStorageService") ObjectStorageService azureBlobObjectStorageService,
-        @Value("${app.avatar.bucket:etl-avatar}") String avatarBucket) {
+        @Value(StoragePropertyDefaults.AVATAR_BUCKET) String avatarBucket) {
         this.lookupDataCacheService = lookupDataCacheService;
         this.storageConnectionRepository = storageConnectionRepository;
         this.storageClientFactory = storageClientFactory;
@@ -520,6 +521,12 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
      * named its own bucket; see uploadForWorkflow.
      */
     private ObjectStorageService resolveService(String bucket, boolean trusted) {
+        if (bucket == null) {
+            // deleteObjects reads its bucket from a request body rather than a required query
+            // parameter, so an absent one arrives here as null and came back as a 500 from the
+            // alias comparison below instead of the refusal every other unusable bucket gets.
+            throw new IllegalArgumentException("Unknown bucket: " + bucket + ".");
+        }
         Optional<StorageConnection> connection = this.storageConnectionRepository.findByAliasAndStatus(bucket, Status.Active);
         if (connection.isPresent()) {
             StorageConnection storageConnection = connection.get();

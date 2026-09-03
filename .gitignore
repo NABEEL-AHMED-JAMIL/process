@@ -40,3 +40,8 @@ logs/
 *.jks
 *.p12
 
+
+# The .env rule above matches only a file named exactly ".env". A backup copy slipped past it
+# once already (.env.bak.<timestamp>) and was committed with real credentials.
+.env.bak.*
+.env.*.bak
