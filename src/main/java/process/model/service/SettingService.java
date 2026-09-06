@@ -3,14 +3,11 @@ package process.model.service;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
-import process.model.projection.ItemResponse;
 
 /**
  * @author Nabeel Ahmed
  * */
 public interface SettingService {
-
-    public ResponseDto dynamicQueryResponse(ItemResponse itemResponse);
 
     public ResponseDto appSetting() throws Exception;
 

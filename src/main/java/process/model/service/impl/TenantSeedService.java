@@ -25,14 +25,15 @@ public class TenantSeedService {
     private final Logger logger = LoggerFactory.getLogger(TenantSeedService.class);
 
     private static final String PLATFORM_ADMIN_USERNAME = "admin@platform.local";
-    private static final String DEFAULT_TENANT_CODE = "default";
+    // Public: TaskFormServiceImpl also targets this tenant, for a platform admin's new form --
+    // see the comment on that call site for why.
+    public static final String DEFAULT_TENANT_CODE = "default";
 
     private final TenantRepository tenantRepository;
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final SourceJobRepository sourceJobRepository;
     private final SourceTaskRepository sourceTaskRepository;
-    private final DynamicFormRepository dynamicFormRepository;
     private final AiAgentRepository aiAgentRepository;
     private final PdfHighlighterTaskRepository pdfHighlighterTaskRepository;
     private final LookupDataRepository lookupDataRepository;
@@ -43,7 +44,7 @@ public class TenantSeedService {
 
     public TenantSeedService(TenantRepository tenantRepository, AppUserRepository appUserRepository,
         PasswordEncoder passwordEncoder, SourceJobRepository sourceJobRepository,
-        SourceTaskRepository sourceTaskRepository, DynamicFormRepository dynamicFormRepository,
+        SourceTaskRepository sourceTaskRepository,
         AiAgentRepository aiAgentRepository, PdfHighlighterTaskRepository pdfHighlighterTaskRepository,
         LookupDataRepository lookupDataRepository, LookupDataCacheService lookupDataCacheService) {
         this.tenantRepository = tenantRepository;
@@ -51,7 +52,6 @@ public class TenantSeedService {
         this.passwordEncoder = passwordEncoder;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskRepository = sourceTaskRepository;
-        this.dynamicFormRepository = dynamicFormRepository;
         this.aiAgentRepository = aiAgentRepository;
         this.pdfHighlighterTaskRepository = pdfHighlighterTaskRepository;
         this.lookupDataRepository = lookupDataRepository;
@@ -129,15 +129,14 @@ public class TenantSeedService {
     private void backfillTenantIds(Long defaultTenantId) {
         int jobs = this.sourceJobRepository.backfillTenantId(defaultTenantId);
         int tasks = this.sourceTaskRepository.backfillTenantId(defaultTenantId);
-        int forms = this.dynamicFormRepository.backfillTenantId(defaultTenantId);
         int agents = this.aiAgentRepository.backfillTenantId(defaultTenantId);
         int pdfTasks = this.pdfHighlighterTaskRepository.backfillTenantId(defaultTenantId);
         int buckets = this.lookupDataRepository.backfillBucketTenantId(defaultTenantId);
-        int total = jobs + tasks + forms + agents + pdfTasks + buckets;
+        int total = jobs + tasks + agents + pdfTasks + buckets;
         if (total > 0) {
             this.logger.info("=========Backfilled tenantId to Default tenant ({}) on {} pre-existing row(s): "
-                + "sourceJob={}, sourceTask={}, dynamicForm={}, aiAgent={}, pdfHighlighterTask={}, bucketLookup={} ==========",
-                defaultTenantId, total, jobs, tasks, forms, agents, pdfTasks, buckets);
+                + "sourceJob={}, sourceTask={}, aiAgent={}, pdfHighlighterTask={}, bucketLookup={} ==========",
+                defaultTenantId, total, jobs, tasks, agents, pdfTasks, buckets);
         }
     }
 

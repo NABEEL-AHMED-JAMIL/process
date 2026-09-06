@@ -55,4 +55,22 @@ public class PromptFileLimitTest {
         assertEquals(expected, limitFor("anthropic"));
         assertEquals(expected, limitFor("  Anthropic  "));
     }
+
+    /**
+     * The actual defect: the AI_PROVIDER lookup row is spelt "AzureOpenAI" (no punctuation,
+     * matching how the seed data and the frontend catalogue both write it), which upper-cases to
+     * "AZUREOPENAI". The map key here used to be written "AZURE-OPENAI" -- a hyphen nothing ever
+     * produces -- so every Azure OpenAI agent silently got Ollama's 24k local-model limit instead
+     * of the 250k a hosted model actually supports, truncating far more of a large file than
+     * necessary. Both spellings are asserted equal here because both should reach the same
+     * answer regardless of which punctuation a lookup row happens to carry.
+     */
+    @Test
+    void azureOpenAiIsMatchedByItsRealLookupSpellingNotOnlyAHyphenatedOne() throws Exception {
+        int azure = limitFor("AzureOpenAI");
+        assertTrue(azure > 30000, "AzureOpenAI must clear the old 30,000 ceiling like every other hosted provider");
+        assertEquals(limitFor("OPENAI"), azure, "Azure OpenAI is configured to share OpenAI's own limit");
+        assertEquals(azure, limitFor("AZURE-OPENAI"), "punctuation must not change which provider this resolves to");
+        assertEquals(azure, limitFor("azure openai"), "spacing must not change which provider this resolves to");
+    }
 }

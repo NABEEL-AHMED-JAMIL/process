@@ -60,9 +60,16 @@ public final class DocumentConverterFormatRegistry {
             Arrays.asList("fodp", "odp", "otp", "ppt", "pptx", "potx", "sxi"),
             Arrays.asList("bmp", "fodp", "gif", "html", "jpg", "odp", "otp", "pdf", "png", "ppt", "pptx",
                 "potx", "svg", "swf", "sxi", "tif", "xhtml"));
+        // "jpeg"/"tiff" are the same formats as "jpg"/"tif" under a longer spelling of the same
+        // extension -- JODConverter's own default format registry already maps both spellings to
+        // the same JPEG/TIFF DocumentFormat, so listing them here just stops this project's OWN
+        // familyOfInput() check from rejecting them before ever reaching JODConverter. ContentTypeUtil
+        // already treats jpeg/tiff (and webp) as images (EXTENSION_CONTENT_TYPES); webp is
+        // deliberately left off this list -- WebP import support varies by LibreOffice version, and
+        // that needs verifying against the actual deployed LibreOffice before being wired in here.
         register("DRAWING", "Drawing / Image",
-            Arrays.asList("bmp", "fodg", "gif", "jpg", "odg", "otg", "pdf", "png", "svg", "tif", "vsd", "vsdx"),
-            Arrays.asList("bmp", "fodg", "gif", "jpg", "odg", "otg", "pdf", "png", "svg", "swf", "tif", "vsd", "vsdx"));
+            Arrays.asList("bmp", "fodg", "gif", "jpg", "jpeg", "odg", "otg", "pdf", "png", "svg", "tif", "tiff", "vsd", "vsdx"),
+            Arrays.asList("bmp", "fodg", "gif", "jpg", "jpeg", "odg", "otg", "pdf", "png", "svg", "swf", "tif", "tiff", "vsd", "vsdx"));
         register("OTHER", "Other (HTML)",
             Arrays.asList("html", "htm"),
             Arrays.asList("doc", "docx", "dotx", "odt", "ott", "fodt", "html", "xhtml", "rtf", "sxw", "txt",

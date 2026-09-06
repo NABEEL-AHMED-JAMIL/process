@@ -23,6 +23,8 @@ public class AiAgentRuntimeConfigDto {
     private String apiKey;
     private String model;
     private Boolean jsonMode;
+    private String instructions;
+    private String targetFileTypes;
 
     public AiAgentRuntimeConfigDto() {
     }
@@ -65,5 +67,21 @@ public class AiAgentRuntimeConfigDto {
 
     public void setJsonMode(Boolean jsonMode) {
         this.jsonMode = jsonMode;
+    }
+
+    public String getInstructions() {
+        return instructions;
+    }
+
+    public void setInstructions(String instructions) {
+        this.instructions = instructions;
+    }
+
+    public String getTargetFileTypes() {
+        return targetFileTypes;
+    }
+
+    public void setTargetFileTypes(String targetFileTypes) {
+        this.targetFileTypes = targetFileTypes;
     }
 }

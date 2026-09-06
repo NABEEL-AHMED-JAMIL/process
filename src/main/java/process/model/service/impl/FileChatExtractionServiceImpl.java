@@ -63,7 +63,11 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
     @Value("${ollama.base.url:http://host.docker.internal:11434}")
     private String ollamaBaseUrl;
 
-    @Value("${ollama.vision.model:llava}")
+    // Bare "llava" is a family name, not a pullable tag -- Ollama resolves it to nothing on its
+    // own. "llava:7b" is what this project actually has pulled (see docker-compose.yml's
+    // OLLAMA_VISION_MODEL, which sets the same default for the deployed container); this default
+    // only matters for a run outside that compose file.
+    @Value("${ollama.vision.model:llava:7b}")
     private String visionModel;
 
     private final StorageBrowserService storageBrowserService;

@@ -56,10 +56,11 @@ public class TenantFilterDeclarationTest {
 
     @Test
     void aRowWithNoTenantBelongsToThePlatformAndStaysVisible() {
-        // Shared task types, the platform's Kafka profile and the shared form definitions are
-        // all rows with a null tenant_id that every tenant is meant to use. A filter written as
-        // a plain equality would delete them from every tenant's screen.
-        for (Class<?> entity : new Class<?>[] { SourceTaskType.class, KafkaConnectionProfile.class, TaskForm.class }) {
+        // Shared task types and the platform's Kafka profile are rows with a null tenant_id that
+        // every tenant is meant to use (dispatch still falls back to the Kafka one -- see
+        // KafkaConnectionProfileRepository). A filter written as a plain equality would delete
+        // them from every tenant's screen.
+        for (Class<?> entity : new Class<?>[] { SourceTaskType.class, KafkaConnectionProfile.class }) {
             assertTrue(conditionOf(entity).contains("tenant_id is null"),
                 entity.getSimpleName() + " has shared rows, so the filter has to admit a null tenant");
         }
@@ -69,6 +70,19 @@ public class TenantFilterDeclarationTest {
     void aRouteBelongsToExactlyOneTenant() {
         // tenant_id is not nullable on this one and there is no shared row to admit.
         assertEquals("tenant_id = :tenantId", conditionOf(TenantTaskTypeKafkaRoute.class));
+    }
+
+    @Test
+    void aTaskFormBelongsToExactlyOneTenant() {
+        // Used to read like SourceTaskType/KafkaConnectionProfile above -- a null-tenant row was
+        // "shared with every tenant." Moved to strict per-tenant filtering (2026-09-05): a task
+        // form's XML-tag schema for a pipeline is workspace-specific the same way a storage or
+        // Kafka connection is, not a shared taxonomy the way SourceTaskType genuinely is, and
+        // nothing here has a dispatch-fallback use for a hidden platform default the way Kafka's
+        // KafkaConnectionResolver does. The declaration itself is currently inert either way --
+        // TaskFormServiceImpl never calls TenantFilterHelper.enableIfNeeded -- but it should still
+        // describe the rule the repository's own @Query methods actually enforce.
+        assertEquals("tenant_id = :tenantId", conditionOf(TaskForm.class));
     }
 
     @Test

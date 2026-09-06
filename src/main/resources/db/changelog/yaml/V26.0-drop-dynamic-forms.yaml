@@ -1,0 +1,69 @@
+databaseChangeLog:
+  - changeSet:
+      id: 26.0-drop-dynamic-forms
+      author: nabeel.amd93
+      description: "Drop dynamic_form, dynamic_form_field and dynamic_form_submission -- the feature was removed whole on 2026-09-03; all three were empty and unreferenced everywhere they were checked"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V26.0-drop-dynamic-forms/V26__drop_dynamic_forms.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            # Best-effort structural recreation from the live schema captured immediately before
+            # the drop -- columns, types, nullability, primary keys, the two unique constraints
+            # and every foreign key, including the one onto tenant(tenant_id). NOT guaranteed
+            # identical to the original: sequence increment/cache settings and the tenant-id
+            # index name are reproduced as observed but were never verified against Hibernate's
+            # own generator configuration, since the entity that configured them is gone. A
+            # rollback of a drop is a safety net, not a promise -- it exists so this changeset is
+            # reversible in principle, not so the exact prior state is guaranteed byte-for-byte.
+            sql: |
+              CREATE SEQUENCE IF NOT EXISTS dynamic_form_seq;
+              CREATE SEQUENCE IF NOT EXISTS dynamic_form_field_seq;
+              CREATE SEQUENCE IF NOT EXISTS dynamic_form_submission_seq;
+
+              CREATE TABLE IF NOT EXISTS dynamic_form (
+                dynamic_form_id BIGINT NOT NULL PRIMARY KEY,
+                date_created    TIMESTAMP,
+                description     VARCHAR(255),
+                form_name       VARCHAR(255) NOT NULL,
+                form_status     VARCHAR(255) NOT NULL,
+                uuid            VARCHAR(255),
+                tenant_id       BIGINT,
+                created_by      BIGINT,
+                updated_by      BIGINT,
+                CONSTRAINT uk_jjfey60fye2oyymo1okfwq1tu UNIQUE (uuid),
+                CONSTRAINT fk_dynamic_form_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(tenant_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_dynamic_form_tenant_id ON dynamic_form(tenant_id);
+
+              CREATE TABLE IF NOT EXISTS dynamic_form_field (
+                dynamic_form_field_id BIGINT NOT NULL PRIMARY KEY,
+                default_value         VARCHAR(255),
+                field_label            VARCHAR(255) NOT NULL,
+                field_name             VARCHAR(255) NOT NULL,
+                field_options          TEXT,
+                field_order            INTEGER NOT NULL,
+                field_type             VARCHAR(255) NOT NULL,
+                field_width            INTEGER,
+                mandatory              BOOLEAN,
+                max_length             INTEGER,
+                min_length             INTEGER,
+                pattern                VARCHAR(255),
+                place_holder           VARCHAR(255),
+                dynamic_form_id        BIGINT,
+                CONSTRAINT fk9ekk42hadrb3w2by8d7ehyrgt FOREIGN KEY (dynamic_form_id) REFERENCES dynamic_form(dynamic_form_id)
+              );
+
+              CREATE TABLE IF NOT EXISTS dynamic_form_submission (
+                dynamic_form_submission_id BIGINT NOT NULL PRIMARY KEY,
+                date_created                TIMESTAMP,
+                dynamic_form_id             BIGINT NOT NULL,
+                payload                     TEXT NOT NULL,
+                uuid                        VARCHAR(255),
+                CONSTRAINT uk_lkucrdojmu5hp0d6pdiswriiw UNIQUE (uuid),
+                CONSTRAINT fk_dynamic_form_submission_dynamic_form FOREIGN KEY (dynamic_form_id) REFERENCES dynamic_form(dynamic_form_id)
+              );

@@ -13,10 +13,14 @@ import process.model.dto.FileChatMessageRequestDto;
 import process.model.dto.ObjectMetadataDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
+import process.model.service.EmbeddingService;
 import process.model.service.FileChatExtractionService;
 import process.model.service.FileChatService;
 import process.model.service.StorageBrowserService;
+import process.security.TenantContext;
 import process.util.ContentTypeUtil;
+import process.util.OpenSearchRagClient;
+import process.util.TextChunker;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
@@ -25,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import static process.util.ProcessUtil.*;
 
 /**
@@ -54,41 +59,121 @@ public class FileChatServiceImpl implements FileChatService {
         Map<String, Integer> limits = new HashMap<>();
         limits.put("ANTHROPIC", 400000);
         limits.put("OPENAI", 250000);
-        limits.put("AZURE-OPENAI", 250000);
+        // Keyed on the AI_PROVIDER lookup value with punctuation stripped (see providerKey
+        // below), not the literal lookup spelling -- "AzureOpenAI" upper-cases to "AZUREOPENAI",
+        // which never matched a key spelt "AZURE-OPENAI" here, so every Azure OpenAI agent
+        // silently fell through to the 24k default meant for a local model with a small context
+        // window, needlessly truncating a provider that can actually take 250k.
+        limits.put("AZUREOPENAI", 250000);
         limits.put("OLLAMA", 24000);
         PROMPT_FILE_CHARS_BY_PROVIDER = Collections.unmodifiableMap(limits);
+    }
+
+    private static String providerKey(String provider) {
+        return provider == null ? "" : provider.trim().toUpperCase().replaceAll("[^A-Z0-9]", "");
     }
 
     /** Used when the provider is unknown, and deliberately the smallest of them. */
     private static final int DEFAULT_PROMPT_FILE_CHARS = 24000;
 
     /**
-     * The provider behind an agent, or null when there is not one to ask.
+     * The chosen agent's runtime config, or null when there is none to ask -- shared by
+     * {@code prepareContext}'s limit lookup and its target-file-type check, so readiness
+     * resolves the agent once per request, not twice.
      *
-     * Never throws: this only decides which limit to report, and a readiness check failing
-     * because an agent lookup did would stop the panel opening at all.
+     * Never throws: a readiness check failing because an agent lookup did would stop the panel
+     * opening at all.
      */
-    private String providerFor(Long aiAgentId) {
+    private AiAgentRuntimeConfigDto agentConfigFor(Long aiAgentId) {
         if (isNull(aiAgentId)) {
             return null;
         }
         try {
             ResponseDto config = this.aiAgentService.resolveRuntimeConfig(aiAgentId);
             if (config != null && SUCCESS.equals(config.getStatus()) && config.getData() != null) {
-                return ((AiAgentRuntimeConfigDto) config.getData()).getProvider();
+                return (AiAgentRuntimeConfigDto) config.getData();
             }
         } catch (Exception ex) {
-            logger.warn("Could not resolve provider for agent {}: {}", aiAgentId, ex.getMessage());
+            logger.warn("Could not resolve agent {}: {}", aiAgentId, ex.getMessage());
         }
         return null;
     }
 
-    private static int promptFileCharsFor(String provider) {
-        if (provider == null) {
-            return DEFAULT_PROMPT_FILE_CHARS;
+    /**
+     * Whether an agent configured for these target file types can be used to chat about this
+     * key -- the actual enforcement behind the "Target file types" field, which used to be
+     * collected, stored and displayed everywhere and consulted nowhere: nothing stopped an
+     * agent configured for "csv,json" being picked, and used without error, against a PDF.
+     *
+     * Blank/unset target types means unrestricted -- the field is required at agent-save time
+     * (see AiAgentServiceImpl.saveAiAgent), so blank is only reachable for an agent saved before
+     * that validation existed; treating it as "accepts anything" rather than "accepts nothing"
+     * is the direction that can't silently break an agent nobody touched.
+     */
+    private static boolean acceptsFileType(String targetFileTypes, String key) {
+        if (isNull(targetFileTypes) || targetFileTypes.trim().isEmpty()) {
+            return true;
         }
-        return PROMPT_FILE_CHARS_BY_PROVIDER.getOrDefault(
-            provider.trim().toUpperCase(), DEFAULT_PROMPT_FILE_CHARS);
+        String extension = ContentTypeUtil.isGzip(key)
+            ? ContentTypeUtil.innerExtensionOfGzip(key) : ContentTypeUtil.extensionOf(key);
+        if (extension.isEmpty()) {
+            return false;
+        }
+        for (String type : targetFileTypes.split(",")) {
+            if (type.trim().equalsIgnoreCase(extension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String fileTypeMismatchMessage(String targetFileTypes, String key) {
+        return String.format("This agent only handles %s files -- pick a different agent for %s.",
+            targetFileTypes, key);
+    }
+
+    private static int promptFileCharsFor(String provider) {
+        String key = providerKey(provider);
+        Integer limit = PROMPT_FILE_CHARS_BY_PROVIDER.get(key);
+        if (limit != null) {
+            return limit;
+        }
+        if (!key.isEmpty()) {
+            // key empty means no agent chosen yet -- routine, not worth a log. A non-empty key
+            // that still misses means a real provider (from the tenant-extendable AI_PROVIDER
+            // lookup, addable through Settings with no code deploy) has no budget entry here and
+            // is silently getting the smallest default -- this is the one place that surfaces it,
+            // since nothing at agent-save time or startup cross-checks the lookup against this map.
+            logger.warn("No configured prompt-file-char budget for provider '{}'; using the "
+                + "default of {} characters.", provider, DEFAULT_PROMPT_FILE_CHARS);
+        }
+        return DEFAULT_PROMPT_FILE_CHARS;
+    }
+
+    /**
+     * How many chunks of retrieved context to hand the model for one question.
+     *
+     * At ~1000 chars per chunk (TextChunker.DEFAULT_CHUNK_SIZE), 8 chunks is up to ~8000 chars
+     * of the most relevant material -- comfortably inside even Ollama's smallest budget above,
+     * so retrieval never has to be truncated a second time on top of being selected.
+     */
+    private static final int RAG_TOP_K = 8;
+
+    /**
+     * One monitor per bucket+key+etag ever indexed, so two concurrent requests for the SAME
+     * not-yet-indexed file (two tabs, a double-submit) serialize on the index step instead of
+     * racing: both would otherwise see "not indexed" from an unsynchronized check, both chunk
+     * and embed the file, and their {@code indexChunks} calls (each a delete-then-write) could
+     * interleave -- one request's delete removing the other's just-written docs. Entries are
+     * never evicted; the cost is one small Object per distinct file version this process has
+     * ever indexed, for the life of the process -- a deliberate trade against the complexity of
+     * reference-counted cleanup for something this infrequent (once per file version, not once
+     * per message).
+     */
+    private final ConcurrentHashMap<String, Object> indexLocks = new ConcurrentHashMap<>();
+
+    private Object indexLockFor(String bucket, String key, String etag) {
+        return this.indexLocks.computeIfAbsent(bucket + "|" + key + "|" + etag, ignored -> new Object());
     }
 
     private static final int MAX_EXPORT_CONTENT_CHARS = 200000;
@@ -107,13 +192,33 @@ public class FileChatServiceImpl implements FileChatService {
     private final StorageBrowserService storageBrowserService;
     private final FileChatExtractionService fileChatExtractionService;
     private final AiAgentService aiAgentService;
+    private final OpenSearchRagClient openSearchRagClient;
+    private final EmbeddingService embeddingService;
 
     public FileChatServiceImpl(StorageBrowserService storageBrowserService,
         FileChatExtractionService fileChatExtractionService,
-        AiAgentService aiAgentService) {
+        AiAgentService aiAgentService,
+        OpenSearchRagClient openSearchRagClient,
+        EmbeddingService embeddingService) {
         this.storageBrowserService = storageBrowserService;
         this.fileChatExtractionService = fileChatExtractionService;
         this.aiAgentService = aiAgentService;
+        this.openSearchRagClient = openSearchRagClient;
+        this.embeddingService = embeddingService;
+    }
+
+    /**
+     * Whether RAG can actually run right now, rather than degrading to whole-file truncation.
+     *
+     * Two independent things have to be true: OpenSearch is configured (opensearch.url set --
+     * see OpenSearchRagClient.isEnabled), and an embedding model is genuinely reachable, not
+     * merely configured (see EmbeddingServiceImpl.isAvailable, which makes a real call). Either
+     * one being false must degrade file chat, never break it -- a tenant asking about a file in
+     * an environment with no OpenSearch should still get an answer from the raw extracted text
+     * (truncated if it does not fit), the same experience this feature always had, not an error.
+     */
+    private boolean ragAvailable() {
+        return this.openSearchRagClient.isEnabled() && this.embeddingService.isAvailable();
     }
 
     /**
@@ -144,11 +249,42 @@ public class FileChatServiceImpl implements FileChatService {
         if (validationError != null) {
             return validationError;
         }
-        ObjectMetadataDto metadata = this.storageBrowserService.getObjectMetadata(bucket, key);
+        AiAgentRuntimeConfigDto agentConfig = this.agentConfigFor(aiAgentId);
+        // Checked before touching storage at all -- an agent that can't handle this file type
+        // never needed its text extracted in the first place, and the panel should say so
+        // immediately rather than only once the user has already typed a question.
+        if (agentConfig != null && !acceptsFileType(agentConfig.getTargetFileTypes(), key)) {
+            return new ResponseDto(ERROR, fileTypeMismatchMessage(agentConfig.getTargetFileTypes(), key));
+        }
+        // Cached, not a live storage round trip: the legacy UI now calls this once per message
+        // (refreshChatReadiness), same as sendMessage below it, which already reads the cached
+        // value -- an object's etag does not change between one message and the next in the
+        // same conversation, so there is nothing this needs that the cache would not already have.
+        ObjectMetadataDto metadata = this.storageBrowserService.getObjectMetadataCached(bucket, key);
         if (isNull(metadata) || isNull(metadata.getEtag())) {
             return new ResponseDto(ERROR, "Couldn't read this file's metadata.");
         }
-        String text = this.fileChatExtractionService.extractText(bucket, key, metadata.getEtag());
+        String etag = metadata.getEtag();
+
+        // Already indexed for this exact version? Retrieval will answer every question from
+        // OpenSearch regardless of file size, so this readiness check needs nothing from the raw
+        // file at all -- skip extraction entirely rather than re-running it (re-transcribing
+        // audio, re-converting a document to PDF) just to recompute a size the UI won't even
+        // show once usingRetrieval is true (see file-chat.html: the usingRetrieval branch never
+        // references charsUsed/totalChars). A cheap OpenSearch existence check, not the live
+        // embedding-model ping ragAvailable() also makes -- there is no question yet to embed
+        // here, so only OpenSearch itself needs to be reachable for this fast path to apply.
+        if (this.openSearchRagClient.isEnabled() && this.openSearchRagClient.isIndexed(bucket, key, etag)) {
+            Map<String, Object> readiness = new HashMap<>();
+            readiness.put("truncated", false);
+            readiness.put("usingRetrieval", true);
+            readiness.put("charsUsed", 0);
+            readiness.put("totalChars", 0);
+            readiness.put("limit", promptFileCharsFor(agentConfig == null ? null : agentConfig.getProvider()));
+            return new ResponseDto(SUCCESS, "Ready.", readiness);
+        }
+
+        String text = this.fileChatExtractionService.extractText(bucket, key, etag);
         if (isNull(text) || text.trim().isEmpty()) {
             return new ResponseDto(ERROR, this.unsupportedMessage(key));
         }
@@ -159,10 +295,18 @@ public class FileChatServiceImpl implements FileChatService {
         // Against the chosen agent's provider where one is known. Without an agent the smallest
         // limit is assumed, so the warning errs towards appearing when it might not be needed
         // rather than staying silent when it is.
-        int limit = promptFileCharsFor(providerFor(aiAgentId));
+        int limit = promptFileCharsFor(agentConfig == null ? null : agentConfig.getProvider());
+        boolean overLimit = text.length() > limit;
+        // RAG now runs for every file it can reach, not only ones over the limit -- so a file
+        // under the limit is not truncated either way, and one over it is not truncated whenever
+        // retrieval is available, not only when it happens to also be large. ragAvailable() is a
+        // live check (it calls the embedding model), so this reflects whether retrieval would
+        // genuinely run for THIS request, not whether it is configured in principle.
+        boolean willUseRetrieval = this.ragAvailable();
         Map<String, Object> readiness = new HashMap<>();
-        readiness.put("truncated", text.length() > limit);
-        readiness.put("charsUsed", Math.min(text.length(), limit));
+        readiness.put("truncated", overLimit && !willUseRetrieval);
+        readiness.put("usingRetrieval", willUseRetrieval);
+        readiness.put("charsUsed", willUseRetrieval ? text.length() : Math.min(text.length(), limit));
         readiness.put("totalChars", text.length());
         readiness.put("limit", limit);
         return new ResponseDto(SUCCESS, "Ready.", readiness);
@@ -196,6 +340,14 @@ public class FileChatServiceImpl implements FileChatService {
             return agentConfigResponse;
         }
         AiAgentRuntimeConfigDto config = (AiAgentRuntimeConfigDto) agentConfigResponse.getData();
+        // Enforced here too, not just in prepareContext: prepareContext's block is a UI
+        // convenience that runs when the panel opens or the agent selection changes, but
+        // sendMessage is the actual API contract -- nothing stops a client calling it directly,
+        // and an agent set up for spreadsheets must not be allowed to answer for a PDF just
+        // because some caller skipped the readiness check.
+        if (!acceptsFileType(config.getTargetFileTypes(), dto.getKey())) {
+            return new ResponseDto(ERROR, fileTypeMismatchMessage(config.getTargetFileTypes(), dto.getKey()));
+        }
         String provider = config.getProvider();
         String model = config.getModel();
         String apiKey = config.getApiKey();
@@ -205,12 +357,23 @@ public class FileChatServiceImpl implements FileChatService {
         if (isNull(metadata) || isNull(metadata.getEtag())) {
             return new ResponseDto(ERROR, "Couldn't read this file's metadata.");
         }
-        String fileText = this.fileChatExtractionService.extractText(dto.getBucket(), dto.getKey(), metadata.getEtag());
-        if (isNull(fileText) || fileText.trim().isEmpty()) {
-            return new ResponseDto(ERROR, this.unsupportedMessage(dto.getKey()));
+        String etag = metadata.getEtag();
+        // Deferred, not extracted here: when this exact bucket/key/etag is already indexed,
+        // resolveContext never reads the raw file at all (see its javadoc) -- extracting first,
+        // unconditionally, meant re-transcribing audio (tens of seconds) or re-converting a
+        // document to PDF on every single question about an already-indexed file, for a value
+        // nothing downstream would use. Memoized so a genuinely unindexed file's extraction
+        // still runs at most once even though resolveContext's fallback path can reference it
+        // after its own inner try/catch already saw (and needed) it once.
+        FileContext context;
+        try {
+            context = this.resolveContext(dto.getBucket(), dto.getKey(), etag,
+                this.memoizedExtraction(dto.getBucket(), dto.getKey(), etag), provider, dto.getMessage());
+        } catch (UnsupportedFileTypeException ex) {
+            return new ResponseDto(ERROR, ex.getMessage());
         }
-
-        String instructions = this.buildInstructions(dto.getBucket(), dto.getKey(), fileText, dto.getHistory(), provider);
+        String instructions = this.buildInstructions(dto.getBucket(), dto.getKey(), context,
+            dto.getHistory(), config.getInstructions());
 
         AdHocPromptRequestDto adHocPromptRequestDto = new AdHocPromptRequestDto();
         adHocPromptRequestDto.setProvider(provider);
@@ -261,14 +424,241 @@ public class FileChatServiceImpl implements FileChatService {
         }
     }
 
-    private String buildInstructions(String bucket, String key, String fileText,
-        List<FileChatHistoryItemDto> history, String provider) {
+    /**
+     * What actually goes in the prompt as "the file": the whole extracted text when it already
+     * fits the provider's budget, the top-K retrieved chunks when RAG ran, or a plain truncation
+     * of the whole text when the file is too large and RAG could not run.
+     */
+    private static final class FileContext {
+        final String content;
+        final boolean retrieved;
+        final boolean truncated;
+        /** Only meaningful when retrieved: whether some of the file's chunks were left out. */
+        final boolean partial;
+
+        FileContext(String content, boolean retrieved, boolean truncated, boolean partial) {
+            this.content = content;
+            this.retrieved = retrieved;
+            this.truncated = truncated;
+            this.partial = partial;
+        }
+    }
+
+    /**
+     * Decides how much of the file the model actually sees, and does whatever that decision
+     * requires -- an index-if-missing-then-retrieve round trip through OpenSearch whenever RAG
+     * can run, for any file size; a plain truncation as the last resort when it cannot, exactly
+     * as this method behaved for every file before RAG existed.
+     *
+     * RAG-first rather than large-file-only: the point of indexing a file at all is so a repeat
+     * question -- about this file, in this session or the next one -- is answered from the
+     * already-embedded chunks in OpenSearch instead of re-reading the raw extracted text, and
+     * that reuse only exists for files that were indexed in the first place. A short file still
+     * indexes cheaply (TextChunker hands back a single chunk when the whole file is smaller than
+     * one), and {@code searchRelevantChunks} reports whether the retrieval it ran was complete --
+     * see {@link #buildInstructions} for what that changes about the prompt.
+     *
+     * One retrieval query does double duty as the "is this indexed" check: a file's chunks are
+     * ranked by relevance regardless of how relevant they are, so an indexed file with ANY
+     * chunks always comes back non-empty -- an empty result reliably means "nothing indexed for
+     * this exact bucket/key/etag yet", the same fact a separate isIndexed() count query would
+     * have reported, one OpenSearch round trip earlier for every single message.
+     */
+    private FileContext resolveContext(String bucket, String key, String etag, TextSupplier fileTextSupplier,
+        String provider, String question) throws Exception {
         int limit = promptFileCharsFor(provider);
-        boolean truncated = fileText.length() > limit;
-        String promptFileText = truncated ? fileText.substring(0, limit) : fileText;
+        if (this.ragAvailable()) {
+            try {
+                float[] queryEmbedding = this.embeddingService.embed(question);
+                OpenSearchRagClient.RetrievalResult result = this.openSearchRagClient.searchRelevantChunks(
+                    bucket, key, etag, queryEmbedding, RAG_TOP_K);
+                if (result.chunks.isEmpty()) {
+                    // Nothing indexed for this exact file version yet. Serialized per
+                    // bucket+key+etag -- see indexLockFor -- and re-checked once inside the lock,
+                    // so a request that lost the race for the lock finds the winner's work already
+                    // done instead of chunking/embedding/indexing the same file a second time. This
+                    // is the ONLY branch that reads the raw file at all when RAG is healthy -- an
+                    // already-indexed file (the common repeat-question case) never calls
+                    // fileTextSupplier, which is the whole point of deferring it to a supplier
+                    // instead of extracting unconditionally before this method is even called.
+                    synchronized (this.indexLockFor(bucket, key, etag)) {
+                        result = this.openSearchRagClient.searchRelevantChunks(
+                            bucket, key, etag, queryEmbedding, RAG_TOP_K);
+                        if (result.chunks.isEmpty()) {
+                            List<String> chunks = TextChunker.chunk(fileTextSupplier.get());
+                            if (!chunks.isEmpty()) {
+                                List<float[]> embeddings = this.embeddingService.embedAll(chunks);
+                                this.openSearchRagClient.indexChunks(TenantContext.getTenantId(), bucket, key,
+                                    etag, chunks, embeddings, this.embeddingService.model());
+                                logger.info("File Chat: indexed {} chunks for {}/{} (etag {}).",
+                                    chunks.size(), bucket, key, etag);
+                                result = this.openSearchRagClient.searchRelevantChunks(
+                                    bucket, key, etag, queryEmbedding, RAG_TOP_K);
+                            }
+                        }
+                    }
+                } else {
+                    logger.info("File Chat: {}/{} (etag {}) already indexed; reusing it.", bucket, key, etag);
+                }
+                if (!result.chunks.isEmpty()) {
+                    return new FileContext(String.join("\n\n---\n\n", result.chunks), true, false, !result.complete);
+                }
+                logger.warn("File Chat: RAG retrieval returned nothing for {}/{}; falling back to direct content.",
+                    bucket, key);
+            } catch (UnsupportedFileTypeException ex) {
+                // Not a RAG failure to degrade past -- the file itself has no readable content,
+                // which the fallback below cannot fix either since it hits the same supplier.
+                // Let the caller report it as what it actually is.
+                throw ex;
+            } catch (Exception ex) {
+                // A RAG failure must degrade the answer, not the feature -- a tenant asking a
+                // question about a file should not see an error because an embedding call timed
+                // out once.
+                logger.warn("File Chat: RAG pipeline failed for {}/{}, falling back to direct content: {}",
+                    bucket, key, ex.getMessage());
+            }
+        }
+        String fileText = fileTextSupplier.get();
+        if (fileText.length() <= limit) {
+            return new FileContext(fileText, false, false, false);
+        }
+        return new FileContext(fileText.substring(0, limit), false, true, false);
+    }
+
+    /** Thrown by a {@link TextSupplier} when the file has no readable content -- distinct from
+        any other Exception so resolveContext's RAG-failure catch doesn't mistake "this file type
+        genuinely isn't supported" for a transient infrastructure problem worth degrading past. */
+    private static final class UnsupportedFileTypeException extends Exception {
+        UnsupportedFileTypeException(String message) {
+            super(message);
+        }
+    }
+
+    @FunctionalInterface
+    private interface TextSupplier {
+        String get() throws Exception;
+    }
+
+    /**
+     * A file's extracted text, fetched at most once no matter how many times resolveContext's
+     * branches end up asking for it (the not-yet-indexed branch and the final fallback can both
+     * reference the same supplier in one call). Extracting is the expensive, sometimes
+     * genuinely slow step -- audio transcription runs tens of seconds per file -- so a caller
+     * that never needs the raw text at all (the common already-indexed case) must never pay for
+     * it, and one that does need it must never pay for it twice.
+     */
+    private TextSupplier memoizedExtraction(String bucket, String key, String etag) {
+        String[] text = new String[1];
+        Exception[] failure = new Exception[1];
+        return () -> {
+            if (failure[0] != null) {
+                throw failure[0];
+            }
+            if (text[0] == null) {
+                try {
+                    String extracted = this.fileChatExtractionService.extractText(bucket, key, etag);
+                    if (isNull(extracted) || extracted.trim().isEmpty()) {
+                        throw new UnsupportedFileTypeException(this.unsupportedMessage(key));
+                    }
+                    text[0] = extracted;
+                } catch (UnsupportedFileTypeException ex) {
+                    failure[0] = ex;
+                    throw ex;
+                } catch (Exception ex) {
+                    // extractText itself failing (a vision-model call erroring, a transcription
+                    // failure, a storage read fault) is not a "RAG infrastructure hiccup" resolveContext
+                    // can degrade past -- the raw-content fallback IS this same supplier, so there is
+                    // nothing left to fall back to. Without this, the original exception (whatever type
+                    // extractText happened to throw) gets cached and rethrown as-is on every subsequent
+                    // call, including the direct-content fallback call sitting outside resolveContext's
+                    // own try/catch -- escaping sendMessage entirely as an unhandled exception instead of
+                    // the graceful "couldn't get content" answer every other extraction failure gets.
+                    // Wrapping it here guarantees every failure this supplier can produce is a type
+                    // sendMessage already knows how to turn into a plain ResponseDto(ERROR, ...).
+                    logger.warn("File Chat: extraction failed for {}/{}: {}", bucket, key, ex.getMessage());
+                    UnsupportedFileTypeException wrapped = new UnsupportedFileTypeException(
+                        this.unsupportedMessage(key));
+                    failure[0] = wrapped;
+                    throw wrapped;
+                }
+            }
+            return text[0];
+        };
+    }
+
+    /**
+     * The agent's own configured behaviour, prepended ahead of whatever category-specific prompt
+     * follows -- persona, tone, domain focus, whatever the agent was set up for. Shared by every
+     * prompt builder below rather than copy-pasted into each: a future change to how agent
+     * instructions are framed (wording, a length cap) needs to land in one place, not be applied
+     * to the document prompt and separately remembered for every other content category.
+     */
+    private void appendAgentPreamble(StringBuilder instructions, String agentInstructions) {
+        if (!isNull(agentInstructions) && !agentInstructions.trim().isEmpty()) {
+            instructions.append("Instructions for this agent, set by whoever configured it:\n")
+                .append(agentInstructions.trim())
+                .append("\n\n");
+        }
+    }
+
+    /**
+     * The last few turns of conversation, rendered the same way for every content category --
+     * shared for the same reason as {@link #appendAgentPreamble}: one place to change the
+     * truncation window or role labelling, not one per prompt builder.
+     */
+    private void appendHistory(StringBuilder instructions, List<FileChatHistoryItemDto> history) {
+        if (history != null && !history.isEmpty()) {
+            int startIndex = Math.max(0, history.size() - MAX_HISTORY_MESSAGES);
+            instructions.append("\nRecent conversation so far:\n");
+            for (int i = startIndex; i < history.size(); i++) {
+                FileChatHistoryItemDto turn = history.get(i);
+                if (turn == null || isNull(turn.getText())) {
+                    continue;
+                }
+                String role = "assistant".equalsIgnoreCase(turn.getRole()) ? "Assistant" : "User";
+                instructions.append(role).append(": ").append(turn.getText()).append("\n");
+            }
+        }
+    }
+
+    private String buildInstructions(String bucket, String key, FileContext context,
+        List<FileChatHistoryItemDto> history, String agentInstructions) {
+        // An image's or audio file's "content" is a vision/transcription model's description, not
+        // extracted document text -- the export/download instructions below (CSV, PDF, Word...)
+        // don't apply to either, and handing the model the bucket/path as an unconditional fact --
+        // reasonable for a document someone might want to relocate -- turned into a vision model
+        // volunteering the raw storage path and an offer to "download in a specific format"
+        // unprompted, in a plain image description. A local model is exactly the kind that doesn't
+        // reliably honour a soft "only mention this if asked" instruction, so the fix is to never
+        // hand it the temptation: a materially shorter, purpose-built prompt per content category
+        // that never mentions storage at all. This is a per-category dispatch, not a single
+        // isImage boolean, precisely so the next content kind needing its own prompt (audio was
+        // one, before this fix) is a new case here rather than another special case bolted on.
+        switch (ContentTypeUtil.categoryOf(key)) {
+            case IMAGE:
+                return this.buildImageInstructions(context, history, agentInstructions);
+            case AUDIO:
+                return this.buildAudioInstructions(context, history, agentInstructions);
+            default:
+                // DOCUMENT falls through to the prompt below.
+        }
+        String promptFileText = context.content;
+        boolean truncated = context.truncated;
+        // A complete retrieval (every chunk the file has came back -- the common case for a
+        // short file, which chunks into one or two pieces well inside RAG_TOP_K) is, in effect,
+        // the whole file; framing it as "excerpts" with a "there may be more" caveat would be
+        // wrong, not just imprecise -- there isn't more.
+        boolean excerpted = context.retrieved && context.partial;
         String sourceRef = bucket + "/" + key;
 
         StringBuilder instructions = new StringBuilder();
+        // The agent's own configured behaviour comes first, ahead of the file-chat mechanics
+        // below -- persona, tone, domain focus, whatever the agent was set up for. It does
+        // not replace what follows: the grounding, refusal and export-format rules are what
+        // make file chat and its "give me this as a PDF" flow work at all, and no agent's
+        // own instructions were ever written with that contract in mind, so they are additive
+        // rather than a substitute for it.
+        this.appendAgentPreamble(instructions, agentInstructions);
         instructions.append("You are a helpful assistant that only answers questions about one attached file. ")
             .append("Filename: ").append(key).append(". Source location: ").append(sourceRef).append(".\n\n")
             .append("Ground every answer strictly in the file content below. If the question is answerable from ")
@@ -335,25 +725,19 @@ public class FileChatServiceImpl implements FileChatService {
             .append("user asked for one of these three formats specifically. Never add a TARGET_FORMAT line after ")
             .append("a ```html or ```md fence -- those download directly as-is.\n\n")
             .append("The fence must contain ONLY the real file content the user is exporting -- never copy the ")
-            .append("\"--- FILE CONTENT ---\" / \"--- END FILE CONTENT ---\" markers below, the truncation note, ")
-            .append("or any of these instructions into your answer or into the fence.\n\n")
-            .append("--- FILE CONTENT ---\n")
+            .append("section markers below (\"FILE CONTENT\" or \"RELEVANT EXCERPTS\", however this message ")
+            .append("labels it), the truncation or excerpt note, or any of these instructions into your answer ")
+            .append("or into the fence.\n\n")
+            .append(excerpted ? "--- RELEVANT EXCERPTS FROM THE FILE ---\n" : "--- FILE CONTENT ---\n")
             .append(promptFileText)
             .append(truncated ? "\n[content truncated -- the file continues beyond what's shown here]" : "")
-            .append("\n--- END FILE CONTENT ---\n");
+            .append(excerpted
+                ? "\n[these are the sections of a larger file judged most relevant to your question -- "
+                    + "there may be other content in the file not shown here]"
+                : "")
+            .append(excerpted ? "\n--- END EXCERPTS ---\n" : "\n--- END FILE CONTENT ---\n");
 
-        if (history != null && !history.isEmpty()) {
-            int startIndex = Math.max(0, history.size() - MAX_HISTORY_MESSAGES);
-            instructions.append("\nRecent conversation so far:\n");
-            for (int i = startIndex; i < history.size(); i++) {
-                FileChatHistoryItemDto turn = history.get(i);
-                if (turn == null || isNull(turn.getText())) {
-                    continue;
-                }
-                String role = "assistant".equalsIgnoreCase(turn.getRole()) ? "Assistant" : "User";
-                instructions.append(role).append(": ").append(turn.getText()).append("\n");
-            }
-        }
+        this.appendHistory(instructions, history);
 
         // Restated right before the model answers, not just once near the top -- with up to
         // ~30k chars of file content and conversation history sandwiched in between, a smaller
@@ -371,6 +755,92 @@ public class FileChatServiceImpl implements FileChatService {
             .append("answer with ").append(sourceRef).append("; (6) never state or guess a path/location/content ")
             .append("for any OTHER file the user names -- you weren't given that information, so decline exactly ")
             .append("like any other out-of-scope question.\n");
+        return instructions.toString();
+    }
+
+    /**
+     * The image counterpart to {@link #buildInstructions}: deliberately shorter, and missing
+     * things the document prompt always includes -- the bucket/path and even the filename itself
+     * as facts the model holds (there is nothing here for a "where is this file" or "what's it
+     * called" question to answer with, by design, not by a rule asking the model not to mention
+     * them), and the CSV/JSON/Excel/Word/PDF export machinery, which has no meaning for a vision
+     * model's description of an image. The filename is withheld deliberately, not just the
+     * bucket: this platform's own storage keys are frequently system-generated (a content hash
+     * plus a suffix, e.g. "52c80c4664...94_big_gallery.png"), which is exactly the kind of
+     * internal-looking detail this fix exists to keep out of a customer-facing answer -- handing
+     * it to the model as "Filename: X" and then separately instructing "don't mention the
+     * filename" is the same contradiction as the bucket/path used to be.
+     */
+    private String buildImageInstructions(FileContext context,
+        List<FileChatHistoryItemDto> history, String agentInstructions) {
+        StringBuilder instructions = new StringBuilder();
+        this.appendAgentPreamble(instructions, agentInstructions);
+        instructions.append("You are a helpful assistant that only answers questions about one attached image.\n\n")
+            .append("Ground every answer strictly in the image description below. If the question is answerable ")
+            .append("from it, always answer it -- don't refuse or hedge on something the description actually ")
+            .append("covers. Only decline when the user asks something unrelated to this image -- general ")
+            .append("knowledge, another topic, small talk, or anything the description doesn't cover. In that ")
+            .append("case do NOT answer it from your own knowledge -- politely decline in a friendly, brief way: ")
+            .append("apologize, explain you can only help with questions about this specific image, and invite ")
+            .append("them to ask something about its content instead.\n\n")
+            .append("This chat cannot produce downloadable files (CSV, PDF, Word, Excel, or any other format) for ")
+            .append("an image -- if asked for one, say plainly that isn't available here and offer to describe or ")
+            .append("answer in the chat instead. Never bring this up yourself; only address it if asked.\n\n")
+            .append("Never mention, volunteer, or hint at where this file is stored -- no bucket name, path, ")
+            .append("internal filename, hash, or URL -- even if one appears to be part of the image or its name. ")
+            .append("You were not given that information for the purpose of repeating it, and nothing about ")
+            .append("storage is relevant to describing what is in the image.\n\n")
+            .append("--- IMAGE DESCRIPTION ---\n")
+            .append(context.content)
+            .append("\n--- END IMAGE DESCRIPTION ---\n");
+
+        this.appendHistory(instructions, history);
+
+        instructions.append("\nQuick reminder before you answer: (1) if the image description answers the ")
+            .append("question, answer it -- don't refuse something it actually covers; (2) never mention where ")
+            .append("this file is stored, and never offer to export or download it in any format -- those aren't ")
+            .append("things this chat can do for an image.\n");
+        return instructions.toString();
+    }
+
+    /**
+     * The audio counterpart to {@link #buildImageInstructions} -- same reasoning, same shape: a
+     * transcript is a model-generated rendering of the file's audio, not literal document text,
+     * so it gets the same treatment as an image description rather than falling through to the
+     * document prompt's bucket/path fact and CSV/Excel/PDF export machinery, neither of which
+     * makes sense for a recording.
+     */
+    private String buildAudioInstructions(FileContext context,
+        List<FileChatHistoryItemDto> history, String agentInstructions) {
+        StringBuilder instructions = new StringBuilder();
+        this.appendAgentPreamble(instructions, agentInstructions);
+        instructions.append("You are a helpful assistant that only answers questions about one attached audio ")
+            .append("recording.\n\n")
+            .append("Ground every answer strictly in the transcript below. If the question is answerable from it, ")
+            .append("always answer it -- don't refuse or hedge on something the transcript actually covers. Only ")
+            .append("decline when the user asks something unrelated to this recording -- general knowledge, ")
+            .append("another topic, small talk, or anything the transcript doesn't cover. In that case do NOT ")
+            .append("answer it from your own knowledge -- politely decline in a friendly, brief way: apologize, ")
+            .append("explain you can only help with questions about this specific recording, and invite them to ")
+            .append("ask something about its content instead.\n\n")
+            .append("This chat cannot produce downloadable files (CSV, PDF, Word, Excel, or any other format) for ")
+            .append("an audio recording -- if asked for one, say plainly that isn't available here and offer to ")
+            .append("describe or answer in the chat instead. Never bring this up yourself; only address it if ")
+            .append("asked.\n\n")
+            .append("Never mention, volunteer, or hint at where this file is stored -- no bucket name, path, ")
+            .append("internal filename, hash, or URL -- even if one appears to be spoken in the recording or part ")
+            .append("of its name. You were not given that information for the purpose of repeating it, and ")
+            .append("nothing about storage is relevant to answering about the recording's content.\n\n")
+            .append("--- AUDIO TRANSCRIPT ---\n")
+            .append(context.content)
+            .append("\n--- END AUDIO TRANSCRIPT ---\n");
+
+        this.appendHistory(instructions, history);
+
+        instructions.append("\nQuick reminder before you answer: (1) if the transcript answers the question, ")
+            .append("answer it -- don't refuse something it actually covers; (2) never mention where this file is ")
+            .append("stored, and never offer to export or download it in any format -- those aren't things this ")
+            .append("chat can do for a recording.\n");
         return instructions.toString();
     }
 

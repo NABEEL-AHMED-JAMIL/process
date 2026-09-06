@@ -41,7 +41,6 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // with a 401 and silently lost. The batch endpoint is listed in its own right.
                 .antMatchers("/changeState/**", "/addLogs/**", "/addLogsBatch/**").permitAll()
 
-                .antMatchers("/dynamicForm.json/fetchFormByUuid", "/dynamicForm.json/fetchSubmissionByUuid").permitAll()
                 // Whoever is asking for a workspace has no account yet, which is the point of
                 // the request. Only submit is open; reading and deciding need a platform admin.
                 .antMatchers(HttpMethod.POST, "/tenantRequest.json/submit").permitAll()

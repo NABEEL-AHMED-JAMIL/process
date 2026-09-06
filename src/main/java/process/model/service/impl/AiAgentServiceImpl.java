@@ -242,6 +242,12 @@ public class AiAgentServiceImpl implements AiAgentService {
         config.setModel(aiAgent.getModel());
         config.setApiEndpoint(aiAgent.getApiEndpoint());
         config.setJsonMode(aiAgent.getJsonMode());
+        // The whole point of a per-agent row: instructions live in this table so an admin can
+        // change how an agent behaves without a deploy. This DTO used to stop at provider/model/
+        // key/endpoint, so nothing that called resolveRuntimeConfig could ever see them --
+        // FileChatServiceImpl built its own hardcoded prompt regardless of which agent was picked.
+        config.setInstructions(aiAgent.getInstructions());
+        config.setTargetFileTypes(aiAgent.getTargetFileTypes());
         if (!isNull(aiAgent.getApiKey())) {
             config.setApiKey(this.encryptionUtil.decrypt(aiAgent.getApiKey()));
         }
@@ -402,6 +408,8 @@ public class AiAgentServiceImpl implements AiAgentService {
             return this.callAnthropic(apiKey, model, instructions, userMessage);
         } else if ("Ollama".equals(provider)) {
             return this.callOllama(apiEndpoint, model, instructions, jsonMode, userMessage);
+        } else if ("AzureOpenAI".equals(provider)) {
+            return this.callAzureOpenAi(apiKey, apiEndpoint, model, instructions, userMessage);
         }
         return this.callGenericOpenAiCompatible(provider, apiKey, apiEndpoint, model, instructions, userMessage);
     }
@@ -444,6 +452,46 @@ public class AiAgentServiceImpl implements AiAgentService {
         Request request = new Request.Builder()
             .url("https://api.openai.com/v1/chat/completions")
             .header("Authorization", "Bearer " + apiKey)
+            .post(RequestBody.create(this.gson.toJson(body), JSON))
+            .build();
+        JsonObject response = this.execute(request);
+        return response.getAsJsonArray("choices").get(0).getAsJsonObject()
+            .getAsJsonObject("message").get("content").getAsString();
+    }
+
+    /**
+     * Azure OpenAI is not the generic OpenAI-compatible path with a different hostname -- it
+     * genuinely rejects the request `callGenericOpenAiCompatible` would send. Azure's Chat
+     * Completions API authenticates a plain resource key through an `api-key` header;
+     * `Authorization: Bearer` is only accepted there for Azure AD OAuth tokens, which is a
+     * separate setup almost nobody has for a simple integration. Sent through the generic path,
+     * an Azure OpenAI agent configured the ordinary way (a resource key, not an AD token) failed
+     * authentication on every single request -- silently, since the generic path's only
+     * validation is that an endpoint was supplied at all.
+     *
+     * The body shape is otherwise identical to plain OpenAI's, since Azure's Chat Completions
+     * API is the same `messages` array format. There is no sensible default endpoint the way
+     * api.openai.com is for OpenAI -- an Azure deployment URL is tenant- and deployment-specific
+     * (`https://{resource}.openai.azure.com/openai/deployments/{deployment}/chat/completions
+     * ?api-version=...`) -- so apiEndpoint stays required here exactly as it already is for
+     * every other non-native provider.
+     */
+    private String callAzureOpenAi(String apiKey, String apiEndpoint, String model,
+        String instructions, String userMessage) throws Exception {
+        if (isNull(apiEndpoint) || apiEndpoint.trim().isEmpty()) {
+            throw new IllegalStateException(
+                "Azure OpenAI needs the full deployment URL as its API endpoint "
+                    + "(https://<resource>.openai.azure.com/openai/deployments/<deployment>/chat/completions?api-version=...).");
+        }
+        JsonArray messages = new JsonArray();
+        messages.add(this.chatMessage("system", instructions));
+        messages.add(this.chatMessage("user", userMessage));
+        JsonObject body = new JsonObject();
+        body.addProperty("model", model);
+        body.add("messages", messages);
+        Request request = new Request.Builder()
+            .url(apiEndpoint.trim())
+            .header("api-key", apiKey)
             .post(RequestBody.create(this.gson.toJson(body), JSON))
             .build();
         JsonObject response = this.execute(request);

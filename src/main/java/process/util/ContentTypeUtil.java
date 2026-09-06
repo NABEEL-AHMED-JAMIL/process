@@ -75,6 +75,44 @@ public final class ContentTypeUtil {
         "json", "csv", "txt", "xml", "md", "pdf", "mp3", "m4a", "mp4",
         "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "doc", "docx"));
 
+    /**
+     * The broad kind of content a key names, for anything that needs a materially different
+     * chat prompt per kind rather than one prompt trying to fit all of them -- an image
+     * description and an audio transcript are both model-generated summaries of the file, not
+     * its literal text, and neither should be handed the document prompt's unconditional
+     * bucket/path fact or its CSV/Excel/PDF export instructions (see FileChatServiceImpl's
+     * per-category prompt builders). A boolean "isImage" check alone left audio falling through
+     * to the document prompt with the exact same problem the image-specific prompt fixed --
+     * this enum is the generalization: the next content kind that needs its own prompt is a new
+     * case here, not a second special-cased boolean next to the first.
+     */
+    public enum ContentCategory { IMAGE, AUDIO, DOCUMENT }
+
+    /**
+     * Gzip-aware: acceptsFileType (FileChatServiceImpl) already unwraps a ".gz" wrapper before
+     * checking file type, since a wrapped file is classified by what it becomes once unwrapped,
+     * not by the wrapper extension itself -- this reuses the same unwrap so an image or audio
+     * file that happened to be gzipped is not silently misclassified as a plain document.
+     */
+    public static ContentCategory categoryOf(String key) {
+        String extension = isGzip(key) ? innerExtensionOfGzip(key) : extensionOf(key);
+        String contentType = EXTENSION_CONTENT_TYPES.get(extension);
+        if (contentType != null && contentType.startsWith("image/")) {
+            return ContentCategory.IMAGE;
+        }
+        if (contentType != null && contentType.startsWith("audio/")) {
+            return ContentCategory.AUDIO;
+        }
+        return ContentCategory.DOCUMENT;
+    }
+
+    /** Whether this key names an image file, by its registered content type -- reuses the same
+        extension-to-MIME map contentTypeFor() does rather than a second hardcoded extension set
+        that could quietly drift out of sync with it. */
+    public static boolean isImage(String key) {
+        return categoryOf(key) == ContentCategory.IMAGE;
+    }
+
     public static String extensionOf(String key) {
         if (key == null) {
             return "";

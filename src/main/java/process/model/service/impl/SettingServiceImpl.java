@@ -16,7 +16,6 @@ import process.model.enums.Status;
 import process.model.pojo.KafkaConnectionProfile;
 import process.model.pojo.LookupData;
 import process.model.pojo.SourceTaskType;
-import process.model.projection.ItemResponse;
 import process.model.projection.SourceTaskTypeProjection;
 import process.model.pojo.TenantTaskTypeKafkaRoute;
 import process.model.repository.KafkaConnectionProfileRepository;
@@ -158,7 +157,6 @@ public class SettingServiceImpl implements SettingService {
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final KafkaConnectionProfileRepository kafkaConnectionProfileRepository;
     private final TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository;
-    private final QueryService queryService;
     private final EncryptionUtil encryptionUtil;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
@@ -172,7 +170,6 @@ public class SettingServiceImpl implements SettingService {
         SourceTaskTypeRepository sourceTaskTypeRepository,
         KafkaConnectionProfileRepository kafkaConnectionProfileRepository,
         TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository,
-        QueryService queryService,
         EncryptionUtil encryptionUtil,
         KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
@@ -184,23 +181,10 @@ public class SettingServiceImpl implements SettingService {
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.kafkaConnectionProfileRepository = kafkaConnectionProfileRepository;
         this.tenantTaskTypeKafkaRouteRepository = tenantTaskTypeKafkaRouteRepository;
-        this.queryService = queryService;
         this.encryptionUtil = encryptionUtil;
         this.kafkaTemplateProvider = kafkaTemplateProvider;
         this.kafkaConnectionResolver = kafkaConnectionResolver;
         this.lookupDataCacheService = lookupDataCacheService;
-    }
-
-    @Override
-    public ResponseDto dynamicQueryResponse(ItemResponse itemResponse) {
-
-        if (!TenantContext.isPlatformAdmin()) {
-            return new ResponseDto(ERROR, "Only a platform admin can run a dynamic query.");
-        }
-        if (isNull(itemResponse.getQuery())) {
-            return new ResponseDto(ERROR, "Query missing.");
-        }
-        return new ResponseDto(SUCCESS, "Data fetch successfully.", this.queryService.executeQueryResponse(itemResponse.getQuery()));
     }
 
     @Override

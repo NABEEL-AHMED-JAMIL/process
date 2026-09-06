@@ -13,14 +13,19 @@ import java.util.Objects;
  * - A platform admin owns and sees everything; that is what the role is for.
  * - Every other caller must carry a tenant of its own. A context with no tenant owns nothing, so
  *   it is refused outright rather than being compared equal to the tenant-less rows.
- * - A row with a null tenantId is platform-owned, not ownerless. Most entities filter on
+ * - A row with a null tenantId is platform-owned, not ownerless. Every entity now filters on
  *   "tenant_id = :tenantId", which no null row satisfies, so such a row is invisible to a tenant
  *   in list queries and must stay unreachable by id too -- {@link #isOwnedByCaller}.
- * - The shared catalogues -- SourceTaskType, TaskForm and KafkaConnectionProfile -- filter on
- *   "tenant_id = :tenantId or tenant_id is null" instead. Their platform-owned rows are published
- *   for every tenant to read and link to, but only a platform admin may change them, so their
- *   read paths ask {@link #isVisibleToCaller} while their write paths keep asking
- *   {@link #isOwnedByCaller}.
+ * - {@link #isVisibleToCaller} exists for the one kind of read that still deliberately admits a
+ *   platform-owned row: resolving a *default* to fall back on when a tenant has none of its own
+ *   (KafkaConnectionResolver's Kafka dispatch is the one live example). That is a narrow,
+ *   internal fallback, not a "list/read screen shows the platform's rows too" catalogue -- the
+ *   last entity that worked the second way, TaskForm, was moved to strict per-tenant filtering
+ *   (2026-09-05) once its "every tenant sees this" behavior was found to be untested and, for a
+ *   task-payload schema, indistinguishable from the same problem Kafka Connections had already
+ *   been fixed for. SourceTaskType still filters "tenant_id = :tenantId or tenant_id is null" as
+ *   a genuine shared taxonomy (the kinds of task a job can run), not a per-workspace resource --
+ *   that one was intentionally left as-is.
  *
  * @author Nabeel Ahmed
  * */

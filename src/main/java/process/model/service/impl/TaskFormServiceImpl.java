@@ -9,8 +9,11 @@ import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.TaskForm;
 import process.model.pojo.TaskFormField;
+import process.model.pojo.Tenant;
 import process.model.repository.TaskFormRepository;
+import process.model.repository.TenantRepository;
 import process.security.TenantContext;
+import process.security.TenantOwnership;
 import process.util.UserNameResolver;
 import process.util.exception.ExceptionUtil;
 import process.util.ProcessUtil;
@@ -40,19 +43,30 @@ public class TaskFormServiceImpl {
 
     private final TaskFormRepository taskFormRepository;
 
+    private final TenantRepository tenantRepository;
+
     private final UserNameResolver userNameResolver;
 
-    public TaskFormServiceImpl(TaskFormRepository taskFormRepository, UserNameResolver userNameResolver) {
+    public TaskFormServiceImpl(TaskFormRepository taskFormRepository, TenantRepository tenantRepository,
+        UserNameResolver userNameResolver) {
         this.taskFormRepository = taskFormRepository;
+        this.tenantRepository = tenantRepository;
         this.userNameResolver = userNameResolver;
     }
 
     public ResponseDto listForms() {
-        List<TaskForm> forms = this.taskFormRepository.findAllByFormStatusNot(Status.Delete);
-        // A tenant sees its own definitions and the shared ones; a platform admin sees all.
-        if (!TenantContext.isPlatformAdmin() && TenantContext.getTenantId() != null) {
-            Long tenantId = TenantContext.getTenantId();
-            forms.removeIf(f -> f.getTenantId() != null && !f.getTenantId().equals(tenantId));
+        // A tenant sees only its own definitions -- same rule Storage/Kafka Connections apply --
+        // a platform admin sees every tenant's. A tenant-role caller with no tenant of its own
+        // (should not happen in practice, but fails closed rather than querying with a null and
+        // hoping the SQL "= null" never-matches semantics are what the reader expects) sees none.
+        List<TaskForm> forms;
+        if (TenantContext.isPlatformAdmin()) {
+            forms = this.taskFormRepository.findAllByFormStatusNot(Status.Delete);
+        } else if (TenantContext.getTenantId() != null) {
+            forms = this.taskFormRepository.findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(
+                TenantContext.getTenantId(), Status.Delete);
+        } else {
+            forms = new ArrayList<>();
         }
         // One lookup for the whole list rather than one per row.
         java.util.Map<Long, String> authors = this.userNameResolver.namesFor(
@@ -66,8 +80,8 @@ public class TaskFormServiceImpl {
         if (ProcessUtil.isNull(pipelineId) || pipelineId.trim().isEmpty()) {
             return new ResponseDto(ERROR, "pipelineId missing.");
         }
-        List<TaskForm> found = this.taskFormRepository
-            .findForPipeline(pipelineId.trim(), TenantContext.getTenantId());
+        List<TaskForm> found = this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
+            pipelineId.trim(), TenantContext.getTenantId(), Status.Delete);
         if (found.isEmpty()) {
             // Not an error: most pipelines have no form, and the task screen falls back to tags.
             return new ResponseDto(SUCCESS, "No form is defined for this pipeline.", null);
@@ -94,6 +108,25 @@ public class TaskFormServiceImpl {
                 return new ResponseDto(ERROR, "That form belongs to another tenant.");
             }
         } else {
+            // A new form always belongs to one tenant -- same rule as a new storage or Kafka
+            // connection. There is no dispatch mechanism here that would give a platform-wide
+            // form a purpose the way KafkaConnectionResolver's default profile has one: a
+            // pipeline with no form for the caller's tenant just falls back to plain tags (see
+            // formForPipeline), so a null-tenant row would only ever be dead weight -- visible
+            // to nobody's task screen. A platform admin's new form is therefore filed under the
+            // seeded "default" tenant instead (the same tenant TenantSeedService backfills
+            // pre-tenancy rows into) rather than left tenantless: only that tenant's users can
+            // use it, and it stays reachable for anyone signed in as it to edit or delete.
+            Long ownerTenantId = TenantContext.getTenantId();
+            if (ownerTenantId == null) {
+                Optional<Tenant> defaultTenant = this.tenantRepository
+                    .findByTenantCode(TenantSeedService.DEFAULT_TENANT_CODE);
+                if (!defaultTenant.isPresent()) {
+                    return new ResponseDto(ERROR,
+                        "No default tenant is configured to own this form. Sign in as a tenant to create one.");
+                }
+                ownerTenantId = defaultTenant.get().getTenantId();
+            }
             /*
              * Checked here rather than caught from the unique index.
              *
@@ -101,17 +134,15 @@ public class TaskFormServiceImpl {
              * after the catch block below has already returned. Relying on it produced the
              * generic "internal error" for what is an ordinary, explainable situation.
              */
-            List<TaskForm> clash = this.taskFormRepository
-                .findForPipeline(submitted.getPipelineId().trim(), TenantContext.getTenantId());
-            boolean sameScope = clash.stream().anyMatch(existing ->
-                Objects.equals(existing.getTenantId(), TenantContext.getTenantId()));
-            if (sameScope) {
+            List<TaskForm> clash = this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
+                submitted.getPipelineId().trim(), ownerTenantId, Status.Delete);
+            if (!clash.isEmpty()) {
                 return new ResponseDto(ERROR, String.format(
                     "A form already exists for pipeline %s. Edit that one instead of adding a second.",
                     submitted.getPipelineId().trim()));
             }
             target = new TaskForm();
-            target.setTenantId(TenantContext.getTenantId());
+            target.setTenantId(ownerTenantId);
             target.setCreatedBy(TenantContext.getAppUserId());
         }
 
@@ -208,10 +239,9 @@ public class TaskFormServiceImpl {
     }
 
     private boolean isOwnedByCaller(TaskForm form) {
-        if (TenantContext.isPlatformAdmin()) return true;
-        Long tenantId = TenantContext.getTenantId();
-        // A shared definition is nobody's to edit but a platform admin's.
-        return form.getTenantId() != null && form.getTenantId().equals(tenantId);
+        // Delegates rather than re-deriving the rule locally -- TenantOwnership exists precisely
+        // because every service used to grow its own private copy of this check.
+        return TenantOwnership.isOwnedByCaller(form.getTenantId());
     }
 
     private static boolean isBlank(String value) {

@@ -172,6 +172,13 @@ services:
       # container (job-search), reached the same way MinIO is: via the published host port,
       # since process_app isn't on that project's docker network.
       OPENSEARCH_URL: ${OPENSEARCH_URL:-http://host.docker.internal:9200}
+      # FileChatExtractionServiceImpl's last-resort path for a PDF with no extractable text (a
+      # scanned/image-only page): render the first page and ask this Ollama vision model to
+      # describe it. The Java @Value default is bare "llava" (no tag), which Ollama does not
+      # resolve to any locally pulled model on its own -- only a real tag like "llava:7b" (or
+      # "llava:latest", if that's what was pulled) actually exists. Set to whatever `ollama list`
+      # on the host shows; this default assumes 7b since that is what this project pulled.
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-llava:7b}
       AWS_S3_ACCESS_KEY: ${AWS_S3_ACCESS_KEY:-}
       AWS_S3_SECRET_KEY: ${AWS_S3_SECRET_KEY:-}
       AWS_S3_REGION: ${AWS_S3_REGION:-us-east-1}

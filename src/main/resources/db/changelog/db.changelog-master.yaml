@@ -58,3 +58,7 @@ databaseChangeLog:
       file: db/changelog/yaml/V24.0-user-phone.yaml
   - include:
       file: db/changelog/yaml/V25.0-drop-avatar-backup.yaml
+  - include:
+      file: db/changelog/yaml/V26.0-drop-dynamic-forms.yaml
+  - include:
+      file: db/changelog/yaml/V27.0-drop-query-engine.yaml

@@ -25,9 +25,13 @@ import java.util.List;
 @Entity
 @Table(name = "task_form")
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
-// The same rule listForms and findForPipeline already apply by hand: a tenant sees its own
-// definitions and the shared ones, which are the rows with no tenant.
-@Filter(name = "tenantFilter", condition = "(tenant_id = :tenantId or tenant_id is null)")
+// Declared for consistency with every other tenant-scoped entity, but currently inert:
+// TaskFormServiceImpl has no EntityManager/TenantFilterHelper and never enables this filter --
+// the actual rule lives in TaskFormRepository's own @Query methods (findVisibleToTenant,
+// findForPipeline), both strict "tenant_id = :tenantId" (2026-09-05; a form used to also match
+// a null-tenant "shared with every tenant" row, the same pattern Kafka Connections was already
+// walked back from -- see TenantOwnership's javadoc).
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
