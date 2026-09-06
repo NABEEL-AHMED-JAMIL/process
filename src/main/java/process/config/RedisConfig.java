@@ -44,9 +44,7 @@ public class RedisConfig {
 
         Map<String, RedisCacheConfiguration> perCacheConfig = new HashMap<>();
         perCacheConfig.put("fileChatExtract", config.entryTtl(Duration.ofDays(7)));
-
         perCacheConfig.put("fileChatMetadata", config.entryTtl(Duration.ofSeconds(30)));
-
         // Every FTP/FTPS operation pays a fresh TCP connect, login and (for FTPS) TLS handshake
         // -- around 1.5s plain and 2.3s secured, against ~55ms for MinIO. A short TTL collapses
         // the repeat listings a single folder view triggers (the browse call and the folder

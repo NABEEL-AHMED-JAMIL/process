@@ -29,8 +29,7 @@ public class KafkaProducerConfig {
     public Map<String, Object> producerConfigs() {
         // Same durability as a profile-based template. A job that falls back to this one because
         // no profile resolved must not silently send with a different retry policy.
-        return KafkaTemplateProvider.applyProducerDefaults(
-            new HashMap<>(kafkaProperties.buildProducerProperties()));
+        return KafkaTemplateProvider.applyProducerDefaults(new HashMap<>(kafkaProperties.buildProducerProperties()));
     }
 
     @Bean
