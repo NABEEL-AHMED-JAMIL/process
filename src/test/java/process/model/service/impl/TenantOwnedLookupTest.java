@@ -31,7 +31,7 @@ public class TenantOwnedLookupTest {
     @Test
     void nothingInTheseFamiliesIsSharedBetweenTenants() throws Exception {
         for (String type : new String[] {
-            "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS" }) {
+            "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS" }) {
             assertTrue(isTenantOwned(type), type + " should belong to the tenant that made it");
         }
     }
@@ -69,7 +69,7 @@ public class TenantOwnedLookupTest {
     @Test
     void whatATenantWorksWithIsNotPlatformOnly() throws Exception {
         for (String type : new String[] {
-            "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS", "AI_PROVIDER" }) {
+            "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS", "AI_PROVIDER" }) {
             assertFalse(isPlatformOnly(type), type + " should stay visible to a tenant");
         }
     }
@@ -115,7 +115,7 @@ public class TenantOwnedLookupTest {
         // A family in both sets would be contradictory: owned hides everything but your own,
         // extendable deliberately shows the platform's.
         for (String type : new String[] {
-            "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS" }) {
+            "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS" }) {
             assertFalse(isTenantExtendable(type), type + " is owned outright, not extendable");
         }
     }

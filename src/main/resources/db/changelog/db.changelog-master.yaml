@@ -62,3 +62,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V26.0-drop-dynamic-forms.yaml
   - include:
       file: db/changelog/yaml/V27.0-drop-query-engine.yaml
+  - include:
+      file: db/changelog/yaml/V28.0-drop-pipeline-ids-lookup.yaml

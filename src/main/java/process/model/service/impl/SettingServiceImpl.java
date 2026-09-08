@@ -49,8 +49,13 @@ public class SettingServiceImpl implements SettingService {
      * Lookup families each tenant owns outright.
      *
      * A tenant admin may add to these and sees only their own entries; nothing in these families
-     * is shared between tenants. Buckets always worked this way; pipelines, their home pages and
-     * task groups now do too.
+     * is shared between tenants. Buckets always worked this way; home pages and task groups now
+     * do too.
+     *
+     * PIPELINE_IDS used to live here as well, until Task Forms took over as the source of truth
+     * for which pipelines exist: a pipeline is now defined by creating its form (Configuration ->
+     * Pipeline Forms), not by adding a lookup row, and Source Task picks from that list instead.
+     * See the V28 migration for the removal of the old lookup rows.
      *
      * The rows that used to be shared were removed rather than split, so every tenant starts
      * with an empty list and fills it in. Tasks created before that still hold the id of a row
@@ -64,7 +69,7 @@ public class SettingServiceImpl implements SettingService {
      */
     private static final java.util.Set<String> TENANT_OWNED_LOOKUPS =
         new java.util.HashSet<>(java.util.Arrays.asList(
-            "BUCKET_LIST", "PIPELINE_IDS", "PIPELINE_HOME_PAGES", "TASK_GROUPS"));
+            "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS"));
 
     /**
      * Families a tenant may add to without owning what is already there.

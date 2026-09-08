@@ -1,0 +1,43 @@
+databaseChangeLog:
+  - changeSet:
+      id: 28.0-drop-pipeline-ids-lookup
+      author: nabeel.amd93
+      description: "Drop the PIPELINE_IDS lookup family (parent 1015 and children 1028-1031) -- Task Forms is now the source of truth for which pipelines exist"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V28.0-drop-pipeline-ids-lookup/V28__drop_pipeline_ids_lookup.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            # Restores the exact rows this changeset deletes (seeded in V2, replaced in V10) and
+            # the source_task_type description text V10 wrote. A rollback of a drop is a safety
+            # net, not a promise the feature works the same afterward -- code that reads
+            # PIPELINE_IDS through Task Forms instead would need rolling back too.
+            sql: |
+              INSERT INTO public.lookup_data
+                (lookup_id, date_created, description, lookup_type, lookup_value, parent_lookup_id)
+                VALUES (1015, NOW(), 'Pipeline IDs', 'PIPELINE_IDS', 'Pipeline IDs', NULL)
+                ON CONFLICT (lookup_id) DO NOTHING;
+              INSERT INTO public.lookup_data
+                (lookup_id, date_created, description, lookup_type, lookup_value, parent_lookup_id)
+                VALUES (1028, NOW(), 'etl/tasks/pdf_highligter_form_fill_F768924.py', 'F768924', 'F768924', 1015)
+                ON CONFLICT (lookup_id) DO NOTHING;
+              INSERT INTO public.lookup_data
+                (lookup_id, date_created, description, lookup_type, lookup_value, parent_lookup_id)
+                VALUES (1029, NOW(), 'etl/tasks/pdf_highlighter_f768925.py', 'F768925', 'F768925', 1015)
+                ON CONFLICT (lookup_id) DO NOTHING;
+              INSERT INTO public.lookup_data
+                (lookup_id, date_created, description, lookup_type, lookup_value, parent_lookup_id)
+                VALUES (1030, NOW(), 'etl/tasks/etl_hurricanes_f768926.py', 'F768926', 'F768926', 1015)
+                ON CONFLICT (lookup_id) DO NOTHING;
+              INSERT INTO public.lookup_data
+                (lookup_id, date_created, description, lookup_type, lookup_value, parent_lookup_id)
+                VALUES (1031, NOW(), 'etl/tasks/mp3_noise_processing_extract_txt_f768927.py', 'F768927', 'F768927', 1015)
+                ON CONFLICT (lookup_id) DO NOTHING;
+              SELECT setval('lookup_id_seq', (SELECT MAX(lookup_id) FROM public.lookup_data), true);
+              UPDATE source_task_type SET description =
+                '[ETL scrapping pipeline -- routes by pipelineId (see PIPELINE_IDS lookup): F768924 PDF Highlighter Form Fill, F768925 PDF Highlighter Text Extraction, F768926 Hurricanes ETL, F768927 MP3 Noise Processing]'
+                WHERE source_task_type_id = 1011;

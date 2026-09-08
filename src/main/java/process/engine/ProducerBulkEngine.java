@@ -318,9 +318,13 @@ public class ProducerBulkEngine {
             if (homePageLookupId != null) {
                 dto.setHomePageId(this.transactionService.findLookupValueByLookupId(homePageLookupId));
             }
-            Long pipelineLookupId = ProcessUtil.parseLongOrNull(sourceJob.getTaskDetail().getPipelineId());
-            if (pipelineLookupId != null) {
-                dto.setPipelineId(this.transactionService.findLookupValueByLookupId(pipelineLookupId));
+            // pipelineId is no longer a PIPELINE_IDS lookup row id -- Task Forms now define a
+            // pipeline directly by its own id string (the same one Source Task's Pipeline
+            // picker offers and TaskForm.pipelineId is keyed on), so it goes straight through
+            // rather than being resolved through the lookup table the way homePageId still is.
+            String pipelineId = sourceJob.getTaskDetail().getPipelineId();
+            if (!ProcessUtil.isNull(pipelineId)) {
+                dto.setPipelineId(pipelineId.trim());
             }
             dto.setTaskPayload(sourceJob.getTaskDetail().getTaskPayload());
         }
