@@ -21,6 +21,17 @@
         <commons-net.version>3.6</commons-net.version>
         <swagger.version>2.9.2</swagger.version>
         <jodconverter.version>4.4.7</jodconverter.version>
+        <!-- Spring Boot 2.3.2's own default (9.0.37) carries a real Tomcat NIO poller bug: an
+             uncaught NullPointerException in NioEndpoint$Poller.events() (NioChannel.getIOChannel()
+             returning null for a channel closed concurrently with the poller processing a queued
+             event for it) kills the poller thread outright, after which the connector accepts no
+             further requests for any tenant. The JVM stays up (docker healthcheck still sees the
+             process running) but stops answering HTTP entirely. Reproduced live: a STOMP/WebSocket
+             disconnect, an ordinary event on page navigation, triggered it. Fixed upstream in this
+             same Tomcat 9.0.x line; 9.0.83 was already resolved into the local repository by an
+             earlier build and needs no new download. Same major/minor series as the Boot-managed
+             default, so no javax.servlet API surface change; this overrides only the patch. -->
+        <tomcat.version>9.0.83</tomcat.version>
     </properties>
 
     <dependencies>

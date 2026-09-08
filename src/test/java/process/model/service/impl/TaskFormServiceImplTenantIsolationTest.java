@@ -163,6 +163,42 @@ class TaskFormServiceImplTenantIsolationTest {
         assertThat(response.getData()).isEqualTo(this.tenantAForm);
     }
 
+    /**
+     * Added 2026-09-07: a platform admin has no tenant of its own to match a form's tenant_id
+     * against, so the strict tenant-scoped query above always came back empty for them even when
+     * the pipeline plainly had a form -- the Pipeline picker (fed by listPipelines, which platform
+     * admins see every tenant's row of) offered a pipeline whose own form then silently failed to
+     * load. Reading is now more forgiving than writing: a platform admin's request matches across
+     * every tenant's forms instead of comparing against a tenant id that does not exist.
+     */
+    @Test
+    void aPlatformAdminsRequestMatchesThePipelineAcrossEveryTenant() {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        when(this.taskFormRepository.findAllByFormStatusNot(Status.Delete))
+            .thenReturn(Collections.singletonList(this.tenantAForm));
+
+        ResponseDto response = this.service.formForPipeline(PIPELINE);
+
+        assertThat(response.getStatus()).isEqualTo(SUCCESS);
+        assertThat(response.getData()).isEqualTo(this.tenantAForm);
+        verify(this.taskFormRepository, never())
+            .findAllByPipelineIdAndTenantIdAndFormStatusNot(any(), any(), any());
+    }
+
+    /** The control: a platform admin gets nothing back for a pipeline no tenant has defined. */
+    @Test
+    void aPlatformAdminGetsNothingForAPipelineNoTenantHasDefined() {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        when(this.taskFormRepository.findAllByFormStatusNot(Status.Delete))
+            .thenReturn(Collections.singletonList(this.tenantAForm));
+
+        ResponseDto response = this.service.formForPipeline("F000000-not-defined-anywhere");
+
+        assertThat(response.getStatus()).isEqualTo(SUCCESS);
+        assertThat(response.getData()).isNull();
+        assertThat(response.getMessage()).contains("No form is defined");
+    }
+
     // ---- saveForm: create always stamps the caller's own tenant, never a shared row -----------
 
     @Test

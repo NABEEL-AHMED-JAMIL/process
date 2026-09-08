@@ -19,6 +19,7 @@ import process.util.exception.ExceptionUtil;
 import process.util.ProcessUtil;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
@@ -75,13 +76,28 @@ public class TaskFormServiceImpl {
         return new ResponseDto(SUCCESS, String.format("%d form(s).", forms.size()), forms);
     }
 
-    /** The form a task screen should show for this pipeline, or nothing if none is defined. */
+    /**
+     * The form a task screen should show for this pipeline, or nothing if none is defined.
+     *
+     * A platform admin carries no tenant of its own to match a form's {@code tenant_id} against
+     * -- the same situation {@link #saveForm} handles by filing a new form under the seeded
+     * default tenant rather than leaving it ownerless. Reading is more forgiving than writing:
+     * rather than refuse a form that plainly exists just because the caller has no tenant to
+     * compare it to, a platform admin's request matches the pipeline across every tenant's forms.
+     * A tenant-scoped caller is unaffected and still sees only its own tenant's row, per
+     * {@link TaskFormRepository#findAllByPipelineIdAndTenantIdAndFormStatusNot}'s own contract.
+     */
     public ResponseDto formForPipeline(String pipelineId) {
         if (ProcessUtil.isNull(pipelineId) || pipelineId.trim().isEmpty()) {
             return new ResponseDto(ERROR, "pipelineId missing.");
         }
-        List<TaskForm> found = this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
-            pipelineId.trim(), TenantContext.getTenantId(), Status.Delete);
+        String trimmed = pipelineId.trim();
+        List<TaskForm> found = TenantContext.isPlatformAdmin()
+            ? this.taskFormRepository.findAllByFormStatusNot(Status.Delete).stream()
+                .filter(f -> trimmed.equals(f.getPipelineId()))
+                .collect(Collectors.toList())
+            : this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
+                trimmed, TenantContext.getTenantId(), Status.Delete);
         if (found.isEmpty()) {
             // Not an error: most pipelines have no form, and the task screen falls back to tags.
             return new ResponseDto(SUCCESS, "No form is defined for this pipeline.", null);
