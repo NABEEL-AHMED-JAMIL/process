@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import process.analytics.dto.QueryResultDto;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
+import process.model.service.StorageBrowserService;
 import process.model.dto.ResponseDto;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
@@ -125,14 +126,33 @@ public class AnalyticsExportService {
     /** How many announcements may be waiting before the oldest are dropped rather than queued. */
     private static final int ANNOUNCEMENT_BACKLOG = 64;
 
+    /**
+     * Milliseconds, not seconds.
+     *
+     * At second resolution two write-backs of the same dataset into the same folder produced an
+     * IDENTICAL key, and copyTo does not check whether anything is already there, so the second
+     * silently replaced the first. The stamp's stated purpose is to stop an export overwriting the
+     * dataset it was derived from; it did not stop an export overwriting another export, in a
+     * class whose own argument is that a storage connection has no undo.
+     *
+     * Milliseconds narrow the window rather than close it, which is why the existence check below
+     * exists as well. Two mechanisms because the cost of being wrong is somebody's data.
+     */
     private static final DateTimeFormatter FILE_STAMP =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
 
     private final DatasetResolver datasetResolver;
     private final AnalyticsQueryService analyticsQueryService;
     private final AnalyticsLimits limits;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
+    /**
+     * Only to ask whether a target key is already taken before writing over it.
+     *
+     * Reads through the platform's own storage service rather than a second client, which is what
+     * specification 04 asks for and what keeps one storage walk in the application.
+     */
+    private final StorageBrowserService storageBrowserService;
     private final Gson gson = new Gson();
 
     /**
@@ -153,12 +173,14 @@ public class AnalyticsExportService {
     public AnalyticsExportService(DatasetResolver datasetResolver,
         AnalyticsQueryService analyticsQueryService, AnalyticsLimits limits,
         KafkaTemplateProvider kafkaTemplateProvider,
-        KafkaConnectionResolver kafkaConnectionResolver) {
+        KafkaConnectionResolver kafkaConnectionResolver,
+        StorageBrowserService storageBrowserService) {
         this.datasetResolver = datasetResolver;
         this.analyticsQueryService = analyticsQueryService;
         this.limits = limits;
         this.kafkaTemplateProvider = kafkaTemplateProvider;
         this.kafkaConnectionResolver = kafkaConnectionResolver;
+        this.storageBrowserService = storageBrowserService;
         this.announcements = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
             new ArrayBlockingQueue<>(ANNOUNCEMENT_BACKLOG),
             work -> {
@@ -278,6 +300,7 @@ public class AnalyticsExportService {
             // field, so "write these rows into that other connection's bucket" has nowhere to be
             // written -- and copyTo refuses a target on any other connection even if one arrives.
             DatasetRef target = this.outputTarget(body, primary, format);
+            this.refuseToOverwrite(primary, target, body);
 
             long rows = this.analyticsQueryService.copyTo(primary, secondary, statementOf(body),
                 target);
@@ -418,6 +441,60 @@ public class AnalyticsExportService {
      * resolved ref is then checked to be the same key it was handed -- a resolver that normalised
      * or reinterpreted the string would otherwise be admitting a location this method never saw.
      */
+    /**
+     * Refuses to write over an object that is already there.
+     *
+     * The reliability half of the specification's "idempotent export/write operations", and the
+     * defect it closes was real: with a second-resolution stamp, two write-backs of the same
+     * dataset into the same folder inside one second built the same key, and nothing anywhere
+     * looked to see whether that key was taken. The second write replaced the first and reported
+     * success. An object store has no undo and this class says so to the user; it was not saying
+     * it to itself.
+     *
+     * An explicit "overwrite": "true" is honoured, because replacing yesterday's export on purpose
+     * is a real thing to want. What is refused is doing it by accident.
+     *
+     * The lookup asks by CONNECTION ALIAS, not by bucket name. StorageBrowserService's first
+     * parameter is named "bucket" and is resolved with findByAliasAndStatus, so an alias is what
+     * it wants -- passing DatasetRef.getBucket() there was a real bug in the benchmark harness,
+     * silent because the two happen to be equal in this environment and are not equal in general.
+     *
+     * A storage error is NOT treated as "the object is absent". Failing open here would restore
+     * exactly the clobber this method exists to prevent, so an unreadable answer refuses the write
+     * and says why.
+     */
+    private void refuseToOverwrite(DatasetRef primary, DatasetRef target, Map<String, String> body)
+        throws AnalyticsException {
+
+        if (Boolean.parseBoolean(value(body.get("overwrite"), "false"))) {
+            return;
+        }
+        String alias = primary.getConnection().getAlias();
+        try {
+            if (this.storageBrowserService.getObjectMetadata(alias, target.getPath()) != null) {
+                throw new AnalyticsException("There is already a file at " + target.getPath()
+                    + ". Nothing was written. Choose another name, or send overwrite=true if you "
+                    + "meant to replace it -- a storage connection has no undo.");
+            }
+        } catch (AnalyticsException refusal) {
+            throw refusal;
+        } catch (Exception ex) {
+            // "Not found" is the answer this method is hoping for and every store spells it
+            // differently, so it is recognised by shape rather than by class: a message that says
+            // the object is not there is an absence, and anything else is an unknown.
+            String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(Locale.ROOT);
+            boolean absent = message.contains("not found") || message.contains("nosuchkey")
+                || message.contains("does not exist") || message.contains("404");
+            if (!absent) {
+                logger.warn("Could not check whether {} already exists before writing it back.",
+                    target, ex);
+                throw new AnalyticsException("Could not check whether something is already at "
+                    + target.getPath() + ", so nothing was written. Try again, or send "
+                    + "overwrite=true to write regardless.");
+            }
+        }
+    }
+
     private DatasetRef outputTarget(Map<String, String> body, DatasetRef primary, String format)
         throws AnalyticsException {
 

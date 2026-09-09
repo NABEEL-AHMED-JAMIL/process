@@ -28,6 +28,24 @@ import java.util.List;
 public class QueryResultDto {
 
     private List<String> columns;
+
+    /**
+     * The same columns, with the type the engine gave each one.
+     *
+     * <b>This is 09's "typed column metadata", and it is a correctness field rather than a
+     * decorative one.</b> Every value below is a String, which is deliberate -- a DECIMAL that
+     * arrives in a browser as a JavaScript double has already lost precision -- but a string with
+     * no type beside it cannot be rendered. A client cannot tell "0123" the postcode from 123 the
+     * number, cannot right-align the numbers, and cannot format a date, so it either guesses from
+     * the characters or renders everything as text. Both are wrong on somebody's file.
+     *
+     * <b>Beside {@link #columns} rather than replacing it.</b> The names are what every existing
+     * caller reads and the Angular client's table is built on a string array; widening that field
+     * would be a breaking change to a payload two other agents are working in, to add information
+     * that fits perfectly well next to it. The two lists are the same columns in the same order.
+     */
+    private List<ColumnDto> columnMeta;
+
     private List<List<String>> rows;
     /**
      * The id this run answered to, which is the id a cancel request names.
@@ -67,6 +85,9 @@ public class QueryResultDto {
 
     public List<String> getColumns() { return this.columns; }
     public void setColumns(List<String> columns) { this.columns = columns; }
+
+    public List<ColumnDto> getColumnMeta() { return this.columnMeta; }
+    public void setColumnMeta(List<ColumnDto> columnMeta) { this.columnMeta = columnMeta; }
 
     public List<List<String>> getRows() { return this.rows; }
     public void setRows(List<List<String>> rows) { this.rows = rows; }

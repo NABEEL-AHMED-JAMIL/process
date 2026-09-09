@@ -1,9 +1,13 @@
 package process.analytics;
 
+import process.analytics.dto.ColumnDto;
 import process.analytics.dto.DatasetPreviewDto;
 import process.analytics.dto.DatasetProfileDto;
 import process.analytics.dto.DatasetSchemaDto;
 import process.analytics.dto.QueryResultDto;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * The six things Analytics Studio asks an execution engine to do, and the only names the rest of
@@ -128,6 +132,66 @@ public interface AnalyticsEngine {
         }
     }
 
+    /**
+     * A statement with every VALUE in it held outside the text.
+     *
+     * <b>This type is the mechanical half of 07's "do not construct raw SQL by string concatenation
+     * with untrusted values", and it exists so that the rule is enforced by the shape of the call
+     * rather than remembered at each site.</b> A composer that wanted to interpolate a value would
+     * have to build a string and leave this list empty, which is visible in a diff; a composer that
+     * binds cannot forget to, because the parameter has nowhere else to go.
+     *
+     * The other half of that sentence -- field NAMES, which SQL has no parameter for -- cannot be
+     * solved here and is solved in {@code process.analytics.canvas.FilterCompiler.Columns}: every
+     * identifier written into the text is a String taken from the dataset's OWN schema, never from
+     * the request. That is why {@link Composer} is handed the columns rather than being trusted to
+     * have looked them up.
+     *
+     * The SQL is a String, which is the same honest limit {@link #bounded(String)} carries: this
+     * interface is a seam, not a dialect-neutral query language, and a second engine would need a
+     * composer that knew its own dialect. Recorded rather than hidden.
+     */
+    final class BoundStatement {
+
+        private final String sql;
+        private final List<Object> parameters;
+
+        public BoundStatement(String sql, List<Object> parameters) {
+            this.sql = sql;
+            this.parameters = parameters == null
+                ? Collections.emptyList() : Collections.unmodifiableList(parameters);
+        }
+
+        /** The statement text. Contains a "?" for every value and no value of its own. */
+        public String getSql() {
+            return this.sql;
+        }
+
+        /** The values, in the order their placeholders appear. Already typed for their columns. */
+        public List<Object> getParameters() {
+            return this.parameters;
+        }
+    }
+
+    /**
+     * Turns a dataset's own columns into the statement to run against it.
+     *
+     * A callback rather than a prepared string, because the composer needs the schema and reading
+     * the schema costs a session and a governor permit. Handing the ENGINE the composer lets both
+     * happen inside one session on one permit -- the same argument profileOf makes for Profile and
+     * Quality being one scan, applied to an analysis and the DESCRIBE that validates its fields.
+     * An analysis that resolved its schema through a separate {@link #schemaOf} call would cost two
+     * of four permits per click.
+     */
+    @FunctionalInterface
+    interface Composer {
+        /**
+         * @param columns the dataset's own columns, read inside the session the statement will run
+         *                in, and the only allow-list an identifier may come from
+         */
+        BoundStatement composeFor(List<ColumnDto> columns) throws AnalyticsException;
+    }
+
     /** The dataset's columns and their types, without reading its rows. */
     DatasetSchemaDto schemaOf(DatasetRef dataset) throws AnalyticsException;
 
@@ -159,6 +223,27 @@ public interface AnalyticsEngine {
      *                       carrying a server-minted one gets back to it; null to have one minted
      */
     QueryResultDto query(DatasetRef primary, DatasetRef secondary, String sql, String requestedRunId)
+        throws AnalyticsException;
+
+    /**
+     * A structured analysis, composed against the dataset's own schema and run with its values bound.
+     *
+     * The third way into the governed path and the only one whose SQL nobody typed. /preview and
+     * /profile build their own statement from a scan expression; /query takes a person's text
+     * through {@link StatementGate}; this takes a MODEL -- dimensions, a measure, filters -- and
+     * turns it into a statement here, inside the session, once the columns are known.
+     *
+     * <b>Everything the other two get, this gets.</b> One permit, one locked-down session, one
+     * timeout, one registry entry that a stop button can reach, and the row ceiling from
+     * {@link #bounded(String)}. It also goes through the statement gate, which is not redundant on
+     * SQL the server composed: the gate is what proves the composed text is exactly ONE read that
+     * names nothing but the bound dataset view, so a field name that had smuggled a location past
+     * the schema allow-list would still be refused at the parser.
+     *
+     * @param composer given the dataset's columns, returns the statement and its bound values
+     * @param requestedRunId the id a stop request will name, or null to mint one
+     */
+    QueryResultDto analyze(DatasetRef dataset, Composer composer, String requestedRunId)
         throws AnalyticsException;
 
     /**

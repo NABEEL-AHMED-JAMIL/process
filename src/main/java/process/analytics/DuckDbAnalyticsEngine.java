@@ -15,11 +15,15 @@ import javax.annotation.PreDestroy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
@@ -154,6 +158,13 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         DateTimeFormatter.ofPattern("M/d/uuuu").withResolverStyle(ResolverStyle.STRICT),
         DateTimeFormatter.ofPattern("d-M-uuuu").withResolverStyle(ResolverStyle.STRICT));
 
+    /** How a TIMESTAMP is written down. See asTimestamp for why neither default would do. */
+    private static final DateTimeFormatter TIMESTAMP_SHAPE =
+        DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss");
+
+    /** The fraction, printed only when the value has one, at DuckDB's own microsecond precision. */
+    private static final DateTimeFormatter FRACTION_SHAPE = DateTimeFormatter.ofPattern("SSSSSS");
+
     private final DuckDbSessionFactory sessions;
     private final AnalyticsLimits limits;
     private final RunningQueries running;
@@ -250,10 +261,11 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         String sql = this.bounded("SELECT * FROM " + dataset.scanExpression()
             + " LIMIT " + size + " OFFSET " + offset);
 
-        List<String> columns = new ArrayList<>();
+        List<ColumnDto> columns = new ArrayList<>();
         List<List<String>> rows = this.run(dataset, sql, resultSet -> rowsOf(resultSet, columns));
 
-        return new DatasetPreviewDto(columns, rows, page, size, total, dataset.isMultiFile());
+        return new DatasetPreviewDto(namesOf(columns), rows, page, size, total,
+            dataset.isMultiFile());
     }
 
     /**
@@ -321,7 +333,7 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
                 StatementGate.confirmComposed(session, executable, timeout);
             }
 
-            List<String> columns = new ArrayList<>();
+            List<ColumnDto> columns = new ArrayList<>();
             List<List<String>> rows;
             try (ResultSet resultSet = statement.executeQuery(executable)) {
                 rows = rowsOf(resultSet, columns);
@@ -331,7 +343,9 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
             // query a second time without the bound to find out, which is the thing the bound is
             // for. An EXPLAIN is never truncated because it was never wrapped.
             boolean truncated = admitted.isBoundable() && rows.size() >= this.limits.getMaxRows();
-            return new QueryResultDto(columns, rows, rows.size(), truncated);
+            QueryResultDto answer = new QueryResultDto(namesOf(columns), rows, rows.size(), truncated);
+            answer.setColumnMeta(columns);
+            return answer;
         });
         // Set out here rather than in the lambda because the id and the elapsed time describe the
         // RUN, and the run is not over until the session that carried it has closed.
@@ -339,6 +353,113 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         result.setStatus(RunState.COMPLETED.name());
         result.setDurationMs(handle.elapsedMs());
         return result;
+    }
+
+    /**
+     * A structured analysis: the schema read, the statement composed from it, and the values bound.
+     *
+     * <b>The order inside this session is the whole argument, and it is a different order from
+     * query()'s for a reason that matters.</b> There the statement arrives first and is judged
+     * before a dataset is opened, because the statement is the untrusted thing. Here the statement
+     * does not exist yet: it is composed FROM the dataset, so the view comes first, then a DESCRIBE
+     * of it, and only then does the composer get to write anything. That ordering is what makes the
+     * field allow-list real -- the composer cannot name a column the dataset has not just told us
+     * about, because it is handed the list rather than asked to trust one.
+     *
+     * <b>One session and one permit for both reads.</b> The DESCRIBE and the analysis run on the
+     * same connection under the same slot, which is the argument profileOf already makes for
+     * Profile and Quality. Resolving the schema through schemaOf() instead would take two of the
+     * four permits this application has for every click of a canvas.
+     *
+     * <b>The gate runs on SQL this class composed, and that is not theatre.</b> Its job here is not
+     * to ask whether a write got in -- nothing here can write -- but to make the parser confirm
+     * that the composed text is exactly ONE statement and that every relation in it is a NAME. If a
+     * field name ever carried a location past the schema allow-list, the identifier would land in
+     * table_name, schema_name or catalog_name and readsOnlyWhatItWasGiven would refuse it. Phase
+     * three's cross-bucket exploit went through the half of that check that did not exist; this is
+     * the same check standing in front of a second composer.
+     *
+     * <b>Values are bound, never interpolated.</b> The statement is prepared and the composer's
+     * parameters are set positionally, so a value cannot become syntax however it is spelled. The
+     * count is checked against the driver's own view of the text first: a composer that emitted a
+     * placeholder without a value, or the other way round, would otherwise run with a parameter
+     * silently left unset -- measured on 1.1.3, that does not throw, it just answers wrongly.
+     *
+     * <b>Cancellation is left on the plain Statement deliberately.</b> The run is registered against
+     * the Statement inSession() opened, not against the PreparedStatement executing below, because
+     * duckdb_jdbc's cancel() interrupts the CONNECTION rather than one statement -- measured on
+     * 1.1.3: cancelling the plain statement stopped a prepared statement running on the same
+     * connection after 705 ms with "INTERRUPT Error: Interrupted!". Re-registering the prepared
+     * statement would buy nothing and would leave a closed handle in the registry for the window
+     * between its try-with-resources and inSession's finish().
+     */
+    @Override
+    public QueryResultDto analyze(DatasetRef dataset, Composer composer, String requestedRunId)
+        throws AnalyticsException {
+
+        if (composer == null) {
+            throw new AnalyticsException("There is no analysis to run.");
+        }
+        int timeout = this.limits.getTimeoutSeconds();
+        RunningQueries.Handle handle = this.running.open(requestedRunId);
+        QueryResultDto result = this.inSession(dataset, handle, (session, statement) -> {
+            statement.execute(viewOf(DATASET, dataset));
+
+            List<ColumnDto> schema = new ArrayList<>();
+            try (ResultSet described = statement.executeQuery("DESCRIBE SELECT * FROM " + DATASET)) {
+                while (described.next()) {
+                    schema.add(new ColumnDto(described.getString("column_name"),
+                        described.getString("column_type")));
+                }
+            }
+
+            BoundStatement composed = composer.composeFor(schema);
+            String executable = this.bounded(composed.getSql());
+            StatementGate.confirmComposed(session, executable, timeout);
+
+            try (PreparedStatement prepared = session.prepareStatement(executable)) {
+                prepared.setQueryTimeout(timeout);
+                bind(prepared, composed.getParameters());
+
+                List<ColumnDto> columns = new ArrayList<>();
+                List<List<String>> rows;
+                try (ResultSet resultSet = prepared.executeQuery()) {
+                    rows = rowsOf(resultSet, columns);
+                }
+                boolean truncated = rows.size() >= this.limits.getMaxRows();
+                QueryResultDto answer = new QueryResultDto(namesOf(columns), rows, rows.size(),
+                    truncated);
+                answer.setColumnMeta(columns);
+                return answer;
+            }
+        });
+        result.setQueryId(handle.getId());
+        result.setStatus(RunState.COMPLETED.name());
+        result.setDurationMs(handle.elapsedMs());
+        return result;
+    }
+
+    /**
+     * Puts the composer's values into the prepared statement, having first agreed how many there are.
+     *
+     * The count check is the belt on a braces. The composer appends a placeholder and its value
+     * together, so they cannot drift -- but "cannot" is a property of code somebody will edit, and
+     * the failure it prevents is silent: DuckDB 1.1.3 executes a statement with an unset parameter
+     * rather than refusing it, so the query returns an answer that is simply not the one that was
+     * asked for. Asking the driver how many placeholders it found compares the composer's own
+     * count against the parser's, which is the only second opinion available.
+     */
+    private static void bind(PreparedStatement prepared, List<Object> parameters)
+        throws AnalyticsException, SQLException {
+
+        int expected = prepared.getParameterMetaData().getParameterCount();
+        if (expected != parameters.size()) {
+            throw new AnalyticsException("That analysis could not be prepared safely, so it was "
+                + "not run.");
+        }
+        for (int i = 0; i < parameters.size(); i++) {
+            prepared.setObject(i + 1, parameters.get(i));
+        }
     }
 
     /**
@@ -602,31 +723,196 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
     }
 
     /**
-     * A whole result read into strings, with the column labels collected on the way past.
+     * A whole result read into strings, with each column's label AND type collected on the way past.
      *
      * Values are rendered as text here rather than in the browser: a DuckDB DECIMAL or TIMESTAMP
      * has no JSON equivalent that survives the trip unchanged, and a number that arrives as a
      * JavaScript double has already lost precision. A null stays a null rather than becoming the
      * four characters "null", which no reader could tell from the value.
+     *
+     * <b>"As text" is not the same as String.valueOf(), and treating them as the same was a real
+     * defect.</b> Measured through the full request path on the 10 MB benchmark file:
+     * {@code sum(amount)} over a DOUBLE column came back as <b>7.46613235E7</b>, and a currency
+     * total in scientific notation is the single most likely thing a person aggregates; the median
+     * of a DATE column came back as <b>2024-02-15 12:00:00.0</b>, a midnight-and-noon that is not
+     * in the data and is not even the column's type. Both are Java's default toString for the
+     * object the driver happened to hand over, which is a rendering nobody chose.
+     *
+     * So the type decides, and the type comes from the RESULT rather than from a guess about the
+     * characters. That is also why the labels are collected as {@link ColumnDto} now: the same
+     * metadata that fixes the rendering here is what 09 asks to be returned, and computing it twice
+     * -- once to render and once to report -- is how the two would disagree.
      */
-    private static List<List<String>> rowsOf(ResultSet resultSet, List<String> columns)
+    private static List<List<String>> rowsOf(ResultSet resultSet, List<ColumnDto> columns)
         throws SQLException {
 
         ResultSetMetaData meta = resultSet.getMetaData();
         int width = meta.getColumnCount();
+        int[] types = new int[width + 1];
         for (int i = 1; i <= width; i++) {
-            columns.add(meta.getColumnLabel(i));
+            types[i] = meta.getColumnType(i);
+            columns.add(new ColumnDto(meta.getColumnLabel(i), meta.getColumnTypeName(i)));
         }
         List<List<String>> rows = new ArrayList<>();
         while (resultSet.next()) {
             List<String> row = new ArrayList<>(width);
             for (int i = 1; i <= width; i++) {
-                Object value = resultSet.getObject(i);
-                row.add(value == null ? null : String.valueOf(value));
+                row.add(rendered(resultSet, i, types[i]));
             }
             rows.add(row);
         }
         return rows;
+    }
+
+    /**
+     * One value, as the string a reader of THAT column would recognise.
+     *
+     * Driven by java.sql.Types rather than by the class the driver returned, because the class is
+     * the driver's business and changes with it -- duckdb_jdbc 1.1.3 hands back a LocalDate for one
+     * DATE and a Timestamp for another depending on how the value was produced -- while the column
+     * type is what the engine committed to. Every branch below is a shape the default rendering got
+     * wrong, and everything else falls through to the rendering that was already correct.
+     *
+     * A failure to render is never a failure of the query: a type this method has not met comes out
+     * as whatever the driver's own toString says, which is exactly what every value used to do.
+     */
+    /**
+     * A time as the column holds it, seconds included.
+     *
+     * LocalTime.toString() is the driver's route and it omits a zero seconds field, which is legal
+     * ISO-8601 and wrong here: the values in one column would render at different precisions
+     * depending on their value. Anything that is not a LocalTime falls through to its own text,
+     * because inventing a format for a type this method has not seen would be the same mistake.
+     */
+    private static String timeOf(Object value) {
+        if (value instanceof java.time.LocalTime) {
+            java.time.LocalTime time = (java.time.LocalTime) value;
+            return time.getNano() == 0
+                ? time.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                : time.toString();
+        }
+        return String.valueOf(value);
+    }
+
+    private static String rendered(ResultSet resultSet, int index, int sqlType) throws SQLException {
+        Object value = resultSet.getObject(index);
+        if (value == null) {
+            return null;
+        }
+        switch (sqlType) {
+            case Types.DECIMAL:
+            case Types.NUMERIC:
+            case Types.DOUBLE:
+            case Types.FLOAT:
+            case Types.REAL:
+                return plainNumber(value);
+            case Types.DATE:
+                return asDate(value);
+            case Types.TIME:
+            case Types.TIME_WITH_TIMEZONE:
+                // Explicitly, because the driver's own rendering drops zero seconds: a column
+                // holding 14:30:00 and 00:00:00 came back as "14:30" and "00:00", ragged down the
+                // column and shorter than the data. Same defect class as the phantom midnight a
+                // DATE used to grow -- a rendering nobody chose, produced by the very method that
+                // was rewritten to stop doing this.
+                return timeOf(value);
+            case Types.TIMESTAMP:
+            case Types.TIMESTAMP_WITH_TIMEZONE:
+                return asTimestamp(value);
+            default:
+                // Integers, booleans, text, blobs and DuckDB's own nested types. An integer's
+                // toString is already its decimal form and a VARCHAR is already itself; rewriting
+                // either would be a change with no defect behind it.
+                return String.valueOf(value);
+        }
+    }
+
+    /**
+     * A number in the notation a person writes cheques in, not the one Java prints doubles in.
+     *
+     * BigDecimal.valueOf(double) goes through Double.toString, so it takes the shortest decimal
+     * that round-trips to the same double -- 7.46613235E7 becomes exactly 74661323.5 and not the
+     * binary expansion new BigDecimal(double) would produce. A DECIMAL arrives as a BigDecimal
+     * already and keeps its scale, so a currency total that DuckDB computed as 52.50 stays "52.50"
+     * rather than becoming "52.5".
+     *
+     * NaN and the infinities have no plain decimal form and BigDecimal refuses them outright, so
+     * they keep the only names they have.
+     *
+     * One consequence worth knowing before somebody reports it as a bug: a DOUBLE renders as the
+     * SHORTEST decimal that round-trips, so 10.0 keeps its trailing zero and 74661320.0 does not.
+     * That is faithful to what a double is, and it is also the argument for storing money as
+     * DECIMAL -- DuckDB carries the scale on that type, and the first branch above preserves it, so
+     * a column declared DECIMAL(18,2) renders as 52.50 down the whole page.
+     */
+    private static String plainNumber(Object value) {
+        if (value instanceof BigDecimal) {
+            return ((BigDecimal) value).toPlainString();
+        }
+        if (value instanceof Double || value instanceof Float) {
+            double number = ((Number) value).doubleValue();
+            if (Double.isNaN(number) || Double.isInfinite(number)) {
+                return String.valueOf(value);
+            }
+            return BigDecimal.valueOf(number).toPlainString();
+        }
+        return String.valueOf(value);
+    }
+
+    /** A DATE as a date. The time it is rendered with is a time the column does not have. */
+    private static String asDate(Object value) {
+        if (value instanceof java.sql.Date) {
+            // java.sql.Date.toString is already yyyy-MM-dd, and going via toLocalDate() would
+            // reinterpret the value in the JVM's zone on the way past.
+            return value.toString();
+        }
+        if (value instanceof LocalDate) {
+            return value.toString();
+        }
+        if (value instanceof java.sql.Timestamp) {
+            return ((java.sql.Timestamp) value).toLocalDateTime().toLocalDate().toString();
+        }
+        if (value instanceof LocalDateTime) {
+            return ((LocalDateTime) value).toLocalDate().toString();
+        }
+        return String.valueOf(value);
+    }
+
+    /**
+     * A TIMESTAMP with its seconds and without JDBC's trailing tenth.
+     *
+     * java.sql.Timestamp.toString always prints at least one fractional digit, so a whole second
+     * reads as "10:00:00.0" -- a precision the value does not claim. LocalDateTime.toString has the
+     * opposite habit and drops the seconds entirely when they are zero, which turns a timestamp
+     * into something that looks like a different kind of value. Neither is what a column of
+     * timestamps should look like down a page, so the format is fixed here and the fraction is
+     * printed only when there is one.
+     */
+    private static String asTimestamp(Object value) {
+        LocalDateTime moment;
+        if (value instanceof java.sql.Timestamp) {
+            moment = ((java.sql.Timestamp) value).toLocalDateTime();
+        } else if (value instanceof LocalDateTime) {
+            moment = (LocalDateTime) value;
+        } else if (value instanceof OffsetDateTime) {
+            return value.toString();
+        } else {
+            return String.valueOf(value);
+        }
+        String rendered = moment.format(TIMESTAMP_SHAPE);
+        if (moment.getNano() != 0) {
+            rendered = rendered + "." + FRACTION_SHAPE.format(moment);
+        }
+        return rendered;
+    }
+
+    /** The names of a set of columns, for the callers that carry names and not types. */
+    private static List<String> namesOf(List<ColumnDto> columns) {
+        List<String> names = new ArrayList<>(columns.size());
+        for (ColumnDto column : columns) {
+            names.add(column.getName());
+        }
+        return names;
     }
 
     /**

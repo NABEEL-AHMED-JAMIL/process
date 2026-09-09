@@ -24,6 +24,8 @@ import process.api.AnalyticsExportRestApi;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
 import process.config.MethodSecurityConfig;
+import process.model.dto.ObjectMetadataDto;
+import process.model.service.StorageBrowserService;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
@@ -131,6 +133,7 @@ class AnalyticsExportTest {
     @Mock private DuckDbSessionFactory sessions;
     @Mock private KafkaTemplateProvider kafkaTemplateProvider;
     @Mock private KafkaConnectionResolver kafkaConnectionResolver;
+    @Mock private StorageBrowserService storageBrowserService;
     @Mock private KafkaTemplate<String, String> kafkaTemplate;
 
     /** A real, un-locked-down DuckDB. What a locked one refuses is asserted on its own below. */
@@ -202,7 +205,7 @@ class AnalyticsExportTest {
         AnalyticsQueryService service = new AnalyticsQueryService(this.sessions, limits);
         this.startedServices.add(service);
         AnalyticsExportService export = new AnalyticsExportService(this.resolver, service, limits,
-            this.kafkaTemplateProvider, this.kafkaConnectionResolver);
+            this.kafkaTemplateProvider, this.kafkaConnectionResolver, this.storageBrowserService);
         this.startedExports.add(export);
         return export;
     }
@@ -477,6 +480,66 @@ class AnalyticsExportTest {
     }
 
     // ---- write-back: where it lands ---------------------------------------------------------------
+
+    @Test
+    void aWriteBackWillNotSilentlyReplaceSomethingAlreadyThere() throws Exception {
+        // The reliability defect specification 15 names as "idempotent export/write operations",
+        // and it was real: the file name carried a stamp only to the SECOND, so two write-backs of
+        // the same dataset into the same folder inside one second built the same key -- and nothing
+        // looked to see whether that key was taken. The second replaced the first and reported
+        // success, in a class whose own message tells the user a storage connection has no undo.
+        when(this.storageBrowserService.getObjectMetadata(anyString(), anyString()))
+            .thenReturn(new ObjectMetadataDto());
+
+        ResponseDto response = this.exports.writeBack(request());
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR_MESSAGE);
+        assertThat(response.getMessage()).contains("already a file at").contains("no undo");
+        // And nothing was written. A refusal that still wrote would be the worse of both.
+        assertThat(this.executed).noneMatch(sql -> sql.startsWith("COPY"));
+    }
+
+    @Test
+    void aWriteBackReplacesSomethingWhenItIsAskedTo() throws Exception {
+        // The control. Refusing every write over an existing object would satisfy the test above
+        // while making "replace yesterday's export" impossible, which is a real thing to want.
+        when(this.storageBrowserService.getObjectMetadata(anyString(), anyString()))
+            .thenReturn(new ObjectMetadataDto());
+
+        ResponseDto response = this.exports.writeBack(request("overwrite", "true"));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        assertThat(theCopyThatRan()).startsWith("COPY (");
+    }
+
+    @Test
+    void aStorageErrorRefusesTheWriteRatherThanAssumingTheKeyIsFree() throws Exception {
+        // Fail closed. Treating an unreadable answer as "nothing is there" would restore exactly
+        // the clobber the check exists to prevent, and would do it precisely when the store is
+        // unhealthy -- the moment a silent overwrite is hardest to notice.
+        when(this.storageBrowserService.getObjectMetadata(anyString(), anyString()))
+            .thenThrow(new IllegalStateException("connection reset"));
+
+        ResponseDto response = this.exports.writeBack(request());
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR_MESSAGE);
+        assertThat(response.getMessage()).contains("Could not check");
+        assertThat(this.executed).noneMatch(sql -> sql.startsWith("COPY"));
+    }
+
+    @Test
+    void anAbsentObjectIsNotAnErrorAndTheWriteProceeds() throws Exception {
+        // The other half of failing closed: every store spells "not found" differently, so an
+        // absence is recognised by the shape of the message. If that recognition broke, every
+        // write-back would refuse and the feature would be dead rather than unsafe.
+        when(this.storageBrowserService.getObjectMetadata(anyString(), anyString()))
+            .thenThrow(new IllegalArgumentException("NoSuchKey: the specified key does not exist"));
+
+        ResponseDto response = this.exports.writeBack(request());
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        assertThat(theCopyThatRan()).startsWith("COPY (");
+    }
 
     @Test
     void aWriteBackLandsInTheConnectionsOwnBucket() throws Exception {
