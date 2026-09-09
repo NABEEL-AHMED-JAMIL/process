@@ -959,7 +959,10 @@ class AnalyticsBenchmarkTest {
     void aRefusedBenchmarkIsAnOkCarryingItsOwnWords() throws Exception {
         String message = "A benchmark needs at least 3 measured runs.";
         AnalyticsBenchmarkService benchmarkService = mock(AnalyticsBenchmarkService.class);
-        when(benchmarkService.run(any())).thenThrow(new AnalyticsException(message));
+        // runAndCompare, because that is what the endpoint calls now: it runs AND compares the
+        // result with previous runs of the same label. The refusal contract is unchanged and is
+        // what this test is about.
+        when(benchmarkService.runAndCompare(any())).thenThrow(new AnalyticsException(message));
         AnalyticsBenchmarkRestApi api = new AnalyticsBenchmarkRestApi(benchmarkService, new AnalyticsLimits());
 
         ResponseEntity<?> response = api.runBenchmark(
@@ -977,7 +980,7 @@ class AnalyticsBenchmarkTest {
     @Test
     void anUnexpectedFailureIsA500ThatSaysNothingAboutItself() throws Exception {
         AnalyticsBenchmarkService benchmarkService = mock(AnalyticsBenchmarkService.class);
-        when(benchmarkService.run(any()))
+        when(benchmarkService.runAndCompare(any()))
             .thenThrow(new IllegalStateException("minio.internal:9000 refused the connection"));
         AnalyticsBenchmarkRestApi api = new AnalyticsBenchmarkRestApi(benchmarkService, new AnalyticsLimits());
 

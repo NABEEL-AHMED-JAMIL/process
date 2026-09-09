@@ -353,6 +353,42 @@ public class AnalyticsBenchmarkService {
     }
 
     /**
+     * Runs a benchmark and compares it with every previous run of the same label.
+     *
+     * <b>This is the "regression suite" half of document 15's row.</b> run() on its own records a
+     * number; a number recorded and never compared is how a deployment that made Parquet reads
+     * four times slower would have written its own evidence down and said nothing.
+     *
+     * The history read happens AFTER the batch is written, which is the natural order and also
+     * the trap -- the run would find its own rows and conclude nothing had changed.
+     * BenchmarkRegression drops rows sharing the batch id for exactly that reason.
+     *
+     * A regression is LOGGED at warn and returned; it does not throw. These are timings from a
+     * real object store over a real network on whatever machine ran them, and a service that
+     * refused to answer because a laptop was busy would be worse than the silence it replaced.
+     */
+    @Transactional
+    public List<BenchmarkRegression.Verdict> runAndCompare(BenchmarkRequest request)
+        throws AnalyticsException {
+
+        List<BenchmarkResult> batch = this.run(request);
+        // The label's whole history, clamped by the same window every read of this table uses.
+        List<BenchmarkResult> history = this.recentResults(null,
+            batch.isEmpty() ? null : batch.get(0).getBenchmarkLabel(), MAX_RESULT_LIMIT);
+
+        List<BenchmarkRegression.Verdict> verdicts =
+            BenchmarkRegression.compare(batch, history);
+        for (BenchmarkRegression.Verdict verdict : verdicts) {
+            if (verdict.isRegressed()) {
+                this.logger.warn("Benchmark regression: {}", verdict.describe());
+            } else {
+                this.logger.info("Benchmark: {}", verdict.describe());
+            }
+        }
+        return verdicts;
+    }
+
+    /**
      * Measurements already taken: one batch, one label, or the most recent of everything.
      *
      * The window is clamped rather than taken as given, the same call the run history makes:

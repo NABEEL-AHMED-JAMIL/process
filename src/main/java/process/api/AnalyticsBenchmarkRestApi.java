@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import process.analytics.AnalyticsBenchmarkService;
+import process.analytics.BenchmarkRegression;
+
+import java.util.List;
 import process.analytics.AnalyticsException;
 import process.analytics.AnalyticsLimits;
 import process.model.dto.ResponseDto;
@@ -105,9 +108,16 @@ public class AnalyticsBenchmarkRestApi {
         @RequestBody(required = false) AnalyticsBenchmarkService.BenchmarkRequest request) {
         try {
             this.analyticsLimits.requireEnabled();
+            // runAndCompare rather than run: a measurement recorded and never compared is how a
+            // deployment that made Parquet reads four times slower writes its own evidence down
+            // and says nothing. The comparison is against every previous run of the same label,
+            // and the caller is told in the message -- not only in the log -- when one regressed.
+            List<BenchmarkRegression.Verdict> verdicts =
+                this.analyticsBenchmarkService.runAndCompare(request);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
-                "Benchmark complete. " + AnalyticsBenchmarkService.whatThisDidNotMeasure(),
-                this.analyticsBenchmarkService.run(request)), HttpStatus.OK);
+                "Benchmark complete. " + regressionSummary(verdicts) + " "
+                    + AnalyticsBenchmarkService.whatThisDidNotMeasure(),
+                verdicts), HttpStatus.OK);
         } catch (AnalyticsException ex) {
             // Written for a reader by whoever threw it, so it is returned as-is. A refused
             // benchmark -- too many sessions projected, too few runs to show a spread, a
@@ -120,6 +130,38 @@ public class AnalyticsBenchmarkRestApi {
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * What the comparison found, as one sentence the caller cannot miss.
+     *
+     * Names the regressed measurements rather than counting them: "1 regression" sends somebody to
+     * the log, and the log is on a server. A first run says so explicitly -- "no baseline" and "no
+     * regression" are different facts, and only one of them means the number can be trusted.
+     */
+    private static String regressionSummary(List<BenchmarkRegression.Verdict> verdicts) {
+        if (verdicts == null || verdicts.isEmpty()) {
+            return "Nothing was measured.";
+        }
+        StringBuilder regressed = new StringBuilder();
+        int baselines = 0;
+        for (BenchmarkRegression.Verdict verdict : verdicts) {
+            if (verdict.isRegressed()) {
+                if (regressed.length() > 0) {
+                    regressed.append("; ");
+                }
+                regressed.append(verdict.describe());
+            } else if (verdict.getBaselineMs() <= 0) {
+                baselines++;
+            }
+        }
+        if (regressed.length() > 0) {
+            return "REGRESSION: " + regressed + ".";
+        }
+        if (baselines == verdicts.size()) {
+            return "First measurement of these -- there is nothing to compare against yet.";
+        }
+        return "No regression against the best previously recorded.";
     }
 
     /**
