@@ -631,4 +631,19 @@ class PreviewSortFilterTest {
         assertThat(answer.getTotalRows()).isEqualTo(999L);
     }
 
+    @Test
+    void aPageNumberBeyondTheEndIsEmptyRatherThanAnEngineError() throws Exception {
+        // page x pageSize overflowed int: page=21475 at a page size of 100,000 produced OFFSET
+        // -2147467296, which DuckDB refuses with "LIMIT/OFFSET cannot be negative" and explain()
+        // turns into a sentence about the FILE being unreadable. It failed closed, so nothing was
+        // ever read wrongly -- but the reader was told something untrue about their data in order
+        // to describe a page number that cannot exist.
+        DatasetPreviewDto answer = this.engine.preview(this.dataset, 21475, 100000, null, null);
+
+        assertThat(answer.getRows()).isEmpty();
+        // And the page is still described honestly rather than the request being rejected: asking
+        // for a page past the end of a file is a question with an answer, and the answer is none.
+        assertThat(answer.getTotalRows()).isEqualTo(5L);
+    }
+
 }

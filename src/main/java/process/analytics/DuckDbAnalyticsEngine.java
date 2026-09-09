@@ -96,6 +96,16 @@ import java.util.regex.Pattern;
 @Service
 public class DuckDbAnalyticsEngine implements AnalyticsEngine {
 
+
+    /**
+     * The furthest a page may start.
+     *
+     * A page beyond the end of a dataset is empty rather than an error, so this does not need to
+     * know how long the file is -- it only needs to stop the arithmetic wrapping. Ten billion rows
+     * is past anything this engine will page through and far short of where a long overflows.
+     */
+    private static final long MAX_OFFSET = 10_000_000_000L;
+
     private static final Logger logger = LoggerFactory.getLogger(DuckDbAnalyticsEngine.class);
 
     /**
@@ -258,7 +268,13 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         Integer knownTotal, PreviewShape shape) throws AnalyticsException {
 
         int size = this.pageSize(requestedSize);
-        int offset = Math.max(0, page) * size;
+        // long, and clamped. page arrives unvalidated and size is clamped only to max-rows, so
+        // page=21475 with a page size of 100,000 overflowed int and produced a NEGATIVE offset --
+        // measured, "OFFSET -2147467296", which DuckDB refuses with "LIMIT/OFFSET cannot be
+        // negative" and explain() turns into a sentence about the file rather than about the
+        // request. It failed closed, so nothing was ever read wrongly; but the reader was told
+        // something untrue about their data to describe a page number that cannot exist.
+        long offset = Math.min((long) Math.max(0, page) * size, MAX_OFFSET);
         if (shape == null || shape.isEmpty()) {
             // A total counted under a filter is dropped even here, where the request itself carries
             // no filter. This branch is exactly what a grid hits when the reader CLEARS one: the
@@ -288,7 +304,7 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * the caller above drops a total whose own shape says it was counted under one, even when the
      * request that arrives here carries no filter at all.
      */
-    private DatasetPreviewDto unshapedPreview(DatasetRef dataset, int page, int size, int offset,
+    private DatasetPreviewDto unshapedPreview(DatasetRef dataset, int page, int size, long offset,
         Integer knownTotal) throws AnalyticsException {
 
         long total = knownTotal != null && knownTotal > 0 ? knownTotal : this.rowCount(dataset);
@@ -333,7 +349,7 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * count a count of the rows the page is a page of, rather than a number that merely arrived
      * with them.
      */
-    private DatasetPreviewDto shapedPreview(DatasetRef dataset, int page, int size, int offset,
+    private DatasetPreviewDto shapedPreview(DatasetRef dataset, int page, int size, long offset,
         Integer knownTotal, PreviewShape shape) throws AnalyticsException {
 
         int timeout = this.limits.getTimeoutSeconds();
