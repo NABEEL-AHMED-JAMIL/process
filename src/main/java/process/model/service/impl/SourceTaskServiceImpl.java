@@ -118,6 +118,21 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     }
 
     /**
+     * Delete is a soft delete -- the row stays in source_task and findById keeps returning it,
+     * because findById knows nothing about task_status. Every list a user can reach a task from
+     * does know: listSourceTaskQuery selects only ('Active', 'Inactive'), and
+     * downloadListSourceTask and fetchAllLinkSourceTaskWithSourceTaskTypeId both exclude
+     * 'Delete'. So a task the list said was gone still opened in the editor when its id was
+     * known, and saving from that screen wrote it back to Active -- while the jobs
+     * deleteSourceTask had already cascaded to Delete stayed deleted, leaving a live task
+     * pointing at a set of dead jobs that no screen shows. A deleted task has to read as absent
+     * on the by-id paths too.
+     */
+    private boolean isDeleted(SourceTask sourceTask) {
+        return sourceTask != null && Status.Delete.equals(sourceTask.getTaskStatus());
+    }
+
+    /**
      * A task type with no tenant is a platform-wide one and everybody may link to it; a
      * tenant-owned one only belongs to its own tenant. The link is not cosmetic -- the type
      * carries the Kafka topic and connection profile the job later publishes with, so binding
@@ -208,7 +223,12 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskDto.getTaskDetailId());
-        if (sourceTask.isPresent() && !this.isOwnedByCaller(sourceTask.get())) {
+        // A deleted task is refused with the wording used for one the caller does not own, and
+        // for one that never existed. Closing only the read path would still leave an editor
+        // tab that was open when the delete landed holding a usable id, and its save would
+        // resurrect the row.
+        if (sourceTask.isPresent()
+            && (!this.isOwnedByCaller(sourceTask.get()) || this.isDeleted(sourceTask.get()))) {
             return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
         }
         if (sourceTask.isPresent()) {
@@ -439,12 +459,21 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId) {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskId);
-        if (sourceTask.isPresent() && !this.isOwnedByCaller(sourceTask.get())) {
+        // The by-id read has to agree with the list the caller came from: a soft-deleted task
+        // reads as absent, exactly like one belonging to another tenant.
+        if (sourceTask.isPresent()
+            && (!this.isOwnedByCaller(sourceTask.get()) || this.isDeleted(sourceTask.get()))) {
             return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskId));
         }
         if (sourceTask.isPresent()) {
             SourceTaskDto sourceTaskDto = new SourceTaskDto();
             sourceTaskDto.setTaskDetailId(sourceTask.get().getTaskDetailId());
+            // Carried so the editor can ask formForPipeline for THIS task's tenant. Without it
+            // a platform admin -- who sees every tenant's rows -- was served whichever tenant's
+            // form for this pipeline had the lower id, and saving wrote that form's fields into
+            // this task's tags and payload. The guard on both sides already existed; the one
+            // line that feeds it did not, so it could never fire.
+            sourceTaskDto.setTenantId(sourceTask.get().getTenantId());
             sourceTaskDto.setTaskName(sourceTask.get().getTaskName());
             sourceTaskDto.setTaskStatus(sourceTask.get().getTaskStatus());
             sourceTaskDto.setHomePageId(sourceTask.get().getHomePageId());

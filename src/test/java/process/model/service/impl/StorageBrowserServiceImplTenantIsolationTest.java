@@ -165,7 +165,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
     void aTenantUserCannotDownloadAnotherTenantsUploadFromThePlatformBucket() {
         this.actAsTenantUser(TENANT_B, 999L);
 
-        assertThatThrownBy(() -> this.service.downloadObject(PLATFORM_BUCKET, "pdf-highlighter/41/contract.pdf", null, null))
+        assertThatThrownBy(() -> this.service.downloadObject(PLATFORM_BUCKET, "document-converter/41/input.docx", null, null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
         verify(this.minioObjectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
@@ -266,12 +266,12 @@ class StorageBrowserServiceImplTenantIsolationTest {
     void anApplicationWorkflowStillReachesTheFileItWrote() {
         this.actAsTenantUser(TENANT_A, USER_A);
 
-        // PdfHighlighterTaskServiceImpl has already checked the task row belongs to this caller,
+        // DocumentConverterServiceImpl has already checked the task row belongs to this caller,
         // and builds the key from it -- which is why this one is allowed where a browse is not.
-        this.service.readForWorkflow(PLATFORM_BUCKET, "pdf-highlighter/41/contract.pdf");
+        this.service.readForWorkflow(PLATFORM_BUCKET, "document-converter/41/input.docx");
 
         verify(this.minioObjectStorageService)
-            .getObjectContent(PLATFORM_BUCKET, "pdf-highlighter/41/contract.pdf", null, null);
+            .getObjectContent(PLATFORM_BUCKET, "document-converter/41/input.docx", null, null);
     }
 
     @Test

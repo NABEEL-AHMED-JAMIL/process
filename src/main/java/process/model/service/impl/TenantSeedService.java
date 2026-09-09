@@ -35,7 +35,6 @@ public class TenantSeedService {
     private final SourceJobRepository sourceJobRepository;
     private final SourceTaskRepository sourceTaskRepository;
     private final AiAgentRepository aiAgentRepository;
-    private final PdfHighlighterTaskRepository pdfHighlighterTaskRepository;
     private final LookupDataRepository lookupDataRepository;
     private final LookupDataCacheService lookupDataCacheService;
 
@@ -45,7 +44,7 @@ public class TenantSeedService {
     public TenantSeedService(TenantRepository tenantRepository, AppUserRepository appUserRepository,
         PasswordEncoder passwordEncoder, SourceJobRepository sourceJobRepository,
         SourceTaskRepository sourceTaskRepository,
-        AiAgentRepository aiAgentRepository, PdfHighlighterTaskRepository pdfHighlighterTaskRepository,
+        AiAgentRepository aiAgentRepository,
         LookupDataRepository lookupDataRepository, LookupDataCacheService lookupDataCacheService) {
         this.tenantRepository = tenantRepository;
         this.appUserRepository = appUserRepository;
@@ -53,7 +52,6 @@ public class TenantSeedService {
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.aiAgentRepository = aiAgentRepository;
-        this.pdfHighlighterTaskRepository = pdfHighlighterTaskRepository;
         this.lookupDataRepository = lookupDataRepository;
         this.lookupDataCacheService = lookupDataCacheService;
     }
@@ -130,13 +128,12 @@ public class TenantSeedService {
         int jobs = this.sourceJobRepository.backfillTenantId(defaultTenantId);
         int tasks = this.sourceTaskRepository.backfillTenantId(defaultTenantId);
         int agents = this.aiAgentRepository.backfillTenantId(defaultTenantId);
-        int pdfTasks = this.pdfHighlighterTaskRepository.backfillTenantId(defaultTenantId);
         int buckets = this.lookupDataRepository.backfillBucketTenantId(defaultTenantId);
-        int total = jobs + tasks + agents + pdfTasks + buckets;
+        int total = jobs + tasks + agents + buckets;
         if (total > 0) {
             this.logger.info("=========Backfilled tenantId to Default tenant ({}) on {} pre-existing row(s): "
-                + "sourceJob={}, sourceTask={}, aiAgent={}, pdfHighlighterTask={}, bucketLookup={} ==========",
-                defaultTenantId, total, jobs, tasks, agents, pdfTasks, buckets);
+                + "sourceJob={}, sourceTask={}, aiAgent={}, bucketLookup={} ==========",
+                defaultTenantId, total, jobs, tasks, agents, buckets);
         }
     }
 

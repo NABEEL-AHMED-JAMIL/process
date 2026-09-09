@@ -41,7 +41,7 @@ public class TenantOwnedLookupTest {
         // Per-tenant copies of these would break the scheduler rather than isolate anything.
         for (String type : new String[] {
             "SCHEDULER_LAST_RUN_TIME", "QUEUE_FETCH_LIMIT", "AUDIT_LOG_SYNC_LAST_RUN_TIME",
-            "AI_PROVIDER", "EMAIL_RECEIVER" }) {
+            "AI_PROVIDER" }) {
             assertFalse(isTenantOwned(type), type + " must stay platform-level");
         }
     }
@@ -57,11 +57,16 @@ public class TenantOwnedLookupTest {
 
     @Test
     void engineDialsAreVisibleOnlyToThePlatformAdmin() throws Exception {
-        // Two are the timestamps the scheduler and audit sync resume from, one caps the
-        // dispatcher, one names where system mail goes. None is a workspace setting.
+        // Two are the timestamps the scheduler and audit sync resume from and one caps the
+        // dispatcher. None is a workspace setting.
+        //
+        // EMAIL_RECEIVER used to be in this list. It named a single mailbox that received every
+        // tenant's job notifications, which is why it had to be platform-only -- and also why it
+        // was wrong: notifications now go to the job's own assigned user, so there is no
+        // platform-wide recipient left to protect.
         for (String type : new String[] {
             "QUEUE_FETCH_LIMIT", "SCHEDULER_LAST_RUN_TIME",
-            "AUDIT_LOG_SYNC_LAST_RUN_TIME", "EMAIL_RECEIVER" }) {
+            "AUDIT_LOG_SYNC_LAST_RUN_TIME" }) {
             assertTrue(isPlatformOnly(type), type + " should be platform-only");
         }
     }

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import process.model.dto.LookupDataDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
+import process.model.repository.SourceJobRepository;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import javax.mail.internet.MimeMessage;
@@ -28,24 +29,64 @@ public class EmailMessagesFactory {
 
     private final String UTF8 = "utf-8";
 
-    @Value("${spring.mail.username}")
+    /**
+     * The From address.
+     *
+     * Was ${spring.mail.username}, which is an SMTP LOGIN, not an address -- on this deployment
+     * it resolves to "ce545af2135fd6". SMTP relays tolerated that; SES will not, and neither
+     * will a recipient's mail client. Now its own setting, defaulting to a real address.
+     */
+    @Value("${app.mail.from:no-reply@etl-console.local}")
     private String sender;
 
     private final JavaMailSender javaMailSender;
     private final VelocityManager velocityManager;
     private final LookupDataCacheService lookupDataCacheService;
+    private final SourceJobRepository sourceJobRepository;
+    /*
+     * javaMailSender is still here, but only to BUILD the message: createMimeMessage() plus
+     * MimeMessageHelper handle HTML, CC, UTF-8 and attachments correctly, and there is no
+     * reason to reimplement MIME. Delivery goes through the transport below.
+     */
+    private final MailTransport mailTransport;
 
     public EmailMessagesFactory(JavaMailSender javaMailSender,
         VelocityManager velocityManager,
-        LookupDataCacheService lookupDataCacheService) {
+        LookupDataCacheService lookupDataCacheService,
+        SourceJobRepository sourceJobRepository,
+        MailTransport mailTransport) {
         this.javaMailSender = javaMailSender;
         this.velocityManager = velocityManager;
         this.lookupDataCacheService = lookupDataCacheService;
+        this.sourceJobRepository = sourceJobRepository;
+        this.mailTransport = mailTransport;
     }
 
+    /**
+     * A job's notification goes to the person the job belongs to.
+     *
+     * It used to go to whatever single address sat in the EMAIL_RECEIVER lookup -- one row,
+     * tenant_id NULL, platform-wide. That was wrong twice over. Every tenant's job names and
+     * failure messages were delivered to one mailbox, which in a system whose own tenant page
+     * says "jobs, buckets, tasks and users never cross between them" is a cross-tenant leak;
+     * and the person who actually owns the job was never told anything, which is the entire
+     * point of a job notification.
+     *
+     * Resolved here rather than at each of the seven call sites, so every path that notifies --
+     * the dispatcher, the queue consumer and the worker callback -- gets the same answer.
+     *
+     * A job with no assignee sends nothing. There is no sensible fallback: any address we chose
+     * would be somebody who did not ask for this job's mail.
+     */
     public String sendSourceJobEmail(SourceJobQueueDto jobQueue, JobStatus jobStatus) {
         try {
-            LookupDataDto lookupDataDto = this.lookupDataCacheService.getParentLookupById(ProcessUtil.EMAIL_RECEIVER);
+            String recipient = ProcessUtil.isNull(jobQueue.getJobId()) ? null
+                : this.sourceJobRepository.findNotificationRecipient(jobQueue.getJobId());
+            if (ProcessUtil.isNull(recipient) || recipient.trim().isEmpty()) {
+                logger.warn("Job {} has no assigned user, so its {} notification was not sent.",
+                    jobQueue.getJobId(), jobStatus);
+                return "No recipient for this job";
+            }
             Map<String, Object> metaData = new HashMap<>();
             metaData.put("job_id", jobQueue.getJobId());
             metaData.put("event_id", jobQueue.getJobQueueId());
@@ -55,7 +96,7 @@ public class EmailMessagesFactory {
             metaData.put("job_name", jobQueue.getJobName());
             metaData.put("status_message", jobQueue.getJobStatusMessage());
             EmailMessageDto emailMessageDto = new EmailMessageDto();
-            emailMessageDto.setRecipients(lookupDataDto.getLookupValue());
+            emailMessageDto.setRecipients(recipient);
             if (jobStatus.equals(JobStatus.Skip)) {
                 metaData.put("status", JobStatus.Skip);
                 emailMessageDto.setSubject("Source Job Skip");
@@ -190,8 +231,9 @@ public class EmailMessagesFactory {
                     helper.addAttachment(emailContent.getAttachmentFilename(),
                         new ByteArrayResource(emailContent.getAttachmentBytes()), emailContent.getAttachmentContentType());
                 }
-                this.javaMailSender.send(mailMessage);
-                logger.info("Email sent successfully. Content: {}.", safeToLog(emailContent.getBodyMap()));
+                this.mailTransport.send(mailMessage);
+                logger.info("Email sent via {} to {}. Content: {}.", this.mailTransport.describe(),
+                    emailContent.getRecipients(), safeToLog(emailContent.getBodyMap()));
             } else {
                 logger.error("Error: recipient is null. Content: {}.", safeToLog(emailContent.getBodyMap()));
             }

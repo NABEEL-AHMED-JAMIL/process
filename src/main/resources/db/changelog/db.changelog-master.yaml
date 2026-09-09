@@ -64,3 +64,15 @@ databaseChangeLog:
       file: db/changelog/yaml/V27.0-drop-query-engine.yaml
   - include:
       file: db/changelog/yaml/V28.0-drop-pipeline-ids-lookup.yaml
+  - include:
+      file: db/changelog/yaml/V29.0-drop-pdf-highlighter.yaml
+  - include:
+      file: db/changelog/yaml/V30.0-drop-email-receiver.yaml
+  - include:
+      file: db/changelog/yaml/V31.0-analytics-dataset.yaml
+  - include:
+      file: db/changelog/yaml/V32.0-analytics-query.yaml
+  - include:
+      file: db/changelog/yaml/V33.0-analytics-benchmark.yaml
+  - include:
+      file: db/changelog/yaml/V34.0-analytics-workspace.yaml

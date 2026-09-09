@@ -1,0 +1,1152 @@
+package process.analytics;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import process.analytics.dto.ColumnDto;
+import process.analytics.dto.ColumnProfileDto;
+import process.analytics.dto.DatasetPreviewDto;
+import process.analytics.dto.DatasetProfileDto;
+import process.analytics.dto.DatasetSchemaDto;
+import process.analytics.dto.QueryResultDto;
+import process.security.TenantContext;
+
+import javax.annotation.PreDestroy;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+
+/**
+ * The only place in this application where an analytics query runs, and the only class that knows
+ * it is DuckDB that runs it.
+ *
+ * Everything here was AnalyticsQueryService until the engine seam was introduced, and moving it
+ * rather than wrapping it is the point: {@link AnalyticsEngine} is worth having only if the
+ * DuckDB-shaped code is on ONE side of it. AnalyticsQueryService is now the name the rest of the
+ * module injects and it hands every call straight here; the governed path -- the fair semaphore,
+ * the locked-down session, the timeout -- did not change, it only stopped being anonymous.
+ *
+ * Every path in and out is narrow on purpose. Callers hand in a DatasetRef, which can only have
+ * come from DatasetResolver and therefore has already passed the tenant and path checks. The
+ * built-in reads -- schema, preview, count, profile -- build their own SQL here from a scan
+ * expression the DatasetRef produced, so there is exactly one place to read when the question is
+ * "what can this feature execute".
+ *
+ * That narrowness is what made SQL Studio possible, and query() is where it landed. User-written
+ * SQL arrives at THIS class, against a session already locked down by DuckDbSessionFactory, under
+ * the same semaphore and the same timeout, rather than opening a second door beside this one --
+ * through StatementGate, which decides whether the statement is a read at all, and through
+ * bounded(), which is where analytics.query.max-rows is enforced and the only place it is. A
+ * query path that skips bounded() is a query with no row ceiling, whatever the property says it
+ * is set to, and one that skips the gate is a session whose only remaining defence is that the
+ * filesystem was taken away from it.
+ *
+ * The user never names a location. query() binds each dataset to a view -- "dataset", and
+ * "dataset2" for a join -- so the SQL a person writes contains a NAME where the URL would have
+ * been, and DatasetResolver stays the only thing in the module that turns a request into somewhere
+ * readable.
+ *
+ * <b>Every run is registered before it starts.</b> {@link RunningQueries} holds the in-flight set,
+ * and a run is opened before the permit is asked for -- so a caller waiting on the governor is
+ * QUEUED, a caller with a statement open is RUNNING, and both can be stopped. The registration is
+ * closed in a finally, on all five ways out, because a registry that keeps an entry per query it
+ * has ever seen is a memory leak with a tenant id in it.
+ *
+ * <b>copyTo() is the one method here that writes, and the module's design assumed for three phases
+ * that no such method would exist.</b> It is here rather than in the export service because the
+ * rule it has to keep is this class's rule: a statement that writes is composed HERE, around a read
+ * StatementGate has already admitted, and never anywhere a caller can reach. The gate cannot admit
+ * a COPY -- json_serialize_sql answers "Only SELECT statements can be serialized to json!", so a
+ * user's own COPY is refused as unserialisable like any other write -- which means the only COPY
+ * this application can run is one this file built. The destination is a DatasetRef, so it came from
+ * DatasetResolver and is the caller's own connection's bucket, and lockDown() is untouched: the
+ * write leaves through the S3 secret, and a local path is still refused by the engine itself.
+ *
+ * On why this is not a connection pool: a DuckDB session is per query and closed with it. The
+ * in-memory catalogue and the attached credentials die with it, so one caller's dataset cannot
+ * be visible to another's, and a query that wedges cannot poison a pooled connection for the
+ * next caller. The cost is a fresh session per request, which is milliseconds against a scan
+ * measured in hundreds.
+ *
+ * @author Nabeel Ahmed
+ */
+@Service
+public class DuckDbAnalyticsEngine implements AnalyticsEngine {
+
+    private static final Logger logger = LoggerFactory.getLogger(DuckDbAnalyticsEngine.class);
+
+    /**
+     * How long a caller waits for a slot before being turned away.
+     *
+     * Short by design. The point of the ceiling is to fail fast while the user is still looking
+     * at the screen, not to build a queue that turns one slow query into a slow application.
+     *
+     * It is also the whole of QUEUED. 05 names a queued state and this module refuses rather than
+     * queues, so the state exists for these two seconds and no longer -- long enough to be a real
+     * thing a run can be stopped in, far too short to be the asynchronous submission the spec's
+     * lifecycle assumes. That gap is recorded rather than papered over; see the result report.
+     */
+    private static final long SLOT_WAIT_SECONDS = 2;
+
+    /**
+     * Anything shaped like a URL, so an engine message can be returned without carrying one.
+     *
+     * The scan expression this class builds interpolates the dataset's s3:// or azure:// URL into
+     * the SQL, and DuckDB's parser errors quote the statement back. Credentials never appear --
+     * DuckDbSessionFactory attaches them with CREATE SECRET precisely so they cannot -- but the
+     * location does, and the only engine messages that leave this class are the ones that would
+     * have carried it.
+     */
+    private static final Pattern LOCATION = Pattern.compile("[a-zA-Z][a-zA-Z0-9+.\\-]*://[^\\s'\"()]*");
+
+    /**
+     * How much of an engine message is worth returning.
+     *
+     * A parser error on a long statement quotes the whole statement back. Past a couple of lines
+     * the useful part -- what is wrong and roughly where -- has already been said.
+     */
+    private static final int ENGINE_MESSAGE_LIMIT = 400;
+
+    /** Percentages arrive from SUMMARIZE as DECIMAL(9,2) and are turned back into counts here. */
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+
+    /**
+     * How close an ESTIMATED distinct count has to sit to the row count before a column is called
+     * key-like.
+     *
+     * Loose because the estimator is. approx_unique is HyperLogLog, and over a million genuinely
+     * distinct values it was measured returning 962,761 -- 3.7% low. A 1% threshold would therefore
+     * have refused to flag a real primary key on any file large enough for the question to matter,
+     * which is the failure that costs a user something; the failure this threshold accepts instead
+     * is flagging a column that has a few duplicates in it, which the word "like" already admits.
+     */
+    private static final BigDecimal KEY_LIKE_RATIO = new BigDecimal("0.95");
+
+    /**
+     * The date shapes a VARCHAR column is tested against before it is called a date surprise.
+     *
+     * Strict, so that 13/13/2024 is not a date. Both slash orderings are here because min and max
+     * cannot tell us which convention wrote the file, and both are required to parse under the SAME
+     * formatter, so a pair like 02/03/2024 and 30/06/2024 is only accepted by the reading that
+     * works for both of them.
+     */
+    private static final List<DateTimeFormatter> DATE_SHAPES = Arrays.asList(
+        DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT),
+        DateTimeFormatter.ofPattern("uuuu/MM/dd").withResolverStyle(ResolverStyle.STRICT),
+        DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT),
+        DateTimeFormatter.ofPattern("M/d/uuuu").withResolverStyle(ResolverStyle.STRICT),
+        DateTimeFormatter.ofPattern("d-M-uuuu").withResolverStyle(ResolverStyle.STRICT));
+
+    private final DuckDbSessionFactory sessions;
+    private final AnalyticsLimits limits;
+    private final RunningQueries running;
+    private final Semaphore slots;
+
+    /**
+     * The thread that stops a query the driver will not stop for us.
+     *
+     * Statement.setQueryTimeout is a NO-OP in duckdb_jdbc 1.1.3 -- the driver logs "not supported"
+     * at FINE and returns -- so until this existed, analytics.query.timeout-seconds was a number
+     * in a properties file and nothing else. That was survivable while every statement was built
+     * here and known to terminate; it stopped being survivable the moment a user could write the
+     * statement, because four queries that never finish take every permit the governor has and
+     * the feature is then down until the process restarts.
+     *
+     * What the driver does implement is cancel(), which interrupts the running query on that
+     * connection -- measured, it lands in about the millisecond after it is called, and the
+     * statement throws "INTERRUPT Error: Interrupted!". explain() has always mapped an interrupt
+     * to the timeout sentence.
+     *
+     * It now cancels through the run's {@link RunningQueries.Handle} rather than through a
+     * Statement it holds itself, because a user pressing stop needs the same interruption under
+     * the same lock. Two mechanisms for one cancel is how the two disagree about whether the
+     * connection is still open.
+     *
+     * One thread for the whole application: these tasks call cancel() and nothing else.
+     */
+    private final ScheduledExecutorService watchdogs;
+
+    public DuckDbAnalyticsEngine(DuckDbSessionFactory sessions, AnalyticsLimits limits,
+        RunningQueries running) {
+        this.sessions = sessions;
+        this.limits = limits;
+        this.running = running;
+        // Fair, so a steady trickle of small queries cannot starve one that has been waiting.
+        this.slots = new Semaphore(Math.max(1, limits.getMaxConcurrentQueries()), true);
+        this.watchdogs = Executors.newSingleThreadScheduledExecutor(work -> {
+            // Daemon: this thread must never be the reason the application will not shut down.
+            Thread thread = new Thread(work, "analytics-query-timeout");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    /**
+     * The dataset's columns and their types, without reading its rows.
+     *
+     * DESCRIBE makes the reader infer the schema from as little of the file as it needs, so this
+     * stays cheap on a large Parquet file and on a folder of a thousand CSVs alike.
+     */
+    @Override
+    public DatasetSchemaDto schemaOf(DatasetRef dataset) throws AnalyticsException {
+        List<ColumnDto> columns = this.run(dataset,
+            "DESCRIBE SELECT * FROM " + dataset.scanExpression(),
+            resultSet -> {
+                List<ColumnDto> found = new ArrayList<>();
+                while (resultSet.next()) {
+                    found.add(new ColumnDto(resultSet.getString("column_name"),
+                        resultSet.getString("column_type")));
+                }
+                return found;
+            });
+        return new DatasetSchemaDto(dataset.getBucket(), dataset.getPath(),
+            dataset.getFormat().name(), dataset.isMultiFile(), columns);
+    }
+
+    /**
+     * One page of rows, counted and bounded.
+     *
+     * The count is a separate query rather than the size of the page, because a reader wants to
+     * know how much there is before deciding whether to page through it, and because count(*)
+     * over Parquet is answered from metadata rather than by reading the file.
+     *
+     * A non-positive or absent knownTotal counts, so the first request for a dataset -- the one
+     * that has nothing to carry forward -- behaves exactly as it always did. The value is not
+     * validated against the dataset because it cannot be: checking it would be the count. It is
+     * a number the client already displayed, echoed back for the client to display again, and
+     * the worst a wrong one does is misdraw a page control.
+     */
+    @Override
+    public DatasetPreviewDto preview(DatasetRef dataset, int page, Integer requestedSize,
+        Integer knownTotal) throws AnalyticsException {
+
+        int size = this.pageSize(requestedSize);
+        int offset = Math.max(0, page) * size;
+        long total = knownTotal != null && knownTotal > 0 ? knownTotal : this.rowCount(dataset);
+
+        // Ordering is deliberately absent. Object storage has no natural row order to promise,
+        // and an ORDER BY here would sort the whole dataset to return a hundred rows.
+        //
+        // Bounded even though the page size is already clamped, because the two are different
+        // policies that happen to agree today: the clamp says how big a PAGE may be, and the
+        // bound says how big a RESULT may be. Phase three's result is not a page.
+        String sql = this.bounded("SELECT * FROM " + dataset.scanExpression()
+            + " LIMIT " + size + " OFFSET " + offset);
+
+        List<String> columns = new ArrayList<>();
+        List<List<String>> rows = this.run(dataset, sql, resultSet -> rowsOf(resultSet, columns));
+
+        return new DatasetPreviewDto(columns, rows, page, size, total, dataset.isMultiFile());
+    }
+
+    /**
+     * How many rows the dataset holds, across every file when the path is a pattern.
+     *
+     * Not bounded: count(*) returns one row whatever the dataset is, and wrapping it would add a
+     * subquery for nothing. Same for DESCRIBE in schemaOf, which returns a row per column and is
+     * not a SELECT the wrapper below could legally contain anyway.
+     */
+    @Override
+    public long rowCount(DatasetRef dataset) throws AnalyticsException {
+        return this.run(dataset, "SELECT count(*) FROM " + dataset.scanExpression(),
+            resultSet -> resultSet.next() ? resultSet.getLong(1) : 0L);
+    }
+
+    /**
+     * A query a person wrote, run under every limit the rest of this class runs under.
+     *
+     * This is the door phase one spent its whole release building the lock for, and it is a door
+     * in the same wall rather than a second one: the same DuckDbSessionFactory session, the same
+     * fair semaphore, the same timeout, the same bounded(), the same explain(). What is added is
+     * StatementGate, because none of those can tell a read from a write.
+     *
+     * The order inside the session is the argument. The statement is judged FIRST, so a COPY or an
+     * ATTACH is refused before a dataset has been opened, let alone read -- a refusal costs a
+     * parse and nothing else. The views come next, which is where the location the user never sees
+     * gets bound to the name they type. Only then is anything executed.
+     *
+     * The second dataset is optional and, when present, has been through DatasetResolver on its
+     * own. Two resolves rather than one is the whole tenancy property of a join: a caller who can
+     * reach connection A and not connection B cannot reach B by joining to it, because the second
+     * dataset passes or fails the same check the first one did, with the same answer it would have
+     * given if B had been asked for by itself.
+     *
+     * <b>This is the only method that lets its caller name the run.</b> /query is synchronous, so
+     * a server-minted id reaches the browser in the same response as the rows -- which is to say,
+     * after there is anything left to cancel. A caller that intends to offer a stop button sends
+     * the id it will cancel with; one that does not gets a minted id and a run nobody outside can
+     * address. That asymmetry is a consequence of the request model, not a preference, and it is
+     * the honest limit of cancellation until a query is a job with a handle of its own.
+     *
+     * @param secondary the dataset exposed as "dataset2", or null when the query reads only one
+     * @param requestedRunId the id this run should answer to, or null to mint one
+     */
+    @Override
+    public QueryResultDto query(DatasetRef primary, DatasetRef secondary, String sql,
+        String requestedRunId) throws AnalyticsException {
+
+        int timeout = this.limits.getTimeoutSeconds();
+        RunningQueries.Handle handle = this.running.open(requestedRunId);
+        QueryResultDto result = this.inSession(primary, handle, (session, statement) -> {
+            StatementGate.Admitted admitted = StatementGate.admit(session, sql, timeout);
+
+            statement.execute(viewOf(DATASET, primary));
+            if (secondary != null) {
+                statement.execute(viewOf(SECOND_DATASET, secondary));
+            }
+
+            String executable = admitted.getSql();
+            if (admitted.isBoundable()) {
+                executable = this.bounded(executable);
+                // The gate again, on the string that is actually about to run rather than on the
+                // one that was submitted. Wrapping cannot turn one statement into two today; this
+                // is what keeps that true after somebody edits the wrapper.
+                StatementGate.confirmComposed(session, executable, timeout);
+            }
+
+            List<String> columns = new ArrayList<>();
+            List<List<String>> rows;
+            try (ResultSet resultSet = statement.executeQuery(executable)) {
+                rows = rowsOf(resultSet, columns);
+            }
+            // A result that came back full to the ceiling is reported as truncated, including the
+            // dataset that happens to hold exactly that many rows. The alternative is running the
+            // query a second time without the bound to find out, which is the thing the bound is
+            // for. An EXPLAIN is never truncated because it was never wrapped.
+            boolean truncated = admitted.isBoundable() && rows.size() >= this.limits.getMaxRows();
+            return new QueryResultDto(columns, rows, rows.size(), truncated);
+        });
+        // Set out here rather than in the lambda because the id and the elapsed time describe the
+        // RUN, and the run is not over until the session that carried it has closed.
+        result.setQueryId(handle.getId());
+        result.setStatus(RunState.COMPLETED.name());
+        result.setDurationMs(handle.elapsedMs());
+        return result;
+    }
+
+    /**
+     * The same query, written into the caller's own connection's bucket instead of returned.
+     *
+     * Everything before the COPY is the read path unchanged: one session, one permit, one timeout,
+     * StatementGate first so a write or a second statement is refused before a dataset is opened,
+     * then the views, then bounded(). The only thing added is the last statement, and it is
+     * composed here from three pieces a caller cannot supply -- the fixed word COPY, a read the
+     * gate admitted, and a URL that came out of DatasetResolver.
+     *
+     * <b>The result is written whole or not at all, and that is why the row count is taken before
+     * the write rather than after it.</b> Everywhere else in this module a result that hits the
+     * ceiling comes back flagged truncated and the reader is told; an object in a bucket has
+     * nowhere to carry that flag. Parquet has no comment, a CSV's trailing marker is a row somebody
+     * will sum, and a file that is renamed or copied loses whatever its name was saying. So the
+     * ceiling is tested first with a probe that stops at max-rows + 1, and a query that would
+     * overflow is refused with nothing written. A partial object in a bucket is worse than no
+     * object: nothing downstream can tell it from a complete one.
+     *
+     * The probe is not free and is not a full second scan either. It returns at most one more row
+     * than the ceiling, so for a streaming read DuckDB stops early; only a query with a sort or an
+     * aggregate in it pays close to the write's own cost, and that query was going to pay it twice
+     * over anyway if it had been run and then exported.
+     *
+     * @param target where to write, which must be the primary dataset's own connection
+     * @return the number of rows the engine reported writing
+     */
+    @Override
+    public long copyTo(DatasetRef primary, DatasetRef secondary, String sql, DatasetRef target)
+        throws AnalyticsException {
+
+        String destination = this.writableUrl(primary, target);
+        int timeout = this.limits.getTimeoutSeconds();
+        int ceiling = this.limits.getMaxRows();
+
+        return this.inSession(primary, (session, statement) -> {
+            StatementGate.Admitted admitted = StatementGate.admit(session, sql, timeout);
+            if (!admitted.isBoundable()) {
+                // EXPLAIN is the only admission that is not boundable, and a plan is a description
+                // of a query rather than an answer to one. Writing it would put a file in a bucket
+                // that nothing downstream can read as data.
+                throw new AnalyticsException("A query plan cannot be written to storage. "
+                    + "Write the query's result instead of its EXPLAIN.");
+            }
+
+            statement.execute(viewOf(DATASET, primary));
+            if (secondary != null) {
+                statement.execute(viewOf(SECOND_DATASET, secondary));
+            }
+
+            long rows = this.countUpTo(session, statement, admitted.getSql(), ceiling, timeout);
+            if (rows > ceiling) {
+                throw new AnalyticsException("That query returns more than the " + ceiling
+                    + " rows an export may write, so nothing was written. Narrow it with a WHERE "
+                    + "or a LIMIT, or write it out in parts.");
+            }
+
+            String bounded = this.bounded(admitted.getSql());
+            // The gate on the composed read, exactly as query() does it, and for the same reason:
+            // what is about to be wrapped in a COPY has to be one read statement, and the parser
+            // is the only thing entitled to say so.
+            StatementGate.confirmComposed(session, bounded, timeout);
+
+            String copy = "COPY (" + bounded + ") TO '" + destination.replace("'", "''") + "' "
+                + copyOptions(target.getFormat());
+            try {
+                statement.execute(copy);
+            } catch (SQLException ex) {
+                // Mapped here rather than by explain(), which is written for a READ: it would tell
+                // someone whose write was refused that the connection "was not allowed to read"
+                // the bucket, and would name the source dataset for a failure at the destination.
+                throw this.explainWrite(target, ex);
+            }
+            // DuckDB returns rows written as the update count -- measured on 1.1.3, 100 rows
+            // reported 100 and an empty result reported 0. The probe's count is the fallback for a
+            // driver that stops doing that, and the two agree by construction.
+            long written = statement.getUpdateCount();
+            if (written > rows) {
+                // The one way this design can still put a short object in a bucket, closed here
+                // rather than left as a caveat. The count and the write are two statements, and
+                // the object store underneath them is not part of the session: a dataset that
+                // grew past the ceiling in between would be written bounded, and every check
+                // above would have passed. More rows written than were counted moments earlier is
+                // proof that happened.
+                //
+                // A dataset that SHRANK in between goes uncaught, and that is deliberate rather
+                // than a gap in the same check: the object then holds every row that was there
+                // when it was written, which is all an export has ever been able to claim.
+                //
+                // The object is already there and cannot be unwritten from here, so the honest
+                // answer is to say which one is suspect rather than to report a success.
+                logger.error("An analytics export to {} wrote {} rows where {} were counted "
+                    + "moments before; the dataset changed underneath it.", target, written, rows);
+                throw new AnalyticsException("The dataset changed while it was being exported, so "
+                    + "the file written to " + target.getPath() + " may be incomplete. Delete it "
+                    + "and run the export again.");
+            }
+            if (written < 0) {
+                // Fail closed, not open. This used to substitute the PROBE's count -- a number
+                // from a different statement -- which also silently disabled the "grew underneath
+                // us" check above it, since -1 > rows is false. Measured on 1.1.3 the driver does
+                // report the count, so this is latent; but the honest answer when a write cannot
+                // be confirmed is to say it cannot be confirmed. The object is already in the
+                // bucket and cannot be unwritten from here, so name it rather than claim it.
+                logger.error("An analytics export to {} completed without reporting how many rows "
+                    + "it wrote; the engine's update count was {}.", target, written);
+                throw new AnalyticsException("The export to " + target.getPath() + " finished, but "
+                    + "the engine did not confirm how much it wrote, so it cannot be reported as "
+                    + "complete. Check the file before relying on it.");
+            }
+            return written;
+        });
+    }
+
+    /**
+     * The destination URL, or a refusal, checked against the one rule that cannot be delegated.
+     *
+     * AnalyticsExportService allow-lists the key a user names, and that check is where a bad key is
+     * caught with a sentence a person can act on. This one is different in kind: it is the check
+     * made by the class that is about to interpolate the string into SQL, and it assumes its caller
+     * is wrong. Phase three's lesson is the reason it exists -- the statement gate checked
+     * table_name and not schema_name, and a quoted schema carried an s3:// URL past it -- so a
+     * location is re-examined at the point of use and not only at the point of entry.
+     *
+     * The bucket is not compared against a name; the CONNECTION is compared against the primary
+     * dataset's. A session carries exactly one storage connection's credentials, so a write to any
+     * other connection's bucket would be this connection's credential spent on somebody else's
+     * location, which is the request DatasetResolver exists to make unaskable.
+     */
+    private String writableUrl(DatasetRef primary, DatasetRef target) throws AnalyticsException {
+        if (primary == null || target == null) {
+            throw new AnalyticsException("There is nowhere to write this result.");
+        }
+        if (target.getConnection() == null || primary.getConnection() == null
+            || target.getConnection().getStorageConnectionId() == null
+            || !target.getConnection().getStorageConnectionId()
+                .equals(primary.getConnection().getStorageConnectionId())
+            || !target.getBucket().equals(primary.getBucket())) {
+            throw new AnalyticsException("An export is written into the connection it was read "
+                + "from, and this one names a different connection.");
+        }
+        String path = target.getPath();
+        String url = target.url();
+        boolean writable = url.equals("s3://" + target.getBucket() + "/" + path)
+            // A second scheme anywhere in the string is the shape a smuggled location takes.
+            && url.indexOf("://", "s3://".length()) < 0
+            // A glob names a set of files. COPY given one writes a file with a star in its name,
+            // which is a location nobody chose and nothing can find again.
+            && !target.isMultiFile()
+            && !path.contains("..")
+            // And a "." segment, which StorageBrowserServiceImpl.isSafeKey (:405-418) refuses and
+            // this did not -- so an object could be written that the app's own browser will not
+            // read back. Checked here as well as in AnalyticsExportService because this is the
+            // point of interpolation, and the two layers deliberately overlap.
+            && !hasDotSegment(path)
+            && !path.contains("//")
+            && !path.startsWith("/")
+            // A key ending in a slash makes DuckDB write a directory-shaped export beside the
+            // object the caller was told about.
+            && !path.endsWith("/");
+        if (!writable) {
+            throw new AnalyticsException("That is not a location an export can be written to.");
+        }
+        return url;
+    }
+
+    /**
+     * How many rows the query would return, counting no further than it has to.
+     *
+     * LIMIT ceiling + 1 rather than ceiling, because "exactly the ceiling" and "more than the
+     * ceiling" are the two answers this has to tell apart, and a count that stops at the ceiling
+     * reports both as the same number.
+     */
+    private long countUpTo(Connection session, Statement statement, String sql, int ceiling,
+        int timeout) throws AnalyticsException, SQLException {
+
+        String probe = "SELECT count(*) FROM (SELECT 1 FROM (" + sql
+            + ") AS export_probe LIMIT " + (ceiling + 1) + ") AS export_probe_count";
+        StatementGate.confirmComposed(session, probe, timeout);
+        try (ResultSet counted = statement.executeQuery(probe)) {
+            return counted.next() ? counted.getLong(1) : 0L;
+        }
+    }
+
+    /**
+     * The writer options for a format, from a switch and never from a caller's string.
+     *
+     * ARRAY true for JSON so that a file called .json holds a JSON array rather than the
+     * newline-delimited objects COPY writes by default. Both are readable by read_json_auto; only
+     * one of them is what a person opening the file expects to find.
+     */
+    private static String copyOptions(DatasetRef.Format format) throws AnalyticsException {
+        switch (format) {
+            case CSV:     return "(FORMAT CSV, HEADER)";
+            // A real tab in the SQL, not the two characters backslash-t: measured on 1.1.3, COPY's
+            // DELIMITER takes the byte it is given and does not unescape it.
+            case TSV:     return "(FORMAT CSV, HEADER, DELIMITER '\t')";
+            case JSON:    return "(FORMAT JSON, ARRAY true)";
+            case PARQUET: return "(FORMAT PARQUET)";
+            default:
+                throw new AnalyticsException("An export can be written as CSV, TSV, JSON or Parquet.");
+        }
+    }
+
+    /**
+     * A failed write, explained to whoever asked for it.
+     *
+     * The local-filesystem branch should be unreachable: the key is allow-listed on the way in and
+     * re-checked in writableUrl, so no path that resolves locally survives to the COPY. It is here
+     * because the day it IS reached is the day something above it stopped working, and the honest
+     * message then is the rule, not "the dataset could not be read".
+     */
+    private RunFailure explainWrite(DatasetRef target, SQLException ex) {
+        String raw = ex.getMessage() == null ? "" : ex.getMessage();
+        String lower = raw.toLowerCase();
+        if (lower.contains("localfilesystem") || lower.contains("disabled by configuration")
+            || lower.contains("permission error")) {
+            logger.error("An analytics write to {} was stopped by the filesystem rule: {}",
+                target, raw);
+            return new RunFailure(RunState.FAILED, "An export is written into a storage "
+                + "connection's own bucket, and nowhere else.");
+        }
+        if (lower.contains("timeout") || lower.contains("interrupt")) {
+            return new RunFailure(RunState.TIMED_OUT, "Writing that result took longer than "
+                + this.limits.getTimeoutSeconds() + " seconds and was stopped. Narrow it, or "
+                + "write it out in parts.");
+        }
+        if (lower.contains("403") || lower.contains("access denied") || lower.contains("forbidden")
+            || lower.contains("401")) {
+            return new RunFailure(RunState.FAILED, "The storage connection reached "
+                + target.getBucket() + " but was not allowed to write to it.");
+        }
+        logger.error("An analytics write to {} failed", target, ex);
+        // Deliberately says nothing else. An engine message from a write quotes the COPY back, and
+        // the COPY is the one statement in this class that carries the destination URL.
+        return new RunFailure(RunState.FAILED, "The result could not be written to storage.");
+    }
+
+    /**
+     * The dataset, bound to a name a person can type.
+     *
+     * A view rather than a CTE prepended to the user's SQL, and the CTE is the obvious answer, so
+     * why it is wrong is worth writing down. It cannot coexist with the user's own WITH clause --
+     * "WITH dataset AS (...)" followed by "WITH sales AS (...)" is a syntax error, and a CTE is
+     * the first thing anybody writes in a query editor. It also has to be glued to the front of
+     * their text, which moves every position in a parser error onto a statement they did not
+     * write, and DuckDB's positions are the half of a syntax message worth having.
+     *
+     * A view touches nothing the user typed. It costs one thing, which is worth knowing: DuckDB
+     * binds a view when it is CREATED, so naming a second dataset reads its header even if the
+     * query never mentions it. That is the price of the second dataset being resolved, checked
+     * and readable whether or not the SQL turns out to use it.
+     *
+     * TEMP because the catalogue dies with the session anyway. Saying so in the SQL keeps it true
+     * if a session ever stops being per-query.
+     */
+    private static String viewOf(String name, DatasetRef dataset) {
+        return "CREATE OR REPLACE TEMP VIEW " + name + " AS SELECT * FROM "
+            + dataset.scanExpression();
+    }
+
+    /**
+     * A whole result read into strings, with the column labels collected on the way past.
+     *
+     * Values are rendered as text here rather than in the browser: a DuckDB DECIMAL or TIMESTAMP
+     * has no JSON equivalent that survives the trip unchanged, and a number that arrives as a
+     * JavaScript double has already lost precision. A null stays a null rather than becoming the
+     * four characters "null", which no reader could tell from the value.
+     */
+    private static List<List<String>> rowsOf(ResultSet resultSet, List<String> columns)
+        throws SQLException {
+
+        ResultSetMetaData meta = resultSet.getMetaData();
+        int width = meta.getColumnCount();
+        for (int i = 1; i <= width; i++) {
+            columns.add(meta.getColumnLabel(i));
+        }
+        List<List<String>> rows = new ArrayList<>();
+        while (resultSet.next()) {
+            List<String> row = new ArrayList<>(width);
+            for (int i = 1; i <= width; i++) {
+                Object value = resultSet.getObject(i);
+                row.add(value == null ? null : String.valueOf(value));
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /**
+     * Per-column statistics for the Profile tab and the quality flags for the Quality tab, from one
+     * scan.
+     *
+     * ONE scan is the whole design, not an optimisation. A file open already costs three sessions
+     * and three governor permits against a ceiling of four (gap 17), so a Quality endpoint beside a
+     * Profile endpoint would have made it five for the same twelve numbers read twice. Everything
+     * the Quality tab shows is derived below from what SUMMARIZE returned, after the session has
+     * closed -- if a flag ever needs a query of its own, it is a different method, and it is a cost
+     * that has to be argued for rather than added.
+     *
+     * Deliberately not bounded(), and here that is a decision rather than a limitation. SUMMARIZE
+     * does survive being wrapped in a subquery -- measured on 1.1.3, not assumed -- so the ceiling
+     * could have been applied. It is not, because this result is one row per COLUMN: its size is
+     * the file's width, not its length, and truncating it would silently drop columns out of a
+     * profile that claims to describe the dataset. A page missing rows says so with a page number;
+     * a profile missing columns says nothing at all.
+     *
+     * The row count comes back free. SUMMARIZE repeats the relation's row count on every row, so
+     * this answers the count question without the separate count(*) that preview() pays for.
+     */
+    @Override
+    public DatasetProfileDto profileOf(DatasetRef dataset) throws AnalyticsException {
+        DatasetProfileDto profile = this.run(dataset,
+            "SUMMARIZE SELECT * FROM " + dataset.scanExpression(),
+            resultSet -> {
+                List<ColumnProfileDto> found = new ArrayList<>();
+                long rowsInDataset = 0L;
+                while (resultSet.next()) {
+                    // Read from every row and overwritten each time rather than read once: it is
+                    // the same number on all of them because it counts the relation, not the
+                    // column, and a dataset with no columns has no row to read it from at all.
+                    rowsInDataset = resultSet.getLong("count");
+                    found.add(measured(resultSet));
+                }
+                return new DatasetProfileDto(dataset.getBucket(), dataset.getPath(),
+                    dataset.getFormat().name(), dataset.isMultiFile(), rowsInDataset, found);
+            });
+
+        // Outside run(), and visibly so. Every flag the Quality tab shows is decided here, from
+        // numbers already in hand, with no session open and no permit held.
+        for (ColumnProfileDto column : profile.getColumns()) {
+            derive(column, profile.getTotalRows());
+        }
+        return profile;
+    }
+
+    /**
+     * One SUMMARIZE row, copied across without interpretation.
+     *
+     * Seven of the twelve columns come back as VARCHAR because they have to carry dates and text as
+     * well as numbers, and they are read with getString for that reason. Parsing them to double
+     * here would work on every numeric column and throw on the first DATE, which is a failure that
+     * only ever happens on a customer's file.
+     */
+    private static ColumnProfileDto measured(ResultSet resultSet) throws SQLException {
+        ColumnProfileDto column = new ColumnProfileDto();
+        column.setName(resultSet.getString("column_name"));
+        column.setType(resultSet.getString("column_type"));
+        column.setMin(resultSet.getString("min"));
+        column.setMax(resultSet.getString("max"));
+        column.setAvg(resultSet.getString("avg"));
+        column.setStd(resultSet.getString("std"));
+        // Named approx on the way in, because SUMMARIZE uses approx_quantile rather than the exact
+        // one: on a column whose true first quartile is 21.0 it reported 18.375. A field called q50
+        // becomes "Median" on a screen, and that would be an overclaim by the time anyone noticed.
+        column.setApproxQ25(resultSet.getString("q25"));
+        column.setApproxQ50(resultSet.getString("q50"));
+        column.setApproxQ75(resultSet.getString("q75"));
+        column.setApproxDistinct(resultSet.getLong("approx_unique"));
+        // Null when the dataset has no rows, which is the one case with no percentage to report.
+        column.setNullPercentage(resultSet.getBigDecimal("null_percentage"));
+        return column;
+    }
+
+    /**
+     * The Quality tab, decided from the Profile tab and from nothing else.
+     *
+     * What each flag can honestly claim is written on the field it sets, in ColumnProfileDto. The
+     * short version is that only completeness rests on a figure DuckDB measured exactly, and even
+     * that arrives rounded to two decimal places -- enough on a thousand rows, not enough on ten
+     * million, where a single null and a single value both round away.
+     */
+    private static void derive(ColumnProfileDto column, long totalRows) {
+        BigDecimal nullPercentage = column.getNullPercentage();
+        if (nullPercentage != null) {
+            column.setCompleteness(ONE_HUNDRED.subtract(nullPercentage));
+            // A reconstruction, not a count. SUMMARIZE's own 'count' is the TOTAL row count -- a
+            // column with one null in three still reports 3 -- so there is no exact null count in
+            // the result to prefer over this one.
+            column.setApproxNullRows(BigDecimal.valueOf(totalRows).multiply(nullPercentage)
+                .divide(ONE_HUNDRED, 0, RoundingMode.HALF_UP).longValue());
+        }
+
+        // Both signals, because on a large file either alone is satisfied by a column that is
+        // nearly empty rather than empty: 99.9999% nulls rounds to 100.00.
+        column.setAllNull(column.getApproxDistinct() == 0
+            && nullPercentage != null && nullPercentage.compareTo(ONE_HUNDRED) == 0);
+        column.setConstant(column.getApproxDistinct() == 1);
+        column.setKeyLike(isKeyLike(column, totalRows));
+        column.setTypeSurprise(typeSurprise(column));
+    }
+
+    /**
+     * Whether the column might be a unique key.
+     *
+     * A key has no nulls and one value per row, so both are asked. The row-count floor is there
+     * because on a single-row file every column is trivially unique and saying so about all of them
+     * is noise rather than an answer.
+     */
+    private static boolean isKeyLike(ColumnProfileDto column, long totalRows) {
+        if (totalRows < 2 || column.getNullPercentage() == null
+            || column.getNullPercentage().signum() != 0) {
+            return false;
+        }
+        BigDecimal ratio = BigDecimal.valueOf(column.getApproxDistinct())
+            .divide(BigDecimal.valueOf(totalRows), 4, RoundingMode.HALF_UP);
+        return ratio.compareTo(KEY_LIKE_RATIO) >= 0;
+    }
+
+    /**
+     * Whether a column DuckDB read as text is holding something that is not text.
+     *
+     * This is the cheapest question in the method and the least certain answer, because min and max
+     * are the only two values SUMMARIZE hands back. Everything between them is unseen: '1', '1abc'
+     * and '9' report a min of '1' and a max of '9', and this returns NUMBER for a column that
+     * contains a word. It is offered as a prompt to look, which is what gap 25 asked for, and the
+     * screen has to phrase it as one.
+     *
+     * Number is tested before date so that an all-digit value like 20240105 is called a number
+     * rather than guessed at as a compact date.
+     */
+    private static String typeSurprise(ColumnProfileDto column) {
+        if (!"VARCHAR".equalsIgnoreCase(column.getType())) {
+            return null;
+        }
+        String low = column.getMin();
+        String high = column.getMax();
+        // Absent on an all-null column, and an empty string is a blank rather than a shape.
+        if (low == null || high == null || low.isEmpty() || high.isEmpty()) {
+            return null;
+        }
+        if (isNumber(low) && isNumber(high)) {
+            return ColumnProfileDto.SURPRISE_NUMBER;
+        }
+        for (DateTimeFormatter shape : DATE_SHAPES) {
+            if (parsesAsDate(low, shape) && parsesAsDate(high, shape)) {
+                return ColumnProfileDto.SURPRISE_DATE;
+            }
+        }
+        return null;
+    }
+
+    /** BigDecimal rather than Double, so a value too wide for a double is still a number. */
+    private static boolean isNumber(String value) {
+        try {
+            new BigDecimal(value);
+            return true;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
+    }
+
+    private static boolean parsesAsDate(String value, DateTimeFormatter shape) {
+        try {
+            LocalDate.parse(value, shape);
+            return true;
+        } catch (DateTimeParseException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * The bounded form of a read query: the same query, unable to return more than
+     * analytics.query.max-rows rows.
+     *
+     * This is what analytics.query.max-rows means, and until now nothing meant it -- the property
+     * clamped the preview page size and was described in AnalyticsLimits as a LIMIT rewrite that
+     * did not exist. It exists here, and it wraps rather than appends because appending is wrong
+     * on any query that already ends in a LIMIT, an ORDER BY or a semicolon, which is every query
+     * a person writes. Wrapping bounds whatever is inside without having to understand it.
+     *
+     * The bound is a ceiling on rows RETURNED, not on rows read: DuckDB pushes the outer limit
+     * down where it can, but a query that aggregates a billion rows into one still reads a
+     * billion. The timeout and the session's memory ceiling are what bound that, and this is the
+     * third of the three rather than a replacement for either.
+     *
+     * What this deliberately does NOT do is decide whether the statement is a read at all. A
+     * COPY ... TO or an ATTACH wrapped in a subquery is a syntax error rather than a write, and
+     * disabled_filesystems has already removed the local target, but "the filesystem is gone" is
+     * a weaker claim than "we only run SELECT". StatementGate makes the stronger one, in front of
+     * this method rather than inside it -- refusing a statement and bounding a result are
+     * different decisions and only one of them has a row count in it.
+     */
+    @Override
+    public String bounded(String sql) throws AnalyticsException {
+        String statement = sql == null ? "" : sql.trim();
+        // A trailing semicolon is the one thing that cannot survive being wrapped, and it is what
+        // a person typing SQL leaves behind most often.
+        while (statement.endsWith(";")) {
+            statement = statement.substring(0, statement.length() - 1).trim();
+        }
+        if (statement.isEmpty()) {
+            throw new AnalyticsException("There is no query to run.");
+        }
+        return "SELECT * FROM (" + statement + ") AS bounded_query LIMIT " + this.limits.getMaxRows();
+    }
+
+    /**
+     * Stops the watchdog thread when the application does.
+     *
+     * It is a daemon, so nothing hangs without this. It is here because a thread that outlives the
+     * bean that owns it is the kind of thing that is fine until something else in the process
+     * starts counting threads.
+     */
+    @PreDestroy
+    public void shutdown() {
+        this.watchdogs.shutdownNow();
+    }
+
+    /** What the caller asked for, clamped to what the policy allows. */
+    private int pageSize(Integer requested) {
+        int size = requested == null || requested < 1 ? this.limits.getPreviewPageSize() : requested;
+        return Math.min(size, this.limits.getMaxRows());
+    }
+
+    /**
+     * Runs one statement under every limit at once: a slot, a timeout, and a locked-down session.
+     *
+     * The three are applied together and in this order for a reason. Taking the slot first means
+     * a rejected caller never pays for a session; the session's own memory ceiling bounds what
+     * the query can consume once it starts; and the timeout bounds how long it may hold the slot,
+     * so one wedged scan cannot occupy a permit for ever and shrink the ceiling for everybody.
+     */
+    private <T> T run(DatasetRef dataset, String sql, ResultReader<T> reader) throws AnalyticsException {
+        return this.inSession(dataset, (session, statement) -> {
+            try (ResultSet resultSet = statement.executeQuery(sql)) {
+                return reader.read(resultSet);
+            }
+        });
+    }
+
+    /**
+     * A governed session for a run nobody outside can address.
+     *
+     * The built-in reads get a minted id and are registered like everything else, so "what is this
+     * application running right now" has one answer rather than one answer plus the reads that
+     * were not worth counting. No endpoint hands their ids out, so in practice only the timeout
+     * stops them.
+     */
+    private <T> T inSession(DatasetRef dataset, SessionWork<T> work) throws AnalyticsException {
+        return this.inSession(dataset, this.running.open(null), work);
+    }
+
+    /**
+     * The governed session itself: a slot, a locked-down connection, a timeout that is enforced,
+     * a registry entry that can be cancelled, and one line in the log saying a dataset was read.
+     *
+     * Split out from run() so that user-written SQL, which needs the session for more than one
+     * statement -- a parse, two view definitions and the query -- cannot get one any other way.
+     * A path that opened its own connection would sit outside every limit applied here, and that
+     * is the failure this whole module was shaped to prevent.
+     *
+     * The handle is closed in the outermost finally, which is what makes the registry bounded:
+     * a completed run, a failed one, a timed-out one, a cancelled one and a caller who never got
+     * a permit all leave through that one line.
+     */
+    private <T> T inSession(DatasetRef dataset, RunningQueries.Handle handle, SessionWork<T> work)
+        throws AnalyticsException {
+
+        try {
+            boolean acquired;
+            try {
+                acquired = this.slots.tryAcquire(SLOT_WAIT_SECONDS, TimeUnit.SECONDS);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new AnalyticsException("The query was interrupted.");
+            }
+            if (!acquired) {
+                // A run its owner stopped while it queued is cancelled, not refused. Both end the
+                // same two seconds later, but they are not the same event: one is the governor
+                // saying no and the other is the user saying no, and a history that recorded a
+                // deliberate stop as a capacity refusal would misreport how busy this module is.
+                if (handle.stoppedBy() == RunningQueries.Stopper.USER) {
+                    throw cancelled();
+                }
+                throw new AnalyticsException("Too many analytics queries are running right now. "
+                    + "Try again in a moment.");
+            }
+
+            long startedAt = System.currentTimeMillis();
+            try (Connection duck = this.sessions.open(dataset.getConnection());
+                 Statement statement = duck.createStatement()) {
+
+                // Kept even though duckdb_jdbc 1.1.3 ignores it. It is the standard way to say
+                // this, it costs nothing, and the day the driver implements it the watchdog below
+                // becomes the backstop rather than the mechanism.
+                statement.setQueryTimeout(this.limits.getTimeoutSeconds());
+
+                // QUEUED to RUNNING, and the one place a cancel that arrived while the caller was
+                // waiting for a permit is honoured -- the statement it would have interrupted did
+                // not exist yet, so the flag has to be read here instead.
+                if (!handle.running(statement)) {
+                    throw cancelled();
+                }
+                ScheduledFuture<?> watchdog = this.stopAfterTimeout(handle);
+                try {
+                    T value = work.on(duck, statement);
+                    // info rather than debug: this line is the only record anywhere that a dataset
+                    // was read, and "who read what, and when" is a question about customer data
+                    // reached through a stored credential. A real audit trail is a platform item
+                    // with four consumers waiting on it; a log line an operator can grep is what
+                    // exists in the meantime. Safe to raise because DatasetRef.toString() was
+                    // written to name the location without the credentials that reach it.
+                    logger.info("Analytics query on {} for tenant {} took {} ms",
+                        dataset, TenantContext.getTenantId(), System.currentTimeMillis() - startedAt);
+                    return value;
+                } finally {
+                    // Before the statement closes: a cancel() already running on another thread
+                    // finishes here, and one that has not started never will. The driver's own
+                    // comment says cancel() on a closed connection is not safe.
+                    handle.finish();
+                    if (watchdog != null) {
+                        watchdog.cancel(false);
+                    }
+                }
+            } catch (SQLException ex) {
+                throw this.explain(dataset, handle, ex, System.currentTimeMillis() - startedAt);
+            } finally {
+                this.slots.release();
+            }
+        } finally {
+            handle.close();
+        }
+    }
+
+    /**
+     * Arranges for a query that outstays the ceiling to be interrupted.
+     *
+     * A non-positive timeout schedules nothing, which is JDBC's own reading of zero -- no limit --
+     * rather than a ceiling of zero seconds that would cancel every query the instant it started.
+     *
+     * The interruption itself belongs to the handle, so the watchdog and a user pressing stop take
+     * the same lock and reach the same statement. What differs is only who is recorded as having
+     * stopped it, which is the difference between TIMED_OUT and CANCELLED in the history.
+     */
+    private ScheduledFuture<?> stopAfterTimeout(RunningQueries.Handle handle) {
+        int seconds = this.limits.getTimeoutSeconds();
+        if (seconds <= 0) {
+            return null;
+        }
+        return this.watchdogs.schedule(() -> handle.stop(RunningQueries.Stopper.TIMEOUT),
+            seconds, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Turns a DuckDB failure into something a person can act on, in the state the run ended in.
+     *
+     * DuckDB's messages are good but they are written for someone holding the SQL. That splits
+     * every failure in two, and the split is what this method is organised around.
+     *
+     * A failure in the STATEMENT is one only the person holding the SQL can fix, and for those
+     * DuckDB's own message is the better answer -- "syntax error at or near" says more than any
+     * sentence written here, and once phase three lets a user write the query they are the person
+     * holding it. A failure in the DATASET is the opposite: the user chose a file, not a query,
+     * and an engine message about an HTTP status or a sniffing failure tells them nothing they
+     * can act on. Those are mapped to sentences below.
+     *
+     * Anything else is logged in full and reported generically, because an unmapped engine
+     * message is exactly the kind of string that carries a path or a host name.
+     *
+     * <b>The handle is asked first, and that ordering is the fix for a real defect.</b> A
+     * cancelled query and a timed-out query both surface as "INTERRUPT Error: Interrupted!", so
+     * the message cannot tell them apart and everything downstream used to record whichever one
+     * the string matching happened to name. The registry knows who called cancel(); the engine
+     * never will.
+     */
+    private RunFailure explain(DatasetRef dataset, RunningQueries.Handle handle, SQLException ex,
+        long elapsedMs) {
+
+        RunningQueries.Stopper stopper = handle.stoppedBy();
+        if (stopper == RunningQueries.Stopper.USER) {
+            return cancelled();
+        }
+        if (stopper == RunningQueries.Stopper.TIMEOUT) {
+            return this.timedOut();
+        }
+
+        String raw = ex.getMessage() == null ? "" : ex.getMessage();
+        String lower = raw.toLowerCase();
+
+        // Ahead of the dataset mapping, not after it, and the ordering is load-bearing. DuckDB
+        // names the error class in front of every message, so "Catalog Error: Table with name
+        // orders does not exist!" is unambiguously about the statement -- but it also contains
+        // "does not exist", and the branch below would report it as a missing file: true of a
+        // path the user never wrote and false of the query they did. None of the dataset
+        // failures this feature has actually seen carry a statement class, so nothing that was
+        // mapped before is caught here now.
+        if (isStatementFailure(lower)) {
+            // Logged as well as returned, and it now means one of two different things. On a
+            // built-in read the SQL is ours, so a statement failure is a bug in this class; on a
+            // query() the SQL is the user's, so it is usually a typo. Both are worth a line: the
+            // first is the only warning anybody gets, and the second is how an operator finds out
+            // that the gate is refusing something it should be admitting.
+            logger.warn("Analytics rejected a statement on {} after {} ms: {}", dataset, elapsedMs, raw);
+            return new RunFailure(RunState.FAILED, safeEngineMessage(raw));
+        }
+        if (lower.contains("timeout") || lower.contains("interrupt")) {
+            // Still here even though the handle is asked first: an interrupt this application did
+            // not ask for -- a driver-level abort, a closed socket reported as one -- is closer to
+            // a timeout than to anything else in this method, and calling it that is the reading
+            // the user was given before there was a registry to consult.
+            return this.timedOut();
+        }
+        if (lower.contains("no files found") || lower.contains("404")
+            || lower.contains("nosuchkey") || lower.contains("does not exist")) {
+            return new RunFailure(RunState.FAILED, "Nothing to read at " + dataset.getBucket() + "/"
+                + dataset.getPath() + ". The connection worked, so check the path.");
+        }
+        if (lower.contains("403") || lower.contains("access denied") || lower.contains("forbidden")) {
+            return new RunFailure(RunState.FAILED, "The storage connection reached "
+                + dataset.getBucket() + " but was not allowed to read it.");
+        }
+        if (lower.contains("out of memory") || lower.contains("memory limit")) {
+            return new RunFailure(RunState.FAILED, "That query needed more memory than analytics is "
+                + "allowed to use. Try a narrower dataset, or Parquet instead of CSV.");
+        }
+        if (lower.contains("invalid input error") || lower.contains("could not convert")
+            || lower.contains("sniffing") || lower.contains("csv error")) {
+            return new RunFailure(RunState.FAILED, "This file could not be read as "
+                + dataset.getFormat() + ". It may be malformed, or a different format.");
+        }
+        logger.error("Analytics query failed on {} after {} ms", dataset, elapsedMs, ex);
+        return new RunFailure(RunState.FAILED, "The dataset could not be read.");
+    }
+
+    /**
+     * What a user is told when their own stop request landed.
+     *
+     * Deliberately plain. A cancellation is the one failure in this class that the person reading
+     * it already knows about, because they asked for it, and an explanation would read as though
+     * something had gone wrong.
+     */
+    private static RunFailure cancelled() {
+        return new RunFailure(RunState.CANCELLED, "That query was cancelled.");
+    }
+
+    private RunFailure timedOut() {
+        return new RunFailure(RunState.TIMED_OUT, "That query took longer than "
+            + this.limits.getTimeoutSeconds() + " seconds and was stopped. "
+            + "Narrow the dataset, or filter it down.");
+    }
+
+    /**
+     * Whether DuckDB is complaining about the statement rather than about the data.
+     *
+     * Matched on the error CLASS DuckDB prefixes its messages with, not on the wording of any one
+     * of them. That is the durable half: the sentence after "Parser Error:" is rewritten between
+     * releases, the class in front of it is part of how DuckDB reports errors. Binder and Catalog
+     * are here with Parser because "no such column" and "no such table" are the same kind of
+     * answer to the same kind of reader -- someone looking at a query they wrote.
+     */
+    private static boolean isStatementFailure(String lowerMessage) {
+        return lowerMessage.contains("parser error")
+            || lowerMessage.contains("syntax error")
+            || lowerMessage.contains("binder error")
+            || lowerMessage.contains("catalog error");
+    }
+
+    /**
+     * An engine message with the things it must not carry taken out of it.
+     *
+     * The message is returned rather than summarised, because summarising it is what made it
+     * useless. What is removed is the dataset URL: DuckDB quotes the failing statement back, this
+     * class interpolated a location into that statement, and a user who wrote "SELCT" does not
+     * need to be shown the bucket to learn they meant SELECT.
+     */
+    private static String safeEngineMessage(String raw) {
+        String redacted = LOCATION.matcher(raw).replaceAll("<dataset>").trim();
+        if (redacted.length() > ENGINE_MESSAGE_LIMIT) {
+            redacted = redacted.substring(0, ENGINE_MESSAGE_LIMIT).trim() + "...";
+        }
+        // Only reachable if a driver ever throws a message that is nothing but a URL, but the
+        // alternative is an empty error toast, which reads as a bug in the screen.
+        return redacted.isEmpty() ? "The dataset could not be read." : redacted;
+    }
+
+    /** Reads a result set into a value. Kept local so callers never hold an open ResultSet. */
+    @FunctionalInterface
+    private interface ResultReader<T> {
+        T read(ResultSet resultSet) throws SQLException;
+    }
+
+    /**
+     * Everything one caller does with one session, so that the limits around it are applied once.
+     *
+     * Declares AnalyticsException as well as SQLException because the work may refuse the caller
+     * on its own account -- StatementGate does -- and such a refusal is already written for a
+     * person and must not be run through explain() as though the engine had said it.
+     */
+    @FunctionalInterface
+    private interface SessionWork<T> {
+        T on(Connection session, Statement statement) throws SQLException, AnalyticsException;
+    }
+
+    /**
+     * Whether any path segment is "." — a step that means "here" and addresses nothing.
+     *
+     * Its own method because two layers check it and a copy that drifted would leave one of them
+     * admitting what the other refuses. Split with a -1 limit so a trailing segment is not dropped.
+     */
+    private static boolean hasDotSegment(String key) {
+        for (String segment : key.split("/", -1)) {
+            if (".".equals(segment)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+}

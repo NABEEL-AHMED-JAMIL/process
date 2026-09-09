@@ -16,6 +16,7 @@ import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AppUserService;
+import process.model.service.NotificationCenterService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
@@ -73,9 +74,13 @@ public class AppUserServiceImpl implements AppUserService {
 
     private final StorageBrowserService storageBrowserService;
 
+    private final NotificationCenterService notificationCenterService;
+
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory,
-        UserNameResolver userNameResolver, StorageBrowserService storageBrowserService) {
+        UserNameResolver userNameResolver, StorageBrowserService storageBrowserService,
+        NotificationCenterService notificationCenterService) {
+        this.notificationCenterService = notificationCenterService;
         this.storageBrowserService = storageBrowserService;
         this.emailMessagesFactory = emailMessagesFactory;
         this.userNameResolver = userNameResolver;
@@ -331,6 +336,19 @@ public class AppUserServiceImpl implements AppUserService {
         AppUser user = userOpt.get();
         user.setStatus(appUserDto.getStatus());
         this.appUserRepository.save(user);
+        /*
+         * The cached unread counter goes with the account.
+         *
+         * notif:unread:<id> is a Redis key with no expiry, written whenever a notification is
+         * created. Nothing removed it, so every account that was ever deactivated left its key
+         * behind for good -- eighteen orphans on this instance already. Dropping it here is
+         * safe in both directions: a deactivated user has no badge to corrupt, and unreadCount
+         * recounts from the database on a miss, so reactivating the account rebuilds the number
+         * rather than showing a stale one.
+         */
+        if (appUserDto.getStatus() != Status.Active) {
+            this.notificationCenterService.clearUnreadCount(user.getAppUserId());
+        }
         return new ResponseDto(SUCCESS, String.format("User \"%s\" is now %s.", user.getUsername(), user.getStatus()));
     }
 

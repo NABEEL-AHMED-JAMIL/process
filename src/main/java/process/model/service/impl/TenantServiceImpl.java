@@ -77,6 +77,7 @@ public class TenantServiceImpl implements TenantService {
         dto.setBucketCount(this.storageConnectionRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
         dto.setSourceTaskTypeCount(this.sourceTaskTypeRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
         dto.setSourceTaskCount(this.sourceTaskRepository.countByTenantIdAndTaskStatusNot(tenantId, Status.Delete));
+        dto.setPipelineCount(this.sourceTaskRepository.countDistinctPipelinesByTenantId(tenantId, Status.Delete));
         dto.setSourceJobCount(this.sourceJobRepository.countByTenantIdAndJobStatusNot(tenantId, Status.Delete));
         return dto;
     }

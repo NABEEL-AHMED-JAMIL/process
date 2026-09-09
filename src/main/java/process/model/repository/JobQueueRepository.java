@@ -73,8 +73,11 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     List<Object[]> findRecentRunsForAssignee(Long appUserId, int limit);
 
     /** How many of that person's runs started inside the window, and how many of those failed. */
-    @Query(value = "select count(*), "
-        + "count(*) filter (where UPPER(q.job_status) = 'FAILED') "
+    // Aliased for the same reason as countAssignedTo: two unaliased count(*) columns both come
+    // back named "count", which Hibernate's auto-discovery rejects with
+    // NonUniqueDiscoveredSqlAliasException. This is the second half of the /profile 500.
+    @Query(value = "select count(*) as total_count, "
+        + "count(*) filter (where UPPER(q.job_status) = 'FAILED') as failed_count "
         + "from job_queue q join source_job j on j.job_id = q.job_id "
         + "where j.assigned_user_id = ?1 and q.start_time >= ?2", nativeQuery = true)
     List<Object[]> countRecentRunsForAssignee(Long appUserId, LocalDateTime since);

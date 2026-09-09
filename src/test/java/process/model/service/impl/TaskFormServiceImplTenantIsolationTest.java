@@ -144,7 +144,7 @@ class TaskFormServiceImplTenantIsolationTest {
         when(this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(PIPELINE, TENANT_B, Status.Delete))
             .thenReturn(Collections.emptyList());
 
-        ResponseDto response = this.service.formForPipeline(PIPELINE);
+        ResponseDto response = this.service.formForPipeline(PIPELINE, null);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         assertThat(response.getData()).isNull();
@@ -157,7 +157,7 @@ class TaskFormServiceImplTenantIsolationTest {
         when(this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(PIPELINE, TENANT_A, Status.Delete))
             .thenReturn(Collections.singletonList(this.tenantAForm));
 
-        ResponseDto response = this.service.formForPipeline(PIPELINE);
+        ResponseDto response = this.service.formForPipeline(PIPELINE, null);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         assertThat(response.getData()).isEqualTo(this.tenantAForm);
@@ -177,7 +177,7 @@ class TaskFormServiceImplTenantIsolationTest {
         when(this.taskFormRepository.findAllByFormStatusNot(Status.Delete))
             .thenReturn(Collections.singletonList(this.tenantAForm));
 
-        ResponseDto response = this.service.formForPipeline(PIPELINE);
+        ResponseDto response = this.service.formForPipeline(PIPELINE, null);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         assertThat(response.getData()).isEqualTo(this.tenantAForm);
@@ -192,7 +192,7 @@ class TaskFormServiceImplTenantIsolationTest {
         when(this.taskFormRepository.findAllByFormStatusNot(Status.Delete))
             .thenReturn(Collections.singletonList(this.tenantAForm));
 
-        ResponseDto response = this.service.formForPipeline("F000000-not-defined-anywhere");
+        ResponseDto response = this.service.formForPipeline("F000000-not-defined-anywhere", null);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         assertThat(response.getData()).isNull();

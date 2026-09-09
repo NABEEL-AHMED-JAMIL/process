@@ -14,6 +14,7 @@ import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
+import process.model.service.NotificationCenterService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
@@ -60,6 +61,8 @@ class AppUserServiceImplFailClosedTest {
     private UserNameResolver userNameResolver;
     @Mock
     private StorageBrowserService storageBrowserService;
+    @Mock
+    private NotificationCenterService notificationCenterService;
 
     private AppUserServiceImpl service;
 
@@ -67,7 +70,7 @@ class AppUserServiceImplFailClosedTest {
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
             this.passwordEncoder, this.emailMessagesFactory, this.userNameResolver,
-            this.storageBrowserService);
+            this.storageBrowserService, this.notificationCenterService);
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }
 

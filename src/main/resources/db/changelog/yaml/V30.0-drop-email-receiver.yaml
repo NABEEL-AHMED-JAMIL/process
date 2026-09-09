@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: 30.0-drop-email-receiver
+      author: nabeel.amd93
+      description: "Drop the EMAIL_RECEIVER lookup -- job notifications now go to the job's own assigned user rather than to one platform-wide mailbox"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V30.0-drop-email-receiver/V30__drop_email_receiver.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            # Restores the row exactly as V2 seeded it. Note that restoring the row alone does
+            # NOT restore the old behaviour: the code that read it is gone, so a rollback of
+            # this changeset needs the matching code rollback to mean anything.
+            sql: |
+              INSERT INTO public.lookup_data
+                (lookup_id, date_created, description, lookup_type, lookup_value, parent_lookup_id)
+                VALUES (1019, NOW(), 'Receiver email', 'EMAIL_RECEIVER', 'nabeel.amd93@gmail.com', NULL)
+                ON CONFLICT (lookup_id) DO NOTHING;

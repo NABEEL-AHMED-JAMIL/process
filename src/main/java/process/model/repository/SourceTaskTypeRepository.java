@@ -22,7 +22,16 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
 
     public List<SourceTaskType> findByStatus(Status status);
 
-    public boolean existsByKafkaConnectionProfileId(Long kafkaConnectionProfileId);
+    /**
+     * Whether a task type that still exists points at this Kafka connection profile.
+     *
+     * Deliberately not a plain existsByKafkaConnectionProfileId. A task type is never removed from
+     * this table -- deleteSourceTaskType only sets task_type_status = Delete and leaves
+     * kafka_connection_profile_id sitting on the row -- so the unqualified check counted task types
+     * that no screen lists and nobody can reassign, and the profile they once used could never be
+     * deleted again.
+     */
+    public boolean existsByKafkaConnectionProfileIdAndStatusNot(Long kafkaConnectionProfileId, Status status);
 
     String FETCH_ALL_SOURCE_TASK_TYPE_SELECT = "select source_task_type.source_task_type_id as sourceTaskTypeId, source_task_type.description as description, \n" +
         "CONCAT(UPPER(SUBSTR(CAST(task_type_status as varchar), 1, 1)), LOWER(SUBSTR(CAST(task_type_status as varchar), 2))) as status,\n" +

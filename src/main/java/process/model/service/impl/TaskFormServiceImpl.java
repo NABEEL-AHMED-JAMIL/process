@@ -87,17 +87,41 @@ public class TaskFormServiceImpl {
      * A tenant-scoped caller is unaffected and still sees only its own tenant's row, per
      * {@link TaskFormRepository#findAllByPipelineIdAndTenantIdAndFormStatusNot}'s own contract.
      */
-    public ResponseDto formForPipeline(String pipelineId) {
+    public ResponseDto formForPipeline(String pipelineId, Long tenantId) {
         if (ProcessUtil.isNull(pipelineId) || pipelineId.trim().isEmpty()) {
             return new ResponseDto(ERROR, "pipelineId missing.");
         }
         String trimmed = pipelineId.trim();
-        List<TaskForm> found = TenantContext.isPlatformAdmin()
-            ? this.taskFormRepository.findAllByFormStatusNot(Status.Delete).stream()
+        List<TaskForm> found;
+        if (TenantContext.isPlatformAdmin()) {
+            /*
+             * A platform admin can see every tenant's forms, and more than one tenant can hold a
+             * form for the same pipeline id -- the id is the worker's routing key, not a globally
+             * unique name. Returning "whichever came back first" out of that set meant the task
+             * screen could load a *different tenant's* form for the task being edited, and saving
+             * then wrote that form's fields into the task's tags: a Source Task on this pipeline
+             * picked up ten fields belonging to another tenant's form, and the derived storage
+             * columns were computed from them. So the task's own tenant is asked for first, and
+             * the fallback is ordered rather than arbitrary.
+             */
+            List<TaskForm> matching = this.taskFormRepository.findAllByFormStatusNot(Status.Delete)
+                .stream()
                 .filter(f -> trimmed.equals(f.getPipelineId()))
-                .collect(Collectors.toList())
-            : this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
+                .sorted(Comparator.comparing(TaskForm::getTaskFormId))
+                .collect(Collectors.toList());
+            found = matching;
+            if (tenantId != null) {
+                List<TaskForm> owned = matching.stream()
+                    .filter(f -> tenantId.equals(f.getTenantId()))
+                    .collect(Collectors.toList());
+                if (!owned.isEmpty()) {
+                    found = owned;
+                }
+            }
+        } else {
+            found = this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
                 trimmed, TenantContext.getTenantId(), Status.Delete);
+        }
         if (found.isEmpty()) {
             // Not an error: most pipelines have no form, and the task screen falls back to tags.
             return new ResponseDto(SUCCESS, "No form is defined for this pipeline.", null);

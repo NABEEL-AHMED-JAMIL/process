@@ -275,11 +275,91 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         if (task.isPresent() && !this.isOwnedByCaller(task.get())) {
             return new ResponseDto(ERROR, String.format("DocumentConverterTask not found with %s.", documentConverterTaskId));
         }
-        if (task.isPresent()) {
-            task.get().setStatus(Status.Delete);
-            this.documentConverterTaskRepository.save(task.get());
+        // The absent case used to fall straight through to the SUCCESS below, so a delete that
+        // deleted nothing was indistinguishable from one that worked: the user saw a success
+        // toast and found the row still there on the next refresh, with nothing to explain it.
+        // Same wording fetchTaskById already uses, so a missing row reads the same either way.
+        if (!task.isPresent()) {
+            return new ResponseDto(ERROR, String.format("DocumentConverterTask not found with %s.", documentConverterTaskId));
         }
-        return new ResponseDto(SUCCESS, String.format("DocumentConverterTask deleted with %s.", documentConverterTaskId));
+        DocumentConverterTask documentConverterTask = task.get();
+        documentConverterTask.setStatus(Status.Delete);
+        this.documentConverterTaskRepository.save(documentConverterTask);
+        return this.retainedObjectsResponse(documentConverterTask);
+    }
+
+    /**
+     * The two objects convert() wrote are deliberately NOT removed here, and this is the record of
+     * that decision.
+     *
+     * The obvious fix for "a deleted task orphans its files" is to delete them on the way past, but
+     * the confirmation the caller accepts before this request says, in as many words, "The converted
+     * file stays in the bucket", and both keys live in a bucket and a folder the caller chose for
+     * themselves in convert() -- next to their own files, not in a private scratch area. Removing an
+     * object cannot be undone, so a delete that quietly destroyed the converted output would be data
+     * loss against the promise the UI had just made: worse than the leak, and unrecoverable when it
+     * turns out to be wrong. The row itself is only soft-deleted for the same reason.
+     *
+     * What was genuinely broken is that the delete then forgot where the files went. fetchAllTasks
+     * filters Status.Delete out, so the one record still holding inputStorageKey/outputStorageKey
+     * vanished from the app the moment it was set, and the leftovers could only be found by someone
+     * who already knew the prefix convert() had built. So the keys are handed back on the delete
+     * response and logged as retained: the objects stay findable in the object browser, an operator
+     * can see what is holding space, and the delete stays reversible in both directions -- the row
+     * can be flipped back to Active and the bytes it points at are still there.
+     *
+     * Reclaiming the space is therefore a separate, deliberate act (delete the folder in the object
+     * browser). That is the trade this makes on purpose; it is not an oversight.
+     */
+    private ResponseDto retainedObjectsResponse(DocumentConverterTask documentConverterTask) {
+        logger.warn("DocumentConverterTask {} deleted, its objects kept on purpose: bucket={} input={} output={} -- "
+            + "remove them in the object browser to reclaim the space.", documentConverterTask.getDocumentConverterTaskId(),
+            documentConverterTask.getBucketName(), documentConverterTask.getInputStorageKey(),
+            documentConverterTask.getOutputStorageKey());
+
+        DocumentConverterTaskDto retained = new DocumentConverterTaskDto();
+        retained.setDocumentConverterTaskId(documentConverterTask.getDocumentConverterTaskId());
+        retained.setTaskName(documentConverterTask.getTaskName());
+        retained.setInputFileName(documentConverterTask.getInputFileName());
+        retained.setOutputFileName(documentConverterTask.getOutputFileName());
+        retained.setBucketName(documentConverterTask.getBucketName());
+        retained.setTargetFolder(documentConverterTask.getTargetFolder());
+        retained.setInputStorageKey(documentConverterTask.getInputStorageKey());
+        retained.setOutputStorageKey(documentConverterTask.getOutputStorageKey());
+        retained.setStatus(documentConverterTask.getStatus());
+
+        String retainedPrefix = this.retainedPrefixOf(documentConverterTask.getInputStorageKey(),
+            documentConverterTask.getOutputStorageKey());
+        String location = retainedPrefix.isEmpty()
+            ? String.format("'%s' and '%s'", documentConverterTask.getInputStorageKey(),
+                documentConverterTask.getOutputStorageKey())
+            : String.format("'%s'", retainedPrefix);
+        return new ResponseDto(SUCCESS, String.format(
+            "DocumentConverterTask deleted with %s. Its input and output files are still in bucket '%s' under %s -- "
+                + "delete them there if you no longer need them.",
+            documentConverterTask.getDocumentConverterTaskId(), documentConverterTask.getBucketName(), location), retained);
+    }
+
+    /**
+     * convert() writes the pair as "folder/taskId/input|output/fileName", so the folder they share
+     * is the one thing a user can paste into the object browser to see everything the task left
+     * behind. Derived from the keys actually stored rather than rebuilt from targetFolder, because a
+     * row written before a folder rule changed would otherwise be pointed at a prefix that does not
+     * exist. A row whose keys share no folder at all -- the "pending" placeholders convert() writes
+     * before the upload -- yields an empty prefix, and the caller names both keys instead.
+     */
+    private String retainedPrefixOf(String inputStorageKey, String outputStorageKey) {
+        if (isNull(inputStorageKey) || isNull(outputStorageKey)) {
+            return "";
+        }
+        int shared = 0;
+        int limit = Math.min(inputStorageKey.length(), outputStorageKey.length());
+        while (shared < limit && inputStorageKey.charAt(shared) == outputStorageKey.charAt(shared)) {
+            shared++;
+        }
+        String common = inputStorageKey.substring(0, shared);
+        int lastSlash = common.lastIndexOf('/');
+        return lastSlash >= 0 ? common.substring(0, lastSlash + 1) : "";
     }
 
     private String baseNameOf(String fileName) {

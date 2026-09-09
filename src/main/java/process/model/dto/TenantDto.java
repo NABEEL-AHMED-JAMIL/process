@@ -29,6 +29,8 @@ public class TenantDto implements AuditNamed {
     private Long bucketCount;
     private Long sourceTaskTypeCount;
     private Long sourceTaskCount;
+    /** Distinct pipelines across this tenant's tasks -- breadth, where sourceTaskCount is volume. */
+    private Long pipelineCount;
     private Long sourceJobCount;
 
     public TenantDto() {}
@@ -119,6 +121,14 @@ public class TenantDto implements AuditNamed {
 
     public void setSourceTaskCount(Long sourceTaskCount) {
         this.sourceTaskCount = sourceTaskCount;
+    }
+
+    public Long getPipelineCount() {
+        return pipelineCount;
+    }
+
+    public void setPipelineCount(Long pipelineCount) {
+        this.pipelineCount = pipelineCount;
     }
 
     public Long getSourceJobCount() {

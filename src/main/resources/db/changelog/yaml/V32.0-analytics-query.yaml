@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 32.0-analytics-query
+      author: nabeel.amd93
+      description: "Add analytics_query and analytics_query_run so a query can be named, saved and found again, and so every execution leaves a who-read-what-and-when record -- both holding the connection alias and path, never the bucket"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V32.0-analytics-query/V32__analytics_query.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP TABLE IF EXISTS analytics_query_run;
+              DROP TABLE IF EXISTS analytics_query;
+              DROP SEQUENCE IF EXISTS analytics_query_run_seq;
+              DROP SEQUENCE IF EXISTS analytics_query_seq;

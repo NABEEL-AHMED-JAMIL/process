@@ -17,7 +17,6 @@ public class ProcessUtil {
     public static String QUEUE_FETCH_LIMIT = "QUEUE_FETCH_LIMIT";
     public static String SCHEDULER_LAST_RUN_TIME = "SCHEDULER_LAST_RUN_TIME";
     public static String AUDIT_LOG_SYNC_LAST_RUN_TIME = "AUDIT_LOG_SYNC_LAST_RUN_TIME";
-    public static String EMAIL_RECEIVER = "EMAIL_RECEIVER";
     public static String JOB_STATUS_INVALID = "Job status must be Running, Failed, or Completed";
     public static String JOB_STATUS_MESSAGE_REQUIRED = "Job status message is required for failed and completed job.";
     public static String BAD_REQUEST_400 = "Bad request.";

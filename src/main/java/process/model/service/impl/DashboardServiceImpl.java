@@ -300,10 +300,21 @@ public class DashboardServiceImpl implements DashboardService {
             this.lookupDataRepository.findById(homePageLookupId)
                 .ifPresent(lookupData -> sourceTaskDto.setHomePageId(lookupData.getLookupType()));
         }
-        Long pipelineLookupId = ProcessUtil.parseLongOrNull(sourceTask.getPipelineId());
+        /*
+         * pipeline_id is the raw id the worker routes on ("F768930") since the PIPELINE_IDS
+         * lookup family was dropped (changeset V28) and Pipeline Forms became the catalogue.
+         * parseLongOrNull returns null for it, so the guarded block below was skipped and the
+         * field was left unset entirely -- which is why the console showed "Pipeline --" on
+         * every task. A numeric value is still resolved, for rows written before that change,
+         * and falls back to the raw value when it resolves to nothing.
+         */
+        String pipelineId = sourceTask.getPipelineId();
+        Long pipelineLookupId = ProcessUtil.parseLongOrNull(pipelineId);
         if (pipelineLookupId != null) {
-            this.lookupDataRepository.findById(pipelineLookupId)
-                .ifPresent(lookupData -> sourceTaskDto.setPipelineId(lookupData.getLookupType()));
+            sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(pipelineLookupId)
+                .map(lookupData -> lookupData.getLookupType()).orElse(pipelineId));
+        } else {
+            sourceTaskDto.setPipelineId(pipelineId);
         }
         if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
             sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask));

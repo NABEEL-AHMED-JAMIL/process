@@ -262,6 +262,24 @@
             <version>2.25.60</version>
         </dependency>
 
+        <!-- Same SDK and version as s3 above. Outbound mail goes through SES rather than SMTP:
+             see process.emailer.SesMailSender for why, and for how it points at LocalStack. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>ses</artifactId>
+            <version>2.25.60</version>
+        </dependency>
+
+        <!-- Analytics Studio's query engine. Embedded, so there is no server to operate: it runs
+             in this JVM and reads object storage over the S3 protocol through its httpfs
+             extension, which means a 1 GB scan never streams through Spring. It is deliberately
+             not a second application database; see process.analytics.AnalyticsQueryService. -->
+        <dependency>
+            <groupId>org.duckdb</groupId>
+            <artifactId>duckdb_jdbc</artifactId>
+            <version>1.1.3</version>
+        </dependency>
+
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-storage-blob</artifactId>

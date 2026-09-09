@@ -12,6 +12,7 @@ import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.AiAgent;
 import process.model.repository.AiAgentRepository;
+import process.model.repository.TenantRepository;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.EncryptionUtil;
@@ -44,6 +45,9 @@ class AiAgentServiceImplTenantIsolationTest {
 
     @Mock
     private AiAgentRepository aiAgentRepository;
+
+    @Mock
+    private TenantRepository tenantRepository;
     @Mock
     private EncryptionUtil encryptionUtil;
     @Mock
@@ -55,7 +59,7 @@ class AiAgentServiceImplTenantIsolationTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new AiAgentServiceImpl(this.aiAgentRepository, this.encryptionUtil,
+        this.service = new AiAgentServiceImpl(this.aiAgentRepository, this.tenantRepository, this.encryptionUtil,
             this.tenantFilterHelper, this.userNameResolver);
         lenient().doNothing().when(this.tenantFilterHelper).enableIfNeeded(any());
         // What the property carries in a real deployment; a unit test gets no @Value injection.

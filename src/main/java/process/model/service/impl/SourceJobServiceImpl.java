@@ -123,6 +123,19 @@ public class SourceJobServiceImpl implements SourceJobService {
             // at commit and reach the caller as "Some internal error occurred contact with
             // support." Named here instead, like every other required field.
             return new ResponseDto(ERROR, "SourceJob execution missing -- Auto or Manual.");
+        } else if (ProcessUtil.isNull(sourceJobDto.getPriority())) {
+            // Exactly the same trap as execution above, and it was still open: priority is
+            // not-null in the database and was written straight through from the DTO, so a
+            // caller that omitted it got HTTP 500 "Some internal error occurred contact with
+            // support." rather than being told which field was missing. The console always
+            // sends it, which is why this only ever bit the API.
+            return new ResponseDto(ERROR, "SourceJob priority missing -- 1 (highest) to 9.");
+        } else if (sourceJobDto.getPriority() < 1 || sourceJobDto.getPriority() > 9) {
+            // The console offers 1-9 and validates it; without the same check here the range is
+            // decoration, and a job saved outside it sorts unpredictably against the rest.
+            return new ResponseDto(ERROR, String.format(
+                "SourceJob priority must be between 1 (highest) and 9; got %d.",
+                sourceJobDto.getPriority()));
         }
 
         Optional<SourceTask> taskDetail = this.sourceTaskRepository.findById(
@@ -216,6 +229,14 @@ public class SourceJobServiceImpl implements SourceJobService {
                 sourceJob.get().setExecution(sourceJobDto.getExecution());
             }
             if (!ProcessUtil.isNull(sourceJobDto.getPriority())) {
+                // Same range the console offers and addSourceJob enforces. An update is the
+                // other way a job's priority is set, so leaving it unchecked here would let
+                // an out-of-range value in through the back door.
+                if (sourceJobDto.getPriority() < 1 || sourceJobDto.getPriority() > 9) {
+                    return new ResponseDto(ERROR, String.format(
+                        "SourceJob priority must be between 1 (highest) and 9; got %d.",
+                        sourceJobDto.getPriority()));
+                }
                 sourceJob.get().setPriority(sourceJobDto.getPriority());
             }
             sourceJob.get().setCompleteJob(sourceJobDto.isCompleteJob());
@@ -566,10 +587,21 @@ public class SourceJobServiceImpl implements SourceJobService {
             dto.setHomePageId(lookupDataRepository.findById(homePageLookupId)
                 .map(ld -> ld.getLookupType()).orElse(null));
         }
-        Long pipelineLookupId = ProcessUtil.parseLongOrNull(sourceTask.getPipelineId());
+        /*
+         * pipeline_id is the raw id the worker routes on ("F768930") since the PIPELINE_IDS
+         * lookup family was dropped (changeset V28) and Pipeline Forms became the catalogue.
+         * parseLongOrNull returns null for it, so the guarded block below was skipped and the
+         * field was left unset entirely -- which is why the console showed "Pipeline --" on
+         * every task. A numeric value is still resolved, for rows written before that change,
+         * and falls back to the raw value when it resolves to nothing.
+         */
+        String pipelineId = sourceTask.getPipelineId();
+        Long pipelineLookupId = ProcessUtil.parseLongOrNull(pipelineId);
         if (pipelineLookupId != null) {
             dto.setPipelineId(lookupDataRepository.findById(pipelineLookupId)
-               .map(ld -> ld.getLookupType()).orElse(null));
+               .map(ld -> ld.getLookupType()).orElse(pipelineId));
+        } else {
+            dto.setPipelineId(pipelineId);
         }
         if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
             dto.setSourceTaskType(getSourceTaskTypeDto(sourceTask.getSourceTaskType()));

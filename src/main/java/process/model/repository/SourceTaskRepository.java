@@ -20,6 +20,23 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
 
     long countByTenantIdAndTaskStatusNot(Long tenantId, Status status);
 
+    /**
+     * How many DIFFERENT pipelines a workspace runs, as against how many tasks it has.
+     *
+     * The two are not the same and neither implies the other: the demo workspace has 19 tasks
+     * across 15 pipelines, because four pipelines carry two tasks each. Nothing else on the
+     * tenants screen distinguishes "nineteen tasks all doing one thing" from "nineteen tasks
+     * doing fifteen different things" -- source_task_type is a single service row and stays at
+     * 1 whatever the tasks underneath it are.
+     *
+     * Blank ids are excluded rather than counted as a pipeline of their own; a task with no
+     * pipeline is unconfigured, not a sixteenth kind of work.
+     */
+    @Query("select count(distinct st.pipelineId) from SourceTask st "
+        + "where st.tenantId = ?1 and st.taskStatus <> ?2 "
+        + "and st.pipelineId is not null and st.pipelineId <> ''")
+    long countDistinctPipelinesByTenantId(Long tenantId, Status status);
+
     @Transactional
     @Modifying
     @Query("update SourceTask s set s.tenantId = ?1 where s.tenantId is null")

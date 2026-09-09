@@ -17,7 +17,9 @@ import process.model.dto.AiAgentToolDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.AiAgent;
+import process.model.pojo.Tenant;
 import process.model.repository.AiAgentRepository;
+import process.model.repository.TenantRepository;
 import process.model.service.AiAgentService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -62,6 +64,7 @@ public class AiAgentServiceImpl implements AiAgentService {
         "That apiEndpoint is not an allowed AI provider address.";
 
     private final AiAgentRepository aiAgentRepository;
+    private final TenantRepository tenantRepository;
     private final EncryptionUtil encryptionUtil;
     private final TenantFilterHelper tenantFilterHelper;
     private final Gson gson = new Gson();
@@ -88,10 +91,11 @@ public class AiAgentServiceImpl implements AiAgentService {
     private final UserNameResolver userNameResolver;
 
 
-    public AiAgentServiceImpl(AiAgentRepository aiAgentRepository, EncryptionUtil encryptionUtil,
-        TenantFilterHelper tenantFilterHelper,
+    public AiAgentServiceImpl(AiAgentRepository aiAgentRepository, TenantRepository tenantRepository,
+        EncryptionUtil encryptionUtil, TenantFilterHelper tenantFilterHelper,
         UserNameResolver userNameResolver) {
         this.userNameResolver = userNameResolver;
+        this.tenantRepository = tenantRepository;
         this.aiAgentRepository = aiAgentRepository;
         this.encryptionUtil = encryptionUtil;
         this.tenantFilterHelper = tenantFilterHelper;
@@ -111,8 +115,26 @@ public class AiAgentServiceImpl implements AiAgentService {
         if (validationError != null) {
             return validationError;
         }
+        /*
+         * A platform admin has no tenant of their own, and the entity is filtered by
+         * `tenant_id = :tenantId` -- a condition NULL never satisfies. So the agent this stamped
+         * for them was invisible to every workspace on the platform including the one they
+         * created it from, and only another platform admin (who has the filter disabled) could
+         * ever see it again. Filed under the seeded default tenant instead, which is the same
+         * fallback saveForm makes for a platform admin's pipeline forms.
+         */
+        Long ownerTenantId = TenantContext.getTenantId();
+        if (ownerTenantId == null) {
+            Optional<Tenant> defaultTenant = this.tenantRepository
+                .findByTenantCode(TenantSeedService.DEFAULT_TENANT_CODE);
+            if (!defaultTenant.isPresent()) {
+                return new ResponseDto(ERROR,
+                    "No default tenant is configured to own this agent. Sign in as a tenant to create one.");
+            }
+            ownerTenantId = defaultTenant.get().getTenantId();
+        }
         AiAgent aiAgent = new AiAgent();
-        aiAgent.setTenantId(TenantContext.getTenantId());
+        aiAgent.setTenantId(ownerTenantId);
         this.applyAgentDto(aiAgent, aiAgentDto);
         aiAgent.setStatus(Status.Active);
         aiAgent.setDateCreated(new Timestamp(System.currentTimeMillis()));

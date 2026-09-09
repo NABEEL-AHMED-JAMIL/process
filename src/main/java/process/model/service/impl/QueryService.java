@@ -58,7 +58,7 @@ public class QueryService {
             selectPortion = "select count(*) as result\n";
         } else {
             selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, ld1.lookup_type as home_page_id, " +
-                "ld2.lookup_type as pipeline_id, ld3.lookup_type as group_id, st.task_status, stt.source_task_type_id, stt.service_name, " +
+                "st.pipeline_id, ld3.lookup_type as group_id, st.task_status, stt.source_task_type_id, stt.service_name, " +
                 "stt.description, stt.queue_topic_partition, stt.task_type_status, stt.kafka_connection_profile_id, " +
                 "st.bucket, st.input_folder, st.output_folder, " +
                 "count(sj.job_id) as total_link_jobs\n";
@@ -66,8 +66,15 @@ public class QueryService {
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n";
         if (!isCount) {
             query += "left join source_job sj on sj.task_detail_id = st.task_detail_id and sj.job_status in ('Active', 'Inactive')\n";
+            // home_page_id and group_id really are lookup ids -- the Home page and Group
+            // fields both store lookup_data.lookup_id. pipeline_id is NOT, and used to be
+            // joined the same way here: since the PIPELINE_IDS lookup family was dropped
+            // (changeset V28) and Pipeline Forms became the catalogue, source_task.pipeline_id
+            // holds the raw id the worker routes on ("F768930"). Nothing in lookup_data has
+            // that for an id, so the join matched nothing and the list's Pipeline column was
+            // blank for every task ever created. Selected straight from source_task now, the
+            // same way SourceTaskRepository and the Kafka producer already read it.
             query += "left join lookup_data ld1 on cast(ld1.lookup_id as varchar(10)) = st.home_page_id\n";
-            query += "left join lookup_data ld2 on cast(ld2.lookup_id as varchar(10)) = st.pipeline_id\n";
             query += "left join lookup_data ld3 on cast(ld3.lookup_id as varchar(10)) = st.group_id\n";
         }
         query += "where st.task_status in ('Active', 'Inactive') " + this.tenantClause("st");
@@ -96,7 +103,10 @@ public class QueryService {
             }
         }
         if (!isCount) {
-            query += "\ngroup by st.task_detail_id, stt.source_task_type_id, ld1.lookup_id, ld2.lookup_id, ld3.lookup_id\n";
+            // ld2 is gone with the pipeline_id join above; st.pipeline_id needs no entry here
+            // because st.task_detail_id is source_task's primary key, so every other
+            // column of that table is functionally dependent on it.
+            query += "\ngroup by st.task_detail_id, stt.source_task_type_id, ld1.lookup_id, ld3.lookup_id\n";
             if (order != null && columnName != null) {
                 query += String.format("order by %s %s ", this.sanitizeSortColumn(columnName), this.sanitizeSortOrder(order));
             }
@@ -179,8 +189,16 @@ public class QueryService {
         return "asc".equalsIgnoreCase(order) ? "asc" : "desc";
     }
 
+    /**
+     * Exactly the constants of process.model.enums.JobStatus, upper-cased.
+     *
+     * "STOP" used to be in here and is not, and has never been, a JobStatus. It was therefore
+     * the one value that passed validation and then matched no row, so a caller filtering by it
+     * got a successful, permanently empty result instead of the "invalid jobStatus" this method
+     * exists to give them.
+     */
     private static final Set<String> JOB_QUEUE_STATUSES = new HashSet<>(Arrays.asList(
-        "QUEUE", "START", "RUNNING", "FAILED", "COMPLETED", "STOP", "SKIP", "INTERRUPT", "MISSED"
+        "QUEUE", "START", "RUNNING", "FAILED", "COMPLETED", "SKIP", "INTERRUPT", "MISSED"
     ));
 
     private String sanitizeJobStatus(String jobStatus) {
@@ -238,11 +256,44 @@ public class QueryService {
             + "to_char(q.start_time, 'YYYY-MM-DD') as day, "
             + "case when q.end_time is null then -1 "
             + "else round(extract(epoch from (q.end_time - q.start_time))) end as seconds, "
-            + "sj.job_name as job, q.job_queue_id as run_id "
+            + "sj.job_name as job, q.job_queue_id as run_id, "
+            // Carried so the report can SAY whose runs these are. A platform admin has the
+            // tenant filter switched off (see tenantClause), so their report already merged
+            // every workspace's runs into one set of totals -- with no column, no filter and
+            // nothing on screen to reveal that it had happened.
+            + "coalesce(t.tenant_name, '(no workspace)') as tenant, "
+            /*
+             * TRUE execution time, separated from the wait in front of it.
+             *
+             * job_queue stamps start_time at ENQUEUE, not at pickup, so end_time - start_time
+             * above is wait + execution with no way to tell them apart -- and on this deployment
+             * the wait is 99.4% of it (41.25s of a 41.48s average, for tasks that run in 0.23s),
+             * because the dispatcher polls once a minute. Reporting only that number invites
+             * every reader to optimise a transform that was never slow.
+             *
+             * The worker writes a 'Job started' audit line the moment it picks a run up, and it
+             * covers every run in this database, so the pickup instant IS recorded -- just not
+             * in job_queue. LEFT JOIN, so a run without the marker reports -1 and is excluded
+             * from execution statistics rather than counted as instant.
+             */
+            // Two decimals, unlike `seconds` above. Whole seconds are the right unit for a
+            // queued-to-finished figure measured in tens of seconds; they are the wrong unit
+            // here, where the real answer is 0.23 and rounding it prints "0s" -- which reads as
+            // "no data" and throws away the very contrast this column exists to show.
+            + "case when x.exec_start is null or q.end_time is null then -1 "
+            // cast(... as numeric), NOT ::numeric. This string is handed to
+            // entityManager.createNativeQuery, which parses ':' as the start of a named
+            // parameter -- "::numeric" made it a syntax error at the database.
+            + "else round(cast(extract(epoch from (q.end_time - x.exec_start)) as numeric), 2) "
+            + "end as exec_seconds "
             + "from job_queue q "
             + "join source_job sj on sj.job_id = q.job_id "
             + "left join source_task st on st.task_detail_id = sj.task_detail_id "
+            + "left join tenant t on t.tenant_id = sj.tenant_id "
             + "left join app_user u on u.app_user_id = sj.assigned_user_id "
+            + "left join (select job_queue_id, min(date_created) as exec_start "
+            + "from job_audit_logs where log_detail = 'Job started' group by job_queue_id) x "
+            + "on x.job_queue_id = q.job_queue_id "
             // A deleted job's runs are not history any more, and every other statistic here
             // already leaves them out -- a report that counted them would disagree with the
             // dashboard beside it, on the same data.

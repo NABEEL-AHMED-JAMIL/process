@@ -39,7 +39,25 @@ public class ApplicationPropertiesDeclarationTest {
         "kafka.ssl.local-store-dir",
         "kafka.topic.default-replication-factor",
         "worker.callback.token",
-        "platform.admin.bootstrap-password");
+        "platform.admin.bootstrap-password",
+        // Analytics Studio's governor. Declared in every profile because an absent limit is an
+        // unlimited one: DuckDB runs in this JVM, so a missing memory ceiling is the container's
+        // OOM killer taking the ETL dispatcher down with the query.
+        "analytics.query.timeout-seconds",
+        "analytics.query.max-rows",
+        "analytics.query.max-concurrent",
+        "analytics.preview.page-size",
+        "analytics.duckdb.memory-limit",
+        "analytics.duckdb.threads",
+        // The three switches and the sampling ceiling, here for the reason above turned around:
+        // a limit nobody declared is unlimited, and a SWITCH nobody declared is undiscoverable.
+        // An operator cannot turn analytics off in an incident, or stop a platform admin
+        // generating load, if the only record that the switch exists is an @Value default in a
+        // class they would have to already know to look at.
+        "analytics.enabled",
+        "analytics.profile.sample-rows",
+        "analytics.benchmark.enabled",
+        "analytics.parquet.conversion-enabled");
 
     /** Nothing in this list may ever be committed with a value beside it. */
     private static final List<String> SECRETS = Arrays.asList(

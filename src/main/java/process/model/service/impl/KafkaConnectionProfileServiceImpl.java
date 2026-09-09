@@ -160,7 +160,13 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
             return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
         }
 
-        boolean stillReferenced = this.sourceTaskTypeRepository.existsByKafkaConnectionProfileId(kafkaConnectionProfileId)
+        // A deleted task type keeps its kafka_connection_profile_id, so the reference has to be read
+        // as "a task type that still exists uses this". Counting the soft-deleted ones made the
+        // profile permanently undeletable the moment the last task type using it was deleted: the
+        // operator was told to reassign a task type that no screen lists any more. The routes are
+        // hard-deleted, so their check needs no such qualification.
+        boolean stillReferenced = this.sourceTaskTypeRepository
+                .existsByKafkaConnectionProfileIdAndStatusNot(kafkaConnectionProfileId, Status.Delete)
             || this.routeRepository.existsByKafkaConnectionProfileId(kafkaConnectionProfileId);
         if (stillReferenced) {
             return new ResponseDto(ERROR, "This profile is still used by a Source Task Type or tenant routing override -- reassign those first.");

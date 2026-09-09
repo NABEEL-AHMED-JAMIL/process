@@ -85,7 +85,23 @@ class UserStatisticsQueryTest {
     @DisplayName("a platform admin sees every tenant's runs")
     void reportUnscopedForPlatformAdmin() {
         TenantContext.set(1000L, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        assertFalse(queryService.runReportRows(null, null).contains("tenant_id ="));
+        String sql = queryService.runReportRows(null, null);
+        // Matches the FILTER tenantClause emits (" and sj.tenant_id = 1004 "), not any mention
+        // of the column. A bare "tenant_id =" also matches the join that carries the workspace
+        // NAME onto every row -- which a platform admin needs precisely because their report is
+        // unscoped and would otherwise merge every workspace with nothing to say it had.
+        assertFalse(sql.contains("and sj.tenant_id ="),
+            "a platform admin's report must not be tenant-filtered: " + sql);
+    }
+
+    @Test
+    @DisplayName("every run row carries the workspace it belongs to")
+    void reportRowsCarryTenantName() {
+        TenantContext.set(1000L, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        String sql = queryService.runReportRows(null, null);
+        assertTrue(sql.contains("as tenant"), "the payload needs a workspace column: " + sql);
+        assertTrue(sql.contains("left join tenant t on t.tenant_id = sj.tenant_id"),
+            "the workspace name has to be joined, not inferred: " + sql);
     }
 
     @Test

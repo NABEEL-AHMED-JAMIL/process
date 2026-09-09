@@ -10,6 +10,7 @@ import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.AiAgent;
 import process.model.repository.AiAgentRepository;
+import process.model.repository.TenantRepository;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.EncryptionUtil;
@@ -37,6 +38,9 @@ class AiAgentRuntimeConfigInstructionsTest {
 
     @Mock
     private AiAgentRepository aiAgentRepository;
+
+    @Mock
+    private TenantRepository tenantRepository;
     @Mock
     private EncryptionUtil encryptionUtil;
     @Mock
@@ -47,7 +51,7 @@ class AiAgentRuntimeConfigInstructionsTest {
     private AiAgentServiceImpl service;
 
     private AiAgentServiceImpl freshService() {
-        AiAgentServiceImpl s = new AiAgentServiceImpl(this.aiAgentRepository, this.encryptionUtil,
+        AiAgentServiceImpl s = new AiAgentServiceImpl(this.aiAgentRepository, this.tenantRepository, this.encryptionUtil,
             this.tenantFilterHelper, this.userNameResolver);
         lenient().doNothing().when(this.tenantFilterHelper).enableIfNeeded(any());
         return s;

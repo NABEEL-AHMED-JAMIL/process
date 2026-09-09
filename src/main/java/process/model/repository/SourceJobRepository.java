@@ -70,6 +70,19 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      * Deleting a task takes every job with it, so this is what stands between removing one
      * unused task and quietly removing a few hundred jobs along with it.
      */
+    /**
+     * The address a job's notifications belong to: its assigned user's login, which in this
+     * system IS an email (app_user has no separate email column, and all 252 accounts are
+     * addresses).
+     *
+     * Returns empty when the job has no assignee, so the caller can decline to send rather than
+     * fall back to some other mailbox.
+     */
+    @Query(value = "select u.username from source_job j "
+        + "join app_user u on u.app_user_id = j.assigned_user_id "
+        + "where j.job_id = ?1 and u.status <> 'Delete'", nativeQuery = true)
+    String findNotificationRecipient(Long jobId);
+
     @Query(value = "select count(*) from source_job where task_detail_id = ?1 "
         + "and upper(job_status) <> 'DELETE'", nativeQuery = true)
     public long countLiveJobsForTask(Long sourceTaskId);
@@ -82,7 +95,12 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      * browser, which is what the profile screen used to do -- the cost of showing somebody their
      * own three jobs grew with the size of the whole workspace.
      */
-    @Query(value = "select count(*), count(*) filter (where job_status = 'Active') "
+    // Both columns are aliased, and they have to be: Postgres names an unaliased count(*)
+    // "count", so two of them collide and Hibernate's auto-discovery throws
+    // NonUniqueDiscoveredSqlAliasException. The profile activity panel returned an error on
+    // every single call because of it.
+    @Query(value = "select count(*) as total_count, "
+        + "count(*) filter (where job_status = 'Active') as active_count "
         + "from source_job where assigned_user_id = ?1 and job_status <> 'Delete'", nativeQuery = true)
     List<Object[]> countAssignedTo(Long appUserId);
 

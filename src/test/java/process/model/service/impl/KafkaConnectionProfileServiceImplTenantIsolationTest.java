@@ -445,7 +445,8 @@ class KafkaConnectionProfileServiceImplTenantIsolationTest {
     @Test
     void deletingAProfileTakesItsCredentialsWithIt() throws Exception {
         when(this.profileRepository.findById(700L)).thenReturn(Optional.of(this.profileOwnedBy(TENANT_A)));
-        when(this.sourceTaskTypeRepository.existsByKafkaConnectionProfileId(700L)).thenReturn(false);
+        when(this.sourceTaskTypeRepository.existsByKafkaConnectionProfileIdAndStatusNot(700L, Status.Delete))
+            .thenReturn(false);
         when(this.routeRepository.existsByKafkaConnectionProfileId(700L)).thenReturn(false);
 
         this.actAsTenant(TENANT_A);

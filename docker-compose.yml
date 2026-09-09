@@ -142,6 +142,15 @@ services:
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       EFS_FILE_DIRE: ${EFS_FILE_DIRE:-/tmp/efs}
+      # Outbound mail goes through SES against LocalStack here, so a job notification can be
+      # sent and then read back instead of trusting a log line. The MAIL_* pair below is the
+      # deprecated SMTP path, unused unless MAIL_TRANSPORT=smtp.
+      MAIL_FROM: ${MAIL_FROM:-no-reply@etl-console.local}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-ses}
+      AWS_SES_ENDPOINT: ${AWS_SES_ENDPOINT:-http://host.docker.internal:4566}
+      AWS_SES_REGION: ${AWS_SES_REGION:-us-east-1}
+      AWS_SES_ACCESS_KEY: ${AWS_SES_ACCESS_KEY:-test}
+      AWS_SES_SECRET_KEY: ${AWS_SES_SECRET_KEY:-test}
       MAIL_HOST: ${MAIL_HOST:-sandbox.smtp.mailtrap.io}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-ce545af2135fd6}

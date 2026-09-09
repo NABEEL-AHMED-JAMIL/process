@@ -134,7 +134,7 @@ class KafkaSecretAccessTest {
         assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET,
             "kafka-secrets/1248/../9999/2026-08-31/ca.pem")).isFalse();
         assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET,
-            "pdf-highlighter/4/contract.pdf")).isFalse();
+            "document-converter/4/input.docx")).isFalse();
         assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, null)).isFalse();
     }
 

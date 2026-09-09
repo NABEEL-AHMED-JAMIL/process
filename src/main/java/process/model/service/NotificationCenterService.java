@@ -20,4 +20,14 @@ public interface NotificationCenterService {
 
     ResponseDto markAllRead() throws Exception;
 
+    /**
+     * Drops the cached unread counter for one user.
+     *
+     * On the interface, not just the implementation: every consumer here autowires the
+     * interface, so a method that exists only on the impl is unreachable and the Redis keys it
+     * was written to clean up would go on accumulating for ever -- which is the defect, not
+     * the fix. Called when an account stops being able to read its notifications.
+     */
+    void clearUnreadCount(Long recipientUserId);
+
 }

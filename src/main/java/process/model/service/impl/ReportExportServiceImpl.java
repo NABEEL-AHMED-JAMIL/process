@@ -97,9 +97,11 @@ public class ReportExportServiceImpl {
 
         // dictionaries per dimension, rows as indexes into them
         List<String> tasks = new ArrayList<>(), statuses = new ArrayList<>(),
-                     owners = new ArrayList<>(), days = new ArrayList<>();
+                     owners = new ArrayList<>(), days = new ArrayList<>(),
+                     tenants = new ArrayList<>();
         Map<String,Integer> ti = new HashMap<>(), si = new HashMap<>(),
-                            oi = new HashMap<>(), di = new HashMap<>();
+                            oi = new HashMap<>(), di = new HashMap<>(),
+                            ni = new HashMap<>();
         List<List<Object>> rows = new ArrayList<>();
         for (Object[] r : result) {
             rows.add(Arrays.asList(
@@ -109,7 +111,12 @@ public class ReportExportServiceImpl {
                 intern(days, di, text(r[3])),
                 r[4] == null ? -1 : Integer.valueOf(String.valueOf(r[4])),
                 text(r[5]),
-                r[6] == null ? null : Long.valueOf(String.valueOf(r[6]))));
+                r[6] == null ? null : Long.valueOf(String.valueOf(r[6])),
+                // Appended at index 7. Every existing index keeps pointing where it did, so an
+                // older client reading seven elements is unaffected.
+                intern(tenants, ni, text(r.length > 7 ? r[7] : null)),
+                // Double, not Integer: this one carries two decimals on purpose.
+                r.length > 8 && r[8] != null ? Double.valueOf(String.valueOf(r[8])) : -1D));
         }
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -117,6 +124,7 @@ public class ReportExportServiceImpl {
         data.put("status", statuses);
         data.put("owner", owners);
         data.put("day", days);
+        data.put("tenant", tenants);
         data.put("rows", rows);
         data.put("truncated", truncated);
         String message = truncated

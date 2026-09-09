@@ -521,7 +521,7 @@ class BucketAccessE2EIT extends E2ESupport {
      * filters by tenant in its own code; /storageConnection.json trusted the Hibernate filter
      * alone -- and that filter admits the platform's rows on purpose, so the avatar and Kafka
      * workflows can resolve etl-avatar and etl-bucket by alias. Every tenant was therefore shown
-     * the platform's two connections on /admin/storage.
+     * the platform's two connections on /settings/storage-connections (formerly /admin/storage).
      */
     @Test
     void aTenantAdminDoesNotSeeThePlatformsConnectionsOnTheStorageScreen() throws Exception {

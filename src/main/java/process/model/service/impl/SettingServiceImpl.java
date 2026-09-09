@@ -97,7 +97,7 @@ public class SettingServiceImpl implements SettingService {
     private static final java.util.Set<String> PLATFORM_ONLY_LOOKUPS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "QUEUE_FETCH_LIMIT", "SCHEDULER_LAST_RUN_TIME",
-            "AUDIT_LOG_SYNC_LAST_RUN_TIME", "EMAIL_RECEIVER"));
+            "AUDIT_LOG_SYNC_LAST_RUN_TIME"));
 
     /**
      * The family a row belongs to: its parent's type for a child, its own for a top-level row.
@@ -114,6 +114,25 @@ public class SettingServiceImpl implements SettingService {
 
     private static boolean isPlatformOnly(LookupData lookupData) {
         return PLATFORM_ONLY_LOOKUPS.contains(familyOf(lookupData));
+    }
+
+    /**
+     * Whether this row may be DELETED, on top of whether it may be changed.
+     *
+     * The engine reads these by name and has no default: ProducerBulkEngine calls
+     * findByLookupType(QUEUE_FETCH_LIMIT) and then getLookupValue() on the result, so with the
+     * row gone every dispatch cycle throws an NPE that is caught and logged, and job dispatch
+     * stops platform-wide with nothing on screen to say why. A platform admin passes every
+     * other check, so this was one click on /settings/lookup. Changing the VALUE stays allowed
+     * -- raising the limit is ordinary administration; removing the row is not.
+     */
+    private static String refuseDeletion(LookupData lookupData) {
+        if (isPlatformOnly(lookupData) && lookupData.getParent() == null) {
+            return String.format("%s is engine configuration and cannot be deleted -- the "
+                + "scheduler reads it by name every cycle. Change its value instead.",
+                lookupData.getLookupType());
+        }
+        return null;
     }
 
     /**
@@ -443,6 +462,18 @@ public class SettingServiceImpl implements SettingService {
         if (!isTenantOwnedChild && !TenantContext.isPlatformAdmin()) {
             return new ResponseDto(ERROR, "Only a platform admin can add this kind of lookup entry -- it is platform reference data other tenants depend on.");
         }
+        /*
+         * Checked here rather than left to the unique index on lookup_type.
+         *
+         * This method is @Transactional, so the constraint fires at commit -- after this method
+         * has already returned SUCCESS -- and the caller got a raw HTTP 500 with no message for
+         * what is an ordinary, explainable situation: a name somebody else already used.
+         */
+        if (!isNull(this.lookupDataRepository.findByLookupType(tempLookupData.getLookupType()))) {
+            return new ResponseDto(ERROR, String.format(
+                "A lookup entry named %s already exists. Lookup names are unique across the platform.",
+                tempLookupData.getLookupType()));
+        }
         boolean encrypted = Boolean.TRUE.equals(tempLookupData.getEncrypted());
         LookupData lookupData = new LookupData();
         lookupData.setLookupValue(encrypted
@@ -573,6 +604,9 @@ public class SettingServiceImpl implements SettingService {
         // Says which rule stopped it. This used to answer "not found" for a row the caller could
         // plainly see listed, which reads as a bug rather than a refusal.
         String deleteRefusal = refuseModification(lookupDataOpt.get());
+        if (deleteRefusal == null) {
+            deleteRefusal = refuseDeletion(lookupDataOpt.get());
+        }
         if (deleteRefusal != null) {
             return new ResponseDto(ERROR, deleteRefusal);
         }

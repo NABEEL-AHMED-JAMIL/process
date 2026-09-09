@@ -12,6 +12,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.ResponseDto;
 import process.model.repository.AiAgentRepository;
+import process.model.repository.TenantRepository;
 import process.security.TenantFilterHelper;
 import process.util.EncryptionUtil;
 import process.util.ProcessUtil;
@@ -46,6 +47,7 @@ import static org.mockito.Mockito.mock;
 class AzureOpenAiAuthHeaderTest {
 
     @Mock private AiAgentRepository aiAgentRepository;
+    @Mock private TenantRepository tenantRepository;
     @Mock private EncryptionUtil encryptionUtil;
     @Mock private TenantFilterHelper tenantFilterHelper;
     @Mock private UserNameResolver userNameResolver;
@@ -61,8 +63,8 @@ class AzureOpenAiAuthHeaderTest {
     }
 
     private AiAgentServiceImpl serviceAllowingLocalhost() {
-        AiAgentServiceImpl service = new AiAgentServiceImpl(this.aiAgentRepository, this.encryptionUtil,
-            this.tenantFilterHelper, this.userNameResolver);
+        AiAgentServiceImpl service = new AiAgentServiceImpl(this.aiAgentRepository, this.tenantRepository,
+            this.encryptionUtil, this.tenantFilterHelper, this.userNameResolver);
         // The endpoint allowlist refuses a private address by default -- see
         // AiAgentServiceImpl.validateEndpoint. A test server on loopback needs the same explicit
         // opt-in an operator would configure for any other private host.

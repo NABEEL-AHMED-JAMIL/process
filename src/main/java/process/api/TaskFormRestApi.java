@@ -71,9 +71,10 @@ public class TaskFormRestApi {
 
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/formForPipeline", method = RequestMethod.GET)
-    public ResponseEntity<?> formForPipeline(@RequestParam String pipelineId) {
+    public ResponseEntity<?> formForPipeline(@RequestParam String pipelineId,
+        @RequestParam(required = false) Long tenantId) {
         try {
-            return new ResponseEntity<>(this.taskFormService.formForPipeline(pipelineId), HttpStatus.OK);
+            return new ResponseEntity<>(this.taskFormService.formForPipeline(pipelineId, tenantId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while reading the form for pipeline {}", pipelineId, ex);
             return internalError();

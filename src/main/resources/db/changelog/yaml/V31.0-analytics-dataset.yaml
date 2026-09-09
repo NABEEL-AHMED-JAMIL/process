@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 31.0-analytics-dataset
+      author: nabeel.amd93
+      description: "Add analytics_dataset so a dataset can be named and come back to -- the row a saved query, a chart and a benchmark result all point at, holding the connection alias and path but never the bucket"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V31.0-analytics-dataset/V31__analytics_dataset.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP TABLE IF EXISTS analytics_dataset;
+              DROP SEQUENCE IF EXISTS analytics_dataset_seq;
