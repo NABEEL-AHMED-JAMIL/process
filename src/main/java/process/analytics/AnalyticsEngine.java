@@ -1,11 +1,13 @@
 package process.analytics;
 
+import process.analytics.canvas.FilterClause;
 import process.analytics.dto.ColumnDto;
 import process.analytics.dto.DatasetPreviewDto;
 import process.analytics.dto.DatasetProfileDto;
 import process.analytics.dto.DatasetSchemaDto;
 import process.analytics.dto.QueryResultDto;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -192,17 +194,192 @@ public interface AnalyticsEngine {
         BoundStatement composeFor(List<ColumnDto> columns) throws AnalyticsException;
     }
 
+    /**
+     * What a grid asks of a page beyond which page it is: an order, a narrowing, or both.
+     *
+     * <b>It carries {@link FilterClause}, which lives in the canvas package, and that direction of
+     * dependency is deliberate.</b> A grid filter and a canvas filter are the same problem -- a
+     * predicate over the dataset's own columns with the user's values in it -- and the module can
+     * afford exactly one answer to it. A second filter model here would be a second place to get
+     * binding and the field allow-list wrong, and the two would drift the first time an operator
+     * was added to one of them. So the grid speaks the canvas's filter language rather than a
+     * dialect of it, and {@code FilterCompiler} is the only thing that turns either into SQL.
+     *
+     * <b>Sorting and searching are the engine's work, not the browser's.</b> A page is one window
+     * onto a dataset that may hold millions of rows; sorting that window in the client sorts a
+     * hundred rows and presents the answer with the same confidence as the right one, which is the
+     * most convincing wrong answer this screen could give.
+     *
+     * Everything here is optional and an absent field means "do not". A shape with nothing set is
+     * the preview that existed before this type did, and the engine takes the same path for it.
+     */
+    final class PreviewShape {
+
+        /** Which way the sorted column runs. Two values, so an ordering keyword cannot be typed. */
+        public enum Direction {
+            ASC,
+            DESC
+        }
+
+        /**
+         * How long a search term may be.
+         *
+         * The term is compared against every text cell of every row, so its length is multiplied by
+         * the size of the file. Past a couple of hundred characters it also cannot match anything a
+         * person would recognise as a cell, and it is arriving on a GET, which means it is being
+         * written into the access log of everything between the browser and here.
+         */
+        private static final int MAX_SEARCH_LENGTH = 256;
+
+        private final String sort;
+        private final Direction direction;
+        private final String search;
+        private final List<FilterClause> filters;
+
+        /**
+         * Whether the total the caller is carrying was counted under a filter.
+         *
+         * This closes the OTHER half of the knownTotal trap, and it is the half that hides data
+         * rather than inventing it. Refusing knownTotal while narrowing stops a filtered page being
+         * paginated as the whole file. But CLEARING a filter is not narrowing -- so the request
+         * takes the trusting branch while the client is still holding the FILTERED total from the
+         * response before it. The pager then offers thirteen pages of a dataset with two and a half
+         * thousand, and the file appears to have permanently shrunk the moment the filter came off.
+         *
+         * A server cannot tell one number from another by looking at it, so the caller says where
+         * it came from. Only a total counted with nothing narrowing may be reused, and in the
+         * non-narrowing case there is exactly one correct answer, so that single bit is complete
+         * rather than merely helpful.
+         */
+        private final boolean knownTotalFiltered;
+
+        public PreviewShape(String sort, Direction direction, String search,
+            List<FilterClause> filters) throws AnalyticsException {
+
+            this(sort, direction, search, filters, false);
+        }
+
+        public PreviewShape(String sort, Direction direction, String search,
+            List<FilterClause> filters, boolean knownTotalFiltered) throws AnalyticsException {
+
+            this.knownTotalFiltered = knownTotalFiltered;
+            this.sort = trimmedOrNull(sort);
+            this.direction = direction;
+            this.search = trimmedOrNull(search);
+            if (this.search != null && this.search.length() > MAX_SEARCH_LENGTH) {
+                throw new AnalyticsException("A search term may be up to " + MAX_SEARCH_LENGTH
+                    + " characters.");
+            }
+            this.filters = filters == null || filters.isEmpty()
+                ? Collections.<FilterClause>emptyList()
+                : Collections.unmodifiableList(new ArrayList<FilterClause>(filters));
+        }
+
+        /** The column to order by, as the caller spelled it, or null. Resolved against the schema. */
+        public String getSort() {
+            return this.sort;
+        }
+
+        /**
+         * Which way to order, ascending unless the caller said otherwise.
+         *
+         * Ascending is the default because the first click on a grid header is: A before Z, oldest
+         * first, smallest first. It is only consulted when a sort column was named.
+         */
+        public Direction getDirection() {
+            return this.direction == null ? Direction.ASC : this.direction;
+        }
+
+        /** The free text to look for in every text column, or null. */
+        public String getSearch() {
+            return this.search;
+        }
+
+        /** The conditions the caller sent, never null and possibly empty. */
+        public List<FilterClause> getFilters() {
+            return this.filters;
+        }
+
+        /**
+         * The conditions as one tree, or null when there are none.
+         *
+         * ANDed, because a grid's filter chips read as "and": three chips narrow three times. The
+         * wire shape is a flat array and this is the only place that decides what joining them
+         * means -- and a caller that wants an OR still has one, because an element of the array may
+         * itself be a group.
+         */
+        public FilterClause filterTree() {
+            if (this.filters.isEmpty()) {
+                return null;
+            }
+            return FilterClause.group(FilterClause.LogicalOp.AND, this.filters);
+        }
+
+        /**
+         * Whether this shape removes rows, as opposed to only reordering them.
+         *
+         * <b>The single most consequential question this type answers</b>, because it is what
+         * decides whether a total the caller carried forward is still a total of anything. A sort
+         * moves rows; a filter or a search changes how many there are.
+         */
+        /** Whether a carried total was counted under a filter, and so cannot be reused. */
+        public boolean isKnownTotalFiltered() {
+            return this.knownTotalFiltered;
+        }
+
+        public boolean isNarrowing() {
+            return this.search != null || !this.filters.isEmpty();
+        }
+
+        /** Whether an order was asked for. */
+        public boolean isOrdered() {
+            return this.sort != null;
+        }
+
+        /** Whether this asks for nothing at all, which is the preview that existed before. */
+        public boolean isEmpty() {
+            return !this.isOrdered() && !this.isNarrowing();
+        }
+
+        private static String trimmedOrNull(String raw) {
+            if (raw == null) {
+                return null;
+            }
+            String trimmed = raw.trim();
+            return trimmed.isEmpty() ? null : trimmed;
+        }
+    }
+
     /** The dataset's columns and their types, without reading its rows. */
     DatasetSchemaDto schemaOf(DatasetRef dataset) throws AnalyticsException;
 
     /**
-     * One page of rows, counted and bounded.
+     * One page of rows, counted and bounded, in the order the file has.
      *
      * @param knownTotal a total the caller already holds, so a page turn need not count again;
      *                   null or non-positive counts
      */
-    DatasetPreviewDto preview(DatasetRef dataset, int page, Integer requestedSize, Integer knownTotal)
-        throws AnalyticsException;
+    default DatasetPreviewDto preview(DatasetRef dataset, int page, Integer requestedSize,
+        Integer knownTotal) throws AnalyticsException {
+        return this.preview(dataset, page, requestedSize, knownTotal, null);
+    }
+
+    /**
+     * The same page, ordered and narrowed by what a grid asked for.
+     *
+     * <b>totalRows counts what the shape left</b>, not what the file holds, and that is not a
+     * detail: totalRows is what draws the pager, so a filtered page beside an unfiltered count
+     * offers pages that do not exist. The response says which of the two it is -- see
+     * {@link DatasetPreviewDto#isFiltered()} -- so a screen can report "1,204 of 250,000" rather
+     * than implying the dataset is small.
+     *
+     * @param knownTotal a total the caller already holds; IGNORED whenever the shape narrows, for
+     *                   the reason above -- a total carried across a filter change is a count of
+     *                   something else
+     * @param shape the order and the narrowing, or null for neither
+     */
+    DatasetPreviewDto preview(DatasetRef dataset, int page, Integer requestedSize,
+        Integer knownTotal, PreviewShape shape) throws AnalyticsException;
 
     /** How many rows the dataset holds, across every file when the path is a pattern. */
     long rowCount(DatasetRef dataset) throws AnalyticsException;

@@ -3,6 +3,7 @@ package process.analytics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import process.analytics.canvas.FilterCompiler;
 import process.analytics.dto.ColumnDto;
 import process.analytics.dto.ColumnProfileDto;
 import process.analytics.dto.DatasetPreviewDto;
@@ -29,6 +30,7 @@ import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -232,7 +234,46 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
     }
 
     /**
-     * One page of rows, counted and bounded.
+     * One page of rows, counted and bounded, in whatever order the reader hands them over or in
+     * the one a grid asked for.
+     *
+     * <b>Two paths, and the split is not laziness.</b> A preview with no shape is the same two
+     * statements it has always been -- a count and a page over the scan expression -- and it stays
+     * that way because it is the call every file open makes and it needs no schema. A shaped
+     * preview cannot be composed without the dataset's own columns, because the columns ARE the
+     * allow-list a sort column and a filter field are validated against, so it takes analyze()'s
+     * route instead: one session, the dataset bound to a view, a DESCRIBE, then the statements
+     * composed from what the DESCRIBE returned.
+     *
+     * That route costs LESS concurrency rather than more. The unshaped path opens two sessions and
+     * takes two of the four governor permits when it has no total to carry forward, because
+     * rowCount() is its own call; everything below happens on one.
+     *
+     * The rest of the reasoning is on the pieces: {@link #whereOf} for the filter and the search,
+     * {@link #orderOf} for the sort, and {@link #totalFor} for why a total the caller sent is
+     * refused as soon as anything narrows.
+     */
+    @Override
+    public DatasetPreviewDto preview(DatasetRef dataset, int page, Integer requestedSize,
+        Integer knownTotal, PreviewShape shape) throws AnalyticsException {
+
+        int size = this.pageSize(requestedSize);
+        int offset = Math.max(0, page) * size;
+        if (shape == null || shape.isEmpty()) {
+            // A total counted under a filter is dropped even here, where the request itself carries
+            // no filter. This branch is exactly what a grid hits when the reader CLEARS one: the
+            // shape is empty again, but the number the client is echoing was counted while the
+            // filter was on. Passing it through makes the file appear to have shrunk -- pages that
+            // exist stop being offered, which is worse than the trap the shaped path closes, where
+            // the surplus pages were at least visibly empty.
+            Integer carried = shape != null && shape.isKnownTotalFiltered() ? null : knownTotal;
+            return this.unshapedPreview(dataset, page, size, offset, carried);
+        }
+        return this.shapedPreview(dataset, page, size, offset, knownTotal, shape);
+    }
+
+    /**
+     * The preview as it was before a grid asked for anything: a count and a page.
      *
      * The count is a separate query rather than the size of the page, because a reader wants to
      * know how much there is before deciding whether to page through it, and because count(*)
@@ -242,18 +283,19 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * that has nothing to carry forward -- behaves exactly as it always did. The value is not
      * validated against the dataset because it cannot be: checking it would be the count. It is
      * a number the client already displayed, echoed back for the client to display again, and
-     * the worst a wrong one does is misdraw a page control.
+     * the worst a wrong one does is misdraw a page control. That last sentence stops being true
+     * the moment a filter is involved, which is why the shaped path does not repeat it -- and why
+     * the caller above drops a total whose own shape says it was counted under one, even when the
+     * request that arrives here carries no filter at all.
      */
-    @Override
-    public DatasetPreviewDto preview(DatasetRef dataset, int page, Integer requestedSize,
+    private DatasetPreviewDto unshapedPreview(DatasetRef dataset, int page, int size, int offset,
         Integer knownTotal) throws AnalyticsException {
 
-        int size = this.pageSize(requestedSize);
-        int offset = Math.max(0, page) * size;
         long total = knownTotal != null && knownTotal > 0 ? knownTotal : this.rowCount(dataset);
 
-        // Ordering is deliberately absent. Object storage has no natural row order to promise,
-        // and an ORDER BY here would sort the whole dataset to return a hundred rows.
+        // Ordering is deliberately absent HERE. Object storage has no natural row order to promise,
+        // and an ORDER BY on a page nobody asked to sort would sort the whole dataset to return a
+        // hundred rows. A caller that does ask pays for it knowingly, in shapedPreview.
         //
         // Bounded even though the page size is already clamped, because the two are different
         // policies that happen to agree today: the clamp says how big a PAGE may be, and the
@@ -265,7 +307,294 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         List<List<String>> rows = this.run(dataset, sql, resultSet -> rowsOf(resultSet, columns));
 
         return new DatasetPreviewDto(namesOf(columns), rows, page, size, total,
-            dataset.isMultiFile());
+            dataset.isMultiFile(), false);
+    }
+
+    /**
+     * A page a grid ordered, narrowed, or both, composed against the dataset's own schema.
+     *
+     * <b>The order inside this session is the security argument and it is analyze()'s order, for
+     * analyze()'s reason.</b> The view is created first, then DESCRIBEd, and only then is anything
+     * composed -- so the sort column and every filter field are checked against a list of names the
+     * dataset has just produced, rather than against a list somebody remembered to look up. A name
+     * that is not in that list never reaches the text.
+     *
+     * <b>Everything the other governed reads get, this gets.</b> One permit, one locked-down
+     * session, one timeout, one registry entry a stop button can reach, the row ceiling from
+     * bounded(), and {@link StatementGate#confirmComposed} on both composed statements -- which is
+     * not theatre on SQL this class wrote. Its job here is to make DuckDB's own parser confirm that
+     * each is exactly ONE read naming nothing but the bound view, so a field name that had somehow
+     * carried a location past the schema allow-list would land in table_name, schema_name or
+     * catalog_name and be refused there as well.
+     *
+     * <b>Values are bound and never interpolated</b>, by {@code FilterCompiler} for the filters and
+     * by {@link #whereOf} for the search term. The count and the page carry the SAME parameter list
+     * in the same order, because they carry the same predicate -- which is also what makes the
+     * count a count of the rows the page is a page of, rather than a number that merely arrived
+     * with them.
+     */
+    private DatasetPreviewDto shapedPreview(DatasetRef dataset, int page, int size, int offset,
+        Integer knownTotal, PreviewShape shape) throws AnalyticsException {
+
+        int timeout = this.limits.getTimeoutSeconds();
+        return this.inSession(dataset, (session, statement) -> {
+            statement.execute(viewOf(DATASET, dataset));
+
+            List<ColumnDto> schema = new ArrayList<>();
+            try (ResultSet described = statement.executeQuery("DESCRIBE SELECT * FROM " + DATASET)) {
+                while (described.next()) {
+                    schema.add(new ColumnDto(described.getString("column_name"),
+                        described.getString("column_type")));
+                }
+            }
+            FilterCompiler.Columns columns = FilterCompiler.Columns.of(schema);
+
+            List<Object> parameters = new ArrayList<>();
+            String where = whereOf(shape, columns, parameters);
+            String order = orderOf(shape, columns);
+
+            long total = this.totalFor(session, statement, shape, where, parameters, knownTotal,
+                timeout);
+
+            String sql = this.bounded("SELECT * FROM " + DATASET + where + order
+                + " LIMIT " + size + " OFFSET " + offset);
+            StatementGate.confirmComposed(session, sql, timeout);
+
+            List<ColumnDto> columnsRead = new ArrayList<>();
+            List<List<String>> rows;
+            try (PreparedStatement prepared = session.prepareStatement(sql)) {
+                prepared.setQueryTimeout(timeout);
+                bind(prepared, parameters);
+                try (ResultSet resultSet = prepared.executeQuery()) {
+                    rows = rowsOf(resultSet, columnsRead);
+                }
+            }
+            return new DatasetPreviewDto(namesOf(columnsRead), rows, page, size, total,
+                dataset.isMultiFile(), shape.isNarrowing());
+        });
+    }
+
+    /**
+     * How many rows the pager has to page through, which is not always a number worth trusting a
+     * caller for.
+     *
+     * <b>A knownTotal is refused outright as soon as the shape narrows, and this is the whole of a
+     * defect that would otherwise be almost impossible to catch.</b> The short-circuit was added so
+     * a page turn need not re-count, and a page turn is exactly the request a grid sends after the
+     * user has changed a filter: the client is holding a total from the response BEFORE the filter,
+     * echoes it back out of habit, and gets 1,204 rows paginated as 250,000. Every page renders,
+     * every page number is clickable, and the pages past the real end are empty -- which reads as a
+     * broken filter rather than as a wrong count. There is no way to validate the number that is
+     * cheaper than the count it exists to skip, so the only safe reading of it is that it describes
+     * whatever the caller last saw, and once a filter has changed, what the caller last saw is a
+     * different dataset.
+     *
+     * A sort keeps the short-circuit. Ordering rows does not change how many there are, so a total
+     * carried across a header click is still the same total -- and a grid whose every sort cost a
+     * full count would make sorting the most expensive thing on the screen.
+     *
+     * The count runs on the session already open, so an unshaped preview's second session and
+     * second permit are saved even in the case that counts.
+     */
+    private long totalFor(Connection session, Statement statement, PreviewShape shape, String where,
+        List<Object> parameters, Integer knownTotal, int timeout)
+        throws AnalyticsException, SQLException {
+
+        if (!shape.isNarrowing()) {
+            // Not narrowing NOW is not the same as the carried total having been counted without a
+            // filter. Clearing a filter lands here while the client still holds the filtered total,
+            // and honouring it makes the dataset appear to shrink -- pages that exist stop being
+            // offered, which is worse than the trap above, where the extra pages were at least
+            // visibly empty. The caller says where its number came from; only an unfiltered one is
+            // reusable, and in this branch there is exactly one correct total, so that is enough.
+            if (knownTotal != null && knownTotal > 0 && !shape.isKnownTotalFiltered()) {
+                return knownTotal;
+            }
+            return this.countMatching(session, statement, "", Collections.emptyList(), timeout);
+        }
+        return this.countMatching(session, statement, where, parameters, timeout);
+    }
+
+    /**
+     * count(*) over the view, under the same predicate and the same bound values as the page.
+     *
+     * Not bounded(), for rowCount()'s reason: a count returns one row whatever the dataset is, and
+     * wrapping it would add a subquery for nothing. Gated, for confirmComposed()'s reason: it is a
+     * composed statement and the parser is the only thing entitled to say it is one read.
+     *
+     * The plain Statement is used when there is nothing to bind, so an unnarrowed count costs no
+     * prepare -- and the prepared path exists only when a value has to stay outside the text.
+     */
+    private long countMatching(Connection session, Statement statement, String where,
+        List<Object> parameters, int timeout) throws AnalyticsException, SQLException {
+
+        String sql = "SELECT count(*) FROM " + DATASET + where;
+        StatementGate.confirmComposed(session, sql, timeout);
+        if (parameters.isEmpty()) {
+            try (ResultSet counted = statement.executeQuery(sql)) {
+                return counted.next() ? counted.getLong(1) : 0L;
+            }
+        }
+        try (PreparedStatement prepared = session.prepareStatement(sql)) {
+            prepared.setQueryTimeout(timeout);
+            bind(prepared, parameters);
+            try (ResultSet counted = prepared.executeQuery()) {
+                return counted.next() ? counted.getLong(1) : 0L;
+            }
+        }
+    }
+
+    /**
+     * The WHERE clause a grid asked for: the caller's own conditions, and the search box.
+     *
+     * <b>The conditions go through {@code FilterCompiler} unchanged and untouched.</b> That class
+     * is the module's answer to "a predicate over a dataset with a user's values in it": values
+     * become placeholders, field names come from the dataset's own DESCRIBE and are emitted in the
+     * SCHEMA's spelling, and the operator vocabulary is the fourteen the Canvas already uses. A
+     * grid filter is the same problem, so it gets the same compiler rather than a second one --
+     * a second implementation is a second place to get injection wrong, and the two would drift
+     * the first time an operator was added to one of them. Its ceilings come along too: 8 levels of
+     * nesting, 200 conditions, 500 operands in an IN.
+     *
+     * <b>The search is NOT one of those fourteen and is composed here, which is a smaller
+     * exception than it looks.</b> The nearest operator is CONTAINS and it is case-SENSITIVE by
+     * design, while a search box that misses "Oslo" because the user typed "oslo" is a search box
+     * that does not work. The alternative considered was a fifteenth, case-insensitive operator on
+     * FilterClause -- rejected because that enum is the Canvas's public wire vocabulary, and
+     * widening a contract with every existing client to serve a predicate no Canvas user can build
+     * is a larger change than this one. What is reused is the part that matters: the identifiers
+     * are {@code FilterCompiler.Columns}, so they are the same allow-list quoted the same way, and
+     * the term is a bound parameter, so there is no escaping here either.
+     *
+     * <b>Every text column is searched, and the cost of that is measured rather than avoided.</b>
+     * "Matches any text column" is an OR of contains over every VARCHAR in the file, evaluated per
+     * row, and on a term that is nowhere in the file there is no early exit from either the page or
+     * the count. Measured against the 1,500,000-row benchmark CSV in MinIO
+     * (analytics-benchmark/sales-100mb.csv, three VARCHAR columns of six), 512MB session, warm:
+     *
+     * <ul>
+     *   <li>unshaped page of 100, no count: <b>~140 ms</b></li>
+     *   <li>count(*) with no predicate: <b>~360 ms</b></li>
+     *   <li>count(*) under the search, term absent: <b>~400 ms</b> -- the predicate costs about
+     *       40 ms over 1.5M rows, because parsing the CSV dominates it</li>
+     *   <li>the page under the search, term absent: <b>~385 ms</b>, a full scan, since LIMIT 100
+     *       cannot stop early when nothing matches</li>
+     * </ul>
+     *
+     * So a searched page is roughly 790 ms against a cold unshaped page's 500 ms -- and it is 790
+     * ms on ONE governor permit where the unshaped pair takes two. The cost grows with the number
+     * of text columns, not with their width.
+     *
+     * Searching fewer columns would make it fast by making it a different feature, and a grid that
+     * silently skipped a column would be a search box that answers "not found" about data that is
+     * there. What bounds it instead is what bounds every other read here: one permit, the memory
+     * ceiling on the session, and the query timeout. The term's own length is capped by
+     * {@link PreviewShape}. What is deliberately NOT bounded here is a minimum term length: a
+     * one-character search is a legitimate question, and the request that should not be sent on
+     * every keystroke is a decision for the client's debounce rather than a refusal from here.
+     *
+     * contains() rather than LIKE, for the reason FilterCompiler gives at its own CONTAINS: LIKE
+     * would make the user's own % and _ into wildcards, so a search for "50%" would match "50"
+     * followed by anything, and the usual fix is the escaping neither class does.
+     */
+    private static String whereOf(PreviewShape shape, FilterCompiler.Columns columns,
+        List<Object> parameters) throws AnalyticsException {
+
+        StringBuilder where = new StringBuilder();
+        String joiner = " WHERE ";
+        BoundStatement filters = new FilterCompiler(columns).compile(shape.filterTree());
+        if (filters != null) {
+            where.append(joiner).append(filters.getSql());
+            parameters.addAll(filters.getParameters());
+            joiner = " AND ";
+        }
+        if (shape.getSearch() != null) {
+            where.append(joiner).append(searchOf(shape.getSearch(), columns, parameters));
+        }
+        return where.toString();
+    }
+
+    /**
+     * The search box, as an OR of case-insensitive containment over every text column.
+     *
+     * lower() is applied by the ENGINE to both sides rather than by Java to the term, so one
+     * implementation of case folding decides both. Folding the term here and the column there would
+     * disagree on the first non-ASCII alphabet somebody searches in. It is also free: measured on
+     * the 1.5M-row benchmark, lower(?) over a bound parameter and a term folded in Java before
+     * binding came back at 523 ms and 526 ms, which is DuckDB folding the constant once rather
+     * than per row.
+     *
+     * <b>A dataset with no text columns matches nothing, and says so with a count of zero rather
+     * than with a refusal.</b> A search is a filter, and a filter that matches nothing returns
+     * nothing; the response carries filtered=true and totalRows=0, so the screen reads "0 of
+     * 250,000" -- which is true. Refusing instead would mean a search box that works on one file
+     * and throws on the next, which is a worse thing to hand a person than an empty result.
+     */
+    private static String searchOf(String term, FilterCompiler.Columns columns,
+        List<Object> parameters) {
+
+        StringBuilder sql = new StringBuilder();
+        String joiner = "";
+        for (ColumnDto column : columns.all()) {
+            if (column == null || !FilterCompiler.Columns.isText(column)) {
+                continue;
+            }
+            sql.append(joiner).append("contains(lower(")
+                .append(FilterCompiler.Columns.quote(column)).append("), lower(?))");
+            parameters.add(term);
+            joiner = " OR ";
+        }
+        if (sql.length() == 0) {
+            // Not a tautology in disguise: it is the honest predicate for "look in the text columns"
+            // asked of a file that has none, and it is written out so the SQL in a log says so.
+            return "false";
+        }
+        return "(" + sql + ")";
+    }
+
+    /**
+     * ORDER BY, over one column the dataset itself named.
+     *
+     * <b>A sort column is an identifier, so it cannot be bound and has to be written into the
+     * text.</b> It is validated exactly as the Canvas validates a dimension --
+     * {@code Columns.require} against the schema the DESCRIBE just returned, which resolves the
+     * dataset's OWN spelling of the name and refuses anything the file did not declare -- and then
+     * quoted, because a CSV header is allowed to say "order date" or a"b. The quoting makes such a
+     * name usable; the allow-list is what makes it safe, and neither is asked to do the other's job.
+     *
+     * <b>NULLS LAST, in both directions, and the direction-independence is the point.</b> A missing
+     * value is not the largest value and it is not the smallest one, so a null that led an
+     * ascending sort would read as the minimum and one that led a descending sort would read as the
+     * maximum -- the same cell claiming to be both, depending on which arrow the user clicked. Last
+     * in both directions makes nulls a place rather than a claim, and it keeps the first page of a
+     * sort about the data: on a column that is a third empty, nulls first is a screen of blank
+     * cells that says nothing about the file. It also matches what
+     * {@code AnalysisQueryBuilder.appendOrderBy} already decided for the Canvas, so the two screens
+     * do not disagree about where a null belongs.
+     *
+     * <b>What this deliberately does not promise is a stable page boundary.</b> ORDER BY over a
+     * column with ties leaves the tied rows in an order DuckDB is free to choose, and it chooses per
+     * execution -- so on a file with no unique column, paging through a sort by a low-cardinality
+     * column can show a row twice or not at all. The fixes are a unique tiebreaker the file does not
+     * have, or a full-width sort key that would multiply the cost of every sorted page; neither is
+     * worth it for a preview, and the honest thing is to record it here rather than to have it
+     * discovered on a duplicate row.
+     */
+    private static String orderOf(PreviewShape shape, FilterCompiler.Columns columns)
+        throws AnalyticsException {
+
+        if (!shape.isOrdered()) {
+            return "";
+        }
+        ColumnDto column = columns.require(shape.getSort());
+        if (!FilterCompiler.Columns.isOrderable(column)) {
+            // The name echoed is the SCHEMA's, not the request's: require() has already resolved it
+            // to a column the DESCRIBE returned, so this cannot hand a caller's own string back.
+            throw new AnalyticsException("\"" + column.getName() + "\" holds " + column.getType()
+                + ", which has no order, so the rows cannot be sorted by it.");
+        }
+        return " ORDER BY " + FilterCompiler.Columns.quote(column) + " "
+            + shape.getDirection().name() + " NULLS LAST";
     }
 
     /**

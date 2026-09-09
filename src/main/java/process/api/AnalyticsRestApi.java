@@ -1,5 +1,7 @@
 package process.api;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -20,14 +22,18 @@ import process.analytics.DatasetRef;
 import process.analytics.AnalyticsExportService;
 import process.analytics.DatasetResolver;
 import process.analytics.RunningQueries;
+import process.analytics.canvas.FilterClause;
 import process.analytics.dto.QueryResultDto;
 import process.model.dto.ResponseDto;
 import process.model.pojo.AnalyticsQueryRun;
 import process.model.service.AnalyticsQueryLibraryService;
 import process.util.ProcessUtil;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -65,6 +71,16 @@ import java.util.Map;
 public class AnalyticsRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(AnalyticsRestApi.class);
+
+    /**
+     * Reads the one parameter on this API that carries structure rather than a scalar.
+     *
+     * Its own instance rather than the application's injected mapper, and shared rather than made
+     * per request: ObjectMapper is thread-safe once configured and expensive to build, and this one
+     * is deliberately at its defaults so a module-wide serialisation setting cannot change what a
+     * filter means. AnalysisService keeps one for the same reason and on the same model.
+     */
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final DatasetResolver datasetResolver;
     private final AnalyticsQueryService analyticsQueryService;
@@ -122,7 +138,8 @@ public class AnalyticsRestApi {
     }
 
     /**
-     * One page of rows, plus the total so the caller can page without guessing.
+     * One page of rows, plus the total so the caller can page without guessing, in the order and
+     * the narrowing a grid asked for.
      *
      * The page size is a request, not an instruction: AnalyticsQueryService clamps it, so a
      * caller asking for a million rows receives the configured maximum instead.
@@ -132,7 +149,21 @@ public class AnalyticsRestApi {
      * session and a second governor permit for a number the browser is displaying. Passing it
      * back halves the cost of every page turn. It is optional and unvalidated on purpose -- the
      * only way to check it is to run the count this parameter exists to skip -- so it is treated
-     * as a display value, never as anything a decision rests on.
+     * as a display value, never as anything a decision rests on. <b>The engine stops honouring it
+     * the moment a filter or a search is present</b>, because at that point it is a count of a
+     * different set of rows and the pager it draws offers pages that do not exist.
+     *
+     * <b>The four grid parameters.</b> sort names a column and direction says ASC or DESC; both are
+     * resolved against the dataset's own schema inside the engine's session, so a name this API
+     * cannot check here is not a name this API guesses about. search is free text matched
+     * case-insensitively against every text column. filters is a JSON array of
+     * {field, operator, value} in the SAME vocabulary the Canvas uses -- FilterClause, compiled by
+     * the same FilterCompiler -- so there is one filter language in this module and not two.
+     *
+     * <b>They are parsed before the dataset is resolved</b>, so a malformed filter costs a JSON
+     * parse and nothing else: no connection lookup, no session, no permit. Sorting and searching
+     * are server-side because a page is a window onto a file that may hold millions of rows, and
+     * sorting the window in the browser sorts the wrong rows and looks right doing it.
      */
     @RequestMapping(value = "/preview", method = RequestMethod.GET)
     public ResponseEntity<?> preview(
@@ -140,13 +171,24 @@ public class AnalyticsRestApi {
         @RequestParam(value = "path") String path,
         @RequestParam(value = "page", required = false, defaultValue = "0") Integer page,
         @RequestParam(value = "pageSize", required = false) Integer pageSize,
-        @RequestParam(value = "knownTotal", required = false) Integer knownTotal) {
+        @RequestParam(value = "knownTotal", required = false) Integer knownTotal,
+        @RequestParam(value = "sort", required = false) String sort,
+        @RequestParam(value = "direction", required = false) String direction,
+        @RequestParam(value = "search", required = false) String search,
+        @RequestParam(value = "filters", required = false) String filters,
+        // Where the carried total came from. Absent means "counted with nothing narrowing", which
+        // is the only provenance that makes knownTotal reusable -- see PreviewShape.
+        @RequestParam(value = "knownTotalFiltered", required = false,
+            defaultValue = "false") Boolean knownTotalFiltered) {
         try {
             this.analyticsLimits.requireEnabled();
+            AnalyticsEngine.PreviewShape shape = new AnalyticsEngine.PreviewShape(sort,
+                directionOf(direction), search, filtersOf(filters),
+                Boolean.TRUE.equals(knownTotalFiltered));
             DatasetRef dataset = this.datasetResolver.resolve(connection, path);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Dataset read.",
                 this.analyticsQueryService.preview(dataset, page == null ? 0 : page, pageSize,
-                    knownTotal)), HttpStatus.OK);
+                    knownTotal, shape)), HttpStatus.OK);
         } catch (AnalyticsException ex) {
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()),
                 HttpStatus.OK);
@@ -373,6 +415,60 @@ public class AnalyticsRestApi {
         run.setDurationMs(System.currentTimeMillis() - startedAt);
         run.setErrorMessage(message);
         this.analyticsQueryLibraryService.recordRun(run);
+    }
+
+    /**
+     * ASC or DESC, and never anything else that could be written into an ORDER BY.
+     *
+     * A String parameter converted here rather than an enum parameter Spring converts, because
+     * Spring answers a bad enum value with a 400 and a stack trace in the log. A direction of
+     * "sideways" is a caller mistake, and a caller mistake in this module is an OK carrying
+     * ERROR and a sentence -- the same shape every other refusal on this controller has.
+     *
+     * The offending value is not echoed. It is the caller's own string, it would be rendered into a
+     * page by somebody else's code, and there are exactly two right answers to name instead.
+     */
+    private static AnalyticsEngine.PreviewShape.Direction directionOf(String requested)
+        throws AnalyticsException {
+
+        if (!hasText(requested)) {
+            return null;
+        }
+        String named = requested.trim().toUpperCase(Locale.ROOT);
+        if (AnalyticsEngine.PreviewShape.Direction.ASC.name().equals(named)) {
+            return AnalyticsEngine.PreviewShape.Direction.ASC;
+        }
+        if (AnalyticsEngine.PreviewShape.Direction.DESC.name().equals(named)) {
+            return AnalyticsEngine.PreviewShape.Direction.DESC;
+        }
+        throw new AnalyticsException("A column is sorted ASC or DESC.");
+    }
+
+    /**
+     * The filters parameter, read as the Canvas's own filter model.
+     *
+     * <b>Deserialised into {@link FilterClause} rather than into a map, and that is the whole
+     * reuse.</b> The same class the Canvas accepts means the same fourteen operators, the same
+     * String-typed values -- which is what keeps an eighteen-digit id from becoming a double before
+     * anything has looked at it -- and the same compiler downstream. An array element may itself be
+     * a group, so a caller that wants an OR has one without this endpoint inventing a syntax for it.
+     *
+     * Nothing is validated here. A field name means nothing without the dataset's schema, and the
+     * schema is read inside the engine's session; a check made here would be a second allow-list
+     * built from a second query, which is both an extra permit and a second thing to keep in step.
+     */
+    private static List<FilterClause> filtersOf(String json) throws AnalyticsException {
+        if (!hasText(json)) {
+            return null;
+        }
+        try {
+            return JSON.readValue(json, new TypeReference<List<FilterClause>>() { });
+        } catch (IOException ex) {
+            // The parser's own message names offsets into a string the caller sent and is written
+            // for somebody holding it. What a person can act on is the shape that was expected.
+            throw new AnalyticsException("Those filters could not be read. Filters are a JSON array "
+                + "of {field, operator, value}, and the operator has to be one this module knows.");
+        }
     }
 
     private static boolean hasText(String value) {

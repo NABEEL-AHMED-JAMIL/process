@@ -96,6 +96,24 @@ public class AnalyticsQueryService {
         return this.engine.preview(dataset, page, requestedSize, knownTotal);
     }
 
+    /**
+     * The same page, ordered and narrowed by what a grid asked for.
+     *
+     * A pass-through like every other method here. The sort is validated, the filters are compiled
+     * and the total is counted where the schema is -- inside the engine's session -- because that
+     * is the only place the dataset's own columns exist. A front door that pre-checked a field name
+     * would be checking it against a schema read by a second query, which is both an extra permit
+     * and a second allow-list to keep in step with the first.
+     *
+     * @param knownTotal ignored by the engine whenever the shape narrows; see
+     *                   {@link AnalyticsEngine#preview(DatasetRef, int, Integer, Integer,
+     *                   AnalyticsEngine.PreviewShape)}
+     */
+    public DatasetPreviewDto preview(DatasetRef dataset, int page, Integer requestedSize,
+        Integer knownTotal, AnalyticsEngine.PreviewShape shape) throws AnalyticsException {
+        return this.engine.preview(dataset, page, requestedSize, knownTotal, shape);
+    }
+
     /** How many rows the dataset holds, across every file when the path is a pattern. */
     public long rowCount(DatasetRef dataset) throws AnalyticsException {
         return this.engine.rowCount(dataset);

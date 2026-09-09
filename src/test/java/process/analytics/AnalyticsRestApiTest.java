@@ -2,6 +2,7 @@ package process.analytics;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 import process.analytics.AnalyticsLimits;
+import process.analytics.canvas.FilterClause;
 import process.analytics.dto.ColumnDto;
 import process.analytics.dto.DatasetPreviewDto;
 import process.analytics.dto.DatasetSchemaDto;
@@ -28,6 +30,9 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -131,9 +136,9 @@ class AnalyticsRestApiTest {
     void previewAnswersWithWhatTheServiceRead() throws Exception {
         DatasetPreviewDto read = previewDto(4200L);
         when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
-        when(this.analyticsQueryService.preview(this.dataset, 0, 100, null)).thenReturn(read);
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(0), eq(100), isNull(), any())).thenReturn(read);
 
-        ResponseEntity<?> response = api().preview(ALIAS, PATH, 0, 100, null);
+        ResponseEntity<?> response = api().preview(ALIAS, PATH, 0, 100, null, null, null, null, null, false);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(bodyOf(response).getStatus()).isEqualTo(ProcessUtil.SUCCESS);
@@ -161,7 +166,7 @@ class AnalyticsRestApiTest {
             .thenThrow(new AnalyticsException(BUSINESS_FAILURE));
 
         ResponseEntity<?> schema = api().schema(ALIAS, PATH);
-        ResponseEntity<?> preview = api().preview(ALIAS, PATH, 0, 100, null);
+        ResponseEntity<?> preview = api().preview(ALIAS, PATH, 0, 100, null, null, null, null, null, false);
 
         for (ResponseEntity<?> response : Arrays.asList(schema, preview)) {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -182,11 +187,11 @@ class AnalyticsRestApiTest {
         when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
         when(this.analyticsQueryService.schemaOf(this.dataset))
             .thenThrow(new AnalyticsException(refused));
-        when(this.analyticsQueryService.preview(this.dataset, 0, 100, null))
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(0), eq(100), isNull(), any()))
             .thenThrow(new AnalyticsException(refused));
 
         ResponseEntity<?> schema = api().schema(ALIAS, PATH);
-        ResponseEntity<?> preview = api().preview(ALIAS, PATH, 0, 100, null);
+        ResponseEntity<?> preview = api().preview(ALIAS, PATH, 0, 100, null, null, null, null, null, false);
 
         for (ResponseEntity<?> response : Arrays.asList(schema, preview)) {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -202,11 +207,11 @@ class AnalyticsRestApiTest {
         when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
         when(this.analyticsQueryService.schemaOf(this.dataset))
             .thenThrow(new IllegalStateException(LEAKY_FAILURE));
-        when(this.analyticsQueryService.preview(this.dataset, 0, 100, null))
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(0), eq(100), isNull(), any()))
             .thenThrow(new IllegalStateException(LEAKY_FAILURE));
 
         ResponseEntity<?> schema = api().schema(ALIAS, PATH);
-        ResponseEntity<?> preview = api().preview(ALIAS, PATH, 0, 100, null);
+        ResponseEntity<?> preview = api().preview(ALIAS, PATH, 0, 100, null, null, null, null, null, false);
 
         for (ResponseEntity<?> response : Arrays.asList(schema, preview)) {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -228,7 +233,7 @@ class AnalyticsRestApiTest {
         when(this.datasetResolver.resolve(ALIAS, PATH))
             .thenThrow(new IllegalStateException(LEAKY_FAILURE));
 
-        ResponseEntity<?> response = api().preview(ALIAS, PATH, 0, 100, null);
+        ResponseEntity<?> response = api().preview(ALIAS, PATH, 0, 100, null, null, null, null, null, false);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(bodyOf(response).getMessage()).isEqualTo(ProcessUtil.INTERNAL_ERROR_500);
@@ -239,56 +244,154 @@ class AnalyticsRestApiTest {
     @Test
     void aKnownTotalIsHandedToTheServiceUntouched() throws Exception {
         when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
-        when(this.analyticsQueryService.preview(this.dataset, 2, 250, 4200))
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(2), eq(250), eq(4200), any()))
             .thenReturn(previewDto(4200L));
 
-        ResponseEntity<?> response = api().preview(ALIAS, PATH, 2, 250, 4200);
+        ResponseEntity<?> response = api().preview(ALIAS, PATH, 2, 250, 4200, null, null, null, null, false);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         // A page turn already knows the total from the response before it, and re-counting costs a
         // second session and a second governor permit for an answer the caller is holding.
-        verify(this.analyticsQueryService).preview(this.dataset, 2, 250, 4200);
+        verify(this.analyticsQueryService).preview(eq(this.dataset), eq(2), eq(250), eq(4200), any());
     }
 
     @Test
     void anAbsentKnownTotalIsNotInvented() throws Exception {
         when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
-        when(this.analyticsQueryService.preview(this.dataset, 1, 250, null))
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(1), eq(250), isNull(), any()))
             .thenReturn(previewDto(4200L));
 
-        api().preview(ALIAS, PATH, 1, 250, null);
+        api().preview(ALIAS, PATH, 1, 250, null, null, null, null, null, false);
 
         // Null has to stay null all the way down. A controller that defaulted it to zero would
         // read as "the caller knows the total is zero" at the far end, which is a different claim.
-        verify(this.analyticsQueryService).preview(this.dataset, 1, 250, null);
+        verify(this.analyticsQueryService).preview(eq(this.dataset), eq(1), eq(250), isNull(), any());
     }
 
     @Test
     void anAbsentPageIsTheFirstPage() throws Exception {
         when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
-        when(this.analyticsQueryService.preview(this.dataset, 0, 100, null))
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(0), eq(100), isNull(), any()))
             .thenReturn(previewDto(4200L));
 
         // Spring's defaultValue = "0" means a real request never arrives with a null page. The
         // controller guards for it anyway, and this is what keeps that guard honest if the
         // annotation is ever edited.
-        api().preview(ALIAS, PATH, null, 100, null);
+        api().preview(ALIAS, PATH, null, 100, null, null, null, null, null, false);
 
-        verify(this.analyticsQueryService).preview(this.dataset, 0, 100, null);
+        verify(this.analyticsQueryService).preview(eq(this.dataset), eq(0), eq(100), isNull(), any());
     }
 
     @Test
     void anAbsentPageSizeIsLeftForTheServiceToDecide() throws Exception {
         when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
-        when(this.analyticsQueryService.preview(this.dataset, 0, null, null))
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(0), isNull(), isNull(), any()))
             .thenReturn(previewDto(4200L));
 
-        api().preview(ALIAS, PATH, 0, null, null);
+        api().preview(ALIAS, PATH, 0, null, null, null, null, null, null, false);
 
         // Deliberately passed through rather than defaulted here: the configured page size and the
         // maximum are policy, AnalyticsQueryService.pageSize owns both, and a second copy of a
         // clamp is a second thing to keep in step with analytics.query.* .
-        verify(this.analyticsQueryService).preview(this.dataset, 0, null, null);
+        verify(this.analyticsQueryService).preview(eq(this.dataset), eq(0), isNull(), isNull(), any());
+    }
+
+    // ---- the four grid parameters, as far as the controller carries them ------------------------
+
+    @Test
+    void theGridsFourParametersArriveAtTheServiceAsOneShape() throws Exception {
+        when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(0), eq(100), isNull(), any()))
+            .thenReturn(previewDto(4200L));
+
+        api().preview(ALIAS, PATH, 0, 100, null, "amount", "desc", " oslo ",
+            "[{\"field\":\"region\",\"operator\":\"EQ\",\"value\":\"north\"}]", false);
+
+        ArgumentCaptor<AnalyticsEngine.PreviewShape> shape =
+            ArgumentCaptor.forClass(AnalyticsEngine.PreviewShape.class);
+        verify(this.analyticsQueryService)
+            .preview(eq(this.dataset), eq(0), eq(100), isNull(), shape.capture());
+
+        assertThat(shape.getValue().getSort()).isEqualTo("amount");
+        // Lower case on the wire is the same direction. A grid sends what its own model holds and
+        // the two spellings are not two requests.
+        assertThat(shape.getValue().getDirection())
+            .isEqualTo(AnalyticsEngine.PreviewShape.Direction.DESC);
+        // Trimmed, because a search box hands over whatever the user's keyboard did and a leading
+        // space would make "oslo" and " oslo" two different searches with two different counts.
+        assertThat(shape.getValue().getSearch()).isEqualTo("oslo");
+        assertThat(shape.getValue().getFilters()).hasSize(1);
+        assertThat(shape.getValue().getFilters().get(0).getField()).isEqualTo("region");
+        assertThat(shape.getValue().getFilters().get(0).getOperator())
+            .isEqualTo(FilterClause.Operator.EQ);
+        assertThat(shape.getValue().isNarrowing()).isTrue();
+    }
+
+    @Test
+    void aRequestThatAsksForNothingCarriesAShapeThatNarrowsNothing() throws Exception {
+        when(this.datasetResolver.resolve(ALIAS, PATH)).thenReturn(this.dataset);
+        when(this.analyticsQueryService.preview(eq(this.dataset), eq(0), eq(100), isNull(), any()))
+            .thenReturn(previewDto(4200L));
+
+        // Blank rather than absent, which is what an Angular query string sends for a cleared
+        // search box. A shape that read "" as a search would filter every page down to the rows
+        // containing the empty string -- all of them -- and would report the result as filtered.
+        api().preview(ALIAS, PATH, 0, 100, null, "", "", "   ", "", false);
+
+        ArgumentCaptor<AnalyticsEngine.PreviewShape> shape =
+            ArgumentCaptor.forClass(AnalyticsEngine.PreviewShape.class);
+        verify(this.analyticsQueryService)
+            .preview(eq(this.dataset), eq(0), eq(100), isNull(), shape.capture());
+
+        assertThat(shape.getValue().isEmpty()).isTrue();
+        assertThat(shape.getValue().isNarrowing()).isFalse();
+    }
+
+    @Test
+    void aDirectionThatIsNotASCOrDESCIsARefusalAndNotABadRequest() throws Exception {
+        ResponseEntity<?> response = api().preview(ALIAS, PATH, 0, 100, null, "amount",
+            "; DROP TABLE dataset", null, null, false);
+
+        // The house shape for a caller mistake, and the reason the parameter is a String the
+        // controller converts rather than an enum Spring converts: Spring's own answer is a 400.
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(bodyOf(response).getStatus()).isEqualTo(ProcessUtil.ERROR_MESSAGE);
+        assertThat(bodyOf(response).getMessage()).isEqualTo("A column is sorted ASC or DESC.");
+        // And the caller's own string is not handed back to be rendered by somebody else's code.
+        assertThat(bodyOf(response).getMessage()).doesNotContain("DROP");
+        verifyNoInteractions(this.datasetResolver, this.analyticsQueryService);
+    }
+
+    @Test
+    void filtersThatAreNotReadableCostAParseAndNothingElse() throws Exception {
+        ResponseEntity<?> response = api().preview(ALIAS, PATH, 0, 100, null, null, null, null,
+            "[{\"field\":\"region\",\"operator\":\"LIKE\"}]", false);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(bodyOf(response).getStatus()).isEqualTo(ProcessUtil.ERROR_MESSAGE);
+        assertThat(bodyOf(response).getMessage()).contains("JSON array");
+        // Parsed BEFORE the dataset is resolved: a malformed filter must not cost a connection
+        // lookup, a session or a governor permit.
+        verifyNoInteractions(this.datasetResolver, this.analyticsQueryService);
+    }
+
+    @Test
+    void aSearchTermLongerThanAnyCellIsRefusedBeforeAnythingIsOpened() throws Exception {
+        StringBuilder term = new StringBuilder();
+        for (int i = 0; i < 400; i++) {
+            term.append("a");
+        }
+
+        ResponseEntity<?> response = api().preview(ALIAS, PATH, 0, 100, null, null, null,
+            term.toString(), null, false);
+
+        // The term is compared against every text cell of every row, so its length is multiplied by
+        // the size of the file -- and it is arriving on a GET, so it is in every access log on the
+        // way here as well.
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(bodyOf(response).getStatus()).isEqualTo(ProcessUtil.ERROR_MESSAGE);
+        assertThat(bodyOf(response).getMessage()).contains("256 characters");
+        verifyNoInteractions(this.datasetResolver, this.analyticsQueryService);
     }
 
     // ---- the role floor -------------------------------------------------------------------------
@@ -341,7 +444,7 @@ class AnalyticsRestApiTest {
 
         for (ResponseEntity<?> response : java.util.Arrays.asList(
             api.schema("store", "sales.csv"),
-            api.preview("store", "sales.csv", 0, null, null),
+            api.preview("store", "sales.csv", 0, null, null, null, null, null, null, false),
             api.profile("store", "sales.csv"))) {
 
             assertThat(response.getStatusCode())
