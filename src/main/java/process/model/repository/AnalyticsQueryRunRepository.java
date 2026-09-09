@@ -2,6 +2,10 @@ package process.model.repository;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import java.sql.Timestamp;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.AnalyticsQueryRun;
 import java.util.List;
@@ -23,5 +27,23 @@ public interface AnalyticsQueryRunRepository extends JpaRepository<AnalyticsQuer
 
     List<AnalyticsQueryRun> findByAnalyticsQueryIdOrderByDateCreatedDescAnalyticsQueryRunIdDesc(
         Long analyticsQueryId, Pageable pageable);
+
+    /**
+     * Deletes history older than a cut-off, and answers with how many rows went.
+     *
+     * A bulk @Modifying delete rather than findAll-then-deleteAll: the retention window is the
+     * whole point, and loading a year of audit rows into the heap to delete them would make the
+     * cleanup the most expensive thing this table ever does to the application.
+     *
+     * NOT tenant-scoped, and it must not be. Retention is an operator policy over the table, not
+     * a tenant's view of it, and Hibernate's tenant filter is off on this path deliberately -- a
+     * filtered delete would silently keep every row belonging to tenants nobody was signed in as.
+     *
+     * Rides idx_analytics_query_run_tenant_date, whose second column is date_created; the
+     * changeset that created it says so, and that index is the reason this is affordable.
+     */
+    @Modifying
+    @Query("DELETE FROM AnalyticsQueryRun r WHERE r.dateCreated < :before")
+    int deleteByDateCreatedBefore(@Param("before") Timestamp before);
 
 }

@@ -459,10 +459,16 @@ public class AnalyticsRestApi {
      * a dataset the caller could not reach is the attempt most worth keeping.
      *
      * <b>On volume.</b> This is one row per read, so opening a file writes two (schema, preview)
-     * and three once a tab that profiles is opened, and every page turn writes another. That is
-     * the cost of being able to answer "who read this file"; it is also why analytics_query_run
-     * needs the TTL cleanup document 15 asks for, which does not exist yet. A reader paging
-     * through a 1,500-page dataset leaves 1,500 rows behind, and nothing removes them.
+     * and three once a tab that profiles is opened, and every page turn writes another. A reader
+     * paging through a 1,500-page dataset leaves 1,500 rows behind.
+     *
+     * That raises the RATE at which analytics_query_run grows by a large multiple; it does not
+     * change the ARGUMENT V32__analytics_query.sql makes for leaving it unpruned. That changeset
+     * named the condition that would change its mind -- "anything that lets a machine issue
+     * queries on a schedule" -- and this is not that: every row here is still a person clicking
+     * something, and the governor still caps even that at four concurrent queries. Retention is
+     * available (analytics.history.retention-days) and OFF by default, because losing audit rows
+     * is the one thing that cannot be undone later.
      */
     private void recordRead(String connection, String path, String descriptor, String status,
         Long rowCount, long startedAt, String message) {

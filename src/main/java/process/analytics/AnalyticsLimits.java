@@ -161,6 +161,37 @@ public class AnalyticsLimits {
     private int threads;
 
     /**
+     * How many days of run history to keep. <b>Zero, the default, keeps everything.</b>
+     *
+     * OFF by default, and that is deliberate rather than timid. V32__analytics_query.sql argued
+     * at length for leaving analytics_query_run unpruned: the question it answers -- "who read
+     * that bucket, and when" -- is asked weeks later by somebody who was not there, losing rows
+     * is the one thing that cannot be undone afterwards, and adding a retention rule later can be
+     * done over data that is still there. That reasoning still holds.
+     *
+     * What changed is the RATE. History is now written for every dataset read and not only for
+     * statements somebody typed, so a reader paging a 1,500-page dataset leaves 1,500 rows. That
+     * is a large multiple, but it is still a person clicking something, behind a governor that
+     * admits four concurrent queries -- not the "machine issuing queries on a schedule" that the
+     * changeset named as the condition for changing its mind.
+     *
+     * So the mechanism exists and the policy does not. An operator who has decided what their
+     * audit retention is sets this; nobody has that decision made for them by a default.
+     */
+    @Value("${analytics.history.retention-days:0}")
+    private int historyRetentionDays;
+
+    /**
+     * How often the cleanup runs, in hours. Ignored entirely while retention is off.
+     *
+     * Six hours rather than nightly: a deletion that only ever runs at 3am never runs at all on a
+     * service that is restarted during the day, and this one is cheap -- one DELETE over the
+     * date_created half of idx_analytics_query_run_tenant_date.
+     */
+    @Value("${analytics.history.cleanup-interval-hours:6}")
+    private int historyCleanupIntervalHours = 6;
+
+    /**
      * The shape DuckDB accepts for a size setting, and the shape this class refuses to hold.
      *
      * The same rule DuckDbSessionFactory applies before interpolating the value into SET
@@ -191,6 +222,14 @@ public class AnalyticsLimits {
                 + "Nothing is wrong with your dataset or your query -- an administrator has to "
                 + "turn it back on.");
         }
+    }
+
+    public int getHistoryRetentionDays() {
+        return this.historyRetentionDays;
+    }
+
+    public int getHistoryCleanupIntervalHours() {
+        return this.historyCleanupIntervalHours;
     }
 
     public int getTimeoutSeconds() {
