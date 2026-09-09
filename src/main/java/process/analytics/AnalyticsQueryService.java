@@ -179,8 +179,9 @@ public class AnalyticsQueryService {
      */
     @PreDestroy
     public void shutdown() {
-        if (this.engine instanceof DuckDbAnalyticsEngine) {
-            ((DuckDbAnalyticsEngine) this.engine).shutdown();
-        }
+        // Through the interface. This used to be an `instanceof DuckDbAnalyticsEngine`, which
+        // meant a second engine -- the whole point of there being an interface -- would have been
+        // constructed, used, and never shut down.
+        this.engine.shutdown();
     }
 }

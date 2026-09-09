@@ -2,6 +2,7 @@ package process.analytics;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import process.analytics.canvas.FilterCompiler;
 import process.analytics.dto.ColumnDto;
@@ -93,7 +94,22 @@ import java.util.regex.Pattern;
  *
  * @author Nabeel Ahmed
  */
+/*
+ * Conditional, so the interface next door is a seam somebody can actually use.
+ *
+ * An unconditional @Service means a deployment that supplies its own AnalyticsEngine gets a
+ * NoUniqueBeanDefinitionException at startup -- the context refuses to build, and the seam that
+ * document 05 asks for exists only on paper.
+ *
+ * @ConditionalOnProperty with matchIfMissing rather than @ConditionalOnMissingBean: this class is
+ * found by component scanning, and ConditionalOnMissingBean is only dependable inside an
+ * auto-configuration, where ordering is guaranteed. Against a scanned bean it silently depends on
+ * the order definitions happen to be registered in, which is exactly the kind of "works until it
+ * doesn't" this module avoids. A property is deterministic and greppable: set analytics.engine to
+ * anything else and this bean is not created.
+ */
 @Service
+@ConditionalOnProperty(name = "analytics.engine", havingValue = "duckdb", matchIfMissing = true)
 public class DuckDbAnalyticsEngine implements AnalyticsEngine {
 
 

@@ -120,6 +120,22 @@ public interface AnalyticsEngine {
      * StatementGate, DatasetResolver, the governor -- means REFUSED, which is what those throws
      * have always meant.
      */
+    /**
+     * Releases whatever the engine holds between requests. Nothing, by default.
+     *
+     * On the interface because AnalyticsQueryService owns the engine's lifecycle and used to reach
+     * for it with an `instanceof DuckDbAnalyticsEngine` -- which meant the seam this interface
+     * exists to provide covered every method EXCEPT the one that stops the background thread. A
+     * second engine would have been constructed, used, and then quietly never shut down.
+     *
+     * A default of "nothing" rather than an abstract method: an engine with nothing to release is
+     * a reasonable engine, and making every implementation write an empty body to say so is how a
+     * seam acquires ceremony.
+     */
+    default void shutdown() {
+        // Nothing held.
+    }
+
     class RunFailure extends AnalyticsException {
 
         private final RunState state;
