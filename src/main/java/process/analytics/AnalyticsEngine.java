@@ -123,14 +123,36 @@ public interface AnalyticsEngine {
     class RunFailure extends AnalyticsException {
 
         private final RunState state;
+        private final boolean retryable;
 
         public RunFailure(RunState state, String message) {
+            this(state, message, false);
+        }
+
+        /**
+         * @param retryable whether running exactly this again could plausibly succeed.
+         *
+         * <b>True only for a failure of the TRANSPORT, never of the request.</b> A refused
+         * credential, a missing key, a malformed CSV and a statement the gate would not admit all
+         * fail identically the second time, and retrying them turns one clear error into two
+         * charged to the same governor. A connection reset or a 503 from the object store is a
+         * different thing: nothing about the request was wrong.
+         *
+         * Defaults to false at every existing call site, which is the safe direction -- a failure
+         * nobody has classified is one nobody has shown to be safe to repeat.
+         */
+        public RunFailure(RunState state, String message, boolean retryable) {
             super(message);
             this.state = state;
+            this.retryable = retryable;
         }
 
         public RunState getState() {
             return this.state;
+        }
+
+        public boolean isRetryable() {
+            return this.retryable;
         }
     }
 

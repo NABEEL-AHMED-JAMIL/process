@@ -1511,7 +1511,64 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * stops them.
      */
     private <T> T inSession(DatasetRef dataset, SessionWork<T> work) throws AnalyticsException {
-        return this.inSession(dataset, this.running.open(null), work);
+        return this.withStorageRetry(dataset, work);
+    }
+
+    /**
+     * Retries a BUILT-IN read once when the object store failed to answer.
+     *
+     * <b>Only the built-in reads.</b> Schema, preview and profile are this class's own statements
+     * over one object: repeating one produces the same answer and costs the same scan, so a retry
+     * is invisible except that it worked. User SQL and composed analyses go through the two-argument
+     * inSession and are deliberately NOT retried -- the caller holds a run id, may be watching a
+     * stop button, and a silent second execution of a query somebody is trying to cancel is the
+     * opposite of what they asked for.
+     *
+     * <b>A fresh session per attempt, not a re-execute on the old one.</b> The failures classified
+     * as transient are failures of the connection to the object store; the DuckDB session holding
+     * that connection is exactly the thing that is broken, and reusing it would retry through it.
+     * That means each attempt re-acquires a governor permit and takes a new registry handle, which
+     * is also correct: an attempt that queues behind other work is an attempt, not a free one.
+     *
+     * The retry is not silent to operators. Every one is a WARN naming the dataset, because a
+     * storage service that needs a second ask on a noticeable fraction of reads is a fact about
+     * the deployment that would otherwise be invisible -- reads would simply look slow.
+     */
+    private <T> T withStorageRetry(DatasetRef dataset, SessionWork<T> work)
+        throws AnalyticsException {
+
+        int attempts = Math.max(1, this.limits.getStorageRetryAttempts());
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return this.inSession(dataset, this.running.open(null), work);
+            } catch (AnalyticsEngine.RunFailure failure) {
+                if (!failure.isRetryable() || attempt >= attempts) {
+                    throw failure;
+                }
+                logger.warn("Retrying analytics read of {} after a transient storage failure "
+                    + "(attempt {} of {}): {}", dataset, attempt, attempts, failure.getMessage());
+                this.pauseBeforeRetry();
+            }
+        }
+    }
+
+    /**
+     * Waits between attempts, and treats an interrupt as a reason to stop rather than to hurry.
+     *
+     * Restoring the flag and giving up is what a caller shutting this thread down is asking for.
+     * Swallowing it and retrying immediately would turn a shutdown into one more scan.
+     */
+    private void pauseBeforeRetry() throws AnalyticsException {
+        long backoff = this.limits.getStorageRetryBackoffMs();
+        if (backoff <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(backoff);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AnalyticsException("The query was interrupted.");
+        }
     }
 
     /**
@@ -1692,8 +1749,56 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
             return new RunFailure(RunState.FAILED, "This file could not be read as "
                 + dataset.getFormat() + ". It may be malformed, or a different format.");
         }
+        // LAST, deliberately. Every check above names something about the REQUEST -- a credential,
+        // a path, the statement, the file's contents -- and each of those fails identically on a
+        // second attempt. Only what is left over can be about the transport, so classifying
+        // transience here rather than earlier means a 403 that happens to mention a socket is
+        // still a 403.
+        if (isTransientStorageFailure(lower)) {
+            logger.warn("Analytics read of {} hit a transient storage failure after {} ms: {}",
+                dataset, elapsedMs, raw);
+            return new RunFailure(RunState.FAILED, "The storage service did not answer. "
+                + "This is usually brief -- try again in a moment.", true);
+        }
         logger.error("Analytics query failed on {} after {} ms", dataset, elapsedMs, ex);
         return new RunFailure(RunState.FAILED, "The dataset could not be read.");
+    }
+
+    /**
+     * Whether the object store failed to ANSWER, as opposed to answering no.
+     *
+     * <b>Matched narrowly, and the narrowness is the point.</b> The cost of calling something
+     * transient that is not is a second full scan of the same file, charged to a governor that
+     * admits four queries at a time across the JVM -- so a wrong yes here is paid for by every
+     * other reader. The cost of a wrong no is the error the user would have got anyway.
+     *
+     * 5xx and not 4xx: a 4xx is the store telling us the request was wrong, which repeating will
+     * not fix. 503 and 429 in particular are the store asking to be asked again later, which is
+     * the clearest possible case for a retry.
+     *
+     * "timeout" is NOT here, even though it looks transient. A query timeout is handled well
+     * before this point and means the work did not fit in the ceiling; retrying it spends another
+     * full ceiling to fail the same way.
+     */
+    private static boolean isTransientStorageFailure(String lower) {
+        return lower.contains("connection reset")
+            || lower.contains("connection refused")
+            || lower.contains("could not establish connection")
+            || lower.contains("unable to connect")
+            || lower.contains("failed to connect")
+            || lower.contains("connection closed")
+            || lower.contains("broken pipe")
+            || lower.contains("temporarily unavailable")
+            || lower.contains("service unavailable")
+            // "slowdown", not "slow down": S3's throttling error CODE is the single word
+            // SlowDown, and the spaced version matched nothing. Found by the test, not by
+            // reading -- which is the argument for testing a substring table at all.
+            || lower.contains("slowdown")
+            || lower.contains("http 429")
+            || lower.contains("http 500")
+            || lower.contains("http 502")
+            || lower.contains("http 503")
+            || lower.contains("http 504");
     }
 
     /**

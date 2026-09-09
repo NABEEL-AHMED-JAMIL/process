@@ -224,6 +224,36 @@ public class AnalyticsLimits {
         }
     }
 
+    /**
+     * How many times a built-in read is ATTEMPTED, not retried. One means no retry.
+     *
+     * Two: the original and one more. A transient failure of the object store is usually gone
+     * within a second, and a second attempt catches nearly all of what a third would -- while a
+     * third costs a third full scan of the same file against a governor that admits four queries
+     * at a time across the whole JVM. Retries here are paid for by every other reader, so the
+     * ceiling is deliberately mean.
+     */
+    @Value("${analytics.storage.retry-attempts:2}")
+    private int storageRetryAttempts = 2;
+
+    /**
+     * How long to wait before the second attempt, in milliseconds.
+     *
+     * A flat wait, not exponential backoff. There is only ever one retry, so "exponential" would
+     * describe a single number, and 250ms is long enough for a reset connection to be re-dialled
+     * without being long enough for anyone to notice the read was slow.
+     */
+    @Value("${analytics.storage.retry-backoff-ms:250}")
+    private long storageRetryBackoffMs = 250L;
+
+    public int getStorageRetryAttempts() {
+        return this.storageRetryAttempts;
+    }
+
+    public long getStorageRetryBackoffMs() {
+        return this.storageRetryBackoffMs;
+    }
+
     public int getHistoryRetentionDays() {
         return this.historyRetentionDays;
     }
