@@ -1,0 +1,52 @@
+# Secret scanning for the process service.
+#
+# Document 15's security section had "secret scanning: MISSING. Never run." This is the
+# configuration for the run; security/secret-scan.sh is the run.
+#
+# WHAT IS ALLOWLISTED HERE AND WHAT IS NOT
+#
+# Only findings that have been read and shown not to be credentials, each with the reason. Nothing
+# is allowlisted for being inconvenient, for being old, or for being already published: a real
+# secret that has leaked stays in the report until it is rotated, because on a repository whose
+# history is already pushed the report is the only thing keeping it visible.
+#
+# Three real exposures are therefore NOT allowlisted and are expected in every run. They are
+# recorded in ../.ai/spec/SECRET-SCAN.md with what each one is and what has to happen to it.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Findings read and confirmed not to be credentials. Each entry says why."
+
+paths = [
+  # Build output: the same file scanned twice, and this copy is not in git at all.
+  '''^target/''',
+
+  # Synthetic fixture data in the e-mail template tests. The "temporary_password" these put into
+  # a template body belongs to a person who does not exist (Rosa Delgado at Litware Financial)
+  # and is asserted against, in the same file, as a string that must appear in the rendered
+  # message. It authenticates nothing and never left the test.
+  '''src/test/java/process/emailer/UserWelcomeTemplateTest\.java''',
+  '''src/test/java/process/emailer/TenantWelcomeTemplateTest\.java''',
+
+  # The e2e profile's JWT signing key. It signs tokens the suite mints for users it creates
+  # inside a transaction that is rolled back, against a local development database; the profile
+  # is never deployed, and the base64 decodes to a sentence saying exactly that. That file's own
+  # comments carry the reasoning and are worth reading before removing this line.
+  '''src/test/resources/application-e2e\.properties''',
+]
+
+regexes = [
+  # A Java CLASS NAME, not a value. The generic-api-key rule matched the parameter list of
+  # `keyMatchesCertificate(PrivateKey privateKey, X509Certificate certificate)` and extracted
+  # "X509Certificate" as the secret. Anchored, because these regexes are matched against the
+  # extracted secret: an unanchored pattern would hide a real key that happened to contain it.
+  '''^X509Certificate$''',
+
+  # A PEM block whose body is the four characters AAAA -- a deliberately invalid key, used by
+  # KafkaCertificateUtilTest to prove the parser REFUSES malformed input. Matching on the
+  # placeholder body rather than on the file, so a real key pasted into that same test would
+  # still be reported.
+  '''BEGIN RSA PRIVATE KEY-----\\nAAAA''',
+]
