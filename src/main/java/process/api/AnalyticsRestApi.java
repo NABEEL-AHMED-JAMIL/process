@@ -23,6 +23,9 @@ import process.analytics.AnalyticsExportService;
 import process.analytics.DatasetResolver;
 import process.analytics.RunningQueries;
 import process.analytics.canvas.FilterClause;
+import process.analytics.dto.DatasetPreviewDto;
+import process.analytics.dto.DatasetProfileDto;
+import process.analytics.dto.DatasetSchemaDto;
 import process.analytics.dto.QueryResultDto;
 import process.model.dto.ResponseDto;
 import process.model.pojo.AnalyticsQueryRun;
@@ -120,17 +123,26 @@ public class AnalyticsRestApi {
     public ResponseEntity<?> schema(
         @RequestParam(value = "connection") String connection,
         @RequestParam(value = "path") String path) {
+        long startedAt = System.currentTimeMillis();
         try {
             this.analyticsLimits.requireEnabled();
             DatasetRef dataset = this.datasetResolver.resolve(connection, path);
+            DatasetSchemaDto schema = this.analyticsQueryService.schemaOf(dataset);
+            recordRead(connection, path, "schema", AnalyticsQueryRun.STATUS_SUCCESS,
+                schema == null || schema.getColumns() == null ? null
+                    : (long) schema.getColumns().size(), startedAt, null);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Schema read.",
-                this.analyticsQueryService.schemaOf(dataset)), HttpStatus.OK);
+                schema), HttpStatus.OK);
         } catch (AnalyticsException ex) {
             // Written for a reader by whoever threw it, so it is returned as-is. A business
             // failure is an OK with status ERROR, matching every other endpoint here.
+            recordRead(connection, path, "schema", AnalyticsQueryRun.STATUS_REFUSED, null,
+                startedAt, ex.getMessage());
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()),
                 HttpStatus.OK);
         } catch (Exception ex) {
+            recordRead(connection, path, "schema", AnalyticsQueryRun.STATUS_FAILED, null,
+                startedAt, ex.getMessage());
             this.logger.error("An error occurred while reading a dataset schema.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -180,19 +192,36 @@ public class AnalyticsRestApi {
         // is the only provenance that makes knownTotal reusable -- see PreviewShape.
         @RequestParam(value = "knownTotalFiltered", required = false,
             defaultValue = "false") Boolean knownTotalFiltered) {
+        long startedAt = System.currentTimeMillis();
+        // What was ASKED for, recorded whether or not the read succeeds -- a refused attempt has
+        // no shape to describe afterwards. Narrowing is named but not quoted: the filter values
+        // are the reader's data, and an audit table is not where a search term for somebody's
+        // surname should end up.
+        String descriptor = "preview page=" + (page == null ? 0 : page)
+            + (sort == null || sort.trim().isEmpty() ? "" : " sorted")
+            + (search == null || search.trim().isEmpty() ? "" : " searched")
+            + (filters == null || filters.trim().isEmpty() ? "" : " filtered");
         try {
             this.analyticsLimits.requireEnabled();
             AnalyticsEngine.PreviewShape shape = new AnalyticsEngine.PreviewShape(sort,
                 directionOf(direction), search, filtersOf(filters),
                 Boolean.TRUE.equals(knownTotalFiltered));
             DatasetRef dataset = this.datasetResolver.resolve(connection, path);
+            DatasetPreviewDto preview = this.analyticsQueryService.preview(dataset,
+                page == null ? 0 : page, pageSize, knownTotal, shape);
+            recordRead(connection, path, descriptor, AnalyticsQueryRun.STATUS_SUCCESS,
+                preview == null || preview.getRows() == null ? null
+                    : (long) preview.getRows().size(), startedAt, null);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Dataset read.",
-                this.analyticsQueryService.preview(dataset, page == null ? 0 : page, pageSize,
-                    knownTotal, shape)), HttpStatus.OK);
+                preview), HttpStatus.OK);
         } catch (AnalyticsException ex) {
+            recordRead(connection, path, descriptor, AnalyticsQueryRun.STATUS_REFUSED, null,
+                startedAt, ex.getMessage());
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()),
                 HttpStatus.OK);
         } catch (Exception ex) {
+            recordRead(connection, path, descriptor, AnalyticsQueryRun.STATUS_FAILED, null,
+                startedAt, ex.getMessage());
             this.logger.error("An error occurred while previewing a dataset.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -215,15 +244,26 @@ public class AnalyticsRestApi {
     public ResponseEntity<?> profile(
         @RequestParam(value = "connection") String connection,
         @RequestParam(value = "path") String path) {
+        long startedAt = System.currentTimeMillis();
         try {
             this.analyticsLimits.requireEnabled();
             DatasetRef dataset = this.datasetResolver.resolve(connection, path);
+            DatasetProfileDto profile = this.analyticsQueryService.profileOf(dataset);
+            // A profile is a FULL SCAN of the file, which is the most expensive read this module
+            // offers and the one most worth being able to attribute afterwards.
+            recordRead(connection, path, "profile", AnalyticsQueryRun.STATUS_SUCCESS,
+                profile == null || profile.getColumns() == null ? null
+                    : (long) profile.getColumns().size(), startedAt, null);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Dataset profiled.",
-                this.analyticsQueryService.profileOf(dataset)), HttpStatus.OK);
+                profile), HttpStatus.OK);
         } catch (AnalyticsException ex) {
+            recordRead(connection, path, "profile", AnalyticsQueryRun.STATUS_REFUSED, null,
+                startedAt, ex.getMessage());
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()),
                 HttpStatus.OK);
         } catch (Exception ex) {
+            recordRead(connection, path, "profile", AnalyticsQueryRun.STATUS_FAILED, null,
+                startedAt, ex.getMessage());
             this.logger.error("An error occurred while profiling a dataset.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
                 ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -401,6 +441,45 @@ public class AnalyticsRestApi {
      * The SQL stored is the text as SUBMITTED, before the max-rows wrapper: a row that recorded
      * the rewritten statement would answer "what did they run" with something nobody wrote.
      */
+    /**
+     * Writes the history row for a dataset READ that is not a statement somebody wrote.
+     *
+     * Schema, preview and profile are reads of exactly the data a query reads, and until now they
+     * left nothing behind but a log line -- so "who has read this file" could be answered for the
+     * SQL console and not for the nine other tabs, which is most of how the file is actually
+     * read. Document 15's audit-completeness row is that gap.
+     *
+     * <b>The descriptor is prefixed "-- " so it can never be mistaken for a statement.</b> It
+     * lands in query_text, which everywhere else holds SQL as the caller submitted it; a bare
+     * word there would eventually be read back as something somebody ran. As a comment it is
+     * inert, it is obvious to a person reading the table, and `query_text LIKE '-- %'` separates
+     * reads from statements without a schema change.
+     *
+     * Refusals are recorded the same way and for the same reason as query refusals: an attempt on
+     * a dataset the caller could not reach is the attempt most worth keeping.
+     *
+     * <b>On volume.</b> This is one row per read, so opening a file writes two (schema, preview)
+     * and three once a tab that profiles is opened, and every page turn writes another. That is
+     * the cost of being able to answer "who read this file"; it is also why analytics_query_run
+     * needs the TTL cleanup document 15 asks for, which does not exist yet. A reader paging
+     * through a 1,500-page dataset leaves 1,500 rows behind, and nothing removes them.
+     */
+    private void recordRead(String connection, String path, String descriptor, String status,
+        Long rowCount, long startedAt, String message) {
+        if (this.analyticsQueryLibraryService == null) {
+            return;
+        }
+        AnalyticsQueryRun run = new AnalyticsQueryRun();
+        run.setConnectionAlias(connection);
+        run.setDatasetPath(path);
+        run.setQueryText("-- " + descriptor);
+        run.setRunStatus(status);
+        run.setRowCount(rowCount);
+        run.setDurationMs(System.currentTimeMillis() - startedAt);
+        run.setErrorMessage(message);
+        this.analyticsQueryLibraryService.recordRun(run);
+    }
+
     private void record(Map<String, String> request, String status, Long rowCount,
         long startedAt, String message) {
         if (this.analyticsQueryLibraryService == null) {
