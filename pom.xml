@@ -346,4 +346,81 @@
         </plugins>
     </build>
 
+    <!--
+      The integration suites, behind a profile.
+
+      WHAT WAS ACTUALLY WRONG. Not "they never run" — run-e2e.sh has been running the five
+      *E2EIT classes plus HarnessSmokeIT for a while (86 tests, recorded in README.md), and
+      run-kafka-matrix.sh covers KafkaSecurityMatrixIT. What was true is that none of them sit in
+      a lifecycle phase: `mvn verify` did not reach one, so nothing could gate a build on them,
+      and two classes — ContextProbeIT and OpenSearchRagClientIT — match no script's -Dtest glob
+      and had genuinely never executed.
+
+      BEHIND A PROFILE, because every one of them needs infrastructure: Postgres, MinIO,
+      LocalStack, Kafka. `mvn verify` on a laptop with no Docker running must not go red, or the
+      first thing anybody does is stop running verify.
+
+      Run with: mvn -o verify -Pit
+    -->
+    <profiles>
+        <profile>
+            <id>it</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <!--
+                          Version deliberately omitted. spring-boot-dependencies manages it at the
+                          same 2.22.2 it pins surefire to, so the two providers cannot drift apart
+                          under this parent, and both are already in the local repository — which
+                          is what keeps `mvn -o` working with no new download.
+                        -->
+                        <configuration>
+                            <!--
+                              The one line the whole thing turns on. Failsafe runs at
+                              integration-test, which is AFTER package — and by then
+                              spring-boot-maven-plugin:repackage has replaced the jar with an
+                              executable one whose classes live under BOOT-INF/classes/ and which
+                              has nothing under process/ at the root. Left unset, Failsafe points
+                              at that jar and every IT dies at class-load on process.*.
+                            -->
+                            <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+                            <trimStackTrace>false</trimStackTrace>
+                            <excludes>
+                                <!--
+                                  Cannot pass on the host: every kafka-it listener advertises
+                                  host.docker.internal, which the host does not resolve. It has its
+                                  own runner, run-kafka-matrix.sh, which is a container on the
+                                  broker's own network.
+                                -->
+                                <exclude>**/KafkaSecurityMatrixIT.java</exclude>
+                                <!--
+                                  A data generator rather than an assertion. It is gated behind
+                                  -Danalytics.generate.sample and would otherwise be swept in by
+                                  the defaults and skip noisily on every run.
+                                -->
+                                <exclude>**/SampleDataGeneratorIT.java</exclude>
+                            </excludes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>integration-tests</id>
+                                <goals>
+                                    <!--
+                                      Both goals. integration-test only RECORDS results; verify is
+                                      the one that fails the build on them, and a suite that runs
+                                      without being able to fail anything is decoration.
+                                    -->
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
 </project>
