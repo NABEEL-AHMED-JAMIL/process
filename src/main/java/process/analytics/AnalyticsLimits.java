@@ -96,6 +96,36 @@ public class AnalyticsLimits {
     private int previewPageSize;
 
     /**
+     * The most CELLS a single response may carry. Zero or below removes the bound.
+     *
+     * <b>Cells, not rows, because rows are the wrong unit.</b> The cost of a response is rows
+     * times columns: 100,000 rows of ten columns was measured at 12.9 MB of JSON and 61 MB of
+     * heap. The same row ceiling over a forty-column file costs four times that, so no row number
+     * bounds a payload -- and `max-rows` was being asked to do a job it cannot do.
+     *
+     * 100,000 cells is about 1.35 MB of JSON and 6.4 MB of heap, and four of them -- the governor's
+     * ceiling -- is about 26 MB rather than the 244 MB the row limit alone allowed. It is also the
+     * unit the BROWSER pays in: one cell is one table cell.
+     *
+     * This does not replace max-rows. That still bounds the QUERY, as a LIMIT the engine applies;
+     * this bounds what comes back over the wire, and a result stopped by either says `truncated`.
+     */
+    @Value("${analytics.query.max-response-cells:100000}")
+    private int maxResponseCells = 100000;
+
+    /**
+     * The largest page the preview endpoint will hand out, whatever the caller asks for.
+     *
+     * <b>This closes a second door.</b> The preview's page size was clamped only to max-rows, so
+     * `?pageSize=100000` returned a hundred-thousand-row payload through an endpoint meant to
+     * return a page -- the same cost as the query path, past a limit that was only ever guarding
+     * the query path. A preview is a page somebody is looking at; a thousand rows is already more
+     * than anyone reads.
+     */
+    @Value("${analytics.preview.max-page-size:1000}")
+    private int maxPreviewPageSize = 1000;
+
+    /**
      * How many analytics queries may run at once across the whole application.
      *
      * A hard ceiling, because each one can hold DuckDB's memory limit at the same time. Requests
@@ -245,6 +275,14 @@ public class AnalyticsLimits {
      */
     @Value("${analytics.storage.retry-backoff-ms:250}")
     private long storageRetryBackoffMs = 250L;
+
+    public int getMaxResponseCells() {
+        return this.maxResponseCells;
+    }
+
+    public int getMaxPreviewPageSize() {
+        return this.maxPreviewPageSize;
+    }
 
     public int getStorageRetryAttempts() {
         return this.storageRetryAttempts;

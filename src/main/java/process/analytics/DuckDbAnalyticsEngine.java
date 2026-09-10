@@ -697,13 +697,17 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
             List<ColumnDto> columns = new ArrayList<>();
             List<List<String>> rows;
             try (ResultSet resultSet = statement.executeQuery(executable)) {
-                rows = rowsOf(resultSet, columns);
+                rows = rowsOf(resultSet, columns, this.limits.getMaxResponseCells());
             }
             // A result that came back full to the ceiling is reported as truncated, including the
             // dataset that happens to hold exactly that many rows. The alternative is running the
             // query a second time without the bound to find out, which is the thing the bound is
             // for. An EXPLAIN is never truncated because it was never wrapped.
-            boolean truncated = admitted.isBoundable() && rows.size() >= this.limits.getMaxRows();
+            // Either ceiling. A result cut by the cell budget is every bit as incomplete as one cut
+            // by the row limit, and a reader told "1,000 rows" with no flag would take it for the
+            // whole answer.
+            boolean truncated = (admitted.isBoundable() && rows.size() >= this.limits.getMaxRows())
+                || hitCellBudget(rows, columns);
             QueryResultDto answer = new QueryResultDto(namesOf(columns), rows, rows.size(), truncated);
             answer.setColumnMeta(columns);
             return answer;
@@ -785,9 +789,12 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
                 List<ColumnDto> columns = new ArrayList<>();
                 List<List<String>> rows;
                 try (ResultSet resultSet = prepared.executeQuery()) {
-                    rows = rowsOf(resultSet, columns);
+                    rows = rowsOf(resultSet, columns, this.limits.getMaxResponseCells());
                 }
-                boolean truncated = rows.size() >= this.limits.getMaxRows();
+                // No isBoundable() half here, and that stays: a composed analysis is always
+                // bounded, unlike a statement the reader wrote.
+                boolean truncated = rows.size() >= this.limits.getMaxRows()
+                    || hitCellBudget(rows, columns);
                 QueryResultDto answer = new QueryResultDto(namesOf(columns), rows, rows.size(),
                     truncated);
                 answer.setColumnMeta(columns);
@@ -1104,8 +1111,45 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * metadata that fixes the rendering here is what 09 asks to be returned, and computing it twice
      * -- once to render and once to report -- is how the two would disagree.
      */
+    /**
+     * Whether the response was stopped by the cell budget rather than by the query's own end.
+     *
+     * Computed from what the caller already holds rather than carried back out of rowsOf, so no
+     * new type has to exist to say one boolean. The comparison is >= for the same reason the row
+     * ceiling's is: a result that came back exactly full is reported as cut, because finding out
+     * otherwise would mean running it again without the bound.
+     */
+    private boolean hitCellBudget(List<List<String>> rows, List<ColumnDto> columns) {
+        int budget = this.limits.getMaxResponseCells();
+        return budget > 0 && !columns.isEmpty()
+            && (long) rows.size() * columns.size() >= budget;
+    }
+
     private static List<List<String>> rowsOf(ResultSet resultSet, List<ColumnDto> columns)
         throws SQLException {
+
+        return rowsOf(resultSet, columns, 0);
+    }
+
+    /**
+     * The same, stopping once the response would carry more than {@code cellBudget} cells.
+     *
+     * <b>Cells rather than rows, because rows do not bound a payload.</b> The cost is rows times
+     * columns: 100,000 rows of ten columns measured at 12.9 MB of JSON and 61 MB of heap, and the
+     * same row ceiling over a forty-column file costs four times that. max-rows was being asked to
+     * bound something it cannot see the width of.
+     *
+     * This is the ONE chokepoint -- every path that materialises rows comes through here, so a
+     * bound applied anywhere else would leave the others open.
+     *
+     * Stopping here rather than adding a smaller LIMIT is deliberate: the caller still learns the
+     * result was cut, and reports it through the `truncated` flag that already exists for the row
+     * ceiling. A quiet smaller LIMIT would hand back a short answer that looked complete.
+     *
+     * A budget of zero or below means no bound, which is what the row-ceiling-only callers pass.
+     */
+    private static List<List<String>> rowsOf(ResultSet resultSet, List<ColumnDto> columns,
+        int cellBudget) throws SQLException {
 
         ResultSetMetaData meta = resultSet.getMetaData();
         int width = meta.getColumnCount();
@@ -1116,6 +1160,12 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         }
         List<List<String>> rows = new ArrayList<>();
         while (resultSet.next()) {
+            // Checked BEFORE adding, so the budget is a ceiling rather than something the last row
+            // is allowed to cross. A width of zero cannot happen from a real result and would
+            // otherwise loop forever against the multiply.
+            if (cellBudget > 0 && width > 0 && (long) (rows.size() + 1) * width > cellBudget) {
+                break;
+            }
             List<String> row = new ArrayList<>(width);
             for (int i = 1; i <= width; i++) {
                 row.add(rendered(resultSet, i, types[i]));
@@ -1523,7 +1573,11 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
     /** What the caller asked for, clamped to what the policy allows. */
     private int pageSize(Integer requested) {
         int size = requested == null || requested < 1 ? this.limits.getPreviewPageSize() : requested;
-        return Math.min(size, this.limits.getMaxRows());
+        // Both ceilings. This used to clamp only to max-rows, so ?pageSize=100000 returned a
+        // hundred-thousand-row payload through an endpoint that exists to return ONE PAGE -- the
+        // same cost as the query path, past a limit that was only ever guarding the query path.
+        return Math.min(Math.min(size, this.limits.getMaxRows()),
+            this.limits.getMaxPreviewPageSize());
     }
 
     /**

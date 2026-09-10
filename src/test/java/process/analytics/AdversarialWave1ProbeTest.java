@@ -276,6 +276,11 @@ class AdversarialWave1ProbeTest {
         ReflectionTestUtils.setField(shipped, "maxConcurrentQueries", 4);
         ReflectionTestUtils.setField(shipped, "memoryLimit", "512MB");
         ReflectionTestUtils.setField(shipped, "threads", 1);
+        // The shipped defaults for the two ceilings this probe now measures. Set explicitly
+        // because a bare AnalyticsLimits has no Spring to resolve @Value, and a zero budget would
+        // mean "no bound" -- which is exactly the state this probe was written to complain about.
+        ReflectionTestUtils.setField(shipped, "maxResponseCells", 100000);
+        ReflectionTestUtils.setField(shipped, "maxPreviewPageSize", 1000);
 
         this.standIns.put(this.sales.scanExpression(),
             "(SELECT i AS id, 'value-' || i AS a, 'value-' || i AS b, 'value-' || i AS c, "
@@ -294,7 +299,26 @@ class AdversarialWave1ProbeTest {
                 + " cols=" + result.getColumns().size()
                 + " jsonBytes=" + json.getBytes("UTF-8").length
                 + " heapDeltaMB=" + ((after - before) / (1024 * 1024)));
-            assertThat(result.getRowCount()).isEqualTo(100000);
+            /*
+             * THIS PROBE HAS DONE ITS JOB AND IS NOW A REGRESSION TEST.
+             *
+             * It was written to record that the shipped ceiling let 100,000 rows of ten columns
+             * back in one response -- 12.9 MB of JSON and 61 MB of heap -- and it asserted that
+             * number to keep the finding honest.
+             *
+             * The bound that fixes it counts CELLS, because rows do not describe a payload: the
+             * same row ceiling over forty columns costs four times as much. 100,000 cells over
+             * these ten columns is 10,000 rows, and that is what comes back now.
+             *
+             * The truncated flag matters as much as the count. A short answer that did not say it
+             * was short would be worse than the long one this replaced.
+             */
+            assertThat(result.getRowCount())
+                .as("100,000 cells over ten columns is 10,000 rows")
+                .isEqualTo(10000);
+            assertThat(result.isTruncated())
+                .as("a result cut by the cell budget must say it was cut")
+                .isTrue();
         } finally {
             big.shutdown();
         }
