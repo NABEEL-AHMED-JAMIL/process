@@ -440,7 +440,7 @@ public final class AnalysisQueryBuilder {
                 return new Measure("count(DISTINCT " + field + ")", name + "_distinct_count");
             case SUM:
                 requireNumeric(column, "summed");
-                return new Measure("sum(" + field + ")", name + "_sum");
+                return new Measure("sum(" + exactly(column, field) + ")", name + "_sum");
             case AVERAGE:
                 requireNumeric(column, "averaged");
                 return new Measure("avg(" + field + ")", name + "_avg");
@@ -486,6 +486,50 @@ public final class AnalysisQueryBuilder {
         }
         requireOrderable(column, "a median");
         return "quantile_disc(" + field + ", 0.5)";
+    }
+
+    /**
+     * A column's values in a form that can be TOTALLED without accumulating float error.
+     *
+     * <b>The defect this exists for, measured.</b> DuckDB's CSV reader types a column of
+     * "1999.20" as DOUBLE, because nothing in a text file says the writer meant two decimal
+     * places; Parquet carries the DECIMAL(12,2) it was written with. Summing 250,000 of the
+     * former gives 103909527.57999855 where the latter gives 103909527.58. Under two thousandths
+     * of a penny at that size, and it grows with the row count -- which is exactly the wrong
+     * direction for a figure somebody puts in front of a finance team.
+     *
+     * <b>Why the route is through VARCHAR.</b> DuckDB renders a DOUBLE to text as the shortest
+     * decimal that round-trips -- 1999.20 as a double prints "1999.2" -- and VARCHAR to DECIMAL
+     * never touches binary floating point. So this recovers the number the writer wrote. It is
+     * the same trick plainNumber() already plays in Java with BigDecimal.valueOf(double), for
+     * the same reason.
+     *
+     * <b>Why not a plain CAST to DECIMAL, which is shorter.</b> There is no correct scale.
+     * Measured: at scale 2 it is exact for this file and destroys four-decimal data (1.2345
+     * becomes 1.23, a 0.36% error introduced to fix a 1e-16 one). At scale 10 it is exact at
+     * hundreds and wrong at thirteen significant digits. The text route at scale 15 was exact for
+     * both, and exact for a genuine float column too.
+     *
+     * <b>Why not fix the READ instead, which would fix every path at once.</b> Because it was
+     * tried and measured, and it is worse. Steering the sniffer with auto_type_candidates types a
+     * column of 3.14159265358979 as DECIMAL(18,3) and reads it as 3.142 -- a 0.013% error
+     * manufactured by the fix. It also turns a file that reads today into a hard failure when a
+     * large value appears past the sniff sample. Forcing types= needs a schema and a scale that
+     * nothing knows. This change is narrow on purpose: it touches SUM and nothing else.
+     *
+     * <b>What is deliberately NOT fixed here.</b> AVERAGE cannot be: avg() over a DECIMAL still
+     * returns DOUBLE in 1.1.3, so routing its argument would look like a fix and not be one.
+     * MIN and MAX never accumulate error and are already exact. The honest thing is to leave them
+     * and say so rather than appear to have covered them.
+     *
+     * A column that is already DECIMAL, or an integer, is returned untouched -- there is nothing
+     * to recover and the cast would only cost a scan.
+     */
+    private static String exactly(ColumnDto column, String field) {
+        if (!FilterCompiler.Columns.isBinaryFloat(column)) {
+            return field;
+        }
+        return "CAST(CAST(" + field + " AS VARCHAR) AS DECIMAL(38,15))";
     }
 
     private static void requireNumeric(ColumnDto column, String verb) throws AnalyticsException {

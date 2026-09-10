@@ -170,7 +170,11 @@ class AnalysisServiceTest {
 
         ColumnDto measure = result.getColumns().get(1);
         assertThat(measure.getName()).isEqualTo("amount_sum");
-        assertThat(measure.getType()).isEqualTo("DOUBLE");
+        // DECIMAL(38,15), not DOUBLE, and the change is the point rather than an accident: a SUM
+        // over a binary-float column is computed as an exact decimal so it does not accumulate
+        // error, and the result column's type says so. A response that reported DOUBLE over a
+        // value that is no longer one would be describing the old behaviour.
+        assertThat(measure.getType()).isEqualTo("DECIMAL(38,15)");
         assertThat(measure.getRole()).isEqualTo(ColumnDto.ROLE_MEASURE);
 
         // 09's typed column metadata, and 07's "every result row should carry enough context to
@@ -360,7 +364,7 @@ class AnalysisServiceTest {
         // The label is applied on this side, from the marker column, and never in the SQL. A
         // dataset is entitled to contain the word "Other", and the marker is what tells the two
         // apart -- so it never leaves the server.
-        assertThat(result.getRows().get(1)).containsExactly("Other", "70.0");
+        assertThat(result.getRows().get(1)).containsExactly("Other", "70");
         assertThat(result.getColumns()).hasSize(2);
 
         AnalysisResultDto.OtherBucketDto other = result.getOther();
@@ -454,14 +458,17 @@ class AnalysisServiceTest {
         // key rather than becoming the four letters "null", which a dataset is allowed to contain.
         assertThat(pivot.getRows()).hasSize(3);
         assertThat(pivot.getRows().get(0).getKey()).isEqualTo("north");
-        assertThat(pivot.getRows().get(0).getCells()).containsExactly("10.0", "74661240");
+        // "10", not "10.0". A SUM over a binary-float column is now computed as an exact
+        // decimal rather than a Java double, so the total no longer carries Double.toString's
+        // trailing zero -- which was never a statement about precision.
+        assertThat(pivot.getRows().get(0).getCells()).containsExactly("10", "74661240");
         assertThat(pivot.getRows().get(1).getKey()).isEqualTo("south");
-        assertThat(pivot.getRows().get(1).getCells()).containsExactly("21.0", "42.0");
+        assertThat(pivot.getRows().get(1).getCells()).containsExactly("21", "42");
         assertThat(pivot.getRows().get(2).getKey()).isNull();
         // A combination with no rows stays null. A month with no sales and a month with sales of
         // nothing are not the same fact, and a zero would put a point on a chart with no data
         // behind it.
-        assertThat(pivot.getRows().get(2).getCells()).containsExactly("7.0", null);
+        assertThat(pivot.getRows().get(2).getCells()).containsExactly("7", null);
     }
 
     @Test

@@ -125,7 +125,24 @@ class SampleDataGeneratorIT {
             + "            ELSE ([600, 900, 350, 2400])[channel_idx] + (h4 % 2200) END"
             + "       AS INTEGER) AS processing_ms,"
             + "  CASE WHEN h3 % 100 < 12 THEN CAST((h3 % 4 + 1) * 5 AS INTEGER) ELSE 0 END"
-            + "    AS discount_pct"
+            + "    AS discount_pct,"
+            // Date PARTS as their own columns, and this is a workaround rather than a design.
+            //
+            // The analysis model groups by a raw column and has no notion of granularity: there is
+            // no date_trunc, no "by month", no grain on AnalysisRequest. So "revenue by month" over
+            // a date column is not expressible -- grouping order_date gives 730 daily buckets and
+            // no way to fold them. Denormalising the parts into the file is what a warehouse does
+            // anyway, and it lets the monthly, weekly and hour-of-day reports exist today. The
+            // engine gap is recorded in REPORTS-REVIEW.md; this does not close it, because a
+            // reader pointing the Canvas at their OWN dated file still cannot ask the question.
+            + "  strftime(CAST(DATE '2024-01-01' + to_days(CAST(day_n AS INTEGER)) AS DATE),"
+            + "    '%Y-%m') AS order_month,"
+            + "  CAST(year(DATE '2024-01-01' + to_days(CAST(day_n AS INTEGER))) AS INTEGER)"
+            + "    AS order_year,"
+            + "  'Q' || CAST(quarter(DATE '2024-01-01' + to_days(CAST(day_n AS INTEGER)))"
+            + "    AS VARCHAR) AS order_quarter,"
+            + "  dayname(DATE '2024-01-01' + to_days(CAST(day_n AS INTEGER))) AS order_weekday,"
+            + "  CAST(8 + (h5 % 12) AS INTEGER) AS order_hour"
             + " FROM shaped";
     }
 

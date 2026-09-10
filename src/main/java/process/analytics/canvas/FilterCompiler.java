@@ -747,6 +747,23 @@ public final class FilterCompiler {
             return (bracket < 0 ? type : type.substring(0, bracket)).trim();
         }
 
+        /**
+         * Whether this column is BINARY floating point, as opposed to a fixed-point decimal.
+         *
+         * The distinction that matters when money is being totalled. DuckDB's CSV sniffer types a
+         * column of "1999.20" as DOUBLE -- it has no way to know the writer meant two decimal
+         * places -- while Parquet carries the DECIMAL(12,2) it was written with. Over 250,000
+         * rows that difference is measurable: the same sum comes back as 103909527.57999855 from
+         * the CSV and 103909527.58 from the Parquet.
+         *
+         * Separate from isNumeric because both are numeric and only one of them accumulates
+         * error. See AnalysisQueryBuilder.exactly.
+         */
+        public static boolean isBinaryFloat(ColumnDto column) {
+            String type = baseType(column);
+            return "DOUBLE".equals(type) || "FLOAT".equals(type) || "REAL".equals(type);
+        }
+
         public static boolean isNumeric(ColumnDto column) {
             switch (baseType(column)) {
                 case "TINYINT": case "SMALLINT": case "INTEGER": case "BIGINT": case "HUGEINT":

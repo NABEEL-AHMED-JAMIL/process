@@ -57,7 +57,8 @@ class ReportNumbersValidationIT {
     private static final String[] COLUMNS = {
         "order_id", "ordered_at", "order_date", "category", "sub_category", "region", "status",
         "channel", "customer_id", "product_sku", "quantity", "unit_price", "amount", "rating",
-        "processing_ms", "discount_pct",
+        "processing_ms", "discount_pct", "order_month", "order_year", "order_quarter",
+        "order_weekday", "order_hour",
     };
 
     private static final int CATEGORY = 3;

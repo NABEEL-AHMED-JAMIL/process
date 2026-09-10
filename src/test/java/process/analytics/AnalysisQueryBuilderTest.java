@@ -84,7 +84,7 @@ class AnalysisQueryBuilderTest {
             dimensions("region"), measure("amount", AnalysisRequest.Aggregation.SUM)));
 
         assertThat(plan.getSql()).isEqualTo(
-            "SELECT \"region\" AS \"region\", sum(\"amount\") AS \"amount_sum\" "
+            "SELECT \"region\" AS \"region\", sum(CAST(CAST(\"amount\" AS VARCHAR) AS DECIMAL(38,15))) AS \"amount_sum\" "
             + "FROM dataset GROUP BY 1 ORDER BY 2 DESC NULLS LAST");
         assertThat(plan.getDimensions()).containsExactly("region");
         assertThat(plan.getMeasureAlias()).isEqualTo("amount_sum");
@@ -124,7 +124,7 @@ class AnalysisQueryBuilderTest {
         // This is a KPI card, not a missing analysis. An aggregate with no GROUP BY returns exactly
         // one row, and ordering one row is a clause a reader has to dismiss every time.
         assertThat(plan.getSql())
-            .isEqualTo("SELECT sum(\"amount\") AS \"amount_sum\" FROM dataset");
+            .isEqualTo("SELECT sum(CAST(CAST(\"amount\" AS VARCHAR) AS DECIMAL(38,15))) AS \"amount_sum\" FROM dataset");
         assertThat(rows(plan)).hasSize(1);
     }
 
@@ -145,7 +145,7 @@ class AnalysisQueryBuilderTest {
         assertThat(measureSql(AnalysisRequest.Aggregation.DISTINCT_COUNT, "city"))
             .isEqualTo("count(DISTINCT \"city\") AS \"city_distinct_count\"");
         assertThat(measureSql(AnalysisRequest.Aggregation.SUM, "amount"))
-            .isEqualTo("sum(\"amount\") AS \"amount_sum\"");
+            .isEqualTo("sum(CAST(CAST(\"amount\" AS VARCHAR) AS DECIMAL(38,15))) AS \"amount_sum\"");
         assertThat(measureSql(AnalysisRequest.Aggregation.AVERAGE, "amount"))
             .isEqualTo("avg(\"amount\") AS \"amount_avg\"");
         assertThat(measureSql(AnalysisRequest.Aggregation.MINIMUM, "booked_on"))
@@ -290,7 +290,7 @@ class AnalysisQueryBuilderTest {
 
         assertThat(plan.getSql())
             .contains("IS NOT DISTINCT FROM")
-            .contains("ORDER BY sum(\"amount\") DESC NULLS LAST LIMIT 1")
+            .contains("ORDER BY sum(CAST(CAST(\"amount\" AS VARCHAR) AS DECIMAL(38,15))) DESC NULLS LAST LIMIT 1")
             .contains("CASE WHEN \"analysis_in_top\" THEN \"region\" END AS \"region\"")
             .contains("to_json(list_slice(list(DISTINCT \"region\"), 1, 200))")
             .contains("count(DISTINCT \"region\")");
@@ -300,7 +300,7 @@ class AnalysisQueryBuilderTest {
         // roll-up's measure is a sum over ITS raw rows -- 10.5 + 21.0 + 1.0 -- and not the sum of
         // two already-aggregated numbers, which is what a truncation would have had to do.
         assertThat(rows).hasSize(2);
-        assertThat(rows.get(0)).containsExactly("south", "49.0", "true", "[\"south\"]", "1");
+        assertThat(rows.get(0)).containsExactly("south", "49", "true", "[\"south\"]", "1");
         assertThat(rows.get(1).get(0)).isNull();
         assertThat(rows.get(1).get(1)).isEqualTo("32.5");
         assertThat(rows.get(1).get(2)).isEqualTo("false");
@@ -326,7 +326,7 @@ class AnalysisQueryBuilderTest {
         assertThat(rows).hasSize(1);
         // The same 49.0 as the roll-up test: the rows that ARE shown carry the number they would
         // have carried with the roll-up present.
-        assertThat(rows.get(0)).containsExactly("south", "49.0");
+        assertThat(rows.get(0)).containsExactly("south", "49");
     }
 
     @Test
@@ -339,7 +339,7 @@ class AnalysisQueryBuilderTest {
         // bottom one, and a bottom-N is deliberately left unexpressible rather than smuggled into
         // a field that means something else.
         String sql = plan(request).getSql();
-        assertThat(sql).contains("ORDER BY sum(\"amount\") DESC NULLS LAST LIMIT 1");
+        assertThat(sql).contains("ORDER BY sum(CAST(CAST(\"amount\" AS VARCHAR) AS DECIMAL(38,15))) DESC NULLS LAST LIMIT 1");
         assertThat(sql).endsWith("ORDER BY 2 ASC NULLS LAST");
     }
 
@@ -399,7 +399,10 @@ class AnalysisQueryBuilderTest {
         assertThat(plan.getCrumbs().get(0).getValue()).isEqualTo("south");
         // One row: rome, the only city in the south.
         assertThat(rows(plan)).hasSize(1);
-        assertThat(rows(plan).get(0)).containsExactly("rome", "49.0");
+        // "49", not "49.0". A total over a binary-float column is now an exact decimal rather
+        // than a Java double, and the old trailing zero was Double.toString's artefact rather
+        // than a statement about precision.
+        assertThat(rows(plan).get(0)).containsExactly("rome", "49");
     }
 
     @Test
@@ -508,6 +511,29 @@ class AnalysisQueryBuilderTest {
         return sql.substring(start, sql.indexOf(" FROM dataset"));
     }
 
+    /**
+     * A cell as the ENGINE would render it, so these assertions are about values and not scales.
+     *
+     * A total over a binary-float column is cast through DECIMAL(38,15) so it does not accumulate
+     * error (AnalysisQueryBuilder.exactly), and JDBC hands that back as "49.000000000000000".
+     * DuckDbAnalyticsEngine.plainNumber strips those zeros because the scale is an artefact of
+     * how the sum was computed rather than a fact about the data; mirroring it here keeps these
+     * tests asserting that the arithmetic is right instead of re-asserting the cast's scale in
+     * seven places, where the next change to it would have to be made seven times.
+     *
+     * Only that scale. A DECLARED scale is left alone, exactly as the engine leaves it.
+     */
+    private static String rendered(Object value) {
+        if (value instanceof java.math.BigDecimal
+            && ((java.math.BigDecimal) value).scale() == 15) {
+            java.math.BigDecimal stripped = ((java.math.BigDecimal) value).stripTrailingZeros();
+            return stripped.scale() <= 0
+                ? stripped.setScale(0).toPlainString()
+                : stripped.toPlainString();
+        }
+        return String.valueOf(value);
+    }
+
     /** The rows the plan actually returns, run on the real view with the parameters bound. */
     private static List<List<String>> rows(AnalysisQueryBuilder.Plan plan) throws Exception {
         try (PreparedStatement prepared = engine.prepareStatement(plan.getSql())) {
@@ -522,7 +548,7 @@ class AnalysisQueryBuilderTest {
                     List<String> row = new ArrayList<>(width);
                     for (int i = 1; i <= width; i++) {
                         Object value = result.getObject(i);
-                        row.add(value == null ? null : String.valueOf(value));
+                        row.add(value == null ? null : rendered(value));
                     }
                     rows.add(row);
                 }
@@ -581,4 +607,68 @@ class AnalysisQueryBuilderTest {
     private static List<String> dimensions(String... names) {
         return new ArrayList<>(Arrays.asList(names));
     }
+
+    // ---- totalling money that arrived as a binary float ---------------------------------------
+
+    /**
+     * A SUM over a DOUBLE column is routed through an exact decimal; over an INTEGER it is not.
+     *
+     * DuckDB's CSV reader types a column of "1999.20" as DOUBLE, because nothing in a text file
+     * says the writer meant two places. Summing 250,000 of those gave 103909527.57999855 where
+     * the same data as Parquet gave 103909527.58. The cast recovers the written number by going
+     * through the shortest round-tripping text form, which never touches binary floating point.
+     *
+     * The INTEGER half is the one that stops this spreading: a cast on every SUM would be a scan
+     * nobody needs, and would change the result type of totals that were already exact.
+     */
+    @Test
+    void aSumOverAbinaryFloatIsMadeExactAndOverAnIntegerIsLeftAlone() throws Exception {
+        assertThat(measureSql(AnalysisRequest.Aggregation.SUM, "amount"))
+            .as("amount is DOUBLE in this schema")
+            .isEqualTo("sum(CAST(CAST(\"amount\" AS VARCHAR) AS DECIMAL(38,15))) AS \"amount_sum\"");
+
+        assertThat(measureSql(AnalysisRequest.Aggregation.SUM, "qty"))
+            .as("qty is INTEGER, and an integer total was never inexact")
+            .isEqualTo("sum(\"qty\") AS \"qty_sum\"");
+    }
+
+    /**
+     * Only SUM. The others are deliberately untouched, and each for its own reason.
+     *
+     * AVERAGE cannot be fixed this way -- avg() over a DECIMAL still returns DOUBLE in DuckDB
+     * 1.1.3, so routing its argument would look like a fix without being one. MIN and MAX never
+     * accumulate error, because neither adds anything up. Appearing to have covered them would be
+     * worse than the gap, because it is the kind of claim nobody re-checks.
+     */
+    @Test
+    void averageMinimumAndMaximumAreLeftAsTheyWere() throws Exception {
+        assertThat(measureSql(AnalysisRequest.Aggregation.AVERAGE, "amount"))
+            .isEqualTo("avg(\"amount\") AS \"amount_avg\"");
+        assertThat(measureSql(AnalysisRequest.Aggregation.MINIMUM, "amount"))
+            .isEqualTo("min(\"amount\") AS \"amount_min\"");
+        assertThat(measureSql(AnalysisRequest.Aggregation.MAXIMUM, "amount"))
+            .isEqualTo("max(\"amount\") AS \"amount_max\"");
+    }
+
+    /** The arithmetic itself, run on the real engine over values that expose the difference. */
+    @Test
+    void theExactSumIsRightWhereTheFloatSumIsNot() throws Exception {
+        // 0.1 + 0.2 as doubles is 0.30000000000000004. Through the text form it is 0.3.
+        try (java.sql.Statement statement = engine.createStatement()) {
+            statement.execute("CREATE OR REPLACE TEMP VIEW pennies AS "
+                + "SELECT * FROM (VALUES (0.1::DOUBLE), (0.2::DOUBLE)) AS t(amount)");
+            try (java.sql.ResultSet loose = statement.executeQuery(
+                    "SELECT sum(amount) FROM pennies")) {
+                loose.next();
+                assertThat(loose.getString(1)).isEqualTo("0.30000000000000004");
+            }
+        }
+        try (java.sql.Statement statement = engine.createStatement();
+             java.sql.ResultSet exact = statement.executeQuery(
+                 "SELECT sum(CAST(CAST(amount AS VARCHAR) AS DECIMAL(38,15))) FROM pennies")) {
+            exact.next();
+            assertThat(exact.getBigDecimal(1).stripTrailingZeros().toPlainString()).isEqualTo("0.3");
+        }
+    }
+
 }

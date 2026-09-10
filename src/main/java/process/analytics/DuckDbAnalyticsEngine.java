@@ -1189,6 +1189,12 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
     }
 
     /**
+     * The scale AnalysisQueryBuilder.exactly casts to, and therefore the one plainNumber treats
+     * as computed rather than declared. Here rather than duplicated as a literal in both places.
+     */
+    private static final int COMPUTED_SCALE = 15;
+
+    /**
      * A number in the notation a person writes cheques in, not the one Java prints doubles in.
      *
      * BigDecimal.valueOf(double) goes through Double.toString, so it takes the shortest decimal
@@ -1205,10 +1211,28 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * That is faithful to what a double is, and it is also the argument for storing money as
      * DECIMAL -- DuckDB carries the scale on that type, and the first branch above preserves it, so
      * a column declared DECIMAL(18,2) renders as 52.50 down the whole page.
+     *
+     * <b>The one exception, and why it does not contradict any of the above.</b> A scale of
+     * exactly {@value #COMPUTED_SCALE} is this module's own signature: AnalysisQueryBuilder.exactly
+     * routes a total over a binary-float column through DECIMAL(38,15) so it does not accumulate
+     * error, and nobody DECLARES a column that way. That scale is an artefact of how the sum was
+     * computed rather than a fact about the data, so its trailing zeros are stripped -- otherwise
+     * every total over a CSV reads "103909527.580000000000000". A declared scale is still kept,
+     * because there the zeros are the column saying how precise it is.
      */
     private static String plainNumber(Object value) {
         if (value instanceof BigDecimal) {
-            return ((BigDecimal) value).toPlainString();
+            BigDecimal number = (BigDecimal) value;
+            if (number.scale() == COMPUTED_SCALE) {
+                // stripTrailingZeros can hand back an exponent form for a whole number
+                // (1.03909527E8), which is the notation this method exists to avoid; toPlainString
+                // undoes that, and setScale(0) keeps an integral total from reading "103909527."
+                BigDecimal stripped = number.stripTrailingZeros();
+                return stripped.scale() <= 0
+                    ? stripped.setScale(0).toPlainString()
+                    : stripped.toPlainString();
+            }
+            return number.toPlainString();
         }
         if (value instanceof Double || value instanceof Float) {
             double number = ((Number) value).doubleValue();
@@ -1759,6 +1783,18 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         if (lower.contains("out of memory") || lower.contains("memory limit")) {
             return new RunFailure(RunState.FAILED, "That query needed more memory than analytics is "
                 + "allowed to use. Try a narrower dataset, or Parquet instead of CSV.");
+        }
+        // BEFORE the malformed-file branch, which would otherwise answer this one and answer it
+        // wrongly. A total over a text-format column is cast through DECIMAL(38,15) so it does not
+        // accumulate float error (AnalysisQueryBuilder.exactly); that cast is the one thing in
+        // this module that can fail on a file which reads perfectly well. Telling somebody their
+        // file "may be malformed" when it is not, and when the real problem is that their numbers
+        // are too large to total exactly, sends them to look in the wrong place entirely.
+        if (lower.contains("could not convert string") && lower.contains("decimal(38,15)")) {
+            return new RunFailure(RunState.FAILED, "This column holds values too large to add up "
+                + "exactly. Nothing is wrong with the file: totals over a text format are made "
+                + "exact by converting each value first, and these do not fit. Reading the same "
+                + "data as Parquet avoids the conversion.");
         }
         if (lower.contains("invalid input error") || lower.contains("could not convert")
             || lower.contains("sniffing") || lower.contains("csv error")) {
