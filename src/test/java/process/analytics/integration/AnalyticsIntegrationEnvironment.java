@@ -528,8 +528,21 @@ final class AnalyticsIntegrationEnvironment {
     static String[] writeCsvAndParquetFixture(StorageConnection connection, String prefix,
         String relation, File directory) throws Exception {
 
-        File csv = new File(directory, "fixture.csv");
-        File parquet = new File(directory, "fixture.parquet");
+        return writeCsvAndParquetFixture(connection, prefix, relation, directory, "fixture");
+    }
+
+    /**
+     * The same, with a name of its own.
+     *
+     * An overload rather than a changed signature: "fixture" is the right name for a fixture and
+     * the wrong one for a sample dataset somebody is meant to open and recognise, and the callers
+     * that wanted a fixture should not have to say so.
+     */
+    static String[] writeCsvAndParquetFixture(StorageConnection connection, String prefix,
+        String relation, File directory, String name) throws Exception {
+
+        File csv = new File(directory, name + ".csv");
+        File parquet = new File(directory, name + ".parquet");
         Connection duck = DriverManager.getConnection("jdbc:duckdb:");
         try {
             Statement statement = duck.createStatement();
@@ -545,11 +558,24 @@ final class AnalyticsIntegrationEnvironment {
             duck.close();
         }
 
-        String csvKey = prefix + "/fixture.csv";
-        String parquetKey = prefix + "/fixture.parquet";
+        String csvKey = prefix + "/" + name + ".csv";
+        String parquetKey = prefix + "/" + name + ".parquet";
         upload(connection, csvKey, csv, "text/csv");
         upload(connection, parquetKey, parquet, "application/octet-stream");
         return new String[] { csvKey, parquetKey };
+    }
+
+    /**
+     * The raw bytes of an object, through the platform's own storage service.
+     *
+     * Here so that a validation can read the SAME file the engine reads and parse it by other
+     * means. Reading it off the MinIO container's disk would be quicker and would prove less:
+     * the point is that both readers were handed the same object by the same code.
+     */
+    static InputStream openObject(StorageConnection connection, String key) {
+        return storageFor(connection)
+            .getObjectContent(connection.getBucketName(), key, null, null)
+            .getContent();
     }
 
     private static void upload(StorageConnection connection, String key, File file,
