@@ -254,6 +254,18 @@ public class AnalysisService {
         answer.setRowCount(rows.size());
         answer.setTruncated(result.isTruncated());
         answer.setDimensions(plan.getDimensions());
+        /*
+         * Omitted entirely when nothing is grained, rather than sent as a list of nulls. A client
+         * that has never heard of grains sees exactly the response it saw before, which is the
+         * same rule the request body follows for its own optional parts.
+         */
+        List<String> grainNames = new ArrayList<String>();
+        boolean anyGrain = false;
+        for (AnalysisRequest.Grain grain : plan.getGrains()) {
+            grainNames.add(grain == null ? null : grain.name());
+            anyGrain = anyGrain || grain != null;
+        }
+        answer.setGrains(anyGrain ? grainNames : null);
         answer.setMeasure(plan.getMeasureAlias());
         answer.setQueryId(result.getQueryId());
         answer.setStatus(result.getStatus());

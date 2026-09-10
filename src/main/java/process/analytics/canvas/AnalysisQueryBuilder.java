@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 
@@ -95,14 +96,16 @@ public final class AnalysisQueryBuilder {
         // works on the effective list, so a drilled analysis and a hand-built one with the same
         // shape compile to the same statement -- which is what makes a drill reproducible.
         Drilled drilled = drill(request, columns);
-        List<ColumnDto> dimensions = drilled.dimensions;
+        List<Grouping> dimensions = drilled.dimensions;
 
         FilterCompiler compiler = this.today == null
             ? new FilterCompiler(columns) : new FilterCompiler(columns, this.today);
         AnalyticsEngine.BoundStatement where = compiler.compile(drilled.filters);
 
         Measure measure = measure(request.getMeasure(), columns);
-        String measureAlias = uniqueAlias(measure.alias, dimensions);
+        // Against the dimension ALIASES, not their names: a dataset may genuinely hold a
+        // column called booked_on_month, and the alias is what would collide.
+        String measureAlias = uniqueAliasAmong(measure.alias, aliases(dimensions));
 
         List<Object> parameters = new ArrayList<>();
         String sql = request.getTopN() != null && request.getTopN().getLimit() != null
@@ -113,6 +116,7 @@ public final class AnalysisQueryBuilder {
             && request.getTopN().isIncludeOther();
         int visible = dimensions.size() + 1;
         return new Plan(new AnalyticsEngine.BoundStatement(sql, parameters), names(dimensions),
+            aliases(dimensions), grainsOf(dimensions),
             measureAlias, visible, rolledUp ? visible : -1,
             rolledUp && !dimensions.isEmpty() ? visible + 1 : -1,
             rolledUp && !dimensions.isEmpty() ? visible + 2 : -1,
@@ -126,14 +130,17 @@ public final class AnalysisQueryBuilder {
      * dimension is written into the select list exactly once, so there is one place a name reaches
      * the text and one place to look when asking whether it could have been anything else.
      */
-    private static String plain(AnalysisRequest request, List<ColumnDto> dimensions,
+    private static String plain(AnalysisRequest request, List<Grouping> dimensions,
         Measure measure, String measureAlias, AnalyticsEngine.BoundStatement where,
         List<Object> parameters) {
 
         StringBuilder sql = new StringBuilder("SELECT ");
-        for (ColumnDto dimension : dimensions) {
-            sql.append(FilterCompiler.Columns.quote(dimension)).append(" AS ")
-                .append(quoteAlias(dimension.getName())).append(", ");
+        for (Grouping dimension : dimensions) {
+            // The grouping EXPRESSION, which is the column itself unless a grain buckets it.
+            // GROUP BY and ORDER BY stay ordinals below, so "a dimension is written into the
+            // select list exactly once" survives a grain unchanged.
+            sql.append(dimension.expression(null)).append(" AS ")
+                .append(quoteAlias(dimension.alias)).append(", ");
         }
         sql.append(measure.expression).append(" AS ").append(quoteAlias(measureAlias));
         sql.append(" FROM ").append(SOURCE);
@@ -176,7 +183,7 @@ public final class AnalysisQueryBuilder {
      * which means it fails as an engine error rather than as an OOM, and it is only paid when a
      * caller asked for the roll-up.
      */
-    private String topN(AnalysisRequest request, List<ColumnDto> dimensions, Measure measure,
+    private String topN(AnalysisRequest request, List<Grouping> dimensions, Measure measure,
         String measureAlias, AnalyticsEngine.BoundStatement where, FilterCompiler.Columns columns,
         List<Object> parameters) throws AnalyticsException {
 
@@ -189,8 +196,9 @@ public final class AnalysisQueryBuilder {
             throw new AnalyticsException("A Top-N is between 1 and " + MAX_TOP_N + ".");
         }
 
-        ColumnDto ranked = dimensions.get(0);
-        String rankedName = FilterCompiler.Columns.quote(ranked);
+        Grouping ranked = dimensions.get(0);
+        // The grouping EXPRESSION, so a grained Top-N ranks the buckets rather than the raw days.
+        String rankedName = ranked.expression(null);
         // Internal names are checked against the dataset's own columns rather than assumed free:
         // "filtered.*" projects every column the file has, so a file with a column called in_top
         // would otherwise produce two columns of that name and a statement that means something
@@ -227,17 +235,26 @@ public final class AnalysisQueryBuilder {
          * the three-valued-logic argument above survives word for word; only its position moves
          * from a WHERE inside a subquery to a JOIN ... ON.
          */
+        /*
+         * expression(filtered), NOT filtered + "." + rankedName.
+         *
+         * A qualifier belongs on the COLUMN, inside the grouping expression -- prefixing it to
+         * the whole thing produced analysis_filtered.date_trunc('month', "booked_on"), which
+         * reads as a function call on a table and is not valid SQL. Both sides have to be grained
+         * the same way, or the ranking buckets months while the membership compares days and
+         * nothing matches at all.
+         */
         String membership = " ON " + top + "." + quoteAlias(key)
-            + " IS NOT DISTINCT FROM " + filtered + "." + rankedName;
+            + " IS NOT DISTINCT FROM " + ranked.expression(filtered);
 
         if (!request.getTopN().isIncludeOther()) {
             // No roll-up asked for: the same membership test, used to narrow rather than to bucket.
             // Still an aggregate over the raw rows of the top N values, so the numbers on the rows
             // that ARE shown are the same numbers they would have had with the roll-up present.
             sql.append(" SELECT ");
-            for (ColumnDto dimension : dimensions) {
-                sql.append(FilterCompiler.Columns.quote(dimension)).append(" AS ")
-                    .append(quoteAlias(dimension.getName())).append(", ");
+            for (Grouping dimension : dimensions) {
+                sql.append(dimension.expression(null)).append(" AS ")
+                    .append(quoteAlias(dimension.alias)).append(", ");
             }
             sql.append(measure.expression).append(" AS ").append(quoteAlias(measureAlias));
             /*
@@ -264,10 +281,10 @@ public final class AnalysisQueryBuilder {
             .append(membership).append(")");
 
         sql.append(" SELECT CASE WHEN ").append(quoteAlias(marker)).append(" THEN ")
-            .append(rankedName).append(" END AS ").append(quoteAlias(ranked.getName()));
+            .append(rankedName).append(" END AS ").append(quoteAlias(ranked.alias));
         for (int i = 1; i < dimensions.size(); i++) {
-            sql.append(", ").append(FilterCompiler.Columns.quote(dimensions.get(i))).append(" AS ")
-                .append(quoteAlias(dimensions.get(i).getName()));
+            sql.append(", ").append(dimensions.get(i).expression(null)).append(" AS ")
+                .append(quoteAlias(dimensions.get(i).alias));
         }
         sql.append(", ").append(measure.expression).append(" AS ").append(quoteAlias(measureAlias));
         // The three trailing columns exist for the caller and never for the reader: the marker says
@@ -376,14 +393,32 @@ public final class AnalysisQueryBuilder {
     private static Drilled drill(AnalysisRequest request, FilterCompiler.Columns columns)
         throws AnalyticsException {
 
-        List<ColumnDto> dimensions = new ArrayList<>();
-        for (String name : request.getDimensions()) {
-            ColumnDto column = columns.require(name);
-            if (contains(dimensions, column)) {
+        /*
+         * Groupings rather than bare columns, and the grain comes from the request's parallel
+         * list -- which normalised() guarantees is exactly as long as the dimensions.
+         *
+         * The duplicate rule now compares column AND grain, so year-of and month-of the SAME date
+         * column is expressible. That is a real nested time axis -- a year band above a month
+         * series -- and DuckDB executes it correctly; refusing it would have been an accident of
+         * how the check was written rather than a decision.
+         */
+        List<AnalysisRequest.Grain> requested = request.getGrains();
+        List<Grouping> dimensions = new ArrayList<>();
+        List<String> takenAliases = new ArrayList<>();
+        for (int at = 0; at < request.getDimensions().size(); at++) {
+            ColumnDto column = columns.require(request.getDimensions().get(at));
+            AnalysisRequest.Grain grain = requested == null || at >= requested.size()
+                ? null : requested.get(at);
+            requireTemporal(column, grain);
+            if (containsGrouping(dimensions, column, grain)) {
                 throw new AnalyticsException("An analysis cannot group by "
-                    + FilterCompiler.safeName(column.getName()) + " twice.");
+                    + FilterCompiler.safeName(column.getName())
+                    + (grain == null ? "" : " by " + grain.name().toLowerCase(Locale.ROOT))
+                    + " twice.");
             }
-            dimensions.add(column);
+            String alias = uniqueAliasAmong(aliasFor(column, grain), takenAliases);
+            takenAliases.add(alias);
+            dimensions.add(new Grouping(column, grain, alias));
         }
 
         List<FilterClause> narrowings = new ArrayList<>();
@@ -401,7 +436,7 @@ public final class AnalysisQueryBuilder {
                     + "lists.");
             }
             ColumnDto through = columns.require(step.getDimension());
-            int at = indexOf(dimensions, through);
+            int at = indexOfGrouping(dimensions, through);
             if (at < 0) {
                 // The client sent a path that does not fit the dimensions it also sent. Refused
                 // rather than repaired: silently dropping the step would run a DIFFERENT analysis
@@ -414,11 +449,16 @@ public final class AnalysisQueryBuilder {
                 dimensions.remove(at);
             } else {
                 ColumnDto next = columns.require(step.getNextDimension());
-                if (contains(dimensions, next) && indexOf(dimensions, next) != at) {
+                if (indexOfGrouping(dimensions, next) >= 0
+                    && indexOfGrouping(dimensions, next) != at) {
                     throw new AnalyticsException("This analysis already groups by "
                         + FilterCompiler.safeName(next.getName()) + ".");
                 }
-                dimensions.set(at, next);
+                // The replacing dimension takes its OWN grain from the step, not the displaced
+                // one's -- a drill from month-of-booked-on into region must not bucket region.
+                AnalysisRequest.Grain nextGrain = step.getNextGrain();
+                requireTemporal(next, nextGrain);
+                dimensions.set(at, new Grouping(next, nextGrain, aliasFor(next, nextGrain)));
             }
             narrowings.add(step.getValue() == null
                 ? FilterClause.of(through.getName(), FilterClause.Operator.IS_NULL, null)
@@ -589,6 +629,28 @@ public final class AnalysisQueryBuilder {
      * resolves to whichever it meets first. Rare enough that nobody would think of it, cheap enough
      * that nobody has to.
      */
+    private static boolean containsGrouping(List<Grouping> groupings, ColumnDto column,
+        AnalysisRequest.Grain grain) {
+
+        for (Grouping grouping : groupings) {
+            if (grouping.column.getName().equalsIgnoreCase(column.getName())
+                && grouping.grain == grain) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Where a column is grouped, whatever grain it is at. A drill names a column, not a bucket. */
+    private static int indexOfGrouping(List<Grouping> groupings, ColumnDto column) {
+        for (int at = 0; at < groupings.size(); at++) {
+            if (groupings.get(at).column.getName().equalsIgnoreCase(column.getName())) {
+                return at;
+            }
+        }
+        return -1;
+    }
+
     private static String uniqueAlias(String proposed, List<ColumnDto> dimensions) {
         String alias = proposed;
         int suffix = 1;
@@ -596,6 +658,25 @@ public final class AnalysisQueryBuilder {
             alias = proposed + "_" + suffix++;
         }
         return alias;
+    }
+
+    /** The same, against a list of aliases already taken rather than against column objects. */
+    private static String uniqueAliasAmong(String proposed, List<String> taken) {
+        String alias = proposed;
+        int suffix = 1;
+        while (containsIgnoringCase(taken, alias)) {
+            alias = proposed + "_" + suffix++;
+        }
+        return alias;
+    }
+
+    private static boolean containsIgnoringCase(List<String> haystack, String needle) {
+        for (String candidate : haystack) {
+            if (needle.equalsIgnoreCase(candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean clashes(String alias, List<ColumnDto> dimensions) {
@@ -639,7 +720,34 @@ public final class AnalysisQueryBuilder {
         return -1;
     }
 
-    private static List<String> names(List<ColumnDto> columns) {
+    /** The schema's own field names, which stay the identity a drill step and a filter use. */
+    private static List<String> names(List<Grouping> groupings) {
+        List<String> found = new ArrayList<>();
+        for (Grouping grouping : groupings) {
+            found.add(grouping.column.getName());
+        }
+        return found;
+    }
+
+    /** What the RESULT columns are labelled, which is the name plus the grain where there is one. */
+    private static List<String> aliases(List<Grouping> groupings) {
+        List<String> found = new ArrayList<>();
+        for (Grouping grouping : groupings) {
+            found.add(grouping.alias);
+        }
+        return found;
+    }
+
+    /** The grain each grouping was bucketed at, index-aligned with the dimensions. */
+    private static List<AnalysisRequest.Grain> grainsOf(List<Grouping> groupings) {
+        List<AnalysisRequest.Grain> found = new ArrayList<>();
+        for (Grouping grouping : groupings) {
+            found.add(grouping.grain);
+        }
+        return found;
+    }
+
+    private static List<String> namesOfColumns(List<ColumnDto> columns) {
         List<String> names = new ArrayList<>(columns.size());
         for (ColumnDto column : columns) {
             names.add(column.getName());
@@ -671,14 +779,92 @@ public final class AnalysisQueryBuilder {
     }
 
     /** What the drill path did to the dimensions, and what it added to the filters. */
+    /**
+     * One grouping column, and how it is bucketed.
+     *
+     * <b>A carrier rather than two parallel lists inside the builder.</b> The request models the
+     * grains as a list index-aligned with the dimensions, which is right there because a drill
+     * replaces a dimension by index. Inside the builder the pair travels together through five
+     * call sites in the Top-N path alone, and two lists that must stay the same length across
+     * that many hops is an invitation for exactly one of them to be updated.
+     */
+    private static final class Grouping {
+
+        private final ColumnDto column;
+        /** Null means grouped by the column's own values, which is what everything did before. */
+        private final AnalysisRequest.Grain grain;
+        private final String alias;
+
+        private Grouping(ColumnDto column, AnalysisRequest.Grain grain, String alias) {
+            this.column = column;
+            this.grain = grain;
+            this.alias = alias;
+        }
+
+        /**
+         * The expression to group by, optionally qualified by a CTE name.
+         *
+         * The qualifier exists for the Top-N path, where the same grouping has to be written both
+         * bare (in the ranking CTE's own SELECT) and qualified (against the filtered CTE on the
+         * other side of the membership test). Both sides must be grained or the ranking buckets
+         * days while the membership compares months, and nothing matches.
+         */
+        private String expression(String qualifier) {
+            String field = (qualifier == null ? "" : qualifier + ".")
+                + FilterCompiler.Columns.quote(this.column);
+            return this.grain == null
+                ? field
+                : "date_trunc('" + this.grain.getPart() + "', " + field + ")";
+        }
+
+        /** The raw column, unbucketed. The null test in the roll-up count needs this. */
+        private String raw() {
+            return FilterCompiler.Columns.quote(this.column);
+        }
+    }
+
+    /**
+     * The default alias for a grouping: the column's own name, or the name and the grain.
+     *
+     * booked_on grouped by month is booked_on_month, so a reader can see from the column heading
+     * that they are looking at months and not days -- which a bare "booked_on" over the first of
+     * every month would not tell them.
+     */
+    private static String aliasFor(ColumnDto column, AnalysisRequest.Grain grain) {
+        return grain == null
+            ? column.getName()
+            : column.getName() + "_" + grain.name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Refuses a grain on a column that has no calendar in it.
+     *
+     * Before the statement is built, for the reason measure() gives about its own type checks: the
+     * alternative is a DuckDB Binder Error arriving at somebody who picked "by month" from a menu,
+     * naming a function they did not call. TIME lands here too -- date_trunc over a TIME is a
+     * binder error in 1.1.3, measured, not assumed.
+     */
+    private static void requireTemporal(ColumnDto column, AnalysisRequest.Grain grain)
+        throws AnalyticsException {
+
+        if (grain == null) {
+            return;
+        }
+        if (!FilterCompiler.Columns.isDate(column) && !FilterCompiler.Columns.isTimestamp(column)) {
+            throw new AnalyticsException(FilterCompiler.safeName(column.getName()) + " holds "
+                + column.getType() + ", which has no calendar in it, so it cannot be grouped by "
+                + grain.name().toLowerCase(Locale.ROOT) + ".");
+        }
+    }
+
     private static final class Drilled {
 
-        private final List<ColumnDto> dimensions;
+        private final List<Grouping> dimensions;
         private final FilterClause filters;
         private final List<AnalysisResultCrumb> crumbs;
         private final List<AnalysisRequest.Drill> drillPath;
 
-        private Drilled(List<ColumnDto> dimensions, FilterClause filters,
+        private Drilled(List<Grouping> dimensions, FilterClause filters,
             List<AnalysisResultCrumb> crumbs, List<AnalysisRequest.Drill> drillPath) {
             this.dimensions = dimensions;
             this.filters = filters;
@@ -725,6 +911,10 @@ public final class AnalysisQueryBuilder {
 
         private final AnalyticsEngine.BoundStatement statement;
         private final List<String> dimensions;
+        /** What the result columns are LABELLED, which differs from the names once a grain is on. */
+        private final List<String> dimensionAliases;
+        /** The grain each dimension was bucketed at, index-aligned. Null entries are ungrained. */
+        private final List<AnalysisRequest.Grain> grains;
         private final String measureAlias;
         private final int visibleColumns;
         private final int rollupMarkerIndex;
@@ -734,13 +924,16 @@ public final class AnalysisQueryBuilder {
         private final List<AnalysisResultCrumb> crumbs;
         private final List<AnalysisRequest.Drill> drillPath;
 
-        Plan(AnalyticsEngine.BoundStatement statement, List<String> dimensions, String measureAlias,
+        Plan(AnalyticsEngine.BoundStatement statement, List<String> dimensions,
+            List<String> dimensionAliases, List<AnalysisRequest.Grain> grains, String measureAlias,
             int visibleColumns, int rollupMarkerIndex, int otherValuesIndex, int otherCountIndex,
             Map<String, String> resolvedWindows, List<AnalysisResultCrumb> crumbs,
             List<AnalysisRequest.Drill> drillPath) {
 
             this.statement = statement;
             this.dimensions = Collections.unmodifiableList(dimensions);
+            this.dimensionAliases = Collections.unmodifiableList(dimensionAliases);
+            this.grains = Collections.unmodifiableList(grains);
             this.measureAlias = measureAlias;
             this.visibleColumns = visibleColumns;
             this.rollupMarkerIndex = rollupMarkerIndex;
@@ -756,6 +949,17 @@ public final class AnalysisQueryBuilder {
 
         /** The dimensions this analysis groups by after drilling, in the schema's own spelling. */
         public List<String> getDimensions() { return this.dimensions; }
+
+        public List<String> getDimensionAliases() { return this.dimensionAliases; }
+
+        /**
+         * The grain each dimension was bucketed at, or null where it was not.
+         *
+         * Index-aligned with getDimensions(). Answers the one question a reader cannot get from
+         * the rows: whether a column of first-of-the-months is months, or days that happen to
+         * fall on the first.
+         */
+        public List<AnalysisRequest.Grain> getGrains() { return this.grains; }
 
         public String getMeasureAlias() { return this.measureAlias; }
 

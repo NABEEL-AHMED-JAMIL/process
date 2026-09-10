@@ -46,6 +46,16 @@ public class AnalysisResultDto {
     /** The dimension names this analysis grouped by, after drilling. Empty for a single total. */
     private List<String> dimensions;
 
+    /**
+     * The calendar grain each dimension was bucketed at, index-aligned with {@link #dimensions}.
+     *
+     * Null, or a null entry, means grouped by the column's own values. <b>Sent because the rows
+     * cannot say it.</b> A month bucket renders as the first of that month, which is
+     * indistinguishable from a day that happens to be the first -- so a client showing "2024-03-01"
+     * has no way to know whether it stands for one day or thirty-one without this.
+     */
+    private List<String> grains;
+
     /** The name of the measure column, so a chart does not have to work out which one it is. */
     private String measure;
 
@@ -92,6 +102,14 @@ public class AnalysisResultDto {
 
     public boolean isTruncated() { return this.truncated; }
     public void setTruncated(boolean truncated) { this.truncated = truncated; }
+
+    public List<String> getGrains() {
+        return this.grains;
+    }
+
+    public void setGrains(List<String> grains) {
+        this.grains = grains;
+    }
 
     public List<String> getDimensions() { return this.dimensions; }
     public void setDimensions(List<String> dimensions) { this.dimensions = dimensions; }

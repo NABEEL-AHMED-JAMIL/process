@@ -61,6 +61,41 @@ public class AnalysisRequest {
     public static final int MAX_DIMENSIONS = 3;
 
     /** The eight measures 07's measure menu lists, and exactly those. */
+    /**
+     * Calendar buckets a temporal dimension can be grouped by.
+     *
+     * <b>Why this exists.</b> Grouping a DATE column by its own values gives one bucket per day:
+     * two years of orders is 730 groups and no way to fold them, so "revenue by month" -- the
+     * grain a business actually reads -- was not expressible at all.
+     *
+     * A CLOSED enum, and never a string reaching the SQL. The part name is interpolated into
+     * date_trunc(), so a free-text grain would be an injection point in the one place this module
+     * builds SQL text rather than binding a parameter. Jackson refuses an unknown enum name with a
+     * 400, which is how Aggregation and Sort.by already behave.
+     *
+     * DAY is included even though it is what an ungrained DATE already does, because a TIMESTAMP
+     * column grouped by DAY is a real and different question from one grouped by its own values.
+     */
+    public enum Grain {
+
+        DAY("day"),
+        WEEK("week"),
+        MONTH("month"),
+        QUARTER("quarter"),
+        YEAR("year");
+
+        /** The literal date_trunc() takes. Kept here so nothing else has to know the spelling. */
+        private final String part;
+
+        Grain(String part) {
+            this.part = part;
+        }
+
+        public String getPart() {
+            return this.part;
+        }
+    }
+
     public enum Aggregation {
 
         /** How many rows are in the group. The only one that ignores the field. */
@@ -100,6 +135,19 @@ public class AnalysisRequest {
      */
     private List<String> dimensions;
 
+    /**
+     * How each dimension is bucketed, index-aligned with {@link #dimensions}. A null entry, or a
+     * shorter list, means that dimension is grouped by its own values as before.
+     *
+     * <b>A parallel list rather than a map keyed by column, and rather than a list of pairs.</b>
+     * Three reasons, and the first is the one that decides it: a drill REPLACES a dimension BY
+     * INDEX, so the grain has to travel with the slot or a drill would carry the previous
+     * dimension's bucketing onto the new one. A map keyed by name also could not express year and
+     * month of the SAME column, which is a legitimate nested time axis. And the response echoes
+     * its dimensions as an index-aligned list already, so this is the shape that echoes back.
+     */
+    private List<Grain> grains;
+
     private Measure measure;
 
     /** The root of the filter tree, or null for no filter. */
@@ -137,7 +185,27 @@ public class AnalysisRequest {
         AnalysisRequest copy = new AnalysisRequest();
         copy.connection = this.connection;
         copy.path = this.path;
-        copy.dimensions = trimmed(this.dimensions);
+        /*
+         * A PAIRED walk, not two independent ones.
+         *
+         * trimmed() drops a blank name, which shifts every index after it -- and the grains are
+         * index-aligned, so dropping a name without dropping its grain would silently bucket the
+         * wrong column. Walking them together makes the two lists exactly the same length by
+         * construction, which is the property everything downstream relies on.
+         */
+        List<String> names = new ArrayList<>();
+        List<Grain> chosen = new ArrayList<>();
+        for (int at = 0; this.dimensions != null && at < this.dimensions.size(); at++) {
+            String name = this.dimensions.get(at);
+            if (isBlank(name)) {
+                continue;
+            }
+            names.add(name.trim());
+            chosen.add(this.grains == null || at >= this.grains.size()
+                ? null : this.grains.get(at));
+        }
+        copy.dimensions = names;
+        copy.grains = chosen;
         copy.measure = this.measure;
         copy.filters = this.filters;
         copy.topN = this.topN;
@@ -188,6 +256,9 @@ public class AnalysisRequest {
 
     public List<String> getDimensions() { return this.dimensions; }
     public void setDimensions(List<String> dimensions) { this.dimensions = dimensions; }
+
+    public List<Grain> getGrains() { return this.grains; }
+    public void setGrains(List<Grain> grains) { this.grains = grains; }
 
     public Measure getMeasure() { return this.measure; }
     public void setMeasure(Measure measure) { this.measure = measure; }
@@ -335,6 +406,16 @@ public class AnalysisRequest {
         private String nextDimension;
 
         /**
+         * The grain the drilled dimension was bucketed at, and the one its replacement takes.
+         *
+         * On the step for the same reason nextDimension is: a step has to be self-describing, or
+         * drill-up cannot restore what it displaced. Without these, climbing out of a drill that
+         * started from "revenue by month" would land on raw days.
+         */
+        private Grain grain;
+        private Grain nextGrain;
+
+        /**
          * Whether the clicked row was the Top-N roll-up rather than a real value.
          *
          * A flag rather than a comparison against the label, because a dataset is perfectly entitled
@@ -358,6 +439,12 @@ public class AnalysisRequest {
 
         public String getValue() { return this.value; }
         public void setValue(String value) { this.value = value; }
+
+        public Grain getGrain() { return this.grain; }
+        public void setGrain(Grain grain) { this.grain = grain; }
+
+        public Grain getNextGrain() { return this.nextGrain; }
+        public void setNextGrain(Grain nextGrain) { this.nextGrain = nextGrain; }
 
         public String getNextDimension() { return this.nextDimension; }
         public void setNextDimension(String nextDimension) { this.nextDimension = nextDimension; }

@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
@@ -679,6 +680,130 @@ class AnalysisQueryBuilderTest {
             exact.next();
             assertThat(exact.getBigDecimal(1).stripTrailingZeros().toPlainString()).isEqualTo("0.3");
         }
+    }
+
+
+    // ---- calendar grain -----------------------------------------------------------------------
+
+    /**
+     * Grouping a date column by month, which was not expressible at all before.
+     *
+     * Two years of orders grouped by a DATE column is 730 buckets and no way to fold them, so the
+     * grain a business actually reads -- month, quarter, year -- could not be asked for.
+     */
+    @Test
+    void adateColumnCanBeGroupedByMonth() throws Exception {
+        AnalysisRequest request = analysis(dimensions("booked_on"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(java.util.Arrays.asList(AnalysisRequest.Grain.MONTH));
+
+        AnalysisQueryBuilder.Plan plan = plan(request);
+
+        assertThat(plan.getSql()).contains(
+            "date_trunc('month', \"booked_on\") AS \"booked_on_month\"");
+        // The FIELD NAME stays the identity a drill step and a filter use; only the label changes.
+        assertThat(plan.getDimensions()).containsExactly("booked_on");
+        assertThat(plan.getDimensionAliases()).containsExactly("booked_on_month");
+        assertThat(plan.getGrains()).containsExactly(AnalysisRequest.Grain.MONTH);
+    }
+
+    /** The rows really are months, run on the engine rather than asserted from the SQL. */
+    @Test
+    void amonthlyGroupingReturnsOneRowPerMonth() throws Exception {
+        AnalysisRequest request = analysis(dimensions("booked_on"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(java.util.Arrays.asList(AnalysisRequest.Grain.MONTH));
+
+        List<List<String>> rows = rows(plan(request));
+
+        // Every bucket label is the first of a month.
+        for (List<String> row : rows) {
+            assertThat(row.get(0)).endsWith("-01");
+        }
+        assertThat(rows).isNotEmpty();
+    }
+
+    /** An ungrained analysis emits exactly what it always did. */
+    @Test
+    void nograinChangesNothing() throws Exception {
+        AnalysisQueryBuilder.Plan plan = plan(analysis(dimensions("region"),
+            measure("amount", AnalysisRequest.Aggregation.SUM)));
+
+        assertThat(plan.getSql()).doesNotContain("date_trunc");
+        assertThat(plan.getDimensionAliases()).containsExactly("region");
+        assertThat(plan.getGrains()).containsExactly((AnalysisRequest.Grain) null);
+    }
+
+    /**
+     * A grain on a column with no calendar in it is refused BEFORE the statement is built.
+     *
+     * The alternative is a DuckDB binder error arriving at somebody who picked "by month" from a
+     * menu, naming a function they did not call.
+     */
+    @Test
+    void agrainOnAtextColumnIsRefusedWithAsentence() {
+        AnalysisRequest request = analysis(dimensions("region"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(java.util.Arrays.asList(AnalysisRequest.Grain.MONTH));
+
+        assertThatThrownBy(() -> plan(request))
+            .isInstanceOf(AnalyticsException.class)
+            .hasMessageContaining("has no calendar in it")
+            .hasMessageContaining("month");
+    }
+
+    /**
+     * The same column at two grains is a real nested time axis, and is allowed.
+     *
+     * The duplicate check compares column AND grain. Refusing this would have been an accident of
+     * how that check was written rather than a decision.
+     */
+    @Test
+    void thesameDateColumnMayBeGroupedAtTwoGrains() throws Exception {
+        AnalysisRequest request = analysis(dimensions("booked_on", "booked_on"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(java.util.Arrays.asList(
+            AnalysisRequest.Grain.YEAR, AnalysisRequest.Grain.MONTH));
+
+        AnalysisQueryBuilder.Plan plan = plan(request);
+
+        assertThat(plan.getDimensionAliases())
+            .containsExactly("booked_on_year", "booked_on_month");
+        assertThat(rows(plan)).isNotEmpty();
+    }
+
+    /** The same column at the SAME grain twice is still refused, because it is still nonsense. */
+    @Test
+    void thesameColumnAtTheSameGrainTwiceIsStillRefused() {
+        AnalysisRequest request = analysis(dimensions("booked_on", "booked_on"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(java.util.Arrays.asList(
+            AnalysisRequest.Grain.MONTH, AnalysisRequest.Grain.MONTH));
+
+        assertThatThrownBy(() -> plan(request))
+            .isInstanceOf(AnalyticsException.class)
+            .hasMessageContaining("twice");
+    }
+
+    /** A Top-N over a grained dimension ranks the BUCKETS, not the raw days inside them. */
+    @Test
+    void atopNoverAgrainedDimensionRanksTheBuckets() throws Exception {
+        AnalysisRequest request = analysis(dimensions("booked_on"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(java.util.Arrays.asList(AnalysisRequest.Grain.MONTH));
+        AnalysisRequest.TopN topN = new AnalysisRequest.TopN();
+        topN.setLimit(1);
+        topN.setIncludeOther(false);
+        request.setTopN(topN);
+
+        AnalysisQueryBuilder.Plan plan = plan(request);
+
+        // Both sides of the membership test are grained, or the ranking buckets months while the
+        // membership compares days and nothing matches.
+        assertThat(plan.getSql())
+            .contains("date_trunc('month', \"booked_on\") AS \"analysis_key\"")
+            .contains("IS NOT DISTINCT FROM date_trunc('month', analysis_filtered.\"booked_on\")");
+        assertThat(rows(plan)).hasSize(1);
     }
 
 }
