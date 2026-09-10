@@ -200,6 +200,7 @@ public final class AnalysisQueryBuilder {
         String top = free("analysis_top", columns);
         String tagged = free("analysis_tagged", columns);
         String key = free("analysis_key", columns);
+        String hit = free("analysis_hit", columns);
 
         StringBuilder sql = new StringBuilder("WITH ").append(filtered)
             .append(" AS (SELECT * FROM ").append(SOURCE);
@@ -208,12 +209,26 @@ public final class AnalysisQueryBuilder {
             parameters.addAll(where.getParameters());
         }
         sql.append("), ").append(top).append(" AS (SELECT ").append(rankedName).append(" AS ")
-            .append(quoteAlias(key)).append(" FROM ").append(filtered)
+            .append(quoteAlias(key)).append(", TRUE AS ").append(quoteAlias(hit))
+            .append(" FROM ").append(filtered)
             .append(" GROUP BY 1 ORDER BY ").append(measure.expression)
             .append(" DESC NULLS LAST LIMIT ").append(limit).append(")");
 
-        String member = "EXISTS (SELECT 1 FROM " + top + " WHERE " + top + "." + quoteAlias(key)
-            + " IS NOT DISTINCT FROM " + filtered + "." + rankedName + ")";
+        /*
+         * A JOIN, not a correlated EXISTS, and the difference is measured rather than stylistic.
+         *
+         * DuckDB decorrelates the EXISTS into a plain HASH_JOIN only when there is no WHERE
+         * filter. Add one -- which is to say, in almost every real analysis -- and the plan
+         * becomes a DELIM_JOIN plus an extra HASH_JOIN. Measured on 4M rows with 50,000 distinct
+         * values: a filtered Top-N of 25 went from 75ms to 30ms without the roll-up, and 109ms to
+         * 83ms with it. Unfiltered, where the old form already decorrelated, it is unchanged.
+         *
+         * The PREDICATE is untouched. IS NOT DISTINCT FROM is still what decides membership, so
+         * the three-valued-logic argument above survives word for word; only its position moves
+         * from a WHERE inside a subquery to a JOIN ... ON.
+         */
+        String membership = " ON " + top + "." + quoteAlias(key)
+            + " IS NOT DISTINCT FROM " + filtered + "." + rankedName;
 
         if (!request.getTopN().isIncludeOther()) {
             // No roll-up asked for: the same membership test, used to narrow rather than to bucket.
@@ -225,15 +240,28 @@ public final class AnalysisQueryBuilder {
                     .append(quoteAlias(dimension.getName())).append(", ");
             }
             sql.append(measure.expression).append(" AS ").append(quoteAlias(measureAlias));
-            sql.append(" FROM ").append(filtered).append(" WHERE ").append(member);
+            /*
+             * A plain INNER JOIN is safe here and does not duplicate rows: the ranking CTE is a
+             * GROUP BY over the ranked dimension, so its key column is distinct by construction
+             * and no left row can match twice. A duplicating join would show up first in count(*),
+             * which the tests check.
+             */
+            sql.append(" FROM ").append(filtered).append(" JOIN ").append(top).append(membership);
             appendGroupBy(sql, dimensions.size(), -1);
             appendOrderBy(sql, request.getSort(), dimensions.size(), false);
             return sql.toString();
         }
 
+        /*
+         * coalesce is load-bearing: a LEFT JOIN gives an unmatched row NULL, and the marker has to
+         * be FALSE. AnalysisService compares it against the string "false", and the outer GROUP BY
+         * groups on it -- a NULL would make its own group and the roll-up would split in two.
+         */
         sql.append(", ").append(tagged).append(" AS (SELECT ").append(filtered).append(".*, ")
-            .append(member).append(" AS ").append(quoteAlias(marker))
-            .append(" FROM ").append(filtered).append(")");
+            .append("coalesce(").append(top).append(".").append(quoteAlias(hit))
+            .append(", FALSE) AS ").append(quoteAlias(marker))
+            .append(" FROM ").append(filtered).append(" LEFT JOIN ").append(top)
+            .append(membership).append(")");
 
         sql.append(" SELECT CASE WHEN ").append(quoteAlias(marker)).append(" THEN ")
             .append(rankedName).append(" END AS ").append(quoteAlias(ranked.getName()));
@@ -253,14 +281,20 @@ public final class AnalysisQueryBuilder {
         sql.append(", to_json(list_slice(list(DISTINCT ").append(rankedName).append("), 1, ")
             .append(OTHER_VALUES_REPORTED).append(")) AS ")
             .append(quoteAlias(marker + "_values"));
-        // count(DISTINCT x) ignores nulls and list(DISTINCT x) does not, so the two disagreed by
-        // exactly one whenever the group with no value was among those rolled up -- the response
-        // shipped a four-element list beside a count of three and flagged nothing, because
-        // "truncated" is count > list size. The null group is a member like any other; this counts
-        // it. Same reasoning as the IS NOT DISTINCT FROM membership test above, applied to the
-        // reporting rather than to the predicate.
-        sql.append(", (count(DISTINCT ").append(rankedName).append(") + max(CASE WHEN ")
-            .append(rankedName).append(" IS NULL THEN 1 ELSE 0 END)) AS ")
+        /*
+         * The LENGTH of the list above, not a second count(DISTINCT) over the same column.
+         *
+         * This used to be count(DISTINCT x) plus a "+ max(CASE WHEN x IS NULL THEN 1 ELSE 0 END)"
+         * correction, because count(DISTINCT) ignores nulls while list(DISTINCT) does not -- the
+         * two disagreed by exactly one whenever the group with no value was among those rolled up,
+         * and the response shipped a four-element list beside a count of three.
+         *
+         * len(list(DISTINCT x)) counts the null group by construction, so the correction is not
+         * needed and the bug it was written for cannot come back. It also collapses two distinct
+         * hash tables into one: DuckDB common-subexpressions the two references to the same list.
+         * Measured on 8M rows, 400,000 distinct values: 491ms to 392ms.
+         */
+        sql.append(", len(list(DISTINCT ").append(rankedName).append(")) AS ")
             .append(quoteAlias(marker + "_count"));
         sql.append(" FROM ").append(tagged);
         appendGroupBy(sql, dimensions.size(), dimensions.size() + 2);

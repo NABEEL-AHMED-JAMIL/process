@@ -293,7 +293,11 @@ class AnalysisQueryBuilderTest {
             .contains("ORDER BY sum(CAST(CAST(\"amount\" AS VARCHAR) AS DECIMAL(38,15))) DESC NULLS LAST LIMIT 1")
             .contains("CASE WHEN \"analysis_in_top\" THEN \"region\" END AS \"region\"")
             .contains("to_json(list_slice(list(DISTINCT \"region\"), 1, 200))")
-            .contains("count(DISTINCT \"region\")");
+            // len(list(DISTINCT x)), not count(DISTINCT x) plus a null correction. The list is
+            // already being built one line above, so this reuses it -- and it counts the null
+            // group by construction, which is what the correction existed to patch up.
+            .contains("len(list(DISTINCT \"region\"))")
+            .doesNotContain("count(DISTINCT");
 
         List<List<String>> rows = rows(plan);
         // Two rows: the one value in the top, and one roll-up standing for the other two. The
@@ -319,7 +323,13 @@ class AnalysisQueryBuilderTest {
     void aTopNWithoutTheOtherBucketNarrowsAndStillAggregatesFromTheRawRows() throws Exception {
         AnalysisQueryBuilder.Plan plan = plan(topNRequest(1, false));
 
-        assertThat(plan.getSql()).contains("WHERE EXISTS").doesNotContain("CASE WHEN");
+        // A JOIN, not a correlated EXISTS. The old form decorrelated only when there was no
+        // WHERE filter; with one -- which is almost every real analysis -- DuckDB produced a
+        // DELIM_JOIN and the query took twice as long. The membership PREDICATE is unchanged.
+        assertThat(plan.getSql())
+            .contains("JOIN analysis_top ON analysis_top.\"analysis_key\" IS NOT DISTINCT FROM")
+            .doesNotContain("EXISTS")
+            .doesNotContain("CASE WHEN");
         assertThat(plan.getRollupMarkerIndex()).isEqualTo(-1);
 
         List<List<String>> rows = rows(plan);
