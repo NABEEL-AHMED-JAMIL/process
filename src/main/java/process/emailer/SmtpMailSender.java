@@ -40,6 +40,18 @@ public class SmtpMailSender implements MailTransport {
     }
 
     @Override
+    public boolean deliversToRealInboxes() {
+        /*
+         * A configured SMTP host is taken at its word. Unlike the SES path there is no signal
+         * here that separates a real relay from a capture sandbox -- sandbox.smtp.mailtrap.io
+         * speaks ordinary SMTP and accepts mail exactly as a real server does. Guessing from the
+         * hostname would be a blocklist that goes stale; the honest answer is that this
+         * transport cannot tell.
+         */
+        return true;
+    }
+
+    @Override
     public String describe() {
         return "SMTP (deprecated)";
     }

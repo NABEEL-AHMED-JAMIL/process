@@ -43,6 +43,7 @@ public class SesMailSender implements MailTransport {
 
     private final SesClient client;
     private final String endpointDescription;
+    private final boolean emulated;
 
     public SesMailSender(
         @Value("${app.mail.ses.region:us-east-1}") String region,
@@ -66,9 +67,18 @@ public class SesMailSender implements MailTransport {
                 AwsBasicCredentials.create(accessKey.trim(), secretKey == null ? "" : secretKey.trim())));
         }
         this.client = builder.build();
-        this.endpointDescription = (endpoint == null || endpoint.trim().isEmpty())
-            ? "SES " + region : "SES " + region + " at " + endpoint.trim();
-        logger.info("Outbound mail transport: {}", this.endpointDescription);
+        /*
+         * An overridden endpoint is, in this project, always a local emulator -- the comment on
+         * the constructor argument says as much, and a real deployment leaves it empty so the
+         * SDK resolves the regional endpoint itself. LocalStack ACCEPTS a SendRawEmail and stores
+         * it in memory; it never delivers. So an override is exactly the signal that "sent"
+         * should not be reported to a person as though it had arrived.
+         */
+        this.emulated = endpoint != null && !endpoint.trim().isEmpty();
+        this.endpointDescription = this.emulated
+            ? "SES " + region + " at " + endpoint.trim() : "SES " + region;
+        logger.info("Outbound mail transport: {}{}", this.endpointDescription,
+            this.emulated ? " -- a local emulator: messages are stored, NOT delivered" : "");
     }
 
     @Override
@@ -80,6 +90,11 @@ public class SesMailSender implements MailTransport {
                 .data(SdkBytes.fromByteArray(raw.toByteArray()))
                 .build())
             .build());
+    }
+
+    @Override
+    public boolean deliversToRealInboxes() {
+        return !this.emulated;
     }
 
     @Override

@@ -237,6 +237,13 @@ public class FileShareServiceImpl implements FileShareService {
         if (emailFactoryResult != null && emailFactoryResult.startsWith("Error")) {
             return new ResponseDto(ERROR, emailFactoryResult);
         }
+        // Still SUCCESS: the message really was built and really was accepted. But a local
+        // emulator stores it and never delivers, and "Email sent." then points someone at an
+        // inbox that will never have it. This exact ambiguity cost a debugging session.
+        if (!this.emailMessagesFactory.deliversToRealInboxes()) {
+            return new ResponseDto(SUCCESS, "Accepted by the local mail sandbox — it is stored, "
+                + "not delivered. Point app.mail.ses.endpoint at real SES to actually send.");
+        }
         return new ResponseDto(SUCCESS, "Email sent.");
     }
 

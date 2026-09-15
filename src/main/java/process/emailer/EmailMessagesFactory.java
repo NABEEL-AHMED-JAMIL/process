@@ -50,6 +50,19 @@ public class EmailMessagesFactory {
      */
     private final MailTransport mailTransport;
 
+    /**
+     * Whether a "sent" from this factory means the message can actually arrive.
+     *
+     * Exposed so a caller can say so to the person waiting. On this deployment SES is pointed at
+     * LocalStack, which accepts a SendRawEmail and stores it in memory -- the message is built
+     * correctly, with the right recipient and a real attachment part, and no inbox will ever see
+     * it. Reporting that as "Sent to you@example.com" sends someone to look somewhere the mail
+     * cannot be, which is worse than saying nothing.
+     */
+    public boolean deliversToRealInboxes() {
+        return this.mailTransport.deliversToRealInboxes();
+    }
+
     public EmailMessagesFactory(JavaMailSender javaMailSender,
         VelocityManager velocityManager,
         LookupDataCacheService lookupDataCacheService,

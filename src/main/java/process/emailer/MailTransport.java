@@ -18,4 +18,15 @@ public interface MailTransport {
 
     /** For logs and health output: which transport is actually in use. */
     String describe();
+
+    /**
+     * Whether this transport can actually reach a real inbox.
+     *
+     * False when it is pointed at a local emulator or a capture sandbox. That case is not an
+     * error and must not be reported as one -- the message is genuinely built, accepted and
+     * stored -- but it is also not delivery, and telling someone "Sent to you@gmail.com" when it
+     * went into LocalStack's in-memory outbox sends them to look in an inbox that will never
+     * have it. Cost a real debugging session; it is a sentence, so it is said.
+     */
+    boolean deliversToRealInboxes();
 }
