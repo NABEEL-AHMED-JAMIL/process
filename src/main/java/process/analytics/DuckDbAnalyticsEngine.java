@@ -122,6 +122,10 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      */
     private static final long MAX_OFFSET = 10_000_000_000L;
 
+    /** The second dataset's view name as a whole word. See namesSecondDataset. */
+    private static final Pattern SECOND_DATASET_NAMED =
+        Pattern.compile("\\b" + SECOND_DATASET + "\\b", Pattern.CASE_INSENSITIVE);
+
     private static final Logger logger = LoggerFactory.getLogger(DuckDbAnalyticsEngine.class);
 
     /**
@@ -683,6 +687,24 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
             statement.execute(viewOf(DATASET, primary));
             if (secondary != null) {
                 statement.execute(viewOf(SECOND_DATASET, secondary));
+            } else if (namesSecondDataset(sql)) {
+                /*
+                 * The statement asks for dataset2 and no second dataset was given.
+                 *
+                 * Refused here, in words, rather than left to DuckDB -- which answers "Catalog
+                 * Error: Table with name dataset2 does not exist!", an engine-internal sentence
+                 * naming a view the reader never created and cannot look up. That message was
+                 * what a dashboard tile over a saved join actually displayed, permanently, and it
+                 * pointed at nothing a person could act on.
+                 *
+                 * The gate does not catch this and should not: readsOnlyWhatItWasGiven checks
+                 * that every relation is a bare NAME rather than a location, which dataset2 is.
+                 * Whether that name has been registered is a fact about this run, known only
+                 * here.
+                 */
+                throw new AnalyticsException("This query reads " + SECOND_DATASET
+                    + ", but no second dataset was given. Pick one, or edit the query so it "
+                    + "reads " + DATASET + " only.");
             }
 
             String executable = admitted.getSql();
@@ -1085,6 +1107,20 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * TEMP because the catalogue dies with the session anyway. Saying so in the SQL keeps it true
      * if a session ever stops being per-query.
      */
+    /**
+     * Whether a statement names the second dataset, as a word rather than as a substring.
+     *
+     * A regex with word boundaries and not contains(): a column called `dataset2_id`, a string
+     * literal 'dataset2' or an alias `my_dataset2` all contain the name without asking for the
+     * view, and refusing those would break queries that are perfectly fine. The cost of the
+     * remaining imprecision is small and one-directional -- a query mentioning dataset2 only
+     * inside a quoted literal is refused with a sentence instead of running -- and the reader is
+     * told exactly what to do about it.
+     */
+    private static boolean namesSecondDataset(String sql) {
+        return sql != null && SECOND_DATASET_NAMED.matcher(sql).find();
+    }
+
     private static String viewOf(String name, DatasetRef dataset) {
         return "CREATE OR REPLACE TEMP VIEW " + name + " AS SELECT * FROM "
             + dataset.scanExpression();
@@ -1115,14 +1151,31 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * Whether the response was stopped by the cell budget rather than by the query's own end.
      *
      * Computed from what the caller already holds rather than carried back out of rowsOf, so no
-     * new type has to exist to say one boolean. The comparison is >= for the same reason the row
-     * ceiling's is: a result that came back exactly full is reported as cut, because finding out
-     * otherwise would mean running it again without the bound.
+     * new type has to exist to say one boolean.
+     *
+     * <b>The test MIRRORS the loop's, and that is the whole of this method.</b> It used to ask
+     * whether the cells collected had REACHED the budget -- {@code rows * columns >= budget} --
+     * while rowsOf stops when one more row would EXCEED it. Those agree only when the column
+     * count divides the budget exactly, and disagree silently the rest of the time: at the
+     * shipped 100,000 cells over three columns the loop stops at 33,333 rows and 99,999 cells,
+     * which is short of 100,000, so a result cut by the ceiling was handed back with
+     * truncated=false. A reader was shown 33,333 rows of a 40,000-row answer with nothing saying
+     * it was partial -- the exact failure QueryResultDto.truncated exists to prevent, and worse
+     * than the row ceiling's off-by-one because nothing on the screen hints at it.
+     *
+     * "One more row would not have fitted" is the same sentence the loop breaks on, so the two
+     * cannot drift again without somebody editing both.
+     *
+     * It still errs one way on purpose, as the row ceiling's test does: a result that ENDED
+     * exactly where the budget would have stopped it is reported as cut, because telling the two
+     * apart would mean running the query again without the bound -- which is the thing the bound
+     * is for. Calling a whole answer partial costs a reader a sentence; calling a partial answer
+     * whole costs them the answer.
      */
     private boolean hitCellBudget(List<List<String>> rows, List<ColumnDto> columns) {
         int budget = this.limits.getMaxResponseCells();
         return budget > 0 && !columns.isEmpty()
-            && (long) rows.size() * columns.size() >= budget;
+            && (long) (rows.size() + 1) * columns.size() > budget;
     }
 
     private static List<List<String>> rowsOf(ResultSet resultSet, List<ColumnDto> columns)

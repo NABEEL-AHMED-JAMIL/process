@@ -67,6 +67,28 @@ public class AnalysisResultDto {
     private OtherBucketDto other;
 
     /**
+     * Which rows of {@link #rows} are the roll-up, by index. Null when none are.
+     *
+     * <b>Sent because the label cannot say it, and this class already has the evidence.</b> A
+     * roll-up row is labelled with the Top-N's otherLabel -- "Other" by default -- and a dataset
+     * is perfectly entitled to contain a sub-category genuinely spelled "Other". AnalysisService
+     * keeps these indices for exactly that reason and its own comment records what happened when
+     * something downstream matched on the label instead: the pivot builder keyed its grid on it,
+     * a real "Other" region collided with the roll-up, and a measured 500 vanished from a 740
+     * total with nothing on the response saying a row had gone.
+     *
+     * Every screen that has to tell them apart was left matching on the label, one-directionally
+     * and conservatively -- a real row spelled like the roll-up goes inert, never the reverse. The
+     * clients doing that are the Canvas's table and, since cross-widget click narrowing, the
+     * dashboard's charts; with this they can be exact instead, because a bar that filters to
+     * nothing and a bar that will not click are not the same failure.
+     *
+     * Omitted entirely when nothing rolled up, which is the rule every other optional part of this
+     * response follows: a client that has never heard of it sees exactly what it saw before.
+     */
+    private List<Integer> rollupRows;
+
+    /**
      * The drill trail as labels, oldest first, always starting at the root.
      *
      * Composed here rather than in the client because the server is what decided the trail: it
@@ -113,6 +135,9 @@ public class AnalysisResultDto {
 
     public List<String> getDimensions() { return this.dimensions; }
     public void setDimensions(List<String> dimensions) { this.dimensions = dimensions; }
+
+    public List<Integer> getRollupRows() { return this.rollupRows; }
+    public void setRollupRows(List<Integer> rollupRows) { this.rollupRows = rollupRows; }
 
     public String getMeasure() { return this.measure; }
     public void setMeasure(String measure) { this.measure = measure; }

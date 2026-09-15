@@ -201,7 +201,10 @@ class AnalyticsExportTest {
     // ---- the fixture ------------------------------------------------------------------------------
 
     private AnalyticsExportService exportService(int maxRows) {
-        AnalyticsLimits limits = limits(maxRows);
+        return exportService(limits(maxRows));
+    }
+
+    private AnalyticsExportService exportService(AnalyticsLimits limits) {
         AnalyticsQueryService service = new AnalyticsQueryService(this.sessions, limits);
         this.startedServices.add(service);
         AnalyticsExportService export = new AnalyticsExportService(this.resolver, service, limits,
@@ -564,6 +567,37 @@ class AnalyticsExportTest {
         assertThat(written).hasSize(1);
         assertThat(new String(Files.readAllBytes(written.get(0)), StandardCharsets.UTF_8))
             .isEqualTo("region,total\neast,5.00\nnorth,52.50\nsouth,21.00\nwest,7.25\n");
+    }
+
+    /**
+     * The Parquet switch, which until now switched nothing off.
+     *
+     * Same defect as the benchmark's: analytics.parquet.conversion-enabled was declared, worded,
+     * reported by /actuator/health as in force, and read by nothing -- so an environment that
+     * turned Parquet write-back off kept writing Parquet.
+     *
+     * The CSV half of this test is the point rather than a formality. This switch governs write-
+     * back ONLY, because Parquet cannot be offered as a download at all; a refusal that also took
+     * CSV with it would be turning export off and calling it a Parquet setting.
+     */
+    @Test
+    void theParquetSwitchRefusesParquetWriteBackAndLeavesCsvWriteBackWorking() throws Exception {
+        AnalyticsLimits limits = limits(10);
+        ReflectionTestUtils.setField(limits, "parquetConversionEnabled", false);
+        AnalyticsExportService switchedOff = exportService(limits);
+
+        ResponseDto refused = switchedOff.writeBack(request("format", "parquet"));
+
+        assertThat(refused.getStatus()).isEqualTo(ProcessUtil.ERROR_MESSAGE);
+        assertThat(refused.getMessage()).contains("Parquet");
+        // Nothing written, not merely nothing returned: a refusal that still produced the object
+        // would leave the bucket holding the file the environment said it did not want.
+        assertThat(objectsInTheBucket()).isEmpty();
+
+        ResponseDto allowed = switchedOff.writeBack(request());
+
+        assertThat(allowed.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        assertThat(objectsInTheBucket()).hasSize(1);
     }
 
     @Test

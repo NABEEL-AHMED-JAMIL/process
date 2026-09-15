@@ -21,7 +21,12 @@ public class LookupDataCacheService {
 
     private Logger logger = LoggerFactory.getLogger(LookupDataCacheService.class);
 
-    private Map<String, LookupDataDto> lookupCacheMap = new HashMap<>();
+    /**
+     * Volatile because initializeCache replaces this reference rather than editing the map behind
+     * it, and the replacement is published to request threads that are reading the cache at the
+     * same time -- see initializeCache for why it is rebuilt rather than updated in place.
+     */
+    private volatile Map<String, LookupDataDto> lookupCacheMap = new HashMap<>();
 
     private final LookupDataRepository lookupDataRepository;
     private final EncryptionUtil encryptionUtil;
@@ -40,18 +45,34 @@ public class LookupDataCacheService {
         }
     }
 
+    /**
+     * Rebuilds the cache from scratch and publishes the finished map in one assignment.
+     *
+     * This is not only the startup path: SettingServiceImpl calls it after every add, update and
+     * delete of a lookup, so it is the only thing that ever brings the cache back in line with the
+     * table. It used to write the parents it found into the existing map and nothing else, which
+     * made it incapable of expressing a removal. Deleting the top-level BUCKET_LIST row left its
+     * DTO -- and every child bucket hanging off it -- still answering getParentLookupById, so
+     * StorageBrowserServiceImpl.collectBuckets went on listing and resolving buckets that no longer
+     * existed in every workspace's object browser until the JVM was restarted. Renaming a parent's
+     * lookupType broke the same way from the other end: the new key was added and the old one stayed
+     * behind, so both names resolved.
+     *
+     * Emptying the map first and refilling it would express removals but would open a window in
+     * which the cache is empty, and this runs on a request thread while other requests are reading:
+     * a reader landing in that window sees no lookups at all rather than the previous ones. Building
+     * the replacement in a local map and swapping it onto the volatile field is a single write, so
+     * every reader sees either the whole previous map or the whole new one and never a half-built
+     * state.
+     */
     @Transactional(readOnly = true)
     public void initializeCache() {
         logger.info("****************Cache-Lookup-Start***************************");
+        Map<String, LookupDataDto> rebuiltCache = new HashMap<>();
         Iterable<LookupData> lookupDataList = this.lookupDataRepository.findByParentLookupIdIsNull();
-        lookupDataList.forEach(lookupData -> {
-            if (this.lookupCacheMap.containsKey(lookupData.getLookupType())) {
-                this.lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
-            } else {
-                this.lookupCacheMap.put(lookupData.getLookupType(), getLookupDataDetail(lookupData));
-            }
-        });
-
+        lookupDataList.forEach(lookupData ->
+            rebuiltCache.put(lookupData.getLookupType(), getLookupDataDetail(lookupData)));
+        this.lookupCacheMap = rebuiltCache;
         logger.info("***************Cache-Lookup-End********************************");
     }
 

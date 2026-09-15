@@ -23,6 +23,8 @@ import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 
@@ -52,6 +54,8 @@ class FileChatImageInstructionsTest {
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
+    // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
+    @Mock private process.model.service.FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -59,13 +63,14 @@ class FileChatImageInstructionsTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, this.fileShareService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("ETL", BUCKET, "MINIO")));
         lenient().when(this.storageBrowserService.getObjectMetadataCached(BUCKET, KEY))
             .thenReturn(new ObjectMetadataDto(KEY, KEY, 1000L, "now", ETAG, "image/png", false));
-        lenient().when(this.fileChatExtractionService.extractText(BUCKET, KEY, ETAG))
+        lenient().when(this.fileChatExtractionService.extractText(eq(BUCKET), eq(KEY), eq(ETAG),
+            nullable(String.class), nullable(String.class)))
             .thenReturn("This appears to be an X-ray image of a person's leg and foot, with a "
                 + "visible fracture in one of the bones near the heel.");
         lenient().when(this.openSearchRagClient.isEnabled()).thenReturn(false);
@@ -131,6 +136,52 @@ class FileChatImageInstructionsTest {
                 + "still reach the model -- this fix removes specific leaks, not the whole feature")
             .contains("vision assistant for images stored in a MinIO bucket")
             .contains("fracture in one of the bones near the heel");
+    }
+
+    /**
+     * The image prompt goes through exactly the same {@link FileChatServiceImpl} resolveContext as
+     * the document one, so a long vision-model description of a dense page -- a scanned multi-page
+     * form, a poster transcribed verbatim -- is cut to the provider's budget before it ever gets
+     * here. This prompt used to append the cut description under its IMAGE DESCRIPTION marker with
+     * nothing to say so, while instructing the model to ground every answer strictly in that
+     * description and to answer anything it covers. The model then denied content that had been
+     * cut rather than content that was absent from the image.
+     */
+    @Test
+    void aTruncatedDescriptionSaysSoRatherThanReadingAsTheWholeImage() throws Exception {
+        lenient().when(this.fileChatExtractionService.extractText(eq(BUCKET), eq(KEY), eq(ETAG),
+            nullable(String.class), nullable(String.class)))
+            .thenReturn(longDescription());
+
+        ResponseDto response = this.service.sendMessage(this.request("What does the last column say?"));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        ArgumentCaptor<AdHocPromptRequestDto> captor = ArgumentCaptor.forClass(AdHocPromptRequestDto.class);
+        verify(this.aiAgentService).processAdHoc(captor.capture());
+        assertThat(captor.getValue().getInstructions())
+            .as("the image prompt must carry the same truncation note the document prompt does")
+            .contains("--- IMAGE DESCRIPTION ---")
+            .contains("[content truncated");
+    }
+
+    /** The converse, so the note is not simply stapled on unconditionally. */
+    @Test
+    void aDescriptionThatFitsCarriesNoTruncationNote() throws Exception {
+        ResponseDto response = this.service.sendMessage(this.request("What's in this image?"));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        ArgumentCaptor<AdHocPromptRequestDto> captor = ArgumentCaptor.forClass(AdHocPromptRequestDto.class);
+        verify(this.aiAgentService).processAdHoc(captor.capture());
+        assertThat(captor.getValue().getInstructions()).doesNotContain("[content truncated");
+    }
+
+    /** Comfortably past Ollama's 24,000-character budget, so resolveContext really does cut it. */
+    private static String longDescription() {
+        StringBuilder sb = new StringBuilder();
+        while (sb.length() < 30000) {
+            sb.append("The next row of the form reads as another line of transcribed text. ");
+        }
+        return sb.toString();
     }
 
     @Test

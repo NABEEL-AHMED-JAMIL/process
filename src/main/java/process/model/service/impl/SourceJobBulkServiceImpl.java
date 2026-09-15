@@ -97,6 +97,23 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             : this.sourceJobRepository.findByTenantId(TenantContext.getTenantId())).stream()
             .filter(sourceJob -> sourceJob.getJobStatus() != Status.Delete)
             .collect(Collectors.toList());
+        /*
+         * One query for every schedule in the export, not one per row.
+         *
+         * findSchedulerByJobId sat inside the forEach below, so exporting a workspace of 400 jobs
+         * issued 400 extra queries inside a single HTTP request -- while the jobs list screen does
+         * the identical job with one findByJobIdIn. It also inherited the cardinality trap: that
+         * derived query returns Optional, so a job that somehow carries two scheduler rows made
+         * the whole export fail with IncorrectResultSizeDataAccessException. Reading them as a
+         * list and keeping the first means one bad job costs its own schedule columns rather than
+         * everybody's export.
+         */
+        // A lambda rather than SourceJob::getJobId: the sheet-name field above is also called
+        // SourceJob and shadows the type, so the method reference resolves against a String.
+        List<Long> jobIds = sourceJobs.stream().map(sourceJob -> sourceJob.getJobId()).collect(Collectors.toList());
+        Map<Long, Scheduler> schedulerByJobId = jobIds.isEmpty() ? Collections.emptyMap()
+            : this.schedulerRepository.findByJobIdIn(jobIds).stream()
+                .collect(Collectors.toMap(Scheduler::getJobId, s -> s, (a, b) -> a));
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
         this.bulkExcel.setWb(workbook);
         XSSFSheet xssfSheet = workbook.createSheet(SourceJob);
@@ -107,13 +124,19 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             rowCount.getAndIncrement();
             List<String> dataCellValue = new ArrayList<>();
             dataCellValue.add(!ProcessUtil.isNull(sourceJob.getJobName()) ? String.valueOf(sourceJob.getJobName()) : "");
-            dataCellValue.add(String.format("%d [%s]", sourceJob.getTaskDetail().getTaskDetailId(), sourceJob.getTaskDetail().getTaskName()));
+            // Guarded like every neighbouring cell. task_detail_id is nullable, and this was the
+            // one cell that dereferenced straight through: a single legacy row without a task
+            // aborted the entire export with a NullPointerException, which the controller
+            // answered as HTTP 500, so nobody could export anything until that row was found.
+            dataCellValue.add(!ProcessUtil.isNull(sourceJob.getTaskDetail())
+                ? String.format("%d [%s]", sourceJob.getTaskDetail().getTaskDetailId(), sourceJob.getTaskDetail().getTaskName())
+                : "");
             dataCellValue.add(String.valueOf(sourceJob.getExecution()));
             dataCellValue.add(String.valueOf(sourceJob.getPriority()));
             dataCellValue.add(String.valueOf(sourceJob.getJobStatus()));
             dataCellValue.add(String.valueOf(sourceJob.getDateCreated()));
 
-            Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.getJobId());
+            Optional<Scheduler> scheduler = Optional.ofNullable(schedulerByJobId.get(sourceJob.getJobId()));
             if (scheduler.isPresent()) {
                 dataCellValue.add(String.valueOf(scheduler.get().getStartDate()));
                 dataCellValue.add(!ProcessUtil.isNull(scheduler.get().getEndDate()) ? String.valueOf(scheduler.get().getEndDate()): "");
@@ -204,9 +227,47 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
                 }
                 jobDetailValidation.isValidJobDetail();
                 if (!ProcessUtil.isNull(jobDetailValidation.getTaskId())) {
-                    if (!this.transactionService.findByTaskDetailIdAndTaskStatus(Long.valueOf(jobDetailValidation.getTaskId())).isPresent()) {
+                    /*
+                     * Parsed rather than trusted. Long.valueOf on the raw cell threw
+                     * NumberFormatException straight out of uploadSourceJob, which the controller
+                     * turned into HTTP 400 "Sorry, the file could not be uploaded. Please contact
+                     * support." -- no row number, no column, and no sign that the other ninety-nine
+                     * rows were fine. The cell is free text from the sheet, and the two easiest
+                     * things to put in it are both unparsable: the task's name, and the composite
+                     * "1043 [orders nightly]" that the job list download writes into this very
+                     * column. Now it joins the per-row error list like every other bad cell.
+                     */
+                    Long taskId = ProcessUtil.parseLongOrNull(jobDetailValidation.getTaskId());
+                    if (taskId == null) {
+                        jobDetailValidation.setErrorMsg("Task Id must be the numeric id at row "
+                            + (currentRow.getRowNum() + 1) + "; got \"" + jobDetailValidation.getTaskId() + "\".\n");
+                    } else if (!this.transactionService.findByTaskDetailIdAndTaskStatus(taskId).isPresent()) {
                         jobDetailValidation.setErrorMsg("Deleted sourceTask is not linked with source job at row " + (currentRow.getRowNum() + 1) + ".\n");
                     }
+                }
+                /*
+                 * A blank Recurrence cell is a rejected row, not a job.
+                 *
+                 * JobDetailValidation only checks Recurrence when it has one -- "not null AND not
+                 * one of the allowed values" -- so an empty cell passed every check and produced a
+                 * Scheduler with no interval_value. Nothing downstream can work with that:
+                 * applyInitialSchedule seeds next_run_at from the start date and stops there, and
+                 * the first time the engine dispatches the job updateNextScheduler asks
+                 * computeNextRun for the following slot, is told null because there is no interval
+                 * to step by, and marks the schedule expired. The job ran exactly once and was
+                 * then dead for good, while the upload reported "Total N jobs saved successfully."
+                 * and the job list showed it Active with no schedule against it.
+                 *
+                 * Refused rather than defaulted: the sheet gives no way to tell which cadence was
+                 * meant, and a job silently given one it was not asked for is the worse outcome of
+                 * the two -- the row is in front of the person who can fix it. The message names
+                 * the values this row's own frequency accepts, the way the recurrence check does.
+                 */
+                if (ProcessUtil.isNull(jobDetailValidation.getRecurrence())) {
+                    List<?> allowed = ProcessTimeUtil.frequencyDetail.get(jobDetailValidation.getFrequency());
+                    jobDetailValidation.setErrorMsg("Recurrence should not be empty at row "
+                        + (currentRow.getRowNum() + 1) + "; a schedule with no recurrence runs once and then expires"
+                        + (allowed != null ? ". It should be " + allowed + "." : ".") + "\n");
                 }
                 if (!ProcessUtil.isNull(jobDetailValidation.getErrorMsg())) {
                     errors.add(jobDetailValidation.getErrorMsg());
@@ -240,9 +301,9 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             }
             scheduler.setStartTime(LocalTime.parse(jobDetailValidation.getStartTime()));
             scheduler.setFrequency(jobDetailValidation.getFrequency());
-            if (!StringUtils.isEmpty(jobDetailValidation.getRecurrence())) {
-                scheduler.setIntervalValue(jobDetailValidation.getRecurrence());
-            }
+            // Unguarded: a row with no recurrence never reaches this loop any more, and a guard
+            // that cannot be false is what hid the one-shot schedule in the first place.
+            scheduler.setIntervalValue(jobDetailValidation.getRecurrence());
             ProcessTimeUtil.applyInitialSchedule(scheduler);
             scheduler.setJobId(sourceJob.getJobId());
             this.transactionService.saveOrUpdateScheduler(scheduler);

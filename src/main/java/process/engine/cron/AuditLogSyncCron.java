@@ -23,10 +23,15 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
  * @author Nabeel Ahmed
  * */
+/* Switched off with the rest of the scheduled work when process.scheduling.enabled is false --
+ * see ProcessCron. A test context has no business deleting history or syncing audit logs out of
+ * the shared database. Absent means enabled, so production is unchanged. */
+@ConditionalOnProperty(name = "process.scheduling.enabled", havingValue = "true", matchIfMissing = true)
 @Component
 public class AuditLogSyncCron {
 

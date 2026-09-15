@@ -16,6 +16,7 @@ import process.model.service.impl.TransactionServiceImpl;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.socket.NotificationService;
+import process.socket.JobEventPublisher;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.time.LocalDateTime;
@@ -33,12 +34,14 @@ public class BulkAction {
     private final TransactionServiceImpl transactionService;
     private final NotificationService notificationService;
     private final NotificationCenterService notificationCenterService;
+    private final JobEventPublisher jobEventPublisher;
 
     public BulkAction(TransactionServiceImpl transactionService, NotificationService notificationService,
-        NotificationCenterService notificationCenterService) {
+        NotificationCenterService notificationCenterService, JobEventPublisher jobEventPublisher) {
         this.transactionService = transactionService;
         this.notificationService = notificationService;
         this.notificationCenterService = notificationCenterService;
+        this.jobEventPublisher = jobEventPublisher;
     }
 
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
@@ -50,6 +53,27 @@ public class BulkAction {
         }
         sourceJob.get().setJobRunningStatus(jobStatus);
         this.transactionService.saveOrUpdateJob(sourceJob.get());
+        // Announced here rather than at each caller. Every transition the platform makes --
+        // Queue when a job is enqueued, Start when the engine picks it up, Interrupt, and the
+        // engine's own Failed -- passes through this one method, while only the external
+        // worker callback announced itself, through NotifyService. Publishing at the callers
+        // meant nine sites of which eight were silent, so a job sat at its old status until
+        // someone pressed Refresh; publishing here means the next caller added cannot forget.
+        //
+        // Unconditional, including a repeat of the status already held. Start -> Start and
+        // Running -> Running are legal transitions (see NotifyServiceImpl.isValidStatusTransition)
+        // because that is how a worker says it is still alive, and the jobs table advances its
+        // lastJobRun on each one. Suppressing repeats as "not a change" would therefore switch
+        // off the heartbeat and let a healthy long run be reported as stalled.
+        //
+        // After commit, because this class is @Transactional and the engine calls it inside
+        // longer units of work: announcing as the row is written announces it before it is
+        // durable, and a rollback then leaves every open jobs table showing a transition the
+        // database does not have.
+        if (jobStatus != null) {
+            this.jobEventPublisher.publishStatusAfterCommit(sourceJob.get().getTenantId(),
+                jobId, null, jobStatus.name(), null);
+        }
     }
 
     public void changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus) {

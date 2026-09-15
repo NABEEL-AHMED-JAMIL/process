@@ -76,3 +76,9 @@ databaseChangeLog:
       file: db/changelog/yaml/V33.0-analytics-benchmark.yaml
   - include:
       file: db/changelog/yaml/V34.0-analytics-workspace.yaml
+  - include:
+      file: db/changelog/yaml/V35.0-analytics-query-second-dataset.yaml
+  - include:
+      file: db/changelog/yaml/V36.0-select-choice-key-label.yaml
+  - include:
+      file: db/changelog/yaml/V37.0-scheduler-one-per-job.yaml

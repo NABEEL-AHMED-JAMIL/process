@@ -49,13 +49,13 @@ public class ApplicationPropertiesDeclarationTest {
         "analytics.preview.page-size",
         "analytics.duckdb.memory-limit",
         "analytics.duckdb.threads",
-        // The three switches and the sampling ceiling, here for the reason above turned around:
-        // a limit nobody declared is unlimited, and a SWITCH nobody declared is undiscoverable.
-        // An operator cannot turn analytics off in an incident, or stop a platform admin
-        // generating load, if the only record that the switch exists is an @Value default in a
-        // class they would have to already know to look at.
+        // The three switches, here for the reason above turned around: a limit nobody declared is
+        // unlimited, and a SWITCH nobody declared is undiscoverable. An operator cannot turn
+        // analytics off in an incident, or stop a platform admin generating load, if the only
+        // record that the switch exists is an @Value default in a class they would have to already
+        // know to look at. analytics.profile.sample-rows used to be in this list and is gone with
+        // the property: AnalyticsLimits carries the measurement that declined it.
         "analytics.enabled",
-        "analytics.profile.sample-rows",
         "analytics.benchmark.enabled",
         "analytics.parquet.conversion-enabled");
 

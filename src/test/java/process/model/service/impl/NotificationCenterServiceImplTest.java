@@ -41,6 +41,10 @@ import static org.mockito.Mockito.when;
  * not stand in for it: create() rebuilt a missing key with INCR, so an evicted key came back as
  * "1 unread" rather than as a recount.
  *
+ * markRead rebuilt a missing key the same careless way, with DECR, and that one was worse: DECR
+ * materialises the key at -1 and the clamp wrote "0" over it, so the badge read zero over a full
+ * mailbox and stayed there.
+ *
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
@@ -136,6 +140,7 @@ class NotificationCenterServiceImplTest {
     @Test
     void markReadReportsSuccessAndDropsTheBadgeWhenARowIsActuallyMarked() throws Exception {
         when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(1);
+        when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(true);
         when(this.valueOperations.decrement(MY_UNREAD_KEY)).thenReturn(47L);
 
         ResponseDto response = this.service.markRead(NOTIFICATION_ID);
@@ -145,18 +150,61 @@ class NotificationCenterServiceImplTest {
         verify(this.valueOperations).decrement(MY_UNREAD_KEY);
         // 47 is a legitimate count, so it must be left alone rather than clamped.
         verify(this.valueOperations, never()).set(MY_UNREAD_KEY, "0");
+        // The warm path stays a single DECR: no database count per mark-as-read.
+        verify(this.notificationRepository, never()).countByRecipientUserIdAndReadFalse(anyLong());
         verify(this.notificationRepository, never()).findById(anyLong());
     }
 
     @Test
     void markReadClampsABadgeThatDecrementedBelowZero() throws Exception {
         when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(1);
+        when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(true);
         when(this.valueOperations.decrement(MY_UNREAD_KEY)).thenReturn(-1L);
 
         ResponseDto response = this.service.markRead(NOTIFICATION_ID);
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
         verify(this.valueOperations).set(MY_UNREAD_KEY, "0");
+    }
+
+    @Test
+    void markReadRecountsFromTheDatabaseInsteadOfDecrementingABadgeThatIsNotThere() throws Exception {
+        // The mirror of the create() hole. DECR on a missing key creates it at -1, and the clamp
+        // then wrote "0" over that -- so the first mark-as-read after anything removed the key
+        // pinned the badge at zero over a mailbox still holding 48 unread rows, and unreadCount()
+        // served that zero straight back out of the cache.
+        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(1);
+        when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(false);
+        when(this.notificationRepository.countByRecipientUserIdAndReadFalse(ME)).thenReturn(48L);
+        when(this.valueOperations.setIfAbsent(MY_UNREAD_KEY, "48")).thenReturn(true);
+
+        ResponseDto response = this.service.markRead(NOTIFICATION_ID);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        verify(this.valueOperations).setIfAbsent(MY_UNREAD_KEY, "48");
+        // The recount runs inside this transaction and so already excludes the row just marked.
+        // Decrementing on top of it would undercount -- and decrementing a key that is not there
+        // is what created the badge at -1 to begin with.
+        verify(this.valueOperations, never()).decrement(MY_UNREAD_KEY);
+        verify(this.valueOperations, never()).set(MY_UNREAD_KEY, "0");
+    }
+
+    @Test
+    void markReadDecrementsAConcurrentlySeededBadgeRatherThanOverwritingIt() throws Exception {
+        // A create() racing this mark on a cold key. The winner's count was taken before this
+        // transaction committed, so it still counts this row as unread: the loser of setIfAbsent
+        // must decrement that value rather than replace it with its own.
+        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(1);
+        when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(false);
+        when(this.notificationRepository.countByRecipientUserIdAndReadFalse(ME)).thenReturn(48L);
+        when(this.valueOperations.setIfAbsent(MY_UNREAD_KEY, "48")).thenReturn(false);
+        when(this.valueOperations.decrement(MY_UNREAD_KEY)).thenReturn(48L);
+
+        ResponseDto response = this.service.markRead(NOTIFICATION_ID);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        verify(this.valueOperations).decrement(MY_UNREAD_KEY);
+        verify(this.valueOperations, never()).set(eq(MY_UNREAD_KEY), any());
     }
 
     @Test

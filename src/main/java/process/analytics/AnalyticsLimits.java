@@ -136,21 +136,34 @@ public class AnalyticsLimits {
     @Value("${analytics.query.max-concurrent:4}")
     private int maxConcurrentQueries;
 
-    /**
-     * The most rows a profile may read before it samples instead of scanning.
+    /*
+     * There is no analytics.profile.sample-rows, and this comment is what is left of it. A plain
+     * comment rather than javadoc on purpose: there is no field for it to document.
      *
-     * <b>Declared and not yet enforced, and saying so here is the point of declaring it.</b>
-     * profileOf runs SUMMARIZE over the whole relation and records a deliberate reason for not
-     * bounding the RESULT -- a profile missing columns says nothing at all -- which is a different
-     * decision from bounding the INPUT, and the second one was never made. Spec 14 asks for it, so
-     * the number lives here where the rest of the policy is, with the gap visible: on a gigabyte
-     * dataset a profile is a full scan today, once per request. Enforcing it means a TABLESAMPLE
-     * or a bounded subquery where the SUMMARIZE is composed, plus telling the user the profile is
-     * a sample -- a profile silently computed from 1,000,000 of 40,000,000 rows and presented as
-     * the truth is the same failure QueryResultDto.truncated exists to prevent.
+     * Document 14 asks for the profile's INPUT to be bounded. The number lived here, declared and
+     * enforced nowhere, with the gap written down beside it. Enforcing it was measured before it
+     * was decided, and the measurement says the property AS SPECIFIED cannot pay for itself. Two
+     * million rows x six columns of CSV (77 MB), duckdb_jdbc 1.1.3, threads=2, warm:
+     *
+     *   SUMMARIZE over the whole relation      396 ms
+     *   USING SAMPLE 200000 ROWS               374 ms   <- what "sample-rows" means
+     *   USING SAMPLE 10%                       203 ms
+     *   LIMIT 200000                           118 ms
+     *   SELECT count(*), for scale             115 ms
+     *
+     * A row-count sample is a RESERVOIR sample: it reads every row and keeps some. It saves 5% and
+     * buys a number that is no longer the truth. The 118 ms line is a first-N sample, fast because
+     * it stops reading -- and biased by whatever the file is ordered by, which for an exported
+     * dataset is usually a date. Neither is a profile worth showing, and the scan is only 115 ms of
+     * the 396: the cost is SUMMARIZE's aggregation, not the read the property would shorten.
+     *
+     * So the knob is gone rather than left switchable-and-inert. An operator who sets a property
+     * that does nothing has been told something false -- the same defect that made
+     * analytics.benchmark.enabled and analytics.parquet.conversion-enabled worth wiring up in this
+     * pass, and this one could not be wired up honestly. If it is ever wanted, the form that would
+     * work is the percentage sample, with DatasetProfileDto carrying the fact that it IS a sample
+     * and the Quality tab saying so. That is a feature, not a limit.
      */
-    @Value("${analytics.profile.sample-rows:1000000}")
-    private long profileSampleRows;
 
     /**
      * Whether the benchmark harness may be invoked.
@@ -210,16 +223,6 @@ public class AnalyticsLimits {
      */
     @Value("${analytics.history.retention-days:0}")
     private int historyRetentionDays;
-
-    /**
-     * How often the cleanup runs, in hours. Ignored entirely while retention is off.
-     *
-     * Six hours rather than nightly: a deletion that only ever runs at 3am never runs at all on a
-     * service that is restarted during the day, and this one is cheap -- one DELETE over the
-     * date_created half of idx_analytics_query_run_tenant_date.
-     */
-    @Value("${analytics.history.cleanup-interval-hours:6}")
-    private int historyCleanupIntervalHours = 6;
 
     /**
      * The shape DuckDB accepts for a size setting, and the shape this class refuses to hold.
@@ -296,10 +299,6 @@ public class AnalyticsLimits {
         return this.historyRetentionDays;
     }
 
-    public int getHistoryCleanupIntervalHours() {
-        return this.historyCleanupIntervalHours;
-    }
-
     public int getTimeoutSeconds() {
         return this.timeoutSeconds;
     }
@@ -314,10 +313,6 @@ public class AnalyticsLimits {
 
     public int getMaxConcurrentQueries() {
         return this.maxConcurrentQueries;
-    }
-
-    public long getProfileSampleRows() {
-        return this.profileSampleRows;
     }
 
     public boolean isBenchmarkEnabled() {

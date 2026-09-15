@@ -174,6 +174,18 @@ public class AnalyticsQueryRun implements Audited {
     @Column(name = "dataset_path", columnDefinition = "TEXT", nullable = false)
     private String datasetPath;
 
+    // The SECOND dataset, when the run read two files at once.
+    //
+    // This table's whole job is to answer "who read what", and it was answering with one location
+    // for a statement that read two -- not an incomplete answer but a wrong one, with nothing
+    // else on the row hinting a second file was involved. Null for the overwhelming majority of
+    // runs, which read one file.
+    @Column(name = "second_connection_alias")
+    private String secondConnectionAlias;
+
+    @Column(name = "second_dataset_path", columnDefinition = "TEXT")
+    private String secondDatasetPath;
+
     // As the caller submitted it, not as the engine rewrote it. The LIMIT the governor adds is
     // reconstructable from the configuration; what the person actually asked for is not
     // reconstructable from anything, and it is what makes a run re-runnable from history.
@@ -220,6 +232,16 @@ public class AnalyticsQueryRun implements Audited {
 
     public String getDatasetPath() { return datasetPath; }
     public void setDatasetPath(String datasetPath) { this.datasetPath = datasetPath; }
+
+    public String getSecondConnectionAlias() { return secondConnectionAlias; }
+    public void setSecondConnectionAlias(String secondConnectionAlias) {
+        this.secondConnectionAlias = secondConnectionAlias;
+    }
+
+    public String getSecondDatasetPath() { return secondDatasetPath; }
+    public void setSecondDatasetPath(String secondDatasetPath) {
+        this.secondDatasetPath = secondDatasetPath;
+    }
 
     public String getQueryText() { return queryText; }
     public void setQueryText(String queryText) { this.queryText = queryText; }

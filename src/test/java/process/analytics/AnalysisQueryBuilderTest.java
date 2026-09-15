@@ -436,6 +436,76 @@ class AnalysisQueryBuilderTest {
         assertThat(rows(plan).get(0)).containsExactly("1");
     }
 
+    /**
+     * A bucketed row shows the BUCKET, not a value the column holds.
+     *
+     * Grouping booked_on by MONTH displays 2024-03-01 for every row in March, so narrowing on that
+     * as an equality asked for midnight on the first of March and nothing else. Drilling into a
+     * month with forty thousand orders in it returned the handful booked at that exact instant --
+     * or none at all -- presented as the legitimate contents of March.
+     *
+     * The assertion is on the compiled SQL and its parameters rather than on the rows, because
+     * every row in this fixture happens to fall on the first of its month: an equality would return
+     * the same single row as the range, and a row count could not tell the fix from the defect.
+     */
+    @Test
+    void aDrillThroughABucketedDimensionNarrowsToTheWholeBucketAndNotToItsFirstInstant() throws Exception {
+        AnalysisRequest request = analysis(dimensions("booked_on"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(Collections.singletonList(AnalysisRequest.Grain.MONTH));
+        request.setDrillPath(new ArrayList<>(Collections.singletonList(
+            new AnalysisRequest.Drill("booked_on", "2024-03-01", "city"))));
+
+        AnalysisQueryBuilder.Plan plan = plan(request);
+
+        assertThat(plan.getSql()).contains("\"booked_on\" >= ? AND \"booked_on\" <= ?");
+        assertThat(plan.getSql()).doesNotContain("\"booked_on\" = ?");
+        assertThat(plan.getStatement().getParameters())
+            .containsExactly(LocalDate.of(2024, 3, 1), LocalDate.of(2024, 3, 31));
+        // March really is in there, which an equality on the bucket only managed by luck.
+        assertThat(rows(plan)).hasSize(1);
+    }
+
+    @Test
+    void everyGrainNarrowsToItsOwnBucketLength() throws Exception {
+        // The end of the bucket is the part that is easy to get wrong -- a quarter is three months
+        // and a year is 365 or 366 days, and both were a single day before this.
+        assertThat(bucketBounds(AnalysisRequest.Grain.DAY, "2024-03-14"))
+            .containsExactly(LocalDate.of(2024, 3, 14), LocalDate.of(2024, 3, 14));
+        assertThat(bucketBounds(AnalysisRequest.Grain.WEEK, "2024-03-11"))
+            .containsExactly(LocalDate.of(2024, 3, 11), LocalDate.of(2024, 3, 17));
+        assertThat(bucketBounds(AnalysisRequest.Grain.QUARTER, "2024-01-01"))
+            .containsExactly(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 3, 31));
+        assertThat(bucketBounds(AnalysisRequest.Grain.YEAR, "2024-01-01"))
+            .containsExactly(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31));
+        // A leap February, so the month end is read from the calendar and not from a table of 30s.
+        assertThat(bucketBounds(AnalysisRequest.Grain.MONTH, "2024-02-01"))
+            .containsExactly(LocalDate.of(2024, 2, 1), LocalDate.of(2024, 2, 29));
+    }
+
+    /** The two parameters a drill through one bucket of this grain compiles to. */
+    private List<Object> bucketBounds(AnalysisRequest.Grain grain, String bucketStart) throws Exception {
+        AnalysisRequest request = analysis(dimensions("booked_on"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(Collections.singletonList(grain));
+        request.setDrillPath(new ArrayList<>(Collections.singletonList(
+            new AnalysisRequest.Drill("booked_on", bucketStart, null))));
+        return plan(request).getStatement().getParameters();
+    }
+
+    @Test
+    void aBucketValueThatIsNotADateIsRefusedRatherThanNarrowedToSomethingElse() throws Exception {
+        AnalysisRequest request = analysis(dimensions("booked_on"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setGrains(Collections.singletonList(AnalysisRequest.Grain.MONTH));
+        request.setDrillPath(new ArrayList<>(Collections.singletonList(
+            new AnalysisRequest.Drill("booked_on", "not-a-date", null))));
+
+        assertThatThrownBy(() -> plan(request))
+            .isInstanceOf(AnalyticsException.class)
+            .hasMessageContaining("bucketed by month");
+    }
+
     @Test
     void aDrillIntoAGroupWithNoValueBecomesIsNullAndNotAnEqualityAgainstNothing() throws Exception {
         AnalysisRequest request = analysis(dimensions("region"),

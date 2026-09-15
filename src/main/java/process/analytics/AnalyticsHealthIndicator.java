@@ -98,9 +98,19 @@ public class AnalyticsHealthIndicator implements HealthIndicator {
      */
     private boolean schemaConfirmed;
 
-    public AnalyticsHealthIndicator(AnalyticsLimits limits, DataSource dataSource) {
+    /**
+     * The one registry every run registers in, read for the in-flight count and nothing else.
+     *
+     * The engine's own bean, so this is the count of runs actually holding or waiting for a
+     * permit rather than a second tally kept alongside it.
+     */
+    private final RunningQueries running;
+
+    public AnalyticsHealthIndicator(AnalyticsLimits limits, DataSource dataSource,
+        RunningQueries running) {
         this.limits = limits;
         this.dataSource = dataSource;
+        this.running = running;
     }
 
     @Override
@@ -230,6 +240,12 @@ public class AnalyticsHealthIndicator implements HealthIndicator {
         inForce.put("queryTimeoutSeconds", this.limits.getTimeoutSeconds());
         inForce.put("maxRows", this.limits.getMaxRows());
         inForce.put("maxConcurrentQueries", this.limits.getMaxConcurrentQueries());
+        // Beside the ceiling rather than anywhere else, because the pair is the answer and neither
+        // number is: four permits with four in flight is why a fifth query is waiting, and four
+        // permits with none in flight means the slowness is somewhere this endpoint cannot see.
+        // A ConcurrentHashMap size -- no lock, no permit, no query -- so a health poll cannot be
+        // the thing that makes analytics slow.
+        inForce.put("queriesInFlight", this.running.size());
         inForce.put("previewPageSize", this.limits.getPreviewPageSize());
         inForce.put("duckdbMemoryLimit", this.limits.getMemoryLimit());
         inForce.put("duckdbThreads", this.limits.getThreads());

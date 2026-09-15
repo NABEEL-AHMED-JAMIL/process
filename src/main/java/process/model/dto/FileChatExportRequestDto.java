@@ -14,6 +14,10 @@ public class FileChatExportRequestDto {
     private String content;
     private String sourceFormat;
     private String targetFormat;
+    /** Set only when the reader asked for the export to be emailed rather than downloaded. */
+    private String recipientEmail;
+    /** A line the sender types to go in the body. Optional. */
+    private String message;
 
     public FileChatExportRequestDto() {}
 
@@ -35,6 +39,22 @@ public class FileChatExportRequestDto {
 
     public String getTargetFormat() {
         return targetFormat;
+    }
+
+    public String getRecipientEmail() {
+        return recipientEmail;
+    }
+
+    public void setRecipientEmail(String recipientEmail) {
+        this.recipientEmail = recipientEmail;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 
     public void setTargetFormat(String targetFormat) {

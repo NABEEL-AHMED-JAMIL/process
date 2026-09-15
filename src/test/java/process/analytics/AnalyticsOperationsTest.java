@@ -10,6 +10,7 @@ import org.springframework.context.annotation.ClassPathScanningCandidateComponen
 import org.springframework.core.type.filter.AssignableTypeFilter;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.test.util.ReflectionTestUtils;
+import process.security.TenantContext;
 
 import javax.sql.DataSource;
 import java.io.IOException;
@@ -84,8 +85,6 @@ class AnalyticsOperationsTest {
                 .isEqualTo("100000");
             assertThat(defaultOf(properties, "analytics.query.max-concurrent")).as(profile)
                 .isEqualTo("4");
-            assertThat(defaultOf(properties, "analytics.profile.sample-rows")).as(profile)
-                .isEqualTo("1000000");
             assertThat(defaultOf(properties, "analytics.benchmark.enabled")).as(profile)
                 .isEqualTo("true");
             assertThat(defaultOf(properties, "analytics.parquet.conversion-enabled")).as(profile)
@@ -262,7 +261,7 @@ class AnalyticsOperationsTest {
         AnalyticsLimits limits = new AnalyticsLimits();
         ReflectionTestUtils.setField(limits, "enabled", false);
 
-        Health health = new AnalyticsHealthIndicator(limits, dataSource).health();
+        Health health = new AnalyticsHealthIndicator(limits, dataSource, new RunningQueries()).health();
 
         assertThat(health.getStatus()).isEqualTo(Status.UP);
         assertThat(health.getDetails()).containsEntry("enabled", false)
@@ -273,7 +272,7 @@ class AnalyticsOperationsTest {
     /** Storage is never reached from here, and the detail says why rather than claiming a pass. */
     @Test
     void storageIsReportedAsNotProbedRatherThanAsHealthy() throws SQLException {
-        Health health = new AnalyticsHealthIndicator(readyLimits(), readyDataSource()).health();
+        Health health = new AnalyticsHealthIndicator(readyLimits(), readyDataSource(), new RunningQueries()).health();
 
         assertThat(String.valueOf(health.getDetails().get("storage")))
             .contains("not probed")
@@ -285,7 +284,7 @@ class AnalyticsOperationsTest {
 
     @Test
     void aHealthyDeploymentReportsReady() throws SQLException {
-        Health health = new AnalyticsHealthIndicator(readyLimits(), readyDataSource()).health();
+        Health health = new AnalyticsHealthIndicator(readyLimits(), readyDataSource(), new RunningQueries()).health();
 
         assertThat(health.getStatus()).isEqualTo(Status.UP);
         assertThat(health.getDetails()).containsEntry("state", "ready");
@@ -303,7 +302,7 @@ class AnalyticsOperationsTest {
      */
     @Test
     void theLimitsInForceAreReportedBecauseActuatorEnvIsNot() throws SQLException {
-        Health health = new AnalyticsHealthIndicator(readyLimits(), readyDataSource()).health();
+        Health health = new AnalyticsHealthIndicator(readyLimits(), readyDataSource(), new RunningQueries()).health();
 
         @SuppressWarnings("unchecked")
         Map<String, Object> inForce = (Map<String, Object>) health.getDetails().get("limits");
@@ -311,6 +310,46 @@ class AnalyticsOperationsTest {
             .containsEntry("queryTimeoutSeconds", 120)
             .containsEntry("maxConcurrentQueries", 4)
             .containsEntry("duckdbMemoryLimit", "512MB");
+    }
+
+    /**
+     * The ceiling alone never answered "why is my query waiting".
+     *
+     * max-concurrent says four permits exist; it does not say whether four are held. An operator
+     * looking at a slow Studio has to tell "the governor is full" from "the governor is idle and
+     * the slowness is somewhere else", and those are the same picture without this number. The
+     * count existed -- RunningQueries.size() -- reachable only through a facade method no caller
+     * ever used, so the one place that wanted it read nothing.
+     */
+    @Test
+    void theInFlightCountIsReportedBesideTheCeilingItIsMeasuredAgainst() throws Exception {
+        RunningQueries running = new RunningQueries();
+        TenantContext.set(11L, "TENANT_USER", 22L, "analyst");
+        try {
+            RunningQueries.Handle held = running.open("in-flight-1");
+            try {
+                Health busy = new AnalyticsHealthIndicator(readyLimits(), readyDataSource(),
+                    running).health();
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> inForce = (Map<String, Object>) busy.getDetails().get("limits");
+                assertThat(inForce).containsEntry("maxConcurrentQueries", 4)
+                    .containsEntry("queriesInFlight", 1);
+            } finally {
+                held.close();
+            }
+
+            Health idle = new AnalyticsHealthIndicator(readyLimits(), readyDataSource(),
+                running).health();
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> after = (Map<String, Object>) idle.getDetails().get("limits");
+            // The second half is what makes the first mean anything: a report that always said 1
+            // would pass the assertion above and tell an operator nothing.
+            assertThat(after).containsEntry("queriesInFlight", 0);
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     /**
@@ -326,7 +365,7 @@ class AnalyticsOperationsTest {
         DataSource dataSource = mock(DataSource.class);
         when(dataSource.getConnection()).thenThrow(new SQLException("connection pool exhausted"));
 
-        Health health = new AnalyticsHealthIndicator(readyLimits(), dataSource).health();
+        Health health = new AnalyticsHealthIndicator(readyLimits(), dataSource, new RunningQueries()).health();
 
         assertThat(health.getStatus()).isEqualTo(Status.UP);
         assertThat(health.getDetails()).containsEntry("state", "degraded");
@@ -344,7 +383,7 @@ class AnalyticsOperationsTest {
     void aDatabaseWithoutTheAnalyticsTablesNamesTheMissingMigration() throws SQLException {
         DataSource dataSource = dataSourceWhereTablesExist(false);
 
-        Health health = new AnalyticsHealthIndicator(readyLimits(), dataSource).health();
+        Health health = new AnalyticsHealthIndicator(readyLimits(), dataSource, new RunningQueries()).health();
 
         assertThat(health.getDetails()).containsEntry("state", "degraded");
         assertThat(health.getDetails().get("findings").toString())
@@ -363,7 +402,7 @@ class AnalyticsOperationsTest {
     @Test
     void theSchemaCheckIsNotRepeatedOncePassed() throws SQLException {
         DataSource dataSource = dataSourceWhereTablesExist(true);
-        AnalyticsHealthIndicator indicator = new AnalyticsHealthIndicator(readyLimits(), dataSource);
+        AnalyticsHealthIndicator indicator = new AnalyticsHealthIndicator(readyLimits(), dataSource, new RunningQueries());
 
         indicator.health();
         indicator.health();

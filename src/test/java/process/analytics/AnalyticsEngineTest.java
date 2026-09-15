@@ -341,6 +341,80 @@ class AnalyticsEngineTest {
     }
 
     @Test
+    void theRegistryEmptiesAfterEveryWayARunCanEnd() throws Exception {
+        // RunningQueries.size() says it exists for this assertion, and until now no such assertion
+        // existed -- the method was reached only through an AnalyticsQueryService.runningCount()
+        // that nothing called. A registry that leaks is this class's most likely defect and its
+        // least visible one: every query still answers correctly while the map grows, until a run
+        // id collides with a dead entry and a user is told their query is "already running".
+        //
+        // Every terminal path in one test on purpose. The success path is the one anybody would
+        // write; the leak, if there is one, is on an error path where the close is not in a
+        // finally.
+        this.engine.query(this.sales, null, "SELECT * FROM dataset", "completed-1");
+        assertThat(this.running.size()).as("after a query that completed").isZero();
+
+        catchThrowableOfType(() -> this.engine.query(this.sales, null, "DROP TABLE dataset",
+            "refused-1"), AnalyticsException.class);
+        assertThat(this.running.size()).as("after a statement the gate refused").isZero();
+
+        catchThrowableOfType(() -> this.engine.query(this.sales, null,
+            "SELECT missing_column FROM dataset", "failed-1"), AnalyticsEngine.RunFailure.class);
+        assertThat(this.running.size()).as("after a query that failed inside the engine").isZero();
+
+        catchThrowableOfType(() -> this.engine.query(this.sales, null, "SELECT * FROM dataset",
+            "not a valid id"), AnalyticsException.class);
+        assertThat(this.running.size()).as("after a run id that was refused").isZero();
+
+        // And the proof that the assertions above could fail: the same names are free again. If
+        // any run had leaked, its id would still be taken and this would throw "already running".
+        this.engine.query(this.sales, null, "SELECT * FROM dataset", "completed-1");
+        this.engine.query(this.sales, null, "SELECT * FROM dataset", "failed-1");
+        assertThat(this.running.size()).isZero();
+    }
+
+    /**
+     * A query that asks for the second dataset when none was given is refused in WORDS.
+     *
+     * What this replaces: DuckDB answered "Catalog Error: Table with name dataset2 does not
+     * exist!" -- an engine-internal sentence naming a view the reader never created and cannot
+     * look up. A dashboard tile over a saved join displayed exactly that, permanently, and it
+     * pointed at nothing a person could act on. The gate cannot catch this and should not:
+     * readsOnlyWhatItWasGiven checks that every relation is a bare NAME rather than a location,
+     * which dataset2 is. Whether that name has been REGISTERED is a fact about this run.
+     */
+    @Test
+    void aQueryNamingTheSecondDatasetWithNoneGivenIsRefusedInWords() {
+        AnalyticsException refused = catchThrowableOfType(
+            () -> this.engine.query(this.sales, null,
+                "SELECT * FROM dataset JOIN dataset2 ON 1 = 1", "join-1"),
+            AnalyticsException.class);
+
+        assertThat(refused).isNotNull();
+        assertThat(refused.getMessage())
+            .contains("no second dataset was given")
+            .doesNotContain("Catalog Error");
+        // A plain AnalyticsException and NOT a RunFailure, which is how the controller knows to
+        // record this as REFUSED rather than as a query that ran and broke.
+        assertThat(refused).isNotInstanceOf(AnalyticsEngine.RunFailure.class);
+    }
+
+    /**
+     * And a column that merely SPELLS like the second dataset still runs.
+     *
+     * The positive control for the refusal above. A check written with contains() rather than a
+     * word boundary would refuse this, and refusing a valid query is the worse failure of the
+     * two: the reader has done nothing wrong and there is nothing to fix.
+     */
+    @Test
+    void aColumnNamedLikeTheSecondDatasetIsNotMistakenForIt() throws Exception {
+        QueryResultDto result = this.engine.query(this.sales, null,
+            "SELECT 1 AS dataset2_id FROM dataset", "not-a-join-1");
+
+        assertThat(result.getStatus()).isEqualTo(AnalyticsEngine.RunState.COMPLETED.name());
+    }
+
+    @Test
     void aStatementTheGateWillNotAdmitIsStillRefusedAndIsNotAnEngineFailure() {
         AnalyticsException refused = catchThrowableOfType(
             () -> this.engine.query(this.sales, null, "DROP TABLE dataset"),

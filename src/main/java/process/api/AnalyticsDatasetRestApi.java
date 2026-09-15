@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import process.analytics.AnalyticsException;
 import process.analytics.AnalyticsLimits;
 import process.model.dto.ResponseDto;
 import process.model.pojo.AnalyticsDataset;
@@ -77,6 +78,16 @@ public class AnalyticsDatasetRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsDatasetService.fetchAllDatasets(), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while fetchAllDatasets ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -89,6 +100,16 @@ public class AnalyticsDatasetRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsDatasetService.fetchDatasetById(analyticsDatasetId), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while fetchDatasetById ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -108,6 +129,16 @@ public class AnalyticsDatasetRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsDatasetService.registerDataset(analyticsDataset), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while registerDataset ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -120,6 +151,16 @@ public class AnalyticsDatasetRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsDatasetService.deleteDataset(analyticsDatasetId), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while deleteDataset ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,

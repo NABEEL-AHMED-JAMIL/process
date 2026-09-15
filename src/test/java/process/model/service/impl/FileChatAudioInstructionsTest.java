@@ -48,6 +48,8 @@ class FileChatAudioInstructionsTest {
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
+    // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
+    @Mock private process.model.service.FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -55,7 +57,7 @@ class FileChatAudioInstructionsTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, this.fileShareService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("ETL", BUCKET, "MINIO")));
@@ -109,6 +111,46 @@ class FileChatAudioInstructionsTest {
             .doesNotContain("```csv");
     }
 
+    /**
+     * A two-hour recording transcribes to far more than a local Ollama agent's 24,000-character
+     * budget, so resolveContext hands the audio prompt a transcript that stops partway through.
+     * The audio prompt used to append that content between its transcript markers with nothing to
+     * say so, while also instructing the model to ground every answer strictly in the transcript
+     * and never to hedge on something it covers. Asked whether a date for the migration was agreed
+     * -- said in the last twenty minutes -- the model reported that the recording does not cover
+     * it, in the same confident voice it uses for the opening minutes, as though that were a fact
+     * about the meeting rather than about where the transcript was cut.
+     */
+    @Test
+    void aTruncatedTranscriptSaysSoRatherThanReadingAsTheWholeRecording() throws Exception {
+        lenient().when(this.fileChatExtractionService.extractText(BUCKET, KEY, ETAG))
+            .thenReturn(longTranscript());
+
+        ResponseDto response = this.service.sendMessage(
+            this.request("Did they agree a date for the migration?"));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        ArgumentCaptor<AdHocPromptRequestDto> captor = ArgumentCaptor.forClass(AdHocPromptRequestDto.class);
+        verify(this.aiAgentService).processAdHoc(captor.capture());
+        assertThat(captor.getValue().getInstructions())
+            .as("the audio prompt must carry the same truncation note the document prompt does -- "
+                + "the model is told to answer anything the transcript covers, so it has to be "
+                + "told the transcript stops early")
+            .contains("--- AUDIO TRANSCRIPT ---")
+            .contains("[content truncated");
+    }
+
+    /** The converse, so the note is not simply stapled on unconditionally. */
+    @Test
+    void aTranscriptThatFitsCarriesNoTruncationNote() throws Exception {
+        ResponseDto response = this.service.sendMessage(this.request("What's this voicemail about?"));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        ArgumentCaptor<AdHocPromptRequestDto> captor = ArgumentCaptor.forClass(AdHocPromptRequestDto.class);
+        verify(this.aiAgentService).processAdHoc(captor.capture());
+        assertThat(captor.getValue().getInstructions()).doesNotContain("[content truncated");
+    }
+
     @Test
     void audioInstructionsStillCarryTheTranscriptAndTheAgentsOwnInstructions() throws Exception {
         ResponseDto response = this.service.sendMessage(this.request("What's this voicemail about?"));
@@ -119,5 +161,14 @@ class FileChatAudioInstructionsTest {
         assertThat(captor.getValue().getInstructions())
             .contains("transcribe and summarize voicemails")
             .contains("rescheduling tomorrow's meeting to 3pm");
+    }
+
+    /** Comfortably past Ollama's 24,000-character budget, so resolveContext really does cut it. */
+    private static String longTranscript() {
+        StringBuilder sb = new StringBuilder();
+        while (sb.length() < 30000) {
+            sb.append("And then somebody said something else worth transcribing at length. ");
+        }
+        return sb.toString();
     }
 }

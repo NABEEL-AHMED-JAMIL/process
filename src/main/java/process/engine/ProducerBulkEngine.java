@@ -70,7 +70,19 @@ public class ProducerBulkEngine {
             scheduler.getNextRunAt(), JobStatus.Skip, "Job %s skip, by user action.", true);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, by user action.", scheduler.getJobId()));
 
-        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
+        /*
+         * The live event, but not a fresh outcome announcement.
+         *
+         * The one-argument overload means "a new outcome transition just happened", and
+         * notifyJobOutcome then reads source_job.job_running_status to decide what to announce.
+         * A skip changes no such thing: it writes a Skip row against the run that was due and
+         * leaves the job's running status holding the PREVIOUS run's outcome. So skipping a job
+         * whose last run had finished raised a second "Job completed -- <name> finished
+         * successfully." in the notification centre, and skipping one whose last run had failed
+         * raised a second "Job failed", each dated to the moment the operator chose NOT to run
+         * it. The browser still needs the state push, which is what the other argument keeps.
+         */
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), false);
         Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(jobQueue.getJobId());
         if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
             this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
@@ -118,9 +130,15 @@ public class ProducerBulkEngine {
                         + "have finished the work -- check the output before running it again.",
                         jobQueue.getJobId(), STALLED_AFTER_MINUTES / 60));
                     this.transactionService.saveJobQueue(jobQueue);
-                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
-                        "Run closed automatically: no update from the worker since %s.",
-                        jobQueue.getStartTime()));
+                    // Quote the time it actually has. A run that was never dispatched has no
+                    // start_time, and "no update since null" reads as "we lost track of it" when
+                    // what happened is "it was never picked up" -- two different incidents, told
+                    // apart here or nowhere.
+                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getStartTime() != null
+                        ? String.format("Run closed automatically: no update from the worker since %s.",
+                            jobQueue.getStartTime())
+                        : String.format("Run closed automatically: queued at %s and never picked up.",
+                            jobQueue.getDateCreated()));
                     // The job carries its own copy of the running status, and that is what the
                     // console shows. Closing the queue row alone leaves the job reading Start for
                     // ever -- the same symptom, one table across. Only clear it once the job has
@@ -152,6 +170,10 @@ public class ProducerBulkEngine {
                         try {
                             Thread.sleep(50);
                             JobQueue jobQueue;
+                            // Whether this pass moved the job's own running status. The skip
+                            // branch does not, and the announcement below reads that status to
+                            // decide what to say -- see skipManualJobInQueue for the full story.
+                            boolean jobStatusMoved;
                             if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
 
                                 jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
@@ -160,15 +182,17 @@ public class ProducerBulkEngine {
                                 if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
                                     this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
                                 }
+                                jobStatusMoved = false;
                             } else {
                                 this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
                                 jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
                                 this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
                                 this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
+                                jobStatusMoved = true;
                             }
 
                             this.bulkAction.updateNextScheduler(scheduler);
-                            this.bulkAction.sendJobStatusNotification(scheduler.getJobId());
+                            this.bulkAction.sendJobStatusNotification(scheduler.getJobId(), jobStatusMoved);
                         } catch (Exception ex) {
                             logger.error("Error in addJobInQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
                         }
@@ -181,11 +205,50 @@ public class ProducerBulkEngine {
         }
     }
 
+    /**
+     * How many queued rows one dispatch pass takes when QUEUE_FETCH_LIMIT cannot be read.
+     *
+     * The same order of magnitude as the value that ships, so a fallback pass behaves like a
+     * normal one rather than either stalling the queue or trying to drain it in a single tick.
+     */
+    private static final long DEFAULT_QUEUE_FETCH_LIMIT = 1000L;
+
+    /**
+     * The dispatch batch size, from the lookup, defensively.
+     *
+     * This was `Long.valueOf(lookupData.getLookupValue())` with no null check and no parse guard,
+     * inside a method-wide catch. Anything that made it throw stopped job dispatch platform-wide
+     * and said so in exactly one server-log line: a value typed as "5,000", a trailing space, the
+     * lookup renamed, or -- the easy one -- the row's "Store encrypted" box ticked, which stores
+     * ciphertext that nothing here decrypts and then serves the value back masked. With dispatch
+     * dead, every job_queue row stayed in Queue, and because the dispatcher counts Queue rows when
+     * deciding whether a job is busy, every later slot for every job was recorded as "skip,
+     * already in queue". Nothing on screen connected any of that to a lookup value.
+     *
+     * A misconfigured dial should not be able to stop the platform: say so loudly, once per pass,
+     * and carry on at a sane rate.
+     */
+    private long resolveQueueFetchLimit() {
+        LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT);
+        if (isNull(lookupData) || isNull(lookupData.getLookupValue())) {
+            logger.warn("Lookup {} is missing; dispatching {} rows this pass. Restore the setting.",
+                ProcessUtil.QUEUE_FETCH_LIMIT, DEFAULT_QUEUE_FETCH_LIMIT);
+            return DEFAULT_QUEUE_FETCH_LIMIT;
+        }
+        Long limit = ProcessUtil.parseLongOrNull(lookupData.getLookupValue());
+        if (limit == null || limit < 1L) {
+            logger.warn("Lookup {} is not a positive whole number, so it cannot be used as a fetch "
+                + "limit; dispatching {} rows this pass. Fix the setting on /settings/lookup.",
+                ProcessUtil.QUEUE_FETCH_LIMIT, DEFAULT_QUEUE_FETCH_LIMIT);
+            return DEFAULT_QUEUE_FETCH_LIMIT;
+        }
+        return limit;
+    }
+
     public void startJobInCurrentTimeSlot() {
         try {
             logger.info("runJobInCurrentTimeSlot --> FETCH JobQueue of current day STARTED ");
-            LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT);
-            List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(Long.valueOf(lookupData.getLookupValue()));
+            List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(this.resolveQueueFetchLimit());
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
                 // The lock this runs under lasts ten minutes, and the loop sleeps 100ms per job:
@@ -209,7 +272,8 @@ public class ProducerBulkEngine {
                         if (sourceJob.isPresent()) {
                             this.pushMessageToQueue(sourceJob.get(), jobQueue);
                         } else {
-                            this.changeStatusForLastJob(jobQueue, "Job %s failed in the queue because the main job is deleted or inactive.");
+                            this.changeStatusForLastJob(jobQueue, String.format(
+                                "Job %s failed in the queue because the main job is deleted or inactive.", jobQueue.getJobId()));
                         }
                         dispatched++;
                     } catch (Exception ex) {
@@ -226,50 +290,74 @@ public class ProducerBulkEngine {
 
     private void pushMessageToQueue(SourceJob sourceJob, JobQueue jobQueue) throws Exception {
         SourceTask sourceTask = sourceJob.getTaskDetail();
-        if (!isNull(sourceTask.getSourceTaskType())) {
-            try {
-                SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
-                if (sourceTaskType.getStatus().equals(Status.Active)) {
-                    String queueTopicPartition = sourceTaskType.getQueueTopicPartition();
-                    Optional<KafkaTopicPartitionUtil.Parsed> parsed = KafkaTopicPartitionUtil.parse(queueTopicPartition);
-                    if (parsed.isPresent()) {
-                        String topic = parsed.get().getTopic();
-                        String partition = parsed.get().getPartition();
+        /*
+         * A run that cannot be dispatched has to be closed, not abandoned.
+         *
+         * The whole body below used to sit inside the task-type check with no else, and the task
+         * itself was dereferenced unguarded -- while SourceJobServiceImpl guards both of exactly
+         * these fields before reading them. So a queue row whose job had no task, or a task with
+         * no task type, fell off the end of this method having changed no status, written no audit
+         * line and sent no notification. It then stayed in Queue for ever, at the head of a capped
+         * fetch, and because getCountForInQueueJobByJobId counts Queue rows the job was treated as
+         * permanently busy: every later slot became "skip, already in queue". Nothing recovers it
+         * either -- reconcileStalledRuns only looks at Start and Running, and both Run now and
+         * Skip next refuse a job whose running status is Queue -- so only direct SQL got it back.
+         */
+        if (isNull(sourceTask)) {
+            this.changeStatusForLastJob(jobQueue, String.format(
+                "Job %s has no task attached, so there is nothing to dispatch.", jobQueue.getJobId()));
+            return;
+        }
+        if (isNull(sourceTask.getSourceTaskType())) {
+            this.changeStatusForLastJob(jobQueue, String.format(
+                "Job %s has no task type configured, so there is no broker to dispatch it to.", jobQueue.getJobId()));
+            return;
+        }
+        try {
+            SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
+            if (sourceTaskType.getStatus().equals(Status.Active)) {
+                String queueTopicPartition = sourceTaskType.getQueueTopicPartition();
+                Optional<KafkaTopicPartitionUtil.Parsed> parsed = KafkaTopicPartitionUtil.parse(queueTopicPartition);
+                if (parsed.isPresent()) {
+                    String topic = parsed.get().getTopic();
+                    String partition = parsed.get().getPartition();
 
-                        String key = UUID.randomUUID().toString();
-                        String payload = this.getSourceJobDetail(sourceJob, jobQueue);
-                        try {
+                    String key = UUID.randomUUID().toString();
+                    String payload = this.getSourceJobDetail(sourceJob, jobQueue);
+                    try {
 
-                            KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
-                                this.kafkaConnectionResolver.resolve(sourceJob.getTenantId(), sourceTaskType.getSourceTaskTypeId()));
-                            if (partition.contains(ProcessUtil.START)) {
-                                template.send(topic, key, payload)
-                                    .addCallback(
-                                        result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
-                                        ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
-                                    );
-                            } else {
-                                template.send(topic, Integer.valueOf(partition), key, payload)
-                                    .addCallback(
-                                        result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
-                                        ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
-                                    );
-                            }
-                        } catch (Exception ex) {
-                            logger.error("Unexpected exception while sending message=[{}]: {}", payload, ex.getMessage());
-                            handleSendFailure(ex, payload, sourceJob, jobQueue);
+                        KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
+                            this.kafkaConnectionResolver.resolve(sourceJob.getTenantId(), sourceTaskType.getSourceTaskTypeId()));
+                        if (partition.contains(ProcessUtil.START)) {
+                            template.send(topic, key, payload)
+                                .addCallback(
+                                    result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
+                                    ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
+                                );
+                        } else {
+                            template.send(topic, Integer.valueOf(partition), key, payload)
+                                .addCallback(
+                                    result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
+                                    ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
+                                );
                         }
-                        return;
+                    } catch (Exception ex) {
+                        logger.error("Unexpected exception while sending message=[{}]: {}", payload, ex.getMessage());
+                        handleSendFailure(ex, payload, sourceJob, jobQueue);
                     }
-                    logger.error("Regex does not match.");
-                    this.changeStatusForLastJob(jobQueue, "Broker configuration is invalid for job %s: " + queueTopicPartition);
                     return;
                 }
-                this.changeStatusForLastJob(jobQueue, "Broker is not active for job %s.");
-            } catch (Exception ex) {
-                this.changeStatusForLastJob(jobQueue, "Broker is not active for job %s.");
-                logger.error("Error in pushMessageToQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
+                logger.error("Regex does not match.");
+                // The configured value is an argument, not part of the format string: it is typed
+                // by an operator and a '%' in it would otherwise be read as a conversion.
+                this.changeStatusForLastJob(jobQueue, String.format(
+                    "Broker configuration is invalid for job %s: %s", jobQueue.getJobId(), queueTopicPartition));
+                return;
             }
+            this.changeStatusForLastJob(jobQueue, String.format("Broker is not active for job %s.", jobQueue.getJobId()));
+        } catch (Exception ex) {
+            this.changeStatusForLastJob(jobQueue, String.format("Broker is not active for job %s.", jobQueue.getJobId()));
+            logger.error("Error in pushMessageToQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 
@@ -279,11 +367,16 @@ public class ProducerBulkEngine {
 
         jobQueue.setJobSend(true);
         jobQueue.setJobStatus(JobStatus.Start);
-        jobQueue.setJobStatusMessage("Sent message=[" + payload + "] with offset=[" + offset + "]");
+        // The payload is NOT in here. jobStatusMessage is what the Recent runs list and the job
+        // row put in front of a person, and a run's whole task XML -- four hundred characters of
+        // escaped markup -- pushed everything worth reading off the end of the line. It is already
+        // written to the application log a line above, which is where a payload belongs.
+        jobQueue.setJobStatusMessage("Handed to the worker queue at offset " + offset + ".");
         this.transactionService.updateJobQueue(jobQueue);
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Start);
 
-        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s sent message=[%s] with offset=[%s]", sourceJob.getJobId(), payload, offset));
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
+            "Job %s handed to the worker queue at offset %s.", sourceJob.getJobId(), offset));
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
     }
 
@@ -291,16 +384,61 @@ public class ProducerBulkEngine {
         logger.error("Unable to send message=[{}] due to: {}", payload, ex.getMessage());
 
         jobQueue.setJobSend(false);
-        jobQueue.setJobStatusMessage("Unable to send message=[" + payload + "] due to: " + ex.getMessage());
+        // Reason first and payload nowhere. This read "Job 2417 unable to send message=[{...four
+        // hundred characters of escaped task XML...}] due to: Failed to construct kafka producer",
+        // so the only part anyone needs -- why it failed -- sat past the end of a two-line clamp
+        // and was reachable solely by hovering for the title attribute. The payload is logged
+        // immediately above.
+        String reason = reasonFor(ex);
+        jobQueue.setJobStatusMessage("Could not hand this run to the worker queue: " + reason);
 
-        this.changeStatusForLastJob(jobQueue, String.format("Job %s unable to send message=[%s] due to: %s", sourceJob.getJobId(), payload, ex.getMessage()));
+        this.changeStatusForLastJob(jobQueue, String.format(
+            "Job %s could not be handed to the worker queue: %s", sourceJob.getJobId(), reason));
     }
 
-    private void changeStatusForLastJob(JobQueue jobQueue, String message) {
-        String formattedMessage = String.format(message, jobQueue.getJobId());
+    /**
+     * A failure as a sentence someone can act on, rather than as a stack trace's toString.
+     *
+     * The root cause carries the useful sentence: a Kafka send failure arrives wrapped, and the
+     * outer message is routinely less specific than the thing that actually went wrong. Taken as
+     * getMessage() rather than toString() because toString() prefixes the fully-qualified class
+     * name, and "org.apache.kafka.common.KafkaException: Failed to construct kafka producer" tells
+     * a person nothing the second half does not.
+     *
+     * Falls back to the class's simple name when the root cause carries no message at all, so the
+     * status line never reads "Could not hand this run to the worker queue: null".
+     */
+    private static String reasonFor(Throwable ex) {
+        Throwable root = ex;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        return message == null || message.trim().isEmpty()
+            ? root.getClass().getSimpleName()
+            : message.trim();
+    }
+
+    /**
+     * Closes a run as Failed with the reason already written out.
+     *
+     * The reason arrives finished, and is written down as given. This used to take a template and
+     * run String.format over it with the job id, which worked for the callers that hand it a
+     * literal with one %s in it and was a trap for the two that do not. handleSendFailure builds
+     * its message first, because it has the payload and the broker's own error to put in it, and
+     * that payload is the task's XML -- so a single literal '%' anywhere in a task payload (a
+     * percentage in a report parameter is enough) made String.format throw
+     * UnknownFormatConversionException from the first line of the one method whose job is to
+     * record why a run failed. The throw escaped through the callback into Kafka's listener, so
+     * the status was never changed, no audit line was written and no notification was sent: the
+     * run stayed in Queue with no reason recorded, exactly when the reason was the thing needed.
+     * The invalid-broker caller had the same shape, concatenating an operator-typed
+     * topic:partition string into the template.
+     */
+    private void changeStatusForLastJob(JobQueue jobQueue, String statusMessage) {
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
-        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, formattedMessage);
-        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), formattedMessage);
+        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), statusMessage);
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
         Optional<SourceJob> sourceJobForFailMail = this.transactionService.findByJobId(jobQueue.getJobId());

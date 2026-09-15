@@ -34,6 +34,29 @@ public class MessageQServiceImpl implements MessageQService {
     private final String AUDIT_LOG = "AUDIT_LOG";
     private final String QUEUE_DETAIL = "QUEUE_DETAIL";
 
+    /**
+     * The statuses a run can be forced out of by hand.
+     *
+     * These are the three the platform treats as occupying the queue: it is the set
+     * getCountForInQueueJobByJobId counts when deciding a job is already busy, the set
+     * findStalledRuns sweeps, and the set the queue screen's own inFlight() enables its Actions
+     * menu for. failJobLogs accepted only Queue, so 'Mark as failed' -- which the screen offers on
+     * all three -- came back "Only 'In Queue' Job can be fail." for precisely the runs an operator
+     * needs it for: the ones sitting in Start or Running behind a worker that is never going to
+     * report. 'Mark as interrupted' beside it, which has no status check at all, worked, so the
+     * two neighbouring buttons disagreed about the same row.
+     *
+     * Forcing an in-flight run to Failed is a deliberate, confirmed operator action and is not the
+     * judgement reconcileStalledRuns declines to make: that sweep runs unattended and cannot know
+     * what a silent worker managed, which is why it settles for Interrupt. A person who has looked
+     * at the run can say it failed, and the screen offers both words so they can say which.
+     *
+     * Terminal statuses stay refused -- re-failing a Completed or Skipped run would rewrite
+     * history that something already recorded correctly.
+     */
+    private static final List<JobStatus> IN_FLIGHT_STATUSES =
+        Arrays.asList(JobStatus.Queue, JobStatus.Start, JobStatus.Running);
+
     private final BulkAction bulkAction;
     private final QueryService queryService;
     private final JobQueueRepository jobQueueRepository;
@@ -146,8 +169,8 @@ public class MessageQServiceImpl implements MessageQService {
             return new ResponseDto(ERROR, "JobQueue not found");
         }
         if (jobQueue.isPresent()) {
-            if (!jobQueue.get().getJobStatus().equals(JobStatus.Queue)) {
-                return new ResponseDto(ERROR, "Only 'In Queue' Job can be fail.", jobQId);
+            if (!IN_FLIGHT_STATUSES.contains(jobQueue.get().getJobStatus())) {
+                return new ResponseDto(ERROR, "Only a run still in flight ('Queue', 'Start', 'Running') can be failed.", jobQId);
             }
             String failMessage = String.format("Job %s fail by manual.", jobQueue.get().getJobId());
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
@@ -156,7 +179,13 @@ public class MessageQServiceImpl implements MessageQService {
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
 
             Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId());
-            if (sourceJob.isPresent() && sourceJob.get().isSkipJob()) {
+            // Gated on the job's Failed preference. This read isSkipJob(), so whether a run marked
+            // Failed sent its failure mail was decided by the "email me when a run is skipped" box
+            // -- a job with fail mail on and skip mail off got nothing, and one with the opposite
+            // pair got a failure mail it had not asked for. Both other places that send this same
+            // Failed mail (ProducerBulkEngine.changeStatusForLastJob and changeJobStatus below)
+            // read isFailJob().
+            if (sourceJob.isPresent() && sourceJob.get().isFailJob()) {
                 this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue.get()),JobStatus.Failed);
             }
             return new ResponseDto(SUCCESS, "JobQueue successfully updated.", jobQId);

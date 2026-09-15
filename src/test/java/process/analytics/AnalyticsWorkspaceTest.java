@@ -37,6 +37,7 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -84,6 +85,17 @@ class AnalyticsWorkspaceTest {
 
     private static final Long ACME_USER = 55L;
     private static final Long GLOBEX_USER = 66L;
+
+    /** A second person in ACME, which is the whole point of the concurrency pair below. */
+    private static final Long ACME_COLLEAGUE = 56L;
+
+    /**
+     * When the second person opened the analysis, and when their colleague saved over it a
+     * minute later. Fixed instants rather than "now", so the version the caller is holding and
+     * the version the row is holding differ by more than any clock could blur.
+     */
+    private static final Timestamp OPENED_AT = new Timestamp(1700000000000L);
+    private static final Timestamp CHANGED_AT = new Timestamp(1700000060000L);
 
     private static final Long OWN_ANALYSIS_ID = 500L;
     private static final Long THEIR_ANALYSIS_ID = 900L;
@@ -287,6 +299,178 @@ class AnalyticsWorkspaceTest {
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         verify(this.analyticsAnalysisRepository, never()).save(any(AnalyticsAnalysis.class));
+    }
+
+    /**
+     * The column is VARCHAR(32), and the sibling path already said so with a sentence.
+     *
+     * Left unchecked here, an over-long chart kind travelled to Postgres, came back as a value
+     * too long for the column, and left the endpoint's last catch to report a mistyped word as a
+     * 500 with a stack trace -- the one validation in this class that answered differently from
+     * every other.
+     */
+    @Test
+    void anOverLongVisualizationTypeOnAnAnalysisIsRefusedRatherThanReachingTheColumn() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+
+        AnalyticsAnalysis payload = analysisPayload();
+        payload.setVisualizationType(chartKindOfLength(33));
+
+        ResponseDto response = this.service.saveAnalysis(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(response.getMessage())
+            .as("word for word what the widget path has always answered, because it is one rule")
+            .isEqualTo("A visualization type is at most 32 characters.");
+        verify(this.analyticsAnalysisRepository, never()).save(any(AnalyticsAnalysis.class));
+    }
+
+    /** The boundary, so the rule stays a length and does not become a ban on naming a chart. */
+    @Test
+    void aVisualizationTypeThatExactlyFillsTheColumnIsAccepted() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        whenAnalysisSavedReturnTheRow();
+
+        AnalyticsAnalysis payload = analysisPayload();
+        payload.setVisualizationType(chartKindOfLength(32));
+
+        ResponseDto response = this.service.saveAnalysis(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        assertThat(capturedAnalysisSave().getVisualizationType()).hasSize(32);
+    }
+
+    // ---------------------------------------------- two people, one workspace, one saved analysis
+
+    /**
+     * The second Save is not allowed to be a silent overwrite.
+     *
+     * An analysis belongs to the workspace and not to the person who made it -- a dashboard
+     * widget renders a colleague's -- so two people holding the same one open is ordinary use.
+     * What was not ordinary is what came next: whoever pressed Save second wrote their whole
+     * configuration over the first person's, and because the row keeps no history and only its
+     * LAST author, there was nothing left to notice it by and nothing to recover it from.
+     */
+    @Test
+    void aSaveCannotOverwriteAnAnalysisThatChangedSinceTheCallerOpenedIt() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        AnalyticsAnalysis current = analysisOwnedBy(ACME, OWN_ANALYSIS_ID);
+        current.setDateUpdated(CHANGED_AT);
+        whenAnalysisLoaded(OWN_ANALYSIS_ID, current);
+
+        // The version the second person was handed, before the colleague saved at CHANGED_AT.
+        AnalyticsAnalysis payload = analysisPayload();
+        payload.setAnalyticsAnalysisId(OWN_ANALYSIS_ID);
+        payload.setDateUpdated(OPENED_AT);
+        payload.setAnalysisConfig("{\"dimensions\":[\"salary\"]}");
+
+        ResponseDto response = this.service.saveAnalysis(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(current.getAnalysisConfig())
+            .as("the colleague's configuration is still the one the row is holding")
+            .isEqualTo(CONFIG);
+        verify(this.analyticsAnalysisRepository, never()).save(any(AnalyticsAnalysis.class));
+    }
+
+    /**
+     * Sending no version at all must not become the way to get the blind overwrite back.
+     *
+     * A caller with nothing to show cannot have been shown the current row, so it is refused for
+     * the same reason a caller holding an old version is -- fail closed, the reading this
+     * application already settled on everywhere a claim cannot be checked.
+     */
+    @Test
+    void aSaveThatCarriesNoVersionAtAllIsRefusedOnceTheRowHasOne() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        AnalyticsAnalysis current = analysisOwnedBy(ACME, OWN_ANALYSIS_ID);
+        current.setDateUpdated(CHANGED_AT);
+        whenAnalysisLoaded(OWN_ANALYSIS_ID, current);
+
+        AnalyticsAnalysis payload = analysisPayload();
+        payload.setAnalyticsAnalysisId(OWN_ANALYSIS_ID);
+
+        ResponseDto response = this.service.saveAnalysis(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        verify(this.analyticsAnalysisRepository, never()).save(any(AnalyticsAnalysis.class));
+    }
+
+    /**
+     * The refusal has to name somebody, because the Canvas shows this sentence verbatim.
+     *
+     * "Somebody changed it" is not something the reader can act on; the name is the difference
+     * between a message and a dead end, and it is the same name the listing already shows as the
+     * row's author.
+     */
+    @Test
+    void theRefusalNamesWhoeverHoldsTheVersionOnTheServer() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        AnalyticsAnalysis current = analysisOwnedBy(ACME, OWN_ANALYSIS_ID);
+        current.setDateUpdated(CHANGED_AT);
+        current.setUpdatedBy(ACME_COLLEAGUE);
+        whenAnalysisLoaded(OWN_ANALYSIS_ID, current);
+        when(this.userNameResolver.nameFor(ACME_COLLEAGUE)).thenReturn("Priya Raman");
+
+        AnalyticsAnalysis payload = analysisPayload();
+        payload.setAnalyticsAnalysisId(OWN_ANALYSIS_ID);
+        payload.setDateUpdated(OPENED_AT);
+
+        ResponseDto response = this.service.saveAnalysis(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(response.getMessage()).contains("Priya Raman");
+    }
+
+    /**
+     * The control, and the test that makes the rule "the caller must be holding the current
+     * version" rather than "a saved analysis cannot be edited".
+     *
+     * It also pins the half that makes the check repeatable: the stored version moves on, so the
+     * colleague who is still holding CHANGED_AT is refused by the very save that succeeded here.
+     */
+    @Test
+    void aSaveHoldingTheCurrentVersionRewritesTheAnalysisAndMovesTheVersionOn() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        AnalyticsAnalysis current = analysisOwnedBy(ACME, OWN_ANALYSIS_ID);
+        current.setDateUpdated(CHANGED_AT);
+        whenAnalysisLoaded(OWN_ANALYSIS_ID, current);
+        whenAnalysisSavedReturnTheRow();
+
+        AnalyticsAnalysis payload = analysisPayload();
+        payload.setAnalyticsAnalysisId(OWN_ANALYSIS_ID);
+        payload.setDateUpdated(CHANGED_AT);
+        payload.setAnalysisConfig("{\"dimensions\":[\"salary\"]}");
+
+        ResponseDto response = this.service.saveAnalysis(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        AnalyticsAnalysis stored = capturedAnalysisSave();
+        assertThat(stored.getAnalysisConfig()).isEqualTo("{\"dimensions\":[\"salary\"]}");
+        assertThat(stored.getDateUpdated().getTime())
+            .as("the version moves on, so the next writer still holding the old one is refused")
+            .isGreaterThan(CHANGED_AT.getTime());
+    }
+
+    /**
+     * A row nobody has edited carries no dateUpdated, so a client that loaded it sends none back.
+     * The very first edit of an analysis must not be mistaken for a stale one.
+     */
+    @Test
+    void theFirstEditOfAnAnalysisNobodyHasChangedYetIsNotRefused() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        AnalyticsAnalysis current = analysisOwnedBy(ACME, OWN_ANALYSIS_ID);
+        assertThat(current.getDateUpdated()).as("never edited").isNull();
+        whenAnalysisLoaded(OWN_ANALYSIS_ID, current);
+        whenAnalysisSavedReturnTheRow();
+
+        AnalyticsAnalysis payload = analysisPayload();
+        payload.setAnalyticsAnalysisId(OWN_ANALYSIS_ID);
+
+        ResponseDto response = this.service.saveAnalysis(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        verify(this.analyticsAnalysisRepository).save(any(AnalyticsAnalysis.class));
     }
 
     // ------------------------------------------------------------------ somebody else's dashboard
@@ -776,6 +960,15 @@ class AnalyticsWorkspaceTest {
         analysis.setVisualizationType("BAR");
         analysis.setAnalysisConfig(CONFIG);
         return analysis;
+    }
+
+    /** Java 8 source level, so no String.repeat. */
+    private static String chartKindOfLength(int length) {
+        StringBuilder kind = new StringBuilder(length);
+        while (kind.length() < length) {
+            kind.append('B');
+        }
+        return kind.toString();
     }
 
     private static AnalyticsAnalysis analysisPayload() {

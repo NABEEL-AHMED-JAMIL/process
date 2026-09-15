@@ -486,6 +486,33 @@ class OrdersReportsE2EIT extends ReportBuildingSupport {
     }
 
     @Test
+    void savingAnewAnalysisNeverRewritesAnExistingOneOfTheSameName() throws Exception {
+        // Written after a seeded widget was found pointing at a DIFFERENT dataset than its
+        // catalogue entry names, with a date_updated ten minutes after its date_created. The
+        // question that mattered was whether saveAnalysis upserts by name -- because if it did,
+        // every catalogue here would be quietly rebinding somebody else's saved work.
+        //
+        // It does not. The id decides: absent means insert. This pins that, so the answer stays
+        // no.
+        Widget first = w("Same name, two analyses",
+            "bar", analysis(BY_REGION, measure("SUM", "amount"), null, null));
+        Widget second = w("Same name, two analyses",
+            "donut", analysis(BY_CATEGORY, measure("COUNT_ROWS", null), null, null));
+
+        long one = this.saveAnalysis(first, CONNECTION, "analytics-samples/orders.csv");
+        long two = this.saveAnalysis(second, CONNECTION, "analytics-benchmark/sales-10mb.csv");
+
+        assertThat(two).as("a second save under the same name must be a new row").isNotEqualTo(one);
+
+        JsonNode original = this.fetch(
+            "/analyticsWorkspace.json/fetchAnalysisById?analyticsAnalysisId=" + one);
+        assertThat(original.path("data").path("datasetPath").asText())
+            .as("the first analysis was rewritten by the second")
+            .isEqualTo("analytics-samples/orders.csv");
+        assertThat(original.path("data").path("visualizationType").asText()).isEqualTo("bar");
+    }
+
+    @Test
     @Rollback(false)
     void seedTheTwentyReports() throws Exception {
         assumeTrue(SEEDING, "Run with -Danalytics.seed.reports=true to actually write these");

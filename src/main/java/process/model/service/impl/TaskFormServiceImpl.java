@@ -19,6 +19,7 @@ import process.util.exception.ExceptionUtil;
 import process.util.ProcessUtil;
 
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static process.util.ProcessUtil.ERROR;
@@ -41,6 +42,9 @@ public class TaskFormServiceImpl {
     /** The types the task form can render. Anything else would render as a blank box. */
     private static final Set<String> FIELD_TYPES = new HashSet<>(Arrays.asList(
         "text", "textarea", "number", "url", "select", "checkbox", "date"));
+
+    /** Compiled once: {@link #choiceValues} asks this of every one-line option string. */
+    private static final Pattern WHITESPACE = Pattern.compile("\\s");
 
     private final TaskFormRepository taskFormRepository;
 
@@ -205,6 +209,10 @@ public class TaskFormServiceImpl {
             copy.setRequired(field.isRequired());
             copy.setDefaultValue(field.getDefaultValue());
             copy.setHelpText(field.getHelpText());
+            // Stored as sent, still. The choices are one per line with an optional first '=' set
+            // splitting the stored value from the displayed label (see choiceValues); validate()
+            // has already had its say about them, and rewriting them here would only give the
+            // server a second opinion on a format the task screen is the one that has to read.
             copy.setFieldOptions(field.getFieldOptions());
             copy.setPosition(position++);
             target.getFields().add(copy);
@@ -275,7 +283,103 @@ public class TaskFormServiceImpl {
                     field.getLabel().trim(), parent);
             }
         }
+        return validateSelectChoices(form);
+    }
+
+    /**
+     * What a dropdown's choices have to satisfy.
+     *
+     * Nothing checked field_options at all before this. It was copied into the row unexamined,
+     * which was defensible while the column was only ever read to paint a list -- and stopped
+     * being defensible once a choice carries a stored value the worker acts on. Each rule below
+     * describes a form that saves without complaint and then misbehaves somewhere else:
+     *
+     * A select with no choices gives the operator a dropdown holding nothing but "None", and when
+     * the field is also required and carries no default, that task can never be made valid --
+     * with "Check the highlighted fields." as the only explanation anyone gets.
+     *
+     * Two choices with the same stored value make the second unreachable, since the browser
+     * matches on the first.
+     *
+     * And a default that is not one of the values is the one that hides: the task screen seeds
+     * the control with it, the required check passes because a non-empty string is non-empty, no
+     * option matches so the control renders blank, and an untouched save still writes that
+     * unseen value into the payload. Rejecting it here is what makes renaming a choice an error
+     * the author is told about rather than a silent break in every task on the pipeline.
+     */
+    private static String validateSelectChoices(TaskForm form) {
+        for (TaskFormField field : form.getFields()) {
+            if (!"select".equals(safe(field.getFieldType()))) {
+                continue;
+            }
+            String name = isBlank(field.getLabel()) ? safe(field.getTagKey()) : field.getLabel().trim();
+            List<String> values = choiceValues(field.getFieldOptions());
+            if (values.isEmpty()) {
+                return String.format(
+                    "The \"%s\" dropdown has no choices. Add at least one, or change its type.", name);
+            }
+            Set<String> seen = new HashSet<>();
+            for (String value : values) {
+                if (!seen.add(value)) {
+                    return String.format(
+                        "\"%s\" offers \"%s\" twice. Each choice needs its own value.", name, value);
+                }
+            }
+            String fallback = safe(field.getDefaultValue());
+            if (!fallback.isEmpty() && !seen.contains(fallback)) {
+                return String.format("\"%s\" defaults to \"%s\", which is not one of its choices. "
+                    + "A task would open on a blank dropdown and still send that value.", name, fallback);
+            }
+        }
         return null;
+    }
+
+    /**
+     * The stored values of a select's choices, in the order the author put them.
+     *
+     * This has to agree, line for line, with parseFieldChoices in task-form-dialog.ts -- it is
+     * the same format read twice, and a server that disagreed with the browser about what a
+     * choice is would reject forms the author can see are fine, or accept ones the author cannot
+     * use. Only the values are wanted here; the labels are the browser's business.
+     *
+     * The format is one choice per line, with an optional first '=' separating the stored value
+     * from the displayed label. A line without one is the legacy case that predates labels
+     * entirely, and is its own value -- unchanged, because every task saved before this reads its
+     * answer back by matching that exact string.
+     *
+     * The comma branch is a read-side tolerance for what the ETL demo seeder wrote (nine select
+     * fields as "records,lines" and the like), which a newline-only split turned into one choice
+     * that no default ever matched. It is guarded narrowly -- one line, no '=', no whitespace
+     * anywhere on it -- so it cannot swallow a real single choice such as "Doe, John".
+     */
+    private static List<String> choiceValues(String fieldOptions) {
+        List<String> values = new ArrayList<>();
+        if (fieldOptions == null) {
+            return values;
+        }
+        List<String> lines = new ArrayList<>();
+        for (String line : fieldOptions.split("\r?\n")) {
+            String trimmed = line.trim();
+            if (!trimmed.isEmpty()) {
+                lines.add(trimmed);
+            }
+        }
+        if (lines.size() == 1 && lines.get(0).indexOf('=') < 0 && lines.get(0).indexOf(',') >= 0
+                && !WHITESPACE.matcher(lines.get(0)).find()) {
+            lines = new ArrayList<>();
+            for (String part : fieldOptions.trim().split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    lines.add(trimmed);
+                }
+            }
+        }
+        for (String line : lines) {
+            int separator = line.indexOf('=');
+            // A separator at position 0 would leave no value at all, so that line is legacy too.
+            values.add(separator <= 0 ? line : line.substring(0, separator).trim());
+        }
+        return values;
     }
 
     private boolean isOwnedByCaller(TaskForm form) {

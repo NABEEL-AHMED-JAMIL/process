@@ -166,6 +166,11 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(ERROR, "SourceTask sourceTaskType missing.");
         } else if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType().getSourceTaskTypeId())) {
             return new ResponseDto(ERROR, "SourceTask sourceTaskTypeId missing.");
+        } else if (Status.Delete.equals(sourceTaskDto.getTaskStatus())) {
+            // Delete is the tombstone deleteSourceTask writes, not a state to create in: a task
+            // saved that way is invisible to every list and picker the moment it exists, and the
+            // caller is told it was saved.
+            return new ResponseDto(ERROR, "SourceTask cannot be created as Delete -- create it Active or Inactive.");
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findSourceTaskTypeBySourceTaskTypeIdAndStatus(
             sourceTaskDto.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
@@ -183,7 +188,17 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         sourceTask.setHomePageId(sourceTaskDto.getHomePageId());
         sourceTask.setPipelineId(sourceTaskDto.getPipelineId());
         sourceTask.setGroupId(sourceTaskDto.getGroupId());
-        sourceTask.setTaskStatus(Status.Active);
+        /*
+         * The caller's choice, not a constant. Every other field here comes from the DTO and this
+         * one was hard-coded to Active, so the console's Clone button -- which posts Inactive and
+         * then tells the operator "it starts inactive" -- produced a live task. That matters
+         * because being Active is what makes a task bindable: updateSourceJob looks the task up
+         * with findByTaskDetailIdAndTaskStatus(.., Active) and refuses it otherwise, and the bulk
+         * job upload builds its valid-task list the same way. A half-configured copy the operator
+         * believed was parked could therefore be attached to live jobs.
+         */
+        sourceTask.setTaskStatus(!ProcessUtil.isNull(sourceTaskDto.getTaskStatus())
+            ? sourceTaskDto.getTaskStatus() : Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
         this.applyDerivedLocation(sourceTask);
         if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())) {
@@ -293,9 +308,16 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                         + "delete them, before deleting this one.",
                     sourceTask.get().getTaskName(), liveJobs, liveJobs == 1 ? "" : "s"));
             }
-            if (!ProcessUtil.isNull(sourceTaskDto.getTaskStatus())) {
-                sourceTask.get().setTaskStatus(Status.Delete);
-            }
+            /*
+             * Unconditional, because deleting is what this endpoint does. The mark used to be
+             * gated on the request carrying a taskStatus -- a field the method does not require
+             * and does not read the value of -- while the cascade to the jobs below ran either
+             * way and the success message was written either way. A caller that sent only
+             * taskDetailId, the one field the endpoint declares as required, was told
+             * "SourceTask successfully deleted with ID N." and the task stayed Active in every
+             * list and every picker. The console only avoids it by sending the field on purpose.
+             */
+            sourceTask.get().setTaskStatus(Status.Delete);
             this.sourceTaskRepository.save(sourceTask.get());
             this.sourceJobRepository.statusChangeSourceJobWithSourceTaskId(sourceTaskDto.getTaskDetailId(), Status.Delete.name());
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully deleted with ID %d.", sourceTaskDto.getTaskDetailId()));
@@ -406,11 +428,24 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());;
-        Object countQueryResult = this.queryService.executeQuery(
+        /*
+         * Paged and counted the way listSourceTask is. The endpoint has always declared page,
+         * limit, columnName and order, and this method took the Pageable built from them and
+         * never referenced it: it called the single-argument executeQuery overload, so every row
+         * came back whatever page was asked for, in no particular order, with no PagingDto for a
+         * paginator to read. A caller asking for page 2 got page 1 again, and the shipped legacy
+         * console asking for a 500-row cap was served the lot.
+         *
+         * The count went through executeQuery too, which returns a List -- never null and never
+         * "" -- so the isNull guard below it could not fire and the query was a wasted round trip.
+         * executeQueryForSingleResult gives the number the guard and the paging block both need.
+         */
+        Object countQueryResult = this.queryService.executeQueryForSingleResult(
             this.queryService.fetchAllLinkJobsWithSourceTaskQuery(true, sourceTaskId, startDate, endDate, searchTextDto));
         if (!ProcessUtil.isNull(countQueryResult)) {
             List<Object[]> result = this.queryService.executeQuery(
-                this.queryService.fetchAllLinkJobsWithSourceTaskQuery(false, sourceTaskId, startDate, endDate, searchTextDto));
+                this.queryService.fetchAllLinkJobsWithSourceTaskQuery(false, sourceTaskId, startDate, endDate,
+                    columnName, order, searchTextDto), paging);
             if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
                 List<SourceJobDto> sourceJobDtoList = new ArrayList<>();
                 for(Object[] obj : result) {
@@ -449,7 +484,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     sourceJobDtoList.add(sourceJobDto);
                 }
-                responseDto = new ResponseDto(SUCCESS, "LinkJobsWithSourceTask successfully ", sourceJobDtoList);
+                responseDto = new ResponseDto(SUCCESS, "LinkJobsWithSourceTask successfully ", sourceJobDtoList,
+                    PagingUtil.convertEntityToPagingDTO(Long.valueOf(countQueryResult.toString()), paging));
             }
         }
         return responseDto;

@@ -57,6 +57,8 @@ class FileChatRagDecisionTest {
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
+    // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
+    @Mock private process.model.service.FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -64,7 +66,7 @@ class FileChatRagDecisionTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, this.fileShareService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("Docs", BUCKET, "MINIO")));
@@ -285,6 +287,75 @@ class FileChatRagDecisionTest {
                 + "not an empty '--- FILE CONTENT ---' block")
             .contains("--- FILE CONTENT ---")
             .contains("[content truncated");
+    }
+
+    // ---- an unreachable cluster degrades, and must NOT be mistaken for a cold index ----------
+
+    /**
+     * The expensive mistake this distinction exists to prevent. OpenSearch being wiped or stopped
+     * while Ollama stays up leaves isEnabled() and ragAvailable() both true, so retrieval is
+     * attempted and comes back with nothing. Read as "not indexed yet", that empty answer sent
+     * this method into the index branch: take the lock, re-extract the file (a fresh audio
+     * transcription, a fresh LibreOffice conversion), re-chunk it, re-embed every chunk through
+     * Ollama, write them into the cluster that is already failing, search again, fail again, and
+     * finally answer from truncated raw text -- on every single message for the length of the
+     * outage. The answer was always going to be the truncated raw text; the entire re-index was
+     * work done to arrive at it.
+     */
+    @Test
+    void anUnreachableClusterAnswersFromTheRawFileWithoutReindexingIt() throws Exception {
+        lenient().when(this.fileChatExtractionService.extractText(BUCKET, KEY, ETAG))
+            .thenReturn(bigText());
+        lenient().when(this.openSearchRagClient.isEnabled()).thenReturn(true);
+        lenient().when(this.embeddingService.isAvailable()).thenReturn(true);
+        lenient().when(this.embeddingService.embed(anyString())).thenReturn(new float[] {1f});
+        lenient().when(this.openSearchRagClient.searchRelevantChunks(
+                eq(BUCKET), eq(KEY), eq(ETAG), any(), eq(8)))
+            .thenReturn(OpenSearchRagClient.RetrievalResult.unavailable());
+
+        ResponseDto response = this.service.sendMessage(this.request("A question."));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        verify(this.embeddingService, never()).embedAll(any());
+        verify(this.openSearchRagClient, never())
+            .indexChunks(any(), anyString(), anyString(), anyString(), any(), any(), any());
+        // One search, not three: no lock, no re-check inside it, no post-index retrieval.
+        verify(this.openSearchRagClient, times(1))
+            .searchRelevantChunks(eq(BUCKET), eq(KEY), eq(ETAG), any(), eq(8));
+
+        ArgumentCaptor<AdHocPromptRequestDto> captor = ArgumentCaptor.forClass(AdHocPromptRequestDto.class);
+        verify(this.aiAgentService).processAdHoc(captor.capture());
+        assertThat(captor.getValue().getInstructions())
+            .as("the degraded path is the pre-RAG one -- the whole file, truncated, and said to be")
+            .contains("--- FILE CONTENT ---")
+            .contains("[content truncated");
+    }
+
+    /**
+     * The cluster can also fall over between the outer check and the re-check inside the index
+     * lock. That second non-answer is no more a licence to index than the first one was.
+     */
+    @Test
+    void aClusterThatDiesInsideTheIndexLockStillDoesNotGetReindexed() throws Exception {
+        lenient().when(this.fileChatExtractionService.extractText(BUCKET, KEY, ETAG))
+            .thenReturn(bigText());
+        lenient().when(this.openSearchRagClient.isEnabled()).thenReturn(true);
+        lenient().when(this.embeddingService.isAvailable()).thenReturn(true);
+        lenient().when(this.embeddingService.embed(anyString())).thenReturn(new float[] {1f});
+        // A genuine "no chunks for this file version" first, so the lock is taken -- and an outage
+        // by the time the re-check runs.
+        lenient().when(this.openSearchRagClient.searchRelevantChunks(
+                eq(BUCKET), eq(KEY), eq(ETAG), any(), eq(8)))
+            .thenReturn(
+                new OpenSearchRagClient.RetrievalResult(Collections.emptyList(), true),
+                OpenSearchRagClient.RetrievalResult.unavailable());
+
+        ResponseDto response = this.service.sendMessage(this.request("A question."));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        verify(this.embeddingService, never()).embedAll(any());
+        verify(this.openSearchRagClient, never())
+            .indexChunks(any(), anyString(), anyString(), anyString(), any(), any(), any());
     }
 
     // ---- a RAG pipeline exception degrades the answer, never the whole request ---------------

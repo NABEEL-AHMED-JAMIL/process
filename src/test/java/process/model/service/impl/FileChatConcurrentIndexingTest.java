@@ -59,6 +59,8 @@ class FileChatConcurrentIndexingTest {
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
+    // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
+    @Mock private process.model.service.FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -66,7 +68,7 @@ class FileChatConcurrentIndexingTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, this.fileShareService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("Docs", BUCKET, "MINIO")));

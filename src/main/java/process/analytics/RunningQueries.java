@@ -161,8 +161,13 @@ public class RunningQueries {
     /**
      * How many runs are in flight.
      *
-     * Exists for the assertion that this map empties -- a registry that leaks is the defect this
-     * class is most likely to have, and it is invisible from every other observation.
+     * Two readers, and the second is why this is not a test hook. AnalyticsHealthIndicator reports
+     * it beside max-concurrent, because that pair is the answer to "why is my query waiting" and
+     * neither number alone is. And a test asserts this map EMPTIES -- a registry that leaks is the
+     * defect this class is most likely to have, and it is invisible from every other observation.
+     *
+     * It reached both through an AnalyticsQueryService.runningCount() that no caller ever used;
+     * that hop is gone, and the count is read where it is kept.
      */
     public int size() {
         return this.inFlight.size();

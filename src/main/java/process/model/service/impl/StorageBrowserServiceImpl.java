@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -222,7 +223,30 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         return this.resolveServiceForCaller(bucket, key).getObjectContent(bucket, key, rangeStart, rangeEnd);
     }
 
+    /**
+     * Drops both file-chat caches, as every write path below this point does.
+     *
+     * fileChatExtract holds the FULL extracted plaintext of an object -- up to 500,000 characters
+     * of whatever a tenant keeps in a bucket, CVs and intake forms included -- for seven days,
+     * and fileChatMetadata holds the etag the chat panel decides freshness by. Neither was being
+     * evicted when the object underneath them changed, so deleting a file left its entire text
+     * sitting readable in Redis for the rest of that seven-day TTL, and replacing a file could be
+     * answered from the previous version until the 30-second metadata entry aged out.
+     *
+     * allEntries rather than a precise key, deliberately. fileChatExtract is keyed
+     * bucket:key:etag (see FileChatExtractionServiceImpl.extractText) and a delete never
+     * learns the etag of the thing it just removed; a folder delete or rename moves an unbounded
+     * set of keys it does not enumerate; and fileChatMetadata is keyed by the ASKING tenant and
+     * user (see getObjectMetadataCached above), so the entry that has to go may well belong to
+     * somebody other than whoever is doing the writing. @CacheEvict offers no key-pattern form
+     * over Redis in any case. Clearing a seven-day text cache costs the next question a
+     * re-extraction; serving a deleted document's text costs the document.
+     *
+     * beforeInvocation stays at its default of false on purpose: a write that threw changed
+     * nothing in storage, and must not throw away a week of extractions on its way out.
+     */
     @Override
+    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void uploadObject(String bucket, String prefix, MultipartFile file) {
         this.uploadMultipart(bucket, prefix, file, false);
     }
@@ -240,6 +264,9 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
      * StorageBrowserRestApi.
      */
     @Override
+    // Evicts on the same terms as uploadObject above: a workflow upload lands a real object a
+    // user can then open the chat panel on, so it must not be readable as its previous version.
+    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void uploadForWorkflow(String bucket, String prefix, MultipartFile file) {
         this.uploadMultipart(bucket, prefix, file, true);
     }
@@ -293,6 +320,8 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     }
 
     @Override
+    // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
+    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void uploadObject(String bucket, String key, InputStream inputStream, long size, String contentType) {
         this.requireSafeKey(key);
         this.resolveServiceForCaller(bucket, key).uploadObject(bucket, key, inputStream, size, contentType);
@@ -300,6 +329,8 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
 
     /** Trusted, on the same terms as uploadForWorkflow above. */
     @Override
+    // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
+    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void uploadForWorkflow(String bucket, String key, InputStream inputStream, long size, String contentType) {
         this.requireSafeKey(key);
         this.resolveService(bucket, true).uploadObject(bucket, key, inputStream, size, contentType);
@@ -312,6 +343,11 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         return this.resolveService(bucket, true).getObjectContent(bucket, key, null, null);
     }
 
+    // The one write path here that is deliberately NOT evicting. It writes a zero-byte marker
+    // whose key ends in "/", and neither file-chat cache can ever hold an entry for such a key:
+    // the extract cache is only ever populated from a chat about a readable file, and the
+    // metadata cache rejects nulls, so a folder marker has nothing cached to invalidate. Clearing
+    // a week of extractions every time somebody makes a folder would be pure cost.
     @Override
     public void createFolder(String bucket, String prefix, String folderName) {
         if (folderName == null || folderName.trim().isEmpty()) {
@@ -329,12 +365,18 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     }
 
     @Override
+    // The case that motivated all of this: without the eviction, the deleted file's full
+    // extracted plaintext stayed in Redis under fileChatExtract::<bucket>:<key>:<etag> -- an etag
+    // this method never sees -- for the remaining seven days. See uploadObject above.
+    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void deleteObject(String bucket, String key) {
         this.requireSafeKey(key);
         this.resolveServiceForCaller(bucket, key).deleteObject(bucket, key);
     }
 
     @Override
+    // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
+    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void deleteObjects(String bucket, List<String> keys) {
         if (keys == null || keys.isEmpty()) {
             throw new IllegalArgumentException("No keys given to delete.");
@@ -346,6 +388,10 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     }
 
     @Override
+    // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above, and
+    // this one could not be keyed even in principle: the set of object keys under the folder is
+    // never enumerated here, so there is no per-key eviction to issue.
+    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void deleteFolder(String bucket, String folderKey) {
         this.requireFolderKey(folderKey);
         this.requireSafeKey(folderKey);
@@ -353,6 +399,10 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     }
 
     @Override
+    // A rename is a move: every key under the old prefix stops resolving and the same bytes
+    // appear under a new one, so both caches are wrong about both prefixes afterwards. Same
+    // unenumerated-key problem as deleteFolder. See uploadObject above.
+    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void renameFolder(String bucket, String folderKey, String newFolderName) {
         this.requireFolderKey(folderKey);
         this.requireSafeKey(folderKey);

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import process.analytics.AnalyticsException;
 import process.analytics.AnalyticsLimits;
 import process.model.dto.ResponseDto;
 import process.model.pojo.AnalyticsAnalysis;
@@ -78,6 +79,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.fetchAllAnalyses(), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while fetchAllAnalyses ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -90,6 +101,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.fetchAnalysisById(analyticsAnalysisId), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while fetchAnalysisById ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -108,6 +129,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.saveAnalysis(analyticsAnalysis), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while saveAnalysis ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -120,6 +151,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.deleteAnalysis(analyticsAnalysisId), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while deleteAnalysis ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -132,6 +173,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.fetchAllDashboards(), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while fetchAllDashboards ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -145,6 +196,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.fetchDashboardById(analyticsDashboardId), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while fetchDashboardById ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -157,6 +218,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.saveDashboard(analyticsDashboard), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while saveDashboard ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -169,6 +240,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.deleteDashboard(analyticsDashboardId), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while deleteDashboard ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -188,6 +269,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.saveWidget(analyticsDashboardWidget), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while saveWidget ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -200,6 +291,16 @@ public class AnalyticsWorkspaceRestApi {
         try {
             this.analyticsLimits.requireEnabled();
             return new ResponseEntity<>(this.analyticsWorkspaceService.deleteWidget(analyticsDashboardWidgetId), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // A business refusal, not a failure: HTTP 200 carrying status ERROR and the sentence
+            // whoever threw it wrote for a reader. Without this the checked AnalyticsException
+            // fell into the catch below and every one of them became a 500 with
+            // INTERNAL_ERROR_500 -- so switching analytics off, which requireEnabled's own
+            // javadoc says "lands in the AnalyticsException catch every analytics endpoint
+            // already has", presented to the user as a crash and to the operator as a stack
+            // trace at ERROR for a state they had just chosen.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while deleteWidget ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,

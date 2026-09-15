@@ -136,6 +136,52 @@ public class SettingServiceImpl implements SettingService {
     }
 
     /**
+     * Engine dials whose value the engine parses as a number.
+     *
+     * Refusing deletion of these rows was only half the guard. The engine looks the row up by
+     * name and reads its value, so renaming it or storing something it cannot parse breaks
+     * dispatch exactly as thoroughly as deleting it did -- and both were one keystroke on
+     * /settings/lookup with no warning. The two resume-timestamp settings are excluded on
+     * purpose: they hold timestamps, not numbers.
+     */
+    private static final java.util.Set<String> NUMERIC_PLATFORM_LOOKUPS =
+        new java.util.HashSet<>(java.util.Collections.singletonList("QUEUE_FETCH_LIMIT"));
+
+    /**
+     * Whether an edit would leave an engine setting in a state the engine cannot read.
+     *
+     * Three ways in, all reachable by a platform admin who passes every other check, and all
+     * with the same consequence -- job dispatch stops platform-wide, logged once on the server
+     * and nowhere on screen. A rename takes the row out from under findByLookupType. A value
+     * like "5,000" or a stray trailing space fails to parse. And ticking "Store encrypted"
+     * stores ciphertext that the engine never decrypts, while the list then serves the value
+     * back masked, so the next edit of the description writes the mask string in as the value.
+     * The dispatcher now falls back rather than dying, but it should not have to: an edit that
+     * cannot work is better refused where the operator can still see what they typed.
+     */
+    private static String refuseUnreadableEngineSetting(LookupData lookupData, LookupDataDto tempLookupData) {
+        if (!isPlatformOnly(lookupData) || lookupData.getParent() != null) {
+            return null;
+        }
+        String currentType = lookupData.getLookupType();
+        if (!isNull(tempLookupData.getLookupType()) && !currentType.equals(tempLookupData.getLookupType())) {
+            return String.format("%s cannot be renamed -- the scheduler looks it up by that exact "
+                + "name every cycle. Change its value instead.", currentType);
+        }
+        if (Boolean.TRUE.equals(tempLookupData.getEncrypted())) {
+            return String.format("%s cannot be stored encrypted -- the scheduler reads it directly "
+                + "and would get the ciphertext.", currentType);
+        }
+        if (NUMERIC_PLATFORM_LOOKUPS.contains(currentType)
+            && !isNull(tempLookupData.getLookupValue())
+            && parseLongOrNull(tempLookupData.getLookupValue()) == null) {
+            return String.format("%s must be a whole number -- the scheduler parses it as one. "
+                + "Got \"%s\".", currentType, tempLookupData.getLookupValue());
+        }
+        return null;
+    }
+
+    /**
      * Whether the caller may change this row.
      *
      * Update and delete took an id and did as they were told -- no role check at all -- so a
@@ -510,6 +556,10 @@ public class SettingServiceImpl implements SettingService {
         String refusal = refuseModification(lookupData);
         if (refusal != null) {
             return new ResponseDto(ERROR, refusal);
+        }
+        String unreadable = refuseUnreadableEngineSetting(lookupData, tempLookupData);
+        if (unreadable != null) {
+            return new ResponseDto(ERROR, unreadable);
         }
         boolean wasEncrypted = Boolean.TRUE.equals(lookupData.getEncrypted());
         boolean nowEncrypted = !isNull(tempLookupData.getEncrypted()) ? tempLookupData.getEncrypted() : wasEncrypted;

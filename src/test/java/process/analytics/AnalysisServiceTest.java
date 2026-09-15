@@ -423,6 +423,40 @@ class AnalysisServiceTest {
         }
     }
 
+    /**
+     * The roll-up rows are named by INDEX on the response, because the label cannot name them.
+     *
+     * A dataset is entitled to contain a value spelled exactly like the roll-up, and every screen
+     * that had to tell the two apart was matching on the label -- one-directionally, so a real row
+     * went inert rather than a roll-up going live. This class already knows the answer: the pivot
+     * builder keys on these indices, after a real "Other" collided with the roll-up there and a
+     * measured 500 vanished from a 740 total with nothing on the response saying a row had gone.
+     * Sending them costs a list of small integers and makes the clients exact.
+     */
+    @Test
+    void theResponseNamesItsRollUpRowsByIndexBecauseTheLabelCannot() throws Exception {
+        AnalysisRequest request = request(dimensions("region"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+        request.setTopN(topN(1, true, null));
+
+        AnalysisResultDto result = this.service.analyze(request);
+
+        // Row 0 is a real region, row 1 is the roll-up -- the same two rows the test above reads,
+        // now identified by something other than what they are called.
+        assertThat(result.getRows()).hasSize(2);
+        assertThat(result.getRollupRows()).containsExactly(1);
+    }
+
+    @Test
+    void aResponseWithNoRollUpDoesNotCarryTheFieldAtAll() throws Exception {
+        // Null and not an empty list. A client that has never heard of this field sees exactly the
+        // response it saw before, which is the rule every other optional part of this DTO follows.
+        AnalysisRequest request = request(dimensions("region"),
+            measure("amount", AnalysisRequest.Aggregation.SUM));
+
+        assertThat(this.service.analyze(request).getRollupRows()).isNull();
+    }
+
     @Test
     void withoutTheOtherBucketThereIsNoRollUpRowAndNoBucketOnTheResponse() throws Exception {
         AnalysisRequest request = request(dimensions("region"),

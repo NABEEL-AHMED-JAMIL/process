@@ -293,6 +293,14 @@ public class AnalyticsExportService {
         }
 
         try {
+            if ("parquet".equals(format)) {
+                // Declared with a written refusal, reported by /actuator/health as in force, and
+                // read by nothing until now -- so an environment that switched Parquet write-back
+                // off kept writing Parquet. Checked here rather than deeper because the format is
+                // the caller's word and this is where that word is first believed; a refusal is
+                // then free, before a permit is taken or a key is resolved.
+                this.limits.requireParquetConversionEnabled();
+            }
             DatasetRef primary = this.datasetResolver.resolve(body.get("connection"),
                 body.get("path"));
             DatasetRef secondary = this.secondDataset(body);

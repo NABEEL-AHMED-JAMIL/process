@@ -89,6 +89,22 @@ public class AnalyticsQuery implements Audited {
     @Column(name = "dataset_path", columnDefinition = "TEXT", nullable = false)
     private String datasetPath;
 
+    // The SECOND dataset, when this query reads two files at once.
+    //
+    // The engine registers the first as the view `dataset` and this one as `dataset2`, so a
+    // person can write an ordinary join. Nullable, because nearly every saved query reads one
+    // file -- and set as a PAIR, both or neither, which the table enforces as a CHECK too: a path
+    // with no connection cannot be resolved and a connection with no path names no file.
+    //
+    // These exist because a saved join used to keep its JOIN text and only half its inputs. The
+    // row looked fine; the failure surfaced on reopening it, as a DuckDB catalog error about a
+    // table nobody had asked for.
+    @Column(name = "second_connection_alias")
+    private String secondConnectionAlias;
+
+    @Column(name = "second_dataset_path", columnDefinition = "TEXT")
+    private String secondDatasetPath;
+
     @Column(name = "query_text", columnDefinition = "TEXT", nullable = false)
     private String queryText;
 
@@ -119,6 +135,16 @@ public class AnalyticsQuery implements Audited {
 
     public String getDatasetPath() { return datasetPath; }
     public void setDatasetPath(String datasetPath) { this.datasetPath = datasetPath; }
+
+    public String getSecondConnectionAlias() { return secondConnectionAlias; }
+    public void setSecondConnectionAlias(String secondConnectionAlias) {
+        this.secondConnectionAlias = secondConnectionAlias;
+    }
+
+    public String getSecondDatasetPath() { return secondDatasetPath; }
+    public void setSecondDatasetPath(String secondDatasetPath) {
+        this.secondDatasetPath = secondDatasetPath;
+    }
 
     public String getQueryText() { return queryText; }
     public void setQueryText(String queryText) { this.queryText = queryText; }

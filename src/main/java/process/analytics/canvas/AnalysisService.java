@@ -273,6 +273,10 @@ public class AnalysisService {
         answer.setOther(other);
         answer.setCrumbs(crumbs(plan));
         answer.setDrillPath(plan.getDrillPath());
+        // The same indices the pivot keys on, sent rather than kept: see
+        // AnalysisResultDto.rollupRows. Null and not an empty list, so a response with no roll-up
+        // is byte-for-byte what it was before this field existed.
+        answer.setRollupRows(rollupRows.isEmpty() ? null : rollupRows);
         answer.setPivot(pivot(plan, rows, rollupRows));
         answer.setResolvedWindows(plan.getResolvedWindows().isEmpty()
             ? null : new LinkedHashMap<>(plan.getResolvedWindows()));

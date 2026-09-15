@@ -976,6 +976,49 @@ class AnalyticsBenchmarkTest {
         assertThat(body.getMessage()).isEqualTo(message);
     }
 
+    /**
+     * The benchmark's own switch, which until now switched nothing off.
+     *
+     * analytics.benchmark.enabled was declared, given a refusal written for a platform admin, and
+     * reported by /actuator/health among the limits "in force" -- and read by no production code.
+     * An operator who set it to false got a health endpoint agreeing the benchmark was off and a
+     * benchmark that went on generating real load on demand, which is worse than having no switch:
+     * the endpoint made the wrong answer look confirmed.
+     *
+     * The positive control is in the same test on purpose. Gating the whole controller would also
+     * satisfy "the benchmark did not run", and would take away the past results exactly when they
+     * are most wanted -- when running a new one is not allowed.
+     */
+    @Test
+    void theBenchmarkSwitchRefusesARunAndStillAllowsThePastResultsToBeRead() throws Exception {
+        AnalyticsBenchmarkService benchmarkService = mock(AnalyticsBenchmarkService.class);
+        when(benchmarkService.recentResults(any(), any(), any()))
+            .thenReturn(Collections.emptyList());
+        AnalyticsLimits switchedOff = new AnalyticsLimits();
+        ReflectionTestUtils.setField(switchedOff, "benchmarkEnabled", false);
+        AnalyticsBenchmarkRestApi api =
+            new AnalyticsBenchmarkRestApi(benchmarkService, switchedOff);
+
+        ResponseEntity<?> refused = api.runBenchmark(
+            request(BenchmarkResult.MEASURE_FILE_OPEN, 3, 0, csvDataset()));
+
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.OK);
+        ResponseDto body = (ResponseDto) refused.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.getStatus()).isEqualTo(ProcessUtil.ERROR_MESSAGE);
+        assertThat(body.getMessage())
+            .contains("switched off in this environment")
+            .contains("generates real load");
+        // The assertion that makes this about load rather than about a message: no run happened.
+        verify(benchmarkService, never()).runAndCompare(any());
+        verify(benchmarkService, never()).run(any());
+
+        ResponseEntity<?> read = api.fetchRecentResults(null, null, null);
+        ResponseDto results = (ResponseDto) read.getBody();
+        assertThat(results).isNotNull();
+        assertThat(results.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+    }
+
     /** And only an unexpected failure is a 500, saying nothing about itself. */
     @Test
     void anUnexpectedFailureIsA500ThatSaysNothingAboutItself() throws Exception {

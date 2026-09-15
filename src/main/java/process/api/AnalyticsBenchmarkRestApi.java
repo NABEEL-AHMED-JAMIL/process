@@ -108,6 +108,14 @@ public class AnalyticsBenchmarkRestApi {
         @RequestBody(required = false) AnalyticsBenchmarkService.BenchmarkRequest request) {
         try {
             this.analyticsLimits.requireEnabled();
+            // The benchmark's OWN switch, and not the same question as analytics.enabled: this one
+            // generates real load on purpose, so an environment can leave Analytics Studio on and
+            // still refuse to have load run against it. It was declared, worded and reported by
+            // /actuator/health as in force -- and read by nothing, so setting it to false switched
+            // off nothing at all while the health endpoint agreed it was off. Reading past results
+            // is deliberately NOT gated: those cost nothing and are most wanted exactly when
+            // running a new one is not allowed.
+            this.analyticsLimits.requireBenchmarkEnabled();
             // runAndCompare rather than run: a measurement recorded and never compared is how a
             // deployment that made Parquet reads four times slower writes its own evidence down
             // and says nothing. The comparison is against every previous run of the same label,
@@ -186,6 +194,11 @@ public class AnalyticsBenchmarkRestApi {
                 "Data fetched successfully. " + AnalyticsBenchmarkService.whatThisDidNotMeasure(),
                 this.analyticsBenchmarkService.recentResults(batchId, label, limit)),
                 HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // The same refusal shape runBenchmark already has. Reading past results with
+            // analytics switched off answered a 500 instead of the sentence the switch carries.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while fetching analytics benchmark results.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,

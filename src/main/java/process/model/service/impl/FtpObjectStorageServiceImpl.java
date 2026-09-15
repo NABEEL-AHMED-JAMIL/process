@@ -252,18 +252,45 @@ public class FtpObjectStorageServiceImpl implements ObjectStorageService {
      * request for that folder, including the separate folder-insights pass that asks for the
      * same directory with a different page size.
      */
+    /**
+     * A cached listing, and a cache outage that must not become a failed listing.
+     *
+     * This class holds a {@link Cache} handed to it by StorageClientFactory and calls get/put/
+     * clear on it DIRECTLY, rather than going through {@code @Cacheable}. That distinction is
+     * not cosmetic: a {@code CacheErrorHandler} -- the one RedisConfig registers so that a Redis
+     * outage degrades to a miss instead of an HTTP 500 -- is consulted only by Spring's
+     * CacheInterceptor, and there is no interceptor on this path. So the handler that now
+     * protects every other cache in the application does not reach these three lines, and with
+     * Redis down a Lettuce RedisConnectionFailureException would come straight out of an FTP
+     * folder listing while every other storage backend degraded quietly.
+     *
+     * Same failure, different mechanism, so it needs its own guard.
+     */
     @SuppressWarnings("unchecked")
     private List<ObjectSummaryDto> listDirectoryCached(String path) {
         String cacheKey = this.connection.getAlias() + ":" + path;
         if (this.listingCache != null) {
-            Cache.ValueWrapper cached = this.listingCache.get(cacheKey);
-            if (cached != null && cached.get() instanceof List) {
-                return (List<ObjectSummaryDto>) cached.get();
+            try {
+                Cache.ValueWrapper cached = this.listingCache.get(cacheKey);
+                if (cached != null && cached.get() instanceof List) {
+                    return (List<ObjectSummaryDto>) cached.get();
+                }
+            } catch (RuntimeException cacheDown) {
+                // A read that cannot reach the cache is a miss. Falling through costs one FTP
+                // round trip; not falling through costs the reader their folder.
+                logger.warn("FTP listing cache unavailable for {}, listing directly: {}",
+                    cacheKey, cacheDown.getMessage());
             }
         }
         List<ObjectSummaryDto> objects = this.listDirectory(path);
         if (this.listingCache != null) {
-            this.listingCache.put(cacheKey, objects);
+            try {
+                this.listingCache.put(cacheKey, objects);
+            } catch (RuntimeException cacheDown) {
+                // The listing is already in hand and correct; failing to memoise it is not a
+                // reason to withhold it.
+                logger.warn("Could not cache the FTP listing for {}: {}", cacheKey, cacheDown.getMessage());
+            }
         }
         return objects;
     }
@@ -271,7 +298,14 @@ public class FtpObjectStorageServiceImpl implements ObjectStorageService {
     /** Drops every cached listing for this connection -- called after anything that writes. */
     private void invalidateListingCache() {
         if (this.listingCache != null) {
-            this.listingCache.clear();
+            try {
+                this.listingCache.clear();
+            } catch (RuntimeException cacheDown) {
+                // The write itself has already happened. An un-cleared cache serves a stale
+                // listing for up to its 45-second TTL, which is strictly better than reporting
+                // a successful upload as a failure.
+                logger.warn("Could not clear the FTP listing cache: {}", cacheDown.getMessage());
+            }
         }
     }
 

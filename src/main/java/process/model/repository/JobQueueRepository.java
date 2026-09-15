@@ -39,10 +39,23 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
      * dispatcher counts anything in Queue, Start or Running when deciding whether a job is
      * already busy, so one stranded run stops that job ever being scheduled again and it
      * accumulates "already in queue" skips instead.
+     *
+     * <b>QUEUE is included, and it is measured from date_created rather than start_time.</b>
+     * This covered START and RUNNING only, which left the one strand nothing could ever clear: a
+     * run whose task has no source task type was never dispatched at all, so it has no start_time
+     * and sat in Queue for ever -- counted by the dispatcher as "already busy" and invisible to
+     * the sweep that exists to clear exactly that. The dispatcher's own guard against that state
+     * now closes the run when it happens, but only for new ones; this is what reaches the rows
+     * already stranded, and any other way a row can be enqueued and never picked up.
+     *
+     * COALESCE rather than a second query: a Queue row has no start_time by definition, and a
+     * START row that somehow has none would otherwise be excluded by the null test the way the
+     * Queue rows were.
      */
     @Query(value = "select job_queue.* from job_queue "
-        + "where UPPER(job_status) in ('START', 'RUNNING') "
-        + "and start_time is not null and start_time < ?1 "
+        + "where UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') "
+        + "and COALESCE(start_time, date_created) is not null "
+        + "and COALESCE(start_time, date_created) < ?1 "
         + "order by job_queue_id asc", nativeQuery = true)
     public List<JobQueue> findStalledRuns(LocalDateTime startedBefore);
 

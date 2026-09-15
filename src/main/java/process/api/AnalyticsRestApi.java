@@ -404,6 +404,11 @@ public class AnalyticsRestApi {
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS,
                 stopped ? "Query stopped." : "That query is no longer running.", state),
                 HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            // The refusal shape the other four endpoints on this controller already have. This
+            // one was missed, so switching analytics off answered a stop request with a 500.
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ex.getMessage()), HttpStatus.OK);
         } catch (Exception ex) {
             this.logger.error("An error occurred while cancelling an analytics query.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
@@ -494,6 +499,11 @@ public class AnalyticsRestApi {
         AnalyticsQueryRun run = new AnalyticsQueryRun();
         run.setConnectionAlias(request.get("connection"));
         run.setDatasetPath(request.get("path"));
+        // Both locations, because a join reads both. The row used to name only the first, so the
+        // one table that answers "who read what" gave a wrong answer for every two-file query --
+        // and nothing else on it hinted that a second file had been read at all.
+        run.setSecondConnectionAlias(request.get("connection2"));
+        run.setSecondDatasetPath(request.get("path2"));
         run.setQueryText(request.get("sql"));
         run.setRunStatus(status);
         run.setRowCount(rowCount);

@@ -49,6 +49,8 @@ class FileChatExtractionFailureTest {
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
+    // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
+    @Mock private process.model.service.FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -56,7 +58,7 @@ class FileChatExtractionFailureTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, this.fileShareService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("Docs", BUCKET, "MINIO")));
@@ -111,5 +113,35 @@ class FileChatExtractionFailureTest {
         ResponseDto response = this.service.sendMessage(this.request("What's in this image?"));
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+    }
+
+    /**
+     * The same failure on the readiness call, which happens first and therefore decides what the
+     * panel looks like before a question has even been typed.
+     *
+     * prepareContext used to call extractText directly, outside the guarded supplier sendMessage
+     * goes through. An .mp3 opened while audio_extract_service is down threw IllegalStateException
+     * straight out of prepareContext, FileChatRestApi turned it into HTTP 500 with "Some internal
+     * error occurred contact with support.", and the panel printed that and left the textarea and
+     * the mic disabled for good -- because prepareError is sticky. The identical failure one call
+     * later, on sendMessage, was a clean 200 with "Couldn't get any readable content out of this
+     * .mp3 file." Same fault, two entirely different answers, and the one the user actually hit
+     * was the useless one.
+     */
+    @Test
+    void anExtractionFailureDuringReadinessIsTheSamePlainErrorSendMessageGives() throws Exception {
+        lenient().when(this.fileChatExtractionService.extractText(BUCKET, KEY, ETAG))
+            .thenThrow(new IllegalStateException("audio_extract_service returned HTTP 502"));
+
+        ResponseDto response = this.service.prepareContext(BUCKET, KEY, AGENT_ID);
+
+        assertThat(response.getStatus())
+            .as("a readable failure the send path already explains must not reach the controller "
+                + "as an unhandled exception and become a 500")
+            .isEqualTo(ProcessUtil.ERROR);
+        assertThat(response.getMessage())
+            .as("and it must be the same plain-words message, naming the file type")
+            .contains("readable content")
+            .contains("jpg");
     }
 }

@@ -12,7 +12,6 @@ import java.util.*;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 /**
  * @author Nabeel Ahmed
@@ -23,12 +22,39 @@ public class ProcessTimeUtil {
     private Logger logger = LoggerFactory.getLogger(ProcessTimeUtil.class);
 
     public static List<String> checked = Arrays.asList("True", "False");
-    public static List<String> priority = Stream.concat(IntStream.rangeClosed(1, 9)
-         .mapToObj(String::valueOf), Stream.of("99", "100")).collect(Collectors.toList());
+
+    /**
+     * The priorities a job may carry: 1 (highest) to 9.
+     *
+     * "99" and "100" were concatenated onto the end of that range, and this single list is used
+     * for two different things -- it fills the Priority dropdown of the downloadable bulk
+     * template, and it is what JobDetailValidation checks an uploaded Priority cell against. So
+     * the template offered two values that SourceJobServiceImpl refuses outright on create and on
+     * update ("priority must be between 1 (highest) and 9"), and the bulk path, validating against
+     * that same over-wide list, accepted them and wrote them to the database. The resulting job
+     * then sorted against every other job on a number no other path can produce, and the first
+     * attempt to edit it in the console was rejected over a priority the operator never typed.
+     */
+    public static List<String> priority = IntStream.rangeClosed(1, 9)
+         .mapToObj(String::valueOf).collect(Collectors.toList());
     public static List<String> frequency = Arrays.asList("Mint", "Hr", "Daily", "Weekly", "Monthly");
 
     public static List<String> daysOfWeek = Arrays.asList("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
 
+    /**
+     * How a stored days_of_week entry is read, in both vocabularies the column actually holds.
+     *
+     * MON..SUN is the vocabulary: it is what `daysOfWeek` above declares, what the legacy console
+     * has always written, and what the jobs list renders. The rewritten console shipped writing
+     * '1'..'7' instead, and nothing on the way in normalised or rejected it, so a "Weekly on Mon
+     * and Wed" schedule stored "1,3", parsed to an empty set, and quietly became one run a week on
+     * whatever weekday the start date happened to fall on -- for ever, with both console screens
+     * confirming the days the operator picked. The column therefore holds a mixture of the two
+     * today, written by two shipped clients, and no backfill can be trusted to have reached every
+     * row of it before the next dispatch tick. Reading both costs seven map entries and repairs
+     * every existing row the moment it is next read; the numeric form is ISO-8601, which is where
+     * the console's 1=Mon..7=Sun ordering came from in the first place.
+     */
     private static final Map<String, DayOfWeek> DAY_CODE_MAP = new LinkedHashMap<>();
     static {
         DAY_CODE_MAP.put("MON", DayOfWeek.MONDAY);
@@ -38,6 +64,13 @@ public class ProcessTimeUtil {
         DAY_CODE_MAP.put("FRI", DayOfWeek.FRIDAY);
         DAY_CODE_MAP.put("SAT", DayOfWeek.SATURDAY);
         DAY_CODE_MAP.put("SUN", DayOfWeek.SUNDAY);
+        DAY_CODE_MAP.put("1", DayOfWeek.MONDAY);
+        DAY_CODE_MAP.put("2", DayOfWeek.TUESDAY);
+        DAY_CODE_MAP.put("3", DayOfWeek.WEDNESDAY);
+        DAY_CODE_MAP.put("4", DayOfWeek.THURSDAY);
+        DAY_CODE_MAP.put("5", DayOfWeek.FRIDAY);
+        DAY_CODE_MAP.put("6", DayOfWeek.SATURDAY);
+        DAY_CODE_MAP.put("7", DayOfWeek.SUNDAY);
     }
 
     public static Map<String, List<?>> frequencyDetail = new HashMap<>();
@@ -85,7 +118,7 @@ public class ProcessTimeUtil {
             return candidate -> candidate.plusDays(interval);
         } else if (scheduler.getFrequency().equals(Frequency.Weekly.name())) {
             if (!ProcessUtil.isNull(scheduler.getDaysOfWeek())) {
-                return candidate -> nextByDaysOfWeek(candidate, scheduler.getDaysOfWeek());
+                return candidate -> nextByDaysOfWeek(candidate, interval, scheduler.getDaysOfWeek());
             }
             return candidate -> candidate.plusWeeks(interval);
         } else if (scheduler.getFrequency().equals(Frequency.Monthly.name())) {
@@ -247,19 +280,53 @@ public class ProcessTimeUtil {
         return next;
     }
 
-    private static LocalDateTime nextByDaysOfWeek(LocalDateTime from, String daysOfWeekCsv) {
+    /**
+     * The next named day, honouring "Repeat every N weeks".
+     *
+     * intervalValue was not passed in at all, so any weekly schedule that named days stepped to
+     * the next named day inside seven days and the repeat count was decoration: "every 2 weeks on
+     * Mon, Wed" ran every Mon and Wed, twice the cadence that was asked for. The editor offers the
+     * repeat count and the day pickers side by side, so that is the combination it encourages.
+     * The two settings answer different questions and both have to be obeyed -- the days say which
+     * days inside a running week fire, the interval says which weeks run at all -- so once the
+     * last named day of a week has gone by the walk jumps whole weeks to the first named day of
+     * the week N weeks on.
+     *
+     * This changes the cadence of every stored weekly schedule that names days AND carries an
+     * interval above 1: they have been firing every week and will now fire every N. Those rows
+     * are being brought back to what their own editor screen has been showing all along rather
+     * than migrated -- nothing is rewritten, next_run_at still names a real slot, and the first
+     * run after this ships is the one already scheduled. Only the step after it widens. Rows with
+     * an interval of 1, which is what the console defaults to, keep the timetable they have.
+     */
+    private static LocalDateTime nextByDaysOfWeek(LocalDateTime from, long intervalWeeks, String daysOfWeekCsv) {
+        long weeks = Math.max(intervalWeeks, 1L);
         Set<DayOfWeek> selected = parseDaysOfWeek(daysOfWeekCsv);
         if (selected.isEmpty()) {
-            return from.plusWeeks(1);
+            // An unreadable day list is no day constraint at all, so the plain weekly step stands.
+            return from.plusWeeks(weeks);
         }
+        // Days still ahead in the week that is already running come first: they belong to a week
+        // the interval has already let through, whatever the interval is.
         LocalDateTime candidate = from.plusDays(1);
-        for (int i = 0; i < 7; i++) {
+        while (candidate.getDayOfWeek().getValue() > from.getDayOfWeek().getValue()) {
             if (selected.contains(candidate.getDayOfWeek())) {
                 return candidate;
             }
             candidate = candidate.plusDays(1);
         }
-        return from.plusWeeks(1);
+        // This week is spent, so skip to the first named day of the week `weeks` on. Measured from
+        // the Monday of the target week rather than by stepping seven days from `from`: the latter
+        // lands on `from`'s own weekday and then has to hunt forward, which walks the cadence
+        // later by up to six days on every cycle instead of holding it.
+        LocalDateTime targetWeekStart = from.plusWeeks(weeks).minusDays(from.getDayOfWeek().getValue() - 1L);
+        for (int i = 0; i < 7; i++) {
+            LocalDateTime day = targetWeekStart.plusDays(i);
+            if (selected.contains(day.getDayOfWeek())) {
+                return day;
+            }
+        }
+        return from.plusWeeks(weeks);
     }
 
     private static LocalDateTime nextByDayOfMonth(LocalDateTime from, long intervalMonths, int dayOfMonth) {

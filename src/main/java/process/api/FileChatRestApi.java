@@ -73,4 +73,18 @@ public class FileChatRestApi {
         }
     }
 
+    /**
+     * The same export, emailed rather than downloaded. The attachment never reaches the browser,
+     * so a reader on a locked-down machine can still get the file out of a conversation.
+     */
+    @RequestMapping(value = "/emailExport", method = RequestMethod.POST)
+    public ResponseEntity<?> emailExport(@RequestBody FileChatExportRequestDto requestDto) {
+        try {
+            return new ResponseEntity<>(this.fileChatService.emailExport(requestDto), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while emailExport ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
 }

@@ -167,6 +167,24 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
         target.setQueryName(payload.getQueryName().trim());
         target.setConnectionAlias(payload.getConnectionAlias().trim());
         target.setDatasetPath(payload.getDatasetPath().trim());
+        /*
+         * The second dataset, copied here for the same reason the first is: this method builds
+         * the row rather than saving the one it was handed, so every field the caller gets to
+         * decide has to be named explicitly. It was missing, and that omission was one of four
+         * independent places a saved join lost half of itself -- the row kept the JOIN text and
+         * one location, and a reader who opened it later was shown a DuckDB catalog error about
+         * a table nobody had asked for.
+         *
+         * Nulled as a PAIR, never half-written. validate() has already refused a payload with
+         * one half; clearing both when neither is given is what lets a person turn a saved join
+         * back into a single-dataset query by unpicking the second file.
+         */
+        boolean hasSecond = !isBlank(payload.getSecondConnectionAlias())
+            && !isBlank(payload.getSecondDatasetPath());
+        target.setSecondConnectionAlias(hasSecond
+            ? payload.getSecondConnectionAlias().trim() : null);
+        target.setSecondDatasetPath(hasSecond
+            ? payload.getSecondDatasetPath().trim() : null);
         target.setQueryText(payload.getQueryText());
         target = this.analyticsQueryRepository.save(target);
         return new ResponseDto(SUCCESS, String.format("Saved query stored with %d.",
@@ -414,6 +432,24 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
         }
         if (isBlank(payload.getQueryText())) {
             return "AnalyticsQuery queryText missing.";
+        }
+        /*
+         * The second dataset is optional, and refused as a HALF.
+         *
+         * Both or neither, which is the same rule AnalyticsRestApi already applies to an ad-hoc
+         * run and the same one the table enforces as a CHECK. A path with no connection cannot be
+         * resolved and a connection with no path names no file, so a half-populated pair is not a
+         * smaller version of a saved join -- it is a row that cannot be run, stored under a name
+         * that says it can.
+         */
+        boolean hasSecondAlias = !isBlank(payload.getSecondConnectionAlias());
+        boolean hasSecondPath = !isBlank(payload.getSecondDatasetPath());
+        if (hasSecondAlias != hasSecondPath) {
+            return "A second dataset needs both a connection and a path, or neither.";
+        }
+        if (hasSecondAlias
+            && payload.getSecondConnectionAlias().trim().length() > MAX_ALIAS_LENGTH) {
+            return String.format("A connection alias is at most %d characters.", MAX_ALIAS_LENGTH);
         }
         return null;
     }

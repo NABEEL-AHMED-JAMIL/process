@@ -116,6 +116,33 @@ public class FileShareServiceImpl implements FileShareService {
         return this.toResponseDto(result);
     }
 
+    @Override
+    public ResponseDto emailGeneratedFile(String recipientEmail, String itemName, String filename,
+        String contentType, byte[] bytes, String message) throws Exception {
+        if (isNull(recipientEmail) || !EMAIL_PATTERN.matcher(recipientEmail.trim()).matches()) {
+            return new ResponseDto(ERROR, "Enter a valid recipient email address.");
+        }
+        if (bytes == null || bytes.length == 0) {
+            return new ResponseDto(ERROR, "There is nothing to send.");
+        }
+        // The same ceiling emailFile enforces, and for the same reason: the attachment is
+        // base64-encoded on the way out, so the transport sees roughly a third more than this.
+        if (bytes.length > MAX_SHARE_BYTES) {
+            return new ResponseDto(ERROR, String.format(
+                "This export is %s -- too large to email (limit is %s).",
+                formatSize((long) bytes.length), formatSize(MAX_SHARE_BYTES)));
+        }
+        try {
+            String result = this.emailMessagesFactory.sendFileShareEmail(
+                recipientEmail.trim(), TenantContext.getUsername(), itemName, "File", false,
+                formatSize((long) bytes.length), message, bytes, filename, contentType);
+            return this.toResponseDto(result);
+        } catch (Exception ex) {
+            logger.error("File Share: emailGeneratedFile failed for {}", filename, ex);
+            return new ResponseDto(ERROR, "Could not send this email: " + ex.getMessage());
+        }
+    }
+
     private ResponseDto emailSingleFile(String bucket, String key, String recipientEmail, String message, String senderName) throws Exception {
         ObjectMetadataDto metadata = this.storageBrowserService.getObjectMetadata(bucket, key);
         if (isNull(metadata)) {

@@ -107,8 +107,23 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         return new ResponseDto(ERROR, String.format("DocumentConverterTask not found with %s.", documentConverterTaskId));
     }
 
+    /**
+     * Deliberately NOT @Transactional, and this is the record of that decision.
+     *
+     * Almost nothing this method does is database work. The LibreOffice round trip below runs
+     * out of process, routinely takes seconds on a real document, and can sit there until its own
+     * timeout expires; the two uploads after it are network round trips carrying the whole file.
+     * A transaction around all of that pins a pooled connection for the entire duration while
+     * issuing no statements on it, so a handful of people converting at once drains the pool and
+     * requests that have nothing to do with conversion start failing to get a connection at all --
+     * one slow document taking the rest of the application down with it.
+     *
+     * The database work is two repository calls, and SimpleJpaRepository.save carries its own
+     * transaction, which is all the atomicity either call needs on its own. What the method-wide
+     * transaction did give, and what the save block now does explicitly, is make sure a failed
+     * upload leaves no row behind.
+     */
     @Override
-    @Transactional
     public ResponseDto convert(MultipartFile file, String outputFormat, String bucketName, String targetFolder, String taskName, boolean save) throws Exception {
         if (file == null || file.isEmpty()) {
             return new ResponseDto(ERROR, "Uploaded file is empty.");
@@ -223,10 +238,21 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
             String prefix = folder + "/" + task.getDocumentConverterTaskId() + "/";
             String inputKey = prefix + "input/" + safeFileName;
             String outputKey = prefix + "output/" + outputFileName;
-            this.storageBrowserService.uploadObject(bucketName.trim(), inputKey,
-                file.getInputStream(), file.getSize(), file.getContentType());
-            this.storageBrowserService.uploadObject(bucketName.trim(), outputKey,
-                new ByteArrayInputStream(outputBytes), outputBytes.length, outputContentType);
+            try {
+                this.storageBrowserService.uploadObject(bucketName.trim(), inputKey,
+                    file.getInputStream(), file.getSize(), file.getContentType());
+                this.storageBrowserService.uploadObject(bucketName.trim(), outputKey,
+                    new ByteArrayInputStream(outputBytes), outputBytes.length, outputContentType);
+            } catch (Exception uploadException) {
+                // Nothing rolls the row back now that the method is not itself a transaction, and
+                // the row as saved still reads "pending" for both keys: it would list as a finished
+                // conversion whose output cannot be downloaded, and nothing ever goes back to
+                // finish it. Removing it leaves the caller exactly where the rollback used to.
+                this.documentConverterTaskRepository.delete(task);
+                logger.error("Upload of converted document {} failed, its placeholder row {} removed: {}",
+                    outputFileName, task.getDocumentConverterTaskId(), uploadException.getMessage());
+                throw uploadException;
+            }
 
             task.setInputStorageKey(inputKey);
             task.setOutputStorageKey(outputKey);

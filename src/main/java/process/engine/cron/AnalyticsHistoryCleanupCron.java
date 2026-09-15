@@ -11,6 +11,7 @@ import process.model.repository.AnalyticsQueryRunRepository;
 
 import java.sql.Timestamp;
 import java.util.concurrent.TimeUnit;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
  * Removes analytics run history older than the configured retention window.
@@ -37,6 +38,10 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Nabeel Ahmed
  */
+/* Switched off with the rest of the scheduled work when process.scheduling.enabled is false --
+ * see ProcessCron. A test context has no business deleting history or syncing audit logs out of
+ * the shared database. Absent means enabled, so production is unchanged. */
+@ConditionalOnProperty(name = "process.scheduling.enabled", havingValue = "true", matchIfMissing = true)
 @Component
 public class AnalyticsHistoryCleanupCron {
 
@@ -54,10 +59,12 @@ public class AnalyticsHistoryCleanupCron {
     /**
      * The schedule is fixed at hourly and the WINDOW decides whether anything happens.
      *
-     * @Scheduled needs a compile-time constant, so the interval cannot be read from
-     * AnalyticsLimits here. Waking hourly and returning immediately costs nothing measurable, and
-     * it means changing analytics.history.cleanup-interval-hours takes effect without the
-     * property having to be resolvable before the bean exists.
+     * <b>There used to be an analytics.history.cleanup-interval-hours to tune this, defaulting to
+     * six, and this comment used to claim it took effect.</b> Nothing read it -- @Scheduled needs
+     * a compile-time constant -- so the property described a cadence the code did not run and
+     * offered a knob that moved nothing. It is gone rather than wired up, because the cadence is
+     * not the control here: retention-days is. Waking hourly and returning immediately costs
+     * nothing measurable, and an hour is a fine granularity for a window measured in days.
      *
      * The initial delay keeps this off the startup path: an application coming up under load has
      * better things to do in its first minute than a retention delete.

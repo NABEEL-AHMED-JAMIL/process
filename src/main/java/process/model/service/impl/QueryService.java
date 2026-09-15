@@ -116,6 +116,18 @@ public class QueryService {
 
     public String fetchAllLinkJobsWithSourceTaskQuery(boolean isCount, Long taskDetailId,
         String startDate, String endDate, SearchTextDto searchTextDto) {
+        return this.fetchAllLinkJobsWithSourceTaskQuery(isCount, taskDetailId, startDate, endDate, null, null, searchTextDto);
+    }
+
+    /**
+     * The linked-jobs query, optionally ordered.
+     *
+     * It emitted no `order by` at all, so the columnName and order the endpoint accepts went
+     * nowhere and the row order was whatever the planner happened to return -- which, once the
+     * rows are also paged, means a row can appear on two pages and another on none.
+     */
+    public String fetchAllLinkJobsWithSourceTaskQuery(boolean isCount, Long taskDetailId,
+        String startDate, String endDate, String columnName, String order, SearchTextDto searchTextDto) {
         String selectPortion = "";
         if (isCount) {
             selectPortion = "select count(*) as result ";
@@ -151,6 +163,12 @@ public class QueryService {
                 query += "and cast(sj.date_created as varchar) like ('%" + itemValue + "%') ";
             }
         }
+        if (!isCount) {
+            // Always ordered, even when the caller names no column: a paged read with no order
+            // is not a stable sequence of pages.
+            query += String.format("order by %s %s ",
+                this.sanitizeLinkedJobSortColumn(columnName), this.sanitizeSortOrder(order));
+        }
         return query;
     }
 
@@ -185,6 +203,15 @@ public class QueryService {
         return SOURCE_TASK_SORT_COLUMNS.contains(columnName) ? columnName : "st.task_detail_id";
     }
 
+    private static final Set<String> LINKED_JOB_SORT_COLUMNS = new HashSet<>(Arrays.asList(
+        "sj.job_id", "sj.job_name", "sj.job_status", "sj.execution",
+        "sj.job_running_status", "sj.last_job_run", "sj.priority", "sj.date_created"
+    ));
+
+    private String sanitizeLinkedJobSortColumn(String columnName) {
+        return LINKED_JOB_SORT_COLUMNS.contains(columnName) ? columnName : "sj.job_id";
+    }
+
     private String sanitizeSortOrder(String order) {
         return "asc".equalsIgnoreCase(order) ? "asc" : "desc";
     }
@@ -208,9 +235,23 @@ public class QueryService {
         throw new IllegalArgumentException("Invalid jobStatus -- expected one of " + JOB_QUEUE_STATUSES);
     }
 
+    /**
+     * The tenant predicate spliced into every list query, and what happens when there is no tenant.
+     *
+     * A missing tenant used to yield no predicate at all, which is the opposite of what the by-id
+     * paths do: TenantOwnership refuses a tenantless caller outright, on the stated principle that
+     * a context with no tenant owns nothing. So the same account that could not open one job by id
+     * was served every tenant's jobs by the list, and every tenant's tasks -- task_payload XML
+     * included -- by the task list. Only a platform admin is meant to cross tenants; anyone else
+     * arriving without one is a legacy or broken row, and the safe answer for them is nothing
+     * rather than everything.
+     */
     private String tenantClause(String tableAlias) {
-        if (TenantContext.isPlatformAdmin() || ProcessUtil.isNull(TenantContext.getTenantId())) {
+        if (TenantContext.isPlatformAdmin()) {
             return "";
+        }
+        if (ProcessUtil.isNull(TenantContext.getTenantId())) {
+            return " and 1 = 0 ";
         }
         return String.format(" and %s.tenant_id = %d ", tableAlias, TenantContext.getTenantId());
     }

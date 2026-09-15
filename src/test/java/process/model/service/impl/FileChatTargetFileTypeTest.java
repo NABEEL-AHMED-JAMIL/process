@@ -22,6 +22,8 @@ import java.util.Collections;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,6 +51,8 @@ class FileChatTargetFileTypeTest {
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
+    // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
+    @Mock private process.model.service.FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -56,7 +60,7 @@ class FileChatTargetFileTypeTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, this.fileShareService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("Docs", BUCKET, "MINIO")));
@@ -79,6 +83,9 @@ class FileChatTargetFileTypeTest {
             .thenReturn(new ObjectMetadataDto(key, key, 1000L, "now", "etag-1", "text/plain", false));
         lenient().when(this.storageBrowserService.getObjectMetadataCached(BUCKET, key))
             .thenReturn(new ObjectMetadataDto(key, key, 1000L, "now", "etag-1", "text/plain", false));
+        lenient().when(this.fileChatExtractionService.extractText(eq(BUCKET), eq(key), eq("etag-1"),
+            nullable(String.class), nullable(String.class)))
+            .thenReturn("content");
         lenient().when(this.fileChatExtractionService.extractText(BUCKET, key, "etag-1"))
             .thenReturn("Some extracted file text.");
     }
@@ -107,6 +114,8 @@ class FileChatTargetFileTypeTest {
             .contains("csv,json")
             .contains("report.pdf");
         verify(this.fileChatExtractionService, never()).extractText(anyString(), anyString(), anyString());
+        verify(this.fileChatExtractionService, never()).extractText(anyString(), anyString(), anyString(),
+            nullable(String.class), nullable(String.class));
         verify(this.aiAgentService, never()).processAdHoc(any());
     }
 
@@ -128,6 +137,56 @@ class FileChatTargetFileTypeTest {
         ResponseDto response = this.service.sendMessage(this.request("REPORT.PDF"));
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+    }
+
+    // ---- one format, two spellings -------------------------------------------------------------
+
+    /**
+     * jpg and jpeg are the same picture, and the exact match refused the pair.
+     *
+     * The refusal was the worst kind: "This agent only handles jpg files -- pick a different agent
+     * for photo.jpeg" is advice nobody can act on, because the agent they already have IS the one
+     * for that file. It also cannot be worked around from the picker, which offered jpg and not
+     * jpeg, so the configuration that would have accepted the file could not be expressed.
+     */
+    @Test
+    void anAgentConfiguredForJpgAcceptsAJpeg() throws Exception {
+        this.stubAgent("jpg");
+        this.stubFile("photo.jpeg");
+
+        ResponseDto response = this.service.sendMessage(this.request("photo.jpeg"));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+    }
+
+    @Test
+    void andAnAgentConfiguredForJpegAcceptsAJpg() throws Exception {
+        this.stubAgent("jpeg");
+        this.stubFile("photo.jpg");
+
+        ResponseDto response = this.service.sendMessage(this.request("photo.jpg"));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+    }
+
+    @Test
+    void theOtherPairsThatAreOneFormatUnderTwoNamesFoldToo() throws Exception {
+        this.stubAgent("tif,html,yaml");
+        this.stubFile("scan.tiff");
+
+        assertThat(this.service.sendMessage(this.request("scan.tiff")).getStatus())
+            .isEqualTo(ProcessUtil.SUCCESS);
+    }
+
+    /** Aliases, not leniency: a png agent still has to refuse a jpeg. */
+    @Test
+    void aFormatThatMerelyLooksSimilarIsStillRefused() throws Exception {
+        this.stubAgent("png");
+        this.stubFile("photo.jpeg");
+
+        ResponseDto response = this.service.sendMessage(this.request("photo.jpeg"));
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
     }
 
     @Test
@@ -178,6 +237,8 @@ class FileChatTargetFileTypeTest {
         assertThat(response.getMessage()).contains("csv,json").contains("report.pdf");
         verify(this.storageBrowserService, never()).getObjectMetadata(anyString(), anyString());
         verify(this.fileChatExtractionService, never()).extractText(anyString(), anyString(), anyString());
+        verify(this.fileChatExtractionService, never()).extractText(anyString(), anyString(), anyString(),
+            nullable(String.class), nullable(String.class));
     }
 
     @Test

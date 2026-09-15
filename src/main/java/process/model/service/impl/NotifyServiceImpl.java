@@ -69,10 +69,6 @@ public class NotifyServiceImpl implements NotifyService {
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), currentStatus != newStatus);
-        // Push the new state to anyone watching this tenant's job list, so a running job
-        // updates in place instead of waiting for someone to hit Refresh.
-        this.jobEventPublisher.publishStatus(job.get().getTenantId(), jobQueue.getJobId(),
-            jobQueue.getJobQueueId(), newStatus.name(), jobQueue.getJobStatusMessage());
         if (newStatus == JobStatus.Failed || newStatus == JobStatus.Completed) {
             logger.info("Setting end date for job {}", jobQueue.getJobId());
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), jobQueue.getEndTime());

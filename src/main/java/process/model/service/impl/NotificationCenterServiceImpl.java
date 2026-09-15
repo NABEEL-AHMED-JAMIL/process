@@ -152,10 +152,7 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
             // "not yours" would confirm the id exists to a caller who is not allowed to see the row.
             return new ResponseDto(ERROR, String.format("Notification not found with %d.", notificationId));
         }
-        Long remaining = this.redisTemplate.opsForValue().decrement(this.unreadKey(recipientUserId));
-        if (remaining != null && remaining < 0) {
-            this.redisTemplate.opsForValue().set(this.unreadKey(recipientUserId), "0");
-        }
+        this.decrementUnread(recipientUserId);
         return new ResponseDto(SUCCESS, "Marked as read.");
     }
 
@@ -212,6 +209,43 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
             return unreadCount;
         }
         return this.redisTemplate.opsForValue().increment(key);
+    }
+
+    /**
+     * Drops the cached unread counter by one for a notification that was just marked read, seeding it
+     * from the database when the key is absent instead of letting DECR materialise it.
+     *
+     * This is the same hole incrementUnread closes, at the other end. DECR on a missing key creates
+     * it at -1, and the clamp that used to follow immediately wrote "0" over that -- so the first
+     * mark-as-read after anything removed the key (clearUnreadCount for a user later reactivated, an
+     * eviction, a flushed Redis) pinned the badge at zero over a mailbox still holding 48 unread
+     * rows, and unreadCount() then served that zero straight back out of the cache. The next create()
+     * would find the key present and INCR it to 1, so the badge never recovered on its own; only
+     * markAllRead, which writes the count outright, could clear the lie. Recounting on a miss keeps
+     * the badge honest whatever removed the key.
+     *
+     * The row has already been updated inside this transaction, so the recount excludes it and must
+     * not then be decremented again.
+     */
+    private void decrementUnread(Long recipientUserId) {
+        String key = this.unreadKey(recipientUserId);
+        if (!Boolean.TRUE.equals(this.redisTemplate.hasKey(key))) {
+            long unreadCount = this.notificationRepository.countByRecipientUserIdAndReadFalse(recipientUserId);
+            // setIfAbsent rather than set, for the same reason as incrementUnread: a concurrent
+            // create() may have seeded the key since the miss above, and overwriting would drop its
+            // notification off the badge. Losing that race falls through to the decrement below,
+            // which is right -- the winner's count was taken before this transaction committed, so
+            // it still counts this row as unread.
+            if (Boolean.TRUE.equals(this.redisTemplate.opsForValue().setIfAbsent(key, String.valueOf(unreadCount)))) {
+                return;
+            }
+        }
+        Long remaining = this.redisTemplate.opsForValue().decrement(key);
+        // A counter that has drifted below zero is not a count anyone can render; clamp it rather
+        // than let unreadCount() hand a negative badge to the bell.
+        if (remaining != null && remaining < 0L) {
+            this.redisTemplate.opsForValue().set(key, "0");
+        }
     }
 
     private String unreadKey(Long recipientUserId) {

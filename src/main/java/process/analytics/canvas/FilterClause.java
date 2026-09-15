@@ -99,6 +99,22 @@ public class FilterClause {
         return clause;
     }
 
+    /**
+     * A condition with two operands: the three two-sided ranges, and IN / NOT_IN.
+     *
+     * The single-value factory beside this one leaves {@code values} null, which every two-sided
+     * operator reports as "needs exactly two values" -- so building a DATE_RANGE in code meant
+     * setting the field directly and bypassing the factory. Drilling into a bucketed dimension
+     * does exactly that, and it is the reason this exists.
+     */
+    public static FilterClause ofValues(String field, Operator operator, List<String> values) {
+        FilterClause clause = new FilterClause();
+        clause.field = field;
+        clause.operator = operator;
+        clause.values = values;
+        return clause;
+    }
+
     /** A group. */
     public static FilterClause group(LogicalOp op, List<FilterClause> clauses) {
         FilterClause clause = new FilterClause();

@@ -166,11 +166,6 @@ public class AnalyticsQueryService {
         return this.running.cancel(runId);
     }
 
-    /** How many runs are in flight right now, across every tenant. */
-    public int runningCount() {
-        return this.running.size();
-    }
-
     /**
      * Stops the engine's watchdog thread when the application does.
      *

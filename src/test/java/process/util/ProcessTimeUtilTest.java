@@ -7,6 +7,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -343,15 +344,27 @@ class ProcessTimeUtilTest {
     @Test
     void aWeeklyFirstRunTakesTheNextNamedDayNotNextWeek() {
         // Every weekday named: the very next day qualifies, so a week must not be skipped.
+        //
+        // <b>Midnight, and not 00:01, and the difference is a real failure this test had.</b> The
+        // start time has to be one that has ALREADY PASSED when the test runs, or the seed is
+        // still ahead and today is the correct answer -- so 00:01 made this test fail for the one
+        // minute a day between 00:00 and 00:01, which is exactly when it was run on 2026-09-10.
+        // Midnight is the only wall-clock-independent choice: resolveInitialNextRun advances on
+        // !isAfter(now), so a seed of today at 00:00 is never after now, whatever the hour.
+        //
+        // It survives the rollover too. If midnight passes between the capture below and the call,
+        // the seed becomes yesterday-at-midnight, the walk steps twice instead of once, and it
+        // lands on the same date this assertion names.
+        LocalDate today = LocalDate.now();
         Scheduler scheduler = new Scheduler();
         scheduler.setFrequency("Weekly");
         scheduler.setIntervalValue("1");
         scheduler.setDaysOfWeek("MON,TUE,WED,THU,FRI,SAT,SUN");
-        scheduler.setStartDate(LocalDate.now());
-        scheduler.setStartTime(LocalTime.of(0, 1));   // already past today
+        scheduler.setStartDate(today);
+        scheduler.setStartTime(LocalTime.MIDNIGHT);
 
         LocalDateTime first = ProcessTimeUtil.resolveInitialNextRun(scheduler);
-        assertEquals(LocalDate.now().plusDays(1), first.toLocalDate());
+        assertEquals(today.plusDays(1), first.toLocalDate());
     }
 
     @Test
@@ -380,5 +393,156 @@ class ProcessTimeUtilTest {
 
         assertEquals(LocalDate.now().plusDays(3),
             ProcessTimeUtil.resolveInitialNextRun(scheduler).toLocalDate());
+    }
+
+    // -------- both day vocabularies the column actually holds ------------------------------
+
+    /**
+     * The rewritten console shipped writing '1'..'7' where everything else writes MON..SUN, and
+     * nothing rejected or normalised it on the way in. So a "Weekly on Mon and Wed" schedule
+     * stored "1,3", parsed to no days at all, and quietly ran once a week on whatever weekday its
+     * start date fell on -- for ever, while both console screens went on showing Mon and Wed.
+     * The console writes MON..SUN now, but those rows are in the database and are not going to be
+     * migrated out from under a running scheduler, so they have to read correctly here.
+     */
+    @Test
+    void numericDayCodesAreReadAsTheDaysTheConsoleMeant() {
+        LocalDateTime monday = LocalDateTime.of(2027, 3, 1, 9, 0);
+        assertEquals(DayOfWeek.MONDAY, monday.getDayOfWeek());
+        Scheduler s = scheduler("Weekly", "1", monday);
+        s.setDaysOfWeek("1,3");
+        assertEquals(DayOfWeek.WEDNESDAY, ProcessTimeUtil.computeNextRun(s).getDayOfWeek(),
+            "'1,3' is Mon and Wed, so the next run after a Monday is the Wednesday");
+    }
+
+    /** ISO-8601 numbering, which is where the console's 1=Mon..7=Sun ordering came from. */
+    @Test
+    void sevenIsSundayNotSaturday() {
+        LocalDateTime friday = LocalDateTime.of(2027, 3, 5, 9, 0);
+        assertEquals(DayOfWeek.FRIDAY, friday.getDayOfWeek());
+        Scheduler s = scheduler("Weekly", "1", friday);
+        s.setDaysOfWeek("7");
+        assertEquals(DayOfWeek.SUNDAY, ProcessTimeUtil.computeNextRun(s).getDayOfWeek());
+    }
+
+    /** A numeric weekly schedule must also stop taking its first run on an unselected day. */
+    @Test
+    void aNumericWeeklyScheduleDoesNotTakeItsFirstRunOnAnUnselectedDay() {
+        LocalDate tuesday = LocalDate.of(2026, 8, 25);
+        Scheduler scheduler = new Scheduler();
+        scheduler.setFrequency("Weekly");
+        scheduler.setIntervalValue("1");
+        scheduler.setDaysOfWeek("1,4");
+        scheduler.setStartDate(tuesday);
+        scheduler.setStartTime(LocalTime.of(23, 0));
+
+        LocalDateTime first = ProcessTimeUtil.resolveInitialNextRun(scheduler);
+        assertTrue(first.getDayOfWeek() == DayOfWeek.MONDAY || first.getDayOfWeek() == DayOfWeek.THURSDAY,
+            "first run landed on " + first.getDayOfWeek());
+    }
+
+    /** Mixed vocabularies in one string, which a hand-edited row can hold. */
+    @Test
+    void theTwoVocabulariesCanBeMixedInOneEntry() {
+        LocalDateTime monday = LocalDateTime.of(2027, 3, 1, 9, 0);
+        Scheduler s = scheduler("Weekly", "1", monday);
+        s.setDaysOfWeek("MON,3");
+        assertEquals(DayOfWeek.WEDNESDAY, ProcessTimeUtil.computeNextRun(s).getDayOfWeek());
+    }
+
+    /** Numbers outside the week are still nonsense and must not become a day. */
+    @Test
+    void aNumberOutsideOneToSevenIsStillUnrecognised() {
+        Scheduler s = scheduler("Weekly", "1", LocalDateTime.now().minusDays(1));
+        s.setDaysOfWeek("0,8,9");
+        LocalDateTime next = ProcessTimeUtil.computeNextRun(s);
+        assertNotNull(next);
+        // No day matched, so it falls back to the plain weekly step rather than picking one.
+        assertTrue(next.isAfter(LocalDateTime.now()));
+    }
+
+    // -------- "Repeat every N weeks", which naming days used to cancel silently --------------
+
+    /**
+     * The days and the repeat count answer different questions and both have to be obeyed. The
+     * interval was not passed into the day walk at all, so a weekly schedule that named days
+     * stepped to the next named day inside seven days whatever the repeat count said -- and the
+     * editor refuses to save a weekly schedule with no day selected, so that is every weekly job
+     * there is. "Every 2 weeks on Mon" ran every Monday, twice the cadence asked for, while the
+     * editor's own summary and the jobs list both printed the 2.
+     */
+    @Test
+    void aWeeklyScheduleRepeatingEveryTwoWeeksSkipsTheWeekBetween() {
+        LocalDateTime monday = LocalDateTime.of(2027, 3, 1, 9, 0);
+        assertEquals(DayOfWeek.MONDAY, monday.getDayOfWeek());
+        Scheduler s = scheduler("Weekly", "2", monday);
+        s.setDaysOfWeek("MON");
+        assertEquals(LocalDate.of(2027, 3, 15), ProcessTimeUtil.computeNextRun(s).toLocalDate(),
+            "every other Monday -- 8 March is the week the interval skips");
+    }
+
+    /** The console's default. These rows keep the timetable they have. */
+    @Test
+    void aWeeklyIntervalOfOneStillRunsEveryWeek() {
+        LocalDateTime monday = LocalDateTime.of(2027, 3, 1, 9, 0);
+        Scheduler s = scheduler("Weekly", "1", monday);
+        s.setDaysOfWeek("MON");
+        assertEquals(LocalDate.of(2027, 3, 8), ProcessTimeUtil.computeNextRun(s).toLocalDate());
+    }
+
+    /**
+     * Days still ahead in the week already running belong to a week the interval has let
+     * through, so they fire whatever the interval is -- "every 3 weeks on Mon and Wed" means
+     * both days of that week, not one day every three weeks.
+     */
+    @Test
+    void aNamedDayLaterInTheSameWeekIsTakenWhateverTheInterval() {
+        LocalDateTime monday = LocalDateTime.of(2027, 3, 1, 9, 0);
+        Scheduler s = scheduler("Weekly", "3", monday);
+        s.setDaysOfWeek("MON,WED");
+        assertEquals(LocalDate.of(2027, 3, 3), ProcessTimeUtil.computeNextRun(s).toLocalDate());
+    }
+
+    /**
+     * And once the week is spent the walk lands on the FIRST named day of the target week, not on
+     * the same weekday it started from: measuring from `from` itself drags the cadence later by up
+     * to six days on every cycle instead of holding it.
+     */
+    @Test
+    void theWeekAfterASkipStartsAtItsFirstNamedDay() {
+        LocalDateTime friday = LocalDateTime.of(2027, 3, 5, 9, 0);
+        assertEquals(DayOfWeek.FRIDAY, friday.getDayOfWeek());
+        Scheduler s = scheduler("Weekly", "2", friday);
+        s.setDaysOfWeek("MON,FRI");
+        assertEquals(LocalDate.of(2027, 3, 15), ProcessTimeUtil.computeNextRun(s).toLocalDate(),
+            "the Monday of the week two on, not 8 March and not that week's Friday");
+    }
+
+    /** The time of day is a property of the schedule, not of the weekday it lands on. */
+    @Test
+    void skippingWeeksKeepsTheTimeOfDay() {
+        Scheduler s = scheduler("Weekly", "2", LocalDateTime.of(2027, 3, 1, 9, 0));
+        s.setDaysOfWeek("MON");
+        LocalDateTime next = ProcessTimeUtil.computeNextRun(s);
+        assertEquals(9, next.getHour());
+        assertEquals(0, next.getMinute());
+    }
+
+    // -------- the priorities a job may carry, in the one list three paths read ---------------
+
+    /**
+     * This list fills the Priority dropdown of the downloadable bulk template AND is what
+     * JobDetailValidation checks an uploaded Priority cell against, while addSourceJob,
+     * updateSourceJob and the console's own control all enforce 1..9. With "99" and "100"
+     * concatenated onto the end, the template offered two values the upload accepted and wrote to
+     * the database, and every later edit of that job was refused over a priority its operator had
+     * never typed.
+     */
+    @Test
+    void thePriorityListIsTheOneToNineRangeEveryOtherPathEnforces() {
+        assertEquals(Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8", "9"),
+            ProcessTimeUtil.priority);
+        assertFalse(ProcessTimeUtil.priority.contains("99"));
+        assertFalse(ProcessTimeUtil.priority.contains("100"));
     }
 }

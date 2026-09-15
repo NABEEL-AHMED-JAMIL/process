@@ -300,6 +300,78 @@ class AnalyticsQueryLibraryTest {
         verify(this.analyticsQueryRepository, never()).save(any(AnalyticsQuery.class));
     }
 
+    /**
+     * A saved JOIN keeps BOTH of its inputs.
+     *
+     * The defect this pins: the row kept the JOIN text and one location, so the statement still
+     * said `dataset2` and nothing on the row said what `dataset2` was. Nothing failed at save
+     * time -- the failure surfaced on a later visit, or on somebody else's dashboard, as a DuckDB
+     * catalog error naming a view the reader had never created.
+     */
+    @Test
+    void aSavedJoinKeepsBothOfItsDatasets() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        whenSavedReturnTheRow();
+        AnalyticsQuery payload = payload();
+        payload.setQueryText("select o.id, c.name from dataset o join dataset2 c on o.cid = c.id");
+        payload.setSecondConnectionAlias("store");
+        payload.setSecondDatasetPath("etl-demo/customers.csv");
+
+        ResponseDto response = this.service.saveQuery(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        AnalyticsQuery stored = capturedSave();
+        assertThat(stored.getSecondConnectionAlias()).isEqualTo("store");
+        assertThat(stored.getSecondDatasetPath()).isEqualTo("etl-demo/customers.csv");
+    }
+
+    /**
+     * Half a second dataset is refused rather than stored.
+     *
+     * A path with no connection cannot be resolved and a connection with no path names no file,
+     * so a half-populated pair is not a smaller saved join -- it is a row that cannot be run,
+     * filed under a name that says it can. The same rule the wire already applies to an ad-hoc
+     * run, and the table enforces it as a CHECK besides.
+     */
+    @Test
+    void halfASecondDatasetIsRefused() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        AnalyticsQuery payload = payload();
+        payload.setSecondDatasetPath("etl-demo/customers.csv");
+
+        ResponseDto response = this.service.saveQuery(payload);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(response.getMessage()).contains("both a connection and a path");
+        verify(this.analyticsQueryRepository, never()).save(any(AnalyticsQuery.class));
+    }
+
+    /**
+     * Unpicking the second file turns a saved join back into a single-dataset query.
+     *
+     * The other half of the pair rule, and the reason saveQuery nulls both rather than only
+     * writing when present: without this, a row that had once been a join would keep its second
+     * location for ever, and a statement that no longer mentions dataset2 would go on registering
+     * a file nobody asked to read.
+     */
+    @Test
+    void savingWithoutASecondDatasetClearsOneThatWasThereBefore() throws Exception {
+        signedInAs(ACME, "TENANT_USER", ACME_USER);
+        whenSavedReturnTheRow();
+        AnalyticsQuery existing = savedQueryOwnedBy(ACME, OWN_QUERY_ID);
+        existing.setSecondConnectionAlias("store");
+        existing.setSecondDatasetPath("etl-demo/customers.csv");
+        whenLoadedById(OWN_QUERY_ID, existing);
+        AnalyticsQuery payload = payload();
+        payload.setAnalyticsQueryId(OWN_QUERY_ID);
+
+        this.service.saveQuery(payload);
+
+        AnalyticsQuery stored = capturedSave();
+        assertThat(stored.getSecondConnectionAlias()).isNull();
+        assertThat(stored.getSecondDatasetPath()).isNull();
+    }
+
     // ---------------------------------------------------------------- history
 
     @Test
@@ -583,8 +655,8 @@ class AnalyticsQueryLibraryTest {
                 }
             }
             assertThat(missing)
-                .as(entity.getSimpleName() + ": mapped but not in V32__analytics_query.sql -- add "
-                    + "a new changeset, never edit the applied one")
+                .as(entity.getSimpleName() + ": mapped but created by no changeset -- add a new one, "
+                    + "never edit an applied one")
                 .isEmpty();
         }
     }
@@ -724,17 +796,42 @@ class AnalyticsQueryLibraryTest {
         return names;
     }
 
+    /**
+     * EVERY changeset, concatenated -- not the one file that first created these tables.
+     *
+     * This used to read V32__analytics_query.sql alone, which made it a guard that worked exactly
+     * until the second changeset touched these tables. That happened: V35 adds the second-dataset
+     * pair to both, and a check pinned to V32 reported the new columns as unmigrated while they
+     * were migrated correctly. Reading the whole directory is also the only version that stays
+     * right for V36 and after, without anybody remembering to come back here.
+     */
     private static String changesetSql() throws Exception {
         // Surefire runs from the module root; the second path is for a run from the parent.
         for (String prefix : new String[] { "", "process/" }) {
-            File file = new File(prefix + "src/main/resources/db/changelog/changelog-sets/"
-                + "V32.0-analytics-query/V32__analytics_query.sql");
-            if (file.isFile()) {
-                return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            File root = new File(prefix + "src/main/resources/db/changelog/changelog-sets");
+            if (root.isDirectory()) {
+                StringBuilder all = new StringBuilder();
+                collectSql(root, all);
+                return all.toString();
             }
         }
-        throw new IllegalStateException("Could not find V32__analytics_query.sql from "
+        throw new IllegalStateException("Could not find the changelog-sets directory from "
             + System.getProperty("user.dir"));
+    }
+
+    private static void collectSql(File directory, StringBuilder into) throws Exception {
+        File[] children = directory.listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            if (child.isDirectory()) {
+                collectSql(child, into);
+            } else if (child.getName().endsWith(".sql")) {
+                into.append(new String(Files.readAllBytes(child.toPath()), StandardCharsets.UTF_8))
+                    .append('\n');
+            }
+        }
     }
 
     @Test

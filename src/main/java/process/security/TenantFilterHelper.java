@@ -14,8 +14,27 @@ public class TenantFilterHelper {
 
     private static final String FILTER_NAME = "tenantFilter";
 
+    /**
+     * The tenant a caller with no tenant of its own is filtered to.
+     *
+     * Every tenant_id is drawn from a sequence starting well above zero, so nothing can match
+     * this and nothing ever will. It is the JPQL-side equivalent of the "and 1 = 0" the native
+     * list queries use: a tenantless non-admin gets an empty result rather than an unfiltered one.
+     */
+    private static final long NO_TENANT_MATCHES = -1L;
+
     private final Logger logger = LoggerFactory.getLogger(TenantFilterHelper.class);
 
+    /**
+     * Turns the tenant filter on for the caller, and on no account leaves it off by accident.
+     *
+     * A null tenant used to be treated exactly like a platform admin -- filter disabled, every
+     * tenant's rows visible. That is backwards: TenantOwnership already refuses a tenantless
+     * caller every row it checks by id, on the principle that a context with no tenant owns
+     * nothing, so the list paths were handing out what the by-id paths were carefully refusing.
+     * The two cases are separated here: only PLATFORM_ADMIN turns the filter off; anyone else
+     * without a tenant is filtered to a tenant that does not exist.
+     */
     public void enableIfNeeded(EntityManager entityManager) {
         Long tenantId = TenantContext.getTenantId();
         Session session;
@@ -25,11 +44,16 @@ public class TenantFilterHelper {
             this.logger.error("Could not unwrap Hibernate Session: {}", ex.getMessage(), ex);
             return;
         }
-        if (tenantId == null || TenantContext.isPlatformAdmin()) {
+        if (TenantContext.isPlatformAdmin()) {
             if (session.getEnabledFilter(FILTER_NAME) != null) {
                 session.disableFilter(FILTER_NAME);
             }
             return;
+        }
+        if (tenantId == null) {
+            this.logger.warn("A caller with role {} reached a tenant-scoped read with no tenant; "
+                + "filtering it to nothing. Its app_user row is missing a tenant_id.", TenantContext.getUserRole());
+            tenantId = NO_TENANT_MATCHES;
         }
         try {
             session.enableFilter(FILTER_NAME).setParameter("tenantId", tenantId);

@@ -401,7 +401,6 @@ final class AnalyticsIntegrationEnvironment {
         ReflectionTestUtils.setField(limits, "maxRows", 10000);
         ReflectionTestUtils.setField(limits, "previewPageSize", 100);
         ReflectionTestUtils.setField(limits, "maxConcurrentQueries", 2);
-        ReflectionTestUtils.setField(limits, "profileSampleRows", 1000000L);
         ReflectionTestUtils.setField(limits, "benchmarkEnabled", true);
         ReflectionTestUtils.setField(limits, "parquetConversionEnabled", true);
         ReflectionTestUtils.setField(limits, "memoryLimit", "512MB");

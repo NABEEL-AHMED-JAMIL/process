@@ -137,6 +137,21 @@ public class AnalyticsWorkspaceServiceImpl implements AnalyticsWorkspaceService 
                 return this.analysisNotFound(payload.getAnalyticsAnalysisId());
             }
             target = existing.get();
+            /*
+             * The caller has to show which version of the row it was editing.
+             *
+             * A saved analysis is workspace-wide on purpose -- a dashboard widget renders a
+             * colleague's analysis, and making one person's saved work private to them would
+             * break that -- so two people holding the same analysis open is ordinary use and not
+             * an abuse to refuse. What was not ordinary is what happened next: whoever pressed
+             * Save second wrote their whole configuration over the first person's with nothing
+             * said to either of them, and because the row keeps only the LAST author the first
+             * person's work left no trace. There is no undo for it and no history table to
+             * recover it from.
+             */
+            if (!isEditingCurrentVersion(payload.getDateUpdated(), target.getDateUpdated())) {
+                return this.staleAnalysis(target);
+            }
             target.setDateUpdated(new Timestamp(System.currentTimeMillis()));
         } else {
             /*
@@ -465,6 +480,54 @@ public class AnalyticsWorkspaceServiceImpl implements AnalyticsWorkspaceService 
             analyticsDashboardWidgetId));
     }
 
+    /**
+     * Whether the version the caller was editing is still the version the row holds.
+     *
+     * The token is dateUpdated rather than a version number because dateUpdated already exists,
+     * is already stamped on every update here, and already reaches the client on every read; a
+     * version column would be a changeset plus a second field saying what this one already says.
+     * Its limit is worth stating rather than discovering: it is stamped to the millisecond, so
+     * two writes inside one millisecond are indistinguishable, and two transactions that both
+     * read the row before either commits both pass this check. Neither of those is the failure
+     * this refusal is for, which is two people with the same analysis open on two screens for
+     * minutes at a time. Closing the interleaved-transaction window too needs a @Version column
+     * on the entity, and that entity and its changeset are not this service's to write.
+     *
+     * A row nobody has edited carries no dateUpdated and a client that loaded it sends none
+     * back, so null against null is the ordinary first edit. A caller that sends nothing for a
+     * row that HAS been edited is refused, because it cannot have been shown the current version
+     * -- and a blind write is precisely what this check exists to stop.
+     *
+     * Compared as epoch milliseconds rather than with Timestamp.equals, which also compares the
+     * nanos field. The value makes a round trip through a Postgres timestamp and Jackson's
+     * ISO-8601 rendering on its way to the browser and back, and a nanos field that survives one
+     * leg of that but not the other would refuse a caller who is holding the current row.
+     */
+    private static boolean isEditingCurrentVersion(Timestamp seen, Timestamp stored) {
+        if (seen == null || stored == null) {
+            return seen == null && stored == null;
+        }
+        return seen.getTime() == stored.getTime();
+    }
+
+    /**
+     * The refusal, naming whoever holds the version that is on the server.
+     *
+     * Without the name there is nothing the reader can do with this: the entire reason they are
+     * being stopped is that somebody else is in the same analysis, and the Canvas puts this
+     * message in front of them verbatim. The last writer is updatedBy, falling back to the
+     * creator for a row nobody has edited yet, resolved the way every listing in this service
+     * resolves an author. An author since deleted resolves to nothing, so the sentence says
+     * "somebody else" rather than printing a dangling id at a person.
+     */
+    private ResponseDto staleAnalysis(AnalyticsAnalysis current) {
+        Long lastAuthor = current.getUpdatedBy() != null ? current.getUpdatedBy() : current.getCreatedBy();
+        String name = this.userNameResolver.nameFor(lastAuthor);
+        return new ResponseDto(ERROR, String.format("This analysis was changed by %s since you "
+            + "opened it. Reopen it and apply your changes to the current version; saving this "
+            + "one would overwrite theirs.", isBlank(name) ? "somebody else" : name));
+    }
+
     private String validateAnalysis(AnalyticsAnalysis payload) {
         if (isBlank(payload.getAnalysisName())) {
             return "AnalyticsAnalysis analysisName missing.";
@@ -480,6 +543,10 @@ public class AnalyticsWorkspaceServiceImpl implements AnalyticsWorkspaceService 
         }
         if (isBlank(payload.getDatasetPath())) {
             return "AnalyticsAnalysis datasetPath missing.";
+        }
+        String visualization = validateVisualizationType(payload.getVisualizationType());
+        if (visualization != null) {
+            return visualization;
         }
         if (isBlank(payload.getAnalysisConfig())) {
             return "AnalyticsAnalysis analysisConfig missing.";
@@ -505,12 +572,29 @@ public class AnalyticsWorkspaceServiceImpl implements AnalyticsWorkspaceService 
         if (hasAnalysis == hasQuery) {
             return "A widget shows exactly one thing: a saved analysis or a saved query, not both and not neither.";
         }
-        if (payload.getVisualizationType() != null
-            && payload.getVisualizationType().trim().length() > MAX_VISUALIZATION_LENGTH) {
-            return String.format("A visualization type is at most %d characters.", MAX_VISUALIZATION_LENGTH);
+        String visualization = validateVisualizationType(payload.getVisualizationType());
+        if (visualization != null) {
+            return visualization;
         }
         if (payload.getWidgetConfig() != null && !payload.getWidgetConfig().trim().isEmpty()) {
             return this.validateConfig(payload.getWidgetConfig(), "A widget");
+        }
+        return null;
+    }
+
+    /**
+     * The chart kind, on both rows that carry one.
+     *
+     * Shared rather than written twice because an analysis and a widget name the same VARCHAR(32)
+     * with the same limit, and having the rule on only one of them is how an over-long value
+     * reached the database on the analysis path: Postgres refused the value as too long for the
+     * column, the DataException came back out of the transaction, and the endpoint's last catch
+     * turned a mistyped chart kind into a 500 and a stack trace -- where every neighbouring
+     * validation, this one included on the widget path, answers 200 with a sentence.
+     */
+    private static String validateVisualizationType(String visualizationType) {
+        if (visualizationType != null && visualizationType.trim().length() > MAX_VISUALIZATION_LENGTH) {
+            return String.format("A visualization type is at most %d characters.", MAX_VISUALIZATION_LENGTH);
         }
         return null;
     }

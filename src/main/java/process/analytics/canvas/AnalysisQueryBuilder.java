@@ -5,6 +5,7 @@ import process.analytics.AnalyticsException;
 import process.analytics.dto.ColumnDto;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -437,6 +438,10 @@ public final class AnalysisQueryBuilder {
             }
             ColumnDto through = columns.require(step.getDimension());
             int at = indexOfGrouping(dimensions, through);
+            // Read BEFORE the grouping is removed or replaced below: a drill through a bucketed
+            // dimension narrows to the whole bucket, and after this loop mutates `dimensions` the
+            // grain that produced the displayed value is gone.
+            AnalysisRequest.Grain drilledGrain = at >= 0 ? dimensions.get(at).grain : null;
             if (at < 0) {
                 // The client sent a path that does not fit the dimensions it also sent. Refused
                 // rather than repaired: silently dropping the step would run a DIFFERENT analysis
@@ -460,9 +465,13 @@ public final class AnalysisQueryBuilder {
                 requireTemporal(next, nextGrain);
                 dimensions.set(at, new Grouping(next, nextGrain, aliasFor(next, nextGrain)));
             }
-            narrowings.add(step.getValue() == null
-                ? FilterClause.of(through.getName(), FilterClause.Operator.IS_NULL, null)
-                : FilterClause.of(through.getName(), FilterClause.Operator.EQ, step.getValue()));
+            if (step.getValue() == null) {
+                narrowings.add(FilterClause.of(through.getName(), FilterClause.Operator.IS_NULL, null));
+            } else if (drilledGrain != null) {
+                narrowings.add(bucketWindow(through, drilledGrain, step.getValue()));
+            } else {
+                narrowings.add(FilterClause.of(through.getName(), FilterClause.Operator.EQ, step.getValue()));
+            }
             crumbs.add(new AnalysisResultCrumb(through.getName(), step.getValue()));
             path.add(step);
         }
@@ -486,6 +495,64 @@ public final class AnalysisQueryBuilder {
             filters = FilterClause.group(FilterClause.LogicalOp.AND, all);
         }
         return new Drilled(dimensions, filters, crumbs, path);
+    }
+
+    /**
+     * The narrowing for a drill through a dimension that was bucketed by a calendar grain.
+     *
+     * A bucketed row shows the bucket, not a value of the column: grouping booked_on by MONTH
+     * displays 2024-03-01 for every row in March. Narrowing on that as an equality --
+     * {@code booked_on = '2024-03-01'} -- matches midnight on the first of March and nothing else,
+     * so drilling into a month with 40,000 orders in it returned the handful booked at exactly
+     * that instant, or none at all, presented as the legitimate contents of March. The bucket is a
+     * RANGE and has to be narrowed as one.
+     *
+     * Expressed as DATE_RANGE rather than as two bounds of our own so that the column's type is
+     * still the compiler's business: dayWindow() already knows a TIMESTAMP needs a half-open
+     * window ending at the start of the next day while a DATE takes an inclusive one, and
+     * duplicating that here is how the two would drift apart.
+     */
+    private static FilterClause bucketWindow(ColumnDto column, AnalysisRequest.Grain grain,
+        String bucketStart) throws AnalyticsException {
+
+        LocalDate from;
+        try {
+            // Whatever the bucket was rendered as -- a date, or a timestamp at midnight -- the day
+            // it starts on is its first ten characters.
+            from = LocalDate.parse(bucketStart.trim().substring(0, 10));
+        } catch (RuntimeException notADate) {
+            throw new AnalyticsException("That row is bucketed by " + grain.name().toLowerCase()
+                + ", so drilling into it narrows to the whole bucket -- but "
+                + FilterCompiler.safeName(bucketStart) + " is not a date this can find the bucket "
+                + "for.");
+        }
+        LocalDate toInclusive;
+        switch (grain) {
+            case DAY:
+                toInclusive = from;
+                break;
+            case WEEK:
+                toInclusive = from.plusDays(6);
+                break;
+            case MONTH:
+                toInclusive = from.withDayOfMonth(from.lengthOfMonth());
+                break;
+            case QUARTER:
+                // Two months on from the first month of the quarter, then that month's last day.
+                LocalDate lastMonth = from.plusMonths(2);
+                toInclusive = lastMonth.withDayOfMonth(lastMonth.lengthOfMonth());
+                break;
+            case YEAR:
+                toInclusive = from.withDayOfYear(from.lengthOfYear());
+                break;
+            default:
+                // A sixth grain added to the enum and forgotten here would otherwise narrow to a
+                // single day and quietly answer a different question.
+                throw new AnalyticsException("This analysis cannot drill through a "
+                    + grain.name().toLowerCase() + " bucket.");
+        }
+        return FilterClause.ofValues(column.getName(), FilterClause.Operator.DATE_RANGE,
+            Arrays.asList(from.toString(), toInclusive.toString()));
     }
 
     /**

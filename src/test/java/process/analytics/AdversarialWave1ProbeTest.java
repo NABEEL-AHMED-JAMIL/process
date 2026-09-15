@@ -267,6 +267,52 @@ class AdversarialWave1ProbeTest {
 
     // ==================================================== FINDING 4: what does a 100k row result cost
 
+    /**
+     * A result cut by the CELL budget says so, whatever the column count is.
+     *
+     * The defect, which the probe above could not see because ten columns divide 100,000 evenly:
+     * the loop stops when one more row would EXCEED the budget, while the truncated flag asked
+     * whether the cells collected had REACHED it. Those agree only when the column count divides
+     * the budget exactly. At the shipped 100,000 over THREE columns the loop stops at 33,333 rows
+     * and 99,999 cells -- short of 100,000 -- so a result cut by the ceiling was handed back with
+     * truncated=false, and a reader saw 33,333 rows of a 40,000-row answer with nothing saying it
+     * was partial.
+     *
+     * Ten cells over three columns is the same arithmetic in miniature: the loop keeps 3 rows (9
+     * cells) because a fourth would make 12, and 9 never reaches 10.
+     */
+    @Test
+    void aResultCutByTheCellBudgetSaysSoEvenWhenTheColumnsDoNotDivideIt() throws Exception {
+        AnalyticsLimits tight = new AnalyticsLimits();
+        ReflectionTestUtils.setField(tight, "timeoutSeconds", 120);
+        ReflectionTestUtils.setField(tight, "maxRows", 100000);
+        ReflectionTestUtils.setField(tight, "previewPageSize", 100);
+        ReflectionTestUtils.setField(tight, "maxConcurrentQueries", 4);
+        ReflectionTestUtils.setField(tight, "memoryLimit", "256MB");
+        ReflectionTestUtils.setField(tight, "threads", 1);
+        ReflectionTestUtils.setField(tight, "maxResponseCells", 10);
+        ReflectionTestUtils.setField(tight, "maxPreviewPageSize", 1000);
+
+        this.standIns.put(this.sales.scanExpression(),
+            "(SELECT i AS a, i AS b, i AS c FROM range(50) t(i))");
+        DuckDbAnalyticsEngine engine = new DuckDbAnalyticsEngine(this.sessions, tight, this.running);
+        try {
+            process.analytics.dto.QueryResultDto result =
+                engine.query(this.sales, null, "SELECT * FROM dataset", "cells-1");
+
+            assertThat(result.getColumns()).hasSize(3);
+            assertThat(result.getRowCount())
+                .as("three rows fit in ten cells; a fourth would need twelve")
+                .isEqualTo(3);
+            assertThat(result.isTruncated())
+                .as("cut by the budget, and the reader has to be told -- 9 cells never reaches 10, "
+                    + "which is how this came back claiming to be the whole answer")
+                .isTrue();
+        } finally {
+            engine.shutdown();
+        }
+    }
+
     @Test
     void probe_theShippedMaxRowsCeilingAsAPayload() throws Exception {
         AnalyticsLimits shipped = new AnalyticsLimits();
