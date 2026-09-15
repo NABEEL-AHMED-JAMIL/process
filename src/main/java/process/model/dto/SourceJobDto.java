@@ -36,6 +36,11 @@ public class SourceJobDto implements AuditNamed {
     private SchedulerDto scheduler;
     private Execution execution;
     private Integer priority;
+    // Optional on create, unlike priority: both have a database default that reproduces the
+    // no-retry behaviour every job had before these existed, so a caller that says nothing about
+    // retry gets exactly what it used to.
+    private Integer maxAttempts;
+    private Integer retryBackoffSeconds;
     private Timestamp dateCreated;
     private List<Integer> jobIds;
     private boolean completeJob;
@@ -139,6 +144,22 @@ public class SourceJobDto implements AuditNamed {
 
     public void setPriority(Integer priority) {
         this.priority = priority;
+    }
+
+    public Integer getMaxAttempts() {
+        return maxAttempts;
+    }
+
+    public void setMaxAttempts(Integer maxAttempts) {
+        this.maxAttempts = maxAttempts;
+    }
+
+    public Integer getRetryBackoffSeconds() {
+        return retryBackoffSeconds;
+    }
+
+    public void setRetryBackoffSeconds(Integer retryBackoffSeconds) {
+        this.retryBackoffSeconds = retryBackoffSeconds;
     }
 
     public Timestamp getDateCreated() {

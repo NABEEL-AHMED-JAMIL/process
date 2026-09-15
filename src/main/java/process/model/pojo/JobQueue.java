@@ -87,6 +87,25 @@ public class JobQueue {
     @Column(name = "job_send")
     private boolean jobSend;
 
+    /**
+     * Which attempt this run is, starting at 1.
+     *
+     * A retry re-uses this row rather than inserting a new one -- see V38__job_retry.sql for why --
+     * so this is how anyone can tell that a run which finally succeeded took three goes to do it.
+     */
+    @Column(name = "attempt", nullable = false)
+    private int attempt = 1;
+
+    /**
+     * When a run awaiting retry becomes eligible for dispatch; null for every ordinary run.
+     *
+     * The dispatcher's pick-up query will not take a Queue row whose value here is still in the
+     * future, which is the whole of the backoff mechanism. Compared against the application clock,
+     * never the database's -- the two are five hours apart.
+     */
+    @Column(name = "next_attempt_at", columnDefinition = "TIMESTAMP")
+    private LocalDateTime nextAttemptAt;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -207,6 +226,22 @@ public class JobQueue {
 
     public void setJobSend(boolean jobSend) {
         this.jobSend = jobSend;
+    }
+
+    public int getAttempt() {
+        return attempt;
+    }
+
+    public void setAttempt(int attempt) {
+        this.attempt = attempt;
+    }
+
+    public LocalDateTime getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public void setNextAttemptAt(LocalDateTime nextAttemptAt) {
+        this.nextAttemptAt = nextAttemptAt;
     }
 
     public Status getStatus() {

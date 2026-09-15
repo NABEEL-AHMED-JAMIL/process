@@ -238,6 +238,20 @@ public class MessageQServiceImpl implements MessageQService {
         if (queueMessageStatus.getMessageType().equals(AUDIT_LOG)) {
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), queueMessageStatus.getLogsDetail());
         } else if (queueMessageStatus.getMessageType().equals(QUEUE_DETAIL)) {
+            // The worker saying a run failed is the failure retry exists for: everything the
+            // dispatcher can go wrong at is infrastructure, whereas this is the task itself
+            // reporting that it could not finish -- a source that was briefly unreachable, an
+            // object store that refused one connection, a database that dropped the session.
+            //
+            // Offered before any of the writes below, because those are what a failure IS as far
+            // as the rest of the platform is concerned: the job's status, the run's status, the
+            // end time and the fail mail. Making them and then retrying would tell everyone the
+            // run had failed moments before trying it again. scheduleRetry writes the worker's own
+            // explanation into the audit log, so nothing it reported is lost by returning early.
+            if (JobStatus.Failed.equals(queueMessageStatus.getJobStatus())
+                && this.bulkAction.scheduleRetry(jobQueue.get(), queueMessageStatus.getLogsDetail())) {
+                return new ResponseDto(SUCCESS, "Run failed and has been queued for another attempt.");
+            }
             this.bulkAction.changeJobStatus(jobId, queueMessageStatus.getJobStatus());
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), queueMessageStatus.getJobStatus(), queueMessageStatus.getLogsDetail());
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), queueMessageStatus.getLogsDetail());

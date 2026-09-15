@@ -115,6 +115,28 @@ public class SourceJob implements Audited {
     @Column(name = "skip_job")
     private boolean skipJob;
 
+    /**
+     * Total attempts a run of this job may make, including the first.
+     *
+     * 1 disables retry, and is what every job had before the column existed -- so a job nobody has
+     * configured behaves exactly as it always did. Per job rather than global because the right
+     * answer differs: a network-bound extract deserves three goes, a task that appends to a file
+     * or sends something outward deserves one, and only whoever built the job knows which it is.
+     */
+    @Column(name = "max_attempts", nullable = false)
+    private Integer maxAttempts = 1;
+
+    /**
+     * Base delay before retrying a failed run; the wait doubles with each attempt.
+     *
+     * Doubling rather than a fixed wait because the two failures worth retrying want opposite
+     * things -- a dropped connection clears in seconds, a broker or object store that is down
+     * wants to be left alone -- and backing off gives the first a fast retry without hammering
+     * the second.
+     */
+    @Column(name = "retry_backoff_seconds", nullable = false)
+    private Integer retryBackoffSeconds = 60;
+
     public SourceJob() {}
 
     @PrePersist
@@ -208,6 +230,22 @@ public class SourceJob implements Audited {
 
     public void setPriority(Integer priority) {
         this.priority = priority;
+    }
+
+    public Integer getMaxAttempts() {
+        return maxAttempts;
+    }
+
+    public void setMaxAttempts(Integer maxAttempts) {
+        this.maxAttempts = maxAttempts;
+    }
+
+    public Integer getRetryBackoffSeconds() {
+        return retryBackoffSeconds;
+    }
+
+    public void setRetryBackoffSeconds(Integer retryBackoffSeconds) {
+        this.retryBackoffSeconds = retryBackoffSeconds;
     }
 
     public Timestamp getDateCreated() {

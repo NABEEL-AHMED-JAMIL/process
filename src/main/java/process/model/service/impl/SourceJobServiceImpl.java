@@ -136,6 +136,8 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, String.format(
                 "SourceJob priority must be between 1 (highest) and 9; got %d.",
                 sourceJobDto.getPriority()));
+        } else if (retryPolicyError(sourceJobDto) != null) {
+            return new ResponseDto(ERROR, retryPolicyError(sourceJobDto));
         } else if (Status.Delete.equals(sourceJobDto.getJobStatus())) {
             // Delete is the soft-delete tombstone, not something a job is born in. Honouring it
             // below would write a job that is invisible to every list and every count the moment
@@ -180,6 +182,15 @@ public class SourceJobServiceImpl implements SourceJobService {
             ? sourceJobDto.getJobStatus() : Status.Active);
         sourceJob.setExecution(sourceJobDto.getExecution());
         sourceJob.setPriority(sourceJobDto.getPriority());
+        // Left at the entity's own default when the caller says nothing, rather than written as
+        // null -- the columns are not-null, and null here would be the 500 that omitting priority
+        // used to produce.
+        if (!ProcessUtil.isNull(sourceJobDto.getMaxAttempts())) {
+            sourceJob.setMaxAttempts(sourceJobDto.getMaxAttempts());
+        }
+        if (!ProcessUtil.isNull(sourceJobDto.getRetryBackoffSeconds())) {
+            sourceJob.setRetryBackoffSeconds(sourceJobDto.getRetryBackoffSeconds());
+        }
         sourceJob.setCompleteJob(sourceJobDto.isCompleteJob());
         sourceJob.setFailJob(sourceJobDto.isFailJob());
         sourceJob.setSkipJob(sourceJobDto.isSkipJob());
@@ -249,6 +260,39 @@ public class SourceJobServiceImpl implements SourceJobService {
      * entries stay two elements and really do produce two rows. Refusing the payload is the only
      * point at which this is still recoverable by the caller.
      */
+    /** Widest retry policy a job may be given; the same ceiling the database enforces. */
+    private static final int MAX_ATTEMPTS_CEILING = 10;
+
+    /** Longest base backoff a job may be given, in seconds; the same ceiling the database enforces. */
+    private static final int MAX_BACKOFF_SECONDS_CEILING = 60 * 60;
+
+    /**
+     * The retry policy's complaint as a sentence, or null when there is nothing wrong with it.
+     *
+     * Checked here as well as by the CHECK constraints so the caller is told which field is wrong
+     * and what the range is. Reaching the constraint instead produces a DataIntegrityViolation at
+     * commit, which arrives as "Some internal error occurred contact with support." -- the exact
+     * trap priority and execution were each fixed for, and it would be a third instance of it.
+     *
+     * Both fields are optional: null means "leave whatever the job has", which for a new job is
+     * the no-retry default. Only a value that is present and out of range is an error.
+     */
+    private static String retryPolicyError(SourceJobDto sourceJobDto) {
+        Integer maxAttempts = sourceJobDto.getMaxAttempts();
+        if (!ProcessUtil.isNull(maxAttempts) && (maxAttempts < 1 || maxAttempts > MAX_ATTEMPTS_CEILING)) {
+            return String.format(
+                "SourceJob maxAttempts must be between 1 (no retry) and %d; got %d.",
+                MAX_ATTEMPTS_CEILING, maxAttempts);
+        }
+        Integer backoff = sourceJobDto.getRetryBackoffSeconds();
+        if (!ProcessUtil.isNull(backoff) && (backoff < 1 || backoff > MAX_BACKOFF_SECONDS_CEILING)) {
+            return String.format(
+                "SourceJob retryBackoffSeconds must be between 1 and %d; got %d.",
+                MAX_BACKOFF_SECONDS_CEILING, backoff);
+        }
+        return null;
+    }
+
     private String refuseMoreThanOneScheduler(SourceJobDto sourceJobDto) {
         if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && sourceJobDto.getSchedulers().size() > 1) {
             return String.format("A job has one schedule; %d were sent. Post a single schedulers entry.",
@@ -308,6 +352,16 @@ public class SourceJobServiceImpl implements SourceJobService {
                         sourceJobDto.getPriority()));
                 }
                 sourceJob.get().setPriority(sourceJobDto.getPriority());
+            }
+            String retryError = retryPolicyError(sourceJobDto);
+            if (retryError != null) {
+                return new ResponseDto(ERROR, retryError);
+            }
+            if (!ProcessUtil.isNull(sourceJobDto.getMaxAttempts())) {
+                sourceJob.get().setMaxAttempts(sourceJobDto.getMaxAttempts());
+            }
+            if (!ProcessUtil.isNull(sourceJobDto.getRetryBackoffSeconds())) {
+                sourceJob.get().setRetryBackoffSeconds(sourceJobDto.getRetryBackoffSeconds());
             }
             sourceJob.get().setCompleteJob(sourceJobDto.isCompleteJob());
             sourceJob.get().setFailJob(sourceJobDto.isFailJob());
@@ -718,6 +772,8 @@ public class SourceJobServiceImpl implements SourceJobService {
         dto.setCreatedBy(sourceJob.getCreatedBy());
         dto.setDateCreated(sourceJob.getDateCreated());
         dto.setPriority(sourceJob.getPriority());
+        dto.setMaxAttempts(sourceJob.getMaxAttempts());
+        dto.setRetryBackoffSeconds(sourceJob.getRetryBackoffSeconds());
         dto.setExecution(sourceJob.getExecution());
         dto.setCompleteJob(sourceJob.isCompleteJob());
         dto.setFailJob(sourceJob.isFailJob());

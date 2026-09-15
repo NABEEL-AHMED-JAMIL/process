@@ -18,9 +18,15 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
 
     // Ordered by id: the fetch is capped, so without this which rows a busy queue hands over is
     // whatever the planner returns, and a job can sit behind newer ones indefinitely.
+    // next_attempt_at is how a backoff is enforced: a run awaiting retry sits in Queue like any
+    // other, and is simply not eligible until the moment written on it. The cutoff arrives as a
+    // parameter rather than being read here as now(), because the database's now() is UTC while
+    // the application writes America/Chicago -- comparing the column against the database's clock
+    // would make every backoff either instantly elapsed or five hours long, depending on sign.
     @Query(value = "select job_queue.* from job_queue where UPPER(job_status) = 'QUEUE' and job_send = false "
+        + "and (next_attempt_at is null or next_attempt_at <= ?2) "
         + "order by job_queue_id asc limit ?1 ", nativeQuery = true)
-    public List<JobQueue> findAllJobForTodayWithLimit(Long limit);
+    public List<JobQueue> findAllJobForTodayWithLimit(Long limit, LocalDateTime eligibleAt);
 
     @Query(value = "select count(*) from job_queue where job_id = ?1 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
     public int getCountForInQueueJobByJobId(Long jobId);

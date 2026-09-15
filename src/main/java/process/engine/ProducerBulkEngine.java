@@ -248,7 +248,7 @@ public class ProducerBulkEngine {
     public void startJobInCurrentTimeSlot() {
         try {
             logger.info("runJobInCurrentTimeSlot --> FETCH JobQueue of current day STARTED ");
-            List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(this.resolveQueueFetchLimit());
+            List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(this.resolveQueueFetchLimit(), LocalDateTime.now());
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
                 // The lock this runs under lasts ten minutes, and the loop sleeps 100ms per job:
@@ -356,7 +356,17 @@ public class ProducerBulkEngine {
             }
             this.changeStatusForLastJob(jobQueue, String.format("Broker is not active for job %s.", jobQueue.getJobId()));
         } catch (Exception ex) {
-            this.changeStatusForLastJob(jobQueue, String.format("Broker is not active for job %s.", jobQueue.getJobId()));
+            // Retryable, and the only site in this method that is. Everything above fails because
+            // the job is configured wrong -- no task, no task type, an unparseable topic, a task
+            // type switched off -- and none of that changes by trying again. This catch is where
+            // building the producer or resolving the tenant's connection threw, which is the
+            // transient case: a broker that was briefly unreachable lands here.
+            //
+            // It also no longer claims the broker is inactive. That was the message whatever the
+            // exception was, so a connection timeout and a deliberately disabled task type were
+            // reported identically, and the one sentence a person gets was wrong for most of them.
+            this.changeStatusForLastJob(jobQueue, String.format(
+                "Job %s could not be dispatched: %s", jobQueue.getJobId(), reasonFor(ex)), true);
             logger.error("Error in pushMessageToQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
@@ -393,7 +403,7 @@ public class ProducerBulkEngine {
         jobQueue.setJobStatusMessage("Could not hand this run to the worker queue: " + reason);
 
         this.changeStatusForLastJob(jobQueue, String.format(
-            "Job %s could not be handed to the worker queue: %s", sourceJob.getJobId(), reason));
+            "Job %s could not be handed to the worker queue: %s", sourceJob.getJobId(), reason), true);
     }
 
     /**
@@ -436,6 +446,27 @@ public class ProducerBulkEngine {
      * topic:partition string into the template.
      */
     private void changeStatusForLastJob(JobQueue jobQueue, String statusMessage) {
+        this.changeStatusForLastJob(jobQueue, statusMessage, false);
+    }
+
+    /**
+     * As above, but offering the run another attempt first when the failure is one that a retry
+     * could plausibly clear.
+     *
+     * Retryable is passed per call site rather than assumed, because the two failures that reach
+     * here are opposites. A broker that would not take the message is transient -- the same
+     * payload sent a minute later usually goes. A job that has been deleted or deactivated is not:
+     * the dispatcher will find it missing again on every attempt, and retrying only delays telling
+     * somebody by the length of the backoff while holding the job's one in-flight slot.
+     */
+    private void changeStatusForLastJob(JobQueue jobQueue, String statusMessage, boolean retryable) {
+        // Ordered so the failure is only announced once the run has genuinely run out of attempts.
+        // Marking Failed first and retrying afterwards would put a Failed status, an audit line and
+        // -- for a job with fail mail on -- an email in front of somebody for a run that is about
+        // to be attempted again, which is the noise this feature exists to remove.
+        if (retryable && this.bulkAction.scheduleRetry(jobQueue, statusMessage)) {
+            return;
+        }
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), statusMessage);

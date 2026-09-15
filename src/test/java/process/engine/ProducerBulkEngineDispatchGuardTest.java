@@ -70,7 +70,7 @@ class ProducerBulkEngineDispatchGuardTest {
 
     private long limitUsedForTheFetch() {
         ArgumentCaptor<Long> captor = ArgumentCaptor.forClass(Long.class);
-        verify(this.transactionService).findAllJobForTodayWithLimit(captor.capture());
+        verify(this.transactionService).findAllJobForTodayWithLimit(captor.capture(), any());
         return captor.getValue();
     }
 
@@ -80,7 +80,7 @@ class ProducerBulkEngineDispatchGuardTest {
     void aValidLimitIsUsedAsGiven() {
         when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT))
             .thenReturn(lookupValued("5000"));
-        when(this.transactionService.findAllJobForTodayWithLimit(anyLong()))
+        when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
         this.engine.startJobInCurrentTimeSlot();
@@ -93,7 +93,7 @@ class ProducerBulkEngineDispatchGuardTest {
     void anUnparsableLimitFallsBackInsteadOfKillingTheCycle() {
         when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT))
             .thenReturn(lookupValued("5,000"));
-        when(this.transactionService.findAllJobForTodayWithLimit(anyLong()))
+        when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
         this.engine.startJobInCurrentTimeSlot();
@@ -108,7 +108,7 @@ class ProducerBulkEngineDispatchGuardTest {
     void anEncryptedLimitFallsBackInsteadOfKillingTheCycle() {
         when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT))
             .thenReturn(lookupValued("Xy8aQ2dF9k1LmNpQrStUvW=="));
-        when(this.transactionService.findAllJobForTodayWithLimit(anyLong()))
+        when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
         this.engine.startJobInCurrentTimeSlot();
@@ -120,7 +120,7 @@ class ProducerBulkEngineDispatchGuardTest {
     @Test
     void aMissingLookupFallsBackInsteadOfKillingTheCycle() {
         when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT)).thenReturn(null);
-        when(this.transactionService.findAllJobForTodayWithLimit(anyLong()))
+        when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
         this.engine.startJobInCurrentTimeSlot();
@@ -133,7 +133,7 @@ class ProducerBulkEngineDispatchGuardTest {
     void aZeroLimitFallsBackRatherThanFetchingNothing() {
         when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT))
             .thenReturn(lookupValued("0"));
-        when(this.transactionService.findAllJobForTodayWithLimit(anyLong()))
+        when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
         this.engine.startJobInCurrentTimeSlot();

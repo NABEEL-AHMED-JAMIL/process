@@ -64,6 +64,27 @@ public class NotifyServiceImpl implements NotifyService {
             logger.warn("Invalid status transition for job {} from {} to {}", jobQueue.getJobId(), currentStatus, newStatus);
             return new ResponseDto(ERROR, String.format("Invalid status transition from %s to %s", currentStatus, newStatus), jobQueue);
         }
+        // The live worker callback, and so the retry decision's real home. A task that reports it
+        // could not finish -- a source briefly unreachable, an object store that refused one
+        // connection -- is the ordinary way an ETL run fails and the one a second attempt most
+        // often clears.
+        //
+        // Offered before any of the writes below, because those ARE the failure as far as the rest
+        // of the platform is concerned: the job's status, the run's status, the end time, the
+        // socket announcement and the fail mail. Making them first and retrying afterwards would
+        // tell everyone the run had failed moments before trying it again -- and on a job with
+        // three attempts, would send three failure emails for one eventual failure.
+        //
+        // scheduleRetry writes the worker's own explanation into the audit log, so returning early
+        // loses nothing it reported.
+        if (newStatus == JobStatus.Failed
+            && this.bulkAction.scheduleRetry(jobQueue.getJobQueueId(), jobQueue.getJobId(),
+                jobQueue.getJobStatusMessage())) {
+            logger.info("Job {} run {} failed and has been queued for another attempt.",
+                jobQueue.getJobId(), jobQueue.getJobQueueId());
+            return new ResponseDto(String.format(
+                "Job %s run failed and has been queued for another attempt.", jobQueue.getJobId()), jobQueue);
+        }
         logger.info("Updating status for job {} to {}", jobQueue.getJobId(), newStatus);
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), newStatus);
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());

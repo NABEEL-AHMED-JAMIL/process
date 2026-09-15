@@ -194,6 +194,140 @@ public class BulkAction {
      * the run it is writing against is not in question. A caller that was given the job and the
      * run as two separate values has to use the overload that takes both.
      */
+    /**
+     * The one ceiling on a computed backoff, in seconds.
+     *
+     * The wait doubles per attempt, and the column allows ten attempts on an hour's base, so the
+     * ninth doubling of 3600 is twenty-one days. Nobody configuring "retry up to ten times, an
+     * hour apart" is asking for a run that sits in the queue until October, and because a queued
+     * run occupies its job, such a row would take that job off its own schedule for the duration.
+     * Capping the interval keeps the attempt count meaning what it says.
+     */
+    private static final long MAX_BACKOFF_SECONDS = 60 * 60;
+
+    /**
+     * Puts a failed run back in the queue to be attempted again, or reports that it is finished.
+     *
+     * <b>The return value decides whether the caller announces a failure.</b> True means this run
+     * is going round again and nothing has failed yet as far as anyone outside is concerned -- no
+     * Failed status, no failure email. False means the run is genuinely over and the caller should
+     * close it exactly as it did before this method existed. Callers that ignore the result send a
+     * failure mail per attempt, which is worse than the problem retry set out to solve.
+     *
+     * Only transient failures should reach here. A run whose job has been deleted, or which a
+     * person deliberately failed from the console, will not succeed by being tried again, and
+     * retrying it just delays the news by the length of the backoff.
+     *
+     * The row is re-used rather than replaced, so the retry continues to occupy the single
+     * in-flight slot its job is allowed -- two attempts of one job running at once would have two
+     * workers writing the same output folder. The consequence worth knowing is that a job whose
+     * backoff outlasts its own interval will skip its next slot, and that is the intended
+     * ordering: finish the slot you are on before starting the next.
+     */
+    public boolean scheduleRetry(JobQueue jobQueue, String reason) {
+        if (ProcessUtil.isNull(jobQueue) || ProcessUtil.isNull(jobQueue.getJobId())) {
+            return false;
+        }
+        boolean retried = this.scheduleRetry(jobQueue.getJobQueueId(), jobQueue.getJobId(), reason);
+        if (retried) {
+            // Keep the caller's copy in step with what was just written. It is what a failure
+            // email would be built from if the caller went on to send one, and a stale copy there
+            // reports the run as Failed moments after this method put it back in the queue.
+            Optional<JobQueue> written = this.transactionService.findJobQueueByJobQueueId(jobQueue.getJobQueueId());
+            if (written.isPresent()) {
+                jobQueue.setAttempt(written.get().getAttempt());
+                jobQueue.setNextAttemptAt(written.get().getNextAttemptAt());
+                jobQueue.setJobStatus(written.get().getJobStatus());
+                jobQueue.setJobSend(written.get().isJobSend());
+                jobQueue.setEndTime(written.get().getEndTime());
+                jobQueue.setJobStatusMessage(written.get().getJobStatusMessage());
+            }
+        }
+        return retried;
+    }
+
+    /**
+     * As above, for a caller holding only the run's identity rather than the entity.
+     *
+     * The live worker callback is one of these: it arrives as a DTO off the wire, and loading the
+     * entity purely to pass it in would be work this method immediately repeats.
+     */
+    public boolean scheduleRetry(Long jobQueueId, Long jobId, String reason) {
+        if (ProcessUtil.isNull(jobQueueId) || ProcessUtil.isNull(jobId)) {
+            return false;
+        }
+        Optional<SourceJob> sourceJob = this.transactionService.findByJobId(jobId);
+        if (!sourceJob.isPresent()) {
+            // Nothing to read a retry policy from, and a run whose job is gone is not coming back.
+            return false;
+        }
+        // Read by id rather than taking an entity from the caller, which is what makes the attempt
+        // count trustworthy. The Kafka path reaches retry from a send callback fired long after
+        // its entity was loaded, so the copy it holds is detached and may be several attempts
+        // behind -- and a stale count read as the current one retries a run that has already
+        // exhausted its attempts, for ever. Every other writer in this class re-reads for the
+        // same reason.
+        Optional<JobQueue> current = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (!current.isPresent()) {
+            this.logger.warn("scheduleRetry: JobQueue not found with jobQueueId {}, not retrying.", jobQueueId);
+            return false;
+        }
+        JobQueue row = current.get();
+        int maxAttempts = ProcessUtil.isNull(sourceJob.get().getMaxAttempts())
+            ? 1 : sourceJob.get().getMaxAttempts();
+        // A row written before this column existed reads 0 through a projection or a hand-edited
+        // database; treat anything below 1 as the first attempt rather than as "already past the
+        // limit", which would disable retry on exactly the rows most likely to be odd.
+        int attempt = Math.max(1, row.getAttempt());
+        if (attempt >= maxAttempts) {
+            return false;
+        }
+        int nextAttempt = attempt + 1;
+        long base = ProcessUtil.isNull(sourceJob.get().getRetryBackoffSeconds())
+            ? 60L : sourceJob.get().getRetryBackoffSeconds().longValue();
+        // Shift rather than Math.pow, and bounded before it is applied: attempt is already capped
+        // at ten by the column's constraint, but the arithmetic should not depend on a constraint
+        // in another table to avoid overflowing.
+        long multiplier = 1L << Math.min(attempt - 1, 20);
+        long backoffSeconds = Math.min(base * multiplier, MAX_BACKOFF_SECONDS);
+        LocalDateTime dueAt = LocalDateTime.now().plusSeconds(backoffSeconds);
+
+        row.setAttempt(nextAttempt);
+        row.setNextAttemptAt(dueAt);
+        row.setJobStatus(JobStatus.Queue);
+        // Both of these are what makes the row eligible again: the dispatcher's pick-up query
+        // takes Queue rows with job_send false, and this row has had it set true if it ever
+        // reached the broker. Leaving it set means the retry is written down and then never
+        // dispatched -- a run that waits for ever, which reads as a hang rather than a failure.
+        row.setJobSend(false);
+        // The run has not ended. An end time left over from the failed attempt makes its duration
+        // read as negative once the retry finally completes.
+        row.setEndTime(null);
+        row.setJobStatusMessage(String.format(
+            "Attempt %s of %s failed: %s Retrying at %s.", attempt, maxAttempts, endWithStop(reason), dueAt));
+        this.transactionService.saveOrUpdateJobQueue(row);
+        this.changeJobStatus(jobId, JobStatus.Queue);
+        this.saveJobAuditLogs(jobQueueId, String.format(
+            "Attempt %s of %s failed: %s Queued for attempt %s at %s.",
+            attempt, maxAttempts, endWithStop(reason), nextAttempt, dueAt));
+        this.sendJobStatusNotification(jobId);
+        this.logger.warn("scheduleRetry --> job {} run {} attempt {} of {} failed; retrying at {}.",
+            jobId, jobQueueId, attempt, maxAttempts, dueAt);
+        return true;
+    }
+
+    /**
+     * The reason as a sentence, so the text built around it does not read "failed: timeout Retrying".
+     */
+    private static String endWithStop(String reason) {
+        if (ProcessUtil.isNull(reason)) {
+            return "no reason recorded.";
+        }
+        String trimmed = reason.trim();
+        return trimmed.endsWith(".") || trimmed.endsWith("!") || trimmed.endsWith("?")
+            ? trimmed : trimmed + ".";
+    }
+
     public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
         this.transactionService.saveJobAuditLogs(jobQueueId, logsDetail);
     }
