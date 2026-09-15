@@ -17,6 +17,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.analytics.dto.QueryResultDto;
+import process.analytics.dto.DistributionBinDto;
+import process.analytics.dto.ColumnDistributionDto;
 import process.api.AnalyticsRestApi;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
@@ -44,6 +46,7 @@ import java.util.concurrent.Semaphore;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -249,6 +252,55 @@ class AnalyticsQueryExecutionTest {
     }
 
     // ---- the query path ----------------------------------------------------------------------------
+
+    /*
+     * The distribution runs against REAL DuckDB here, not a stub, because the risk it carries is
+     * entirely in its SQL. DuckDB 1.1.3 has no width_bucket and no two-argument histogram -- the
+     * binning is arithmetic for that reason -- and mode() and approx_count_distinct are the other
+     * two functions this depends on existing. A shape test of the DTOs would have proved none of
+     * that; this fails if any of those three is not there.
+     */
+    @Test
+    void aTextColumnIsDrawnValueByValueWithItsCommonestValueNamed() throws Exception {
+        ColumnDistributionDto column = this.service.distributionOf(this.sales, "region");
+
+        assertThat(column.getName()).isEqualTo("region");
+        // Two distinct values, under the exact-value threshold, so no binning.
+        assertThat(column.isExactValues()).isTrue();
+        assertThat(column.getBins()).hasSize(2);
+        assertThat(column.getBins()).extracting(DistributionBinDto::getValue)
+            .containsExactly("north", "south");
+        // Biggest first: north appears twice.
+        assertThat(column.getBins().get(0).getRows()).isEqualTo(2L);
+        assertThat(column.getMostCommon()).isEqualTo("north");
+        assertThat(column.getMostCommonRows()).isEqualTo(2L);
+    }
+
+    @Test
+    void aValueBarCarriesNoRangeSoTheClientCanTellTheTwoDrawingsApart() throws Exception {
+        ColumnDistributionDto column = this.service.distributionOf(this.sales, "region");
+        assertThat(column.getBins().get(0).getFrom()).isNull();
+        assertThat(column.getBins().get(0).getTo()).isNull();
+    }
+
+    @Test
+    void aColumnThatIsNotInTheFileIsRefusedRatherThanReachingTheParser() {
+        // The name arrives from the browser. It is resolved against the file's own DESCRIBE
+        // before anything is quoted, so this is a refusal and not a statement.
+        assertThatThrownBy(() -> this.service.distributionOf(this.sales, "region\"; DROP TABLE x--"))
+            .isInstanceOf(AnalyticsException.class)
+            .hasMessageContaining("no column called");
+    }
+
+    @Test
+    void theNumericColumnIsMeasuredToo() throws Exception {
+        // Three distinct amounts, under the threshold, so still value-by-value -- and the point
+        // is that a numeric column round-trips through the same path without throwing.
+        ColumnDistributionDto column = this.service.distributionOf(this.sales, "amount");
+        assertThat(column.getName()).isEqualTo("amount");
+        assertThat(column.getBins()).isNotEmpty();
+        assertThat(column.getBins()).allMatch(bin -> bin.getRows() > 0);
+    }
 
     @Test
     void aQueryAPersonWroteRunsAndComesBackAsColumnsAndRows() throws Exception {

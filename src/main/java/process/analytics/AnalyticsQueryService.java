@@ -3,6 +3,7 @@ package process.analytics;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.analytics.dto.DatasetPreviewDto;
+import process.analytics.dto.ColumnDistributionDto;
 import process.analytics.dto.DatasetProfileDto;
 import process.analytics.dto.DatasetSchemaDto;
 import process.analytics.dto.QueryResultDto;
@@ -122,6 +123,12 @@ public class AnalyticsQueryService {
     /** Per-column statistics and the quality flags derived from them, from one scan. */
     public DatasetProfileDto profileOf(DatasetRef dataset) throws AnalyticsException {
         return this.engine.profileOf(dataset);
+    }
+
+    /** One column's counted distribution, fetched when a reader opens that column. */
+    public ColumnDistributionDto distributionOf(DatasetRef dataset, String column)
+        throws AnalyticsException {
+        return this.engine.distributionOf(dataset, column);
     }
 
     /** A query a person wrote, under a run id nobody outside can address. */

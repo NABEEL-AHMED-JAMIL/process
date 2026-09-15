@@ -24,6 +24,7 @@ import process.analytics.DatasetResolver;
 import process.analytics.RunningQueries;
 import process.analytics.canvas.FilterClause;
 import process.analytics.dto.DatasetPreviewDto;
+import process.analytics.dto.ColumnDistributionDto;
 import process.analytics.dto.DatasetProfileDto;
 import process.analytics.dto.DatasetSchemaDto;
 import process.analytics.dto.QueryResultDto;
@@ -294,6 +295,40 @@ public class AnalyticsRestApi {
      * The id is not a secret: it is only ever accepted from, and only ever acts on, the tenant and
      * user who started that run, which is the check RunningQueries makes.
      */
+    /**
+     * One column's distribution. Two statements against the file, not the full SUMMARIZE the
+     * profile pays for -- see ColumnDistributionDto for why this is not folded into that.
+     */
+    @RequestMapping(value = "/distribution", method = RequestMethod.GET)
+    public ResponseEntity<?> distribution(
+        @RequestParam(value = "connection") String connection,
+        @RequestParam(value = "path") String path,
+        @RequestParam(value = "column") String column) {
+        long startedAt = System.currentTimeMillis();
+        try {
+            this.analyticsLimits.requireEnabled();
+            DatasetRef dataset = this.datasetResolver.resolve(connection, path);
+            ColumnDistributionDto distribution =
+                this.analyticsQueryService.distributionOf(dataset, column);
+            recordRead(connection, path, "distribution", AnalyticsQueryRun.STATUS_SUCCESS,
+                distribution == null || distribution.getBins() == null ? null
+                    : (long) distribution.getBins().size(), startedAt, null);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Column measured.",
+                distribution), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            recordRead(connection, path, "distribution", AnalyticsQueryRun.STATUS_REFUSED, null,
+                startedAt, ex.getMessage());
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()),
+                HttpStatus.OK);
+        } catch (Exception ex) {
+            recordRead(connection, path, "distribution", AnalyticsQueryRun.STATUS_FAILED, null,
+                startedAt, ex.getMessage());
+            logger.error("An error occurred while measuring a column", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @RequestMapping(value = "/query", method = RequestMethod.POST)
     public ResponseEntity<?> query(@RequestBody(required = false) Map<String, String> body) {
         Map<String, String> request = body == null ? Collections.emptyMap() : body;

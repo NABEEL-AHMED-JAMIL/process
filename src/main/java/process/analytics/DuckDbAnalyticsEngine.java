@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import process.analytics.canvas.FilterCompiler;
 import process.analytics.dto.ColumnDto;
 import process.analytics.dto.ColumnProfileDto;
+import process.analytics.dto.ColumnDistributionDto;
+import process.analytics.dto.DistributionBinDto;
 import process.analytics.dto.DatasetPreviewDto;
 import process.analytics.dto.DatasetProfileDto;
 import process.analytics.dto.DatasetSchemaDto;
@@ -1448,6 +1450,190 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
             derive(column, profile.getTotalRows());
         }
         return profile;
+    }
+
+    /**
+     * One column's distribution: counted bars, and the value that dominates it.
+     *
+     * TWO statements, deliberately, and neither is SUMMARIZE. The first asks how many distinct
+     * values the column holds and where its range sits; the second draws the bars. Which bars
+     * depends on the first answer, so they cannot be folded into one -- a twelve-value column is
+     * drawn value-by-value and binning it into twelve buckets would put nine empty bars on screen
+     * and invent a spread the column does not have.
+     *
+     * SAFETY. The column name arrives from the browser and is never concatenated into SQL as it
+     * was given. It is resolved against the file's own DESCRIBE first through
+     * FilterCompiler.Columns.require, so a name that is not a column of this dataset is a refusal
+     * rather than a string reaching the parser; only then is the resolved name quoted. That is
+     * the same order FilterCompiler uses and the reason its comment gives -- the doubling makes a
+     * name USABLE, the resolution is what makes it safe.
+     */
+    @Override
+    public ColumnDistributionDto distributionOf(DatasetRef dataset, String column)
+        throws AnalyticsException {
+
+        DatasetSchemaDto schema = this.schemaOf(dataset);
+        FilterCompiler.Columns catalog = FilterCompiler.Columns.of(schema.getColumns());
+        ColumnDto resolved = catalog.require(column);
+        String quoted = FilterCompiler.Columns.quote(resolved);
+        String scan = dataset.scanExpression();
+
+        ColumnDistributionDto distribution = new ColumnDistributionDto(resolved.getName());
+
+        // approx_count_distinct is a HyperLogLog sketch, which is why EXACT_VALUES_UP_TO is
+        // documented as a threshold on an approximation. mode() is exact.
+        Shape shape = this.run(dataset,
+            "SELECT count(" + quoted + ") AS present,"
+            + " approx_count_distinct(" + quoted + ") AS distinct_values,"
+            + " min(" + quoted + ")::VARCHAR AS low,"
+            + " max(" + quoted + ")::VARCHAR AS high,"
+            + " mode(" + quoted + ")::VARCHAR AS common"
+            + " FROM " + scan + " WHERE " + quoted + " IS NOT NULL",
+            resultSet -> {
+                Shape read = new Shape();
+                if (resultSet.next()) {
+                    read.present = resultSet.getLong("present");
+                    read.distinctValues = resultSet.getLong("distinct_values");
+                    read.low = resultSet.getString("low");
+                    read.high = resultSet.getString("high");
+                    read.common = resultSet.getString("common");
+                }
+                return read;
+            });
+
+        distribution.setMostCommon(shape.common);
+
+        if (shape.present == 0L) {
+            // An all-null column, or a file with no rows. Empty bins rather than a bar of
+            // nothing: the client reads an empty list as "no distribution to draw".
+            distribution.setBins(new ArrayList<DistributionBinDto>());
+            return distribution;
+        }
+
+        if (shape.common != null) {
+            distribution.setMostCommonRows(this.countOf(dataset, scan, quoted, shape.common));
+        }
+
+        boolean binnable = FilterCompiler.Columns.isNumeric(resolved)
+            && shape.distinctValues > ColumnDistributionDto.EXACT_VALUES_UP_TO
+            // Null-guarded before isNumber, which builds a BigDecimal and throws NPE on null.
+            // min/max come back null for a column that is entirely null, which the present==0
+            // return above catches -- but not for one whose only non-null rows are NaN.
+            && shape.low != null && shape.high != null
+            && isNumber(shape.low) && isNumber(shape.high)
+            && Double.parseDouble(shape.high) > Double.parseDouble(shape.low);
+
+        distribution.setExactValues(!binnable);
+        distribution.setBins(binnable
+            ? this.binnedBars(dataset, scan, quoted, Double.parseDouble(shape.low),
+                Double.parseDouble(shape.high))
+            : this.valueBars(dataset, scan, quoted));
+        return distribution;
+    }
+
+    /** The first statement's answers, carried between the two. */
+    private static final class Shape {
+        private long present;
+        private long distinctValues;
+        private String low;
+        private String high;
+        private String common;
+    }
+
+    /** How many rows carry one particular value. Parameterised, so the value never touches SQL. */
+    private Long countOf(DatasetRef dataset, String scan, String quoted, String value)
+        throws AnalyticsException {
+        return this.run(dataset,
+            "SELECT count(*) AS rows FROM " + scan + " WHERE " + quoted + "::VARCHAR = "
+                + literal(value),
+            resultSet -> resultSet.next() ? resultSet.getLong("rows") : 0L);
+    }
+
+    /**
+     * A bar per distinct value, biggest first.
+     *
+     * Used for a column of few values and for EVERY text column, however many it holds -- a text
+     * column has no range to cut into equal parts, so the honest answer is its commonest values
+     * rather than bars over an ordering that does not exist. The limit is the same constant the
+     * binned path uses, so neither drawing is wider than the card.
+     */
+    private List<DistributionBinDto> valueBars(DatasetRef dataset, String scan, String quoted)
+        throws AnalyticsException {
+        return this.run(dataset,
+            "SELECT " + quoted + "::VARCHAR AS value, count(*) AS rows FROM " + scan
+                + " WHERE " + quoted + " IS NOT NULL GROUP BY 1 ORDER BY rows DESC, value ASC"
+                + " LIMIT " + ColumnDistributionDto.BINS,
+            resultSet -> {
+                List<DistributionBinDto> bars = new ArrayList<DistributionBinDto>();
+                while (resultSet.next()) {
+                    DistributionBinDto bar = new DistributionBinDto();
+                    bar.setValue(resultSet.getString("value"));
+                    bar.setRows(resultSet.getLong("rows"));
+                    bars.add(bar);
+                }
+                return bars;
+            });
+    }
+
+    /**
+     * Equal-width bars over the column's range.
+     *
+     * Arithmetic rather than width_bucket or histogram(col, n): DuckDB 1.1.3 has neither in a form
+     * this can use -- width_bucket does not exist and the two-argument histogram is not there
+     * either, while histogram(col) alone returns a MAP of every distinct value, which is the thing
+     * this path exists to avoid on a high-cardinality column.
+     *
+     * least(..., BINS - 1) is what puts the maximum value in the last bar rather than in a
+     * thirteenth of its own: (high - low) / width is exactly BINS at the top of the range.
+     *
+     * Empty bars are FILLED IN afterwards. A gap in the middle of a distribution is a fact about
+     * the data -- it is where there are no values -- and a chart that simply skips it draws a
+     * continuous shape over a hole.
+     */
+    private List<DistributionBinDto> binnedBars(DatasetRef dataset, String scan, String quoted,
+        double low, double high) throws AnalyticsException {
+
+        int bins = ColumnDistributionDto.BINS;
+        double width = (high - low) / bins;
+
+        java.util.Map<Integer, Long> counted = this.run(dataset,
+            "SELECT least(floor((" + quoted + " - " + low + ") / " + width + "), " + (bins - 1)
+                + ")::INTEGER AS bucket, count(*) AS rows FROM " + scan
+                + " WHERE " + quoted + " IS NOT NULL GROUP BY 1",
+            resultSet -> {
+                java.util.Map<Integer, Long> rows = new java.util.HashMap<Integer, Long>();
+                while (resultSet.next()) {
+                    rows.put(resultSet.getInt("bucket"), resultSet.getLong("rows"));
+                }
+                return rows;
+            });
+
+        List<DistributionBinDto> bars = new ArrayList<DistributionBinDto>();
+        for (int at = 0; at < bins; at++) {
+            double from = low + (width * at);
+            double to = at == bins - 1 ? high : low + (width * (at + 1));
+            DistributionBinDto bar = new DistributionBinDto(
+                edge(from), edge(to), counted.containsKey(at) ? counted.get(at) : 0L);
+            bars.add(bar);
+        }
+        return bars;
+    }
+
+    /**
+     * A bin edge as text.
+     *
+     * Text for the reason every figure on ColumnProfileDto is text: an edge on a DECIMAL column is
+     * not a double, and rendering 103909527.58 through one would put 103909527.57999787 on a
+     * tooltip. BigDecimal.valueOf goes through the double's shortest round-trip representation
+     * rather than its exact binary value, which is what keeps that artefact out.
+     */
+    private static String edge(double value) {
+        return java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
+    }
+
+    /** A VARCHAR literal with its quotes doubled -- the same defusal FilterCompiler applies. */
+    private static String literal(String value) {
+        return "'" + value.replace("'", "''") + "'";
     }
 
     /**

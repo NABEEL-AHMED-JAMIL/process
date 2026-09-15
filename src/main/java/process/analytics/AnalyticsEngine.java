@@ -3,6 +3,7 @@ package process.analytics;
 import process.analytics.canvas.FilterClause;
 import process.analytics.dto.ColumnDto;
 import process.analytics.dto.DatasetPreviewDto;
+import process.analytics.dto.ColumnDistributionDto;
 import process.analytics.dto.DatasetProfileDto;
 import process.analytics.dto.DatasetSchemaDto;
 import process.analytics.dto.QueryResultDto;
@@ -424,6 +425,17 @@ public interface AnalyticsEngine {
 
     /** Per-column statistics and the quality flags derived from them, from one scan. */
     DatasetProfileDto profileOf(DatasetRef dataset) throws AnalyticsException;
+
+    /**
+     * What ONE column's values actually look like, counted rather than summarised.
+     *
+     * Separate from profileOf on purpose, and the reasoning is on ColumnDistributionDto: the
+     * profile is one SUMMARIZE over the whole file and paying for a second scan of it to answer a
+     * question nobody has asked yet would be a fourth permit against a ceiling of four. This is
+     * fetched when a reader opens a column, which is the same "cost follows the click" bargain
+     * the registry panel and the query library already make on that screen.
+     */
+    ColumnDistributionDto distributionOf(DatasetRef dataset, String column) throws AnalyticsException;
 
     /** A validated read a person wrote, run under every limit the built-in reads run under. */
     default QueryResultDto query(DatasetRef primary, DatasetRef secondary, String sql)
