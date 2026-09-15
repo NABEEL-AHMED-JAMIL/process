@@ -104,4 +104,48 @@ public class ColumnDistributionTest {
                 "bar " + at + " must end where bar " + (at + 1) + " begins");
         }
     }
+
+    @Test
+    @DisplayName("a bin edge is rounded to what its width makes meaningful, not to the double's tail")
+    public void edgesAreRoundedByWidth() throws Exception {
+        // On the orders file, (3042.9 - 4.13) / 12 gives edges like 257.36083333333335 and
+        // 1017.0533333333333, and that is what the chart's axis said. A bin edge is min + width*n
+        // -- a synthetic boundary, not a value the file holds -- so precision past the scale it
+        // divides carries no information and costs legibility.
+        java.lang.reflect.Method edge = Class.forName("process.analytics.DuckDbAnalyticsEngine")
+            .getDeclaredMethod("edge", double.class, double.class);
+        edge.setAccessible(true);
+
+        // Width 253 means whole numbers ARE the meaningful precision: two decimals on a boundary
+        // that moves in steps of 253 describe nothing. I expected 257.36 when writing this and
+        // the code was right -- 257 is the honest edge.
+        assertEquals("257", edge.invoke(null, 257.36083333333335d, 253.23d));
+        assertEquals("1017", edge.invoke(null, 1017.0533333333333d, 253.23d));
+        // A narrower column keeps its decimals, which is the point of deriving this from width.
+        assertEquals("25.74", edge.invoke(null, 25.73608333333d, 25.3d));
+        // A wide column loses the decimals entirely; a narrow one keeps enough to stay distinct.
+        assertEquals("1200", edge.invoke(null, 1200.4d, 500d));
+        assertEquals("0.1235", edge.invoke(null, 0.12345d, 0.05d));
+    }
+
+    @Test
+    @DisplayName("rounding both bounds keeps the bars contiguous")
+    public void roundingPreservesContiguity() throws Exception {
+        // Each bar's `to` is the next bar's `from`, and both go through the same rounding, so
+        // the half-open [from, to) rule still covers the range exactly once.
+        java.lang.reflect.Method edge = Class.forName("process.analytics.DuckDbAnalyticsEngine")
+            .getDeclaredMethod("edge", double.class, double.class);
+        edge.setAccessible(true);
+        double low = 4.13d;
+        double width = 253.23083333333335d;
+        String previousTo = null;
+        for (int at = 0; at < 12; at++) {
+            String from = (String) edge.invoke(null, low + (width * at), width);
+            String to = (String) edge.invoke(null, low + (width * (at + 1)), width);
+            if (previousTo != null) {
+                assertEquals(previousTo, from, "bar " + at + " must begin where the last one ended");
+            }
+            previousTo = to;
+        }
+    }
 }

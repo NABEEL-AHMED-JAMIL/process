@@ -1613,22 +1613,36 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
             double from = low + (width * at);
             double to = at == bins - 1 ? high : low + (width * (at + 1));
             DistributionBinDto bar = new DistributionBinDto(
-                edge(from), edge(to), counted.containsKey(at) ? counted.get(at) : 0L);
+                edge(from, width), edge(to, width), counted.containsKey(at) ? counted.get(at) : 0L);
             bars.add(bar);
         }
         return bars;
     }
 
     /**
-     * A bin edge as text.
+     * A bin edge as text, ROUNDED to what the width makes meaningful.
      *
      * Text for the reason every figure on ColumnProfileDto is text: an edge on a DECIMAL column is
      * not a double, and rendering 103909527.58 through one would put 103909527.57999787 on a
      * tooltip. BigDecimal.valueOf goes through the double's shortest round-trip representation
-     * rather than its exact binary value, which is what keeps that artefact out.
+     * rather than its exact binary value, which keeps that artefact out.
+     *
+     * The rounding is the other half, and without it this produced its own version of the same
+     * artefact. A bin edge is not a value the file contains -- it is min + (width * n), and on
+     * the orders file that is 257.36083333333335 and 1017.0533333333333, which is what the axis
+     * of a chart then said. Unlike a data value, where precision is the point, a synthetic
+     * boundary carries no information past the scale it divides.
+     *
+     * The precision comes from the WIDTH rather than being fixed, so a column spanning thousands
+     * gets whole-ish numbers and one spanning a fraction still gets distinguishable edges. Both
+     * bounds of every bar go through here, so the contiguity the bars rely on -- each bar's `to`
+     * is the next one's `from` -- survives the rounding.
      */
-    private static String edge(double value) {
-        return java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
+    private static String edge(double value, double width) {
+        int decimals = width >= 100 ? 0 : width >= 1 ? 2 : width >= 0.01 ? 4 : 8;
+        return java.math.BigDecimal.valueOf(value)
+            .setScale(decimals, java.math.RoundingMode.HALF_UP)
+            .stripTrailingZeros().toPlainString();
     }
 
     /** A VARCHAR literal with its quotes doubled -- the same defusal FilterCompiler applies. */
