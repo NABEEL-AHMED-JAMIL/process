@@ -16,7 +16,19 @@ import process.util.ProcessUtil;
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/ollama.json")
-@PreAuthorize("hasRole('TENANT_ADMIN')")
+/*
+ * Reading the catalogue is a tenant administrator's business; changing it is not.
+ *
+ * There is ONE Ollama server behind this controller and no tenant dimension to a model at all --
+ * every workspace draws on the same catalogue. The class used to carry hasRole('TENANT_ADMIN') for
+ * all three endpoints, which meant any tenant administrator could delete a model every other
+ * workspace depended on, or pull gigabytes onto shared disk. Deleting the model an agent or a
+ * pipeline is configured against breaks that workspace silently and from the outside.
+ *
+ * So the read stays where it was and the two writes move up. Declared per method rather than on
+ * the class, so adding an endpoint here is a decision about who may call it rather than an
+ * inheritance nobody re-reads.
+ */
 public class OllamaRestApi {
 
     private Logger logger = LoggerFactory.getLogger(OllamaRestApi.class);
@@ -27,6 +39,8 @@ public class OllamaRestApi {
         this.ollamaService = ollamaService;
     }
 
+    /** Knowing what is available is harmless, and an agent cannot be configured without it. */
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @RequestMapping(value = "/listModels", method = RequestMethod.GET)
     public ResponseEntity<?> listModels() {
         try {
@@ -39,6 +53,8 @@ public class OllamaRestApi {
         }
     }
 
+    /** Spends shared disk and shared bandwidth, so it is the platform's decision. */
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/pullModel", method = RequestMethod.POST)
     public ResponseEntity<?> pullModel(@RequestParam String name) {
         try {
@@ -52,6 +68,12 @@ public class OllamaRestApi {
         }
     }
 
+    /**
+     * Destructive across every workspace at once, which is why it is the narrowest of the three.
+     * A model removed here stops an agent or a pipeline in a workspace whose administrator had no
+     * part in the decision and no way to see it coming.
+     */
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/deleteModel", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteModel(@RequestParam String name) {
         try {

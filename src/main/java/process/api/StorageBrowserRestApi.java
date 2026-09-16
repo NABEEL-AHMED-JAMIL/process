@@ -15,6 +15,7 @@ import process.model.dto.ObjectContentDto;
 import process.model.dto.ResponseDto;
 import process.model.service.StorageBrowserService;
 import process.util.ProcessUtil;
+import process.util.StorageNotFound;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -237,6 +238,15 @@ public class StorageBrowserRestApi {
             logger.warn("streamObject rejected bucket={} key={}: {}", bucket, key, ex.getMessage());
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
+            // An object that is not there is the caller's answer, not a fault. Every adapter wraps
+            // its SDK's exception in a plain RuntimeException, so this used to land here and be
+            // answered 500 with a stack trace logged -- a deleted avatar produced one on every
+            // page load, and a caller asking for something absent was told the server had broken.
+            if (StorageNotFound.isNotFound(ex)) {
+                logger.debug("streamObject: no such object bucket={} key={}", bucket, key);
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                    String.format("No object at %s/%s.", bucket, key)), HttpStatus.NOT_FOUND);
+            }
             logger.error("An error occurred while streaming object bucket={} key={}", bucket, key, ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }

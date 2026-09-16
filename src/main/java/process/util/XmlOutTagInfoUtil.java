@@ -17,7 +17,11 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import org.xml.sax.InputSource;
+import java.io.StringReader;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -139,6 +143,84 @@ public class XmlOutTagInfoUtil {
             child.appendChild(xmlDoc.createTextNode(tagValue));
         } else {
             child.appendChild(xmlDoc.createTextNode(BLANK));
+        }
+    }
+
+    /**
+     * The inverse of {@link #makeXml}: a task payload read back as the tag rows it was built from.
+     *
+     * <b>Why this has to exist.</b> A task carries the same configuration twice -- as the XML in
+     * {@code source_task.task_payload}, which is what the worker actually runs, and as
+     * {@code source_task_payload} rows, which are what the editor shows. They were written
+     * independently: a caller supplying only the XML got a task that RAN correctly and EDITED as
+     * blank, and one updating the XML without the tags left the tags describing the previous
+     * payload. Either way the editor then showed something the task does not do, and saving from
+     * that screen wrote it back over the XML that did.
+     *
+     * So the tags are now derived from the XML wherever they were not supplied, and the XML is the
+     * source of truth. Static because the callers that need it are validation and service code
+     * that have no reason to hold this component.
+     *
+     * Returns an empty list rather than throwing for payload that is not parseable XML -- a task
+     * can be saved with a hand-written payload that is not yet valid, and refusing to load its
+     * editor is a worse answer than opening it with nothing filled in.
+     */
+    public static List<ConfigurationMakerRequest.TagInfo> parseXmlToTags(String xml) {
+        List<ConfigurationMakerRequest.TagInfo> tagInfos = new ArrayList<>();
+        if (xml == null || xml.trim().isEmpty()) {
+            return tagInfos;
+        }
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            // A task payload is operator-supplied text. Without these an entity declaration in it
+            // reads local files or opens network connections from inside the application.
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setXIncludeAware(false);
+            factory.setExpandEntityReferences(false);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(new InputSource(new StringReader(xml)));
+            Element root = doc.getDocumentElement();
+            traverseTags(root, root.getNodeName(), tagInfos);
+        } catch (Exception ex) {
+            LoggerFactory.getLogger(XmlOutTagInfoUtil.class)
+                .warn("Task payload could not be read as XML; its editor will open empty: {}", ex.getMessage());
+            return new ArrayList<>();
+        }
+        return tagInfos;
+    }
+
+    /** Depth-first walk; only leaf elements carry a value, matching what makeXml writes. */
+    private static void traverseTags(Node node, String parent,
+        List<ConfigurationMakerRequest.TagInfo> tagInfos) {
+        if (node.getNodeType() != Node.ELEMENT_NODE) {
+            return;
+        }
+        NodeList children = node.getChildNodes();
+        boolean hasElementChild = false;
+        for (int i = 0; i < children.getLength(); i++) {
+            if (children.item(i).getNodeType() == Node.ELEMENT_NODE) {
+                hasElementChild = true;
+                break;
+            }
+        }
+        String value = null;
+        if (!hasElementChild) {
+            value = node.getTextContent() != null ? node.getTextContent().trim() : null;
+        }
+        ConfigurationMakerRequest.TagInfo tagInfo = new ConfigurationMakerRequest.TagInfo();
+        tagInfo.setTagKey(node.getNodeName());
+        tagInfo.setTagParent(parent);
+        tagInfo.setTagValue(value);
+        tagInfos.add(tagInfo);
+
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child.getNodeType() == Node.ELEMENT_NODE) {
+                traverseTags(child, node.getNodeName(), tagInfos);
+            }
         }
     }
 

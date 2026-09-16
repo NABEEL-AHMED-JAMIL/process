@@ -14,6 +14,8 @@ import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.enums.Status;
 import process.model.pojo.SourceTaskPayload;
+import process.util.XmlOutTagInfoUtil;
+import java.util.List;
 import process.model.pojo.SourceTaskType;
 import process.model.pojo.SourceTask;
 import process.model.projection.SourceTaskProjection;
@@ -201,16 +203,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             ? sourceTaskDto.getTaskStatus() : Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
         this.applyDerivedLocation(sourceTask);
-        if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())) {
-            sourceTask.setSourceTaskPayload(sourceTaskDto.getXmlTagsInfo()
-                .stream().map(tagInfo -> {
-                    SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
-                    sourceTaskPayload.setTagKey(tagInfo.getTagKey());
-                    sourceTaskPayload.setTagParent(tagInfo.getTagParent());
-                    sourceTaskPayload.setTagValue(tagInfo.getTagValue());
-                    return sourceTaskPayload;
-                }).collect(Collectors.toList()));
-        }
+        sourceTask.setSourceTaskPayload(this.tagRowsFor(sourceTaskDto));
         this.sourceTaskRepository.save(sourceTask);
         return new ResponseDto(SUCCESS, String.format("SourceTask successfully saved with ID %d.", sourceTask.getTaskDetailId()));
     }
@@ -257,15 +250,21 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             if (!ProcessUtil.isNull(sourceTaskDto.getSourceTaskType())) {
                 sourceTask.get().setSourceTaskType(sourceTaskType.get());
             }
-            if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())) {
-                sourceTask.get().setSourceTaskPayload(sourceTaskDto.getXmlTagsInfo()
-                    .stream().map(tagInfo -> {
-                        SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
-                        sourceTaskPayload.setTagKey(tagInfo.getTagKey());
-                        sourceTaskPayload.setTagParent(tagInfo.getTagParent());
-                        sourceTaskPayload.setTagValue(tagInfo.getTagValue());
-                        return sourceTaskPayload;
-                    }).collect(Collectors.toList()));
+            // Re-derived on every update that carries a payload, not only when tags are sent.
+            // Updating the XML alone used to leave the tag rows describing the PREVIOUS payload,
+            // so the editor then showed a configuration the task did not have.
+            if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())
+                || !ProcessUtil.isNull(sourceTaskDto.getTaskPayload())) {
+                List<SourceTaskPayload> rows = this.tagRowsFor(sourceTaskDto);
+                // Mutated in place rather than replaced: the collection is orphan-removal managed,
+                // and handing Hibernate a new instance throws "A collection with cascade
+                // all-delete-orphan was no longer referenced".
+                if (sourceTask.get().getSourceTaskPayload() == null) {
+                    sourceTask.get().setSourceTaskPayload(rows);
+                } else {
+                    sourceTask.get().getSourceTaskPayload().clear();
+                    sourceTask.get().getSourceTaskPayload().addAll(rows);
+                }
             }
             if (!ProcessUtil.isNull(sourceTaskDto.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(sourceTaskDto.getTaskStatus());
@@ -492,6 +491,32 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     }
 
     @Transactional(readOnly = true)
+    /**
+     * The tag rows for a task, taken from the caller's own tags or derived from its XML.
+     *
+     * A task carries its configuration twice: as the XML the worker runs, and as tag rows the
+     * editor renders. Nothing kept the two in step, so a caller sending only the XML -- the API,
+     * a bulk import, a hand-written payload -- created a task that ran correctly and opened in the
+     * editor with every field blank. Saving from that screen then wrote the blanks back over the
+     * XML that worked, which is the actual loss.
+     *
+     * The XML is the source of truth and the rows are derived from it whenever they were not
+     * supplied, so the two cannot disagree by omission.
+     */
+    private List<SourceTaskPayload> tagRowsFor(SourceTaskDto sourceTaskDto) {
+        List<ConfigurationMakerRequest.TagInfo> tags = sourceTaskDto.getXmlTagsInfo();
+        if (ProcessUtil.isNull(tags) || tags.isEmpty()) {
+            tags = XmlOutTagInfoUtil.parseXmlToTags(sourceTaskDto.getTaskPayload());
+        }
+        return tags.stream().map(tagInfo -> {
+            SourceTaskPayload sourceTaskPayload = new SourceTaskPayload();
+            sourceTaskPayload.setTagKey(tagInfo.getTagKey());
+            sourceTaskPayload.setTagParent(tagInfo.getTagParent());
+            sourceTaskPayload.setTagValue(tagInfo.getTagValue());
+            return sourceTaskPayload;
+        }).collect(Collectors.toList());
+    }
+
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId) {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskId);
