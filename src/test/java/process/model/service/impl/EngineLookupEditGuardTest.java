@@ -60,7 +60,7 @@ class EngineLookupEditGuardTest {
     void setUp() {
         this.service = new SettingServiceImpl(this.lookupDataRepository, this.sourceJobRepository,
             this.sourceTaskTypeRepository, this.kafkaConnectionProfileRepository,
-            this.tenantTaskTypeKafkaRouteRepository, this.encryptionUtil, this.kafkaTemplateProvider,
+            this.tenantTaskTypeKafkaRouteRepository, null, this.encryptionUtil, this.kafkaTemplateProvider,
             this.kafkaConnectionResolver, this.lookupDataCacheService, this.userNameResolver);
         // The edit is a platform-admin action; a tenant admin is already refused a step earlier.
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "root@example.com");

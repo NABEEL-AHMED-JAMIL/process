@@ -22,6 +22,7 @@ import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
+import process.model.repository.TenantRepository;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.SettingService;
 import process.security.TenantContext;
@@ -227,6 +228,7 @@ public class SettingServiceImpl implements SettingService {
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final KafkaConnectionProfileRepository kafkaConnectionProfileRepository;
     private final TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository;
+    private final TenantRepository tenantRepository;
     private final EncryptionUtil encryptionUtil;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
@@ -240,12 +242,14 @@ public class SettingServiceImpl implements SettingService {
         SourceTaskTypeRepository sourceTaskTypeRepository,
         KafkaConnectionProfileRepository kafkaConnectionProfileRepository,
         TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository,
+        TenantRepository tenantRepository,
         EncryptionUtil encryptionUtil,
         KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
         LookupDataCacheService lookupDataCacheService,
         UserNameResolver userNameResolver) {
         this.userNameResolver = userNameResolver;
+        this.tenantRepository = tenantRepository;
         this.lookupDataRepository = lookupDataRepository;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
@@ -338,6 +342,10 @@ public class SettingServiceImpl implements SettingService {
         if (kafkaProfileError != null) {
             return new ResponseDto(ERROR, kafkaProfileError);
         }
+        String ownerError = this.validateTaskTypeOwner(sourceTaskTypeDto);
+        if (ownerError != null) {
+            return new ResponseDto(ERROR, ownerError);
+        }
         SourceTaskType sourceTaskType = this.getSourceTaskType(sourceTaskTypeDto);
         this.sourceTaskTypeRepository.save(sourceTaskType);
 
@@ -421,11 +429,20 @@ public class SettingServiceImpl implements SettingService {
         return Objects.equals(sourceTaskType.getTenantId(), TenantContext.getTenantId());
     }
 
+    /**
+     * Whether the caller may SEE this task type, as opposed to edit it.
+     *
+     * A null owner used to answer true here -- it meant "the platform's, shared with every
+     * workspace", and this is the single-row half of the rule the list query carried. V39 removed
+     * that meaning: every task type has exactly one owner, so a null is now a row that should not
+     * exist rather than a row everybody may read, and it is refused like anyone else's.
+     */
     private boolean isSourceTaskTypeVisibleToCaller(SourceTaskType sourceTaskType) {
-        if (TenantContext.isPlatformAdmin() || sourceTaskType.getTenantId() == null) {
+        if (TenantContext.isPlatformAdmin()) {
             return true;
         }
-        return Objects.equals(sourceTaskType.getTenantId(), TenantContext.getTenantId());
+        return sourceTaskType.getTenantId() != null
+            && Objects.equals(sourceTaskType.getTenantId(), TenantContext.getTenantId());
     }
 
     @Override
@@ -691,13 +708,42 @@ public class SettingServiceImpl implements SettingService {
     private SourceTaskType getSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) {
         SourceTaskType sourceTaskType = new SourceTaskType();
 
-        sourceTaskType.setTenantId(TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId());
+        // A platform admin acts for a workspace and has to name it; everybody else can only
+        // create for their own. This read `isPlatformAdmin() ? null : getTenantId()`, and that
+        // null was the whole leak: it did not mean "no owner", it meant "every workspace", so a
+        // task type built for one agency appeared on all of their screens. Validated in
+        // addSourceTaskType, which is where a missing id can still be reported as a sentence.
+        sourceTaskType.setTenantId(TenantContext.isPlatformAdmin()
+            ? sourceTaskTypeDto.getTenantId() : TenantContext.getTenantId());
         sourceTaskType.setServiceName(sourceTaskTypeDto.getServiceName());
         sourceTaskType.setDescription(sourceTaskTypeDto.getDescription());
         sourceTaskType.setQueueTopicPartition(sourceTaskTypeDto.getQueueTopicPartition());
         sourceTaskType.setKafkaConnectionProfileId(sourceTaskTypeDto.getKafkaConnectionProfileId());
         sourceTaskType.setStatus(Status.Active);
         return sourceTaskType;
+    }
+
+    /**
+     * The workspace a new task type will belong to, or a sentence saying why it cannot be decided.
+     *
+     * Only a platform admin can get this wrong: everybody else's owner comes from the thread and
+     * cannot be supplied by the caller. Named here rather than left to the NOT NULL constraint,
+     * which would surface as "Some internal error occurred contact with support." -- the trap
+     * priority, execution and the retry policy have each been fixed for.
+     */
+    private String validateTaskTypeOwner(SourceTaskTypeDto sourceTaskTypeDto) {
+        if (!TenantContext.isPlatformAdmin()) {
+            return null;
+        }
+        Long tenantId = sourceTaskTypeDto.getTenantId();
+        if (isNull(tenantId)) {
+            return "SourceTaskType tenantId missing -- a platform admin must say which workspace "
+                + "this task type belongs to.";
+        }
+        if (!this.tenantRepository.findById(tenantId).isPresent()) {
+            return String.format("SourceTaskType tenantId %d is not a workspace.", tenantId);
+        }
+        return null;
     }
 
     private String validateKafkaProfileOwnership(Long kafkaConnectionProfileId) {

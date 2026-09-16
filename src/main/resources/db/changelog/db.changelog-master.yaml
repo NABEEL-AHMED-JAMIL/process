@@ -84,3 +84,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V37.0-scheduler-one-per-job.yaml
   - include:
       file: db/changelog/yaml/V38.0-job-retry.yaml
+  - include:
+      file: db/changelog/yaml/V39.0-task-type-tenant-owner.yaml

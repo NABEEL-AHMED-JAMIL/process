@@ -48,8 +48,17 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "order by source_task_type.source_task_type_id asc", nativeQuery = true)
     public List<SourceTaskTypeProjection> fetchAllSourceTaskType();
 
+    // One workspace, its own task types, and nothing else.
+    //
+    // This used to carry "or source_task_type.tenant_id is null", because a NULL owner meant
+    // "the platform's, shared with everyone". That reading was load-bearing for exactly one row
+    // and an accident for five others: a platform admin creating a task type got a NULL owner
+    // (SettingServiceImpl.getSourceTaskType), so five per-workspace types called "Test User 1-5
+    // Task" were on every tenant's Task Types screen, carrying their Kafka topic names with them.
+    // V39 gave every row an owner and made the column NOT NULL, so there is no longer a value
+    // that means "everyone" and no clause here to honour one.
     @Query(value = FETCH_ALL_SOURCE_TASK_TYPE_SELECT +
-        "where source_task_type.tenant_id = :tenantId or source_task_type.tenant_id is null\n" +
+        "where source_task_type.tenant_id = :tenantId\n" +
         "group by source_task_type.source_task_type_id\n" +
         "order by source_task_type.source_task_type_id asc", nativeQuery = true)
     public List<SourceTaskTypeProjection> fetchAllSourceTaskTypeForTenant(@Param("tenantId") Long tenantId);
