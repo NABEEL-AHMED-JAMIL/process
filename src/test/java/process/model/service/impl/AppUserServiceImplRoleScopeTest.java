@@ -15,6 +15,8 @@ import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.NotificationCenterService;
+import process.model.service.PageAccessService;
+import process.security.PageAccessCache;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
@@ -65,6 +67,8 @@ public class AppUserServiceImplRoleScopeTest {
     private StorageBrowserService storageBrowserService;
     @Mock
     private NotificationCenterService notificationCenterService;
+    @Mock
+    private PageAccessService pageAccessService;
 
     private AppUserServiceImpl service;
 
@@ -72,7 +76,8 @@ public class AppUserServiceImplRoleScopeTest {
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
             this.passwordEncoder, this.emailMessagesFactory, this.userNameResolver,
-            this.storageBrowserService, this.notificationCenterService);
+            this.storageBrowserService, this.notificationCenterService, this.pageAccessService,
+            new PageAccessCache());
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }
 

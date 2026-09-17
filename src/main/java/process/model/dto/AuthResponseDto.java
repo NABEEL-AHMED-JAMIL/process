@@ -31,6 +31,13 @@ public class AuthResponseDto {
      */
     private Boolean mustChangePassword;
 
+    /**
+     * The pages this person may open, as PageKey keys, so the menu is right on the first paint
+     * rather than after a second request. Every key for an admin; null is never sent.
+     */
+    private java.util.List<String> pageKeys;
+    private String pageAccessProfileName;
+
     public String getAccessToken() {
         return accessToken;
     }
@@ -111,4 +118,9 @@ public class AuthResponseDto {
     public void setMustChangePassword(Boolean mustChangePassword) {
         this.mustChangePassword = mustChangePassword;
     }
+
+    public java.util.List<String> getPageKeys() { return pageKeys; }
+    public void setPageKeys(java.util.List<String> pageKeys) { this.pageKeys = pageKeys; }
+    public String getPageAccessProfileName() { return pageAccessProfileName; }
+    public void setPageAccessProfileName(String pageAccessProfileName) { this.pageAccessProfileName = pageAccessProfileName; }
 }

@@ -1,0 +1,55 @@
+package process.security;
+
+import org.springframework.stereotype.Component;
+import process.model.enums.PageKey;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+
+/**
+ * A person's resolved page set, remembered for a few seconds.
+ *
+ * Its own bean rather than a field of the interceptor, because the things that change the
+ * answer -- a profile edited, a person moved to another profile -- live in services the
+ * interceptor depends on, and a bean cannot be told about a change by something it created.
+ * Both sides hold this instead.
+ *
+ * @author Nabeel Ahmed
+ */
+@Component
+public class PageAccessCache {
+
+    /** How long a resolved set is trusted. Short: a change should land before it is explained. */
+    static final long TTL_MILLIS = 15_000L;
+
+    private final ConcurrentHashMap<Long, Entry> entries = new ConcurrentHashMap<>();
+
+    public Set<PageKey> get(Long appUserId, Function<Long, Set<PageKey>> resolve) {
+        long now = System.currentTimeMillis();
+        Entry entry = this.entries.get(appUserId);
+        if (entry != null && entry.expiresAt > now) {
+            return entry.pages;
+        }
+        Set<PageKey> pages = resolve.apply(appUserId);
+        this.entries.put(appUserId, new Entry(pages, now + TTL_MILLIS));
+        return pages;
+    }
+
+    /** One person moved to another profile. */
+    public void forget(Long appUserId) {
+        if (appUserId != null) {
+            this.entries.remove(appUserId);
+        }
+    }
+
+    /** A profile's pages changed, so every holder's answer did. */
+    public void forgetAll() {
+        this.entries.clear();
+    }
+
+    private static final class Entry {
+        final Set<PageKey> pages;
+        final long expiresAt;
+        Entry(Set<PageKey> pages, long expiresAt) { this.pages = pages; this.expiresAt = expiresAt; }
+    }
+}

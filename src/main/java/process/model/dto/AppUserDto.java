@@ -38,6 +38,9 @@ public class AppUserDto implements AuditNamed {
     private Timestamp dateCreated;
     private Timestamp lastLoginAt;
     private String position;
+    /** Access profile: the id is what the form sends, the name is what the list shows. */
+    private Long pageAccessProfileId;
+    private String pageAccessProfileName;
     private boolean mustChangePassword;
     private String avatarBucket;
     private String avatarKey;
@@ -220,4 +223,9 @@ public class AppUserDto implements AuditNamed {
     public void setAvatarUploadBucket(String avatarUploadBucket) {
         this.avatarUploadBucket = avatarUploadBucket;
     }
+
+    public Long getPageAccessProfileId() { return pageAccessProfileId; }
+    public void setPageAccessProfileId(Long pageAccessProfileId) { this.pageAccessProfileId = pageAccessProfileId; }
+    public String getPageAccessProfileName() { return pageAccessProfileName; }
+    public void setPageAccessProfileName(String pageAccessProfileName) { this.pageAccessProfileName = pageAccessProfileName; }
 }

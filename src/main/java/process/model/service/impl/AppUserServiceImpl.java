@@ -19,7 +19,9 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AppUserService;
 import process.model.service.NotificationCenterService;
+import process.model.service.PageAccessService;
 import process.model.service.StorageBrowserService;
+import process.security.PageAccessCache;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
 import process.emailer.EmailMessagesFactory;
@@ -77,11 +79,16 @@ public class AppUserServiceImpl implements AppUserService {
     private final StorageBrowserService storageBrowserService;
 
     private final NotificationCenterService notificationCenterService;
+    private final PageAccessService pageAccessService;
+    private final PageAccessCache pageAccessCache;
 
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory,
         UserNameResolver userNameResolver, StorageBrowserService storageBrowserService,
-        NotificationCenterService notificationCenterService) {
+        NotificationCenterService notificationCenterService, PageAccessService pageAccessService,
+        PageAccessCache pageAccessCache) {
+        this.pageAccessService = pageAccessService;
+        this.pageAccessCache = pageAccessCache;
         this.notificationCenterService = notificationCenterService;
         this.storageBrowserService = storageBrowserService;
         this.emailMessagesFactory = emailMessagesFactory;
@@ -202,6 +209,17 @@ public class AppUserServiceImpl implements AppUserService {
         user.setUserRole(appUserDto.getUserRole());
         user.setPhoneNumber(phone.getValue());
         user.setPosition(trimToNull(appUserDto.getPosition()));
+        // Only a tenant user carries a profile; an admin opens everything and a stale pointer on
+        // its row would only confuse the list. Checked against the target workspace, not the
+        // caller's: a platform admin creating somebody in tenant B may not hand them tenant A's
+        // profile.
+        if (appUserDto.getUserRole() == UserRole.TENANT_USER) {
+            ResponseDto badProfile = this.pageAccessService.refuseUnusableProfile(appUserDto.getPageAccessProfileId(), targetTenantId);
+            if (badProfile != null) {
+                return badProfile;
+            }
+            user.setPageAccessProfileId(appUserDto.getPageAccessProfileId());
+        }
         user.setStatus(Status.Active);
         user.setMustChangePassword(generated);
         user.setDateCreated(new Timestamp(System.currentTimeMillis()));
@@ -228,6 +246,24 @@ public class AppUserServiceImpl implements AppUserService {
         }
         return new ResponseDto(SUCCESS, String.format(
             "User \"%s\" created and emailed how to sign in.", user.getUsername()), this.mapToDto(user));
+    }
+
+    /**
+     * The person whose profile was swapped hears about it, in the same words the profile screen
+     * uses. Silent for an admin: nothing changed for them.
+     */
+    private void notifyProfileChanged(AppUser user) {
+        if (user.getUserRole() != UserRole.TENANT_USER) {
+            return;
+        }
+        String profileName = this.pageAccessService.profileNameFor(user.getPageAccessProfileId());
+        this.notificationCenterService.create(user.getTenantId(), user.getAppUserId(),
+            NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO,
+            "Your page access changed",
+            profileName == null
+                ? "You are on your workspace's default access profile now. Your menu shows what it opens."
+                : String.format("You are on the \"%s\" access profile now. Your menu shows what it opens.", profileName),
+            "/dashboard");
     }
 
     /**
@@ -393,12 +429,28 @@ public class AppUserServiceImpl implements AppUserService {
             && !this.tenantRepository.findById(effectiveTenantId).isPresent()) {
             return new ResponseDto(ERROR, String.format("Tenant not found with %d.", effectiveTenantId));
         }
+        if (effectiveRole == UserRole.TENANT_USER) {
+            ResponseDto badProfile = this.pageAccessService.refuseUnusableProfile(appUserDto.getPageAccessProfileId(), effectiveTenantId);
+            if (badProfile != null) {
+                return badProfile;
+            }
+        }
         user.setUserRole(effectiveRole);
         user.setPhoneNumber(phone.getValue());
         user.setTenantId(effectiveTenantId);
         user.setFullName(appUserDto.getFullName().trim());
         user.setPosition(trimToNull(appUserDto.getPosition()));
+        // The console posts the whole form, so a missing id is "no profile" rather than "leave
+        // it": that is what lets an admin clear a profile. Promotion out of TENANT_USER clears
+        // it too; the pointer means nothing on an admin and would silently come back if they
+        // were ever demoted.
+        Long previousProfile = user.getPageAccessProfileId();
+        user.setPageAccessProfileId(effectiveRole == UserRole.TENANT_USER ? appUserDto.getPageAccessProfileId() : null);
         this.appUserRepository.save(user);
+        if (!java.util.Objects.equals(previousProfile, user.getPageAccessProfileId())) {
+            this.pageAccessCache.forget(user.getAppUserId());
+            this.notifyProfileChanged(user);
+        }
         return new ResponseDto(SUCCESS, String.format("User \"%s\" updated.", user.getUsername()), this.mapToDto(user));
     }
 
@@ -669,6 +721,8 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setFullName(user.getFullName());
         dto.setUserRole(user.getUserRole());
         dto.setPosition(user.getPosition());
+        dto.setPageAccessProfileId(user.getPageAccessProfileId());
+        dto.setPageAccessProfileName(this.pageAccessService.profileNameFor(user.getPageAccessProfileId()));
         dto.setMustChangePassword(user.isMustChangePassword());
         dto.setStatus(user.getStatus());
         dto.setAvatarBucket(user.getAvatarBucket());

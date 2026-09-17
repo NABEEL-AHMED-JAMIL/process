@@ -15,6 +15,7 @@ import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
+import process.model.service.PageAccessService;
 import process.util.JwtUtil;
 import process.util.ProcessUtil;
 
@@ -49,13 +50,15 @@ public class AuthServiceImplMustChangePasswordTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private JwtUtil jwtUtil;
+    @Mock
+    private PageAccessService pageAccessService;
 
     private AuthServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.jwtUtil);
+            this.passwordEncoder, this.jwtUtil, this.pageAccessService);
     }
 
     /** No tenant, like the seeded platform admin, so the tenant lookup never comes into it. */

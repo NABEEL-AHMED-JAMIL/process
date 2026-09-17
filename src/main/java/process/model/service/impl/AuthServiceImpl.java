@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import process.model.dto.AuthResponseDto;
+import process.model.enums.PageKey;
+import process.model.service.PageAccessService;
 import process.model.dto.LoginRequestDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
@@ -35,13 +37,15 @@ public class AuthServiceImpl implements AuthService {
     private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final PageAccessService pageAccessService;
 
     public AuthServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
-        PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+        PasswordEncoder passwordEncoder, JwtUtil jwtUtil, PageAccessService pageAccessService) {
         this.appUserRepository = appUserRepository;
         this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.pageAccessService = pageAccessService;
     }
 
     @Override
@@ -130,6 +134,12 @@ public class AuthServiceImpl implements AuthService {
         // still succeeds -- the change is forced by the console, as it is for every other account
         // carrying the flag.
         response.setMustChangePassword(user.isMustChangePassword());
+        // The menu is built from this on the first paint. An admin gets every key; a tenant
+        // user gets their profile's, and the profile's name so the header can say which.
+        response.setPageKeys(PageKey.all().stream()
+            .filter(this.pageAccessService.effectivePages(user)::contains)
+            .map(PageKey::getKey).collect(java.util.stream.Collectors.toList()));
+        response.setPageAccessProfileName(this.pageAccessService.profileNameFor(user.getPageAccessProfileId()));
         return response;
     }
 

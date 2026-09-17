@@ -21,4 +21,9 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     public Optional<AppUser> findByUuid(String uuid);
 
+    /** Who still holds a profile -- what stops a profile from being deleted. */
+    public long countByPageAccessProfileIdAndStatusNot(Long pageAccessProfileId, Status status);
+
+    public List<AppUser> findByPageAccessProfileIdAndStatusNot(Long pageAccessProfileId, Status status);
+
 }

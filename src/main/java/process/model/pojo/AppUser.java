@@ -98,6 +98,13 @@ public class AppUser implements Audited {
     private String position;
 
     /**
+     * The access profile this person holds, or null for the workspace default. Only ever
+     * meaningful on a TENANT_USER: admins open every page whatever this says.
+     */
+    @Column(name = "page_access_profile_id")
+    private Long pageAccessProfileId;
+
+    /**
      * Set when the account was created with a generated password. Cleared the moment the person
      * chooses their own, which is what makes the emailed credential a one-time one.
      */
@@ -227,6 +234,8 @@ public class AppUser implements Audited {
     }
 
     public boolean isMustChangePassword() { return mustChangePassword; }
+    public Long getPageAccessProfileId() { return pageAccessProfileId; }
+    public void setPageAccessProfileId(Long pageAccessProfileId) { this.pageAccessProfileId = pageAccessProfileId; }
     public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
 
     @Override
