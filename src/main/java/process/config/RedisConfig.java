@@ -96,7 +96,7 @@ public class RedisConfig extends CachingConfigurerSupport {
      * operation looks, from the outside, exactly like one that is working but always cold, and
      * the difference is the whole of an incident.
      */
-    static final class DegradeToMissCacheErrorHandler implements CacheErrorHandler {
+    private static final class DegradeToMissCacheErrorHandler implements CacheErrorHandler {
 
         /**
          * Safe to swallow: a read that cannot answer IS a miss. CacheInterceptor's get path

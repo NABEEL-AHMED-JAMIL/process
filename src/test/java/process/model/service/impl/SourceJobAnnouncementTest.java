@@ -47,7 +47,7 @@ import static org.mockito.Mockito.*;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class SourceJobAnnouncementTest {
+public class SourceJobAnnouncementTest {
 
     private static final long TENANT_A = 1001L;
     private static final long CALLER_ID = 77L;

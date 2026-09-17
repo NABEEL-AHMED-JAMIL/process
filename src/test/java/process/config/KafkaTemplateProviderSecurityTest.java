@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class KafkaTemplateProviderSecurityTest {
+public class KafkaTemplateProviderSecurityTest {
 
     private static final long TENANT_A = 1001L;
 

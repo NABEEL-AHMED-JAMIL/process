@@ -52,7 +52,7 @@ import static org.mockito.Mockito.*;
  * them, and returned no paging block for a paginator to read.
  */
 @ExtendWith(MockitoExtension.class)
-class SourceTaskLifecycleDefectTest {
+public class SourceTaskLifecycleDefectTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TASK_TYPE_ID = 17L;

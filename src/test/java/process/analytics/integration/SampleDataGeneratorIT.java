@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * @author Nabeel Ahmed
  */
-class SampleDataGeneratorIT {
+public class SampleDataGeneratorIT {
 
     /** Only writes when asked. Twenty-five megabytes into somebody's bucket is not a build step. */
     private static final boolean GENERATE = Boolean.getBoolean("analytics.generate.sample");

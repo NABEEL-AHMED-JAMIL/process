@@ -13,14 +13,14 @@ import java.util.Optional;
 @Repository
 public interface StorageConnectionRepository extends JpaRepository<StorageConnection, Long> {
 
-    List<StorageConnection> findByStatusNotOrderByStorageConnectionIdDesc(Status status);
+    public List<StorageConnection> findByStatusNotOrderByStorageConnectionIdDesc(Status status);
 
-    Optional<StorageConnection> findByAliasAndStatus(String alias, Status status);
+    public Optional<StorageConnection> findByAliasAndStatus(String alias, Status status);
 
-    Optional<StorageConnection> findByAlias(String alias);
+    public Optional<StorageConnection> findByAlias(String alias);
 
-    List<StorageConnection> findByTenantIdAndStatus(Long tenantId, Status status);
+    public List<StorageConnection> findByTenantIdAndStatus(Long tenantId, Status status);
 
-    long countByTenantIdAndStatusNot(Long tenantId, Status status);
+    public long countByTenantIdAndStatusNot(Long tenantId, Status status);
 
 }

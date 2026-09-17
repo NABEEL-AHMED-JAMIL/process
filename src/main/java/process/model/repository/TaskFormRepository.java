@@ -4,7 +4,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import process.model.enums.Status;
 import process.model.pojo.TaskForm;
-
 import java.util.List;
 import java.util.Optional;
 
@@ -15,7 +14,7 @@ import java.util.Optional;
 public interface TaskFormRepository extends JpaRepository<TaskForm, Long> {
 
     /** Everything a platform admin sees -- every tenant's forms, in one list. */
-    List<TaskForm> findAllByFormStatusNot(Status status);
+    public List<TaskForm> findAllByFormStatusNot(Status status);
 
     /**
      * A tenant's own form definitions, and only those.
@@ -31,7 +30,7 @@ public interface TaskFormRepository extends JpaRepository<TaskForm, Long> {
      * 'Delete', so a rename of that enum constant is caught by the compiler here too instead of
      * silently drifting out of sync in a string only this method used to carry.
      */
-    List<TaskForm> findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(Long tenantId, Status status);
+    public List<TaskForm> findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(Long tenantId, Status status);
 
     /**
      * The form a pipeline should use for this tenant, if it has defined one.
@@ -41,7 +40,7 @@ public interface TaskFormRepository extends JpaRepository<TaskForm, Long> {
      * "most pipelines have no form" case that already exists today, not a shared definition
      * borrowed from another tenant or a platform-wide default.
      */
-    List<TaskForm> findAllByPipelineIdAndTenantIdAndFormStatusNot(String pipelineId, Long tenantId, Status status);
+    public List<TaskForm> findAllByPipelineIdAndTenantIdAndFormStatusNot(String pipelineId, Long tenantId, Status status);
 
-    Optional<TaskForm> findByTaskFormIdAndFormStatusNot(Long taskFormId, Status status);
+    public Optional<TaskForm> findByTaskFormIdAndFormStatusNot(Long taskFormId, Status status);
 }

@@ -78,7 +78,7 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class AnalyticsQueryServiceTest {
+public class AnalyticsQueryServiceTest {
 
     private static final int TIMEOUT_SECONDS = 30;
     private static final int MAX_ROWS = 1000;

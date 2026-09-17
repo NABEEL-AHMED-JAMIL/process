@@ -57,7 +57,7 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class PreviewSortFilterTest {
+public class PreviewSortFilterTest {
 
     private static final long TENANT_ID = 1001L;
     private static final String BUCKET = "etl-bucket";

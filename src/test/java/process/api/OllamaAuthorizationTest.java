@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class OllamaAuthorizationTest {
+public class OllamaAuthorizationTest {
 
     private static String ruleOn(String methodName) throws Exception {
         for (Method method : OllamaRestApi.class.getDeclaredMethods()) {

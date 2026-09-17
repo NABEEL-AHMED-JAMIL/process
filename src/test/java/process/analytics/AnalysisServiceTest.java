@@ -64,7 +64,7 @@ import static org.mockito.Mockito.when;
 // Lenient because the governor test never reaches the engine at all: it is refused a permit before
 // a session is opened, which is the property it exists to prove.
 @MockitoSettings(strictness = Strictness.LENIENT)
-class AnalysisServiceTest {
+public class AnalysisServiceTest {
 
     private static final long TENANT_ID = 1001L;
     private static final String BUCKET = "etl-bucket";

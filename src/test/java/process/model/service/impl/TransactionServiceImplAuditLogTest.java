@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class TransactionServiceImplAuditLogTest {
+public class TransactionServiceImplAuditLogTest {
 
     private static final long JOB_ID = 1196L;
     private static final long QUEUE_ID = 91422L;

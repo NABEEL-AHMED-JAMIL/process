@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AnalyticsReadAuditTest {
+public class AnalyticsReadAuditTest {
 
     private static final String ALIAS = "store";
     private static final String PATH = "etl-demo/sales.csv";

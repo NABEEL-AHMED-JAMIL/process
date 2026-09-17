@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class KafkaCertificateStoreAliasTest {
+public class KafkaCertificateStoreAliasTest {
 
     private static final char[] PASSWORD = "unit-test-store".toCharArray();
 

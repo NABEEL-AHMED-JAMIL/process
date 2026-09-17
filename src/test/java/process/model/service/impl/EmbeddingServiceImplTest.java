@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * @author Nabeel Ahmed
  */
-class EmbeddingServiceImplTest {
+public class EmbeddingServiceImplTest {
 
     private HttpServer server;
     private final AtomicInteger embedRequestCount = new AtomicInteger(0);

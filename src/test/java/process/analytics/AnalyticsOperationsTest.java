@@ -58,7 +58,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AnalyticsOperationsTest {
+public class AnalyticsOperationsTest {
 
     private static final List<String> PROFILES = Arrays.asList(
         "application-dev.properties", "application-stage.properties", "application-prod.properties");

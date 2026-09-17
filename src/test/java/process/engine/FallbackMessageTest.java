@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * complete.", because the placeholder assumed success regardless of how the run had actually
  * ended. A reader cannot tell a contradiction like that from a bug in the report itself.
  */
-class FallbackMessageTest {
+public class FallbackMessageTest {
 
     private String fallbackFor(JobStatus status) throws Exception {
         JobQueue queue = new JobQueue();

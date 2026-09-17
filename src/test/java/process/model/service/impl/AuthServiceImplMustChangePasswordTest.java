@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AuthServiceImplMustChangePasswordTest {
+public class AuthServiceImplMustChangePasswordTest {
 
     private static final String USERNAME = "platform_admin";
     private static final String PASSWORD = "one-time";

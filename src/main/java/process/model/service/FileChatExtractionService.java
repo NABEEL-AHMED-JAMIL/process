@@ -55,7 +55,7 @@ public interface FileChatExtractionService {
      * {@code getMessage()} is written for the person in the chat panel and is safe to show
      * verbatim -- it names no bucket, key, endpoint or stack detail.
      */
-    class UnreadableFileException extends Exception {
+    public class UnreadableFileException extends Exception {
 
         public UnreadableFileException(String message) {
             super(message);

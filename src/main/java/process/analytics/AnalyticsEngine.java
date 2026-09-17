@@ -91,7 +91,7 @@ public interface AnalyticsEngine {
      * where the compiler should be checking the transitions; that is a column shared with a
      * screen and a JSON payload, where adding a name should not be a schema change.
      */
-    enum RunState {
+    public enum RunState {
         /** Waiting for a governor permit. Short by design -- see AnalyticsQueryService's ceiling. */
         QUEUED,
         /** Holding a permit with a statement open on the engine. */
@@ -137,7 +137,7 @@ public interface AnalyticsEngine {
         // Nothing held.
     }
 
-    class RunFailure extends AnalyticsException {
+    public class RunFailure extends AnalyticsException {
 
         private final RunState state;
         private final boolean retryable;
@@ -192,7 +192,7 @@ public interface AnalyticsEngine {
      * interface is a seam, not a dialect-neutral query language, and a second engine would need a
      * composer that knew its own dialect. Recorded rather than hidden.
      */
-    final class BoundStatement {
+    public final class BoundStatement {
 
         private final String sql;
         private final List<Object> parameters;
@@ -225,7 +225,7 @@ public interface AnalyticsEngine {
      * of four permits per click.
      */
     @FunctionalInterface
-    interface Composer {
+    public interface Composer {
         /**
          * @param columns the dataset's own columns, read inside the session the statement will run
          *                in, and the only allow-list an identifier may come from
@@ -252,7 +252,7 @@ public interface AnalyticsEngine {
      * Everything here is optional and an absent field means "do not". A shape with nothing set is
      * the preview that existed before this type did, and the engine takes the same path for it.
      */
-    final class PreviewShape {
+    public final class PreviewShape {
 
         /** Which way the sorted column runs. Two values, so an ordering keyword cannot be typed. */
         public enum Direction {

@@ -52,7 +52,7 @@ import static org.mockito.Mockito.*;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class ProducerBulkEngineFailureReportingTest {
+public class ProducerBulkEngineFailureReportingTest {
 
     private static final long JOB_ID = 1196L;
     private static final long JOB_QUEUE_ID = 5073L;

@@ -40,7 +40,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatExtractionCapTest {
+public class FileChatExtractionCapTest {
 
     private static final String BUCKET = "docs";
     private static final String KEY = "contract.txt";

@@ -56,7 +56,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class DocumentConverterTransactionBoundaryTest {
+public class DocumentConverterTransactionBoundaryTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TASK_ID = 1042L;

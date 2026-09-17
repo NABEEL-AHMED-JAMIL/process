@@ -42,7 +42,7 @@ import static org.mockito.Mockito.verify;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatImageInstructionsTest {
+public class FileChatImageInstructionsTest {
 
     private static final String BUCKET = "etl-bucket";
     private static final String KEY = "test-file/52c80c466436aa335f4464619bad831cfea87cc6d2d1fa19706c3a53e8088951_big_gallery.png";

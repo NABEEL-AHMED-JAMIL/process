@@ -32,7 +32,7 @@ import static org.mockito.Mockito.*;
  * means no rows.
  */
 @ExtendWith(MockitoExtension.class)
-class TenantlessListerFailsClosedTest {
+public class TenantlessListerFailsClosedTest {
 
     @Mock private EntityManager entityManager;
     @Mock private Session session;

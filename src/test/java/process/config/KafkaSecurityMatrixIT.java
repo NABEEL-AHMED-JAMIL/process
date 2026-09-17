@@ -53,7 +53,7 @@ import static org.mockito.Mockito.when;
  *
  * @author Nabeel Ahmed
  * */
-class KafkaSecurityMatrixIT {
+public class KafkaSecurityMatrixIT {
 
     private static final Path SECRETS = Paths.get("kafka-it/secrets");
     private static final Path ENV = Paths.get("kafka-it/.env");

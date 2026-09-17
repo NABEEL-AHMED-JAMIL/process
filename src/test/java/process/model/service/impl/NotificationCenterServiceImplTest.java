@@ -48,7 +48,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class NotificationCenterServiceImplTest {
+public class NotificationCenterServiceImplTest {
 
     private static final long TENANT_ID = 1001L;
     private static final long ME = 3468L;

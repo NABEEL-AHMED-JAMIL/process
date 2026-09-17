@@ -37,7 +37,7 @@ import static org.mockito.Mockito.when;
  *
  * @author Nabeel Ahmed
  */
-class AnalyticsStorageRetryTest {
+public class AnalyticsStorageRetryTest {
 
     private static boolean transientFailure(String message) throws Exception {
         Method method = DuckDbAnalyticsEngine.class

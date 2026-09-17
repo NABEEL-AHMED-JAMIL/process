@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AuditLogSyncCronOrphanSkipTest {
+public class AuditLogSyncCronOrphanSkipTest {
 
     private static final long LIVE_QUEUE_ID = 5342L;
     private static final long ANOTHER_LIVE_QUEUE_ID = 5343L;

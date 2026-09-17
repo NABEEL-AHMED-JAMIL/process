@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * a property of the text this builder produces, and a test that runs it would pass just as
  * happily against a database with one tenant in it.
  */
-class UserStatisticsQueryTest {
+public class UserStatisticsQueryTest {
 
     private final QueryService queryService = new QueryService();
 

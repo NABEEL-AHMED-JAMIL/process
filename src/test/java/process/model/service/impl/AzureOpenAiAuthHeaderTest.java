@@ -44,7 +44,7 @@ import static org.mockito.Mockito.mock;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AzureOpenAiAuthHeaderTest {
+public class AzureOpenAiAuthHeaderTest {
 
     @Mock private AiAgentRepository aiAgentRepository;
     @Mock private TenantRepository tenantRepository;

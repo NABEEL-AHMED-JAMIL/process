@@ -1282,13 +1282,13 @@ public class OpenSearchRagClient {
      * One chunk as it came back from OpenSearch. {@code score} is filled in by {@link #rankChunks}
      * and is meaningless on the document-order path, which never sets it.
      */
-    static final class Chunk {
-        final int chunkIndex;
-        final String text;
-        final float[] vector;
-        double score;
+    private static final class Chunk {
+        private final int chunkIndex;
+        private final String text;
+        private final float[] vector;
+        private double score;
 
-        Chunk(int chunkIndex, String text, float[] vector) {
+        private Chunk(int chunkIndex, String text, float[] vector) {
             this.chunkIndex = chunkIndex;
             this.text = text;
             this.vector = vector;

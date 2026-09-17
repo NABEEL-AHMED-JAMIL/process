@@ -39,7 +39,7 @@ import static org.mockito.Mockito.*;
  * platform-wide, and none of them said anything the operator could see.
  */
 @ExtendWith(MockitoExtension.class)
-class EngineLookupEditGuardTest {
+public class EngineLookupEditGuardTest {
 
     private static final long LOOKUP_ID = 88L;
 

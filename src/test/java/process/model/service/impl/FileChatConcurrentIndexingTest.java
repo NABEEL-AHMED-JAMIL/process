@@ -47,7 +47,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatConcurrentIndexingTest {
+public class FileChatConcurrentIndexingTest {
 
     private static final String BUCKET = "docs";
     private static final String KEY = "big-file.txt";

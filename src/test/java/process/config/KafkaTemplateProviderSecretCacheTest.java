@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class KafkaTemplateProviderSecretCacheTest {
+public class KafkaTemplateProviderSecretCacheTest {
 
     private static final long PROFILE_ID = 42L;
     private static final String BUCKET = "etl-bucket";

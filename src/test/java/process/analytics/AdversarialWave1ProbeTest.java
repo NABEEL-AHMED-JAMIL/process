@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class AdversarialWave1ProbeTest {
+public class AdversarialWave1ProbeTest {
 
     private static final long TENANT_ID = 1001L;
     private static final long OTHER_TENANT_ID = 2002L;

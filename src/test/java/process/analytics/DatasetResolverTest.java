@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class DatasetResolverTest {
+public class DatasetResolverTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;

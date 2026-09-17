@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class StorageNotFoundTest {
+public class StorageNotFoundTest {
 
     /** The shape every adapter produces: the SDK's exception behind a sentence of its own. */
     private static RuntimeException asAdapterWraps(Throwable cause) {

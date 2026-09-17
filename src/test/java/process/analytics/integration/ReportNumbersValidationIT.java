@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class ReportNumbersValidationIT {
+public class ReportNumbersValidationIT {
 
     private static final String CSV = SampleDataGeneratorIT.PREFIX + "/orders.csv";
 

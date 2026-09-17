@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class AnalyticsBodyLimitFilterTest {
+public class AnalyticsBodyLimitFilterTest {
 
     private final AnalyticsBodyLimitFilter filter = new AnalyticsBodyLimitFilter();
 

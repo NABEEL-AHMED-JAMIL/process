@@ -8,7 +8,7 @@ import process.model.pojo.Tenant;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Proves the harness itself works: a real token reaches a real endpoint through the real chain. */
-class HarnessSmokeIT extends E2ESupport {
+public class HarnessSmokeIT extends E2ESupport {
 
     @Test
     void aSignedInUserReachesTheirOwnProfile() throws Exception {

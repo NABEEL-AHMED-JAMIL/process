@@ -23,7 +23,7 @@ import static org.mockito.Mockito.mock;
  *
  * @author Nabeel Ahmed
  */
-class SchedulingDisabledTest {
+public class SchedulingDisabledTest {
 
     private final ApplicationContextRunner contexts = new ApplicationContextRunner()
         .withBean(ProducerBulkEngine.class, () -> mock(ProducerBulkEngine.class))

@@ -44,7 +44,7 @@ import static org.mockito.Mockito.*;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class MessageQFailInFlightRunTest {
+public class MessageQFailInFlightRunTest {
 
     private static final long TENANT_A = 1001L;
     private static final long JOB_ID = 66L;

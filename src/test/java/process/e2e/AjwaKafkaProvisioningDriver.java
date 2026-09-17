@@ -61,7 +61,7 @@ import static process.util.ProcessUtil.SUCCESS;
 @SpringBootTest
 @ActiveProfiles("e2e")
 @EnabledIfSystemProperty(named = "provisionKafka", matches = "true")
-class AjwaKafkaProvisioningDriver {
+public class AjwaKafkaProvisioningDriver {
 
     private static final Path SECRETS = Paths.get("kafka-it/secrets");
     private static final Path STACK_ENV = Paths.get("kafka-it/.env");

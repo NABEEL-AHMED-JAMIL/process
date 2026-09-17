@@ -51,7 +51,7 @@ import static process.analytics.integration.AnalyticsIntegrationEnvironment.TENA
  *
  * @author Nabeel Ahmed
  */
-class RemoteSessionLockdownIntegrationTest {
+public class RemoteSessionLockdownIntegrationTest {
 
     private DuckDbSessionFactory sessions;
     private StorageConnection connection;

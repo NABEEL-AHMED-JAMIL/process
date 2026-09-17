@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * @author Nabeel Ahmed
  */
-abstract class ReportBuildingSupport extends E2ESupport {
+public abstract class ReportBuildingSupport extends E2ESupport {
 
     @Autowired protected StorageConnectionRepository storageConnectionRepository;
     @Autowired protected EncryptionUtil encryptionUtil;

@@ -38,7 +38,7 @@ import static org.mockito.Mockito.*;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class BulkActionJobEventTest {
+public class BulkActionJobEventTest {
 
     private static final long TENANT_A = 1001L;
     private static final long JOB_ID = 1196L;

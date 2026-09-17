@@ -43,7 +43,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class KafkaProfileDeleteGuardTest {
+public class KafkaProfileDeleteGuardTest {
 
     private static final long TENANT_A = 1001L;
     private static final long PROFILE_ID = 700L;

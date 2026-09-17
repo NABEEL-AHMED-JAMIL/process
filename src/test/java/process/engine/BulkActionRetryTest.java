@@ -43,7 +43,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class BulkActionRetryTest {
+public class BulkActionRetryTest {
 
     private static final long JOB_ID = 2420L;
     private static final long QUEUE_ID = 77L;

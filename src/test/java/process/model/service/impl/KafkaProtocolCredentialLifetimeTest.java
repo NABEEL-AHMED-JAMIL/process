@@ -35,7 +35,7 @@ import static org.mockito.Mockito.when;
  *
  * @author Nabeel Ahmed
  */
-class KafkaProtocolCredentialLifetimeTest {
+public class KafkaProtocolCredentialLifetimeTest {
 
     /**
      * Stubbed to return something, not left bare. The SASL password is the one credential here

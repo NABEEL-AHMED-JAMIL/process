@@ -40,7 +40,7 @@ import static org.mockito.Mockito.*;
  * Driven through TenantContext rather than a JWT: the context is what the check actually reads.
  */
 @ExtendWith(MockitoExtension.class)
-class SourceTaskServiceImplTenantIsolationTest {
+public class SourceTaskServiceImplTenantIsolationTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;

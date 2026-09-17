@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatTargetFileTypeTest {
+public class FileChatTargetFileTypeTest {
 
     private static final String BUCKET = "docs";
     private static final Long AGENT_ID = 2000L;

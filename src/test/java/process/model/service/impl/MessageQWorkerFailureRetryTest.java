@@ -46,7 +46,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class MessageQWorkerFailureRetryTest {
+public class MessageQWorkerFailureRetryTest {
 
     private static final long TENANT_A = 1001L;
     private static final long JOB_ID = 2420L;

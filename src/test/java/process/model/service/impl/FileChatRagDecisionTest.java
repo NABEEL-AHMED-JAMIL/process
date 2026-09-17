@@ -45,7 +45,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatRagDecisionTest {
+public class FileChatRagDecisionTest {
 
     private static final String BUCKET = "docs";
     private static final String KEY = "big-file.txt";

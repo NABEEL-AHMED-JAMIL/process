@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  * */
-class TenantOwnershipTest {
+public class TenantOwnershipTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;

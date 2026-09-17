@@ -34,7 +34,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AnalyticsHistoryCleanupTest {
+public class AnalyticsHistoryCleanupTest {
 
     @Mock private AnalyticsQueryRunRepository repository;
 

@@ -45,7 +45,7 @@ import static process.util.ProcessUtil.SUCCESS;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class DocumentConverterDeleteRetentionTest {
+public class DocumentConverterDeleteRetentionTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;

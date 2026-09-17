@@ -55,7 +55,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class AnalyticsBoundaryTest {
+public class AnalyticsBoundaryTest {
 
     private static final File ANALYTICS =
         new File("src/main/java/process/analytics");

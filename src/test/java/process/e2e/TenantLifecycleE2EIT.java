@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * @author Nabeel Ahmed
  * */
-class TenantLifecycleE2EIT extends E2ESupport {
+public class TenantLifecycleE2EIT extends E2ESupport {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

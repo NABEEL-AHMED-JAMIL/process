@@ -42,7 +42,7 @@ import static org.mockito.Mockito.*;
  * a job in Queue.
  */
 @ExtendWith(MockitoExtension.class)
-class ProducerBulkEngineDispatchGuardTest {
+public class ProducerBulkEngineDispatchGuardTest {
 
     private static final long JOB_ID = 1196L;
     private static final long JOB_QUEUE_ID = 5073L;

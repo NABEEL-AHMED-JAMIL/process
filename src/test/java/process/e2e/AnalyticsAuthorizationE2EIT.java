@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *
  * @author Nabeel Ahmed
  */
-class AnalyticsAuthorizationE2EIT extends E2ESupport {
+public class AnalyticsAuthorizationE2EIT extends E2ESupport {
 
     /** Every controller that serves analytics. Adding a fifth here is the only manual step. */
     private static final List<Class<?>> CONTROLLERS = Arrays.asList(

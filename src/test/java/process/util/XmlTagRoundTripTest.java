@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class XmlTagRoundTripTest {
+public class XmlTagRoundTripTest {
 
     private static final String PAYLOAD =
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n"

@@ -34,7 +34,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AiAgentRuntimeConfigInstructionsTest {
+public class AiAgentRuntimeConfigInstructionsTest {
 
     @Mock
     private AiAgentRepository aiAgentRepository;

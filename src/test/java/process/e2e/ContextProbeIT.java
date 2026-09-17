@@ -9,7 +9,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @ActiveProfiles("e2e")
-class ContextProbeIT {
+public class ContextProbeIT {
 
     @MockBean private OfficeManager officeManager;
     @MockBean private DocumentFormatRegistry documentFormatRegistry;

@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class KafkaSecretPathTest {
+public class KafkaSecretPathTest {
 
     private static final LocalDate DAY = LocalDate.of(2026, 8, 31);
 

@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * @author Nabeel Ahmed
  * */
-class OpenSearchRagClientIT {
+public class OpenSearchRagClientIT {
 
     private static final String OPENSEARCH_URL = System.getProperty("opensearch.url", "http://localhost:9200");
     private static final String OLLAMA_URL = System.getProperty("ollama.url", "http://localhost:11434");

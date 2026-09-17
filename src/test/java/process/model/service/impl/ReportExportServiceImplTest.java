@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Conversion and bucket writes are not exercised here -- those are LibreOffice and MinIO, and
  * a test that stubs them proves only that the stubs were called.
  */
-class ReportExportServiceImplTest {
+public class ReportExportServiceImplTest {
 
     private ReportExportServiceImpl service;
 

@@ -101,7 +101,7 @@ import static org.mockito.Mockito.when;
 // a storage metadata lookup -- and a request refused before anything is opened uses none of it.
 // That refusal is the property such a test exists to prove, so an unused stub is not a defect.
 @MockitoSettings(strictness = Strictness.LENIENT)
-class AnalyticsBenchmarkTest {
+public class AnalyticsBenchmarkTest {
 
     private static final long TENANT_ID = 1001L;
     private static final long OTHER_TENANT_ID = 2002L;

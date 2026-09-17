@@ -40,7 +40,7 @@ import static org.mockito.Mockito.*;
  * reads, and it needs no running server or minted token to set.
  */
 @ExtendWith(MockitoExtension.class)
-class SourceJobServiceImplTenantIsolationTest {
+public class SourceJobServiceImplTenantIsolationTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;

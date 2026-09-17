@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * @author Nabeel Ahmed
  * */
-class TextChunkerTest {
+public class TextChunkerTest {
 
     @Test
     void nullAndBlankProduceNoChunks() {

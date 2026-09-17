@@ -8,7 +8,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class KafkaTopicPartitionUtilTest {
+public class KafkaTopicPartitionUtilTest {
 
     @Test
     void parsesAWildcardPartition() {

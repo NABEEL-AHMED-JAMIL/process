@@ -71,7 +71,7 @@ import static org.mockito.Mockito.when;
 // session is opened, which is the property it exists to prove. Strict stubs would report the
 // unused half of a shared fixture as a defect in the test.
 @MockitoSettings(strictness = Strictness.LENIENT)
-class AnalyticsProfileTest {
+public class AnalyticsProfileTest {
 
     private static final int TIMEOUT_SECONDS = 30;
     private static final long TENANT_ID = 1001L;

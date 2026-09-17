@@ -30,10 +30,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class AvatarBucketPropertyTest {
+public class AvatarBucketPropertyTest {
 
     @Configuration
-    static class Holder {
+    private static class Holder {
         @Value(StoragePropertyDefaults.AVATAR_BUCKET)
         String avatarBucket;
     }

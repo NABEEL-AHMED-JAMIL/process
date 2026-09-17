@@ -47,7 +47,7 @@ import static process.util.ProcessUtil.SUCCESS;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class StorageConnectionKafkaDependencyTest {
+public class StorageConnectionKafkaDependencyTest {
 
     private static final long TENANT_A = 1001L;
 

@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Both numbers come off the query string, so anything a caller can type has to produce a page
  * rather than the internal-error response.
  */
-class PagingUtilTest {
+public class PagingUtilTest {
 
     @Test
     void aOneBasedPageBecomesAZeroBasedIndex() {

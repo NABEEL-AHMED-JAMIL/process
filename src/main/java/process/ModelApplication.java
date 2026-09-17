@@ -40,20 +40,17 @@ public class ModelApplication {
     public void started() {
         logger.info("========== @PostConstruct started() method called ==========");
         try {
-
             ZonedDateTime znow = ZonedDateTime.now(ZoneId.of("America/Chicago"));
             LocalDateTime now = znow.toLocalDateTime();
             logger.info("=========Current Chicago Time: {} ==========", now);
             LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
             if (ProcessUtil.isNull(lookupData)) {
-
                 LookupData newLookupData = new LookupData();
                 newLookupData.setLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
                 newLookupData.setLookupValue(now.toString());
                 this.transactionService.updateLookupDate(newLookupData);
                 logger.info("=========Initialized SCHEDULER_LAST_RUN_TIME to {} ==========", now);
             } else {
-
                 logger.info("=========SCHEDULER_LAST_RUN_TIME already exists: {} (not overwriting on restart) ==========", lookupData.getLookupValue());
             }
         } catch (Exception e) {

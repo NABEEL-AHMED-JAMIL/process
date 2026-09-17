@@ -19,7 +19,7 @@ import static org.mockito.Mockito.verify;
  *
  * @author Nabeel Ahmed
  */
-class AnalyticsEngineSeamTest {
+public class AnalyticsEngineSeamTest {
 
     @Test
     void theDuckDbBeanCanBeTurnedOff_soASecondEngineCanExist() {

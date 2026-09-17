@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * Flat rather than @Nested: surefire 2.22.2 does not discover nested test classes.
  */
-class ProcessTimeUtilTest {
+public class ProcessTimeUtilTest {
 
     private static Scheduler scheduler(String frequency, String interval, LocalDateTime nextRunAt) {
         Scheduler s = new Scheduler();

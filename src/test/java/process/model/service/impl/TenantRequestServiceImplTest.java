@@ -41,7 +41,7 @@ import static process.util.ProcessUtil.SUCCESS;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class TenantRequestServiceImplTest {
+public class TenantRequestServiceImplTest {
 
     @Mock private TenantRequestRepository tenantRequestRepository;
     @Mock private TenantRepository tenantRepository;

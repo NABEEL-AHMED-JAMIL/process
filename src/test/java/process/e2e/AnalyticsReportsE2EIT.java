@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * @author Nabeel Ahmed
  */
-class AnalyticsReportsE2EIT extends ReportBuildingSupport {
+public class AnalyticsReportsE2EIT extends ReportBuildingSupport {
 
     private static final String CONNECTION = "etl-bucket";
     private static final String DATASET = "analytics-benchmark/sales-10mb.csv";

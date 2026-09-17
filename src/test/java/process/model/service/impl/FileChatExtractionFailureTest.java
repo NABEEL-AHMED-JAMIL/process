@@ -37,7 +37,7 @@ import static org.mockito.Mockito.lenient;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatExtractionFailureTest {
+public class FileChatExtractionFailureTest {
 
     private static final String BUCKET = "docs";
     private static final String KEY = "photo.jpg";

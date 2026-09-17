@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * memory when the test runs, so the repository never carries something that looks like a
  * credential even though it protects nothing.
  */
-class KafkaCertificateUtilTest {
+public class KafkaCertificateUtilTest {
 
     private static final char[] PASSWORD = "unit-test-store".toCharArray();
 

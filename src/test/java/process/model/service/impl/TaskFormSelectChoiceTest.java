@@ -44,7 +44,7 @@ import static process.util.ProcessUtil.SUCCESS;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class TaskFormSelectChoiceTest {
+public class TaskFormSelectChoiceTest {
 
     private static final long TENANT_A = 1001L;
     private static final String PIPELINE = "F768930";

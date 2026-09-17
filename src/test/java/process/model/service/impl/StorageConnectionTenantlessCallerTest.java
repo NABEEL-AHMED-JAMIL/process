@@ -46,7 +46,7 @@ import static process.util.ProcessUtil.SUCCESS;
  *
  * @author Nabeel Ahmed
  */
-class StorageConnectionTenantlessCallerTest {
+public class StorageConnectionTenantlessCallerTest {
 
     private static final long CONNECTION_ID = 55L;
     private static final String PLATFORM_ALIAS = "platform-archive";

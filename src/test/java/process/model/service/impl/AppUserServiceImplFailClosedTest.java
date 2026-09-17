@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AppUserServiceImplFailClosedTest {
+public class AppUserServiceImplFailClosedTest {
 
     private static final long TENANT_A = 1001L;
     private static final long ACTING_ADMIN_ID = 9000L;

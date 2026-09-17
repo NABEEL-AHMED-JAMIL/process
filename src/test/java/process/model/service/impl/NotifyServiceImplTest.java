@@ -38,7 +38,7 @@ import static process.util.ProcessUtil.ERROR;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class NotifyServiceImplTest {
+public class NotifyServiceImplTest {
 
     private static final long TENANT_A = 1001L;
     private static final long JOB_ID = 1196L;

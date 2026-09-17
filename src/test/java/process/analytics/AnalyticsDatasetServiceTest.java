@@ -57,7 +57,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AnalyticsDatasetServiceTest {
+public class AnalyticsDatasetServiceTest {
 
     /** Two real workspaces. Neither is the platform, which is a third case and tested apart. */
     private static final Long ACME = 1001L;

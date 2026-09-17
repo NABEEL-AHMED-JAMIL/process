@@ -54,7 +54,7 @@ import static process.analytics.integration.AnalyticsIntegrationEnvironment.TENA
  *
  * @author Nabeel Ahmed
  */
-class MinioAnalyticsIntegrationTest {
+public class MinioAnalyticsIntegrationTest {
 
     private AnalyticsQueryService service;
     private DatasetResolver resolver;

@@ -57,7 +57,7 @@ import static process.analytics.integration.AnalyticsIntegrationEnvironment.TENA
  *
  * @author Nabeel Ahmed
  */
-class LocalStackS3AnalyticsIntegrationTest {
+public class LocalStackS3AnalyticsIntegrationTest {
 
     /** Written once for the class. Uploading five thousand rows per test would be waste, not rigour. */
     private static String csvKey;

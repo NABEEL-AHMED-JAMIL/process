@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * These rules exist because a bad definition does not fail here -- it produces tasks that build
  * the wrong XML and fail at run time, a long way from the person who defined the form.
  */
-class TaskFormValidationTest {
+public class TaskFormValidationTest {
 
     @AfterEach
     void clear() { TenantContext.clear(); }

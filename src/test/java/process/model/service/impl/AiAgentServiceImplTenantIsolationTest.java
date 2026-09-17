@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AiAgentServiceImplTenantIsolationTest {
+public class AiAgentServiceImplTenantIsolationTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;

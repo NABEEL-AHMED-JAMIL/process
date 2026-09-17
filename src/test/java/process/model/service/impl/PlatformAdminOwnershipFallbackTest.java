@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class PlatformAdminOwnershipFallbackTest {
+public class PlatformAdminOwnershipFallbackTest {
 
     private static final long DEFAULT_TENANT = 1815L;
     private static final long REAL_TENANT = 2364L;

@@ -40,7 +40,7 @@ import static org.mockito.Mockito.verify;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatLazyExtractionTest {
+public class FileChatLazyExtractionTest {
 
     private static final String BUCKET = "docs";
     private static final String KEY = "episode.mp3";

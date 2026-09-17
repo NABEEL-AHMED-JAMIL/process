@@ -174,7 +174,7 @@ public class RunningQueries {
     }
 
     /** Who asked for a run to stop. The two produce different lifecycle states and different words. */
-    enum Stopper {
+    public enum Stopper {
         USER,
         TIMEOUT
     }

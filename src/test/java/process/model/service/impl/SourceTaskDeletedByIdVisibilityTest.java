@@ -42,7 +42,7 @@ import static org.mockito.Mockito.*;
  * Driven through TenantContext rather than a JWT: the context is what the guards actually read.
  */
 @ExtendWith(MockitoExtension.class)
-class SourceTaskDeletedByIdVisibilityTest {
+public class SourceTaskDeletedByIdVisibilityTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TASK_ID = 4242L;

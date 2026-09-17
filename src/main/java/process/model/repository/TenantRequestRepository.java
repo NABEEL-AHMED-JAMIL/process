@@ -22,5 +22,5 @@ public interface TenantRequestRepository extends JpaRepository<TenantRequest, Lo
      */
     @Query(value = "select * from tenant_request where lower(contact_email) = lower(?1) "
         + "and status = 'Pending' limit 1", nativeQuery = true)
-    Optional<TenantRequest> findOpenByEmail(String contactEmail);
+    public Optional<TenantRequest> findOpenByEmail(String contactEmail);
 }

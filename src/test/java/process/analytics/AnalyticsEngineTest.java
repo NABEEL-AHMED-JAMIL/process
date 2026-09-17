@@ -72,7 +72,7 @@ import static org.mockito.Mockito.when;
 // Lenient because a query that is refused before a session is opened uses none of the scripted
 // session, and that refusal is the property such a test exists to prove.
 @MockitoSettings(strictness = Strictness.LENIENT)
-class AnalyticsEngineTest {
+public class AnalyticsEngineTest {
 
     private static final long TENANT_ID = 1001L;
     private static final long USER_ID = 7L;

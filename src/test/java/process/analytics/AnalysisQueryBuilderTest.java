@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  *
  * @author Nabeel Ahmed
  */
-class AnalysisQueryBuilderTest {
+public class AnalysisQueryBuilderTest {
 
     private static final List<ColumnDto> SCHEMA = Arrays.asList(
         new ColumnDto("region", "VARCHAR"),

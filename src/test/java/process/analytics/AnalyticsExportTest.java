@@ -109,7 +109,7 @@ import static org.mockito.Mockito.when;
 // Lenient because the fixture scripts a whole session and a request refused before the engine is
 // reached uses none of it -- and being refused that early is the property those tests exist for.
 @MockitoSettings(strictness = Strictness.LENIENT)
-class AnalyticsExportTest {
+public class AnalyticsExportTest {
 
     private static final long TENANT_ID = 1001L;
     private static final long OTHER_TENANT_ID = 2002L;

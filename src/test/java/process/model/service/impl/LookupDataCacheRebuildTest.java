@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class LookupDataCacheRebuildTest {
+public class LookupDataCacheRebuildTest {
 
     private static final String BUCKET_LIST = "BUCKET_LIST";
     private static final String QUEUE_FETCH_LIMIT = "QUEUE_FETCH_LIMIT";

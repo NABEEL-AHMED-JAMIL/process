@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  *
  * @author Nabeel Ahmed
  */
-class StatementGateTest {
+public class StatementGateTest {
 
     /** Long enough that nothing here is timed out, short enough that a hang fails the build. */
     private static final int TIMEOUT_SECONDS = 10;

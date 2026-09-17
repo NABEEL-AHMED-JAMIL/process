@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * @author Nabeel Ahmed
  */
-class BenchmarkRegressionTest {
+public class BenchmarkRegressionTest {
 
     private static BenchmarkResult row(String batch, String label, String measure, String format,
         long medianMs) {

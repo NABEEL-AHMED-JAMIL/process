@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class UserManagementE2EIT extends E2ESupport {
+public class UserManagementE2EIT extends E2ESupport {
 
     private static final String LIST_USERS = "/appUser.json/listUsers";
     private static final String ADD_USER = "/appUser.json/addUser";

@@ -52,7 +52,7 @@ import static org.mockito.Mockito.*;
  * export down with an HTTP 500.
  */
 @ExtendWith(MockitoExtension.class)
-class SourceJobBulkDefectTest {
+public class SourceJobBulkDefectTest {
 
     private static final long TENANT_A = 1001L;
 

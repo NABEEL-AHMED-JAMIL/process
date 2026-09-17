@@ -36,7 +36,7 @@ import static org.mockito.Mockito.verify;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatAudioInstructionsTest {
+public class FileChatAudioInstructionsTest {
 
     private static final String BUCKET = "etl-bucket";
     private static final String KEY = "voicemail-2024-03-12.mp3";

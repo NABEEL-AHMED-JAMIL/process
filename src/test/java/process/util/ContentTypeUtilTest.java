@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class ContentTypeUtilTest {
+public class ContentTypeUtilTest {
 
     @Test
     void plainImageExtensionsAreClassifiedAsImage() {

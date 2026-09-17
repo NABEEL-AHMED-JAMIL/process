@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class KafkaConnectionResolverTenantIsolationTest {
+public class KafkaConnectionResolverTenantIsolationTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 1002L;

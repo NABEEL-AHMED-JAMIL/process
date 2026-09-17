@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class AudioTranscriptBucketGuardTest {
+public class AudioTranscriptBucketGuardTest {
 
     private static final String BUCKET = "etl-avatar";
     private static final String KEY = "9/profile/interview.mp3";

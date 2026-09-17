@@ -60,7 +60,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class PostgresAnalyticsSchemaIntegrationTest {
+public class PostgresAnalyticsSchemaIntegrationTest {
 
     /**
      * Every entity the analytics module persists, named explicitly rather than found by scanning.

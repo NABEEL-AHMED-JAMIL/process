@@ -58,7 +58,7 @@ import static org.mockito.Mockito.*;
  * more clearly.
  */
 @ExtendWith(MockitoExtension.class)
-class SourceJobLifecycleDefectTest {
+public class SourceJobLifecycleDefectTest {
 
     private static final long TENANT_A = 1001L;
     private static final long CALLER_ID = 77L;

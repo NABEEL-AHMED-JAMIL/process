@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * @author Nabeel Ahmed
  */
-class OrdersReportsE2EIT extends ReportBuildingSupport {
+public class OrdersReportsE2EIT extends ReportBuildingSupport {
 
     private static final String CONNECTION = "etl-bucket";
     private static final String DATASET = "analytics-samples/orders.csv";

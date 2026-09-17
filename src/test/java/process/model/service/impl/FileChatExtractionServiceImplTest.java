@@ -67,7 +67,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class FileChatExtractionServiceImplTest {
+public class FileChatExtractionServiceImplTest {
 
     private static final String BUCKET = "docs";
     private static final String KEY = "scan.pdf";

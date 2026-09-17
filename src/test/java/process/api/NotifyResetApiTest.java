@@ -34,7 +34,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class NotifyResetApiTest {
+public class NotifyResetApiTest {
 
     private static final String CONFIGURED_TOKEN = "the-configured-worker-token";
     private static final long JOB_ID = 1196L;

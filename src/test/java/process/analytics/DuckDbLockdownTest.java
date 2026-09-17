@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class DuckDbLockdownTest {
+public class DuckDbLockdownTest {
 
     private DuckDbSessionFactory factory;
     private File secretOnDisk;

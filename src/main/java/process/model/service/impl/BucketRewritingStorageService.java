@@ -18,12 +18,12 @@ import java.util.List;
  *
  * @author Nabeel Ahmed
  */
-class BucketRewritingStorageService implements ObjectStorageService {
+public class BucketRewritingStorageService implements ObjectStorageService {
 
     private final ObjectStorageService delegate;
     private final String realBucket;
 
-    BucketRewritingStorageService(ObjectStorageService delegate, String realBucket) {
+    public BucketRewritingStorageService(ObjectStorageService delegate, String realBucket) {
         this.delegate = delegate;
         this.realBucket = realBucket;
     }

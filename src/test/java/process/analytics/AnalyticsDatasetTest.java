@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class AnalyticsDatasetTest {
+public class AnalyticsDatasetTest {
 
     /**
      * Anything that would say WHERE the data is rather than WHICH connection reaches it. The

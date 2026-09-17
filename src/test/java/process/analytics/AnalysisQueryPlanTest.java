@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Nabeel Ahmed
  */
-class AnalysisQueryPlanTest {
+public class AnalysisQueryPlanTest {
 
     private static final List<ColumnDto> SCHEMA = Arrays.asList(
         new ColumnDto("region", "VARCHAR"),
