@@ -41,6 +41,11 @@ public class AppUserDto implements AuditNamed {
     /** Access profile: the id is what the form sends, the name is what the list shows. */
     private Long pageAccessProfileId;
     private String pageAccessProfileName;
+    /** How many catalogue pages the person opens, and how many exceptions to their profile they carry. */
+    private Integer pageCount;
+    private Integer pageExceptionCount;
+    /** The workspace default profile's name, for a person on the default. */
+    private String defaultProfileName;
     private boolean mustChangePassword;
     private String avatarBucket;
     private String avatarKey;
@@ -228,4 +233,10 @@ public class AppUserDto implements AuditNamed {
     public void setPageAccessProfileId(Long pageAccessProfileId) { this.pageAccessProfileId = pageAccessProfileId; }
     public String getPageAccessProfileName() { return pageAccessProfileName; }
     public void setPageAccessProfileName(String pageAccessProfileName) { this.pageAccessProfileName = pageAccessProfileName; }
+    public Integer getPageCount() { return pageCount; }
+    public void setPageCount(Integer pageCount) { this.pageCount = pageCount; }
+    public Integer getPageExceptionCount() { return pageExceptionCount; }
+    public void setPageExceptionCount(Integer pageExceptionCount) { this.pageExceptionCount = pageExceptionCount; }
+    public String getDefaultProfileName() { return defaultProfileName; }
+    public void setDefaultProfileName(String defaultProfileName) { this.defaultProfileName = defaultProfileName; }
 }

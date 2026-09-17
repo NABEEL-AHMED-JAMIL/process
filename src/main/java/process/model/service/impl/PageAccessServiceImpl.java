@@ -539,6 +539,41 @@ public class PageAccessServiceImpl implements PageAccessService {
     }
 
     @Override
+    public Map<Long, AccessSummary> accessSummaryFor(Collection<AppUser> users) {
+        Map<Long, AccessSummary> out = new HashMap<>();
+        if (users == null || users.isEmpty()) {
+            return out;
+        }
+        Set<Long> profileIds = users.stream().map(AppUser::getPageAccessProfileId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, PageAccessProfile> profiles = profileIds.isEmpty() ? Collections.emptyMap()
+            : this.profileRepository.findAllById(profileIds).stream()
+                .collect(Collectors.toMap(PageAccessProfile::getPageAccessProfileId, p -> p));
+        Set<Long> tenantIds = users.stream().map(AppUser::getTenantId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, PageAccessProfile> defaults = new HashMap<>();
+        for (Long tenantId : tenantIds) {
+            this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(tenantId, Status.Active)
+                .ifPresent(p -> defaults.put(tenantId, p));
+        }
+        List<Long> userIds = users.stream().filter(u -> u.getUserRole() == UserRole.TENANT_USER)
+            .map(AppUser::getAppUserId).collect(Collectors.toList());
+        Map<Long, List<UserPageAccess>> exceptions = userIds.isEmpty() ? Collections.emptyMap()
+            : this.exceptionRepository.findByIdAppUserIdIn(userIds).stream().collect(Collectors.groupingBy(UserPageAccess::getAppUserId));
+        for (AppUser user : users) {
+            if (user.getUserRole() != UserRole.TENANT_USER) {
+                out.put(user.getAppUserId(), new AccessSummary(null, null, PageKey.values().length, 0));
+                continue;
+            }
+            PageAccessProfile own = profiles.get(user.getPageAccessProfileId());
+            List<UserPageAccess> mine = exceptions.getOrDefault(user.getAppUserId(), Collections.emptyList());
+            Set<PageKey> pages = resolve(user, own, defaults.get(user.getTenantId()), mine);
+            String name = own != null && own.getStatus() == Status.Active ? own.getProfileName() : null;
+            PageAccessProfile fallback = defaults.get(user.getTenantId());
+            out.put(user.getAppUserId(), new AccessSummary(name, fallback == null ? null : fallback.getProfileName(), pages.size(), mine.size()));
+        }
+        return out;
+    }
+
+    @Override
     public Map<Long, String> profileNamesFor(Collection<Long> pageAccessProfileIds) {
         Set<Long> ids = pageAccessProfileIds == null ? Collections.emptySet()
             : pageAccessProfileIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());

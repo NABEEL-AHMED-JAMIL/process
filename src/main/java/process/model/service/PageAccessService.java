@@ -78,6 +78,25 @@ public interface PageAccessService {
     /** The same, for a whole list at once: one query, however many rows. */
     Map<Long, String> profileNamesFor(Collection<Long> pageAccessProfileIds);
 
+    /** What the user list shows per person: the profile's name, pages opened, exceptions held. */
+    final class AccessSummary {
+        public final String profileName;
+        /** The workspace default's name, so "Default" can say which profile that is. */
+        public final String defaultProfileName;
+        public final int pageCount;
+        public final int exceptionCount;
+        public AccessSummary(String profileName, String defaultProfileName, int pageCount, int exceptionCount) {
+            this.profileName = profileName; this.defaultProfileName = defaultProfileName;
+            this.pageCount = pageCount; this.exceptionCount = exceptionCount;
+        }
+    }
+
+    /**
+     * The summary for a whole list at once -- three reads (profiles, defaults, exceptions),
+     * however many rows. Admins read as every page and no exceptions.
+     */
+    Map<Long, AccessSummary> accessSummaryFor(Collection<AppUser> users);
+
     /**
      * Tells a tenant user their profile changed, in the one wording the console uses for it.
      * Silent for an admin, for whom nothing changed.

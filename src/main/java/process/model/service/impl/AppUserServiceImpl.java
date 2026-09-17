@@ -557,12 +557,17 @@ public class AppUserServiceImpl implements AppUserService {
         Map<Long, Tenant> tenantById = tenantIds.isEmpty() ? Collections.emptyMap()
             : this.tenantRepository.findAllById(tenantIds).stream()
                 .collect(Collectors.toMap(Tenant::getTenantId, t -> t));
-        // Same shape as the tenant names above: one query for every profile name on the page,
-        // rather than one per row.
-        Map<Long, String> profileNames = this.pageAccessService.profileNamesFor(
-            users.stream().map(AppUser::getPageAccessProfileId).collect(Collectors.toList()));
+        // Same shape as the tenant names above: three reads for every profile name, page count
+        // and exception count on the page, rather than a handful per row.
+        Map<Long, PageAccessService.AccessSummary> access = this.pageAccessService.accessSummaryFor(users);
         return users.stream().map(user -> {
-            AppUserDto dto = this.mapToDtoWithoutTenantName(user, profileNames.get(user.getPageAccessProfileId()));
+            PageAccessService.AccessSummary summary = access.get(user.getAppUserId());
+            AppUserDto dto = this.mapToDtoWithoutTenantName(user, summary == null ? null : summary.profileName);
+            if (summary != null) {
+                dto.setPageCount(summary.pageCount);
+                dto.setPageExceptionCount(summary.exceptionCount);
+                dto.setDefaultProfileName(summary.defaultProfileName);
+            }
             if (!isNull(user.getTenantId())) {
                 this.applyTenantInfo(dto, tenantById.get(user.getTenantId()));
             }

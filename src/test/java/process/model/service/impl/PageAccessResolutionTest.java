@@ -185,4 +185,29 @@ public class PageAccessResolutionTest {
         assertThat(this.service.effectivePages(user(UserRole.TENANT_ADMIN, TENANT_A, null))).isEqualTo(PageKey.all());
         org.mockito.Mockito.verify(this.exceptionRepository, org.mockito.Mockito.never()).findByIdAppUserId(any());
     }
+
+    /** The user list's summary: three reads for the whole page, admins read as everything. */
+    @Test
+    void accessSummaryCoversAListInThreeReads() {
+        PageAccessProfile operator = profile(500L, TENANT_A, Status.Active, "jobs", "queue"); operator.setProfileName("Operator");
+        when(this.profileRepository.findAllById(any())).thenReturn(Arrays.asList(operator));
+        when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(TENANT_A, Status.Active)).thenReturn(Optional.of(operator));
+        AppUser olivia = user(UserRole.TENANT_USER, TENANT_A, 500L); olivia.setAppUserId(44L);
+        AppUser ava = user(UserRole.TENANT_USER, TENANT_A, null); ava.setAppUserId(45L);
+        AppUser daniel = user(UserRole.TENANT_ADMIN, TENANT_A, null); daniel.setAppUserId(9L);
+        when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Arrays.asList(
+            new process.model.pojo.UserPageAccess(44L, "reports", true, 9L)));
+
+        java.util.Map<Long, process.model.service.PageAccessService.AccessSummary> summary =
+            this.service.accessSummaryFor(Arrays.asList(olivia, ava, daniel));
+
+        assertThat(summary.get(44L).profileName).isEqualTo("Operator");
+        assertThat(summary.get(44L).pageCount).isEqualTo(3);
+        assertThat(summary.get(44L).exceptionCount).isEqualTo(1);
+        assertThat(summary.get(45L).profileName).isNull();
+        assertThat(summary.get(45L).defaultProfileName).isEqualTo("Operator");
+        assertThat(summary.get(45L).pageCount).isEqualTo(2);
+        assertThat(summary.get(9L).pageCount).isEqualTo(PageKey.values().length);
+        org.mockito.Mockito.verify(this.profileRepository, org.mockito.Mockito.never()).findById(any());
+    }
 }
