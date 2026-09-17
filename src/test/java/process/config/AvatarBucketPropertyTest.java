@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class AvatarBucketPropertyTest {
 
     @Configuration
-    private static class Holder {
+    static class Holder {
         @Value(StoragePropertyDefaults.AVATAR_BUCKET)
         String avatarBucket;
     }

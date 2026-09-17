@@ -17,6 +17,12 @@ public class JobPayloadDTO {
     private String homePageId;
     private String pipelineId;
     private Integer priority;
+    /**
+     * The worker's proof for this run: echo it as X-Worker-Token on every callback for this
+     * jobQueueId. Good for this run and attempt only; a retry arrives with a new one.
+     */
+    private String callbackToken;
+    private Integer attempt;
 
     public JobPayloadDTO() {
     }
@@ -74,4 +80,8 @@ public class JobPayloadDTO {
         return new GsonBuilder().disableHtmlEscaping().create().toJson(this);
     }
 
+    public String getCallbackToken() { return callbackToken; }
+    public void setCallbackToken(String callbackToken) { this.callbackToken = callbackToken; }
+    public Integer getAttempt() { return attempt; }
+    public void setAttempt(Integer attempt) { this.attempt = attempt; }
 }

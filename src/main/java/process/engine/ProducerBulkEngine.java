@@ -10,6 +10,7 @@ import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
 import process.emailer.EmailMessagesFactory;
 import process.engine.dto.JobPayloadDTO;
+import process.security.RunCallbackTokens;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -37,6 +38,7 @@ public class ProducerBulkEngine {
 
     public Logger logger = LogManager.getLogger(ProducerBulkEngine.class);
 
+    private final RunCallbackTokens runCallbackTokens;
     private final BulkAction bulkAction;
     private final TransactionServiceImpl transactionService;
     private final EmailMessagesFactory emailMessagesFactory;
@@ -47,7 +49,9 @@ public class ProducerBulkEngine {
         TransactionServiceImpl transactionService,
         EmailMessagesFactory emailMessagesFactory,
         KafkaTemplateProvider kafkaTemplateProvider,
-        KafkaConnectionResolver kafkaConnectionResolver) {
+        KafkaConnectionResolver kafkaConnectionResolver,
+        RunCallbackTokens runCallbackTokens) {
+        this.runCallbackTokens = runCallbackTokens;
         this.bulkAction = bulkAction;
         this.transactionService = transactionService;
         this.emailMessagesFactory = emailMessagesFactory;
@@ -482,6 +486,10 @@ public class ProducerBulkEngine {
         JobPayloadDTO dto = new JobPayloadDTO();
         dto.setJobQueueId(jobQueue.getJobQueueId());
         dto.setJobId(jobQueue.getJobId());
+        // The run's own proof for its callbacks, minted and saved here -- before the send below,
+        // so the server knows the token before any worker can echo it. See RunCallbackTokens.
+        dto.setCallbackToken(this.runCallbackTokens.issue(jobQueue));
+        dto.setAttempt(Math.max(1, jobQueue.getAttempt()));
         if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
             Long homePageLookupId = ProcessUtil.parseLongOrNull(sourceJob.getTaskDetail().getHomePageId());
             if (homePageLookupId != null) {

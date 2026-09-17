@@ -1,54 +1,59 @@
 package process.api;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.service.NotifyService;
+import process.security.RunCallbackTokens;
+import process.util.ProcessUtil;
 
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 /**
- * The worker callbacks sit outside the JWT chain -- SecurityConfig permits them -- so the shared
- * secret is the only thing between the internet and any tenant's job status and audit log. It
- * used to be optional: a blank token meant "let everyone in", which is what an environment
- * missing WORKER_CALLBACK_TOKEN silently produced. These pin the closed behaviour.
+ * The worker callbacks sit outside the JWT chain -- SecurityConfig permits them -- so the run's
+ * own token is the only thing between the internet and any tenant's job status and audit log.
+ * The controller asks {@link RunCallbackTokens} and does exactly two things with the answer:
+ * refuses with a bare 401 before touching the service, or lets the call through and spends the
+ * token once the run is over. The verdict itself is pinned in RunCallbackTokensTest.
  *
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
 public class NotifyResetApiTest {
 
-    private static final String CONFIGURED_TOKEN = "the-configured-worker-token";
+    private static final String TOKEN = "cbt_1.91422.some-random-part";
     private static final long JOB_ID = 1196L;
     private static final long QUEUE_ID = 91422L;
 
     @Mock private NotifyService notifyService;
+    @Mock private RunCallbackTokens runCallbackTokens;
 
-    /** The token is injected by Spring at runtime; there is no constructor to pass it through. */
-    private NotifyResetApi apiWithToken(String configuredToken) throws Exception {
-        NotifyResetApi api = new NotifyResetApi(this.notifyService);
-        Field token = NotifyResetApi.class.getDeclaredField("workerCallbackToken");
-        token.setAccessible(true);
-        token.set(api, configuredToken);
-        return api;
+    private NotifyResetApi api;
+
+    @BeforeEach
+    void setUp() {
+        this.api = new NotifyResetApi(this.notifyService, this.runCallbackTokens);
     }
 
     private SourceJobQueueDto callback() {
@@ -57,69 +62,51 @@ public class NotifyResetApiTest {
         return dto;
     }
 
-    @Test
-    void anUnconfiguredTokenRefusesToStart() throws Exception {
-        assertThatThrownBy(() -> apiWithToken(null).requireCallbackToken())
-            .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> apiWithToken("").requireCallbackToken())
-            .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> apiWithToken("   ").requireCallbackToken())
-            .isInstanceOf(IllegalStateException.class);
+    private void tokenIsGood() {
+        when(this.runCallbackTokens.verify(JOB_ID, QUEUE_ID, TOKEN)).thenReturn(Optional.empty());
+    }
+
+    private void tokenIsRefused(RunCallbackTokens.Refusal why) {
+        when(this.runCallbackTokens.verify(eq(JOB_ID), eq(QUEUE_ID), any())).thenReturn(Optional.of(why));
     }
 
     @Test
-    void aConfiguredTokenStarts() throws Exception {
-        apiWithToken(CONFIGURED_TOKEN).requireCallbackToken();
+    void everyRefusalIsTheSameBare401() {
+        for (RunCallbackTokens.Refusal why : RunCallbackTokens.Refusal.values()) {
+            when(this.runCallbackTokens.verify(JOB_ID, QUEUE_ID, "x")).thenReturn(Optional.of(why));
+            ResponseEntity<?> rejected = this.api.rejectIfUntrusted(JOB_ID, QUEUE_ID, "x");
+            assertThat(rejected).as(why.name()).isNotNull();
+            assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            // The reason stays in the log: a caller probing for a live run learns nothing here.
+            assertThat(rejected.getBody().toString()).doesNotContain(why.name());
+        }
     }
 
     @Test
-    void anUnconfiguredTokenLetsNobodyThrough() throws Exception {
-        // Startup refuses this, so it can only be reached if the value was cleared afterwards.
-        // Either way, nothing to compare against is not permission.
-        assertThat(apiWithToken("").rejectIfUntrusted(CONFIGURED_TOKEN)).isNotNull();
-        assertThat(apiWithToken(null).rejectIfUntrusted(null)).isNotNull();
+    void theRunsOwnTokenIsLetThrough() {
+        tokenIsGood();
+        assertThat(this.api.rejectIfUntrusted(JOB_ID, QUEUE_ID, TOKEN)).isNull();
     }
 
     @Test
-    void aMissingHeaderIsRejected() throws Exception {
-        ResponseEntity<?> rejected = apiWithToken(CONFIGURED_TOKEN).rejectIfUntrusted(null);
+    void aStateChangeWithoutAGoodTokenNeverReachesTheService() {
+        tokenIsRefused(RunCallbackTokens.Refusal.MISMATCH);
 
-        assertThat(rejected).isNotNull();
-        assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-    }
-
-    @Test
-    void aWrongTokenIsRejected() throws Exception {
-        assertThat(apiWithToken(CONFIGURED_TOKEN).rejectIfUntrusted("not-the-token")).isNotNull();
-        // A prefix of the real value must not be enough either.
-        assertThat(apiWithToken(CONFIGURED_TOKEN).rejectIfUntrusted("the-configured")).isNotNull();
-        assertThat(apiWithToken(CONFIGURED_TOKEN).rejectIfUntrusted("")).isNotNull();
-    }
-
-    @Test
-    void theRightTokenIsLetThrough() throws Exception {
-        assertThat(apiWithToken(CONFIGURED_TOKEN).rejectIfUntrusted(CONFIGURED_TOKEN)).isNull();
-        // Whitespace either side of the header value is trimmed, as it is on the configured one.
-        assertThat(apiWithToken(CONFIGURED_TOKEN).rejectIfUntrusted("  " + CONFIGURED_TOKEN + " ")).isNull();
-    }
-
-    @Test
-    void aStateChangeWithoutTheTokenNeverReachesTheService() throws Exception {
-        ResponseEntity<?> response = apiWithToken(CONFIGURED_TOKEN)
-            .changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, null, callback());
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, null, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verifyNoInteractions(this.notifyService);
+        verify(this.runCallbackTokens, never()).retire(anyLong());
     }
 
     @Test
-    void logsWithoutTheTokenNeverReachTheService() throws Exception {
-        NotifyResetApi api = apiWithToken(CONFIGURED_TOKEN);
+    void logsWithoutAGoodTokenNeverReachTheService() {
+        tokenIsRefused(RunCallbackTokens.Refusal.EXPIRED);
         List<String> messages = Arrays.asList("line one", "line two");
         Map<String, List<String>> body = Collections.singletonMap("messages", messages);
 
-        ResponseEntity<?> single = api.addLogs(JOB_ID, QUEUE_ID, "not-the-token", callback());
-        ResponseEntity<?> batch = api.addLogsBatch(JOB_ID, QUEUE_ID, "not-the-token", body);
+        ResponseEntity<?> single = this.api.addLogs(JOB_ID, QUEUE_ID, "stale", callback());
+        ResponseEntity<?> batch = this.api.addLogsBatch(JOB_ID, QUEUE_ID, "stale", body);
 
         assertThat(single.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(batch.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -128,11 +115,51 @@ public class NotifyResetApiTest {
     }
 
     @Test
-    void aStateChangeWithTheTokenReachesTheService() throws Exception {
-        ResponseEntity<?> response = apiWithToken(CONFIGURED_TOKEN)
-            .changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, CONFIGURED_TOKEN, callback());
+    void aTerminalStateChangeSpendsTheToken() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class)))
+            .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
+
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(this.notifyService).changeState(any(SourceJobQueueDto.class));
+        verify(this.runCallbackTokens).retire(QUEUE_ID);
+    }
+
+    /** Running is not the end of anything; the worker still has logs and a final state to send. */
+    @Test
+    void aRunningStateChangeKeepsTheToken() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class)))
+            .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
+
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Running, TOKEN, callback());
+
+        verify(this.runCallbackTokens, never()).retire(anyLong());
+    }
+
+    /** A refused transition leaves the run where it was, and its token with it. */
+    @Test
+    void aRefusedTerminalChangeKeepsTheToken() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class)))
+            .thenReturn(new ResponseDto(ProcessUtil.ERROR, "already finished"));
+
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, callback());
+
+        verify(this.runCallbackTokens, never()).retire(anyLong());
+    }
+
+    @Test
+    void aBadRequestIsCaughtAfterTheTokenCheckAndSpendsNothing() {
+        tokenIsGood();
+        SourceJobQueueDto noMessage = new SourceJobQueueDto();
+
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, noMessage);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        verifyNoInteractions(this.notifyService);
+        verify(this.runCallbackTokens, never()).retire(anyLong());
     }
 }

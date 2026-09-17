@@ -17,6 +17,7 @@ import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.service.impl.TransactionServiceImpl;
 import process.util.ProcessUtil;
+import process.security.RunCallbackTokens;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
@@ -52,13 +53,15 @@ public class ProducerBulkEngineDispatchGuardTest {
     @Mock private EmailMessagesFactory emailMessagesFactory;
     @Mock private KafkaTemplateProvider kafkaTemplateProvider;
     @Mock private KafkaConnectionResolver kafkaConnectionResolver;
+    @Mock private RunCallbackTokens runCallbackTokens;
 
     private ProducerBulkEngine engine;
 
     @BeforeEach
     void setUp() {
         this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService,
-            this.emailMessagesFactory, this.kafkaTemplateProvider, this.kafkaConnectionResolver);
+            this.emailMessagesFactory, this.kafkaTemplateProvider, this.kafkaConnectionResolver,
+            this.runCallbackTokens);
     }
 
     private static LookupData lookupValued(String value) {

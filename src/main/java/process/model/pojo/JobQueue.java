@@ -106,6 +106,20 @@ public class JobQueue {
     @Column(name = "next_attempt_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime nextAttemptAt;
 
+    /**
+     * The run's callback token, as the server keeps it: a hash, the attempt it was minted for,
+     * and when it stops being accepted. The token itself goes to the worker in the run's message
+     * and is never stored. Null until dispatch, and again once the run ends. See V42.
+     */
+    @Column(name = "callback_token_hash", length = 64)
+    private String callbackTokenHash;
+
+    @Column(name = "callback_token_attempt")
+    private Integer callbackTokenAttempt;
+
+    @Column(name = "callback_token_expires_at", columnDefinition = "TIMESTAMP")
+    private LocalDateTime callbackTokenExpiresAt;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -260,4 +274,11 @@ public class JobQueue {
         return gson.toJson(this);
     }
 
+
+    public String getCallbackTokenHash() { return callbackTokenHash; }
+    public void setCallbackTokenHash(String callbackTokenHash) { this.callbackTokenHash = callbackTokenHash; }
+    public Integer getCallbackTokenAttempt() { return callbackTokenAttempt; }
+    public void setCallbackTokenAttempt(Integer callbackTokenAttempt) { this.callbackTokenAttempt = callbackTokenAttempt; }
+    public LocalDateTime getCallbackTokenExpiresAt() { return callbackTokenExpiresAt; }
+    public void setCallbackTokenExpiresAt(LocalDateTime callbackTokenExpiresAt) { this.callbackTokenExpiresAt = callbackTokenExpiresAt; }
 }

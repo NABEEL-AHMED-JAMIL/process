@@ -169,10 +169,13 @@ services:
       # only as an unset passthrough so an existing deployment can still perform that one-time
       # migration; nothing reads them once a bucket has a connection row. No inline defaults:
       # a real secret written here ends up committed to the repository.
-      # Shared secret for the ETL worker callbacks (/changeState, /addLogs). No default on
-      # purpose -- generate one with `openssl rand -hex 32` and set the SAME value here and in
-      # the job-search workers' env. Left unset, those endpoints stay unauthenticated.
+      # Worker callbacks (/changeState, /addLogs, /addLogsBatch) are proved by a token minted
+      # per run at dispatch and echoed back as X-Worker-Token -- nothing to configure. The
+      # shared secret below only covers a run dispatched before per-run tokens existed (no hash
+      # on its job_queue row); drop it once every worker echoes the run token. Budget hours is
+      # how long a run's token stays good after dispatch (default 24).
       WORKER_CALLBACK_TOKEN: ${WORKER_CALLBACK_TOKEN:-}
+      WORKER_CALLBACK_BUDGET_HOURS: ${WORKER_CALLBACK_BUDGET_HOURS:-24}
       # Job audit logs (OpenSearchAuditLogClient) -- OpenSearch is a separate compose project's
       # container (job-search), reached via the published host port, since process_app isn't on
       # that project's docker network.

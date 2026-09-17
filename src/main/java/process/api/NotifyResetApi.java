@@ -2,7 +2,6 @@ package process.api;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -10,22 +9,20 @@ import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.service.NotifyService;
+import process.security.RunCallbackTokens;
 import process.util.ProcessUtil;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.annotation.PostConstruct;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 
 /**
  * Callback endpoints the ETL workers use to report job progress back. These are outside the
  * JWT chain (SecurityConfig permits them) because the workers are batch processes with no
- * user session -- so they authenticate instead with a shared secret in X-Worker-Token, without
+ * user session -- so they authenticate instead with the run's own token in X-Worker-Token, without
  * which anyone able to reach this port could drive any job's status and audit log by id.
  *
  * @author Nabeel Ahmed
@@ -39,55 +36,30 @@ public class NotifyResetApi {
     private Logger logger = LoggerFactory.getLogger(NotifyResetApi.class);
 
     private final NotifyService notifyService;
+    private final RunCallbackTokens runCallbackTokens;
 
-    @Value("${worker.callback.token:}")
-    private String workerCallbackToken;
-
-    public NotifyResetApi(NotifyService notifyService) {
+    public NotifyResetApi(NotifyService notifyService, RunCallbackTokens runCallbackTokens) {
         this.notifyService = notifyService;
+        this.runCallbackTokens = runCallbackTokens;
     }
 
     /**
-     * A blank token used to mean "leave the callbacks open", warned about in the log and
-     * otherwise ignored -- so a deploy that simply forgot the variable shipped three
-     * unauthenticated write endpoints. Refuse to start instead, the same way JwtUtil refuses
-     * to run without its signing key.
+     * Whether this callback may act on this run. Null means yes.
+     *
+     * The proof is the run's own token (RunCallbackTokens), issued at dispatch and echoed back
+     * here, so a caller can only ever touch the run it was handed; the shared secret is honoured
+     * only for a run dispatched before tokens existed. Every refusal is the same 401 with the
+     * same words: which check failed is logged, never returned.
      */
-    @PostConstruct
-    public void requireCallbackToken() {
-        if (isTokenUnset()) {
-            throw new IllegalStateException("WORKER_CALLBACK_TOKEN environment variable is not set; "
-                + "/changeState, /addLogs and /addLogsBatch would accept unauthenticated requests. "
-                + "Set it here and on the ETL workers.");
-        }
-    }
-
-    private boolean isTokenUnset() {
-        return ProcessUtil.isNull(this.workerCallbackToken) || this.workerCallbackToken.trim().isEmpty();
-    }
-
-    /**
-     * Returns null when the caller is allowed through. Comparison is constant-time so that a
-     * wrong token can't be recovered a character at a time from response timing.
-     */
-    ResponseEntity<?> rejectIfUntrusted(String presentedToken) {
-        if (isTokenUnset()) {
-            // Startup already refuses this, so reaching here means the field was cleared after
-            // the fact. Nothing to compare against is not a reason to let the caller in.
-            this.logger.error("Rejected worker callback: no worker callback token is configured.");
-            return new ResponseEntity<>(
-                new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Unauthorized worker callback."), HttpStatus.UNAUTHORIZED);
-        }
-        byte[] expected = this.workerCallbackToken.trim().getBytes(StandardCharsets.UTF_8);
-        byte[] presented = presentedToken == null
-            ? new byte[0]
-            : presentedToken.trim().getBytes(StandardCharsets.UTF_8);
-        if (MessageDigest.isEqual(expected, presented)) {
-            return null;
-        }
-        this.logger.warn("Rejected worker callback with a missing or invalid {}.", WORKER_TOKEN_HEADER);
-        return new ResponseEntity<>(
-            new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Unauthorized worker callback."), HttpStatus.UNAUTHORIZED);
+    ResponseEntity<?> rejectIfUntrusted(Long jobId, Long jobQueueId, String presentedToken) {
+        return this.runCallbackTokens.verify(jobId, jobQueueId, presentedToken)
+            .map(refusal -> {
+                this.logger.warn("Rejected worker callback for job {} run {}: {}.", jobId, jobQueueId, refusal);
+                return new ResponseEntity<>(
+                    new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Unauthorized worker callback."), HttpStatus.UNAUTHORIZED);
+            })
+            .map(r -> (ResponseEntity<?>) r)
+            .orElse(null);
     }
 
     @RequestMapping(value = "/changeState/jobId/{jobId}/jobQueueId/{jobQueueId}/jobStatus/{jobStatus}", method = RequestMethod.POST)
@@ -98,7 +70,7 @@ public class NotifyResetApi {
         @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
         @RequestBody SourceJobQueueDto jobQueue) {
         try {
-            ResponseEntity<?> rejected = this.rejectIfUntrusted(workerToken);
+            ResponseEntity<?> rejected = this.rejectIfUntrusted(jobId, jobQueueId, workerToken);
             if (rejected != null) {
                 return rejected;
             }
@@ -115,7 +87,15 @@ public class NotifyResetApi {
             if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
                 jobQueue.setEndTime(LocalDateTime.now());
             }
-            return new ResponseEntity<>(this.notifyService.changeState(jobQueue), HttpStatus.OK);
+            ResponseDto outcome = this.notifyService.changeState(jobQueue);
+            // The run is over: its token is spent. A retry, should one be scheduled, is a new
+            // dispatch and mints its own. Only on an accepted change -- a refused transition
+            // leaves the run, and its token, as they were.
+            if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)
+                && !ProcessUtil.ERROR.equals(outcome.getStatus())) {
+                this.runCallbackTokens.retire(jobQueueId);
+            }
+            return new ResponseEntity<>(outcome, HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while changeState ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -136,7 +116,7 @@ public class NotifyResetApi {
             @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
             @RequestBody Map<String, List<String>> body) {
         try {
-            ResponseEntity<?> rejected = this.rejectIfUntrusted(workerToken);
+            ResponseEntity<?> rejected = this.rejectIfUntrusted(jobId, jobQueueId, workerToken);
             if (rejected != null) {
                 return rejected;
             }
@@ -161,7 +141,7 @@ public class NotifyResetApi {
             @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
             @RequestBody SourceJobQueueDto jobQueue) {
         try {
-            ResponseEntity<?> rejected = this.rejectIfUntrusted(workerToken);
+            ResponseEntity<?> rejected = this.rejectIfUntrusted(jobId, jobQueueId, workerToken);
             if (rejected != null) {
                 return rejected;
             }
