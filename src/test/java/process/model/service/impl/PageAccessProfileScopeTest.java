@@ -17,6 +17,7 @@ import process.model.pojo.PageAccessProfile;
 import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
 import process.model.repository.TenantRepository;
+import process.model.repository.UserPageAccessRepository;
 import process.model.service.NotificationCenterService;
 import process.security.PageAccessCache;
 import process.security.TenantContext;
@@ -54,13 +55,15 @@ public class PageAccessProfileScopeTest {
     @Mock private NotificationCenterService notificationCenterService;
     @Mock private UserNameResolver userNameResolver;
     @Mock private TenantRepository tenantRepository;
+    @Mock private UserPageAccessRepository exceptionRepository;
 
     private PageAccessServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            this.notificationCenterService, this.userNameResolver, new PageAccessCache(), this.tenantRepository);
+            this.notificationCenterService, this.userNameResolver, new PageAccessCache(), this.tenantRepository,
+            this.exceptionRepository);
         lenient().when(this.profileRepository.save(any())).thenAnswer(inv -> {
             PageAccessProfile p = inv.getArgument(0);
             if (p.getPageAccessProfileId() == null) p.setPageAccessProfileId(1000L);
@@ -70,6 +73,8 @@ public class PageAccessProfileScopeTest {
             .thenReturn(Optional.empty());
         lenient().when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(any(), any()))
             .thenReturn(Optional.empty());
+        lenient().when(this.exceptionRepository.findByIdAppUserId(any())).thenReturn(Collections.emptyList());
+        lenient().when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Collections.emptyList());
         lenient().when(this.appUserRepository.findByPageAccessProfileIdAndStatusNot(any(), any()))
             .thenReturn(Collections.emptyList());
         lenient().when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(any(), any()))
@@ -368,5 +373,84 @@ public class PageAccessProfileScopeTest {
 
         assertThat(response.getMessage()).isEqualTo("Olivia Bennett is now on the workspace default.");
         assertThat(olivia.getPageAccessProfileId()).isNull();
+    }
+
+    // ---- per-person exceptions
+
+    @Test
+    void tickingAPageTheProfileWithholdsStoresAnAllowedException() throws Exception {
+        this.actAsTenantAdmin();
+        AppUser olivia = person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L);
+        when(this.appUserRepository.findById(44L)).thenReturn(Optional.of(olivia));
+        when(this.profileRepository.findById(1L)).thenReturn(Optional.of(existing(1L, TENANT_A, "Operator", true, "jobs")));
+
+        ResponseDto response = this.service.setPageAccess(44L, "reports", true);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        assertThat(response.getMessage()).isEqualTo("Reports is now open for Olivia Bennett (an exception to their profile).");
+        ArgumentCaptor<process.model.pojo.UserPageAccess> saved = ArgumentCaptor.forClass(process.model.pojo.UserPageAccess.class);
+        verify(this.exceptionRepository).save(saved.capture());
+        assertThat(saved.getValue().getPageKey()).isEqualTo("reports");
+        assertThat(saved.getValue().isAllowed()).isTrue();
+        verify(this.notificationCenterService).create(eq(TENANT_A), eq(44L), eq(NotificationType.PAGE_ACCESS_CHANGED),
+            any(), any(), eq("Reports is now open for you."), eq("/dashboard"));
+    }
+
+    /** Ticking back to what the profile already says deletes the exception rather than storing a no-op. */
+    @Test
+    void tickingBackToTheProfileClearsTheException() throws Exception {
+        this.actAsTenantAdmin();
+        AppUser olivia = person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L);
+        when(this.appUserRepository.findById(44L)).thenReturn(Optional.of(olivia));
+        when(this.profileRepository.findById(1L)).thenReturn(Optional.of(existing(1L, TENANT_A, "Operator", true, "jobs")));
+
+        ResponseDto response = this.service.setPageAccess(44L, "jobs", true);
+
+        assertThat(response.getMessage()).contains("as their profile says");
+        verify(this.exceptionRepository).deleteOne(44L, "jobs");
+        verify(this.exceptionRepository, never()).save(any());
+    }
+
+    @Test
+    void exceptionsAreRefusedForAdminsOtherWorkspacesAndUnknownPages() throws Exception {
+        this.actAsTenantAdmin();
+        assertThat(this.service.setPageAccess(44L, "not-a-page", true).getMessage()).isEqualTo("Unknown page.");
+        when(this.appUserRepository.findById(ADMIN_A)).thenReturn(Optional.of(person(ADMIN_A, TENANT_A, UserRole.TENANT_ADMIN, "Daniel Carter", null)));
+        assertThat(this.service.setPageAccess(ADMIN_A, "jobs", false).getMessage()).contains("admins open every page");
+        when(this.appUserRepository.findById(77L)).thenReturn(Optional.of(person(77L, TENANT_B, UserRole.TENANT_USER, "Someone Else", null)));
+        assertThat(this.service.setPageAccess(77L, "jobs", false).getMessage()).isEqualTo("User not found.");
+        verify(this.exceptionRepository, never()).save(any());
+    }
+
+    @Test
+    void clearingExceptionsPutsThePersonBackOnTheirProfile() throws Exception {
+        this.actAsTenantAdmin();
+        AppUser olivia = person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L);
+        when(this.appUserRepository.findById(44L)).thenReturn(Optional.of(olivia));
+        when(this.exceptionRepository.deleteAllFor(44L)).thenReturn(2);
+
+        ResponseDto response = this.service.clearPageAccess(44L);
+
+        assertThat(response.getMessage()).isEqualTo("Olivia Bennett reads exactly as their profile again (2 exceptions cleared).");
+        verify(this.notificationCenterService).create(eq(TENANT_A), eq(44L), eq(NotificationType.PAGE_ACCESS_CHANGED), any(), any(), any(), any());
+    }
+
+    @Test
+    void peopleRowsCarryTheirExceptionsAndReflectThem() throws Exception {
+        this.actAsTenantAdmin();
+        when(this.profileRepository.findByTenantIdAndStatusOrderByProfileNameAsc(TENANT_A, Status.Active))
+            .thenReturn(Collections.singletonList(existing(1L, TENANT_A, "Operator", true, "jobs", "queue")));
+        when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete))
+            .thenReturn(Collections.singletonList(person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L)));
+        when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Arrays.asList(
+            new process.model.pojo.UserPageAccess(44L, "reports", true, ADMIN_A),
+            new process.model.pojo.UserPageAccess(44L, "queue", false, ADMIN_A)));
+
+        @SuppressWarnings("unchecked")
+        java.util.List<process.model.dto.AccessPersonDto> rows = (java.util.List<process.model.dto.AccessPersonDto>) this.service.listPeople(null).getData();
+
+        assertThat(rows.get(0).getPageKeys()).containsExactly("jobs", "reports");
+        assertThat(rows.get(0).getAllowedExceptions()).containsExactly("reports");
+        assertThat(rows.get(0).getWithheldExceptions()).containsExactly("queue");
     }
 }

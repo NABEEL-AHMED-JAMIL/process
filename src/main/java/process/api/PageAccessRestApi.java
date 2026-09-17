@@ -123,6 +123,29 @@ public class PageAccessRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/setPageAccess", method = RequestMethod.PUT)
+    public ResponseEntity<?> setPageAccess(@RequestParam Long appUserId, @RequestParam String pageKey,
+        @RequestParam boolean allowed) {
+        try {
+            return new ResponseEntity<>(this.pageAccessService.setPageAccess(appUserId, pageKey, allowed), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while setPageAccess.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/clearPageAccess", method = RequestMethod.DELETE)
+    public ResponseEntity<?> clearPageAccess(@RequestParam Long appUserId) {
+        try {
+            return new ResponseEntity<>(this.pageAccessService.clearPageAccess(appUserId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while clearPageAccess.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @RequestMapping(value = "/setDefaultProfile", method = RequestMethod.PUT)
     public ResponseEntity<?> setDefaultProfile(@RequestParam Long pageAccessProfileId) {
         try {

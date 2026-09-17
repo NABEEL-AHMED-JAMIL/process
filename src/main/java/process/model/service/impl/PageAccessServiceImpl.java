@@ -14,9 +14,11 @@ import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.pojo.PageAccessProfile;
+import process.model.pojo.UserPageAccess;
 import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
 import process.model.repository.TenantRepository;
+import process.model.repository.UserPageAccessRepository;
 import process.model.service.NotificationCenterService;
 import process.model.service.PageAccessService;
 import process.security.PageAccessCache;
@@ -56,16 +58,19 @@ public class PageAccessServiceImpl implements PageAccessService {
     private final UserNameResolver userNameResolver;
     private final PageAccessCache cache;
     private final TenantRepository tenantRepository;
+    private final UserPageAccessRepository exceptionRepository;
 
     public PageAccessServiceImpl(PageAccessProfileRepository profileRepository,
         AppUserRepository appUserRepository, NotificationCenterService notificationCenterService,
-        UserNameResolver userNameResolver, PageAccessCache cache, TenantRepository tenantRepository) {
+        UserNameResolver userNameResolver, PageAccessCache cache, TenantRepository tenantRepository,
+        UserPageAccessRepository exceptionRepository) {
         this.profileRepository = profileRepository;
         this.appUserRepository = appUserRepository;
         this.notificationCenterService = notificationCenterService;
         this.userNameResolver = userNameResolver;
         this.cache = cache;
         this.tenantRepository = tenantRepository;
+        this.exceptionRepository = exceptionRepository;
     }
 
     /**
@@ -93,15 +98,31 @@ public class PageAccessServiceImpl implements PageAccessService {
             : this.profileRepository.findById(user.getPageAccessProfileId());
         Optional<PageAccessProfile> fallback = isNull(user.getTenantId()) ? Optional.empty()
             : this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(user.getTenantId(), Status.Active);
-        return resolve(user, own.orElse(null), fallback.orElse(null));
+        return resolve(user, own.orElse(null), fallback.orElse(null),
+            this.exceptionRepository.findByIdAppUserId(user.getAppUserId()));
     }
 
     /**
      * The rule itself, with the rows already in hand -- what effectivePages and the grid share.
-     * The candidate profile is checked, not trusted: a deactivated row, or one from another
-     * workspace (a data error), must not grant anything and falls through to the default.
+     *
+     * The profile is the baseline: the person's own if it is active and in their workspace (a
+     * deactivated row, or one from another workspace, must not grant anything and falls through
+     * to the default), else the default, else every page. Then the person's exceptions: each
+     * allowed one opens a page the profile withholds, each withheld one closes a page it opens.
      */
-    private static Set<PageKey> resolve(AppUser user, PageAccessProfile own, PageAccessProfile fallback) {
+    private static Set<PageKey> resolve(AppUser user, PageAccessProfile own, PageAccessProfile fallback,
+        Collection<UserPageAccess> exceptions) {
+        Set<PageKey> pages = profilePages(user, own, fallback);
+        for (UserPageAccess exception : exceptions == null ? Collections.<UserPageAccess>emptyList() : exceptions) {
+            PageKey.fromKey(exception.getPageKey()).ifPresent(page -> {
+                if (exception.isAllowed()) pages.add(page); else pages.remove(page);
+            });
+        }
+        return pages;
+    }
+
+    /** What the profile alone says -- the baseline the exceptions are measured against. */
+    private static Set<PageKey> profilePages(AppUser user, PageAccessProfile own, PageAccessProfile fallback) {
         PageAccessProfile chosen = own != null && own.getStatus() == Status.Active
             && own.getTenantId() != null && own.getTenantId().equals(user.getTenantId()) ? own : fallback;
         if (chosen == null) {
@@ -349,16 +370,24 @@ public class PageAccessServiceImpl implements PageAccessService {
             .findByTenantIdAndStatusOrderByProfileNameAsc(tenantId, Status.Active).stream()
             .collect(Collectors.toMap(PageAccessProfile::getPageAccessProfileId, p -> p));
         PageAccessProfile fallback = profiles.values().stream().filter(PageAccessProfile::isDefaultProfile).findFirst().orElse(null);
-        List<AccessPersonDto> rows = this.appUserRepository
+        List<AppUser> people = this.appUserRepository
             .findByTenantIdAndStatusNotOrderByAppUserIdDesc(tenantId, Status.Delete).stream()
             .filter(u -> u.getUserRole() == UserRole.TENANT_USER)
             .sorted(Comparator.comparing(u -> u.getFullName() == null ? "" : u.getFullName().toLowerCase()))
-            .map(u -> toPersonDto(u, profiles.get(u.getPageAccessProfileId()), fallback))
+            .collect(Collectors.toList());
+        // And everyone's exceptions in one read, likewise.
+        Map<Long, List<UserPageAccess>> exceptions = people.isEmpty() ? Collections.emptyMap()
+            : this.exceptionRepository.findByIdAppUserIdIn(people.stream().map(AppUser::getAppUserId).collect(Collectors.toList()))
+                .stream().collect(Collectors.groupingBy(UserPageAccess::getAppUserId));
+        List<AccessPersonDto> rows = people.stream()
+            .map(u -> toPersonDto(u, profiles.get(u.getPageAccessProfileId()), fallback,
+                exceptions.getOrDefault(u.getAppUserId(), Collections.emptyList())))
             .collect(Collectors.toList());
         return new ResponseDto(SUCCESS, "People fetched.", rows);
     }
 
-    private static AccessPersonDto toPersonDto(AppUser person, PageAccessProfile own, PageAccessProfile fallback) {
+    private static AccessPersonDto toPersonDto(AppUser person, PageAccessProfile own, PageAccessProfile fallback,
+        Collection<UserPageAccess> exceptions) {
         AccessPersonDto dto = new AccessPersonDto();
         dto.setAppUserId(person.getAppUserId());
         dto.setFullName(person.getFullName());
@@ -368,30 +397,30 @@ public class PageAccessServiceImpl implements PageAccessService {
         dto.setAvatarKey(person.getAvatarKey());
         dto.setPageAccessProfileId(person.getPageAccessProfileId());
         dto.setPageAccessProfileName(own != null && own.getStatus() == Status.Active ? own.getProfileName() : null);
-        dto.setPageKeys(keysOf(resolve(person, own, fallback)));
+        dto.setPageKeys(keysOf(resolve(person, own, fallback, exceptions)));
+        List<String> allowed = new ArrayList<>();
+        List<String> withheld = new ArrayList<>();
+        for (PageKey page : PageKey.values()) {
+            for (UserPageAccess exception : exceptions) {
+                if (page.getKey().equals(exception.getPageKey())) {
+                    (exception.isAllowed() ? allowed : withheld).add(page.getKey());
+                }
+            }
+        }
+        dto.setAllowedExceptions(allowed);
+        dto.setWithheldExceptions(withheld);
         return dto;
     }
 
     @Override
     @Transactional
     public ResponseDto assignProfile(Long appUserId, Long pageAccessProfileId) throws Exception {
-        if (isNull(appUserId)) {
-            return new ResponseDto(ERROR, "User id missing.");
+        AppUser[] holder = new AppUser[1];
+        ResponseDto refused = this.reachablePerson(appUserId, holder);
+        if (refused != null) {
+            return refused;
         }
-        Optional<AppUser> found = this.appUserRepository.findById(appUserId)
-            .filter(u -> u.getStatus() != Status.Delete);
-        if (!found.isPresent()) {
-            return new ResponseDto(ERROR, "User not found.");
-        }
-        AppUser person = found.get();
-        // The caller's reach: its own workspace, or any for a platform admin.
-        if (!TenantContext.isPlatformAdmin()
-            && (isNull(person.getTenantId()) || !person.getTenantId().equals(TenantContext.getTenantId()))) {
-            return new ResponseDto(ERROR, "User not found.");
-        }
-        if (person.getUserRole() != UserRole.TENANT_USER) {
-            return new ResponseDto(ERROR, "Only a tenant user holds an access profile; admins open every page.");
-        }
+        AppUser person = holder[0];
         ResponseDto badProfile = this.refuseUnusableProfile(pageAccessProfileId, person.getTenantId());
         if (badProfile != null) {
             return badProfile;
@@ -412,7 +441,85 @@ public class PageAccessServiceImpl implements PageAccessService {
             : this.profileRepository.findById(person.getPageAccessProfileId()).orElse(null);
         PageAccessProfile fallback = isNull(person.getTenantId()) ? null
             : this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(person.getTenantId(), Status.Active).orElse(null);
-        return toPersonDto(person, own, fallback);
+        return toPersonDto(person, own, fallback, this.exceptionRepository.findByIdAppUserId(person.getAppUserId()));
+    }
+
+    /** The person a management call is about, under the same reach as assignProfile. */
+    private ResponseDto reachablePerson(Long appUserId, AppUser[] out) {
+        if (isNull(appUserId)) {
+            return new ResponseDto(ERROR, "User id missing.");
+        }
+        Optional<AppUser> found = this.appUserRepository.findById(appUserId)
+            .filter(u -> u.getStatus() != Status.Delete);
+        if (!found.isPresent()) {
+            return new ResponseDto(ERROR, "User not found.");
+        }
+        AppUser person = found.get();
+        if (!TenantContext.isPlatformAdmin()
+            && (isNull(person.getTenantId()) || !person.getTenantId().equals(TenantContext.getTenantId()))) {
+            return new ResponseDto(ERROR, "User not found.");
+        }
+        if (person.getUserRole() != UserRole.TENANT_USER) {
+            return new ResponseDto(ERROR, "Only a tenant user holds an access profile; admins open every page.");
+        }
+        out[0] = person;
+        return null;
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto setPageAccess(Long appUserId, String pageKey, boolean allowed) throws Exception {
+        Optional<PageKey> page = PageKey.fromKey(pageKey);
+        if (!page.isPresent()) {
+            return new ResponseDto(ERROR, "Unknown page.");
+        }
+        AppUser[] holder = new AppUser[1];
+        ResponseDto refused = this.reachablePerson(appUserId, holder);
+        if (refused != null) {
+            return refused;
+        }
+        AppUser person = holder[0];
+        PageAccessProfile own = isNull(person.getPageAccessProfileId()) ? null
+            : this.profileRepository.findById(person.getPageAccessProfileId()).orElse(null);
+        PageAccessProfile fallback = isNull(person.getTenantId()) ? null
+            : this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(person.getTenantId(), Status.Active).orElse(null);
+        boolean profileSays = profilePages(person, own, fallback).contains(page.get());
+        if (profileSays == allowed) {
+            // Back to what the profile says: the exception, if any, goes rather than being
+            // stored as a difference that makes no difference.
+            this.exceptionRepository.deleteOne(person.getAppUserId(), page.get().getKey());
+        } else {
+            this.exceptionRepository.save(new UserPageAccess(person.getAppUserId(), page.get().getKey(), allowed, TenantContext.getAppUserId()));
+        }
+        this.exceptionRepository.flush();
+        this.cache.forget(person.getAppUserId());
+        this.notificationCenterService.create(person.getTenantId(), person.getAppUserId(),
+            NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO,
+            "Your page access changed",
+            String.format("%s is now %s for you.", page.get().getLabel(), allowed ? "open" : "withheld"),
+            "/dashboard");
+        return new ResponseDto(SUCCESS, String.format("%s is now %s for %s%s.", page.get().getLabel(),
+            allowed ? "open" : "withheld", person.getFullName(), profileSays == allowed ? " (as their profile says)" : " (an exception to their profile)"),
+            this.personRow(person));
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto clearPageAccess(Long appUserId) throws Exception {
+        AppUser[] holder = new AppUser[1];
+        ResponseDto refused = this.reachablePerson(appUserId, holder);
+        if (refused != null) {
+            return refused;
+        }
+        int dropped = this.exceptionRepository.deleteAllFor(appUserId);
+        this.exceptionRepository.flush();
+        this.cache.forget(appUserId);
+        if (dropped > 0) {
+            this.notifyProfileChanged(holder[0]);
+        }
+        return new ResponseDto(SUCCESS, dropped == 0 ? "No exceptions to clear."
+            : String.format("%s reads exactly as their profile again (%d %s cleared).", holder[0].getFullName(), dropped, dropped == 1 ? "exception" : "exceptions"),
+            this.personRow(holder[0]));
     }
 
     @Override

@@ -45,9 +45,11 @@ Administration pages — the roles already gate those.
 ```
 1. PLATFORM_ADMIN or TENANT_ADMIN            → every page
 2. app_user.page_access_profile_id set,
-   active, and in the user's own tenant      → that profile's pages
-3. else the tenant's default profile exists  → the default's pages
-4. else                                      → every page
+   active, and in the user's own tenant      → that profile's pages   ┐
+3. else the tenant's default profile exists  → the default's pages    ├ the baseline
+4. else                                      → every page             ┘
+5. then the person's exceptions (user_page_access): each allowed=true row opens a page,
+   each allowed=false row withholds one
 ```
 
 Rule 4 is what makes the feature opt-in: a workspace that never opened the screen behaves
@@ -76,7 +78,15 @@ page_access_profile_page
 
 app_user
   + page_access_profile_id BIGINT NULL → page_access_profile ON DELETE SET NULL
+
+user_page_access  (Liquibase V41 — per-person exceptions)
+  app_user_id  BIGINT → app_user ON DELETE CASCADE
+  page_key     VARCHAR(64)          PK (user, key)
+  allowed      BOOLEAN              true opens the page beyond the profile, false withholds it despite the profile
+  date_created, created_by
 ```
+Only real differences are stored: setting a page to what the profile already says deletes the
+row, so "reset to profile" is a delete.
 
 Rollback is in the changeset. No platform-wide profile exists on purpose: a bundle shared
 across tenants would let one workspace's admin change what another's people see.
@@ -97,6 +107,8 @@ across tenants would let one workspace's admin change what another's people see.
 | PUT | `/setDefaultProfile?pageAccessProfileId=` | TENANT_ADMIN | Moves the default |
 | GET | `/listPeople[?tenantId=]` | TENANT_ADMIN | The workspace's tenant users with profile and effective `pageKeys` — the grid's rows |
 | PUT | `/assignProfile?appUserId=&pageAccessProfileId=` | TENANT_ADMIN | One person onto one profile (omit the profile for the default). Notifies the person |
+| PUT | `/setPageAccess?appUserId=&pageKey=&allowed=` | TENANT_ADMIN | One checkbox: open/withhold a page for a person as an exception; back to the profile's answer clears it. Notifies the person |
+| DELETE | `/clearPageAccess?appUserId=` | TENANT_ADMIN | Drops every exception the person carries |
 
 `tenantId` is how a **platform admin** names the workspace (it has none of its own); a tenant admin's
 workspace is always its own, whatever id it sends.
@@ -154,10 +166,13 @@ untouched.
 - `Administration › Access profiles` — two views of the same facts:
   - **Profiles**: cards (pages opened / withheld, holders), New/Edit dialog with pages grouped by
     section, Make default, Delete.
-  - **People × pages**: a grid — people down the side, pages across the top, one cell per pair,
-    derived from the profile each person holds; the workspace default is the first row. A cell is
-    not a switch: clicking it lists the profiles that would change that answer, and picking one
-    reassigns the person (`assignProfile`). Each row also has a plain profile picker.
+  - **People × pages**: a grid — people down the side, pages across the top (grouped under their
+    menu section), rows grouped under the profile they share. The profile's own row shows its
+    pattern; every person's cell is a **checkbox** that means what it says: tick it and that page
+    opens for that person (`setPageAccess`). A tick that differs from the profile is an exception,
+    shown with an orange marker and a tinted cell; "n exceptions · reset to profile" clears them
+    (`clearPageAccess`). Each row also has a profile picker (`assignProfile`) and there is a
+    find-a-person filter.
 - User dialog — **Access profile** picker for tenant users (shown once the workspace has profiles);
   the Users list shows the profile under the role.
 

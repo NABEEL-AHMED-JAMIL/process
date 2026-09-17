@@ -14,12 +14,14 @@ import process.model.pojo.PageAccessProfile;
 import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
 import process.model.repository.TenantRepository;
+import process.model.repository.UserPageAccessRepository;
 import process.model.service.NotificationCenterService;
 import process.security.PageAccessCache;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 
@@ -48,15 +50,19 @@ public class PageAccessResolutionTest {
     @Mock private NotificationCenterService notificationCenterService;
     @Mock private UserNameResolver userNameResolver;
     @Mock private TenantRepository tenantRepository;
+    @Mock private UserPageAccessRepository exceptionRepository;
 
     private PageAccessServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            this.notificationCenterService, this.userNameResolver, new PageAccessCache(), this.tenantRepository);
+            this.notificationCenterService, this.userNameResolver, new PageAccessCache(), this.tenantRepository,
+            this.exceptionRepository);
         lenient().when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(any(), any()))
             .thenReturn(Optional.empty());
+        lenient().when(this.exceptionRepository.findByIdAppUserId(any())).thenReturn(Collections.emptyList());
+        lenient().when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Collections.emptyList());
     }
 
     @AfterEach
@@ -157,5 +163,26 @@ public class PageAccessResolutionTest {
         assertThat(names).containsExactly(org.assertj.core.api.Assertions.entry(500L, "Operator"));
         assertThat(this.service.profileNamesFor(Arrays.asList((Long) null))).isEmpty();
         assertThat(this.service.profileNamesFor(null)).isEmpty();
+    }
+
+    /** Exceptions sit on top of the profile: an allowed one opens, a withheld one closes. */
+    @Test
+    void exceptionsAdjustTheProfileInBothDirections() {
+        when(this.profileRepository.findById(500L))
+            .thenReturn(Optional.of(profile(500L, TENANT_A, Status.Active, "jobs", "queue")));
+        when(this.exceptionRepository.findByIdAppUserId(7L)).thenReturn(Arrays.asList(
+            new process.model.pojo.UserPageAccess(7L, "reports", true, 9L),
+            new process.model.pojo.UserPageAccess(7L, "queue", false, 9L),
+            new process.model.pojo.UserPageAccess(7L, "page-that-was-removed", true, 9L)));
+
+        assertThat(this.service.effectivePages(user(UserRole.TENANT_USER, TENANT_A, 500L)))
+            .containsExactlyInAnyOrder(PageKey.JOBS, PageKey.REPORTS);
+    }
+
+    /** An admin is answered before exceptions are even read. */
+    @Test
+    void exceptionsNeverTouchAnAdmin() {
+        assertThat(this.service.effectivePages(user(UserRole.TENANT_ADMIN, TENANT_A, null))).isEqualTo(PageKey.all());
+        org.mockito.Mockito.verify(this.exceptionRepository, org.mockito.Mockito.never()).findByIdAppUserId(any());
     }
 }

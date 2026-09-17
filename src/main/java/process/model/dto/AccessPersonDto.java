@@ -22,6 +22,9 @@ public class AccessPersonDto {
     private String pageAccessProfileName;
     /** PageKey keys the person effectively opens, in catalogue order. */
     private List<String> pageKeys;
+    /** Pages opened for this person beyond their profile, and pages withheld despite it. */
+    private List<String> allowedExceptions;
+    private List<String> withheldExceptions;
 
     public Long getAppUserId() { return appUserId; }
     public void setAppUserId(Long appUserId) { this.appUserId = appUserId; }
@@ -41,4 +44,8 @@ public class AccessPersonDto {
     public void setPageAccessProfileName(String pageAccessProfileName) { this.pageAccessProfileName = pageAccessProfileName; }
     public List<String> getPageKeys() { return pageKeys; }
     public void setPageKeys(List<String> pageKeys) { this.pageKeys = pageKeys; }
+    public List<String> getAllowedExceptions() { return allowedExceptions; }
+    public void setAllowedExceptions(List<String> allowedExceptions) { this.allowedExceptions = allowedExceptions; }
+    public List<String> getWithheldExceptions() { return withheldExceptions; }
+    public void setWithheldExceptions(List<String> withheldExceptions) { this.withheldExceptions = withheldExceptions; }
 }

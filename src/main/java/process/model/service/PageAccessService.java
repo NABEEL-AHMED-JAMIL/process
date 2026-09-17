@@ -57,6 +57,16 @@ public interface PageAccessService {
     ResponseDto assignProfile(Long appUserId, Long pageAccessProfileId) throws Exception;
 
     /**
+     * Opens or withholds one page for one person, as an exception to their profile. Asking for
+     * what the profile already says clears any exception instead, so the table only ever holds
+     * real differences. Same reach rules as assignProfile.
+     */
+    ResponseDto setPageAccess(Long appUserId, String pageKey, boolean allowed) throws Exception;
+
+    /** Drops every exception a person carries, so they read exactly as their profile. */
+    ResponseDto clearPageAccess(Long appUserId) throws Exception;
+
+    /**
      * Checks a profile id somebody wants to put on a user: it has to exist, be active, and belong
      * to the user's workspace. Returns null when it is fine, or the refusal to send back.
      */

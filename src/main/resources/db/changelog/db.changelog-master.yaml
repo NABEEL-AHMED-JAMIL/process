@@ -88,3 +88,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V39.0-task-type-tenant-owner.yaml
   - include:
       file: db/changelog/yaml/V40.0-page-access-profiles.yaml
+  - include:
+      file: db/changelog/yaml/V41.0-user-page-access.yaml
