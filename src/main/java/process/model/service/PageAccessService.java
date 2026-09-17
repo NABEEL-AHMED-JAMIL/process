@@ -4,6 +4,8 @@ import process.model.dto.PageAccessProfileDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.PageKey;
 import process.model.pojo.AppUser;
+import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -62,6 +64,15 @@ public interface PageAccessService {
 
     /** The profile's name for a user row, or null when the user holds none. */
     String profileNameFor(Long pageAccessProfileId);
+
+    /** The same, for a whole list at once: one query, however many rows. */
+    Map<Long, String> profileNamesFor(Collection<Long> pageAccessProfileIds);
+
+    /**
+     * Tells a tenant user their profile changed, in the one wording the console uses for it.
+     * Silent for an admin, for whom nothing changed.
+     */
+    void notifyProfileChanged(AppUser user);
 
     /** A tenant user asking their admins for a page they cannot open. */
     ResponseDto requestAccess(String pageKey) throws Exception;

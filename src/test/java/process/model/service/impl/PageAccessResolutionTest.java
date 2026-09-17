@@ -144,4 +144,18 @@ public class PageAccessResolutionTest {
 
         assertThat(this.service.effectivePages(user(UserRole.TENANT_USER, TENANT_A, 503L))).isEmpty();
     }
+
+    /** The user list asks for every name at once; nulls and unknown ids fall out quietly. */
+    @Test
+    void profileNamesAreResolvedInOneReadForAWholeList() {
+        PageAccessProfile a = profile(500L, TENANT_A, Status.Active, "jobs"); a.setProfileName("Operator");
+        PageAccessProfile gone = profile(501L, TENANT_A, Status.Delete, "jobs"); gone.setProfileName("Old");
+        when(this.profileRepository.findAllById(any())).thenReturn(Arrays.asList(a, gone));
+
+        java.util.Map<Long, String> names = this.service.profileNamesFor(Arrays.asList(500L, null, 501L, 500L));
+
+        assertThat(names).containsExactly(org.assertj.core.api.Assertions.entry(500L, "Operator"));
+        assertThat(this.service.profileNamesFor(Arrays.asList((Long) null))).isEmpty();
+        assertThat(this.service.profileNamesFor(null)).isEmpty();
+    }
 }

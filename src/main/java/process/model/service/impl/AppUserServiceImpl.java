@@ -21,7 +21,6 @@ import process.model.service.AppUserService;
 import process.model.service.NotificationCenterService;
 import process.model.service.PageAccessService;
 import process.model.service.StorageBrowserService;
-import process.security.PageAccessCache;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
 import process.emailer.EmailMessagesFactory;
@@ -34,6 +33,7 @@ import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -80,15 +80,12 @@ public class AppUserServiceImpl implements AppUserService {
 
     private final NotificationCenterService notificationCenterService;
     private final PageAccessService pageAccessService;
-    private final PageAccessCache pageAccessCache;
 
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory,
         UserNameResolver userNameResolver, StorageBrowserService storageBrowserService,
-        NotificationCenterService notificationCenterService, PageAccessService pageAccessService,
-        PageAccessCache pageAccessCache) {
+        NotificationCenterService notificationCenterService, PageAccessService pageAccessService) {
         this.pageAccessService = pageAccessService;
-        this.pageAccessCache = pageAccessCache;
         this.notificationCenterService = notificationCenterService;
         this.storageBrowserService = storageBrowserService;
         this.emailMessagesFactory = emailMessagesFactory;
@@ -246,24 +243,6 @@ public class AppUserServiceImpl implements AppUserService {
         }
         return new ResponseDto(SUCCESS, String.format(
             "User \"%s\" created and emailed how to sign in.", user.getUsername()), this.mapToDto(user));
-    }
-
-    /**
-     * The person whose profile was swapped hears about it, in the same words the profile screen
-     * uses. Silent for an admin: nothing changed for them.
-     */
-    private void notifyProfileChanged(AppUser user) {
-        if (user.getUserRole() != UserRole.TENANT_USER) {
-            return;
-        }
-        String profileName = this.pageAccessService.profileNameFor(user.getPageAccessProfileId());
-        this.notificationCenterService.create(user.getTenantId(), user.getAppUserId(),
-            NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO,
-            "Your page access changed",
-            profileName == null
-                ? "You are on your workspace's default access profile now. Your menu shows what it opens."
-                : String.format("You are on the \"%s\" access profile now. Your menu shows what it opens.", profileName),
-            "/dashboard");
     }
 
     /**
@@ -447,9 +426,8 @@ public class AppUserServiceImpl implements AppUserService {
         Long previousProfile = user.getPageAccessProfileId();
         user.setPageAccessProfileId(effectiveRole == UserRole.TENANT_USER ? appUserDto.getPageAccessProfileId() : null);
         this.appUserRepository.save(user);
-        if (!java.util.Objects.equals(previousProfile, user.getPageAccessProfileId())) {
-            this.pageAccessCache.forget(user.getAppUserId());
-            this.notifyProfileChanged(user);
+        if (!Objects.equals(previousProfile, user.getPageAccessProfileId())) {
+            this.pageAccessService.notifyProfileChanged(user);
         }
         return new ResponseDto(SUCCESS, String.format("User \"%s\" updated.", user.getUsername()), this.mapToDto(user));
     }
@@ -579,8 +557,12 @@ public class AppUserServiceImpl implements AppUserService {
         Map<Long, Tenant> tenantById = tenantIds.isEmpty() ? Collections.emptyMap()
             : this.tenantRepository.findAllById(tenantIds).stream()
                 .collect(Collectors.toMap(Tenant::getTenantId, t -> t));
+        // Same shape as the tenant names above: one query for every profile name on the page,
+        // rather than one per row.
+        Map<Long, String> profileNames = this.pageAccessService.profileNamesFor(
+            users.stream().map(AppUser::getPageAccessProfileId).collect(Collectors.toList()));
         return users.stream().map(user -> {
-            AppUserDto dto = this.mapToDtoWithoutTenantName(user);
+            AppUserDto dto = this.mapToDtoWithoutTenantName(user, profileNames.get(user.getPageAccessProfileId()));
             if (!isNull(user.getTenantId())) {
                 this.applyTenantInfo(dto, tenantById.get(user.getTenantId()));
             }
@@ -713,6 +695,10 @@ public class AppUserServiceImpl implements AppUserService {
     }
 
     private AppUserDto mapToDtoWithoutTenantName(AppUser user) {
+        return this.mapToDtoWithoutTenantName(user, this.pageAccessService.profileNameFor(user.getPageAccessProfileId()));
+    }
+
+    private AppUserDto mapToDtoWithoutTenantName(AppUser user, String profileName) {
         AppUserDto dto = new AppUserDto();
         dto.setAppUserId(user.getAppUserId());
         dto.setUuid(user.getUuid());
@@ -722,7 +708,7 @@ public class AppUserServiceImpl implements AppUserService {
         dto.setUserRole(user.getUserRole());
         dto.setPosition(user.getPosition());
         dto.setPageAccessProfileId(user.getPageAccessProfileId());
-        dto.setPageAccessProfileName(this.pageAccessService.profileNameFor(user.getPageAccessProfileId()));
+        dto.setPageAccessProfileName(profileName);
         dto.setMustChangePassword(user.isMustChangePassword());
         dto.setStatus(user.getStatus());
         dto.setAvatarBucket(user.getAvatarBucket());

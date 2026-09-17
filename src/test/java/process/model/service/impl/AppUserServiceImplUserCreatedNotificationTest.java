@@ -21,7 +21,6 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.NotificationCenterService;
 import process.model.service.PageAccessService;
-import process.security.PageAccessCache;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
@@ -80,8 +79,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
             this.passwordEncoder, this.emailMessagesFactory, this.userNameResolver,
-            this.storageBrowserService, this.notificationCenterService, this.pageAccessService,
-            new PageAccessCache());
+            this.storageBrowserService, this.notificationCenterService, this.pageAccessService);
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
         // The id the database would hand back -- without it the new user has nobody to notify.
         lenient().when(this.appUserRepository.save(any())).thenAnswer(invocation -> {

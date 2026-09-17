@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import process.model.dto.AccessPersonDto;
 import process.model.dto.PageAccessProfileDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.NotificationSeverity;
@@ -23,7 +24,10 @@ import process.security.TenantContext;
 import process.util.UserNameResolver;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.Objects;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -85,21 +89,25 @@ public class PageAccessServiceImpl implements PageAccessService {
         if (user.getUserRole() != UserRole.TENANT_USER) {
             return PageKey.all();
         }
-        Optional<PageAccessProfile> profile = Optional.empty();
-        if (!isNull(user.getPageAccessProfileId())) {
-            profile = this.profileRepository.findById(user.getPageAccessProfileId())
-                .filter(p -> p.getStatus() == Status.Active)
-                // A profile from another workspace on this row is a data error, and it must not
-                // grant anything: fall through to the workspace's own default.
-                .filter(p -> p.getTenantId() != null && p.getTenantId().equals(user.getTenantId()));
-        }
-        if (!profile.isPresent() && !isNull(user.getTenantId())) {
-            profile = this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(user.getTenantId(), Status.Active);
-        }
-        if (!profile.isPresent()) {
+        Optional<PageAccessProfile> own = isNull(user.getPageAccessProfileId()) ? Optional.empty()
+            : this.profileRepository.findById(user.getPageAccessProfileId());
+        Optional<PageAccessProfile> fallback = isNull(user.getTenantId()) ? Optional.empty()
+            : this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(user.getTenantId(), Status.Active);
+        return resolve(user, own.orElse(null), fallback.orElse(null));
+    }
+
+    /**
+     * The rule itself, with the rows already in hand -- what effectivePages and the grid share.
+     * The candidate profile is checked, not trusted: a deactivated row, or one from another
+     * workspace (a data error), must not grant anything and falls through to the default.
+     */
+    private static Set<PageKey> resolve(AppUser user, PageAccessProfile own, PageAccessProfile fallback) {
+        PageAccessProfile chosen = own != null && own.getStatus() == Status.Active
+            && own.getTenantId() != null && own.getTenantId().equals(user.getTenantId()) ? own : fallback;
+        if (chosen == null) {
             return PageKey.all();
         }
-        return toPageKeys(profile.get().getPageKeys());
+        return toPageKeys(chosen.getPageKeys());
     }
 
     private static Set<PageKey> toPageKeys(Collection<String> keys) {
@@ -179,7 +187,14 @@ public class PageAccessServiceImpl implements PageAccessService {
         List<PageAccessProfile> profiles = this.profileRepository
             .findByTenantIdAndStatusOrderByProfileNameAsc(tenantId, Status.Active);
         this.userNameResolver.attachNames(profiles);
-        List<PageAccessProfileDto> dtos = profiles.stream().map(this::toDto).collect(Collectors.toList());
+        // One read of the workspace's people for every card, rather than one per card.
+        Map<Long, List<AppUser>> holders = this.appUserRepository
+            .findByTenantIdAndStatusNotOrderByAppUserIdDesc(tenantId, Status.Delete).stream()
+            .filter(u -> !isNull(u.getPageAccessProfileId()))
+            .collect(Collectors.groupingBy(AppUser::getPageAccessProfileId));
+        List<PageAccessProfileDto> dtos = profiles.stream()
+            .map(p -> this.toDto(p, holders.getOrDefault(p.getPageAccessProfileId(), Collections.emptyList())))
+            .collect(Collectors.toList());
         return new ResponseDto(SUCCESS, "Access profiles fetched.", dtos);
     }
 
@@ -328,26 +343,33 @@ public class PageAccessServiceImpl implements PageAccessService {
         if (tenantId == null) {
             return refused[0];
         }
-        List<Map<String, Object>> rows = new ArrayList<>();
-        List<AppUser> people = this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(tenantId, Status.Delete);
-        people.sort(java.util.Comparator.comparing(u -> u.getFullName() == null ? "" : u.getFullName().toLowerCase()));
-        for (AppUser person : people) {
-            if (person.getUserRole() != UserRole.TENANT_USER) {
-                continue;
-            }
-            Map<String, Object> row = new HashMap<>();
-            row.put("appUserId", person.getAppUserId());
-            row.put("fullName", person.getFullName());
-            row.put("username", person.getUsername());
-            row.put("position", person.getPosition());
-            row.put("status", person.getStatus());
-            row.put("avatarKey", person.getAvatarKey());
-            row.put("pageAccessProfileId", person.getPageAccessProfileId());
-            row.put("pageAccessProfileName", this.profileNameFor(person.getPageAccessProfileId()));
-            row.put("pageKeys", keysOf(this.effectivePages(person)));
-            rows.add(row);
-        }
+        // The workspace's profiles once, then every person resolves against the map: the grid
+        // is the screen built to show everyone, so a query per row is the one thing it must not do.
+        Map<Long, PageAccessProfile> profiles = this.profileRepository
+            .findByTenantIdAndStatusOrderByProfileNameAsc(tenantId, Status.Active).stream()
+            .collect(Collectors.toMap(PageAccessProfile::getPageAccessProfileId, p -> p));
+        PageAccessProfile fallback = profiles.values().stream().filter(PageAccessProfile::isDefaultProfile).findFirst().orElse(null);
+        List<AccessPersonDto> rows = this.appUserRepository
+            .findByTenantIdAndStatusNotOrderByAppUserIdDesc(tenantId, Status.Delete).stream()
+            .filter(u -> u.getUserRole() == UserRole.TENANT_USER)
+            .sorted(Comparator.comparing(u -> u.getFullName() == null ? "" : u.getFullName().toLowerCase()))
+            .map(u -> toPersonDto(u, profiles.get(u.getPageAccessProfileId()), fallback))
+            .collect(Collectors.toList());
         return new ResponseDto(SUCCESS, "People fetched.", rows);
+    }
+
+    private static AccessPersonDto toPersonDto(AppUser person, PageAccessProfile own, PageAccessProfile fallback) {
+        AccessPersonDto dto = new AccessPersonDto();
+        dto.setAppUserId(person.getAppUserId());
+        dto.setFullName(person.getFullName());
+        dto.setUsername(person.getUsername());
+        dto.setPosition(person.getPosition());
+        dto.setStatus(person.getStatus());
+        dto.setAvatarKey(person.getAvatarKey());
+        dto.setPageAccessProfileId(person.getPageAccessProfileId());
+        dto.setPageAccessProfileName(own != null && own.getStatus() == Status.Active ? own.getProfileName() : null);
+        dto.setPageKeys(keysOf(resolve(person, own, fallback)));
+        return dto;
     }
 
     @Override
@@ -374,31 +396,51 @@ public class PageAccessServiceImpl implements PageAccessService {
         if (badProfile != null) {
             return badProfile;
         }
-        if (java.util.Objects.equals(person.getPageAccessProfileId(), pageAccessProfileId)) {
+        if (Objects.equals(person.getPageAccessProfileId(), pageAccessProfileId)) {
             return new ResponseDto(SUCCESS, "No change.", this.personRow(person));
         }
         person.setPageAccessProfileId(pageAccessProfileId);
         this.appUserRepository.save(person);
-        this.cache.forget(person.getAppUserId());
+        this.notifyProfileChanged(person);
         String profileName = this.profileNameFor(pageAccessProfileId);
-        this.notificationCenterService.create(person.getTenantId(), person.getAppUserId(),
+        return new ResponseDto(SUCCESS, String.format("%s is now on %s.", person.getFullName(),
+            profileName == null ? "the workspace default" : "\"" + profileName + "\""), this.personRow(person));
+    }
+
+    private AccessPersonDto personRow(AppUser person) {
+        PageAccessProfile own = isNull(person.getPageAccessProfileId()) ? null
+            : this.profileRepository.findById(person.getPageAccessProfileId()).orElse(null);
+        PageAccessProfile fallback = isNull(person.getTenantId()) ? null
+            : this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(person.getTenantId(), Status.Active).orElse(null);
+        return toPersonDto(person, own, fallback);
+    }
+
+    @Override
+    public void notifyProfileChanged(AppUser user) {
+        this.cache.forget(user.getAppUserId());
+        if (user.getUserRole() != UserRole.TENANT_USER) {
+            return;
+        }
+        String profileName = this.profileNameFor(user.getPageAccessProfileId());
+        this.notificationCenterService.create(user.getTenantId(), user.getAppUserId(),
             NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO,
             "Your page access changed",
             profileName == null
                 ? "You are on your workspace's default access profile now. Your menu shows what it opens."
                 : String.format("You are on the \"%s\" access profile now. Your menu shows what it opens.", profileName),
             "/dashboard");
-        return new ResponseDto(SUCCESS, String.format("%s is now on %s.", person.getFullName(),
-            profileName == null ? "the workspace default" : "\"" + profileName + "\""), this.personRow(person));
     }
 
-    private Map<String, Object> personRow(AppUser person) {
-        Map<String, Object> row = new HashMap<>();
-        row.put("appUserId", person.getAppUserId());
-        row.put("pageAccessProfileId", person.getPageAccessProfileId());
-        row.put("pageAccessProfileName", this.profileNameFor(person.getPageAccessProfileId()));
-        row.put("pageKeys", keysOf(this.effectivePages(person)));
-        return row;
+    @Override
+    public Map<Long, String> profileNamesFor(Collection<Long> pageAccessProfileIds) {
+        Set<Long> ids = pageAccessProfileIds == null ? Collections.emptySet()
+            : pageAccessProfileIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return this.profileRepository.findAllById(ids).stream()
+            .filter(p -> p.getStatus() == Status.Active)
+            .collect(Collectors.toMap(PageAccessProfile::getPageAccessProfileId, PageAccessProfile::getProfileName));
     }
 
     @Override
@@ -536,6 +578,11 @@ public class PageAccessServiceImpl implements PageAccessService {
     }
 
     private PageAccessProfileDto toDto(PageAccessProfile profile) {
+        return this.toDto(profile, this.appUserRepository
+            .findByPageAccessProfileIdAndStatusNot(profile.getPageAccessProfileId(), Status.Delete));
+    }
+
+    private PageAccessProfileDto toDto(PageAccessProfile profile, List<AppUser> holders) {
         PageAccessProfileDto dto = new PageAccessProfileDto();
         dto.setPageAccessProfileId(profile.getPageAccessProfileId());
         dto.setTenantId(profile.getTenantId());
@@ -544,8 +591,6 @@ public class PageAccessServiceImpl implements PageAccessService {
         dto.setDefaultProfile(profile.isDefaultProfile());
         dto.setStatus(profile.getStatus());
         dto.setPageKeys(keysOf(toPageKeys(profile.getPageKeys())));
-        List<AppUser> holders = this.appUserRepository
-            .findByPageAccessProfileIdAndStatusNot(profile.getPageAccessProfileId(), Status.Delete);
         dto.setUserCount((long) holders.size());
         dto.setUserNames(holders.stream().map(AppUser::getFullName).sorted().collect(Collectors.toList()));
         dto.setDateCreated(profile.getDateCreated());

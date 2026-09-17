@@ -72,6 +72,10 @@ public class PageAccessProfileScopeTest {
             .thenReturn(Optional.empty());
         lenient().when(this.appUserRepository.findByPageAccessProfileIdAndStatusNot(any(), any()))
             .thenReturn(Collections.emptyList());
+        lenient().when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(any(), any()))
+            .thenReturn(Collections.emptyList());
+        lenient().when(this.profileRepository.findByTenantIdAndStatusOrderByProfileNameAsc(any(), any()))
+            .thenReturn(Collections.emptyList());
     }
 
     @AfterEach
@@ -301,9 +305,8 @@ public class PageAccessProfileScopeTest {
     @Test
     void peopleAreTheWorkspacesTenantUsersWithWhatTheyEffectivelyOpen() throws Exception {
         this.actAsTenantAdmin();
-        when(this.profileRepository.findById(1L)).thenReturn(Optional.of(existing(1L, TENANT_A, "Operator", true, "jobs", "queue")));
-        when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(TENANT_A, Status.Active))
-            .thenReturn(Optional.of(existing(1L, TENANT_A, "Operator", true, "jobs", "queue")));
+        when(this.profileRepository.findByTenantIdAndStatusOrderByProfileNameAsc(TENANT_A, Status.Active))
+            .thenReturn(Collections.singletonList(existing(1L, TENANT_A, "Operator", true, "jobs", "queue")));
         when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete)).thenReturn(Arrays.asList(
             person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L),
             person(45L, TENANT_A, UserRole.TENANT_USER, "Ava Patel", null),
@@ -313,12 +316,14 @@ public class PageAccessProfileScopeTest {
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
         @SuppressWarnings("unchecked")
-        java.util.List<java.util.Map<String, Object>> rows = (java.util.List<java.util.Map<String, Object>>) response.getData();
+        java.util.List<process.model.dto.AccessPersonDto> rows = (java.util.List<process.model.dto.AccessPersonDto>) response.getData();
         // Sorted by name, admins left out, the unassigned person shown on the default.
-        assertThat(rows).extracting(r -> r.get("fullName")).containsExactly("Ava Patel", "Olivia Bennett");
-        assertThat(rows.get(0).get("pageAccessProfileName")).isNull();
-        assertThat(rows.get(0).get("pageKeys")).isEqualTo(Arrays.asList("jobs", "queue"));
-        assertThat(rows.get(1).get("pageAccessProfileName")).isEqualTo("Operator");
+        assertThat(rows).extracting(process.model.dto.AccessPersonDto::getFullName).containsExactly("Ava Patel", "Olivia Bennett");
+        assertThat(rows.get(0).getPageAccessProfileName()).isNull();
+        assertThat(rows.get(0).getPageKeys()).isEqualTo(Arrays.asList("jobs", "queue"));
+        assertThat(rows.get(1).getPageAccessProfileName()).isEqualTo("Operator");
+        // The whole list cost one read of the profiles and one of the people.
+        verify(this.profileRepository, never()).findById(any());
     }
 
     @Test

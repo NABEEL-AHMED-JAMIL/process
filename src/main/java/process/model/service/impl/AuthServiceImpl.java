@@ -8,6 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import process.model.dto.AuthResponseDto;
 import process.model.enums.PageKey;
+import java.util.stream.Collectors;
 import process.model.service.PageAccessService;
 import process.model.dto.LoginRequestDto;
 import process.model.dto.ResponseDto;
@@ -138,7 +139,7 @@ public class AuthServiceImpl implements AuthService {
         // user gets their profile's, and the profile's name so the header can say which.
         response.setPageKeys(PageKey.all().stream()
             .filter(this.pageAccessService.effectivePages(user)::contains)
-            .map(PageKey::getKey).collect(java.util.stream.Collectors.toList()));
+            .map(PageKey::getKey).collect(Collectors.toList()));
         response.setPageAccessProfileName(this.pageAccessService.profileNameFor(user.getPageAccessProfileId()));
         return response;
     }
