@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.ResponseDto;
 import process.model.dto.TenantDto;
 import process.model.enums.Status;
+import process.model.enums.UserRole;
 import process.model.enums.TenantStatus;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
@@ -79,6 +80,11 @@ public class TenantServiceImpl implements TenantService {
         dto.setSourceTaskCount(this.sourceTaskRepository.countByTenantIdAndTaskStatusNot(tenantId, Status.Delete));
         dto.setPipelineCount(this.sourceTaskRepository.countDistinctPipelinesByTenantId(tenantId, Status.Delete));
         dto.setSourceJobCount(this.sourceJobRepository.countByTenantIdAndJobStatusNot(tenantId, Status.Delete));
+        this.appUserRepository.findFirstByTenantIdAndUserRoleAndStatusOrderByAppUserIdAsc(tenantId, UserRole.TENANT_ADMIN, Status.Active)
+            .ifPresent(admin -> {
+                dto.setAdminName(admin.getFullName());
+                dto.setAdminEmail(admin.getUsername());
+            });
         return dto;
     }
 

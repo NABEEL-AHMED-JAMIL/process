@@ -32,8 +32,30 @@ public class TenantDto implements AuditNamed {
     /** Distinct pipelines across this tenant's tasks -- breadth, where sourceTaskCount is volume. */
     private Long pipelineCount;
     private Long sourceJobCount;
+    /**
+     * The workspace's first tenant admin -- who to contact about it. The oldest active one, so
+     * the answer does not change every time a second admin is added.
+     */
+    private String adminName;
+    private String adminEmail;
 
     public TenantDto() {}
+
+    public String getAdminName() {
+        return adminName;
+    }
+
+    public void setAdminName(String adminName) {
+        this.adminName = adminName;
+    }
+
+    public String getAdminEmail() {
+        return adminEmail;
+    }
+
+    public void setAdminEmail(String adminEmail) {
+        this.adminEmail = adminEmail;
+    }
 
     public Long getTenantId() {
         return tenantId;
