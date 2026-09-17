@@ -453,4 +453,28 @@ public class PageAccessProfileScopeTest {
         assertThat(rows.get(0).getAllowedExceptions()).containsExactly("reports");
         assertThat(rows.get(0).getWithheldExceptions()).containsExactly("queue");
     }
+
+    /** The default's card counts the people who land on it with no profile of their own. */
+    @Test
+    void theDefaultProfileCountsThePeopleItCoversByDefault() throws Exception {
+        this.actAsTenantAdmin();
+        when(this.profileRepository.findByTenantIdAndStatusOrderByProfileNameAsc(TENANT_A, Status.Active))
+            .thenReturn(Arrays.asList(existing(2L, TENANT_A, "Analyst", false, "jobs"), existing(1L, TENANT_A, "Operator", true, "jobs")));
+        when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete)).thenReturn(Arrays.asList(
+            person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L),
+            person(45L, TENANT_A, UserRole.TENANT_USER, "Ava Patel", null),
+            person(46L, TENANT_A, UserRole.TENANT_USER, "Noah Kim", null),
+            person(ADMIN_A, TENANT_A, UserRole.TENANT_ADMIN, "Daniel Carter", null)));
+
+        @SuppressWarnings("unchecked")
+        java.util.List<PageAccessProfileDto> dtos = (java.util.List<PageAccessProfileDto>) this.service.listProfiles(null).getData();
+        PageAccessProfileDto analyst = dtos.get(0), operator = dtos.get(1);
+
+        assertThat(analyst.getUserCount()).isEqualTo(0L);
+        assertThat(analyst.getDefaultUserCount()).isNull();
+        assertThat(operator.getUserCount()).isEqualTo(1L);
+        assertThat(operator.getUserNames()).containsExactly("Olivia Bennett");
+        assertThat(operator.getDefaultUserCount()).isEqualTo(2L);
+        assertThat(operator.getDefaultUserNames()).containsExactly("Ava Patel", "Noah Kim");
+    }
 }

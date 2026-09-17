@@ -208,13 +208,27 @@ public class PageAccessServiceImpl implements PageAccessService {
         List<PageAccessProfile> profiles = this.profileRepository
             .findByTenantIdAndStatusOrderByProfileNameAsc(tenantId, Status.Active);
         this.userNameResolver.attachNames(profiles);
-        // One read of the workspace's people for every card, rather than one per card.
-        Map<Long, List<AppUser>> holders = this.appUserRepository
+        // One read of the workspace's people for every card, rather than one per card. Tenant
+        // users only: an admin holds no profile, and counting them would say they were covered.
+        List<AppUser> people = this.appUserRepository
             .findByTenantIdAndStatusNotOrderByAppUserIdDesc(tenantId, Status.Delete).stream()
+            .filter(u -> u.getUserRole() == UserRole.TENANT_USER)
+            .collect(Collectors.toList());
+        Map<Long, List<AppUser>> holders = people.stream()
             .filter(u -> !isNull(u.getPageAccessProfileId()))
             .collect(Collectors.groupingBy(AppUser::getPageAccessProfileId));
+        // The default covers everyone with no profile of their own too, and its card must say
+        // so: "1 person" on a default four more people land on understated it by four.
+        List<AppUser> onDefault = people.stream().filter(u -> isNull(u.getPageAccessProfileId())).collect(Collectors.toList());
         List<PageAccessProfileDto> dtos = profiles.stream()
-            .map(p -> this.toDto(p, holders.getOrDefault(p.getPageAccessProfileId(), Collections.emptyList())))
+            .map(p -> {
+                PageAccessProfileDto dto = this.toDto(p, holders.getOrDefault(p.getPageAccessProfileId(), Collections.emptyList()));
+                if (p.isDefaultProfile()) {
+                    dto.setDefaultUserCount((long) onDefault.size());
+                    dto.setDefaultUserNames(onDefault.stream().map(AppUser::getFullName).sorted().collect(Collectors.toList()));
+                }
+                return dto;
+            })
             .collect(Collectors.toList());
         return new ResponseDto(SUCCESS, "Access profiles fetched.", dtos);
     }

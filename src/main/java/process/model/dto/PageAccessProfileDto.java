@@ -26,6 +26,9 @@ public class PageAccessProfileDto {
     /** How many active people hold it -- shown on the card, and what refuses a delete. */
     private Long userCount;
     private List<String> userNames;
+    /** For the default profile only: the people who land on it because they hold no profile of their own. */
+    private Long defaultUserCount;
+    private List<String> defaultUserNames;
     private Timestamp dateCreated;
     private Timestamp dateUpdated;
     private String createdByName;
@@ -57,4 +60,8 @@ public class PageAccessProfileDto {
     public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
     public String getUpdatedByName() { return updatedByName; }
     public void setUpdatedByName(String updatedByName) { this.updatedByName = updatedByName; }
+    public Long getDefaultUserCount() { return defaultUserCount; }
+    public void setDefaultUserCount(Long defaultUserCount) { this.defaultUserCount = defaultUserCount; }
+    public List<String> getDefaultUserNames() { return defaultUserNames; }
+    public void setDefaultUserNames(List<String> defaultUserNames) { this.defaultUserNames = defaultUserNames; }
 }
