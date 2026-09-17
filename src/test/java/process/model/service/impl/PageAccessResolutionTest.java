@@ -13,6 +13,7 @@ import process.model.pojo.AppUser;
 import process.model.pojo.PageAccessProfile;
 import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
+import process.model.repository.TenantRepository;
 import process.model.service.NotificationCenterService;
 import process.security.PageAccessCache;
 import process.security.TenantContext;
@@ -46,13 +47,14 @@ public class PageAccessResolutionTest {
     @Mock private AppUserRepository appUserRepository;
     @Mock private NotificationCenterService notificationCenterService;
     @Mock private UserNameResolver userNameResolver;
+    @Mock private TenantRepository tenantRepository;
 
     private PageAccessServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            this.notificationCenterService, this.userNameResolver, new PageAccessCache());
+            this.notificationCenterService, this.userNameResolver, new PageAccessCache(), this.tenantRepository);
         lenient().when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(any(), any()))
             .thenReturn(Optional.empty());
     }

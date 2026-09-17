@@ -57,9 +57,9 @@ public class PageAccessRestApi {
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
     @RequestMapping(value = "/listProfiles", method = RequestMethod.GET)
-    public ResponseEntity<?> listProfiles() {
+    public ResponseEntity<?> listProfiles(@RequestParam(required = false) Long tenantId) {
         try {
-            return new ResponseEntity<>(this.pageAccessService.listProfiles(), HttpStatus.OK);
+            return new ResponseEntity<>(this.pageAccessService.listProfiles(tenantId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listProfiles.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

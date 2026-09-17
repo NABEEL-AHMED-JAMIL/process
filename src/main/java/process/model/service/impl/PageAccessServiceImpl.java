@@ -15,6 +15,7 @@ import process.model.pojo.AppUser;
 import process.model.pojo.PageAccessProfile;
 import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
+import process.model.repository.TenantRepository;
 import process.model.service.NotificationCenterService;
 import process.model.service.PageAccessService;
 import process.security.PageAccessCache;
@@ -50,15 +51,17 @@ public class PageAccessServiceImpl implements PageAccessService {
     private final NotificationCenterService notificationCenterService;
     private final UserNameResolver userNameResolver;
     private final PageAccessCache cache;
+    private final TenantRepository tenantRepository;
 
     public PageAccessServiceImpl(PageAccessProfileRepository profileRepository,
         AppUserRepository appUserRepository, NotificationCenterService notificationCenterService,
-        UserNameResolver userNameResolver, PageAccessCache cache) {
+        UserNameResolver userNameResolver, PageAccessCache cache, TenantRepository tenantRepository) {
         this.profileRepository = profileRepository;
         this.appUserRepository = appUserRepository;
         this.notificationCenterService = notificationCenterService;
         this.userNameResolver = userNameResolver;
         this.cache = cache;
+        this.tenantRepository = tenantRepository;
     }
 
     /**
@@ -140,13 +143,38 @@ public class PageAccessServiceImpl implements PageAccessService {
         return new ResponseDto(SUCCESS, "Pages fetched.", data);
     }
 
+    /**
+     * Which workspace a management call is about.
+     *
+     * A tenant admin's is always its own -- whatever id it sends is ignored, so one workspace's
+     * admin cannot reach into another's. A platform admin has none, so it has to say: a missing
+     * or unknown id is refused rather than guessed. Returns null and fills `refused` otherwise.
+     */
+    private Long workspaceFor(Long requested, ResponseDto[] refused) {
+        if (!TenantContext.isPlatformAdmin()) {
+            Long own = TenantContext.getTenantId();
+            if (isNull(own)) {
+                refused[0] = new ResponseDto(ERROR, "Access profiles belong to a workspace; sign in to one to manage them.");
+            }
+            return own;
+        }
+        if (isNull(requested)) {
+            refused[0] = new ResponseDto(ERROR, "Say which workspace: a platform admin has none of its own.");
+            return null;
+        }
+        if (!this.tenantRepository.findById(requested).isPresent()) {
+            refused[0] = new ResponseDto(ERROR, String.format("Tenant not found with %d.", requested));
+            return null;
+        }
+        return requested;
+    }
+
     @Override
-    public ResponseDto listProfiles() throws Exception {
-        Long tenantId = TenantContext.getTenantId();
-        if (isNull(tenantId)) {
-            // A platform admin has no workspace of its own, and profiles are strictly a
-            // workspace's. Managing another tenant's profiles is done as that tenant's admin.
-            return new ResponseDto(ERROR, "Access profiles belong to a workspace; sign in to one to manage them.");
+    public ResponseDto listProfiles(Long requestedTenantId) throws Exception {
+        ResponseDto[] refused = new ResponseDto[1];
+        Long tenantId = this.workspaceFor(requestedTenantId, refused);
+        if (tenantId == null) {
+            return refused[0];
         }
         List<PageAccessProfile> profiles = this.profileRepository
             .findByTenantIdAndStatusOrderByProfileNameAsc(tenantId, Status.Active);
@@ -158,9 +186,10 @@ public class PageAccessServiceImpl implements PageAccessService {
     @Override
     @Transactional
     public ResponseDto addProfile(PageAccessProfileDto dto) throws Exception {
-        Long tenantId = TenantContext.getTenantId();
-        if (isNull(tenantId)) {
-            return new ResponseDto(ERROR, "Access profiles belong to a workspace; sign in to one to manage them.");
+        ResponseDto[] noWorkspace = new ResponseDto[1];
+        Long tenantId = this.workspaceFor(dto.getTenantId(), noWorkspace);
+        if (tenantId == null) {
+            return noWorkspace[0];
         }
         ResponseDto refused = this.validate(dto, tenantId, null);
         if (refused != null) {
@@ -382,15 +411,18 @@ public class PageAccessServiceImpl implements PageAccessService {
         return null;
     }
 
-    /** Active, and the caller's own workspace -- a platform admin has none, so sees none here. */
+    /** Active, and the caller's own workspace; a platform admin reaches every workspace's. */
     private Optional<PageAccessProfile> scopedFind(Long id) {
+        Optional<PageAccessProfile> found = this.profileRepository.findById(id)
+            .filter(p -> p.getStatus() == Status.Active);
+        if (TenantContext.isPlatformAdmin()) {
+            return found;
+        }
         Long tenantId = TenantContext.getTenantId();
         if (isNull(tenantId)) {
             return Optional.empty();
         }
-        return this.profileRepository.findById(id)
-            .filter(p -> p.getStatus() == Status.Active)
-            .filter(p -> tenantId.equals(p.getTenantId()));
+        return found.filter(p -> tenantId.equals(p.getTenantId()));
     }
 
     private void clearDefault(Long tenantId) {

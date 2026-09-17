@@ -16,6 +16,7 @@ import process.model.pojo.AppUser;
 import process.model.pojo.PageAccessProfile;
 import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
+import process.model.repository.TenantRepository;
 import process.model.service.NotificationCenterService;
 import process.security.PageAccessCache;
 import process.security.TenantContext;
@@ -52,13 +53,14 @@ public class PageAccessProfileScopeTest {
     @Mock private AppUserRepository appUserRepository;
     @Mock private NotificationCenterService notificationCenterService;
     @Mock private UserNameResolver userNameResolver;
+    @Mock private TenantRepository tenantRepository;
 
     private PageAccessServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            this.notificationCenterService, this.userNameResolver, new PageAccessCache());
+            this.notificationCenterService, this.userNameResolver, new PageAccessCache(), this.tenantRepository);
         lenient().when(this.profileRepository.save(any())).thenAnswer(inv -> {
             PageAccessProfile p = inv.getArgument(0);
             if (p.getPageAccessProfileId() == null) p.setPageAccessProfileId(1000L);
@@ -151,15 +153,47 @@ public class PageAccessProfileScopeTest {
         assertThat(response.getMessage()).contains("already exists");
     }
 
-    /** A platform admin has no workspace, and profiles are strictly a workspace's. */
+    /** A platform admin has no workspace of its own, so it has to name one -- and a real one. */
     @Test
-    void aPlatformAdminCannotMakeProfilesOutsideAWorkspace() throws Exception {
+    void aPlatformAdminMustNameTheWorkspace() throws Exception {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "platform@example.com");
 
-        ResponseDto response = this.service.addProfile(dto("Operator", "jobs"));
-
-        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(this.service.addProfile(dto("Operator", "jobs")).getMessage()).contains("Say which workspace");
+        assertThat(this.service.listProfiles(null).getStatus()).isEqualTo(ProcessUtil.ERROR);
+        when(this.tenantRepository.findById(999L)).thenReturn(Optional.empty());
+        assertThat(this.service.listProfiles(999L).getMessage()).contains("Tenant not found");
         verify(this.profileRepository, never()).save(any());
+    }
+
+    @Test
+    void aPlatformAdminMakesAProfileInTheWorkspaceItNames() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "platform@example.com");
+        when(this.tenantRepository.findById(TENANT_B)).thenReturn(Optional.of(new process.model.pojo.Tenant()));
+        when(this.profileRepository.countByTenantIdAndStatus(TENANT_B, Status.Active)).thenReturn(0L);
+
+        PageAccessProfileDto draft = dto("Operator", "jobs");
+        draft.setTenantId(TENANT_B);
+        ResponseDto response = this.service.addProfile(draft);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        ArgumentCaptor<PageAccessProfile> saved = ArgumentCaptor.forClass(PageAccessProfile.class);
+        verify(this.profileRepository).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo(TENANT_B);
+    }
+
+    /** A tenant admin's workspace is its own whatever id it sends: it cannot reach into another's. */
+    @Test
+    void aTenantAdminCannotNameAnotherWorkspace() throws Exception {
+        this.actAsTenantAdmin();
+        when(this.profileRepository.countByTenantIdAndStatus(TENANT_A, Status.Active)).thenReturn(1L);
+
+        PageAccessProfileDto draft = dto("Sneaky", "jobs");
+        draft.setTenantId(TENANT_B);
+        this.service.addProfile(draft);
+
+        ArgumentCaptor<PageAccessProfile> saved = ArgumentCaptor.forClass(PageAccessProfile.class);
+        verify(this.profileRepository).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo(TENANT_A);
     }
 
     @Test

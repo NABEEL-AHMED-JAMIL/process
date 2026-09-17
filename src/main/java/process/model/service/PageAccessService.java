@@ -27,7 +27,11 @@ public interface PageAccessService {
     /** The caller's own effective pages, for a console that wants to re-check after a change. */
     ResponseDto mine() throws Exception;
 
-    ResponseDto listProfiles() throws Exception;
+    /**
+     * The profiles of one workspace. A tenant admin's own; a platform admin names it with
+     * tenantId, since it has no workspace of its own.
+     */
+    ResponseDto listProfiles(Long tenantId) throws Exception;
 
     ResponseDto addProfile(PageAccessProfileDto dto) throws Exception;
 
