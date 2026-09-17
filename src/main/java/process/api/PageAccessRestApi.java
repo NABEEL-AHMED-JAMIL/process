@@ -100,6 +100,29 @@ public class PageAccessRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/listPeople", method = RequestMethod.GET)
+    public ResponseEntity<?> listPeople(@RequestParam(required = false) Long tenantId) {
+        try {
+            return new ResponseEntity<>(this.pageAccessService.listPeople(tenantId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while listPeople.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/assignProfile", method = RequestMethod.PUT)
+    public ResponseEntity<?> assignProfile(@RequestParam Long appUserId,
+        @RequestParam(required = false) Long pageAccessProfileId) {
+        try {
+            return new ResponseEntity<>(this.pageAccessService.assignProfile(appUserId, pageAccessProfileId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while assignProfile.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @RequestMapping(value = "/setDefaultProfile", method = RequestMethod.PUT)
     public ResponseEntity<?> setDefaultProfile(@RequestParam Long pageAccessProfileId) {
         try {

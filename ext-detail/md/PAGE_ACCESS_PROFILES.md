@@ -95,6 +95,11 @@ across tenants would let one workspace's admin change what another's people see.
 | PUT | `/updateProfile` | TENANT_ADMIN | Same body + `pageAccessProfileId`. Changed pages notify holders (`PAGE_ACCESS_CHANGED`) |
 | DELETE | `/deleteProfile?pageAccessProfileId=` | TENANT_ADMIN | Refused while anyone holds it |
 | PUT | `/setDefaultProfile?pageAccessProfileId=` | TENANT_ADMIN | Moves the default |
+| GET | `/listPeople[?tenantId=]` | TENANT_ADMIN | The workspace's tenant users with profile and effective `pageKeys` — the grid's rows |
+| PUT | `/assignProfile?appUserId=&pageAccessProfileId=` | TENANT_ADMIN | One person onto one profile (omit the profile for the default). Notifies the person |
+
+`tenantId` is how a **platform admin** names the workspace (it has none of its own); a tenant admin's
+workspace is always its own, whatever id it sends.
 
 Also changed:
 - `auth.json/login` and `/refresh` now return `pageKeys[]` and `pageAccessProfileName`.
@@ -102,8 +107,8 @@ Also changed:
   against the target workspace). The user list returns `pageAccessProfileId` + `pageAccessProfileName`.
   Promoting a user out of TENANT_USER clears the pointer.
 
-A platform admin has no workspace, so `listProfiles`/`addProfile` refuse them — profiles are managed
-by the workspace's own admin.
+A platform admin manages any workspace by naming it (`tenantId`); the console shows it a workspace
+picker. A tenant admin never sees the picker.
 
 ---
 
@@ -146,8 +151,13 @@ untouched.
 - `pageGuard` on every gated route (`data.pageKey`) → `/unauthorized?page=<key>`.
 - The menu drops withheld pages, and a whole section when nothing in it is left.
 - `/unauthorized` names the page and offers **Request access**.
-- `Administration › Access profiles` — cards (pages opened / withheld, holders), New/Edit dialog
-  with pages grouped by section, Make default, Delete.
+- `Administration › Access profiles` — two views of the same facts:
+  - **Profiles**: cards (pages opened / withheld, holders), New/Edit dialog with pages grouped by
+    section, Make default, Delete.
+  - **People × pages**: a grid — people down the side, pages across the top, one cell per pair,
+    derived from the profile each person holds; the workspace default is the first row. A cell is
+    not a switch: clicking it lists the profiles that would change that answer, and picking one
+    reassigns the person (`assignProfile`). Each row also has a plain profile picker.
 - User dialog — **Access profile** picker for tenant users (shown once the workspace has profiles);
   the Users list shows the profile under the role.
 

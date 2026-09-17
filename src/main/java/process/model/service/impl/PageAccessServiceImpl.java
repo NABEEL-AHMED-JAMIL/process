@@ -322,6 +322,86 @@ public class PageAccessServiceImpl implements PageAccessService {
     }
 
     @Override
+    public ResponseDto listPeople(Long requestedTenantId) throws Exception {
+        ResponseDto[] refused = new ResponseDto[1];
+        Long tenantId = this.workspaceFor(requestedTenantId, refused);
+        if (tenantId == null) {
+            return refused[0];
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        List<AppUser> people = this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(tenantId, Status.Delete);
+        people.sort(java.util.Comparator.comparing(u -> u.getFullName() == null ? "" : u.getFullName().toLowerCase()));
+        for (AppUser person : people) {
+            if (person.getUserRole() != UserRole.TENANT_USER) {
+                continue;
+            }
+            Map<String, Object> row = new HashMap<>();
+            row.put("appUserId", person.getAppUserId());
+            row.put("fullName", person.getFullName());
+            row.put("username", person.getUsername());
+            row.put("position", person.getPosition());
+            row.put("status", person.getStatus());
+            row.put("avatarKey", person.getAvatarKey());
+            row.put("pageAccessProfileId", person.getPageAccessProfileId());
+            row.put("pageAccessProfileName", this.profileNameFor(person.getPageAccessProfileId()));
+            row.put("pageKeys", keysOf(this.effectivePages(person)));
+            rows.add(row);
+        }
+        return new ResponseDto(SUCCESS, "People fetched.", rows);
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto assignProfile(Long appUserId, Long pageAccessProfileId) throws Exception {
+        if (isNull(appUserId)) {
+            return new ResponseDto(ERROR, "User id missing.");
+        }
+        Optional<AppUser> found = this.appUserRepository.findById(appUserId)
+            .filter(u -> u.getStatus() != Status.Delete);
+        if (!found.isPresent()) {
+            return new ResponseDto(ERROR, "User not found.");
+        }
+        AppUser person = found.get();
+        // The caller's reach: its own workspace, or any for a platform admin.
+        if (!TenantContext.isPlatformAdmin()
+            && (isNull(person.getTenantId()) || !person.getTenantId().equals(TenantContext.getTenantId()))) {
+            return new ResponseDto(ERROR, "User not found.");
+        }
+        if (person.getUserRole() != UserRole.TENANT_USER) {
+            return new ResponseDto(ERROR, "Only a tenant user holds an access profile; admins open every page.");
+        }
+        ResponseDto badProfile = this.refuseUnusableProfile(pageAccessProfileId, person.getTenantId());
+        if (badProfile != null) {
+            return badProfile;
+        }
+        if (java.util.Objects.equals(person.getPageAccessProfileId(), pageAccessProfileId)) {
+            return new ResponseDto(SUCCESS, "No change.", this.personRow(person));
+        }
+        person.setPageAccessProfileId(pageAccessProfileId);
+        this.appUserRepository.save(person);
+        this.cache.forget(person.getAppUserId());
+        String profileName = this.profileNameFor(pageAccessProfileId);
+        this.notificationCenterService.create(person.getTenantId(), person.getAppUserId(),
+            NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO,
+            "Your page access changed",
+            profileName == null
+                ? "You are on your workspace's default access profile now. Your menu shows what it opens."
+                : String.format("You are on the \"%s\" access profile now. Your menu shows what it opens.", profileName),
+            "/dashboard");
+        return new ResponseDto(SUCCESS, String.format("%s is now on %s.", person.getFullName(),
+            profileName == null ? "the workspace default" : "\"" + profileName + "\""), this.personRow(person));
+    }
+
+    private Map<String, Object> personRow(AppUser person) {
+        Map<String, Object> row = new HashMap<>();
+        row.put("appUserId", person.getAppUserId());
+        row.put("pageAccessProfileId", person.getPageAccessProfileId());
+        row.put("pageAccessProfileName", this.profileNameFor(person.getPageAccessProfileId()));
+        row.put("pageKeys", keysOf(this.effectivePages(person)));
+        return row;
+    }
+
+    @Override
     public ResponseDto refuseUnusableProfile(Long pageAccessProfileId, Long tenantId) {
         if (isNull(pageAccessProfileId)) {
             return null;

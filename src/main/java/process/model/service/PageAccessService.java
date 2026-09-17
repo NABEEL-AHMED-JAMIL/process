@@ -42,6 +42,19 @@ public interface PageAccessService {
     ResponseDto setDefaultProfile(Long pageAccessProfileId) throws Exception;
 
     /**
+     * The workspace's tenant users with the pages each one effectively opens -- the grid's rows.
+     * Admins are left out: nothing about them can be changed here.
+     */
+    ResponseDto listPeople(Long tenantId) throws Exception;
+
+    /**
+     * Puts one tenant user on a profile (null: the workspace default), without the rest of the
+     * user form. Same rules as updateUser: the person must be in a workspace the caller manages,
+     * must be a TENANT_USER, and the profile must belong to that workspace.
+     */
+    ResponseDto assignProfile(Long appUserId, Long pageAccessProfileId) throws Exception;
+
+    /**
      * Checks a profile id somebody wants to put on a user: it has to exist, be active, and belong
      * to the user's workspace. Returns null when it is fine, or the refusal to send back.
      */

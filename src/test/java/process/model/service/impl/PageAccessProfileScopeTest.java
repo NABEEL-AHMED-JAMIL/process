@@ -288,4 +288,80 @@ public class PageAccessProfileScopeTest {
         assertThat(response.getMessage()).contains("already open");
         verify(this.notificationCenterService, never()).create(any(), any(), any(), any(), any(), any(), any());
     }
+
+    // ---- the grid: people rows and the one-call assignment
+
+    private AppUser person(long id, Long tenantId, UserRole role, String name, Long profileId) {
+        AppUser u = new AppUser();
+        u.setAppUserId(id); u.setTenantId(tenantId); u.setUserRole(role); u.setStatus(Status.Active);
+        u.setFullName(name); u.setUsername(name.toLowerCase().replace(' ', '.') + "@a.example"); u.setPageAccessProfileId(profileId);
+        return u;
+    }
+
+    @Test
+    void peopleAreTheWorkspacesTenantUsersWithWhatTheyEffectivelyOpen() throws Exception {
+        this.actAsTenantAdmin();
+        when(this.profileRepository.findById(1L)).thenReturn(Optional.of(existing(1L, TENANT_A, "Operator", true, "jobs", "queue")));
+        when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(TENANT_A, Status.Active))
+            .thenReturn(Optional.of(existing(1L, TENANT_A, "Operator", true, "jobs", "queue")));
+        when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete)).thenReturn(Arrays.asList(
+            person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L),
+            person(45L, TENANT_A, UserRole.TENANT_USER, "Ava Patel", null),
+            person(ADMIN_A, TENANT_A, UserRole.TENANT_ADMIN, "Daniel Carter", null)));
+
+        ResponseDto response = this.service.listPeople(null);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String, Object>> rows = (java.util.List<java.util.Map<String, Object>>) response.getData();
+        // Sorted by name, admins left out, the unassigned person shown on the default.
+        assertThat(rows).extracting(r -> r.get("fullName")).containsExactly("Ava Patel", "Olivia Bennett");
+        assertThat(rows.get(0).get("pageAccessProfileName")).isNull();
+        assertThat(rows.get(0).get("pageKeys")).isEqualTo(Arrays.asList("jobs", "queue"));
+        assertThat(rows.get(1).get("pageAccessProfileName")).isEqualTo("Operator");
+    }
+
+    @Test
+    void assigningMovesThePersonNotifiesThemAndForgetsTheCachedAnswer() throws Exception {
+        this.actAsTenantAdmin();
+        AppUser olivia = person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L);
+        when(this.appUserRepository.findById(44L)).thenReturn(Optional.of(olivia));
+        when(this.profileRepository.findById(2L)).thenReturn(Optional.of(existing(2L, TENANT_A, "Analyst", false, "jobs", "reports")));
+
+        ResponseDto response = this.service.assignProfile(44L, 2L);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        assertThat(response.getMessage()).isEqualTo("Olivia Bennett is now on \"Analyst\".");
+        assertThat(olivia.getPageAccessProfileId()).isEqualTo(2L);
+        verify(this.appUserRepository).save(olivia);
+        verify(this.notificationCenterService).create(eq(TENANT_A), eq(44L), eq(NotificationType.PAGE_ACCESS_CHANGED),
+            any(), eq("Your page access changed"), org.mockito.ArgumentMatchers.contains("Analyst"), eq("/dashboard"));
+    }
+
+    @Test
+    void assigningRefusesAnAdminAnotherWorkspaceAndAForeignProfile() throws Exception {
+        this.actAsTenantAdmin();
+        when(this.appUserRepository.findById(ADMIN_A)).thenReturn(Optional.of(person(ADMIN_A, TENANT_A, UserRole.TENANT_ADMIN, "Daniel Carter", null)));
+        assertThat(this.service.assignProfile(ADMIN_A, 1L).getMessage()).contains("admins open every page");
+
+        when(this.appUserRepository.findById(77L)).thenReturn(Optional.of(person(77L, TENANT_B, UserRole.TENANT_USER, "Someone Else", null)));
+        assertThat(this.service.assignProfile(77L, 1L).getMessage()).isEqualTo("User not found.");
+
+        when(this.appUserRepository.findById(44L)).thenReturn(Optional.of(person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", null)));
+        when(this.profileRepository.findById(600L)).thenReturn(Optional.of(existing(600L, TENANT_B, "Theirs", false, "jobs")));
+        assertThat(this.service.assignProfile(44L, 600L).getMessage()).isEqualTo("Access profile not found.");
+        verify(this.appUserRepository, never()).save(any());
+    }
+
+    @Test
+    void assigningNullPutsThePersonBackOnTheDefault() throws Exception {
+        this.actAsTenantAdmin();
+        AppUser olivia = person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L);
+        when(this.appUserRepository.findById(44L)).thenReturn(Optional.of(olivia));
+
+        ResponseDto response = this.service.assignProfile(44L, null);
+
+        assertThat(response.getMessage()).isEqualTo("Olivia Bennett is now on the workspace default.");
+        assertThat(olivia.getPageAccessProfileId()).isNull();
+    }
 }
