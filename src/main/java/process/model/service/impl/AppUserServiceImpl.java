@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.AppUserDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ResponseDto;
+import process.model.enums.NotificationSeverity;
+import process.model.enums.NotificationType;
 import process.model.enums.Status;
 import process.model.enums.TenantStatus;
 import process.model.enums.UserRole;
@@ -205,8 +207,14 @@ public class AppUserServiceImpl implements AppUserService {
         user.setDateCreated(new Timestamp(System.currentTimeMillis()));
         this.appUserRepository.save(user);
 
-        String mailResult = notifyNewUser(user, generated ? temporaryPassword : null, targetTenantId);
-        if (mailResult != null && mailResult.startsWith("Error")) {
+        String organisation = this.organisationFor(targetTenantId);
+        String createdBy = this.actorName();
+        String mailResult = this.emailMessagesFactory.sendUserWelcomeEmail(user.getUsername(),
+            user.getFullName(), organisation, user.getUsername(), generated ? temporaryPassword : null,
+            roleLabel(user.getUserRole()), createdBy, this.consoleUrl + "/login");
+        boolean mailFailed = mailResult != null && mailResult.startsWith("Error");
+        this.notifyUserCreated(user, organisation, createdBy, generated, mailFailed);
+        if (mailFailed) {
             // The account exists either way. When the password was generated this was the only
             // moment it was readable, so say plainly that it has to be reset rather than
             // reporting a clean success.
@@ -223,22 +231,97 @@ public class AppUserServiceImpl implements AppUserService {
     }
 
     /**
-     * Tells the new user their account exists.
-     *
-     * The organisation name is what the recipient recognises, so a tenant's name is looked up
+     * The organisation name is what a recipient recognises, so a tenant's name is looked up
      * rather than printing an id. A platform admin belongs to no tenant, hence the fallback.
      */
-    private String notifyNewUser(AppUser user, String temporaryPassword, Long tenantId) {
+    private String organisationFor(Long tenantId) {
         String organisation = "ETL Console";
         if (!isNull(tenantId)) {
             organisation = this.tenantRepository.findById(tenantId)
                 .map(Tenant::getTenantName).orElse(organisation);
         }
-        String createdBy = this.appUserRepository.findById(TenantContext.getAppUserId())
+        return organisation;
+    }
+
+    /** Who is doing this, as a person would say it rather than as a login. */
+    private String actorName() {
+        return this.appUserRepository.findById(TenantContext.getAppUserId())
             .map(AppUser::getFullName).orElse("An administrator");
-        return this.emailMessagesFactory.sendUserWelcomeEmail(user.getUsername(),
-            user.getFullName(), organisation, user.getUsername(), temporaryPassword,
-            roleLabel(user.getUserRole()), createdBy, this.consoleUrl + "/login");
+    }
+
+    /**
+     * The in-app side of a new account, written once the row and the welcome email are done.
+     *
+     * Three audiences. The new user finds a welcome waiting the first time they sign in -- the
+     * email said how to get in, this says where they are now that they have. The administrator
+     * who did it gets a record of it: the toast is gone in a few seconds, and "did I create that
+     * account or only mean to" is a question the bell should be able to answer. And the other
+     * administrators of the same workspace learn that somebody joined it -- a platform admin
+     * staffing a tenant is otherwise invisible to that tenant's own admins, and a second platform
+     * admin is something every existing one should hear about.
+     *
+     * A failed welcome email rides on the actor's copy as a WARNING rather than being a separate
+     * item: it is one fact about one account, and the thing it asks for -- reset the password,
+     * pass it on another way -- belongs next to the account it is about.
+     *
+     * Each create runs in its own transaction and swallows its own failures, so a notification
+     * that cannot be written never undoes the account it is about.
+     */
+    private void notifyUserCreated(AppUser user, String organisation, String createdBy,
+        boolean generated, boolean mailFailed) {
+        Long actorId = TenantContext.getAppUserId();
+        String role = roleLabel(user.getUserRole()).toLowerCase();
+        String who = String.format("%s (%s)", user.getFullName(), user.getUsername());
+
+        this.notificationCenterService.create(user.getTenantId(), user.getAppUserId(),
+            NotificationType.USER_ADDED, NotificationSeverity.SUCCESS,
+            "Welcome to " + organisation,
+            String.format("%s set up your account as %s. Your profile is where to keep your name, "
+                + "phone number and password up to date.", createdBy, role),
+            "/profile");
+
+        String summary = String.format("You created %s as %s in %s.", who, role, organisation);
+        if (mailFailed) {
+            summary += generated
+                ? " The welcome email could not be sent -- reset their password and pass it on another way."
+                : " The welcome email could not be sent.";
+        }
+        this.notificationCenterService.create(TenantContext.getTenantId(), actorId,
+            NotificationType.USER_ADDED, mailFailed ? NotificationSeverity.WARNING : NotificationSeverity.INFO,
+            mailFailed ? "User created, welcome email not sent" : "User created",
+            summary, "/users");
+
+        boolean platformWide = isNull(user.getTenantId());
+        for (AppUser peer : this.peerAdminsOf(user)) {
+            if (peer.getAppUserId().equals(actorId) || peer.getAppUserId().equals(user.getAppUserId())) {
+                continue;
+            }
+            this.notificationCenterService.create(peer.getTenantId(), peer.getAppUserId(),
+                NotificationType.USER_ADDED, NotificationSeverity.INFO,
+                platformWide ? "New platform admin" : "New user in your workspace",
+                String.format("%s added %s as %s.", createdBy, who, role), "/users");
+        }
+    }
+
+    /**
+     * The administrators who share the new user's scope: a tenant's admins for a tenant user or
+     * admin, every platform admin for a new platform admin. Active only -- a deactivated admin
+     * has no bell to ring, and its unread counter was dropped on the way out.
+     */
+    private List<AppUser> peerAdminsOf(AppUser user) {
+        List<AppUser> candidates;
+        UserRole peerRole;
+        if (isNull(user.getTenantId())) {
+            candidates = this.appUserRepository.findAll();
+            peerRole = UserRole.PLATFORM_ADMIN;
+        } else {
+            candidates = this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(
+                user.getTenantId(), Status.Delete);
+            peerRole = UserRole.TENANT_ADMIN;
+        }
+        return candidates.stream()
+            .filter(u -> u.getUserRole() == peerRole && u.getStatus() == Status.Active)
+            .collect(Collectors.toList());
     }
 
     /** The role as the recipient would say it, not as the enum spells it. */
