@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
 import process.model.repository.JobQueueRepository;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +14,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.EnumSet;
 import java.util.Optional;
 
 /**
@@ -40,7 +42,16 @@ public class RunCallbackTokens {
     private static final int RANDOM_BYTES = 32;
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    public enum Refusal { NO_SUCH_RUN, WRONG_JOB, NOT_ISSUED, EXPIRED, MISMATCH }
+    public enum Refusal { NO_SUCH_RUN, WRONG_JOB, RUN_OVER, NOT_ISSUED, EXPIRED, MISMATCH }
+
+    /**
+     * States a run cannot leave. A run gets here by more than one road -- the worker's own
+     * changeState, a cancel from the screen, the dispatcher closing a run it could not send --
+     * and only the first of those passes through retire(). So the check does not rely on the
+     * hash having been cleared: a run that is over is refused whatever its row still carries.
+     */
+    private static final EnumSet<JobStatus> OVER = EnumSet.of(
+        JobStatus.Failed, JobStatus.Completed, JobStatus.Skip, JobStatus.Interrupt, JobStatus.Missed);
 
     private final JobQueueRepository jobQueueRepository;
     private final long budgetHours;
@@ -94,6 +105,9 @@ public class RunCallbackTokens {
         JobQueue run = found.get();
         if (jobId == null || !jobId.equals(run.getJobId())) {
             return Optional.of(Refusal.WRONG_JOB);
+        }
+        if (run.getJobStatus() != null && OVER.contains(run.getJobStatus())) {
+            return Optional.of(Refusal.RUN_OVER);
         }
         String token = presented == null ? "" : presented.trim();
         if (run.getCallbackTokenHash() == null) {

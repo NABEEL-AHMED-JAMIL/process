@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
 import process.model.repository.JobQueueRepository;
 
@@ -86,6 +87,32 @@ public class RunCallbackTokensTest {
         assertThat(this.run.getCallbackTokenAttempt()).isEqualTo(2);
         assertThat(this.tokens.verify(JOB, RUN, first)).contains(RunCallbackTokens.Refusal.MISMATCH);
         assertThat(this.tokens.verify(JOB, RUN, second)).isEmpty();
+    }
+
+    /**
+     * The end of a run is not always the worker's doing: a cancel from the screen or a run the
+     * dispatcher could not send marks it Failed without passing through retire(). The token of
+     * such a run must be as dead as one that was retired -- ghost log lines on a finished run
+     * are what the old shared secret allowed.
+     */
+    @Test
+    void aTokenOfARunThatEndedWithoutRetireIsRefused() {
+        String token = this.tokens.issue(this.run);
+        for (JobStatus over : new JobStatus[] {JobStatus.Failed, JobStatus.Completed, JobStatus.Skip, JobStatus.Interrupt, JobStatus.Missed}) {
+            this.run.setJobStatus(over);
+            assertThat(this.tokens.verify(JOB, RUN, token)).as(over.name()).contains(RunCallbackTokens.Refusal.RUN_OVER);
+        }
+        for (JobStatus live : new JobStatus[] {JobStatus.Queue, JobStatus.Start, JobStatus.Running}) {
+            this.run.setJobStatus(live);
+            assertThat(this.tokens.verify(JOB, RUN, token)).as(live.name()).isEmpty();
+        }
+    }
+
+    /** The legacy secret does not open a finished run either. */
+    @Test
+    void theLegacySecretDoesNotOpenAFinishedRun() {
+        this.run.setJobStatus(JobStatus.Failed);
+        assertThat(this.tokens.verify(JOB, RUN, LEGACY)).contains(RunCallbackTokens.Refusal.RUN_OVER);
     }
 
     @Test

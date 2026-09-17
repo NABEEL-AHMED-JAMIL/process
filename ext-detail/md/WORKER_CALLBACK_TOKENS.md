@@ -16,7 +16,7 @@ radius; it would still be a long-lived credential sitting in worker environments
 | Step | Where | What |
 |------|-------|------|
 | Dispatch | `ProducerBulkEngine.getSourceJobDetail` → `RunCallbackTokens.issue` | Mints `cbt_<attempt>.<jobQueueId>.<32 random bytes, base64url>`; stores **only the SHA-256 hash**, the attempt and an expiry (`now + worker.callback.budget-hours`) on the `job_queue` row; puts the token in the Kafka message as `callbackToken` (plus `attempt`). Saved before the send, so a fast worker can never call back before the server knows the token. |
-| Callback | `NotifyResetApi.rejectIfUntrusted` → `RunCallbackTokens.verify` | Looks the run up by `jobQueueId`; refuses if the job id does not match, no token was ever issued, the token expired, or the hash does not match (constant-time). Every refusal is the same `401 {"status":"ERROR","message":"Unauthorized worker callback."}`; the reason is only logged. |
+| Callback | `NotifyResetApi.rejectIfUntrusted` → `RunCallbackTokens.verify` | Looks the run up by `jobQueueId`; refuses if the job id does not match, **the run is already over** (Failed/Completed/Skip/Interrupt/Missed — however it got there: worker, UI cancel, dispatcher), no token was ever issued, the token expired, or the hash does not match (constant-time). Every refusal is the same `401 {"status":"ERROR","message":"Unauthorized worker callback."}`; the reason is only logged. |
 | Retry | dispatch again | The row is re-minted: the earlier attempt's token stops working. |
 | End of run | `changeState` to `Failed`/`Completed` accepted by the state machine | `RunCallbackTokens.retire` clears the hash and expiry. A replayed callback then finds nothing to match. A refused transition (e.g. `Start → Completed`) leaves the token in place. |
 
@@ -60,7 +60,9 @@ The application no longer refuses to start without `WORKER_CALLBACK_TOKEN`.
 | no header / wrong token / legacy secret on a tokened run / right token with the wrong `jobId` | 401 |
 | right token: `addLogs`, `addLogsBatch`, `Running`, `Completed` | 200; hash cleared after `Completed` |
 | same token replayed after `Completed` | 401 |
+| token of a run cancelled from the UI (hash still on the row) | 401 (`RUN_OVER`) |
+| token of another run, or a token with another run's ids | 401 |
 | run with no hash + wrong secret | 401 |
 | run with no hash + legacy secret | 200 (fallback) |
 
-Tests: `RunCallbackTokensTest` (8), `NotifyResetApiTest` (8).
+Tests: `RunCallbackTokensTest` (10), `NotifyResetApiTest` (8).
