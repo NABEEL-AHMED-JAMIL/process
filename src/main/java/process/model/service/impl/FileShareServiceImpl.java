@@ -242,7 +242,7 @@ public class FileShareServiceImpl implements FileShareService {
         // inbox that will never have it. This exact ambiguity cost a debugging session.
         if (!this.emailMessagesFactory.deliversToRealInboxes()) {
             return new ResponseDto(SUCCESS, "Accepted by the local mail sandbox — it is stored, "
-                + "not delivered. Point app.mail.ses.endpoint at real SES to actually send.");
+                + "not delivered. Clear aws.endpoint so mail goes to real SES to actually send.");
         }
         return new ResponseDto(SUCCESS, "Email sent.");
     }

@@ -12,6 +12,7 @@ import process.model.enums.KafkaSecretKind;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
+import process.config.StoragePropertyDefaults;
 import process.model.service.KafkaSecretService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
@@ -56,12 +57,21 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
     private final StorageBrowserService storageBrowserService;
     private final AppUserRepository appUserRepository;
     private final EncryptionUtil encryptionUtil;
+    /** The platform's config bucket, read through the same expression its guard and its seeding use. */
+    private final String secretBucket;
 
     public KafkaSecretServiceImpl(StorageBrowserService storageBrowserService,
-        AppUserRepository appUserRepository, EncryptionUtil encryptionUtil) {
+        AppUserRepository appUserRepository, EncryptionUtil encryptionUtil,
+        @Value(StoragePropertyDefaults.CONFIG_BUCKET) String secretBucket) {
         this.storageBrowserService = storageBrowserService;
         this.appUserRepository = appUserRepository;
         this.encryptionUtil = encryptionUtil;
+        this.secretBucket = secretBucket;
+    }
+
+    @Override
+    public String secretBucket() {
+        return this.secretBucket;
     }
 
     @Override
@@ -93,12 +103,12 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         }
 
         KafkaSecretPath path = KafkaSecretPath.newUpload(callerId, file.getOriginalFilename(), LocalDate.now());
-        this.storageBrowserService.uploadForWorkflow(SECRET_BUCKET, path.key(),
+        this.storageBrowserService.uploadForWorkflow(this.secretBucket, path.key(),
             new ByteArrayInputStream(bytes), bytes.length, "application/octet-stream");
 
         this.fill(summary, kind, path, (long) bytes.length);
         // The key is logged; the contents never are.
-        this.logger.info("Stored Kafka {} for user {} at {}/{}.", kind, callerId, SECRET_BUCKET, path.key());
+        this.logger.info("Stored Kafka {} for user {} at {}/{}.", kind, callerId, this.secretBucket, path.key());
         return new ResponseDto(SUCCESS, "File uploaded and checked.", summary);
     }
 
@@ -109,7 +119,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         }
         List<X509Certificate> certificates = new ArrayList<>();
         for (String objectKey : caObjectKeys) {
-            if (!this.canUseObject(SECRET_BUCKET, objectKey)) {
+            if (!this.canUseObject(this.secretBucket, objectKey)) {
                 return new ResponseDto(ERROR, "That certificate could not be found.");
             }
             try {
@@ -130,7 +140,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         // removed together when the CA is rotated.
         KafkaSecretPath source = KafkaSecretPath.parse(caObjectKeys.get(0));
         KafkaSecretPath target = source.sibling(generatedStoreName("truststore"));
-        this.storageBrowserService.uploadForWorkflow(SECRET_BUCKET, target.key(),
+        this.storageBrowserService.uploadForWorkflow(this.secretBucket, target.key(),
             new ByteArrayInputStream(store), store.length, "application/x-pkcs12");
 
         KafkaSecretDto dto = new KafkaSecretDto();
@@ -148,8 +158,8 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         if (certificateObjectKey == null || privateKeyObjectKey == null) {
             return new ResponseDto(ERROR, "A keystore needs both the client certificate and its private key.");
         }
-        if (!this.canUseObject(SECRET_BUCKET, certificateObjectKey)
-            || !this.canUseObject(SECRET_BUCKET, privateKeyObjectKey)) {
+        if (!this.canUseObject(this.secretBucket, certificateObjectKey)
+            || !this.canUseObject(this.secretBucket, privateKeyObjectKey)) {
             return new ResponseDto(ERROR, "Those files could not be found.");
         }
 
@@ -175,7 +185,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         String storePassword = this.encryptionUtil.encrypt(password);
         KafkaSecretPath target = KafkaSecretPath.parse(certificateObjectKey)
             .sibling(generatedStoreName("keystore"));
-        this.storageBrowserService.uploadForWorkflow(SECRET_BUCKET, target.key(),
+        this.storageBrowserService.uploadForWorkflow(this.secretBucket, target.key(),
             new ByteArrayInputStream(store), store.length, "application/x-pkcs12");
 
         KafkaSecretDto dto = new KafkaSecretDto();
@@ -200,7 +210,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
      */
     @Override
     public boolean canUseObject(String bucket, String objectKey) {
-        if (!SECRET_BUCKET.equals(bucket)) {
+        if (!this.secretBucket.equals(bucket)) {
             return false;
         }
         KafkaSecretPath path = KafkaSecretPath.parse(objectKey);
@@ -253,7 +263,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
 
     private void fill(KafkaSecretDto dto, KafkaSecretKind kind, KafkaSecretPath path, Long size) {
         dto.setKind(kind);
-        dto.setBucket(SECRET_BUCKET);
+        dto.setBucket(this.secretBucket);
         dto.setObjectKey(path.key());
         dto.setFileName(path.getFileName());
         dto.setUploadId(path.getUploadId());
@@ -272,11 +282,11 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
     private byte[] read(String objectKey) throws Exception {
         ObjectContentDto content;
         try {
-            content = this.storageBrowserService.readForWorkflow(SECRET_BUCKET, objectKey);
+            content = this.storageBrowserService.readForWorkflow(this.secretBucket, objectKey);
         } catch (RuntimeException unreadable) {
             // Logged rather than reported: a bucket that is unreachable and a file that is gone
             // look the same from here, and only one of them is the caller's to do anything about.
-            this.logger.warn("Could not read Kafka secret {}/{}.", SECRET_BUCKET, objectKey, unreadable);
+            this.logger.warn("Could not read Kafka secret {}/{}.", this.secretBucket, objectKey, unreadable);
             throw new IllegalArgumentException(UNREADABLE);
         }
         if (content == null || content.getContent() == null) {

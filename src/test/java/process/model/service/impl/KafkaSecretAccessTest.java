@@ -24,7 +24,7 @@ import static org.mockito.Mockito.when;
  * with no principal, so the file itself is read through the trusted path that asks nothing. If
  * this is wrong, nothing downstream will catch it.
  */
-class KafkaSecretAccessTest {
+public class KafkaSecretAccessTest {
 
     private static final LocalDate DAY = LocalDate.of(2026, 8, 31);
     private static final Long OWNER = 1248L;
@@ -32,7 +32,7 @@ class KafkaSecretAccessTest {
 
     private final AppUserRepository appUserRepository = mock(AppUserRepository.class);
     private final KafkaSecretService service =
-        new KafkaSecretServiceImpl(null, this.appUserRepository, null);
+        new KafkaSecretServiceImpl(null, this.appUserRepository, null, "etl-config");
 
     private final String ownersKey = KafkaSecretPath.newUpload(OWNER, "ca.pem", DAY).key();
 
@@ -55,13 +55,13 @@ class KafkaSecretAccessTest {
     @Test
     void theUploaderMayUseTheirOwnFile() {
         TenantContext.set(OWNER_TENANT, "TENANT_USER", OWNER, "owner@example.com");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isTrue();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isTrue();
     }
 
     @Test
     void aPlatformAdminMayUseAnybodys() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isTrue();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isTrue();
     }
 
     /** A tenant admin owns its tenant's connections, so it has to be able to finish one. */
@@ -69,7 +69,7 @@ class KafkaSecretAccessTest {
     void aTenantAdminMayUseAFileUploadedBySomebodyInItsOwnTenant() {
         this.ownerIsInTenant(OWNER_TENANT);
         TenantContext.set(OWNER_TENANT, "TENANT_ADMIN", 99L, "admin@tenant.example");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isTrue();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isTrue();
     }
 
     /**
@@ -81,7 +81,7 @@ class KafkaSecretAccessTest {
     void aTenantAdminMayNotUseAPeerAdminsFile() {
         this.ownerIsInTenant(OWNER_TENANT, UserRole.TENANT_ADMIN);
         TenantContext.set(OWNER_TENANT, "TENANT_ADMIN", 99L, "admin@tenant.example");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isFalse();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isFalse();
     }
 
     /** Nor a platform admin's, who is in no tenant at all and so was never reachable anyway. */
@@ -89,21 +89,21 @@ class KafkaSecretAccessTest {
     void aTenantAdminMayNotUseAPlatformAdminsFile() {
         this.ownerIsInTenant(null, UserRole.PLATFORM_ADMIN);
         TenantContext.set(OWNER_TENANT, "TENANT_ADMIN", 99L, "admin@tenant.example");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isFalse();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isFalse();
     }
 
     /** Their own uploads are theirs by id, before the tenant rule is ever consulted. */
     @Test
     void aTenantAdminStillUsesItsOwnFile() {
         TenantContext.set(OWNER_TENANT, "TENANT_ADMIN", OWNER, "owner@example.com");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isTrue();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isTrue();
     }
 
     @Test
     void aTenantAdminMayNotReachIntoAnotherTenant() {
         this.ownerIsInTenant(OWNER_TENANT);
         TenantContext.set(77L, "TENANT_ADMIN", 99L, "admin@other.example");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isFalse();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isFalse();
     }
 
     /** A plain user gets no tenant-wide reach, only their own uploads. */
@@ -111,14 +111,14 @@ class KafkaSecretAccessTest {
     void aTenantUserMayNotUseAPeersFileEvenInTheSameTenant() {
         this.ownerIsInTenant(OWNER_TENANT);
         TenantContext.set(OWNER_TENANT, "TENANT_USER", 99L, "someone@tenant.example");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isFalse();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isFalse();
     }
 
     @Test
     void aLongerUserIdDoesNotSatisfyAShorterOne() {
         String longerId = KafkaSecretPath.newUpload(12480L, "ca.pem", DAY).key();
         TenantContext.set(OWNER_TENANT, "TENANT_USER", OWNER, "owner@example.com");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, longerId)).isFalse();
+        assertThat(this.service.canUseObject("etl-config", longerId)).isFalse();
     }
 
     @Test
@@ -131,17 +131,17 @@ class KafkaSecretAccessTest {
     @Test
     void aKeyThatIsNotInTheAgreedLayoutIsRefused() {
         TenantContext.set(OWNER_TENANT, "TENANT_USER", OWNER, "owner@example.com");
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET,
+        assertThat(this.service.canUseObject("etl-config",
             "kafka-secrets/1248/../9999/2026-08-31/ca.pem")).isFalse();
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET,
+        assertThat(this.service.canUseObject("etl-config",
             "document-converter/4/input.docx")).isFalse();
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, null)).isFalse();
+        assertThat(this.service.canUseObject("etl-config", null)).isFalse();
     }
 
     /** Nobody signed in at all -- a scheduler thread -- gets nothing through this door. */
     @Test
     void anEmptyContextIsRefused() {
-        assertThat(this.service.canUseObject(KafkaSecretService.SECRET_BUCKET, this.ownersKey)).isFalse();
+        assertThat(this.service.canUseObject("etl-config", this.ownersKey)).isFalse();
     }
 
 }

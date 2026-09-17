@@ -13,8 +13,6 @@ import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.stereotype.Service;
 import process.model.dto.BrowseObjectsResponseDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
@@ -30,12 +28,11 @@ import java.util.stream.Collectors;
 /**
  * @author Nabeel Ahmed
  * */
-@Service("minioObjectStorageService")
 public class MinioObjectStorageServiceImpl implements ObjectStorageService {
 
     private final MinioClient minioClient;
 
-    public MinioObjectStorageServiceImpl(@Lazy MinioClient minioClient) {
+    public MinioObjectStorageServiceImpl(MinioClient minioClient) {
         this.minioClient = minioClient;
     }
 

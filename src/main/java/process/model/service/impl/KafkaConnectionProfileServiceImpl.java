@@ -472,7 +472,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         if (bucket.equals(storedBucket) && location.equals(storedLocation)) {
             return null;
         }
-        if (KafkaSecretService.SECRET_BUCKET.equals(bucket)) {
+        if (this.kafkaSecretService.secretBucket().equals(bucket)) {
             return this.kafkaSecretService.canUseObject(bucket, location) ? null
                 : new ResponseDto(ERROR, String.format("That %s could not be found.", what));
         }

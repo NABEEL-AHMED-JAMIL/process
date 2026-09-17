@@ -7,7 +7,6 @@ import process.config.StorageClientFactory;
 import process.model.dto.BucketSummaryDto;
 import process.model.dto.LookupDataDto;
 import process.model.repository.StorageConnectionRepository;
-import process.model.service.KafkaSecretService;
 import process.model.service.ObjectStorageService;
 import process.security.TenantContext;
 
@@ -39,17 +38,20 @@ import static org.mockito.Mockito.when;
  *
  * @author Nabeel Ahmed
  */
-class PlatformBucketNamedGuardTest {
+public class PlatformBucketNamedGuardTest {
 
     private static final long TENANT_A = 1001L;
     private static final String AVATAR_BUCKET = "etl-avatar";
-    private static final String PLATFORM_BUCKET = KafkaSecretService.SECRET_BUCKET;
+    /** Kafka key material under kafka-secrets/; the bucket the tests below try to reach. */
+    private static final String CONFIG_BUCKET = "etl-config";
+    private static final String PLATFORM_BUCKET = CONFIG_BUCKET;
 
     private final LookupDataCacheService lookupDataCacheService = mock(LookupDataCacheService.class);
     private final StorageConnectionRepository storageConnectionRepository =
         mock(StorageConnectionRepository.class);
     private final StorageClientFactory storageClientFactory = mock(StorageClientFactory.class);
-    private final ObjectStorageService minio = mock(ObjectStorageService.class);
+    /** The legacy BUCKET_LIST client -- S3 on the platform's identity, the only fallback left. */
+    private final ObjectStorageService legacyS3 = mock(ObjectStorageService.class);
 
     private StorageBrowserServiceImpl service;
 
@@ -57,8 +59,8 @@ class PlatformBucketNamedGuardTest {
     void setUp() {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
-            this.minio, mock(ObjectStorageService.class), mock(ObjectStorageService.class),
-            AVATAR_BUCKET);
+            this.legacyS3,
+            AVATAR_BUCKET, CONFIG_BUCKET);
     }
 
     @AfterEach
@@ -71,7 +73,7 @@ class PlatformBucketNamedGuardTest {
         LookupDataDto child = new LookupDataDto();
         child.setLookupType("My bucket");
         child.setLookupValue(bucket);
-        child.setDescription("MINIO");
+        child.setDescription("S3");
         child.setTenantId(TENANT_A);
         LookupDataDto parent = new LookupDataDto();
         parent.setLookupValue("BUCKET_LIST");
@@ -98,9 +100,9 @@ class PlatformBucketNamedGuardTest {
         assertThatThrownBy(() -> this.service.deleteFolder(PLATFORM_BUCKET, "kafka-secrets/"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minio, never()).listObjects(anyString(), anyString(), any(), anyInt());
-        verify(this.minio, never()).getObjectContent(anyString(), anyString(), any(), any());
-        verify(this.minio, never()).deleteFolder(anyString(), anyString());
+        verify(this.legacyS3, never()).listObjects(anyString(), anyString(), any(), anyInt());
+        verify(this.legacyS3, never()).getObjectContent(anyString(), anyString(), any(), any());
+        verify(this.legacyS3, never()).deleteFolder(anyString(), anyString());
     }
 
     /** The avatar bucket is named by a property alone, so it has even less to be inferred from. */
@@ -112,7 +114,7 @@ class PlatformBucketNamedGuardTest {
         assertThatThrownBy(() -> this.service.downloadObject(AVATAR_BUCKET, "9/profile/avatar.png", null, null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minio, never()).getObjectContent(anyString(), anyString(), any(), any());
+        verify(this.legacyS3, never()).getObjectContent(anyString(), anyString(), any(), any());
     }
 
     // The own-picture exception is unaffected and stays where it is exercised against a properly
@@ -135,7 +137,7 @@ class PlatformBucketNamedGuardTest {
 
         this.service.deleteFolder(PLATFORM_BUCKET, "kafka-secrets/");
 
-        verify(this.minio).deleteFolder(PLATFORM_BUCKET, "kafka-secrets/");
+        verify(this.legacyS3).deleteFolder(PLATFORM_BUCKET, "kafka-secrets/");
     }
 
     /** And so does a workflow, which is the reason the trusted path exists. */
@@ -145,7 +147,7 @@ class PlatformBucketNamedGuardTest {
 
         this.service.readForWorkflow(PLATFORM_BUCKET, "kafka-secrets/9/u/2026-08-31/truststore-a1b2c3d4.p12");
 
-        verify(this.minio).getObjectContent(
+        verify(this.legacyS3).getObjectContent(
             PLATFORM_BUCKET, "kafka-secrets/9/u/2026-08-31/truststore-a1b2c3d4.p12", null, null);
     }
 

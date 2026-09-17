@@ -18,7 +18,6 @@ import process.config.StoragePropertyDefaults;
 import process.model.enums.Status;
 import process.model.pojo.StorageConnection;
 import process.model.repository.StorageConnectionRepository;
-import process.model.service.KafkaSecretService;
 import process.model.service.ObjectStorageService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
@@ -57,24 +56,28 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     private final StorageClientFactory storageClientFactory;
     /** The same property AppUserServiceImpl writes every picture to; see isOwnProfileObject. */
     private final String avatarBucket;
+    /** The same property KafkaSecretServiceImpl writes every certificate and store to. */
+    private final String configBucket;
     private final Map<String, ObjectStorageService> objectStorageServicesByProvider;
 
     public StorageBrowserServiceImpl(
         LookupDataCacheService lookupDataCacheService,
         StorageConnectionRepository storageConnectionRepository,
         StorageClientFactory storageClientFactory,
-        @Qualifier("minioObjectStorageService") ObjectStorageService minioObjectStorageService,
         @Qualifier("s3ObjectStorageService") ObjectStorageService s3ObjectStorageService,
-        @Qualifier("azureBlobObjectStorageService") ObjectStorageService azureBlobObjectStorageService,
-        @Value(StoragePropertyDefaults.AVATAR_BUCKET) String avatarBucket) {
+        @Value(StoragePropertyDefaults.AVATAR_BUCKET) String avatarBucket,
+        @Value(StoragePropertyDefaults.CONFIG_BUCKET) String configBucket) {
         this.lookupDataCacheService = lookupDataCacheService;
         this.storageConnectionRepository = storageConnectionRepository;
         this.storageClientFactory = storageClientFactory;
         this.avatarBucket = avatarBucket;
+        this.configBucket = configBucket;
+        // The legacy BUCKET_LIST path, for a lookup entry nobody has turned into a connection yet.
+        // S3 only: it is the one provider the platform holds an account for (the aws.* identity).
+        // There is no global MinIO or Azure account any more for a lookup to fall back to, so a
+        // bucket on either is a connection with its own credentials or it is nothing.
         Map<String, ObjectStorageService> byProvider = new HashMap<>();
-        byProvider.put("MINIO", minioObjectStorageService);
         byProvider.put("S3", s3ObjectStorageService);
-        byProvider.put("AZURE", azureBlobObjectStorageService);
         this.objectStorageServicesByProvider = byProvider;
     }
 
@@ -473,10 +476,10 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
      * resolveService below deliberately lets a platform bucket through for everybody, because an
      * application workflow reaching a file it wrote has no tenant of its own to be matched on.
      * A request that arrived from a browser gets no such licence, on any verb: every user's
-     * picture lives in etl-avatar, and etl-bucket holds Kafka key material, PDF uploads and
-     * other tenants' documents, so an unguarded path would let one tenant read, enumerate,
-     * rename or delete another's. The one object a tenant user genuinely owns in a platform
-     * bucket is their own avatar, and that is the only exception made.
+     * picture lives in the avatar bucket and every tenant's Kafka key material in the config
+     * bucket, so an unguarded path would let one tenant read, enumerate, rename or delete
+     * another's. The one object a tenant user genuinely owns in a platform bucket is their own
+     * avatar, and that is the only exception made.
      */
     private ObjectStorageService resolveServiceForCaller(String bucket, String key) {
         if (this.isPlatformBucket(bucket)
@@ -489,13 +492,13 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     /**
      * Whether a bucket is one the platform manages rather than a tenant.
      *
-     * The two default buckets are named here, not merely inferred from a tenant-less storage
-     * connection, because no migration creates a connection row for either of them: etl-bucket
-     * ships as a BUCKET_LIST lookup entry and etl-avatar as a property. BUCKET_LIST is a family a
-     * tenant admin may add to, so with the guard resting on a row that does not exist, a lookup
-     * entry of their own called "etl-bucket" was enough to be handed the platform's own client --
-     * and with it every tenant's Kafka key material and every user's picture. Naming the buckets
-     * keeps the answer the same however they come to be configured.
+     * The two platform buckets are named here, not merely inferred from a tenant-less storage
+     * connection, because a boot that could not seed the rows (no AWS identity yet) leaves none
+     * to find. BUCKET_LIST is a family a tenant admin may add to, so with the guard resting on a
+     * row that does not exist, a lookup entry of their own with a platform bucket's name was
+     * enough to be handed the platform's own client -- and with it every tenant's Kafka key
+     * material or every user's picture. Naming the buckets keeps the answer the same however
+     * they come to be configured.
      *
      * The connection lookup still stands for every other platform bucket an operator adds, and
      * reads any status: a retired or soft-deleted row still names a real bucket, and matching only
@@ -514,7 +517,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     }
 
     private boolean isPlatformBucketName(String bucket) {
-        return this.avatarBucket.equals(bucket) || KafkaSecretService.SECRET_BUCKET.equals(bucket);
+        return this.avatarBucket.equals(bucket) || this.configBucket.equals(bucket);
     }
 
     /**
@@ -610,8 +613,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (service == null) {
             throw new IllegalStateException(
                 "Unsupported/missing storage provider '" + provider + "' for bucket " + bucket
-                    + ". Configure it as a storage connection, or set the BUCKET_LIST lookup entry's"
-                    + " description to MINIO, S3, or AZURE.");
+                    + ". Add a storage connection for it.");
         }
         return service;
     }

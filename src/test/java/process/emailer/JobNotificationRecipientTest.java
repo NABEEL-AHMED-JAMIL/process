@@ -6,7 +6,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
@@ -33,7 +32,7 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class JobNotificationRecipientTest {
+public class JobNotificationRecipientTest {
 
     @Mock private VelocityManager velocityManager;
     @Mock private LookupDataCacheService lookupDataCacheService;
@@ -44,10 +43,7 @@ class JobNotificationRecipientTest {
 
     @BeforeEach
     void setUp() {
-        // A real JavaMailSender, unconfigured: it is only used to BUILD the MimeMessage now,
-        // never to send one, so it needs no host.
-        JavaMailSenderImpl builder = new JavaMailSenderImpl();
-        this.factory = new EmailMessagesFactory(builder, this.velocityManager,
+        this.factory = new EmailMessagesFactory(this.velocityManager,
             this.lookupDataCacheService, this.sourceJobRepository, this.mailTransport);
         ReflectionTestUtils.setField(this.factory, "sender", "etl@platform.local");
         lenient().when(this.velocityManager.getResponseMessage(any(), any())).thenReturn("<p>body</p>");

@@ -65,11 +65,8 @@ public class ApplicationPropertiesDeclarationTest {
         "platform.admin.bootstrap-password",
         "jwt.secret.key",
         "lookup.encryption.key",
-        "minio.access-key",
-        "minio.secret-key",
-        "aws.s3.access-key",
-        "aws.s3.secret-key",
-        "azure.storage.connection-string");
+        "aws.access-key",
+        "aws.secret-key");
 
     private Properties load(String resource) throws IOException {
         InputStream stream = this.getClass().getClassLoader().getResourceAsStream(resource);

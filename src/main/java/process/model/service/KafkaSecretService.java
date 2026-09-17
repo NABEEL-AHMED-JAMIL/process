@@ -18,13 +18,15 @@ import java.util.List;
 public interface KafkaSecretService {
 
     /**
-     * The platform bucket every Kafka file lives in.
+     * The platform's config bucket, where every Kafka file lives under kafka-secrets/.
      *
      * Not configurable per tenant on purpose: key material is the one thing that should not sit in
      * a bucket whose credentials a tenant holds, because anyone with those credentials can read it
-     * outside the application entirely.
+     * outside the application entirely. A method rather than the constant it used to be, because
+     * the bucket's name is a property now (app.config.bucket) and a constant could only ever
+     * guess at it.
      */
-    String SECRET_BUCKET = "etl-bucket";
+    String secretBucket();
 
     /**
      * Stores one uploaded file after checking it really is what the caller says it is.

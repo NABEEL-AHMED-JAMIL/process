@@ -38,15 +38,14 @@ import static org.mockito.Mockito.mock;
 public class PlatformBucketAccessTest {
 
     private static final String AVATAR_BUCKET = "etl-avatar";
+    private static final String CONFIG_BUCKET = "etl-config";
 
     private final StorageBrowserServiceImpl service = new StorageBrowserServiceImpl(
         mock(LookupDataCacheService.class),
         mock(StorageConnectionRepository.class),
         mock(StorageClientFactory.class),
         mock(ObjectStorageService.class),
-        mock(ObjectStorageService.class),
-        mock(ObjectStorageService.class),
-        AVATAR_BUCKET);
+        AVATAR_BUCKET, CONFIG_BUCKET);
 
     /** The guard reads the caller from the thread, so a case is set up by becoming that caller. */
     private boolean ownProfile(Long callerId, String bucket, String key) {

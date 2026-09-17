@@ -1,7 +1,7 @@
 package process.config;
 
 /**
- * The one spelling of the avatar bucket property, so its four readers cannot disagree about it.
+ * The one spelling of each platform bucket property, so their readers cannot disagree about it.
  *
  * StorageBrowserServiceImpl (which guards the bucket), StorageConnectionServiceImpl (which
  * reserves the alias), AppUserServiceImpl (which writes the pictures) and StorageConnectionBootstrap
@@ -28,6 +28,15 @@ public final class StoragePropertyDefaults {
     public static final String AVATAR_BUCKET =
         "#{'${app.avatar.bucket:etl-avatar}'.trim().isEmpty() ? 'etl-avatar' "
         + ": '${app.avatar.bucket:etl-avatar}'.trim()}";
+
+    /**
+     * The platform's configuration bucket -- Kafka key material under kafka-secrets/ -- normalised
+     * the same way and for the same reason: KafkaSecretServiceImpl writes to it, the browser
+     * guard refuses it by name, the alias is reserved by it, and the bootstrap creates it.
+     */
+    public static final String CONFIG_BUCKET =
+        "#{'${app.config.bucket:etl-config}'.trim().isEmpty() ? 'etl-config' "
+        + ": '${app.config.bucket:etl-config}'.trim()}";
 
     private StoragePropertyDefaults() {}
 

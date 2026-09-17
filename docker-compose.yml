@@ -142,19 +142,18 @@ services:
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       EFS_FILE_DIRE: ${EFS_FILE_DIRE:-/tmp/efs}
-      # Outbound mail goes through SES against LocalStack here, so a job notification can be
-      # sent and then read back instead of trusting a log line. The MAIL_* pair below is the
-      # deprecated SMTP path, unused unless MAIL_TRANSPORT=smtp.
+      # The platform's one AWS identity: SES for outbound mail and S3 for the platform buckets
+      # (etl-avatar for profile pictures, etl-config for Kafka key material). LocalStack here, so a
+      # notification can be sent and read back and a picture uploaded and fetched, without an
+      # account -- mail is stored, not delivered. On a real environment clear AWS_ENDPOINT and
+      # either supply a scoped key pair or leave both blank and let the instance role sign
+      # (STORAGE_ALLOW_INSTANCE_ROLE=true for the bucket half). Tenants' own buckets are never
+      # configured here: each is a storage connection added from Settings > Storage.
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://host.docker.internal:4566}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-test}
+      AWS_SECRET_KEY: ${AWS_SECRET_KEY:-test}
       MAIL_FROM: ${MAIL_FROM:-no-reply@etl-console.local}
-      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-ses}
-      AWS_SES_ENDPOINT: ${AWS_SES_ENDPOINT:-http://host.docker.internal:4566}
-      AWS_SES_REGION: ${AWS_SES_REGION:-us-east-1}
-      AWS_SES_ACCESS_KEY: ${AWS_SES_ACCESS_KEY:-test}
-      AWS_SES_SECRET_KEY: ${AWS_SES_SECRET_KEY:-test}
-      MAIL_HOST: ${MAIL_HOST:-sandbox.smtp.mailtrap.io}
-      MAIL_PORT: ${MAIL_PORT:-587}
-      MAIL_USERNAME: ${MAIL_USERNAME:-ce545af2135fd6}
-      MAIL_PASSWORD: ${MAIL_PASSWORD:-35f35312703886}
       # Base64-encoded 256-bit AES key for encrypted lookup values (openssl rand -base64 32).
       # Rotating this makes any already-encrypted lookup values undecryptable -- override via
       # a real LOOKUP_ENCRYPTION_KEY env var rather than editing this fallback once real
@@ -174,12 +173,9 @@ services:
       # purpose -- generate one with `openssl rand -hex 32` and set the SAME value here and in
       # the job-search workers' env. Left unset, those endpoints stay unauthenticated.
       WORKER_CALLBACK_TOKEN: ${WORKER_CALLBACK_TOKEN:-}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}
       # Job audit logs (OpenSearchAuditLogClient) -- OpenSearch is a separate compose project's
-      # container (job-search), reached the same way MinIO is: via the published host port,
-      # since process_app isn't on that project's docker network.
+      # container (job-search), reached via the published host port, since process_app isn't on
+      # that project's docker network.
       OPENSEARCH_URL: ${OPENSEARCH_URL:-http://host.docker.internal:9200}
       # FileChatExtractionServiceImpl's last-resort path for a PDF with no extractable text (a
       # scanned/image-only page): render the first page and ask this Ollama vision model to
@@ -188,10 +184,6 @@ services:
       # "llava:latest", if that's what was pulled) actually exists. Set to whatever `ollama list`
       # on the host shows; this default assumes 7b since that is what this project pulled.
       OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-llava:7b}
-      AWS_S3_ACCESS_KEY: ${AWS_S3_ACCESS_KEY:-}
-      AWS_S3_SECRET_KEY: ${AWS_S3_SECRET_KEY:-}
-      AWS_S3_REGION: ${AWS_S3_REGION:-us-east-1}
-      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING:-}
       # WebSocket (STOMP/SockJS) Origin allowlist -- application-{prod,stage}.properties already
       # read this env var, but the "dev" profile active here has no properties file wiring it up,
       # so it's supplied directly. Includes the LAN IP so phones/other laptops on the same

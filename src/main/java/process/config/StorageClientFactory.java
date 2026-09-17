@@ -27,8 +27,8 @@ import java.util.List;
 
 /**
  * Turns a stored StorageConnection into a ready-to-use ObjectStorageService bound to that
- * connection's own credentials -- the per-connection counterpart to MinioConfig/S3Config/
- * AzureBlobConfig, which can only ever produce one globally-configured client each.
+ * connection's own credentials -- the per-connection counterpart to S3Config, which can only
+ * ever produce one client, on the platform's own identity.
  *
  * Built clients are cached, since constructing an SDK client sets up connection pools and
  * is wasteful to repeat per request. The cache key includes a fingerprint of the connection's

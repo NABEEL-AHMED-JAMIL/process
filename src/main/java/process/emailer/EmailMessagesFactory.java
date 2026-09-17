@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import process.model.service.impl.LookupDataCacheService;
 import org.springframework.stereotype.Component;
@@ -14,7 +13,9 @@ import process.model.enums.JobStatus;
 import process.model.repository.SourceJobRepository;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
+import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
+import java.util.Properties;
 import java.util.HashMap;
 import java.util.Map;
 import static process.util.ProcessUtil.isNull;
@@ -39,15 +40,17 @@ public class EmailMessagesFactory {
     @Value("${app.mail.from:no-reply@etl-console.local}")
     private String sender;
 
-    private final JavaMailSender javaMailSender;
     private final VelocityManager velocityManager;
     private final LookupDataCacheService lookupDataCacheService;
     private final SourceJobRepository sourceJobRepository;
     /*
-     * javaMailSender is still here, but only to BUILD the message: createMimeMessage() plus
-     * MimeMessageHelper handle HTML, CC, UTF-8 and attachments correctly, and there is no
-     * reason to reimplement MIME. Delivery goes through the transport below.
+     * The message is BUILT here -- a bare JavaMail Session plus MimeMessageHelper handle HTML,
+     * CC, UTF-8 and attachments correctly, and there is no reason to reimplement MIME -- and
+     * delivered through the transport below. There used to be a JavaMailSender in between,
+     * used for nothing but createMimeMessage(); it went with the SMTP path, because Spring
+     * only builds one when spring.mail.host is set, and nothing sets that any more.
      */
+    private final Session mailSession = Session.getInstance(new Properties());
     private final MailTransport mailTransport;
 
     /**
@@ -63,12 +66,10 @@ public class EmailMessagesFactory {
         return this.mailTransport.deliversToRealInboxes();
     }
 
-    public EmailMessagesFactory(JavaMailSender javaMailSender,
-        VelocityManager velocityManager,
+    public EmailMessagesFactory(VelocityManager velocityManager,
         LookupDataCacheService lookupDataCacheService,
         SourceJobRepository sourceJobRepository,
         MailTransport mailTransport) {
-        this.javaMailSender = javaMailSender;
         this.velocityManager = velocityManager;
         this.lookupDataCacheService = lookupDataCacheService;
         this.sourceJobRepository = sourceJobRepository;
@@ -226,7 +227,7 @@ public class EmailMessagesFactory {
 
     private String sendSimpleMail(EmailMessageDto emailContent) {
         try {
-            MimeMessage mailMessage = this.javaMailSender.createMimeMessage();
+            MimeMessage mailMessage = new MimeMessage(this.mailSession);
             MimeMessageHelper helper = new MimeMessageHelper(mailMessage, emailContent.getAttachmentBytes() != null, UTF8);
             helper.setFrom(sender);
             if(!isNull(emailContent.getRecipients())) {

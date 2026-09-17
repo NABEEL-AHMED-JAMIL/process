@@ -10,9 +10,6 @@ import com.azure.storage.blob.models.BlobItem;
 import com.azure.storage.blob.models.BlobProperties;
 import com.azure.storage.blob.models.BlobRange;
 import com.azure.storage.blob.models.ListBlobsOptions;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 import process.model.dto.BrowseObjectsResponseDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
@@ -30,20 +27,14 @@ import java.util.stream.Collectors;
 /**
  * @author Nabeel Ahmed
  * */
-@Service("azureBlobObjectStorageService")
 public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
 
     private final Supplier<BlobServiceClient> blobServiceClientSupplier;
 
-    // @Autowired is required now that a second constructor exists -- with only one, Spring
-    // picks it implicitly, but with two it can't guess which is the injection point.
-    @Autowired
-    public AzureBlobObjectStorageServiceImpl(ObjectProvider<BlobServiceClient> blobServiceClientProvider) {
-        this.blobServiceClientSupplier = blobServiceClientProvider::getObject;
-    }
-
-    // Used by StorageClientFactory to bind this impl to one user-configured StorageConnection's
-    // own credentials, instead of the single global client the Spring bean above resolves to.
+    // Built by StorageClientFactory, bound to one storage connection's own credentials. There
+    // used to be a Spring bean beside this resolving to a single global client from
+    // AZURE_STORAGE_CONNECTION_STRING; that account is gone, so an Azure container is a
+    // connection somebody adds with its own connection string or account key, or it is nothing.
     public AzureBlobObjectStorageServiceImpl(BlobServiceClient blobServiceClient) {
         this.blobServiceClientSupplier = () -> blobServiceClient;
     }

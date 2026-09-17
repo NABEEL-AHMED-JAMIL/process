@@ -38,11 +38,12 @@ import static org.mockito.Mockito.when;
  *
  * @author Nabeel Ahmed
  */
-class OwnAvatarFolderGuardTest {
+public class OwnAvatarFolderGuardTest {
 
     private static final long TENANT_A = 1001L;
     private static final long USER_A = 61L;
     private static final String AVATAR_BUCKET = "etl-avatar";
+    private static final String CONFIG_BUCKET = "etl-config";
     private static final String OWN_FOLDER = USER_A + "/profile/";
 
     private final LookupDataCacheService lookupDataCacheService = mock(LookupDataCacheService.class);
@@ -57,8 +58,8 @@ class OwnAvatarFolderGuardTest {
     void setUp() {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
-            this.minio, mock(ObjectStorageService.class), mock(ObjectStorageService.class),
-            AVATAR_BUCKET);
+            this.minio,
+            AVATAR_BUCKET, CONFIG_BUCKET);
         StorageConnection platform = new StorageConnection();
         platform.setStorageConnectionId(700L);
         platform.setTenantId(null);

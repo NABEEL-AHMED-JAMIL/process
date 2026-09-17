@@ -34,14 +34,14 @@ import static process.util.ProcessUtil.SUCCESS;
  *
  * @author Nabeel Ahmed
  */
-class KafkaSecretUnreadableObjectTest {
+public class KafkaSecretUnreadableObjectTest {
 
     private static final Long OWNER = 1248L;
     private static final Long TENANT = 5L;
 
     private final StorageBrowserService storageBrowserService = mock(StorageBrowserService.class);
     private final KafkaSecretService service =
-        new KafkaSecretServiceImpl(this.storageBrowserService, mock(AppUserRepository.class), null);
+        new KafkaSecretServiceImpl(this.storageBrowserService, mock(AppUserRepository.class), null, "etl-config");
 
     private final String ownersKey =
         KafkaSecretPath.newUpload(OWNER, "ca.pem", LocalDate.of(2026, 8, 31)).key();

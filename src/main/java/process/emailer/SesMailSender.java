@@ -3,7 +3,6 @@ package process.emailer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -24,10 +23,12 @@ import java.net.URI;
  *
  * SMTP was pointed at a Mailtrap sandbox whose credentials no longer authenticate, so nothing
  * had actually been delivered for some time and the failure was invisible -- send errors are
- * caught and logged, and the health indicator for mail is switched off. Moving to the SDK
- * removes the credential pair entirely on deployed environments (the instance's own IAM role
- * signs the request) and, just as usefully, makes the path testable: LocalStack implements SES,
- * so a developer can send a real notification and read it back instead of trusting a log line.
+ * caught and logged. Moving to the SDK removes the credential pair entirely on deployed
+ * environments (the instance's own IAM role signs the request) and, just as usefully, makes the
+ * path testable: LocalStack implements SES, so a developer can send a real notification and read
+ * it back instead of trusting a log line. The SMTP transport was kept for a while as an opt-in
+ * escape hatch and is gone now: nothing used it, and the host, username and password it needed
+ * were four more variables in every environment for a path that was never switched on.
  *
  * SendRawEmail, not SendEmail: the raw form takes the MIME message we already build, so
  * attachments, CC and the HTML body survive the move untouched. SendEmail would have meant
@@ -36,7 +37,6 @@ import java.net.URI;
  * @author Nabeel Ahmed
  */
 @Component
-@ConditionalOnProperty(name = "app.mail.transport", havingValue = "ses", matchIfMissing = true)
 public class SesMailSender implements MailTransport {
 
     private static final Logger logger = LoggerFactory.getLogger(SesMailSender.class);
@@ -46,15 +46,20 @@ public class SesMailSender implements MailTransport {
     private final boolean emulated;
 
     public SesMailSender(
-        @Value("${app.mail.ses.region:us-east-1}") String region,
+        /*
+         * The one AWS identity the platform holds, shared with the platform bucket on S3: mail
+         * and pictures are both things the platform itself does, and two key pairs for one
+         * account were two things to rotate and two places to leak.
+         */
+        @Value("${aws.region:us-east-1}") String region,
         /*
          * Empty on a real deployment, where the default endpoint and the instance's IAM role
          * apply. Set to LocalStack's address for local work, which is the whole reason this is
          * configurable rather than fixed.
          */
-        @Value("${app.mail.ses.endpoint:}") String endpoint,
-        @Value("${app.mail.ses.access-key:}") String accessKey,
-        @Value("${app.mail.ses.secret-key:}") String secretKey) {
+        @Value("${aws.endpoint:}") String endpoint,
+        @Value("${aws.access-key:}") String accessKey,
+        @Value("${aws.secret-key:}") String secretKey) {
 
         SesClientBuilder builder = SesClient.builder().region(Region.of(region));
         if (endpoint != null && !endpoint.trim().isEmpty()) {

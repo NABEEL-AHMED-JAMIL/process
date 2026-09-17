@@ -48,12 +48,13 @@ import static org.mockito.Mockito.when;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-class StorageBrowserServiceImplTenantIsolationTest {
+public class StorageBrowserServiceImplTenantIsolationTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;
     private static final long USER_A = 61L;
     private static final String AVATAR_BUCKET = "etl-avatar";
+    private static final String CONFIG_BUCKET = "etl-config";
     private static final String PLATFORM_BUCKET = "etl-bucket";
     private static final String TENANT_BUCKET = "tenant-a-exports";
     private static final String LEGACY_BUCKET = "legacy-lookup-bucket";
@@ -65,11 +66,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
     @Mock
     private StorageClientFactory storageClientFactory;
     @Mock
-    private ObjectStorageService minioObjectStorageService;
-    @Mock
-    private ObjectStorageService s3ObjectStorageService;
-    @Mock
-    private ObjectStorageService azureBlobObjectStorageService;
+    private ObjectStorageService objectStorageService;
 
     private StorageBrowserServiceImpl service;
 
@@ -77,8 +74,8 @@ class StorageBrowserServiceImplTenantIsolationTest {
     void setUp() {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
-            this.minioObjectStorageService, this.s3ObjectStorageService, this.azureBlobObjectStorageService,
-            AVATAR_BUCKET);
+            this.objectStorageService,
+            AVATAR_BUCKET, CONFIG_BUCKET);
 
         // The guard resolves by alias alone. Matching only Active rows let a retired or
         // soft-deleted platform connection fall through to the legacy lookup path, where a tenant
@@ -93,7 +90,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
             .thenReturn(Optional.of(this.connection(TENANT_BUCKET, TENANT_A)));
         lenient().when(this.storageConnectionRepository.findByAliasAndStatus(TENANT_BUCKET, Status.Active))
             .thenReturn(Optional.of(this.connection(TENANT_BUCKET, TENANT_A)));
-        lenient().when(this.storageClientFactory.serviceFor(any())).thenReturn(this.minioObjectStorageService);
+        lenient().when(this.storageClientFactory.serviceFor(any())).thenReturn(this.objectStorageService);
     }
 
     @AfterEach
@@ -129,7 +126,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.deleteFolder(PLATFORM_BUCKET, "kafka-secrets/"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minioObjectStorageService, never()).deleteFolder(anyString(), anyString());
+        verify(this.objectStorageService, never()).deleteFolder(anyString(), anyString());
     }
 
     @Test
@@ -139,7 +136,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.renameFolder(AVATAR_BUCKET, "9/profile/", "mine"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minioObjectStorageService, never()).renameFolder(anyString(), anyString(), anyString());
+        verify(this.objectStorageService, never()).renameFolder(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -148,7 +145,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
 
         assertThatThrownBy(() -> this.service.deleteFolder(AVATAR_BUCKET, "9/profile/"))
             .isInstanceOf(IllegalArgumentException.class);
-        verify(this.minioObjectStorageService, never()).deleteFolder(anyString(), anyString());
+        verify(this.objectStorageService, never()).deleteFolder(anyString(), anyString());
     }
 
     @Test
@@ -158,7 +155,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.downloadObject(AVATAR_BUCKET, "9/profile/avatar.png", null, null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minioObjectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
+        verify(this.objectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -168,7 +165,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.downloadObject(PLATFORM_BUCKET, "document-converter/41/input.docx", null, null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minioObjectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
+        verify(this.objectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -179,8 +176,8 @@ class StorageBrowserServiceImplTenantIsolationTest {
             .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> this.service.listObjects(PLATFORM_BUCKET, "", null, 50))
             .isInstanceOf(IllegalArgumentException.class);
-        verify(this.minioObjectStorageService, never()).getObjectMetadata(anyString(), anyString());
-        verify(this.minioObjectStorageService, never()).listObjects(anyString(), anyString(), any(), anyInt());
+        verify(this.objectStorageService, never()).getObjectMetadata(anyString(), anyString());
+        verify(this.objectStorageService, never()).listObjects(anyString(), anyString(), any(), anyInt());
     }
 
     @Test
@@ -189,7 +186,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
 
         this.service.downloadObject(AVATAR_BUCKET, USER_A + "/profile/avatar.png", null, null);
 
-        verify(this.minioObjectStorageService)
+        verify(this.objectStorageService)
             .getObjectContent(AVATAR_BUCKET, USER_A + "/profile/avatar.png", null, null);
     }
 
@@ -200,7 +197,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.downloadObject(AVATAR_BUCKET, "12480/profile/avatar.png", null, null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minioObjectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
+        verify(this.objectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -217,7 +214,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
                 AVATAR_BUCKET, USER_A + "/profile/../9/profile/avatar.png"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Invalid key");
-        verifyNoInteractions(this.minioObjectStorageService);
+        verifyNoInteractions(this.objectStorageService);
     }
 
     @Test
@@ -227,7 +224,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.deleteObject(AVATAR_BUCKET, USER_A + "/profile/..\\9\\avatar.png"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Invalid key");
-        verifyNoInteractions(this.minioObjectStorageService);
+        verifyNoInteractions(this.objectStorageService);
     }
 
     @Test
@@ -248,7 +245,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.deleteObject(PLATFORM_BUCKET, USER_A + "/profile/avatar.png"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verifyNoInteractions(this.minioObjectStorageService);
+        verifyNoInteractions(this.objectStorageService);
     }
 
     @Test
@@ -258,8 +255,8 @@ class StorageBrowserServiceImplTenantIsolationTest {
         this.service.deleteFolder(PLATFORM_BUCKET, "kafka-secrets/");
         this.service.renameFolder(PLATFORM_BUCKET, "kafka-secrets/", "kafka-material");
 
-        verify(this.minioObjectStorageService).deleteFolder(PLATFORM_BUCKET, "kafka-secrets/");
-        verify(this.minioObjectStorageService).renameFolder(PLATFORM_BUCKET, "kafka-secrets/", "kafka-material/");
+        verify(this.objectStorageService).deleteFolder(PLATFORM_BUCKET, "kafka-secrets/");
+        verify(this.objectStorageService).renameFolder(PLATFORM_BUCKET, "kafka-secrets/", "kafka-material/");
     }
 
     @Test
@@ -270,7 +267,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         // and builds the key from it -- which is why this one is allowed where a browse is not.
         this.service.readForWorkflow(PLATFORM_BUCKET, "document-converter/41/input.docx");
 
-        verify(this.minioObjectStorageService)
+        verify(this.objectStorageService)
             .getObjectContent(PLATFORM_BUCKET, "document-converter/41/input.docx", null, null);
     }
 
@@ -281,8 +278,8 @@ class StorageBrowserServiceImplTenantIsolationTest {
         this.service.deleteFolder(TENANT_BUCKET, "exports/");
         this.service.deleteObjects(TENANT_BUCKET, Collections.singletonList("exports/run-1.csv"));
 
-        verify(this.minioObjectStorageService).deleteFolder(TENANT_BUCKET, "exports/");
-        verify(this.minioObjectStorageService).deleteObjects(eq(TENANT_BUCKET), any());
+        verify(this.objectStorageService).deleteFolder(TENANT_BUCKET, "exports/");
+        verify(this.objectStorageService).deleteObjects(eq(TENANT_BUCKET), any());
     }
 
     @Test
@@ -292,7 +289,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.deleteFolder(TENANT_BUCKET, "exports/"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minioObjectStorageService, never()).deleteFolder(anyString(), anyString());
+        verify(this.objectStorageService, never()).deleteFolder(anyString(), anyString());
     }
 
     @Test
@@ -302,7 +299,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.downloadObject(AVATAR_BUCKET, "61/profile/avatar.png", null, null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minioObjectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
+        verify(this.objectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -316,7 +313,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
 
         this.service.readForWorkflow(LEGACY_BUCKET, "kafka-secrets/2024/truststore.p12");
 
-        verify(this.minioObjectStorageService)
+        verify(this.objectStorageService)
             .getObjectContent(LEGACY_BUCKET, "kafka-secrets/2024/truststore.p12", null, null);
     }
 
@@ -328,7 +325,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.downloadObject(LEGACY_BUCKET, "exports/run-1.csv", null, null))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unknown bucket");
-        verify(this.minioObjectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
+        verify(this.objectStorageService, never()).getObjectContent(anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -342,7 +339,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.uploadObject(TENANT_BUCKET, "exports/", file))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Invalid key");
-        verify(this.minioObjectStorageService, never())
+        verify(this.objectStorageService, never())
             .uploadObject(anyString(), anyString(), any(), anyLong(), any());
     }
 
@@ -355,7 +352,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         assertThatThrownBy(() -> this.service.uploadObject(TENANT_BUCKET, "exports/", nameless))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("no name");
-        verifyNoInteractions(this.minioObjectStorageService);
+        verifyNoInteractions(this.objectStorageService);
     }
 
     /** A bucket that exists only as a BUCKET_LIST lookup row, stamped with the default tenant. */
@@ -363,7 +360,7 @@ class StorageBrowserServiceImplTenantIsolationTest {
         LookupDataDto child = new LookupDataDto();
         child.setLookupType("Legacy bucket");
         child.setLookupValue(LEGACY_BUCKET);
-        child.setDescription("MINIO");
+        child.setDescription("S3");
         child.setTenantId(TENANT_A);
         LookupDataDto parent = new LookupDataDto();
         parent.setLookupValue("BUCKET_LIST");

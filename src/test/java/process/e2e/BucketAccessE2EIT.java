@@ -20,9 +20,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * The two default buckets -- etl-avatar and etl-bucket -- driven over real HTTP.
+ * The two platform buckets -- etl-avatar and etl-config -- driven over real HTTP.
  *
- * These two belong to the platform, not to any tenant: etl-bucket holds every tenant's Kafka key
+ * Both belong to the platform, not to any tenant: etl-config holds every tenant's Kafka key
  * material under kafka-secrets/{userid}/{uuid}/{date}/, and etl-avatar holds every user's picture.
  * The owner's rule is that only a PLATFORM_ADMIN manages them, with one deliberate hole punched
  * through it -- anybody may put their own picture and their own truststore in. A hole that size is
@@ -42,10 +42,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * @author Nabeel Ahmed
  * */
-class BucketAccessE2EIT extends E2ESupport {
+public class BucketAccessE2EIT extends E2ESupport {
 
-    /** Named by the owner's rule, and by KafkaSecretService.SECRET_BUCKET, as a shipped default. */
-    private static final String KAFKA_BUCKET = "etl-bucket";
+    /** Named by the owner's rule, and by KafkaSecretService.secretBucket(), as a shipped default. */
+    private static final String KAFKA_BUCKET = "etl-config";
 
     /** A plausible Kafka secret key: the folder a tenant user's own truststore would land in. */
     private static final String KAFKA_SECRET_FOLDER = "kafka-secrets/";
@@ -537,13 +537,13 @@ class BucketAccessE2EIT extends E2ESupport {
             .andReturn().getResponse().getContentAsString();
         assertThat(platform)
             .as("the platform's two connections have to exist for hiding them to mean anything")
-            .contains("etl-avatar").contains("etl-bucket");
+            .contains("etl-avatar").contains("etl-config");
 
         String body = this.mvc.perform(this.getAs(admin, "/storageConnection.json/fetchAllConnections"))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
 
-        assertThat(body).doesNotContain("etl-avatar").doesNotContain("etl-bucket");
+        assertThat(body).doesNotContain("etl-avatar").doesNotContain("etl-config");
     }
 
     @Test
@@ -563,7 +563,7 @@ class BucketAccessE2EIT extends E2ESupport {
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
 
-        assertThat(body).contains("etl-avatar").contains("etl-bucket");
+        assertThat(body).contains("etl-avatar").contains("etl-config");
     }
 
 

@@ -51,7 +51,7 @@ import static process.util.ProcessUtil.SUCCESS;
  * opens the resulting store the way a Kafka client would: same password, same declared type. If it
  * opens and holds what it should, the feature works.
  */
-class KafkaCertificateWorkflowTest {
+public class KafkaCertificateWorkflowTest {
 
     private static final Long UPLOADER = 1248L;
     private static final Long TENANT = 5L;
@@ -82,7 +82,7 @@ class KafkaCertificateWorkflowTest {
             Base64.getEncoder().encodeToString(generator.generateKey().getEncoded()));
 
         AppUserRepository users = mock(AppUserRepository.class);
-        this.service = new KafkaSecretServiceImpl(storage, users, this.encryptionUtil);
+        this.service = new KafkaSecretServiceImpl(storage, users, this.encryptionUtil, "etl-config");
         ReflectionTestUtils.setField(this.service, "maxFileSizeKb", 512);
 
         TenantContext.set(TENANT, "TENANT_ADMIN", UPLOADER, "admin@tenant.example");
@@ -135,7 +135,7 @@ class KafkaCertificateWorkflowTest {
         assertThat(uploaded.getObjectKey())
             .startsWith("kafka-secrets/" + UPLOADER + "/")
             .endsWith("/ca.pem");
-        assertThat(uploaded.getBucket()).isEqualTo(KafkaSecretService.SECRET_BUCKET);
+        assertThat(uploaded.getBucket()).isEqualTo("etl-config");
         // What the person uploading needs in order to tell production from staging.
         assertThat(uploaded.getSubject()).isEqualTo("Test Root CA");
         assertThat(uploaded.getIssuer()).isEqualTo("Test Root CA");

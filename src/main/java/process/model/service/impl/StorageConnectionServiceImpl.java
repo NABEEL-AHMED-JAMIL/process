@@ -16,7 +16,6 @@ import process.model.pojo.KafkaConnectionProfile;
 import process.model.pojo.StorageConnection;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.StorageConnectionRepository;
-import process.model.service.KafkaSecretService;
 import process.model.service.ObjectStorageService;
 import process.model.service.StorageConnectionService;
 import process.security.TenantContext;
@@ -51,9 +50,12 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
      */
     static final String ALIAS_UNAVAILABLE = "That alias isn't available. Choose another.";
 
-    /** The same property StorageBrowserServiceImpl guards the avatar bucket by. */
+    /** The same properties StorageBrowserServiceImpl guards the platform buckets by. */
     @Value(StoragePropertyDefaults.AVATAR_BUCKET)
     private String avatarBucket;
+
+    @Value(StoragePropertyDefaults.CONFIG_BUCKET)
+    private String configBucket;
 
     private final StorageConnectionRepository storageConnectionRepository;
     private final StorageClientFactory storageClientFactory;
@@ -129,16 +131,16 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
     /**
      * The aliases nobody but a platform admin may claim.
      *
-     * Neither default bucket ships as a connection row -- etl-bucket is a BUCKET_LIST lookup
-     * entry, etl-avatar only a property -- so the name was free for a tenant admin to take. The
-     * object browser refuses those two buckets to a tenant by name, so such a connection could
-     * never be opened from the console; but the trusted workflow paths resolve a bucket by alias
-     * alone, and would have found it, quietly writing every Kafka store and every user's picture
-     * into storage whose credentials that tenant holds.
+     * The platform buckets are seeded as connection rows on first boot, but a boot that could not
+     * seed them (no AWS identity yet) leaves the names free for a tenant admin to take. The object
+     * browser refuses those buckets to a tenant by name, so such a connection could never be
+     * opened from the console; but the trusted workflow paths resolve a bucket by alias alone, and
+     * would have found it, quietly writing every Kafka store or every user's picture into storage
+     * whose credentials that tenant holds.
      */
     private boolean isReservedAlias(String alias) {
-        return KafkaSecretService.SECRET_BUCKET.equals(alias)
-            || (this.avatarBucket != null && this.avatarBucket.equals(alias));
+        return (this.avatarBucket != null && this.avatarBucket.equals(alias))
+            || (this.configBucket != null && this.configBucket.equals(alias));
     }
 
     /**
@@ -146,7 +148,7 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
      *
      * On Objects.equals alone a caller carrying no tenant of its own -- a token minted without the
      * claim, a role changed out from under the row -- matched every platform-owned connection,
-     * because null equals null. Among those rows are etl-avatar and etl-bucket, and owning one is
+     * because null equals null. Among those rows are the platform buckets, and owning one is
      * being able to repoint the endpoint and credentials that every profile picture and every
      * Kafka certificate is written through. TenantOwnership refuses a tenant-less caller, which
      * is the same answer StorageBrowserServiceImpl.belongsToCaller already gives the bucket list.
@@ -351,7 +353,7 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         // Filtered here as well as by the ORM, and this is not belt and braces: StorageConnection's
         // tenantFilter admits the platform's own rows (tenant_id null) so that the avatar and Kafka
-        // workflows can resolve etl-avatar and etl-bucket by alias. That makes the filter alone the
+        // workflows can resolve the platform buckets by alias. That makes the filter alone the
         // wrong answer for a listing -- every tenant was shown the platform's two connections on
         // the storage screen. isOwnedByCaller is the same rule listBuckets already applies.
         List<StorageConnection> connections =

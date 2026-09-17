@@ -10,7 +10,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import process.model.enums.Status;
-import process.model.service.KafkaSecretService;
 import process.model.enums.StorageProvider;
 import process.model.pojo.LookupData;
 import process.model.pojo.StorageConnection;
@@ -52,21 +51,33 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
     /** Each step gets its own transaction, so the catch in run() sees the commit; see run(). */
     private final TransactionTemplate transactionTemplate;
 
-    @Value("${minio.endpoint:}")
-    private String minioEndpoint;
+    /**
+     * The platform's own AWS identity -- the pair SES signs with. What the platform bucket is
+     * created with, so that one set of keys covers everything the platform itself does on AWS.
+     */
+    @Value("${aws.region:us-east-1}")
+    private String awsRegion;
 
-    @Value("${minio.access-key:}")
-    private String minioAccessKey;
+    @Value("${aws.endpoint:}")
+    private String awsEndpoint;
 
-    @Value("${minio.secret-key:}")
-    private String minioSecretKey;
+    @Value("${aws.access-key:}")
+    private String awsAccessKey;
 
-    @Value("${azure.storage.connection-string:}")
-    private String azureConnectionString;
+    @Value("${aws.secret-key:}")
+    private String awsSecretKey;
+
+    /** Whether a key-less platform connection may borrow the instance role; mirrors StorageClientFactory. */
+    @Value("${storage.allow-instance-role:false}")
+    private boolean allowInstanceRole;
 
     /** Where profile pictures live. Platform-owned, so it carries no tenant. */
     @Value(StoragePropertyDefaults.AVATAR_BUCKET)
     private String avatarBucket;
+
+    /** Where Kafka key material lives, under kafka-secrets/. Platform-owned likewise. */
+    @Value(StoragePropertyDefaults.CONFIG_BUCKET)
+    private String configBucket;
 
     public StorageConnectionBootstrap(LookupDataRepository lookupDataRepository,
         StorageConnectionRepository storageConnectionRepository,
@@ -116,61 +127,68 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
     /**
      * Creates the two buckets the application itself depends on, when they are missing.
      *
-     * These are not a migration of anything -- they are the platform's own storage, named in the
-     * requirements as the two defaults, and nothing else creates them. Until now they existed only
-     * because somebody had inserted them by hand: on a freshly migrated database there was no
-     * storage_connection for either, so the first avatar upload and the first Kafka certificate
-     * upload both failed with "Unknown bucket", and the platform-bucket guard had no row to
-     * recognise and so protected nothing.
+     * Not a migration of anything -- they are the platform's own storage, and nothing else
+     * creates them. Profile pictures go in one, Kafka key material in the other: the pictures
+     * are something every user reaches one object of, the key material is something no tenant
+     * reaches at all, and keeping them apart keeps the guard on each simple. Everything else a
+     * workspace stores goes in a connection it adds itself from Settings > Storage.
+     *
+     * On S3, with the platform's shared aws.* identity: the same pair SES signs with, and on a
+     * deployment whose instance role covers the buckets, no keys at all. Until now they were
+     * seeded on MinIO from a second set of environment variables that no longer exist.
      *
      * Owned by the platform, meaning tenant_id stays null. That is what makes
      * StorageBrowserServiceImpl treat them as platform buckets: only a PLATFORM_ADMIN may browse
      * them, while everyone else reaches them through the avatar and Kafka workflows alone.
      *
-     * Only ever creates what is absent, so an installation that has already configured either one
-     * -- pointed it at real S3, given it different credentials -- keeps exactly what it has.
+     * Only ever creates what is absent, so an installation that has already configured either
+     * -- pointed it at a different bucket, given it different credentials -- keeps exactly what
+     * it has.
      */
     private void ensureDefaultBuckets() {
-        String secretBucket = KafkaSecretService.SECRET_BUCKET;
-        // Verbatim: StoragePropertyDefaults.AVATAR_BUCKET has already trimmed it and supplied the
-        // default for a blank one, and it is the same expression the guard and the uploader read,
-        // so the row created here is named what they ask for. Normalising a second time here is
-        // how the two came to disagree in the first place.
-        this.ensurePlatformBucket(this.avatarBucket,
-            "ETL Avatars", "Profile pictures. Each user owns the folder under their own id.");
-        this.ensurePlatformBucket(secretBucket, "ETL Bucket",
-            "Application storage, including Kafka certificates under kafka-secrets/.");
+        // Verbatim: StoragePropertyDefaults has already trimmed each and supplied the default for
+        // a blank one, and they are the same expressions the guard and the uploaders read, so the
+        // rows created here are named what they ask for. Normalising a second time here is how
+        // the two came to disagree in the first place.
+        this.ensurePlatformBucket(this.avatarBucket, "ETL Avatars",
+            "Profile pictures. Each user owns the folder under their own id.");
+        this.ensurePlatformBucket(this.configBucket, "ETL Config",
+            "Platform configuration: Kafka certificates and the stores built from them, under kafka-secrets/.");
     }
 
     private void ensurePlatformBucket(String alias, String connectionName, String description) {
         if (this.storageConnectionRepository.findByAlias(alias).isPresent()) {
             return;
         }
-        if (this.isBlank(this.minioEndpoint)) {
-            // Left for the operator rather than guessed at: a connection pointing nowhere would
-            // look configured and fail at the first upload, which is worse than being absent.
-            logger.warn("Default bucket '{}' has no storage connection and MINIO_ENDPOINT is not "
-                + "set, so one cannot be created. Avatar and Kafka certificate uploads will fail "
-                + "until a connection for it exists.", alias);
+        boolean hasKeys = !this.isBlank(this.awsAccessKey) && !this.isBlank(this.awsSecretKey);
+        if (!hasKeys && !this.allowInstanceRole) {
+            // Left for the operator rather than guessed at: a connection with no way to sign a
+            // request would look configured and fail at the first upload, which is worse than
+            // being absent.
+            logger.warn("Default bucket '{}' has no storage connection and neither AWS_ACCESS_KEY/"
+                + "AWS_SECRET_KEY nor STORAGE_ALLOW_INSTANCE_ROLE is set, so one cannot be created. "
+                + "Uploads to it will fail until a connection for it exists.", alias);
             return;
         }
         StorageConnection connection = new StorageConnection();
         connection.setTenantId(null);
         connection.setConnectionName(connectionName);
         connection.setAlias(alias);
-        connection.setProvider(StorageProvider.MINIO);
+        connection.setProvider(StorageProvider.S3);
         connection.setBucketName(alias);
         connection.setDescription(description);
         connection.setStatus(Status.Active);
         connection.setConnectionStatus("UNTESTED");
         connection.setDateCreated(new Timestamp(System.currentTimeMillis()));
-        connection.setEndpoint(this.minioEndpoint.trim());
-        connection.setAccessKey(this.trimToNull(this.minioAccessKey));
-        if (!this.isBlank(this.minioSecretKey)) {
-            connection.setSecretKeyEnc(this.encryptionUtil.encrypt(this.minioSecretKey.trim()));
+        connection.setRegion(this.trimToNull(this.awsRegion));
+        connection.setEndpoint(this.trimToNull(this.awsEndpoint));
+        if (hasKeys) {
+            connection.setAccessKey(this.awsAccessKey.trim());
+            connection.setSecretKeyEnc(this.encryptionUtil.encrypt(this.awsSecretKey.trim()));
         }
         this.storageConnectionRepository.save(connection);
-        logger.info("Created the default platform storage connection '{}'.", alias);
+        logger.info("Created the default platform storage connection '{}' on S3{}.", alias,
+            hasKeys ? "" : " (no keys: signing with the instance role)");
     }
 
 
@@ -224,8 +242,8 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
      * wins depends on the order the children come back in. Nothing else reports that, and the
      * skip above is otherwise indistinguishable from an ordinary already-migrated re-run.
      *
-     * A platform-owned row is not a collision: etl-bucket ships as a lookup entry and is meant to
-     * be taken over by the default seeded above.
+     * A platform-owned row is not a collision: a lookup entry naming the platform bucket is meant
+     * to be taken over by the default seeded above.
      */
     private void warnIfAnotherTenantHoldsTheAlias(StorageConnection existing, LookupData child, String alias) {
         if (existing.getTenantId() == null || child.getTenantId() == null
@@ -265,28 +283,21 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
 
         switch (provider) {
             case MINIO:
-                if (this.isBlank(this.minioEndpoint)) {
-                    logger.warn("Skipping bucket '{}': MINIO_ENDPOINT isn't configured, so there is "
-                        + "nothing to migrate into a connection.", alias);
-                    return null;
-                }
-                connection.setEndpoint(this.minioEndpoint.trim());
-                connection.setAccessKey(this.trimToNull(this.minioAccessKey));
-                if (!this.isBlank(this.minioSecretKey)) {
-                    connection.setSecretKeyEnc(this.encryptionUtil.encrypt(this.minioSecretKey.trim()));
-                }
-                return connection;
+                // There is no global MinIO account any more to copy an endpoint and keys from;
+                // a MinIO bucket is a connection somebody adds with its own credentials.
+                logger.warn("Skipping bucket '{}': a MinIO bucket has to be added as a storage "
+                    + "connection from Settings > Storage, with its own endpoint and keys.", alias);
+                return null;
             case AZURE:
-                if (!this.isBlank(this.azureConnectionString)) {
-                    connection.setAzureConnectionStringEnc(
-                        this.encryptionUtil.encrypt(this.azureConnectionString.trim()));
-                }
-                return connection;
+                // Likewise: no global Azure account to copy a connection string from.
+                logger.warn("Skipping bucket '{}': an Azure container has to be added as a storage "
+                    + "connection from Settings > Storage, with its own connection string or account key.", alias);
+                return null;
             case S3:
                 // Nothing to copy: the S3 client falls back to the AWS SDK's default provider
                 // chain (env vars, profile, or the host's IAM role) when no keys are stored,
                 // which is exactly the behaviour these buckets already had.
-                connection.setRegion(this.trimToNull(System.getenv("AWS_DEFAULT_REGION")));
+                connection.setRegion(this.trimToNull(this.awsRegion));
                 return connection;
             default:
                 // FTP/FTPS never existed as a BUCKET_LIST provider, so there is no env-based

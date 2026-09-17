@@ -17,7 +17,6 @@ import process.model.enums.KafkaSecretKind;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
-import process.model.service.KafkaSecretService;
 import process.model.service.impl.StorageBrowserServiceImpl;
 import process.util.SelfSignedCertificate;
 
@@ -54,7 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Two things stand in for infrastructure, and neither is on the path any of these assertions
  * turn on:
  *
- * The object store. etl-bucket resolves through a storage_connection row that points at a MinIO
+ * The object store. etl-config (the platform's config bucket) resolves through a storage_connection row that points at a MinIO
  * the test JVM cannot reach, and -- more to the point -- an object written to a real bucket is
  * not covered by the transaction that rolls this test back, so a suite that uploads certificates
  * would leave a folder of them behind on every run. The bucket is a map here, on the same terms
@@ -75,7 +74,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * @author Nabeel Ahmed
  * */
-class KafkaSecretE2EIT extends E2ESupport {
+public class KafkaSecretE2EIT extends E2ESupport {
 
     /** The shape the requirement names: kafka-secrets/{userid}/{uuid}/{date}/anyfile. */
     private static final String KEY_SHAPE = "kafka-secrets/%d/[0-9a-f-]{36}/\\d{4}-\\d{2}-\\d{2}/%s";
@@ -122,7 +121,7 @@ class KafkaSecretE2EIT extends E2ESupport {
                 KafkaSecretKind.CA_CERTIFICATE))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("SUCCESS"))
-            .andExpect(jsonPath("$.data.bucket").value(KafkaSecretService.SECRET_BUCKET))
+            .andExpect(jsonPath("$.data.bucket").value("etl-config"))
             // What the console shows so somebody can tell production from staging without keytool.
             .andExpect(jsonPath("$.data.subject").value("Production Root CA"))
             .andExpect(jsonPath("$.data.issuer").value("Production Root CA"))
@@ -178,7 +177,7 @@ class KafkaSecretE2EIT extends E2ESupport {
         dto.setProfileName(profileName);
         dto.setBootstrapServers("broker.kafka.example:9093");
         dto.setSecurityProtocol("SSL");
-        dto.setSslTruststoreBucket(KafkaSecretService.SECRET_BUCKET);
+        dto.setSslTruststoreBucket("etl-config");
         dto.setSslTruststoreLocation(this.text(truststore, "$.data.objectKey"));
         // Handed back exactly as the server gave it: the store was built in an earlier request and
         // its password must not travel in the clear between the two.
@@ -250,7 +249,7 @@ class KafkaSecretE2EIT extends E2ESupport {
         dto.setProfileName(profileName);
         dto.setBootstrapServers("broker.kafka.example:9093");
         dto.setSecurityProtocol("SSL");
-        dto.setSslTruststoreBucket(KafkaSecretService.SECRET_BUCKET);
+        dto.setSslTruststoreBucket("etl-config");
         dto.setSslTruststoreLocation(this.text(truststore, "$.data.objectKey"));
         dto.setSslTruststorePasswordEnc(this.text(truststore, "$.data.storePasswordEnc"));
 
