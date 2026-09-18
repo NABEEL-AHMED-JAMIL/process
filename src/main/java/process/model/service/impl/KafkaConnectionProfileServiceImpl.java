@@ -631,7 +631,10 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
 
     private void applyProfileDto(KafkaConnectionProfile profile, KafkaConnectionProfileDto dto) {
         profile.setProfileName(dto.getProfileName());
-        profile.setEnvironmentLabel(dto.getEnvironmentLabel());
+        // One spelling per environment: the console filters and colours on the exact key
+        // (local, dev, test, stage, prod), and "Prod " and "prod" must not be two environments.
+        String environment = dto.getEnvironmentLabel() == null ? null : dto.getEnvironmentLabel().trim().toLowerCase();
+        profile.setEnvironmentLabel(environment == null || environment.isEmpty() ? null : environment);
         profile.setBootstrapServers(dto.getBootstrapServers());
         profile.setSecurityProtocol(dto.getSecurityProtocol());
         profile.setSaslMechanism(dto.getSaslMechanism());
