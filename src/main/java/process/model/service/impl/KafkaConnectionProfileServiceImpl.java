@@ -372,11 +372,30 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
 
     @Override
     public ResponseDto testTopicConnection(String topicName) throws Exception {
+        return this.testTopicConnection(topicName, null);
+    }
+
+    /**
+     * Describes the topic on a cluster: the named profile when one is given -- a topic listed
+     * under a profile is tested on THAT profile, not on whatever the caller's default happens
+     * to be -- else the profile that resolves for the caller. A profile the caller cannot see
+     * reads as not found, the same as everywhere else on this service.
+     */
+    @Override
+    public ResponseDto testTopicConnection(String topicName, Long kafkaConnectionProfileId) throws Exception {
         if (isNull(topicName) || topicName.trim().isEmpty()) {
             return new ResponseDto(ERROR, "Topic name missing.");
         }
-        Long tenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
-        Optional<KafkaConnectionProfile> resolved = this.kafkaConnectionResolver.resolve(tenantId, null);
+        Optional<KafkaConnectionProfile> resolved;
+        if (!isNull(kafkaConnectionProfileId)) {
+            resolved = this.scopedFind(kafkaConnectionProfileId);
+            if (!resolved.isPresent()) {
+                return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
+            }
+        } else {
+            Long tenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
+            resolved = this.kafkaConnectionResolver.resolve(tenantId, null);
+        }
         Map<String, Object> adminProps = resolved.map(this.kafkaTemplateProvider::commonClientProps)
             .orElseGet(this.kafkaTemplateProvider::defaultAdminProps);
         try (AdminClient adminClient = AdminClient.create(adminProps)) {

@@ -99,9 +99,10 @@ public class KafkaConnectionProfileRestApi {
     }
 
     @RequestMapping(value = "/testTopic", method = RequestMethod.GET)
-    public ResponseEntity<?> testTopic(@RequestParam String topicName) {
+    public ResponseEntity<?> testTopic(@RequestParam String topicName,
+        @RequestParam(required = false) Long kafkaConnectionProfileId) {
         try {
-            return new ResponseEntity<>(this.kafkaConnectionProfileService.testTopicConnection(topicName), HttpStatus.OK);
+            return new ResponseEntity<>(this.kafkaConnectionProfileService.testTopicConnection(topicName, kafkaConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while testTopic ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

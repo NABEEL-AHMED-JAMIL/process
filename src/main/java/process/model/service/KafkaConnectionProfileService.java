@@ -24,4 +24,7 @@ public interface KafkaConnectionProfileService {
 
     public ResponseDto testTopicConnection(String topicName) throws Exception;
 
+    /** The same check against one named profile, for a topic listed under that profile's pane. */
+    public ResponseDto testTopicConnection(String topicName, Long kafkaConnectionProfileId) throws Exception;
+
 }

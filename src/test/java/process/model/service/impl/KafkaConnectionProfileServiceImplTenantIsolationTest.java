@@ -543,6 +543,20 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         assertThat(response.getMessage()).contains("the detail is in the server log");
     }
 
+    /** A topic listed under another tenant's profile cannot be tested on it: the profile reads as not found. */
+    @Test
+    void theTopicTestOnANamedProfileIsScopedToTheCaller() throws Exception {
+        KafkaConnectionProfile theirs = this.profileOwnedBy(TENANT_B);
+        when(this.profileRepository.findById(theirs.getKafkaConnectionProfileId())).thenReturn(Optional.of(theirs));
+
+        this.actAsTenant(TENANT_A);
+        ResponseDto response = this.service.testTopicConnection("orders-in", theirs.getKafkaConnectionProfileId());
+
+        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getMessage()).contains("Profile not found");
+        verify(this.kafkaConnectionResolver, never()).resolve(any(), any());
+    }
+
     @Test
     void aBootstrapListThatIsNotHostPortIsRefused() throws Exception {
         KafkaConnectionProfileDto dto = new KafkaConnectionProfileDto();
