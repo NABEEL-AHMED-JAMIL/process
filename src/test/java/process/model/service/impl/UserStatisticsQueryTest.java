@@ -105,6 +105,18 @@ public class UserStatisticsQueryTest {
     }
 
     @Test
+    @DisplayName("skipped and missed runs are report rows too, dated by when they were due")
+    void skippedAndMissedRunsAreIncluded() {
+        String sql = queryService.runReportRows("2026-09-01", "2026-09-30");
+        // Skip and Missed rows carry skip_time and no start_time; a filter on start_time alone
+        // made a task skipped six times look like six fewer runs.
+        assertTrue(sql.contains("where (q.start_time is not null or q.skip_time is not null)"), sql);
+        assertFalse(sql.contains("where q.start_time is not null and"), sql);
+        assertTrue(sql.contains("date(coalesce(q.start_time, q.skip_time)) between '2026-09-01' and '2026-09-30'"), sql);
+        assertTrue(sql.contains("to_char(coalesce(q.start_time, q.skip_time), 'YYYY-MM-DD') as day"), sql);
+    }
+
+    @Test
     @DisplayName("a run with no end time reports -1 rather than a duration of zero")
     void unfinishedRunsAreNotZero() {
         String sql = queryService.runReportRows(null, null);

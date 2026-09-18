@@ -290,11 +290,18 @@ public class QueryService {
      */
     public String runReportRows(String startDate, String endDate) {
 
-        String dateFilter = this.dateRangeFilter("q.start_time", startDate, endDate);
+        /*
+         * A run that never started still happened to the schedule. Skip and Missed rows carry
+         * skip_time and no start_time (BulkAction.createJobQueue), so a filter on start_time
+         * alone dropped them and the report could not say that a task was skipped six times
+         * this week -- it simply showed six fewer runs. The moment a run belongs to the day is
+         * whichever of the two the engine stamped.
+         */
+        String dateFilter = this.dateRangeFilter("coalesce(q.start_time, q.skip_time)", startDate, endDate);
         return "select coalesce(st.task_name, '(no task)') as task, "
             + "q.job_status as status, "
             + "coalesce(u.full_name, u.username, 'Unassigned') as owner, "
-            + "to_char(q.start_time, 'YYYY-MM-DD') as day, "
+            + "to_char(coalesce(q.start_time, q.skip_time), 'YYYY-MM-DD') as day, "
             + "case when q.end_time is null then -1 "
             + "else round(extract(epoch from (q.end_time - q.start_time))) end as seconds, "
             + "sj.job_name as job, q.job_queue_id as run_id, "
@@ -338,7 +345,8 @@ public class QueryService {
             // A deleted job's runs are not history any more, and every other statistic here
             // already leaves them out -- a report that counted them would disagree with the
             // dashboard beside it, on the same data.
-            + "where q.start_time is not null and upper(sj.job_status) <> 'DELETE' "
+            + "where (q.start_time is not null or q.skip_time is not null) "
+            + "and upper(sj.job_status) <> 'DELETE' "
             + dateFilter + this.tenantClause("sj")
             + "order by q.job_queue_id desc";
     }
