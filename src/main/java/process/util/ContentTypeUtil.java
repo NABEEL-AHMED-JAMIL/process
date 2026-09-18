@@ -121,6 +121,15 @@ public final class ContentTypeUtil {
         return dot >= 0 && dot < key.length() - 1 ? key.substring(dot + 1).toLowerCase() : "";
     }
 
+    /** The last path segment: what a person calls the file. */
+    public static String fileNameOf(String key) {
+        if (key == null) {
+            return "";
+        }
+        int slash = key.lastIndexOf('/');
+        return slash >= 0 ? key.substring(slash + 1) : key;
+    }
+
     public static String contentTypeFor(String key) {
         String contentType = EXTENSION_CONTENT_TYPES.get(extensionOf(key));
         return contentType != null ? contentType : "application/octet-stream";

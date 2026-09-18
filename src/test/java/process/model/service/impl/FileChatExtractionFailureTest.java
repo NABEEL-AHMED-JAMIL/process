@@ -145,4 +145,29 @@ public class FileChatExtractionFailureTest {
             .contains("readable content")
             .contains("jpg");
     }
+
+    /**
+     * A file that read fine and held nothing is not an unsupported format. The whisper step a
+     * worker runs on a test tone writes a zero-byte transcript, and "Couldn't get any readable
+     * content out of this .txt file" sent the reader looking for a format problem.
+     */
+    @Test
+    void anEmptyFileIsReportedAsEmptyNotAsUnreadable() throws Exception {
+        lenient().when(this.openSearchRagClient.isEnabled()).thenReturn(false);
+        // The fixture's key is a .jpg, which is read through the agent-aware overload.
+        lenient().when(this.fileChatExtractionService.extractText(eq(BUCKET), eq(KEY), eq(ETAG), any(), any()))
+            .thenReturn("  \n");
+
+        ResponseDto response = this.service.prepareContext(BUCKET, KEY, AGENT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(response.getMessage()).contains("is empty").doesNotContain("readable content");
+
+        // And the literal empty string, which ProcessUtil.isNull treats as null -- the reason a
+        // zero-byte object was still being called unreadable after the branch above existed.
+        lenient().when(this.fileChatExtractionService.extractText(eq(BUCKET), eq(KEY), eq(ETAG), any(), any()))
+            .thenReturn("");
+        ResponseDto again = this.service.prepareContext(BUCKET, KEY, AGENT_ID);
+        assertThat(again.getMessage()).contains("is empty");
+    }
 }

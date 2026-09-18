@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -417,6 +418,45 @@ public class FileChatExtractionServiceImplTest {
             document.save(out);
             return out.toByteArray();
         }
+    }
+
+    /**
+     * A worker's .log is plain text and reads as itself. It used to fall through to the document
+     * converter -- which has no "log" family -- and come back as "no readable content", which is
+     * the one answer a 216-byte text file cannot honestly be given. Same for the other plain
+     * formats an ETL bucket fills up with.
+     */
+    @Test
+    void plainTextFormatsWithoutAConverterFamilyAreReadAsThemselves() throws Exception {
+        for (String name : new String[] {"worker.log", "rates.tsv", "config.yaml", "events.jsonl", "app.properties"}) {
+            byte[] bytes = ("line one of " + name + "\nline two").getBytes(StandardCharsets.UTF_8);
+            when(this.storageBrowserService.downloadObject(BUCKET, name, null, null))
+                .thenAnswer(invocation -> new ObjectContentDto(new ByteArrayInputStream(bytes),
+                    "text/plain", bytes.length, name));
+            FileChatExtractionServiceImpl service = new FileChatExtractionServiceImpl(
+                this.storageBrowserService, this.audioTranscriptService,
+                this.documentConverter, this.documentFormatRegistry);
+            ReflectionTestUtils.setField(service, "cacheManager", this.cacheManager);
+
+            assertThat(service.extractText(BUCKET, name, "etag-" + name))
+                .as(name + " should be read as text")
+                .isEqualTo("line one of " + name + "\nline two");
+        }
+        verifyNoInteractions(this.documentConverter);
+    }
+
+    /** A zero-byte text object reads as "", never as null: null means "no reader for this type". */
+    @Test
+    void anEmptyTextFileReadsAsEmptyNotAsUnsupported() throws Exception {
+        byte[] none = new byte[0];
+        when(this.storageBrowserService.downloadObject(BUCKET, "tone.txt", null, null))
+            .thenAnswer(invocation -> new ObjectContentDto(new ByteArrayInputStream(none), "text/plain", 0L, "tone.txt"));
+        FileChatExtractionServiceImpl service = new FileChatExtractionServiceImpl(
+            this.storageBrowserService, this.audioTranscriptService,
+            this.documentConverter, this.documentFormatRegistry);
+        ReflectionTestUtils.setField(service, "cacheManager", this.cacheManager);
+
+        assertThat(service.extractText(BUCKET, "tone.txt", "etag-empty")).isEqualTo("");
     }
 
     private FileChatExtractionServiceImpl service(byte[] pdfBytes, String ollamaBaseUrl) throws Exception {

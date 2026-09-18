@@ -784,8 +784,18 @@ public class FileChatServiceImpl implements FileChatService {
                         ? this.fileChatExtractionService.extractText(
                             bucket, key, etag, visionModel, visionInstructions)
                         : this.fileChatExtractionService.extractText(bucket, key, etag);
-                    if (isNull(extracted) || extracted.trim().isEmpty()) {
+                    // == null, not ProcessUtil.isNull: that one is true for "" as well, and an
+                    // empty file is the case the next branch exists to name.
+                    if (extracted == null) {
                         throw new UnsupportedFileTypeException(this.unsupportedMessage(key));
+                    }
+                    if (extracted.trim().isEmpty()) {
+                        // Read fine, and there was nothing in it: a zero-byte object, or a
+                        // recording with no speech (a worker's whisper step on a test tone writes
+                        // exactly that). "Couldn't get any readable content" would send the
+                        // reader looking for a format problem that is not there.
+                        throw new UnsupportedFileTypeException(String.format(
+                            "%s is empty -- there is nothing in it to ask about.", ContentTypeUtil.fileNameOf(key)));
                     }
                     text[0] = extracted;
                 } catch (UnsupportedFileTypeException ex) {

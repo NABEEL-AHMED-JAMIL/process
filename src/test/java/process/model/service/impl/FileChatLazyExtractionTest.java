@@ -134,7 +134,9 @@ public class FileChatLazyExtractionTest {
 
     @Test
     void sendMessageStillReportsAnUnsupportedFileTypeRatherThanARagWarning() throws Exception {
-        lenient().when(this.fileChatExtractionService.extractText(BUCKET, KEY, ETAG)).thenReturn("");
+        // null is what the extractor answers for a type it has no reader for; "" is a file it
+        // read and found empty, which gets its own message now.
+        lenient().when(this.fileChatExtractionService.extractText(BUCKET, KEY, ETAG)).thenReturn(null);
         lenient().when(this.openSearchRagClient.isEnabled()).thenReturn(true);
         lenient().when(this.embeddingService.isAvailable()).thenReturn(true);
         lenient().when(this.embeddingService.embed(anyString())).thenReturn(new float[] {1f});

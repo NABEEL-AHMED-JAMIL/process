@@ -88,8 +88,16 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
      */
     private static final int MAX_TEXT_CHARS = 500000;
 
-    private static final Set<String> NATIVE_TEXT_EXTENSIONS =
-        new HashSet<>(Arrays.asList("md", "txt", "csv", "json", "xml"));
+    /**
+     * Read as-is, no conversion. The list used to stop at md/txt/csv/json/xml, so a worker's
+     * .log -- the file the "Log triage" prompt exists for -- fell through to the document
+     * converter, which knows no such format, and the reader was told a 216-byte text file had
+     * no readable content. Everything here is plain text by construction; none of it has a
+     * converter family to lose by skipping the converter.
+     */
+    private static final Set<String> NATIVE_TEXT_EXTENSIONS = new HashSet<>(Arrays.asList(
+        "md", "txt", "csv", "json", "xml",
+        "log", "tsv", "yaml", "yml", "jsonl", "ndjson", "properties", "ini", "sql", "toml", "env"));
     private static final Set<String> AUDIO_EXTENSIONS = new HashSet<>(Arrays.asList("mp3", "m4a"));
 
     /**
@@ -573,7 +581,10 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
      * answer while the cap was 60,000 and silent.
      */
     private String truncate(String text, String key) {
-        if (isNull(text)) {
+        // A real null check. ProcessUtil.isNull is also true for "", which turned every
+        // zero-byte text object into null -- the value that means "no reader for this type" --
+        // so an empty transcript was reported as an unsupported format.
+        if (text == null) {
             return null;
         }
         if (text.length() <= MAX_TEXT_CHARS) {
