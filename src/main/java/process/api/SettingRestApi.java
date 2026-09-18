@@ -44,6 +44,28 @@ public class SettingRestApi {
         }
     }
 
+    /** The parent lookups alone -- what the Lookups screen and the task editor need from appSetting. */
+    @RequestMapping(value = "/lookups", method = RequestMethod.GET)
+    public ResponseEntity<?> lookups() {
+        try {
+            return new ResponseEntity<>(this.settingService.lookups(), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while lookups.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /** Every topic the caller may pick, as picker rows -- a fraction of appSetting's per-topic detail. */
+    @RequestMapping(value = "/topics", method = RequestMethod.GET)
+    public ResponseEntity<?> topics() {
+        try {
+            return new ResponseEntity<>(this.settingService.topics(), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while topics.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     /** The topics of one Kafka profile, each with its pipelines -- the Kafka pane asks per profile. */
     @RequestMapping(value = "/topicsForProfile", method = RequestMethod.GET)
     public ResponseEntity<?> topicsForProfile(@RequestParam Long kafkaConnectionProfileId) {

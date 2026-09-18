@@ -69,6 +69,18 @@ public class PipelineRestApi {
         }
     }
 
+    /** The fields of one pipeline, fetched when a list row is opened rather than sent with every row. */
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/fields", method = RequestMethod.GET)
+    public ResponseEntity<?> fields(@RequestParam Long pipelineKey) {
+        try {
+            return new ResponseEntity<>(this.pipelineService.fieldsFor(pipelineKey), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while listing fields", ex);
+            return internalError();
+        }
+    }
+
     /** The pipelines on one topic -- what a task may pick once its topic is chosen. */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/listForTopic", method = RequestMethod.GET)

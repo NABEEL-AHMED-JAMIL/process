@@ -17,6 +17,7 @@ import process.model.pojo.KafkaConnectionProfile;
 import process.model.pojo.LookupData;
 import process.model.pojo.SourceTaskType;
 import process.model.projection.SourceTaskTypeProjection;
+import process.model.projection.TopicOptionProjection;
 import process.model.pojo.TenantTaskTypeKafkaRoute;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.LookupDataRepository;
@@ -273,24 +274,7 @@ public class SettingServiceImpl implements SettingService {
         key = "T(process.security.TenantContext).isPlatformAdmin() ? 'platform' : T(process.security.TenantContext).getTenantId()")
     public ResponseDto appSetting() throws Exception {
         Map<String, Object> appSettingDetail = new HashMap<>();
-        List<LookupDataDto> lookupDataList = new ArrayList<>();
-        boolean callerIsPlatformAdmin = TenantContext.isPlatformAdmin();
-        for (LookupData lookup: this.lookupDataRepository.findByParentLookupIdIsNull()) {
-            if (!callerIsPlatformAdmin && isPlatformOnly(lookup)) {
-                continue;
-            }
-            LookupDataDto lookupDataDto = new LookupDataDto();
-            this.fillLookupDateDto(lookup, lookupDataDto);
-            if (!isNull(lookup.getParent())) {
-                LookupDataDto lookupDataDto2 = new LookupDataDto();
-                this.fillLookupDateDto(lookup.getParent(), lookupDataDto2);
-                lookupDataDto.setParent(lookupDataDto2);
-            }
-            lookupDataList.add(lookupDataDto);
-        }
-        this.userNameResolver.attachToDtos(lookupDataList, this.lookupDataRepository,
-            LookupData::getLookupId);
-        appSettingDetail.put(LOOKUP_DATA, lookupDataList);
+        appSettingDetail.put(LOOKUP_DATA, this.parentLookups());
 
         List<SourceTaskTypeProjection> sourceTaskTypeProjections = TenantContext.isPlatformAdmin()
             ? this.sourceTaskTypeRepository.fetchAllSourceTaskType()
@@ -311,6 +295,49 @@ public class SettingServiceImpl implements SettingService {
             SourceTaskType::getSourceTaskTypeId);
         appSettingDetail.put(SOURCE_TASK_TYPE, sourceTaskTypeList);
         return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
+    }
+
+    /** The parent lookups the caller may see -- the platform-only ones stay with the platform admin. */
+    private List<LookupDataDto> parentLookups() {
+        List<LookupDataDto> lookupDataList = new ArrayList<>();
+        boolean callerIsPlatformAdmin = TenantContext.isPlatformAdmin();
+        for (LookupData lookup: this.lookupDataRepository.findByParentLookupIdIsNull()) {
+            if (!callerIsPlatformAdmin && isPlatformOnly(lookup)) {
+                continue;
+            }
+            LookupDataDto lookupDataDto = new LookupDataDto();
+            this.fillLookupDateDto(lookup, lookupDataDto);
+            if (!isNull(lookup.getParent())) {
+                LookupDataDto lookupDataDto2 = new LookupDataDto();
+                this.fillLookupDateDto(lookup.getParent(), lookupDataDto2);
+                lookupDataDto.setParent(lookupDataDto2);
+            }
+            lookupDataList.add(lookupDataDto);
+        }
+        this.userNameResolver.attachToDtos(lookupDataList, this.lookupDataRepository,
+            LookupData::getLookupId);
+        return lookupDataList;
+    }
+
+    /**
+     * Just the parent lookups. The Lookups screen, the task editor and the agents screen used
+     * to read appSetting for these and throw its topics away -- at ten thousand topics that was
+     * several megabytes per page open for six rows.
+     */
+    public ResponseDto lookups() throws Exception {
+        return new ResponseDto(SUCCESS, "Data fetch successfully.", this.parentLookups());
+    }
+
+    /**
+     * Every topic the caller may pick, as picker rows (id, name, Kafka topic, state, profile,
+     * workspace) and nothing more; see {@link TopicOptionProjection}. Scoped like appSetting.
+     */
+    public ResponseDto topics() throws Exception {
+        List<TopicOptionProjection> topics = TenantContext.isPlatformAdmin()
+            ? this.sourceTaskTypeRepository.fetchTopicOptions()
+            : TenantContext.getTenantId() == null ? Collections.emptyList()
+            : this.sourceTaskTypeRepository.fetchTopicOptionsForTenant(TenantContext.getTenantId());
+        return new ResponseDto(SUCCESS, String.format("%d topic(s).", topics.size()), topics);
     }
 
     /**

@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
+import process.model.dto.PipelineRowDto;
 import process.model.pojo.PipelineField;
 import process.model.pojo.Tenant;
 import process.model.repository.PipelineRepository;
@@ -104,21 +105,51 @@ public class PipelineServiceImpl {
         // a platform admin sees every tenant's. A tenant-role caller with no tenant of its own
         // (should not happen in practice, but fails closed rather than querying with a null and
         // hoping the SQL "= null" never-matches semantics are what the reader expects) sees none.
-        List<Pipeline> forms;
+        //
+        // Rows, not entities: the entity drags every field along, and a list of ten thousand
+        // pipelines was twenty megabytes of fields nobody had opened. A row carries the counts;
+        // the fields come through fieldsFor when a row is opened.
+        List<process.model.projection.PipelineRowProjection> rows;
         if (TenantContext.isPlatformAdmin()) {
-            forms = this.pipelineRepository.findAllByStatusNot(Status.Delete);
+            rows = this.pipelineRepository.listRows();
         } else if (TenantContext.getTenantId() != null) {
-            forms = this.pipelineRepository.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(
-                TenantContext.getTenantId(), Status.Delete);
+            rows = this.pipelineRepository.listRowsForTenant(TenantContext.getTenantId());
         } else {
-            forms = new ArrayList<>();
+            rows = new ArrayList<>();
         }
+        List<PipelineRowDto> forms = rows.stream().map(PipelineRowDto::from).collect(Collectors.toList());
         // One lookup for the whole list rather than one per row.
-        java.util.Map<Long, String> authors = this.userNameResolver.namesFor(
-            forms.stream().map(Pipeline::getCreatedBy).collect(java.util.stream.Collectors.toList()));
-        forms.forEach(f -> f.setCreatedByName(authors.get(f.getCreatedBy())));
-        this.attachTopics(forms);
+        this.userNameResolver.attachNames(forms);
+        java.util.Set<Long> ids = forms.stream().map(PipelineRowDto::getSourceTaskTypeId)
+            .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        if (!ids.isEmpty()) {
+            java.util.Map<Long, SourceTaskType> topics = new java.util.HashMap<>();
+            this.sourceTaskTypeRepository.findAllById(ids).forEach(t -> topics.put(t.getSourceTaskTypeId(), t));
+            for (PipelineRowDto row : forms) {
+                SourceTaskType t = topics.get(row.getSourceTaskTypeId());
+                if (t == null) continue;
+                row.setTopicName(t.getServiceName());
+                row.setKafkaTopic(KafkaTopicPartitionUtil.parse(t.getQueueTopicPartition()).map(KafkaTopicPartitionUtil.Parsed::getTopic).orElse(null));
+            }
+        }
         return new ResponseDto(SUCCESS, String.format("%d pipeline(s).", forms.size()), forms);
+    }
+
+    /**
+     * One pipeline's fields, for a list row being opened or edited. Scoped like delete: a
+     * tenant reads its own, a platform admin any.
+     */
+    public ResponseDto fieldsFor(Long pipelineKey) {
+        if (ProcessUtil.isNull(pipelineKey)) {
+            return new ResponseDto(ERROR, "pipelineKey missing.");
+        }
+        Optional<Pipeline> existing = this.pipelineRepository
+            .findByPipelineKeyAndStatusNot(pipelineKey, Status.Delete);
+        if (!existing.isPresent() || !isOwnedByCaller(existing.get())) {
+            return new ResponseDto(ERROR, "That pipeline no longer exists.");
+        }
+        return new ResponseDto(SUCCESS, String.format("%d field(s).", existing.get().getFields().size()),
+            existing.get().getFields());
     }
 
     /**

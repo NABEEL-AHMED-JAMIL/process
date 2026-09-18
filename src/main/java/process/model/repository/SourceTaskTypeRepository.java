@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import process.model.enums.Status;
 import process.model.pojo.SourceTaskType;
 import process.model.projection.SourceTaskTypeProjection;
+import process.model.projection.TopicOptionProjection;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,19 @@ import java.util.Optional;
  * */
 @Repository
 public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, Long> {
+
+    String TOPIC_OPTION_SELECT = "select source_task_type_id as sourceTaskTypeId, service_name as serviceName,\n" +
+        "queue_topic_partition as queueTopicPartition, kafka_connection_profile_id as kafkaConnectionProfileId, tenant_id as tenantId,\n" +
+        "CONCAT(UPPER(SUBSTR(CAST(task_type_status as varchar), 1, 1)), LOWER(SUBSTR(CAST(task_type_status as varchar), 2))) as status\n" +
+        "from source_task_type where task_type_status <> 'Delete'\n";
+
+    /** Every topic a platform admin can pick, as six columns; see {@link TopicOptionProjection}. */
+    @Query(value = TOPIC_OPTION_SELECT + "order by service_name asc", nativeQuery = true)
+    public List<TopicOptionProjection> fetchTopicOptions();
+
+    /** One workspace's topics, as six columns. */
+    @Query(value = TOPIC_OPTION_SELECT + "and tenant_id = :tenantId order by service_name asc", nativeQuery = true)
+    public List<TopicOptionProjection> fetchTopicOptionsForTenant(@Param("tenantId") Long tenantId);
 
     public Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
 

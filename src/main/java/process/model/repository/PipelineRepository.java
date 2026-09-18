@@ -4,6 +4,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
+import process.model.projection.PipelineRowProjection;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +15,21 @@ import java.util.Optional;
  * */
 @Repository
 public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
+
+    String ROW_SELECT = "select p.pipeline_key as pipelineKey, p.pipeline_id as pipelineId, p.pipeline_name as pipelineName,\n" +
+        "p.description as description, p.tenant_id as tenantId, p.source_task_type_id as sourceTaskTypeId,\n" +
+        "cast(p.status as varchar) as status, p.date_created as dateCreated, p.created_by as createdBy, p.updated_by as updatedBy,\n" +
+        "(select count(*) from pipeline_field f where f.pipeline_key = p.pipeline_key) as fieldCount,\n" +
+        "(select count(*) from pipeline_field f where f.pipeline_key = p.pipeline_key and f.required) as requiredCount\n" +
+        "from pipeline p where cast(p.status as varchar) <> 'Delete'\n";
+
+    /** Every workspace's rows, for a platform admin; counts stand in for the fields. */
+    @Query(value = ROW_SELECT + "order by p.pipeline_key desc", nativeQuery = true)
+    List<PipelineRowProjection> listRows();
+
+    /** One workspace's rows; counts stand in for the fields. */
+    @Query(value = ROW_SELECT + "and p.tenant_id = :tenantId order by p.pipeline_key desc", nativeQuery = true)
+    List<PipelineRowProjection> listRowsForTenant(@Param("tenantId") Long tenantId);
 
     /** Everything a platform admin sees -- every tenant's forms, in one list. */
     public List<Pipeline> findAllByStatusNot(Status status);

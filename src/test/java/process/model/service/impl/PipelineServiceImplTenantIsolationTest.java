@@ -9,6 +9,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
+import process.model.dto.PipelineRowDto;
+import process.model.projection.PipelineRowProjection;
 import process.model.pojo.PipelineField;
 import process.model.pojo.Tenant;
 import process.model.repository.PipelineRepository;
@@ -30,6 +32,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 
@@ -103,40 +106,56 @@ public class PipelineServiceImplTenantIsolationTest {
 
     // ---- listForms: a tenant sees only its own rows -------------------------------------------
 
+    /** A list row as the repository projects it: the tenant A form, minus its fields, plus counts. */
+    private PipelineRowProjection tenantARow() {
+        Long key = this.tenantAForm.getPipelineKey();
+        PipelineRowProjection row = mock(PipelineRowProjection.class);
+        when(row.getPipelineKey()).thenReturn(key);
+        when(row.getPipelineId()).thenReturn(PIPELINE);
+        when(row.getTenantId()).thenReturn(TENANT_A);
+        when(row.getFieldCount()).thenReturn(3L);
+        when(row.getRequiredCount()).thenReturn(1L);
+        return row;
+    }
+
     @Test
     void aTenantNeverSeesAnotherTenantsForms() {
         this.actAsTenant(TENANT_B);
-        when(this.pipelineRepository.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(TENANT_B, Status.Delete))
-            .thenReturn(Collections.emptyList());
+        when(this.pipelineRepository.listRowsForTenant(TENANT_B)).thenReturn(Collections.emptyList());
 
         ResponseDto response = this.service.listForms();
 
         assertThat((List<?>) response.getData()).isEmpty();
-        verify(this.pipelineRepository, never()).findAllByStatusNot(any());
+        verify(this.pipelineRepository, never()).listRows();
     }
 
     @Test
     void aTenantSeesItsOwnForms() {
         this.actAsTenant(TENANT_A);
-        when(this.pipelineRepository.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(TENANT_A, Status.Delete))
-            .thenReturn(Collections.singletonList(this.tenantAForm));
+        // Built before the stubbing: a mock set up inside thenReturn(...) is a nested, unfinished stub.
+        PipelineRowProjection row = this.tenantARow();
+        when(this.pipelineRepository.listRowsForTenant(TENANT_A)).thenReturn(Collections.singletonList(row));
 
         ResponseDto response = this.service.listForms();
 
-        assertThat((List<Pipeline>) (List<?>) response.getData()).containsExactly(this.tenantAForm);
+        List<PipelineRowDto> rows = (List<PipelineRowDto>) (List<?>) response.getData();
+        assertThat(rows).extracting(PipelineRowDto::getPipelineId).containsExactly(PIPELINE);
+        // The row says how many fields there are rather than carrying them.
+        assertThat(rows.get(0).getFieldCount()).isEqualTo(3L);
+        assertThat(rows.get(0).getRequiredCount()).isEqualTo(1L);
     }
 
     @Test
     void aPlatformAdminSeesEveryTenantsForms() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        when(this.pipelineRepository.findAllByStatusNot(Status.Delete))
-            .thenReturn(Collections.singletonList(this.tenantAForm));
+        PipelineRowProjection row = this.tenantARow();
+        when(this.pipelineRepository.listRows()).thenReturn(Collections.singletonList(row));
 
         ResponseDto response = this.service.listForms();
 
-        assertThat((List<Pipeline>) (List<?>) response.getData()).containsExactly(this.tenantAForm);
-        verify(this.pipelineRepository, never())
-            .findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(anyLong(), any());
+        assertThat((List<PipelineRowDto>) (List<?>) response.getData())
+            .extracting(PipelineRowDto::getPipelineId).containsExactly(PIPELINE);
+        verify(this.pipelineRepository, never()).listRowsForTenant(anyLong());
     }
 
     @Test
@@ -146,9 +165,34 @@ public class PipelineServiceImplTenantIsolationTest {
         ResponseDto response = this.service.listForms();
 
         assertThat((List<?>) response.getData()).isEmpty();
-        verify(this.pipelineRepository, never())
-            .findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(any(), any());
-        verify(this.pipelineRepository, never()).findAllByStatusNot(any());
+        verify(this.pipelineRepository, never()).listRowsForTenant(any());
+        verify(this.pipelineRepository, never()).listRows();
+    }
+
+    // ---- fieldsFor: the fields of one row, scoped like delete ----------------------------------
+
+    @Test
+    void aTenantCannotReadAnotherTenantsFields() {
+        this.actAsTenant(TENANT_B);
+        when(this.pipelineRepository.findByPipelineKeyAndStatusNot(this.tenantAForm.getPipelineKey(), Status.Delete))
+            .thenReturn(Optional.of(this.tenantAForm));
+
+        ResponseDto response = this.service.fieldsFor(this.tenantAForm.getPipelineKey());
+
+        assertThat(response.getStatus()).isEqualTo(ERROR);
+        assertThat(response.getData()).isNull();
+    }
+
+    @Test
+    void aTenantReadsItsOwnFields() {
+        this.actAsTenant(TENANT_A);
+        when(this.pipelineRepository.findByPipelineKeyAndStatusNot(this.tenantAForm.getPipelineKey(), Status.Delete))
+            .thenReturn(Optional.of(this.tenantAForm));
+
+        ResponseDto response = this.service.fieldsFor(this.tenantAForm.getPipelineKey());
+
+        assertThat(response.getStatus()).isEqualTo(SUCCESS);
+        assertThat(response.getData()).isSameAs(this.tenantAForm.getFields());
     }
 
     // ---- formForPipeline: strict, no shared fallback -------------------------------------------
