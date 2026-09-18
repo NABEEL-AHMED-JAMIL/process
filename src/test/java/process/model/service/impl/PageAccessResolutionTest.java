@@ -122,7 +122,7 @@ public class PageAccessResolutionTest {
     @Test
     void aProfileFromAnotherWorkspaceIsIgnoredInFavourOfTheDefault() {
         when(this.profileRepository.findById(600L))
-            .thenReturn(Optional.of(profile(600L, TENANT_B, Status.Active, "analytics", "ai-agents")));
+            .thenReturn(Optional.of(profile(600L, TENANT_B, Status.Active, "analytics", "ai-prompts")));
         when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(TENANT_A, Status.Active))
             .thenReturn(Optional.of(profile(501L, TENANT_A, Status.Active, "jobs")));
 

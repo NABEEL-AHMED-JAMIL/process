@@ -1,0 +1,82 @@
+package process.api;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import process.model.dto.AiPromptDto;
+import process.model.dto.ResponseDto;
+import process.model.service.impl.AiPromptServiceImpl;
+import process.util.ProcessUtil;
+
+/**
+ * Prompts. Reading is TENANT_USER -- a person must be able to see what the step on their
+ * task says, and the file chat lists prompts -- writing and trying is TENANT_ADMIN, since a
+ * try spends the workspace's tokens.
+ */
+@RestController
+@CrossOrigin(origins = "*")
+@RequestMapping(value = "/aiPrompt.json")
+public class AiPromptRestApi {
+
+    private final Logger logger = LoggerFactory.getLogger(AiPromptRestApi.class);
+    private final AiPromptServiceImpl service;
+
+    public AiPromptRestApi(AiPromptServiceImpl service) { this.service = service; }
+
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/list", method = RequestMethod.GET)
+    public ResponseEntity<?> list() {
+        try { return new ResponseEntity<>(this.service.list(), HttpStatus.OK); } catch (Exception ex) { return this.failed("list", ex); }
+    }
+
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/get", method = RequestMethod.GET)
+    public ResponseEntity<?> get(@RequestParam Long promptId) {
+        try { return new ResponseEntity<>(this.service.get(promptId), HttpStatus.OK); } catch (Exception ex) { return this.failed("get", ex); }
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/save", method = RequestMethod.POST)
+    public ResponseEntity<?> save(@RequestBody AiPromptDto dto) {
+        try { return new ResponseEntity<>(this.service.save(dto), HttpStatus.OK); } catch (Exception ex) { return this.failed("save", ex); }
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/setStatus", method = RequestMethod.PUT)
+    public ResponseEntity<?> setStatus(@RequestParam Long promptId, @RequestParam String status) {
+        try { return new ResponseEntity<>(this.service.setStatus(promptId, status), HttpStatus.OK); } catch (Exception ex) { return this.failed("setStatus", ex); }
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/delete", method = RequestMethod.DELETE)
+    public ResponseEntity<?> delete(@RequestParam Long promptId) {
+        try { return new ResponseEntity<>(this.service.delete(promptId), HttpStatus.OK); } catch (Exception ex) { return this.failed("delete", ex); }
+    }
+
+    /** Runs the prompt as sent, with its samples (or `values`), and records a "try" run. */
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/try", method = RequestMethod.POST)
+    public ResponseEntity<?> tryPrompt(@RequestBody AiPromptDto dto) {
+        try { return new ResponseEntity<>(this.service.tryPrompt(dto), HttpStatus.OK); } catch (Exception ex) { return this.failed("try", ex); }
+    }
+
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/runs", method = RequestMethod.GET)
+    public ResponseEntity<?> runs(@RequestParam Long promptId, @RequestParam(required = false) Long page, @RequestParam(required = false) Long limit) {
+        try { return new ResponseEntity<>(this.service.runs(promptId, page, limit), HttpStatus.OK); } catch (Exception ex) { return this.failed("runs", ex); }
+    }
+
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/versions", method = RequestMethod.GET)
+    public ResponseEntity<?> versions(@RequestParam Long promptId) {
+        try { return new ResponseEntity<>(this.service.versionsOf(promptId), HttpStatus.OK); } catch (Exception ex) { return this.failed("versions", ex); }
+    }
+
+    private ResponseEntity<?> failed(String what, Exception ex) {
+        this.logger.error("An error occurred while {} prompt", what, ex);
+        return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}

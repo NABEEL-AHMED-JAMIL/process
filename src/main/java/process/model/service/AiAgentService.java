@@ -9,12 +9,6 @@ import process.model.dto.ResponseDto;
  * */
 public interface AiAgentService {
 
-    public ResponseDto addAgent(AiAgentDto aiAgentDto) throws Exception;
-
-    public ResponseDto updateAgent(AiAgentDto aiAgentDto) throws Exception;
-
-    public ResponseDto deleteAgent(Long aiAgentId) throws Exception;
-
     public ResponseDto fetchAllAgents() throws Exception;
 
     public ResponseDto fetchAgentByAgentId(Long aiAgentId) throws Exception;

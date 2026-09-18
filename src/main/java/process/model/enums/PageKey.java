@@ -31,16 +31,16 @@ import java.util.Set;
  */
 public enum PageKey {
 
-    JOBS("jobs", "Source Jobs", "Pipelines", "/jobs",
-        "/sourceJob.json", "/sourceTask.json", "/aiAgent.json", "/fileChat.json"),
-    TASKS("tasks", "Source Tasks", "Pipelines", "/tasks",
+    JOBS("jobs", "Source Jobs", "Operations", "/jobs",
+        "/sourceJob.json", "/sourceTask.json", "/aiAgent.json", "/aiPrompt.json", "/fileChat.json"),
+    TASKS("tasks", "Source Tasks", "Operations", "/tasks",
         "/sourceTask.json"),
-    QUEUE("queue", "Queue", "Pipelines", "/queue",
+    QUEUE("queue", "Queue", "Operations", "/queue",
         "/message.json"),
-    REPORTS("reports", "Reports", "Pipelines", "/reports",
+    REPORTS("reports", "Reports", "Operations", "/reports",
         "/report.json", "/message.json"),
     OBJECTS("objects", "Browse files", "Object Browser", "/objects",
-        "/fileShare.json", "/fileChat.json", "/aiAgent.json"),
+        "/fileShare.json", "/fileChat.json", "/aiAgent.json", "/aiPrompt.json"),
     ANALYTICS("analytics", "Analytics Studio", "Object Browser", "/analytics",
         "/analytics.json", "/analyticsDataset.json", "/analyticsLibrary.json", "/analyticsExport.json",
         "/analyticsBenchmark.json", "/analyticsWorkspace.json"),
@@ -51,8 +51,10 @@ public enum PageKey {
         "/documentConverter.json"),
     TOOLS_TRANSCRIPT("tools-transcript", "Audio Transcript", "Tools", "/tools/transcript",
         "/audioTranscript.json"),
-    AI_AGENTS("ai-agents", "AI Agents", "Assistants", "/ai/agents",
-        "/aiAgent.json");
+    // Prompts replaced AI Agents on 2026-09-18 (V44 renames the grants). /aiAgent.json stays in
+    // the group: the file chat and the job assistant still read prompts through its aliases.
+    AI_PROMPTS("ai-prompts", "Prompts", "Assistants", "/ai/prompts",
+        "/aiPrompt.json", "/aiAgent.json");
 
     /**
      * Calls under an enforced group that every signed-in person may make regardless of pages.

@@ -94,3 +94,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V42.0-run-callback-token.yaml
   - include:
       file: db/changelog/yaml/V43.0-pipelines-under-topics.yaml
+  - include:
+      file: db/changelog/yaml/V44.0-ai-prompts.yaml

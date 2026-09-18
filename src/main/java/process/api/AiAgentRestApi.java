@@ -29,35 +29,8 @@ public class AiAgentRestApi {
         this.aiAgentService = aiAgentService;
     }
 
-    @RequestMapping(value = "/addAgent", method = RequestMethod.POST)
-    public ResponseEntity<?> addAgent(@RequestBody AiAgentDto aiAgentDto) {
-        try {
-            return new ResponseEntity<>(this.aiAgentService.addAgent(aiAgentDto), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while addAgent ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
-    @RequestMapping(value = "/updateAgent", method = RequestMethod.PUT)
-    public ResponseEntity<?> updateAgent(@RequestBody AiAgentDto aiAgentDto) {
-        try {
-            return new ResponseEntity<>(this.aiAgentService.updateAgent(aiAgentDto), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while updateAgent ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
-    @RequestMapping(value = "/deleteAgent", method = RequestMethod.DELETE)
-    public ResponseEntity<?> deleteAgent(@RequestParam Long aiAgentId) {
-        try {
-            return new ResponseEntity<>(this.aiAgentService.deleteAgent(aiAgentId), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while deleteAgent ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllAgents", method = RequestMethod.GET)

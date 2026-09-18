@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: 44.0-ai-prompts
+      author: nabeel.amd93
+      description: "ai_agent becomes ai_model_connection + ai_prompt (+ versions, runs); page grants ai-agents -> ai-prompts"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V44.0-ai-prompts/V44__ai_prompts.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              UPDATE page_access_profile_page SET page_key = 'ai-agents' WHERE page_key = 'ai-prompts';
+              UPDATE user_page_access SET page_key = 'ai-agents' WHERE page_key = 'ai-prompts';
+              DROP TABLE IF EXISTS ai_prompt_run;
+              DROP TABLE IF EXISTS ai_prompt_version;
+              DROP TABLE IF EXISTS ai_prompt;
+              DROP TABLE IF EXISTS ai_model_connection;
+              DROP SEQUENCE IF EXISTS ai_prompt_run_seq;
+              DROP SEQUENCE IF EXISTS ai_prompt_seq;
+              DROP SEQUENCE IF EXISTS ai_model_connection_seq;
