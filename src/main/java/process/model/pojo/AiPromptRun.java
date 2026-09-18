@@ -3,6 +3,9 @@ package process.model.pojo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
 import javax.persistence.*;
 import java.sql.Timestamp;
 
@@ -12,6 +15,8 @@ import java.sql.Timestamp;
  * step is unique on (job_queue_id, step_tag): a retried worker gets the stored answer.
  */
 @Entity
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @Table(name = "ai_prompt_run")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AiPromptRun {
