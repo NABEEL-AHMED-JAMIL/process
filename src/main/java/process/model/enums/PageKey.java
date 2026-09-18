@@ -31,20 +31,20 @@ import java.util.Set;
  */
 public enum PageKey {
 
-    JOBS("jobs", "Source Jobs", "Operations", "/jobs",
+    JOBS("jobs", "Source Jobs", "Operations", "/operations/jobs",
         "/sourceJob.json", "/sourceTask.json", "/aiAgent.json", "/aiPrompt.json", "/fileChat.json"),
-    TASKS("tasks", "Source Tasks", "Operations", "/tasks",
+    TASKS("tasks", "Source Tasks", "Operations", "/operations/tasks",
         "/sourceTask.json"),
-    QUEUE("queue", "Queue", "Operations", "/queue",
+    QUEUE("queue", "Queue", "Operations", "/operations/queue",
         "/message.json"),
-    REPORTS("reports", "Reports", "Operations", "/reports",
+    REPORTS("reports", "Reports", "Operations", "/operations/reports",
         "/report.json", "/message.json"),
-    OBJECTS("objects", "Browse files", "Object Browser", "/objects",
+    OBJECTS("objects", "Browse files", "Object Browser", "/objects/files",
         "/fileShare.json", "/fileChat.json", "/aiAgent.json", "/aiPrompt.json"),
-    ANALYTICS("analytics", "Analytics Studio", "Object Browser", "/analytics",
+    ANALYTICS("analytics", "Analytics Studio", "Object Browser", "/objects/analytics",
         "/analytics.json", "/analyticsDataset.json", "/analyticsLibrary.json", "/analyticsExport.json",
         "/analyticsBenchmark.json", "/analyticsWorkspace.json"),
-    ANALYTICS_DASHBOARDS("analytics-dashboards", "Saved Analyses", "Object Browser", "/analytics/dashboards",
+    ANALYTICS_DASHBOARDS("analytics-dashboards", "Saved Analyses", "Object Browser", "/objects/analytics/dashboards",
         "/analytics.json", "/analyticsDataset.json", "/analyticsLibrary.json", "/analyticsExport.json",
         "/analyticsBenchmark.json", "/analyticsWorkspace.json"),
     TOOLS_CONVERTER("tools-converter", "Document Converter", "Tools", "/tools/converter",
@@ -53,7 +53,7 @@ public enum PageKey {
         "/audioTranscript.json"),
     // Prompts replaced AI Agents on 2026-09-18 (V44 renames the grants). /aiAgent.json stays in
     // the group: the file chat and the job assistant still read prompts through its aliases.
-    AI_PROMPTS("ai-prompts", "Prompts", "Assistants", "/ai/prompts",
+    AI_PROMPTS("ai-prompts", "Prompts", "Assistants", "/assistants/prompts",
         "/aiPrompt.json", "/aiAgent.json");
 
     /**
