@@ -87,7 +87,10 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "select q.job_queue_id, q.job_id, j.job_name, q.job_status, q.start_time, "
         + "q.end_time, q.job_status_message "
         + "from job_queue q join source_job j on j.job_id = q.job_id "
-        + "where j.assigned_user_id = ?1 "
+        // A deleted job's runs are not the person's activity any more: the job tiles beside this
+        // list already leave them out, and so does the report. Without the clause a deleted job
+        // kept appearing here, with a link to a job that no longer opens.
+        + "where j.assigned_user_id = ?1 and j.job_status <> 'Delete' "
         + "order by q.start_time desc nulls last, q.job_queue_id desc limit ?2", nativeQuery = true)
     List<Object[]> findRecentRunsForAssignee(Long appUserId, int limit);
 
@@ -98,7 +101,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "select count(*) as total_count, "
         + "count(*) filter (where UPPER(q.job_status) = 'FAILED') as failed_count "
         + "from job_queue q join source_job j on j.job_id = q.job_id "
-        + "where j.assigned_user_id = ?1 and q.start_time >= ?2", nativeQuery = true)
+        + "where j.assigned_user_id = ?1 and j.job_status <> 'Delete' and q.start_time >= ?2", nativeQuery = true)
     List<Object[]> countRecentRunsForAssignee(Long appUserId, LocalDateTime since);
 
 }
