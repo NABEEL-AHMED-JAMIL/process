@@ -325,15 +325,15 @@ public class SettingServiceImpl implements SettingService {
     @CacheEvict(value = "appSetting", allEntries = true)
     public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception {
         if (isNull(sourceTaskTypeDto.getServiceName())) {
-            return new ResponseDto(ERROR, "SourceTaskType serviceName missing.");
+            return new ResponseDto(ERROR, "Topic name missing.");
         } else if (isNull(sourceTaskTypeDto.getDescription())) {
-            return new ResponseDto(ERROR, "SourceTaskType description missing.");
+            return new ResponseDto(ERROR, "Topic description missing.");
         } else if (isNull(sourceTaskTypeDto.getQueueTopicPartition())) {
-            return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition missing.");
+            return new ResponseDto(ERROR, "Kafka topic missing.");
         }
         Optional<KafkaTopicPartitionUtil.Parsed> parsedTopic = KafkaTopicPartitionUtil.parse(sourceTaskTypeDto.getQueueTopicPartition());
         if (!parsedTopic.isPresent()) {
-            return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition format invalid, expected topic=<name>&partitions=[<n>|*].");
+            return new ResponseDto(ERROR, "Kafka topic format invalid, expected topic=<name>&partitions=[<n>|*].");
         }
         if (parsedTopic.get().exceedsMaxPartitionIndex()) {
             return new ResponseDto(ERROR, String.format("Partition index must be between 0 and %d.", KafkaTopicPartitionUtil.MAX_PARTITION_INDEX));
@@ -353,22 +353,22 @@ public class SettingServiceImpl implements SettingService {
         this.kafkaTemplateProvider.ensureTopicExists(
             this.kafkaConnectionResolver.resolve(ownerTenantId, sourceTaskType.getSourceTaskTypeId()),
             parsedTopic.get().getTopic(), parsedTopic.get().minimumPartitionCount());
-        return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.", sourceTaskType.getSourceTaskTypeId()));
+        return new ResponseDto(SUCCESS, String.format("Topic saved with %s.", sourceTaskType.getSourceTaskTypeId()));
     }
 
     @Override
     @CacheEvict(value = "appSetting", allEntries = true)
     public ResponseDto updateSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception {
         if (isNull(sourceTaskTypeDto.getSourceTaskTypeId())) {
-            return new ResponseDto(ERROR, "SourceTaskType sourceTaskTypeId missing.");
+            return new ResponseDto(ERROR, "Topic id missing.");
         } else if (isNull(sourceTaskTypeDto.getServiceName())) {
-            return new ResponseDto(ERROR, "SourceTaskType serviceName missing.");
+            return new ResponseDto(ERROR, "Topic name missing.");
         } else if (isNull(sourceTaskTypeDto.getQueueTopicPartition())) {
-            return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition missing.");
+            return new ResponseDto(ERROR, "Kafka topic missing.");
         }
         Optional<KafkaTopicPartitionUtil.Parsed> parsedTopic = KafkaTopicPartitionUtil.parse(sourceTaskTypeDto.getQueueTopicPartition());
         if (!parsedTopic.isPresent()) {
-            return new ResponseDto(ERROR, "SourceTaskType queueTopicPartition format invalid, expected topic=<name>&partitions=[<n>|*].");
+            return new ResponseDto(ERROR, "Kafka topic format invalid, expected topic=<name>&partitions=[<n>|*].");
         }
         if (parsedTopic.get().exceedsMaxPartitionIndex()) {
             return new ResponseDto(ERROR, String.format("Partition index must be between 0 and %d.", KafkaTopicPartitionUtil.MAX_PARTITION_INDEX));
@@ -379,7 +379,7 @@ public class SettingServiceImpl implements SettingService {
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(sourceTaskTypeDto.getSourceTaskTypeId());
         if (sourceTaskType.isPresent() && !this.isSourceTaskTypeOwnedByCaller(sourceTaskType.get())) {
-            return new ResponseDto(ERROR, String.format("SourceTaskType not found with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
+            return new ResponseDto(ERROR, String.format("Topic not found with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
         }
         if (sourceTaskType.isPresent()) {
             sourceTaskType.get().setServiceName(sourceTaskTypeDto.getServiceName());
@@ -397,26 +397,26 @@ public class SettingServiceImpl implements SettingService {
             this.kafkaTemplateProvider.ensureTopicExists(
                 this.kafkaConnectionResolver.resolve(ownerTenantId, sourceTaskTypeDto.getSourceTaskTypeId()),
                 parsedTopic.get().getTopic(), parsedTopic.get().minimumPartitionCount());
-            return new ResponseDto(SUCCESS, String.format("SourceTaskType save with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
+            return new ResponseDto(SUCCESS, String.format("Topic saved with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
         }
-        return new ResponseDto(ERROR, String.format("SourceTaskType not found with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
+        return new ResponseDto(ERROR, String.format("Topic not found with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
     }
 
     @Override
     @CacheEvict(value = "appSetting", allEntries = true)
     public ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception {
         if (isNull(sourceTaskTypeId)) {
-            return new ResponseDto(ERROR, "SourceTaskType sourceTaskTypeId missing.");
+            return new ResponseDto(ERROR, "Topic id missing.");
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(sourceTaskTypeId);
         if (!sourceTaskType.isPresent() || !this.isSourceTaskTypeOwnedByCaller(sourceTaskType.get())) {
-            return new ResponseDto(ERROR, String.format("SourceTaskType not found with %s.", sourceTaskTypeId));
+            return new ResponseDto(ERROR, String.format("Topic not found with %s.", sourceTaskTypeId));
         }
 
         this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(sourceTaskTypeId, Status.Delete.name());
         sourceTaskType.get().setStatus(Status.Delete);
         this.sourceTaskTypeRepository.save(sourceTaskType.get());
-        return new ResponseDto(SUCCESS, String.format("SourceTaskType delete with %s.", sourceTaskTypeId));
+        return new ResponseDto(SUCCESS, String.format("Topic deleted with %s.", sourceTaskTypeId));
     }
 
     private boolean isSourceTaskTypeOwnedByCaller(SourceTaskType sourceTaskType) {
@@ -448,7 +448,7 @@ public class SettingServiceImpl implements SettingService {
     @Override
     public ResponseDto fetchKafkaRoute(Long sourceTaskTypeId) throws Exception {
         if (isNull(sourceTaskTypeId)) {
-            return new ResponseDto(ERROR, "SourceTaskType id missing.");
+            return new ResponseDto(ERROR, "Topic id missing.");
         }
         if (TenantContext.isPlatformAdmin()) {
             return new ResponseDto(SUCCESS, "Platform Admin has no tenant routing override.", null);
@@ -463,7 +463,7 @@ public class SettingServiceImpl implements SettingService {
     @CacheEvict(value = "appSetting", allEntries = true)
     public ResponseDto setKafkaRoute(Long sourceTaskTypeId, Long kafkaConnectionProfileId) throws Exception {
         if (isNull(sourceTaskTypeId) || isNull(kafkaConnectionProfileId)) {
-            return new ResponseDto(ERROR, "SourceTaskType id and Kafka connection profile id are both required.");
+            return new ResponseDto(ERROR, "Topic id and Kafka connection profile id are both required.");
         }
         if (TenantContext.isPlatformAdmin()) {
             return new ResponseDto(ERROR, "Platform Admin publishes unscoped -- tenant routing overrides don't apply.");
@@ -475,7 +475,7 @@ public class SettingServiceImpl implements SettingService {
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findById(sourceTaskTypeId);
         if (!sourceTaskType.isPresent() || !this.isSourceTaskTypeVisibleToCaller(sourceTaskType.get())) {
-            return new ResponseDto(ERROR, String.format("SourceTaskType not found with %d.", sourceTaskTypeId));
+            return new ResponseDto(ERROR, String.format("Topic not found with %d.", sourceTaskTypeId));
         }
         TenantTaskTypeKafkaRoute route = this.tenantTaskTypeKafkaRouteRepository
             .findByTenantIdAndSourceTaskTypeId(tenantId, sourceTaskTypeId)
@@ -491,7 +491,7 @@ public class SettingServiceImpl implements SettingService {
     @CacheEvict(value = "appSetting", allEntries = true)
     public ResponseDto deleteKafkaRoute(Long sourceTaskTypeId) throws Exception {
         if (isNull(sourceTaskTypeId)) {
-            return new ResponseDto(ERROR, "SourceTaskType id missing.");
+            return new ResponseDto(ERROR, "Topic id missing.");
         }
         if (TenantContext.isPlatformAdmin()) {
             return new ResponseDto(ERROR, "Platform Admin has no tenant routing override to remove.");
@@ -745,11 +745,11 @@ public class SettingServiceImpl implements SettingService {
         }
         Long tenantId = sourceTaskTypeDto.getTenantId();
         if (isNull(tenantId)) {
-            return "SourceTaskType tenantId missing -- a platform admin must say which workspace "
+            return "Topic workspace missing -- a platform admin must say which workspace "
                 + "this task type belongs to.";
         }
         if (!this.tenantRepository.findById(tenantId).isPresent()) {
-            return String.format("SourceTaskType tenantId %d is not a workspace.", tenantId);
+            return String.format("Topic workspace %d is not a workspace.", tenantId);
         }
         return null;
     }
