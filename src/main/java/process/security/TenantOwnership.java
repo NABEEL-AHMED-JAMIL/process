@@ -20,7 +20,7 @@ import java.util.Objects;
  *   platform-owned row: resolving a *default* to fall back on when a tenant has none of its own
  *   (KafkaConnectionResolver's Kafka dispatch is the one live example). That is a narrow,
  *   internal fallback, not a "list/read screen shows the platform's rows too" catalogue -- the
- *   last entity that worked the second way, TaskForm, was moved to strict per-tenant filtering
+ *   last entity that worked the second way, Pipeline, was moved to strict per-tenant filtering
  *   (2026-09-05) once its "every tenant sees this" behavior was found to be untested and, for a
  *   task-payload schema, indistinguishable from the same problem Kafka Connections had already
  *   been fixed for. SourceTaskType still filters "tenant_id = :tenantId or tenant_id is null" as

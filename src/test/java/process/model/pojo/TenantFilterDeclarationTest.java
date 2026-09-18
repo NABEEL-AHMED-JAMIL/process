@@ -73,16 +73,16 @@ public class TenantFilterDeclarationTest {
     }
 
     @Test
-    void aTaskFormBelongsToExactlyOneTenant() {
+    void aPipelineBelongsToExactlyOneTenant() {
         // Used to read like SourceTaskType/KafkaConnectionProfile above -- a null-tenant row was
         // "shared with every tenant." Moved to strict per-tenant filtering (2026-09-05): a task
         // form's XML-tag schema for a pipeline is workspace-specific the same way a storage or
         // Kafka connection is, not a shared taxonomy the way SourceTaskType genuinely is, and
         // nothing here has a dispatch-fallback use for a hidden platform default the way Kafka's
         // KafkaConnectionResolver does. The declaration itself is currently inert either way --
-        // TaskFormServiceImpl never calls TenantFilterHelper.enableIfNeeded -- but it should still
+        // PipelineServiceImpl never calls TenantFilterHelper.enableIfNeeded -- but it should still
         // describe the rule the repository's own @Query methods actually enforce.
-        assertEquals("tenant_id = :tenantId", conditionOf(TaskForm.class));
+        assertEquals("tenant_id = :tenantId", conditionOf(Pipeline.class));
     }
 
     @Test

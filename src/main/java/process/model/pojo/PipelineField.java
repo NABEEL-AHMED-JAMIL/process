@@ -13,30 +13,30 @@ import javax.persistence.*;
  * @author Nabeel Ahmed
  * */
 @Entity
-@Table(name = "task_form_field")
+@Table(name = "pipeline_field")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TaskFormField {
+public class PipelineField {
 
     @GenericGenerator(
-        name = "taskFormFieldSequenceGenerator",
+        name = "pipelineFieldSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "task_form_source_seq"),
+            @Parameter(name = "sequence_name", value = "pipeline_source_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         })
     @Id
-    @GeneratedValue(generator = "taskFormFieldSequenceGenerator")
-    @Column(name = "task_form_field_id")
-    private Long taskFormFieldId;
+    @GeneratedValue(generator = "pipelineFieldSequenceGenerator")
+    @Column(name = "pipeline_field_id")
+    private Long pipelineFieldId;
 
     // Ignored on the way out: the form already carries its fields, and serialising the parent
     // from each child is how a response becomes infinitely deep.
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "task_form_id", nullable = false)
-    private TaskForm taskForm;
+    @JoinColumn(name = "pipeline_key", nullable = false)
+    private Pipeline pipeline;
 
     @Column(name = "tag_key", nullable = false)
     private String tagKey;
@@ -65,11 +65,11 @@ public class TaskFormField {
     @Column(name = "position", nullable = false)
     private int position;
 
-    public Long getTaskFormFieldId() { return taskFormFieldId; }
-    public void setTaskFormFieldId(Long taskFormFieldId) { this.taskFormFieldId = taskFormFieldId; }
+    public Long getPipelineFieldId() { return pipelineFieldId; }
+    public void setPipelineFieldId(Long pipelineFieldId) { this.pipelineFieldId = pipelineFieldId; }
 
-    public TaskForm getTaskForm() { return taskForm; }
-    public void setTaskForm(TaskForm taskForm) { this.taskForm = taskForm; }
+    public Pipeline getPipeline() { return pipeline; }
+    public void setPipeline(Pipeline pipeline) { this.pipeline = pipeline; }
 
     public String getTagKey() { return tagKey; }
     public void setTagKey(String tagKey) { this.tagKey = tagKey; }

@@ -7,10 +7,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
-import process.model.pojo.TaskForm;
-import process.model.pojo.TaskFormField;
+import process.model.pojo.Pipeline;
+import process.model.pojo.PipelineField;
 import process.model.pojo.Tenant;
-import process.model.repository.TaskFormRepository;
+import process.model.repository.PipelineRepository;
+import process.model.repository.SourceTaskTypeRepository;
+import process.model.pojo.SourceTaskType;
+import process.util.KafkaTopicPartitionUtil;
 import process.model.repository.TenantRepository;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
@@ -35,9 +38,9 @@ import static process.util.ProcessUtil.SUCCESS;
  * @author Nabeel Ahmed
  */
 @Service
-public class TaskFormServiceImpl {
+public class PipelineServiceImpl {
 
-    private static final Logger logger = LoggerFactory.getLogger(TaskFormServiceImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(PipelineServiceImpl.class);
 
     /** The types the task form can render. Anything else would render as a blank box. */
     private static final Set<String> FIELD_TYPES = new HashSet<>(Arrays.asList(
@@ -46,17 +49,54 @@ public class TaskFormServiceImpl {
     /** Compiled once: {@link #choiceValues} asks this of every one-line option string. */
     private static final Pattern WHITESPACE = Pattern.compile("\\s");
 
-    private final TaskFormRepository taskFormRepository;
+    private final PipelineRepository pipelineRepository;
 
     private final TenantRepository tenantRepository;
 
     private final UserNameResolver userNameResolver;
 
-    public TaskFormServiceImpl(TaskFormRepository taskFormRepository, TenantRepository tenantRepository,
-        UserNameResolver userNameResolver) {
-        this.taskFormRepository = taskFormRepository;
+    private final SourceTaskTypeRepository sourceTaskTypeRepository;
+
+    public PipelineServiceImpl(PipelineRepository pipelineRepository, TenantRepository tenantRepository,
+        UserNameResolver userNameResolver, SourceTaskTypeRepository sourceTaskTypeRepository) {
+        this.pipelineRepository = pipelineRepository;
         this.tenantRepository = tenantRepository;
         this.userNameResolver = userNameResolver;
+        this.sourceTaskTypeRepository = sourceTaskTypeRepository;
+    }
+
+    /**
+     * The pipelines on one topic, for the task screen: the caller picks a topic first and is
+     * then offered only what publishes on it. Scoped like everything else here -- a tenant sees
+     * its own rows, a platform admin every tenant's.
+     */
+    public ResponseDto listForTopic(Long sourceTaskTypeId) {
+        if (ProcessUtil.isNull(sourceTaskTypeId)) {
+            return new ResponseDto(ERROR, "sourceTaskTypeId missing.");
+        }
+        List<Pipeline> pipelines = this.pipelineRepository
+            .findAllBySourceTaskTypeIdAndStatusNotOrderByPipelineNameAsc(sourceTaskTypeId, Status.Delete)
+            .stream()
+            .filter(p -> TenantContext.isPlatformAdmin()
+                || (TenantContext.getTenantId() != null && TenantContext.getTenantId().equals(p.getTenantId())))
+            .collect(Collectors.toList());
+        this.attachTopics(pipelines);
+        return new ResponseDto(SUCCESS, String.format("%d pipeline(s).", pipelines.size()), pipelines);
+    }
+
+    /** Names the topic on each row, one lookup for the whole list. */
+    private void attachTopics(List<Pipeline> pipelines) {
+        java.util.Set<Long> ids = pipelines.stream().map(Pipeline::getSourceTaskTypeId)
+            .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) return;
+        java.util.Map<Long, SourceTaskType> topics = new java.util.HashMap<>();
+        this.sourceTaskTypeRepository.findAllById(ids).forEach(t -> topics.put(t.getSourceTaskTypeId(), t));
+        for (Pipeline p : pipelines) {
+            SourceTaskType t = p.getSourceTaskTypeId() == null ? null : topics.get(p.getSourceTaskTypeId());
+            if (t == null) continue;
+            p.setTopicName(t.getServiceName());
+            p.setKafkaTopic(KafkaTopicPartitionUtil.parse(t.getQueueTopicPartition()).map(KafkaTopicPartitionUtil.Parsed::getTopic).orElse(null));
+        }
     }
 
     public ResponseDto listForms() {
@@ -64,20 +104,21 @@ public class TaskFormServiceImpl {
         // a platform admin sees every tenant's. A tenant-role caller with no tenant of its own
         // (should not happen in practice, but fails closed rather than querying with a null and
         // hoping the SQL "= null" never-matches semantics are what the reader expects) sees none.
-        List<TaskForm> forms;
+        List<Pipeline> forms;
         if (TenantContext.isPlatformAdmin()) {
-            forms = this.taskFormRepository.findAllByFormStatusNot(Status.Delete);
+            forms = this.pipelineRepository.findAllByStatusNot(Status.Delete);
         } else if (TenantContext.getTenantId() != null) {
-            forms = this.taskFormRepository.findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(
+            forms = this.pipelineRepository.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(
                 TenantContext.getTenantId(), Status.Delete);
         } else {
             forms = new ArrayList<>();
         }
         // One lookup for the whole list rather than one per row.
         java.util.Map<Long, String> authors = this.userNameResolver.namesFor(
-            forms.stream().map(TaskForm::getCreatedBy).collect(java.util.stream.Collectors.toList()));
+            forms.stream().map(Pipeline::getCreatedBy).collect(java.util.stream.Collectors.toList()));
         forms.forEach(f -> f.setCreatedByName(authors.get(f.getCreatedBy())));
-        return new ResponseDto(SUCCESS, String.format("%d form(s).", forms.size()), forms);
+        this.attachTopics(forms);
+        return new ResponseDto(SUCCESS, String.format("%d pipeline(s).", forms.size()), forms);
     }
 
     /**
@@ -89,14 +130,14 @@ public class TaskFormServiceImpl {
      * rather than refuse a form that plainly exists just because the caller has no tenant to
      * compare it to, a platform admin's request matches the pipeline across every tenant's forms.
      * A tenant-scoped caller is unaffected and still sees only its own tenant's row, per
-     * {@link TaskFormRepository#findAllByPipelineIdAndTenantIdAndFormStatusNot}'s own contract.
+     * {@link PipelineRepository#findAllByPipelineIdAndTenantIdAndStatusNot}'s own contract.
      */
     public ResponseDto formForPipeline(String pipelineId, Long tenantId) {
         if (ProcessUtil.isNull(pipelineId) || pipelineId.trim().isEmpty()) {
             return new ResponseDto(ERROR, "pipelineId missing.");
         }
         String trimmed = pipelineId.trim();
-        List<TaskForm> found;
+        List<Pipeline> found;
         if (TenantContext.isPlatformAdmin()) {
             /*
              * A platform admin can see every tenant's forms, and more than one tenant can hold a
@@ -108,14 +149,14 @@ public class TaskFormServiceImpl {
              * columns were computed from them. So the task's own tenant is asked for first, and
              * the fallback is ordered rather than arbitrary.
              */
-            List<TaskForm> matching = this.taskFormRepository.findAllByFormStatusNot(Status.Delete)
+            List<Pipeline> matching = this.pipelineRepository.findAllByStatusNot(Status.Delete)
                 .stream()
                 .filter(f -> trimmed.equals(f.getPipelineId()))
-                .sorted(Comparator.comparing(TaskForm::getTaskFormId))
+                .sorted(Comparator.comparing(Pipeline::getPipelineKey))
                 .collect(Collectors.toList());
             found = matching;
             if (tenantId != null) {
-                List<TaskForm> owned = matching.stream()
+                List<Pipeline> owned = matching.stream()
                     .filter(f -> tenantId.equals(f.getTenantId()))
                     .collect(Collectors.toList());
                 if (!owned.isEmpty()) {
@@ -123,33 +164,34 @@ public class TaskFormServiceImpl {
                 }
             }
         } else {
-            found = this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
+            found = this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(
                 trimmed, TenantContext.getTenantId(), Status.Delete);
         }
         if (found.isEmpty()) {
             // Not an error: most pipelines have no form, and the task screen falls back to tags.
-            return new ResponseDto(SUCCESS, "No form is defined for this pipeline.", null);
+            return new ResponseDto(SUCCESS, "No pipeline is defined with this id.", null);
         }
-        return new ResponseDto(SUCCESS, "Form found.", found.get(0));
+        this.attachTopics(found);
+        return new ResponseDto(SUCCESS, "Pipeline found.", found.get(0));
     }
 
     @Transactional
-    public ResponseDto saveForm(TaskForm submitted) {
+    public ResponseDto saveForm(Pipeline submitted) {
         String problem = validate(submitted);
         if (problem != null) {
             return new ResponseDto(ERROR, problem);
         }
 
-        TaskForm target;
-        if (submitted.getTaskFormId() != null) {
-            Optional<TaskForm> existing = this.taskFormRepository
-                .findByTaskFormIdAndFormStatusNot(submitted.getTaskFormId(), Status.Delete);
+        Pipeline target;
+        if (submitted.getPipelineKey() != null) {
+            Optional<Pipeline> existing = this.pipelineRepository
+                .findByPipelineKeyAndStatusNot(submitted.getPipelineKey(), Status.Delete);
             if (!existing.isPresent()) {
-                return new ResponseDto(ERROR, "That form no longer exists.");
+                return new ResponseDto(ERROR, "That pipeline no longer exists.");
             }
             target = existing.get();
             if (!isOwnedByCaller(target)) {
-                return new ResponseDto(ERROR, "That form belongs to another tenant.");
+                return new ResponseDto(ERROR, "That pipeline belongs to another tenant.");
             }
         } else {
             // A new form always belongs to one tenant -- same rule as a new storage or Kafka
@@ -167,7 +209,7 @@ public class TaskFormServiceImpl {
                     .findByTenantCode(TenantSeedService.DEFAULT_TENANT_CODE);
                 if (!defaultTenant.isPresent()) {
                     return new ResponseDto(ERROR,
-                        "No default tenant is configured to own this form. Sign in as a tenant to create one.");
+                        "No default tenant is configured to own this pipeline. Sign in as a tenant to create one.");
                 }
                 ownerTenantId = defaultTenant.get().getTenantId();
             }
@@ -178,30 +220,44 @@ public class TaskFormServiceImpl {
              * after the catch block below has already returned. Relying on it produced the
              * generic "internal error" for what is an ordinary, explainable situation.
              */
-            List<TaskForm> clash = this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
+            List<Pipeline> clash = this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(
                 submitted.getPipelineId().trim(), ownerTenantId, Status.Delete);
             if (!clash.isEmpty()) {
                 return new ResponseDto(ERROR, String.format(
-                    "A form already exists for pipeline %s. Edit that one instead of adding a second.",
+                    "Pipeline %s already exists. Edit that one instead of adding a second.",
                     submitted.getPipelineId().trim()));
             }
-            target = new TaskForm();
+            target = new Pipeline();
             target.setTenantId(ownerTenantId);
             target.setCreatedBy(TenantContext.getAppUserId());
         }
 
+        /*
+         * The topic is required and has to be one the pipeline's own workspace can see: a
+         * pipeline on another tenant's topic would publish into a cluster that tenant owns.
+         */
+        Optional<SourceTaskType> topic = this.sourceTaskTypeRepository.findById(submitted.getSourceTaskTypeId());
+        if (!topic.isPresent() || topic.get().getStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, "That topic no longer exists.");
+        }
+        Long topicTenant = topic.get().getTenantId();
+        if (topicTenant != null && !topicTenant.equals(target.getTenantId())) {
+            return new ResponseDto(ERROR, "That topic belongs to another workspace.");
+        }
+        target.setSourceTaskTypeId(topic.get().getSourceTaskTypeId());
+
         target.setPipelineId(submitted.getPipelineId().trim());
-        target.setFormName(submitted.getFormName().trim());
+        target.setPipelineName(submitted.getPipelineName().trim());
         target.setDescription(submitted.getDescription());
-        target.setFormStatus(submitted.getFormStatus() == null ? Status.Active : submitted.getFormStatus());
+        target.setStatus(submitted.getStatus() == null ? Status.Active : submitted.getStatus());
 
         // Replaced wholesale rather than merged: the client sends the field list it wants, and
         // reconciling by id would leave a removed field behind whenever the client forgot one.
         target.getFields().clear();
         int position = 0;
-        for (TaskFormField field : submitted.getFields()) {
-            TaskFormField copy = new TaskFormField();
-            copy.setTaskForm(target);
+        for (PipelineField field : submitted.getFields()) {
+            PipelineField copy = new PipelineField();
+            copy.setPipeline(target);
             copy.setTagKey(field.getTagKey().trim());
             copy.setTagParent(blankToNull(field.getTagParent()));
             copy.setLabel(field.getLabel().trim());
@@ -219,53 +275,54 @@ public class TaskFormServiceImpl {
         }
 
         try {
-            TaskForm saved = this.taskFormRepository.save(target);
+            Pipeline saved = this.pipelineRepository.save(target);
             return new ResponseDto(SUCCESS,
-                String.format("\"%s\" saved with %d field(s).", saved.getFormName(), saved.getFields().size()),
+                String.format("\"%s\" saved with %d field(s).", saved.getPipelineName(), saved.getFields().size()),
                 saved);
         } catch (DataIntegrityViolationException ex) {
             // The check above catches this in practice; this remains for two saves racing.
-            logger.warn("Duplicate task form for pipeline {}", submitted.getPipelineId());
+            logger.warn("Duplicate pipeline {}", submitted.getPipelineId());
             return new ResponseDto(ERROR,
-                "A form already exists for that pipeline. Edit that one instead of adding a second.");
+                "That pipeline id already exists. Edit that one instead of adding a second.");
         } catch (Exception ex) {
-            logger.error("Could not save task form for pipeline {}", submitted.getPipelineId(), ex);
-            return new ResponseDto(ERROR, "That form could not be saved: " + ExceptionUtil.getRootCauseMessage(ex));
+            logger.error("Could not save pipeline {}", submitted.getPipelineId(), ex);
+            return new ResponseDto(ERROR, "That pipeline could not be saved: " + ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 
     @Transactional
-    public ResponseDto deleteForm(Long taskFormId) {
-        if (ProcessUtil.isNull(taskFormId)) {
-            return new ResponseDto(ERROR, "taskFormId missing.");
+    public ResponseDto deleteForm(Long pipelineKey) {
+        if (ProcessUtil.isNull(pipelineKey)) {
+            return new ResponseDto(ERROR, "pipelineKey missing.");
         }
-        Optional<TaskForm> existing = this.taskFormRepository
-            .findByTaskFormIdAndFormStatusNot(taskFormId, Status.Delete);
+        Optional<Pipeline> existing = this.pipelineRepository
+            .findByPipelineKeyAndStatusNot(pipelineKey, Status.Delete);
         if (!existing.isPresent()) {
-            return new ResponseDto(ERROR, "That form no longer exists.");
+            return new ResponseDto(ERROR, "That pipeline no longer exists.");
         }
         if (!isOwnedByCaller(existing.get())) {
-            return new ResponseDto(ERROR, "That form belongs to another tenant.");
+            return new ResponseDto(ERROR, "That pipeline belongs to another tenant.");
         }
         // Soft delete, and safe regardless: tasks keep their own tags, so removing a definition
         // changes how new tasks are configured and nothing about existing ones.
-        existing.get().setFormStatus(Status.Delete);
-        this.taskFormRepository.save(existing.get());
-        return new ResponseDto(SUCCESS, "Form deleted. Tasks already configured with it are unaffected.");
+        existing.get().setStatus(Status.Delete);
+        this.pipelineRepository.save(existing.get());
+        return new ResponseDto(SUCCESS, "Pipeline deleted. Tasks already configured with it are unaffected.");
     }
 
     // ---- helpers ---------------------------------------------------------------------------
 
     /** Package-private and static so the rules can be tested without a database behind them. */
-    static String validate(TaskForm form) {
+    static String validate(Pipeline form) {
         if (form == null) return "Nothing to save.";
-        if (isBlank(form.getPipelineId())) return "Choose the pipeline this form is for.";
-        if (isBlank(form.getFormName())) return "Give the form a name.";
+        if (isBlank(form.getPipelineId())) return "Give the pipeline its id -- the one the worker routes on.";
+        if (isBlank(form.getPipelineName())) return "Give the pipeline a name.";
+        if (form.getSourceTaskTypeId() == null) return "Choose the topic this pipeline publishes on.";
         if (form.getFields() == null || form.getFields().isEmpty()) {
-            return "A form needs at least one field.";
+            return "A pipeline needs at least one field.";
         }
         Set<String> keys = new HashSet<>();
-        for (TaskFormField field : form.getFields()) {
+        for (PipelineField field : form.getFields()) {
             if (isBlank(field.getTagKey())) return "Every field needs an XML tag.";
             if (isBlank(field.getLabel())) return String.format(
                 "The field for \"%s\" needs a label.", field.getTagKey().trim());
@@ -276,7 +333,7 @@ public class TaskFormServiceImpl {
             }
         }
         // A parent has to exist, or the generated document loses the field.
-        for (TaskFormField field : form.getFields()) {
+        for (PipelineField field : form.getFields()) {
             String parent = blankToNull(field.getTagParent());
             if (parent != null && !keys.contains(parent)) {
                 return String.format("\"%s\" nests under <%s>, which no field creates.",
@@ -307,8 +364,8 @@ public class TaskFormServiceImpl {
      * unseen value into the payload. Rejecting it here is what makes renaming a choice an error
      * the author is told about rather than a silent break in every task on the pipeline.
      */
-    private static String validateSelectChoices(TaskForm form) {
-        for (TaskFormField field : form.getFields()) {
+    private static String validateSelectChoices(Pipeline form) {
+        for (PipelineField field : form.getFields()) {
             if (!"select".equals(safe(field.getFieldType()))) {
                 continue;
             }
@@ -382,7 +439,7 @@ public class TaskFormServiceImpl {
         return values;
     }
 
-    private boolean isOwnedByCaller(TaskForm form) {
+    private boolean isOwnedByCaller(Pipeline form) {
         // Delegates rather than re-deriving the rule locally -- TenantOwnership exists precisely
         // because every service used to grow its own private copy of this check.
         return TenantOwnership.isOwnedByCaller(form.getTenantId());

@@ -3,7 +3,7 @@ package process.model.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import process.model.enums.Status;
-import process.model.pojo.TaskForm;
+import process.model.pojo.Pipeline;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,10 +11,10 @@ import java.util.Optional;
  * @author Nabeel Ahmed
  * */
 @Repository
-public interface TaskFormRepository extends JpaRepository<TaskForm, Long> {
+public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
 
     /** Everything a platform admin sees -- every tenant's forms, in one list. */
-    public List<TaskForm> findAllByFormStatusNot(Status status);
+    public List<Pipeline> findAllByStatusNot(Status status);
 
     /**
      * A tenant's own form definitions, and only those.
@@ -30,17 +30,23 @@ public interface TaskFormRepository extends JpaRepository<TaskForm, Long> {
      * 'Delete', so a rename of that enum constant is caught by the compiler here too instead of
      * silently drifting out of sync in a string only this method used to carry.
      */
-    public List<TaskForm> findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(Long tenantId, Status status);
+    public List<Pipeline> findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(Long tenantId, Status status);
 
     /**
      * The form a pipeline should use for this tenant, if it has defined one.
      *
      * Strict: a tenant with no form of its own for this pipeline gets none back, and the task
-     * screen falls back to plain tags (see TaskFormServiceImpl.formForPipeline) -- the same
+     * screen falls back to plain tags (see PipelineServiceImpl.formForPipeline) -- the same
      * "most pipelines have no form" case that already exists today, not a shared definition
      * borrowed from another tenant or a platform-wide default.
      */
-    public List<TaskForm> findAllByPipelineIdAndTenantIdAndFormStatusNot(String pipelineId, Long tenantId, Status status);
+    public List<Pipeline> findAllByPipelineIdAndTenantIdAndStatusNot(String pipelineId, Long tenantId, Status status);
 
-    public Optional<TaskForm> findByTaskFormIdAndFormStatusNot(Long taskFormId, Status status);
+    public Optional<Pipeline> findByPipelineKeyAndStatusNot(Long pipelineKey, Status status);
+
+    /** The pipelines that publish on one topic -- what the task screen offers once a topic is picked. */
+    public List<Pipeline> findAllBySourceTaskTypeIdAndStatusNotOrderByPipelineNameAsc(Long sourceTaskTypeId, Status status);
+
+    /** How many pipelines still name a topic; a topic with any cannot be deleted. */
+    public long countBySourceTaskTypeIdAndStatusNot(Long sourceTaskTypeId, Status status);
 }

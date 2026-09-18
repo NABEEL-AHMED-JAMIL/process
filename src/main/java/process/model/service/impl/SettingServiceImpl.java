@@ -230,6 +230,13 @@ public class SettingServiceImpl implements SettingService {
     private final TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository;
     private final TenantRepository tenantRepository;
     private final EncryptionUtil encryptionUtil;
+
+    /**
+     * Field-injected and optional: the guard on deleting a topic is the only thing here that
+     * reads pipelines, and the eleven-argument constructor is built by hand in six tests.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private process.model.repository.PipelineRepository pipelineRepository;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
     private final LookupDataCacheService lookupDataCacheService;
@@ -413,6 +420,15 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, String.format("Topic not found with %s.", sourceTaskTypeId));
         }
 
+        // A topic that pipelines still publish on cannot go: the pipelines would have nowhere
+        // to publish and every task on them would be dispatched into nothing.
+        long pipelines = this.pipelineRepository == null ? 0
+            : this.pipelineRepository.countBySourceTaskTypeIdAndStatusNot(sourceTaskTypeId, Status.Delete);
+        if (pipelines > 0) {
+            return new ResponseDto(ERROR, String.format(
+                "%d pipeline%s still publish%s on this topic. Move or delete %s first.",
+                pipelines, pipelines == 1 ? "" : "s", pipelines == 1 ? "es" : "", pipelines == 1 ? "it" : "them"));
+        }
         this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(sourceTaskTypeId, Status.Delete.name());
         sourceTaskType.get().setStatus(Status.Delete);
         this.sourceTaskTypeRepository.save(sourceTaskType.get());

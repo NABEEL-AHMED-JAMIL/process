@@ -9,9 +9,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
-import process.model.pojo.TaskForm;
-import process.model.pojo.TaskFormField;
-import process.model.repository.TaskFormRepository;
+import process.model.pojo.Pipeline;
+import process.model.pojo.PipelineField;
+import process.model.repository.PipelineRepository;
+import process.model.repository.SourceTaskTypeRepository;
+import process.model.pojo.SourceTaskType;
 import process.model.repository.TenantRepository;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
@@ -44,28 +46,39 @@ import static process.util.ProcessUtil.SUCCESS;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-public class TaskFormSelectChoiceTest {
+public class PipelineSelectChoiceTest {
 
     private static final long TENANT_A = 1001L;
     private static final String PIPELINE = "F768930";
 
-    @Mock private TaskFormRepository taskFormRepository;
+    @Mock private PipelineRepository pipelineRepository;
     @Mock private TenantRepository tenantRepository;
     @Mock private UserNameResolver userNameResolver;
+    @Mock private SourceTaskTypeRepository sourceTaskTypeRepository;
 
-    private TaskFormServiceImpl service;
+    private PipelineServiceImpl service;
+
+    /** A topic with no tenant -- visible to every workspace -- so it never trips the ownership check here. */
+    private static final long TOPIC_ID = 9001L;
 
     @BeforeEach
     void setUp() {
-        this.service = new TaskFormServiceImpl(
-            this.taskFormRepository, this.tenantRepository, this.userNameResolver);
+        this.service = new PipelineServiceImpl(this.pipelineRepository, this.tenantRepository, this.userNameResolver, this.sourceTaskTypeRepository);
+        this.theTopicExists();
     }
 
     @AfterEach
     void clear() { TenantContext.clear(); }
 
-    private TaskFormField select(String options, String defaultValue) {
-        TaskFormField field = new TaskFormField();
+    private void theTopicExists() {
+        SourceTaskType topic = new SourceTaskType();
+        topic.setSourceTaskTypeId(TOPIC_ID);
+        topic.setStatus(process.model.enums.Status.Active);
+        org.mockito.Mockito.lenient().when(this.sourceTaskTypeRepository.findById(TOPIC_ID)).thenReturn(java.util.Optional.of(topic));
+    }
+
+    private PipelineField select(String options, String defaultValue) {
+        PipelineField field = new PipelineField();
         field.setTagKey("format");
         field.setLabel("JSON shape");
         field.setFieldType("select");
@@ -74,11 +87,12 @@ public class TaskFormSelectChoiceTest {
         return field;
     }
 
-    private TaskForm formWith(TaskFormField... fields) {
-        TaskForm form = new TaskForm();
+    private Pipeline formWith(PipelineField... fields) {
+        Pipeline form = new Pipeline();
+        form.setSourceTaskTypeId(TOPIC_ID);
         form.setPipelineId(PIPELINE);
-        form.setFormName("CSV to JSON demo");
-        ArrayList<TaskFormField> list = new ArrayList<>();
+        form.setPipelineName("CSV to JSON demo");
+        ArrayList<PipelineField> list = new ArrayList<>();
         Collections.addAll(list, fields);
         form.setFields(list);
         return form;
@@ -89,7 +103,7 @@ public class TaskFormSelectChoiceTest {
     @Test
     @DisplayName("a select whose choices and default line up is accepted")
     void acceptsAWellFormedSelect() {
-        assertThat(TaskFormServiceImpl.validate(
+        assertThat(PipelineServiceImpl.validate(
             formWith(select("records=JSON array\nlines=JSON Lines", "records")))).isNull();
     }
 
@@ -98,7 +112,7 @@ public class TaskFormSelectChoiceTest {
     void acceptsLegacyOptions() {
         // The format is a superset, not a replacement: forms written before labels existed have
         // to keep saving, or an author cannot edit a typo without first rewriting every choice.
-        assertThat(TaskFormServiceImpl.validate(
+        assertThat(PipelineServiceImpl.validate(
             formWith(select("records\nlines", "records")))).isNull();
     }
 
@@ -108,9 +122,9 @@ public class TaskFormSelectChoiceTest {
         // It offers the operator nothing but "None", and when the field is also required with no
         // default, that task can never be made valid -- with "Check the highlighted fields." as
         // the only explanation anyone ever gets.
-        String problem = TaskFormServiceImpl.validate(formWith(select(null, null)));
+        String problem = PipelineServiceImpl.validate(formWith(select(null, null)));
         assertThat(problem).contains("JSON shape").contains("no choices");
-        assertThat(TaskFormServiceImpl.validate(formWith(select("   \n  ", null))))
+        assertThat(PipelineServiceImpl.validate(formWith(select("   \n  ", null))))
             .contains("no choices");
     }
 
@@ -118,7 +132,7 @@ public class TaskFormSelectChoiceTest {
     @DisplayName("two choices sharing a stored value are refused")
     void refusesDuplicateChoiceValues() {
         // The browser matches the first, so the second is unreachable however it is labelled.
-        assertThat(TaskFormServiceImpl.validate(
+        assertThat(PipelineServiceImpl.validate(
             formWith(select("records=JSON array\nrecords=Records", null)))).contains("twice");
     }
 
@@ -133,7 +147,7 @@ public class TaskFormSelectChoiceTest {
          * choice without touching the default and every new task on the pipeline is wrong, with
          * nothing on any screen pointing back at the form.
          */
-        String problem = TaskFormServiceImpl.validate(formWith(select("records\nlines", "daily")));
+        String problem = PipelineServiceImpl.validate(formWith(select("records\nlines", "daily")));
         assertThat(problem).contains("daily").contains("not one of its choices");
     }
 
@@ -142,7 +156,7 @@ public class TaskFormSelectChoiceTest {
     void refusesADefaultThatIsOnlyALabel() {
         // Reading the rendered dropdown and typing what it says is the obvious thing to do, and
         // it was harmless while value and label were the same string.
-        assertThat(TaskFormServiceImpl.validate(
+        assertThat(PipelineServiceImpl.validate(
             formWith(select("records=JSON array\nlines=JSON Lines", "JSON array"))))
             .contains("not one of its choices");
     }
@@ -153,7 +167,7 @@ public class TaskFormSelectChoiceTest {
         // etl_demo_catalogue.py wrote options="records,lines" for nine select fields. Both
         // readers tolerate that shape, and they have to do it identically: if only the browser
         // did, editing a seeded form would be refused for a default the author can plainly see.
-        assertThat(TaskFormServiceImpl.validate(formWith(select("records,lines", "records"))))
+        assertThat(PipelineServiceImpl.validate(formWith(select("records,lines", "records"))))
             .isNull();
     }
 
@@ -163,8 +177,8 @@ public class TaskFormSelectChoiceTest {
         // The guard that stops the tolerance above becoming a second bug: a machine-written
         // token list carries no whitespace, and a human label almost always does. So this field
         // has ONE choice, and a default of "Doe" is not it.
-        assertThat(TaskFormServiceImpl.validate(formWith(select("Doe, John", "Doe, John")))).isNull();
-        assertThat(TaskFormServiceImpl.validate(formWith(select("Doe, John", "Doe"))))
+        assertThat(PipelineServiceImpl.validate(formWith(select("Doe, John", "Doe, John")))).isNull();
+        assertThat(PipelineServiceImpl.validate(formWith(select("Doe, John", "Doe"))))
             .contains("not one of its choices");
     }
 
@@ -173,7 +187,7 @@ public class TaskFormSelectChoiceTest {
     void aLabelKeepsItsOwnPunctuation() {
         // No escaping is needed because everything after the first '=' is the label verbatim,
         // which is most of why the separator is positional rather than escaped.
-        assertThat(TaskFormServiceImpl.validate(
+        assertThat(PipelineServiceImpl.validate(
             formWith(select("eq=Equals (a = b), exactly\nratio=Width:Height", "eq")))).isNull();
     }
 
@@ -182,9 +196,9 @@ public class TaskFormSelectChoiceTest {
     void ignoresOptionsOnEveryOtherType() {
         // They are carried rather than dropped now -- a save made while the type reads `text`
         // used to delete them -- so a text field routinely arrives holding choices.
-        TaskFormField text = select("records\nlines", "anything at all");
+        PipelineField text = select("records\nlines", "anything at all");
         text.setFieldType("text");
-        assertThat(TaskFormServiceImpl.validate(formWith(text))).isNull();
+        assertThat(PipelineServiceImpl.validate(formWith(text))).isNull();
     }
 
     // ---- the round trip through saveForm ------------------------------------------------------
@@ -198,7 +212,7 @@ public class TaskFormSelectChoiceTest {
         this.actAsTenant();
         String options = "records=JSON array of objects\nlines=JSON Lines (one object per line)";
 
-        TaskForm saved = saveAndReturn(formWith(select(options, "records")));
+        Pipeline saved = saveAndReturn(formWith(select(options, "records")));
 
         assertThat(saved.getFields()).hasSize(1);
         assertThat(saved.getFields().get(0).getFieldOptions()).isEqualTo(options);
@@ -209,7 +223,7 @@ public class TaskFormSelectChoiceTest {
     @DisplayName("saveForm stores legacy options byte for byte too")
     void saveFormStoresLegacyOptionsVerbatim() {
         this.actAsTenant();
-        TaskForm saved = saveAndReturn(formWith(select("records\nlines", "lines")));
+        Pipeline saved = saveAndReturn(formWith(select("records\nlines", "lines")));
         assertThat(saved.getFields().get(0).getFieldOptions()).isEqualTo("records\nlines");
     }
 
@@ -225,10 +239,10 @@ public class TaskFormSelectChoiceTest {
          * server's side of that contract is simply to store what it is given.
          */
         this.actAsTenant();
-        TaskFormField text = select("eq\nne\ngt", null);
+        PipelineField text = select("eq\nne\ngt", null);
         text.setFieldType("text");
 
-        TaskForm saved = saveAndReturn(formWith(text));
+        Pipeline saved = saveAndReturn(formWith(text));
 
         assertThat(saved.getFields().get(0).getFieldOptions()).isEqualTo("eq\nne\ngt");
     }
@@ -244,22 +258,22 @@ public class TaskFormSelectChoiceTest {
 
         assertThat(response.getStatus()).isEqualTo(ERROR);
         assertThat(response.getMessage()).contains("not one of its choices");
-        verify(this.taskFormRepository, never()).save(any());
+        verify(this.pipelineRepository, never()).save(any());
     }
 
     private void actAsTenant() {
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 9000L, "user@tenant.example");
     }
 
-    private TaskForm saveAndReturn(TaskForm submitted) {
-        when(this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
-            PIPELINE, TENANT_A, Status.Delete)).thenReturn(Collections.<TaskForm>emptyList());
-        when(this.taskFormRepository.save(any(TaskForm.class)))
+    private Pipeline saveAndReturn(Pipeline submitted) {
+        when(this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(
+            PIPELINE, TENANT_A, Status.Delete)).thenReturn(Collections.<Pipeline>emptyList());
+        when(this.pipelineRepository.save(any(Pipeline.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         ResponseDto response = this.service.saveForm(submitted);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
-        return (TaskForm) response.getData();
+        return (Pipeline) response.getData();
     }
 }

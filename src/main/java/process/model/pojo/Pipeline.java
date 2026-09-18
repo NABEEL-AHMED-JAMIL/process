@@ -15,19 +15,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * What one pipeline's payload looks like, so a task can be filled in rather than hand-written.
+ * A pipeline a task can run: its public id (what the worker routes on), the topic it publishes
+ * on, and the fields a task on it fills in -- so a task can be configured by form rather than
+ * by hand-written XML.
  *
  * Holds no payload of its own. A task's tags remain the only record of what it sends; this
- * describes what those tags mean. Delete a form and every task built with it keeps working.
+ * describes what those tags mean. Delete a pipeline and every task built with it keeps working.
+ * Was task_form until V43; pipelineKey is the surrogate key, pipelineId the public id.
  *
  * @author Nabeel Ahmed
  */
 @Entity
-@Table(name = "task_form")
+@Table(name = "pipeline")
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
 // Declared for consistency with every other tenant-scoped entity, but currently inert:
-// TaskFormServiceImpl has no EntityManager/TenantFilterHelper and never enables this filter --
-// the actual rule lives in TaskFormRepository's own @Query methods (findVisibleToTenant,
+// PipelineServiceImpl has no EntityManager/TenantFilterHelper and never enables this filter --
+// the actual rule lives in PipelineRepository's own @Query methods (findVisibleToTenant,
 // findForPipeline), both strict "tenant_id = :tenantId" (2026-09-05; a form used to also match
 // a null-tenant "shared with every tenant" row, the same pattern Kafka Connections was already
 // walked back from -- see TenantOwnership's javadoc).
@@ -35,7 +38,7 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
-public class TaskForm implements Audited {
+public class Pipeline implements Audited {
     @Transient
     private String updatedByName;
 
@@ -44,23 +47,23 @@ public class TaskForm implements Audited {
 
 
     @GenericGenerator(
-        name = "taskFormSequenceGenerator",
+        name = "pipelineSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "task_form_source_seq"),
+            @Parameter(name = "sequence_name", value = "pipeline_source_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         })
     @Id
-    @GeneratedValue(generator = "taskFormSequenceGenerator")
-    @Column(name = "task_form_id")
-    private Long taskFormId;
+    @GeneratedValue(generator = "pipelineSequenceGenerator")
+    @Column(name = "pipeline_key")
+    private Long pipelineKey;
 
     @Column(name = "pipeline_id", nullable = false)
     private String pipelineId;
 
-    @Column(name = "form_name", nullable = false)
-    private String formName;
+    @Column(name = "pipeline_name", nullable = false)
+    private String pipelineName;
 
     @Column(name = "description")
     private String description;
@@ -68,9 +71,19 @@ public class TaskForm implements Audited {
     @Column(name = "tenant_id")
     private Long tenantId;
 
+    /** The topic (source task type) this pipeline publishes on; null only for a pre-V43 row. */
+    @Column(name = "source_task_type_id")
+    private Long sourceTaskTypeId;
+
+    /** Filled in on the way out: the topic's name and Kafka topic, for the console's lists. */
+    @Transient
+    private String topicName;
+    @Transient
+    private String kafkaTopic;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "form_status", nullable = false)
-    private Status formStatus = Status.Active;
+    @Column(name = "status", nullable = false)
+    private Status status = Status.Active;
 
     @Column(name = "date_created", nullable = false)
     private LocalDateTime dateCreated = LocalDateTime.now();
@@ -88,19 +101,19 @@ public class TaskForm implements Audited {
      * orphanRemoval because a field taken off a form has no meaning without it -- leaving the
      * row behind would resurrect the field the next time the form was read.
      */
-    @OneToMany(mappedBy = "taskForm", cascade = CascadeType.ALL, orphanRemoval = true,
+    @OneToMany(mappedBy = "pipeline", cascade = CascadeType.ALL, orphanRemoval = true,
                fetch = FetchType.EAGER)
     @OrderBy("position ASC")
-    private List<TaskFormField> fields = new ArrayList<>();
+    private List<PipelineField> fields = new ArrayList<>();
 
-    public Long getTaskFormId() { return taskFormId; }
-    public void setTaskFormId(Long taskFormId) { this.taskFormId = taskFormId; }
+    public Long getPipelineKey() { return pipelineKey; }
+    public void setPipelineKey(Long pipelineKey) { this.pipelineKey = pipelineKey; }
 
     public String getPipelineId() { return pipelineId; }
     public void setPipelineId(String pipelineId) { this.pipelineId = pipelineId; }
 
-    public String getFormName() { return formName; }
-    public void setFormName(String formName) { this.formName = formName; }
+    public String getPipelineName() { return pipelineName; }
+    public void setPipelineName(String pipelineName) { this.pipelineName = pipelineName; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
@@ -108,8 +121,17 @@ public class TaskForm implements Audited {
     public Long getTenantId() { return tenantId; }
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 
-    public Status getFormStatus() { return formStatus; }
-    public void setFormStatus(Status formStatus) { this.formStatus = formStatus; }
+    public Long getSourceTaskTypeId() { return sourceTaskTypeId; }
+    public void setSourceTaskTypeId(Long sourceTaskTypeId) { this.sourceTaskTypeId = sourceTaskTypeId; }
+
+    public String getTopicName() { return topicName; }
+    public void setTopicName(String topicName) { this.topicName = topicName; }
+
+    public String getKafkaTopic() { return kafkaTopic; }
+    public void setKafkaTopic(String kafkaTopic) { this.kafkaTopic = kafkaTopic; }
+
+    public Status getStatus() { return status; }
+    public void setStatus(Status status) { this.status = status; }
 
     public LocalDateTime getDateCreated() { return dateCreated; }
     public void setDateCreated(LocalDateTime dateCreated) { this.dateCreated = dateCreated; }
@@ -117,8 +139,8 @@ public class TaskForm implements Audited {
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
 
-    public List<TaskFormField> getFields() { return fields; }
-    public void setFields(List<TaskFormField> fields) { this.fields = fields; }
+    public List<PipelineField> getFields() { return fields; }
+    public void setFields(List<PipelineField> fields) { this.fields = fields; }
 
     public String getCreatedByName() { return createdByName; }
     public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }

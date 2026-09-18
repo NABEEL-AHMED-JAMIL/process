@@ -7,8 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.ResponseDto;
-import process.model.pojo.TaskForm;
-import process.model.service.impl.TaskFormServiceImpl;
+import process.model.pojo.Pipeline;
+import process.model.service.impl.PipelineServiceImpl;
 import process.util.ProcessUtil;
 
 /**
@@ -28,22 +28,22 @@ import process.util.ProcessUtil;
  */
 @RestController
 @CrossOrigin(origins = "*")
-@RequestMapping(value = "/taskForm.json")
+@RequestMapping(value = "/pipeline.json")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
-public class TaskFormRestApi {
+public class PipelineRestApi {
 
-    private final Logger logger = LoggerFactory.getLogger(TaskFormRestApi.class);
+    private final Logger logger = LoggerFactory.getLogger(PipelineRestApi.class);
 
-    private final TaskFormServiceImpl taskFormService;
+    private final PipelineServiceImpl pipelineService;
 
-    public TaskFormRestApi(TaskFormServiceImpl taskFormService) {
-        this.taskFormService = taskFormService;
+    public PipelineRestApi(PipelineServiceImpl pipelineService) {
+        this.pipelineService = pipelineService;
     }
 
-    @RequestMapping(value = "/listForms", method = RequestMethod.GET)
+    @RequestMapping(value = {"/list", "/listForms"}, method = RequestMethod.GET)
     public ResponseEntity<?> listForms() {
         try {
-            return new ResponseEntity<>(this.taskFormService.listForms(), HttpStatus.OK);
+            return new ResponseEntity<>(this.pipelineService.listForms(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listing task forms", ex);
             return internalError();
@@ -62,19 +62,31 @@ public class TaskFormRestApi {
     @RequestMapping(value = "/listPipelines", method = RequestMethod.GET)
     public ResponseEntity<?> listPipelines() {
         try {
-            return new ResponseEntity<>(this.taskFormService.listForms(), HttpStatus.OK);
+            return new ResponseEntity<>(this.pipelineService.listForms(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listing pipelines", ex);
             return internalError();
         }
     }
 
+    /** The pipelines on one topic -- what a task may pick once its topic is chosen. */
     @PreAuthorize("hasRole('TENANT_USER')")
-    @RequestMapping(value = "/formForPipeline", method = RequestMethod.GET)
+    @RequestMapping(value = "/listForTopic", method = RequestMethod.GET)
+    public ResponseEntity<?> listForTopic(@RequestParam Long sourceTaskTypeId) {
+        try {
+            return new ResponseEntity<>(this.pipelineService.listForTopic(sourceTaskTypeId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while listing pipelines for topic {}", sourceTaskTypeId, ex);
+            return internalError();
+        }
+    }
+
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = {"/definition", "/formForPipeline"}, method = RequestMethod.GET)
     public ResponseEntity<?> formForPipeline(@RequestParam String pipelineId,
         @RequestParam(required = false) Long tenantId) {
         try {
-            return new ResponseEntity<>(this.taskFormService.formForPipeline(pipelineId, tenantId), HttpStatus.OK);
+            return new ResponseEntity<>(this.pipelineService.formForPipeline(pipelineId, tenantId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while reading the form for pipeline {}", pipelineId, ex);
             return internalError();
@@ -82,10 +94,10 @@ public class TaskFormRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
-    @RequestMapping(value = "/saveForm", method = RequestMethod.POST)
-    public ResponseEntity<?> saveForm(@RequestBody TaskForm form) {
+    @RequestMapping(value = {"/save", "/saveForm"}, method = RequestMethod.POST)
+    public ResponseEntity<?> saveForm(@RequestBody Pipeline form) {
         try {
-            return new ResponseEntity<>(this.taskFormService.saveForm(form), HttpStatus.OK);
+            return new ResponseEntity<>(this.pipelineService.saveForm(form), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while saving a task form", ex);
             return internalError();
@@ -93,12 +105,12 @@ public class TaskFormRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
-    @RequestMapping(value = "/deleteForm", method = RequestMethod.DELETE)
-    public ResponseEntity<?> deleteForm(@RequestParam Long taskFormId) {
+    @RequestMapping(value = {"/delete", "/deleteForm"}, method = RequestMethod.DELETE)
+    public ResponseEntity<?> deleteForm(@RequestParam Long pipelineKey) {
         try {
-            return new ResponseEntity<>(this.taskFormService.deleteForm(taskFormId), HttpStatus.OK);
+            return new ResponseEntity<>(this.pipelineService.deleteForm(pipelineKey), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while deleting task form {}", taskFormId, ex);
+            logger.error("An error occurred while deleting task form {}", pipelineKey, ex);
             return internalError();
         }
     }

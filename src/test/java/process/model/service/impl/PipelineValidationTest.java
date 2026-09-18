@@ -3,8 +3,8 @@ package process.model.service.impl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import process.model.pojo.TaskForm;
-import process.model.pojo.TaskFormField;
+import process.model.pojo.Pipeline;
+import process.model.pojo.PipelineField;
 import process.security.TenantContext;
 
 import java.util.Arrays;
@@ -18,34 +18,35 @@ import static org.junit.jupiter.api.Assertions.*;
  * These rules exist because a bad definition does not fail here -- it produces tasks that build
  * the wrong XML and fail at run time, a long way from the person who defined the form.
  */
-public class TaskFormValidationTest {
+public class PipelineValidationTest {
 
     @AfterEach
     void clear() { TenantContext.clear(); }
 
-    private TaskFormField field(String tag, String parent, String label) {
-        TaskFormField f = new TaskFormField();
+    private PipelineField field(String tag, String parent, String label) {
+        PipelineField f = new PipelineField();
         f.setTagKey(tag); f.setTagParent(parent); f.setLabel(label); f.setFieldType("text");
         return f;
     }
 
-    private TaskForm form(TaskFormField... fields) {
-        TaskForm form = new TaskForm();
+    private Pipeline form(PipelineField... fields) {
+        Pipeline form = new Pipeline();
+        form.setSourceTaskTypeId(9001L);
         form.setPipelineId("F768926");
-        form.setFormName("Hurricane payload");
+        form.setPipelineName("Hurricane payload");
         form.setFields(new java.util.ArrayList<>(Arrays.asList(fields)));
         return form;
     }
 
     /** The rules alone: no repository, no transaction, nothing to stub. */
-    private String save(TaskForm form) {
-        return TaskFormServiceImpl.validate(form);
+    private String save(Pipeline form) {
+        return PipelineServiceImpl.validate(form);
     }
 
     @Test
     @DisplayName("a form needs the pipeline it describes")
     void needsPipeline() {
-        TaskForm f = form(field("bucket", null, "Bucket"));
+        Pipeline f = form(field("bucket", null, "Bucket"));
         f.setPipelineId("  ");
         assertTrue(save(f).contains("pipeline"), save(f));
     }
@@ -53,15 +54,15 @@ public class TaskFormValidationTest {
     @Test
     @DisplayName("a form needs a name")
     void needsName() {
-        TaskForm f = form(field("bucket", null, "Bucket"));
-        f.setFormName("");
+        Pipeline f = form(field("bucket", null, "Bucket"));
+        f.setPipelineName("");
         assertTrue(save(f).toLowerCase().contains("name"), save(f));
     }
 
     @Test
     @DisplayName("a form with no fields is refused")
     void needsFields() {
-        TaskForm f = form();
+        Pipeline f = form();
         assertTrue(save(f).contains("at least one field"), save(f));
     }
 

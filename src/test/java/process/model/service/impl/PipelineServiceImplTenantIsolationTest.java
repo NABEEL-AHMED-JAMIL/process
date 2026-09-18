@@ -8,10 +8,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
-import process.model.pojo.TaskForm;
-import process.model.pojo.TaskFormField;
+import process.model.pojo.Pipeline;
+import process.model.pojo.PipelineField;
 import process.model.pojo.Tenant;
-import process.model.repository.TaskFormRepository;
+import process.model.repository.PipelineRepository;
+import process.model.repository.SourceTaskTypeRepository;
+import process.model.pojo.SourceTaskType;
 import process.model.repository.TenantRepository;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
@@ -42,30 +44,36 @@ import static process.util.ProcessUtil.SUCCESS;
  * @author Nabeel Ahmed
  */
 @ExtendWith(MockitoExtension.class)
-public class TaskFormServiceImplTenantIsolationTest {
+public class PipelineServiceImplTenantIsolationTest {
 
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;
     private static final long DEFAULT_TENANT = 1L;
     private static final String PIPELINE = "F768926";
 
-    @Mock private TaskFormRepository taskFormRepository;
+    @Mock private PipelineRepository pipelineRepository;
     @Mock private TenantRepository tenantRepository;
     @Mock private UserNameResolver userNameResolver;
+    @Mock private SourceTaskTypeRepository sourceTaskTypeRepository;
 
-    private TaskFormServiceImpl service;
-    private TaskForm tenantAForm;
+    private PipelineServiceImpl service;
+
+    /** A topic with no tenant -- visible to every workspace -- so it never trips the ownership check here. */
+    private static final long TOPIC_ID = 9001L;
+    private Pipeline tenantAForm;
 
     @BeforeEach
     void setUp() {
-        this.service = new TaskFormServiceImpl(this.taskFormRepository, this.tenantRepository, this.userNameResolver);
+        this.service = new PipelineServiceImpl(this.pipelineRepository, this.tenantRepository, this.userNameResolver, this.sourceTaskTypeRepository);
+        this.theTopicExists();
 
-        this.tenantAForm = new TaskForm();
-        this.tenantAForm.setTaskFormId(55L);
+        this.tenantAForm = new Pipeline();
+        this.tenantAForm.setSourceTaskTypeId(TOPIC_ID);
+        this.tenantAForm.setPipelineKey(55L);
         this.tenantAForm.setPipelineId(PIPELINE);
-        this.tenantAForm.setFormName("Tenant A's form");
+        this.tenantAForm.setPipelineName("Tenant A's form");
         this.tenantAForm.setTenantId(TENANT_A);
-        this.tenantAForm.setFormStatus(Status.Active);
+        this.tenantAForm.setStatus(Status.Active);
         this.tenantAForm.setFields(new java.util.ArrayList<>(Collections.singletonList(field("bucket", "Bucket"))));
 
         lenient().when(this.userNameResolver.namesFor(any())).thenReturn(Collections.emptyMap());
@@ -74,8 +82,15 @@ public class TaskFormServiceImplTenantIsolationTest {
     @AfterEach
     void clear() { TenantContext.clear(); }
 
-    private TaskFormField field(String tag, String label) {
-        TaskFormField f = new TaskFormField();
+    private void theTopicExists() {
+        SourceTaskType topic = new SourceTaskType();
+        topic.setSourceTaskTypeId(TOPIC_ID);
+        topic.setStatus(process.model.enums.Status.Active);
+        org.mockito.Mockito.lenient().when(this.sourceTaskTypeRepository.findById(TOPIC_ID)).thenReturn(java.util.Optional.of(topic));
+    }
+
+    private PipelineField field(String tag, String label) {
+        PipelineField f = new PipelineField();
         f.setTagKey(tag);
         f.setLabel(label);
         f.setFieldType("text");
@@ -91,37 +106,37 @@ public class TaskFormServiceImplTenantIsolationTest {
     @Test
     void aTenantNeverSeesAnotherTenantsForms() {
         this.actAsTenant(TENANT_B);
-        when(this.taskFormRepository.findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(TENANT_B, Status.Delete))
+        when(this.pipelineRepository.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(TENANT_B, Status.Delete))
             .thenReturn(Collections.emptyList());
 
         ResponseDto response = this.service.listForms();
 
         assertThat((List<?>) response.getData()).isEmpty();
-        verify(this.taskFormRepository, never()).findAllByFormStatusNot(any());
+        verify(this.pipelineRepository, never()).findAllByStatusNot(any());
     }
 
     @Test
     void aTenantSeesItsOwnForms() {
         this.actAsTenant(TENANT_A);
-        when(this.taskFormRepository.findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(TENANT_A, Status.Delete))
+        when(this.pipelineRepository.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(TENANT_A, Status.Delete))
             .thenReturn(Collections.singletonList(this.tenantAForm));
 
         ResponseDto response = this.service.listForms();
 
-        assertThat((List<TaskForm>) (List<?>) response.getData()).containsExactly(this.tenantAForm);
+        assertThat((List<Pipeline>) (List<?>) response.getData()).containsExactly(this.tenantAForm);
     }
 
     @Test
     void aPlatformAdminSeesEveryTenantsForms() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        when(this.taskFormRepository.findAllByFormStatusNot(Status.Delete))
+        when(this.pipelineRepository.findAllByStatusNot(Status.Delete))
             .thenReturn(Collections.singletonList(this.tenantAForm));
 
         ResponseDto response = this.service.listForms();
 
-        assertThat((List<TaskForm>) (List<?>) response.getData()).containsExactly(this.tenantAForm);
-        verify(this.taskFormRepository, never())
-            .findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(anyLong(), any());
+        assertThat((List<Pipeline>) (List<?>) response.getData()).containsExactly(this.tenantAForm);
+        verify(this.pipelineRepository, never())
+            .findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(anyLong(), any());
     }
 
     @Test
@@ -131,9 +146,9 @@ public class TaskFormServiceImplTenantIsolationTest {
         ResponseDto response = this.service.listForms();
 
         assertThat((List<?>) response.getData()).isEmpty();
-        verify(this.taskFormRepository, never())
-            .findAllByTenantIdAndFormStatusNotOrderByTaskFormIdDesc(any(), any());
-        verify(this.taskFormRepository, never()).findAllByFormStatusNot(any());
+        verify(this.pipelineRepository, never())
+            .findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(any(), any());
+        verify(this.pipelineRepository, never()).findAllByStatusNot(any());
     }
 
     // ---- formForPipeline: strict, no shared fallback -------------------------------------------
@@ -141,20 +156,20 @@ public class TaskFormServiceImplTenantIsolationTest {
     @Test
     void aPipelinesFormNeverResolvesToAnotherTenantsDefinition() {
         this.actAsTenant(TENANT_B);
-        when(this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(PIPELINE, TENANT_B, Status.Delete))
+        when(this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(PIPELINE, TENANT_B, Status.Delete))
             .thenReturn(Collections.emptyList());
 
         ResponseDto response = this.service.formForPipeline(PIPELINE, null);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         assertThat(response.getData()).isNull();
-        assertThat(response.getMessage()).contains("No form is defined");
+        assertThat(response.getMessage()).contains("No pipeline is defined");
     }
 
     @Test
     void aPipelinesFormResolvesToTheCallersOwnTenant() {
         this.actAsTenant(TENANT_A);
-        when(this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(PIPELINE, TENANT_A, Status.Delete))
+        when(this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(PIPELINE, TENANT_A, Status.Delete))
             .thenReturn(Collections.singletonList(this.tenantAForm));
 
         ResponseDto response = this.service.formForPipeline(PIPELINE, null);
@@ -174,29 +189,29 @@ public class TaskFormServiceImplTenantIsolationTest {
     @Test
     void aPlatformAdminsRequestMatchesThePipelineAcrossEveryTenant() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        when(this.taskFormRepository.findAllByFormStatusNot(Status.Delete))
+        when(this.pipelineRepository.findAllByStatusNot(Status.Delete))
             .thenReturn(Collections.singletonList(this.tenantAForm));
 
         ResponseDto response = this.service.formForPipeline(PIPELINE, null);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         assertThat(response.getData()).isEqualTo(this.tenantAForm);
-        verify(this.taskFormRepository, never())
-            .findAllByPipelineIdAndTenantIdAndFormStatusNot(any(), any(), any());
+        verify(this.pipelineRepository, never())
+            .findAllByPipelineIdAndTenantIdAndStatusNot(any(), any(), any());
     }
 
     /** The control: a platform admin gets nothing back for a pipeline no tenant has defined. */
     @Test
     void aPlatformAdminGetsNothingForAPipelineNoTenantHasDefined() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        when(this.taskFormRepository.findAllByFormStatusNot(Status.Delete))
+        when(this.pipelineRepository.findAllByStatusNot(Status.Delete))
             .thenReturn(Collections.singletonList(this.tenantAForm));
 
         ResponseDto response = this.service.formForPipeline("F000000-not-defined-anywhere", null);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         assertThat(response.getData()).isNull();
-        assertThat(response.getMessage()).contains("No form is defined");
+        assertThat(response.getMessage()).contains("No pipeline is defined");
     }
 
     // ---- saveForm: create always stamps the caller's own tenant, never a shared row -----------
@@ -204,19 +219,20 @@ public class TaskFormServiceImplTenantIsolationTest {
     @Test
     void aNewFormIsStampedWithTheCreatorsOwnTenant() {
         this.actAsTenant(TENANT_A);
-        when(this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(PIPELINE, TENANT_A, Status.Delete))
+        when(this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(PIPELINE, TENANT_A, Status.Delete))
             .thenReturn(Collections.emptyList());
-        when(this.taskFormRepository.save(any(TaskForm.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(this.pipelineRepository.save(any(Pipeline.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TaskForm submitted = new TaskForm();
+        Pipeline submitted = new Pipeline();
+        submitted.setSourceTaskTypeId(TOPIC_ID);
         submitted.setPipelineId(PIPELINE);
-        submitted.setFormName("New form");
+        submitted.setPipelineName("New form");
         submitted.setFields(Collections.singletonList(field("bucket", "Bucket")));
 
         ResponseDto response = this.service.saveForm(submitted);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
-        TaskForm saved = (TaskForm) response.getData();
+        Pipeline saved = (Pipeline) response.getData();
         assertThat(saved.getTenantId()).isEqualTo(TENANT_A);
     }
 
@@ -232,19 +248,20 @@ public class TaskFormServiceImplTenantIsolationTest {
         defaultTenant.setTenantId(DEFAULT_TENANT);
         when(this.tenantRepository.findByTenantCode(TenantSeedService.DEFAULT_TENANT_CODE))
             .thenReturn(Optional.of(defaultTenant));
-        when(this.taskFormRepository.findAllByPipelineIdAndTenantIdAndFormStatusNot(
+        when(this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(
             PIPELINE, DEFAULT_TENANT, Status.Delete)).thenReturn(Collections.emptyList());
-        when(this.taskFormRepository.save(any(TaskForm.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(this.pipelineRepository.save(any(Pipeline.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TaskForm submitted = new TaskForm();
+        Pipeline submitted = new Pipeline();
+        submitted.setSourceTaskTypeId(TOPIC_ID);
         submitted.setPipelineId(PIPELINE);
-        submitted.setFormName("New form");
+        submitted.setPipelineName("New form");
         submitted.setFields(Collections.singletonList(field("bucket", "Bucket")));
 
         ResponseDto response = this.service.saveForm(submitted);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
-        TaskForm saved = (TaskForm) response.getData();
+        Pipeline saved = (Pipeline) response.getData();
         assertThat(saved.getTenantId()).isEqualTo(DEFAULT_TENANT);
     }
 
@@ -257,16 +274,17 @@ public class TaskFormServiceImplTenantIsolationTest {
         when(this.tenantRepository.findByTenantCode(TenantSeedService.DEFAULT_TENANT_CODE))
             .thenReturn(Optional.empty());
 
-        TaskForm submitted = new TaskForm();
+        Pipeline submitted = new Pipeline();
+        submitted.setSourceTaskTypeId(TOPIC_ID);
         submitted.setPipelineId(PIPELINE);
-        submitted.setFormName("New form");
+        submitted.setPipelineName("New form");
         submitted.setFields(Collections.singletonList(field("bucket", "Bucket")));
 
         ResponseDto response = this.service.saveForm(submitted);
 
         assertThat(response.getStatus()).isEqualTo(ERROR);
         assertThat(response.getMessage()).contains("No default tenant");
-        verify(this.taskFormRepository, never()).save(any());
+        verify(this.pipelineRepository, never()).save(any());
     }
 
     // ---- edit/delete: a tenant cannot touch another tenant's row (already-strict write path) ---
@@ -274,46 +292,48 @@ public class TaskFormServiceImplTenantIsolationTest {
     @Test
     void aTenantCannotEditAnotherTenantsForm() {
         this.actAsTenant(TENANT_B);
-        when(this.taskFormRepository.findByTaskFormIdAndFormStatusNot(55L, Status.Delete))
+        when(this.pipelineRepository.findByPipelineKeyAndStatusNot(55L, Status.Delete))
             .thenReturn(Optional.of(this.tenantAForm));
 
-        TaskForm submitted = new TaskForm();
-        submitted.setTaskFormId(55L);
+        Pipeline submitted = new Pipeline();
+        submitted.setSourceTaskTypeId(TOPIC_ID);
+        submitted.setPipelineKey(55L);
         submitted.setPipelineId(PIPELINE);
-        submitted.setFormName("Repointed");
+        submitted.setPipelineName("Repointed");
         submitted.setFields(Collections.singletonList(field("bucket", "Bucket")));
 
         ResponseDto response = this.service.saveForm(submitted);
 
         assertThat(response.getStatus()).isEqualTo(ERROR);
         assertThat(response.getMessage()).contains("another tenant");
-        verify(this.taskFormRepository, never()).save(any());
+        verify(this.pipelineRepository, never()).save(any());
     }
 
     @Test
     void aTenantCannotDeleteAnotherTenantsForm() {
         this.actAsTenant(TENANT_B);
-        when(this.taskFormRepository.findByTaskFormIdAndFormStatusNot(55L, Status.Delete))
+        when(this.pipelineRepository.findByPipelineKeyAndStatusNot(55L, Status.Delete))
             .thenReturn(Optional.of(this.tenantAForm));
 
         ResponseDto response = this.service.deleteForm(55L);
 
         assertThat(response.getStatus()).isEqualTo(ERROR);
-        verify(this.taskFormRepository, never()).save(any());
+        verify(this.pipelineRepository, never()).save(any());
     }
 
     /** The control: the platform admin can still manage a form regardless of whose tenant it is. */
     @Test
     void aPlatformAdminCanStillEditAnyExistingForm() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        when(this.taskFormRepository.findByTaskFormIdAndFormStatusNot(55L, Status.Delete))
+        when(this.pipelineRepository.findByPipelineKeyAndStatusNot(55L, Status.Delete))
             .thenReturn(Optional.of(this.tenantAForm));
-        when(this.taskFormRepository.save(any(TaskForm.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(this.pipelineRepository.save(any(Pipeline.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TaskForm submitted = new TaskForm();
-        submitted.setTaskFormId(55L);
+        Pipeline submitted = new Pipeline();
+        submitted.setSourceTaskTypeId(TOPIC_ID);
+        submitted.setPipelineKey(55L);
         submitted.setPipelineId(PIPELINE);
-        submitted.setFormName("Renamed by platform admin");
+        submitted.setPipelineName("Renamed by platform admin");
         submitted.setFields(Collections.singletonList(field("bucket", "Bucket")));
 
         ResponseDto response = this.service.saveForm(submitted);

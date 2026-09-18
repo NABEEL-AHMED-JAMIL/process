@@ -25,7 +25,7 @@ public class TenantSeedService {
     private final Logger logger = LoggerFactory.getLogger(TenantSeedService.class);
 
     private static final String PLATFORM_ADMIN_USERNAME = "admin@platform.local";
-    // Public: TaskFormServiceImpl also targets this tenant, for a platform admin's new form --
+    // Public: PipelineServiceImpl also targets this tenant, for a platform admin's new form --
     // see the comment on that call site for why.
     public static final String DEFAULT_TENANT_CODE = "default";
 

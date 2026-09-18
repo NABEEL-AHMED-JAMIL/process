@@ -35,7 +35,7 @@ import java.sql.Timestamp;
  * @author Nabeel Ahmed
  * */
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
-// Admits the platform's own rows (tenant_id null) as SourceTaskType, TaskForm and
+// Admits the platform's own rows (tenant_id null) as SourceTaskType, Pipeline and
 // KafkaConnectionProfile already do. A strict condition hid etl-bucket and etl-avatar from the
 // alias lookup that resolves a bucket, which broke every workflow writing there AND silently
 // disabled the platform-bucket guard -- the guard can only refuse a connection it can see.
