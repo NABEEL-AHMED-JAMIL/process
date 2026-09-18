@@ -333,8 +333,6 @@ public class SettingServiceImpl implements SettingService {
     public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception {
         if (isNull(sourceTaskTypeDto.getServiceName())) {
             return new ResponseDto(ERROR, "Topic name missing.");
-        } else if (isNull(sourceTaskTypeDto.getDescription())) {
-            return new ResponseDto(ERROR, "Topic description missing.");
         } else if (isNull(sourceTaskTypeDto.getQueueTopicPartition())) {
             return new ResponseDto(ERROR, "Kafka topic missing.");
         }
