@@ -65,6 +65,28 @@ public class PipelineField {
     @Column(name = "position", nullable = false)
     private int position;
 
+    // An AI step (field_type "ai"): the prompt it runs, which earlier fields feed its variables
+    // ({"promptVariable": "sourceTagKey"}), and what a failed call does to the run. The answer is
+    // written to this field's own tag before dispatch, so the worker sees an ordinary tag.
+    @Column(name = "prompt_id")
+    private Long promptId;
+    @Column(name = "variable_map", columnDefinition = "TEXT")
+    private String variableMap;
+    @Column(name = "on_error")
+    private String onError;
+    /** The prompt's name, for the screens; not stored. */
+    @Transient
+    private String promptName;
+
+    public Long getPromptId() { return promptId; }
+    public void setPromptId(Long promptId) { this.promptId = promptId; }
+    public String getVariableMap() { return variableMap; }
+    public void setVariableMap(String variableMap) { this.variableMap = variableMap; }
+    public String getOnError() { return onError; }
+    public void setOnError(String onError) { this.onError = onError; }
+    public String getPromptName() { return promptName; }
+    public void setPromptName(String promptName) { this.promptName = promptName; }
+
     public Long getPipelineFieldId() { return pipelineFieldId; }
     public void setPipelineFieldId(Long pipelineFieldId) { this.pipelineFieldId = pipelineFieldId; }
 

@@ -54,6 +54,7 @@ public class ProducerBulkEngineDispatchGuardTest {
     @Mock private KafkaTemplateProvider kafkaTemplateProvider;
     @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
+    @Mock private process.ai.AiStepService aiStepService;
 
     private ProducerBulkEngine engine;
 
@@ -61,7 +62,11 @@ public class ProducerBulkEngineDispatchGuardTest {
     void setUp() {
         this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService,
             this.emailMessagesFactory, this.kafkaTemplateProvider, this.kafkaConnectionResolver,
-            this.runCallbackTokens);
+            this.runCallbackTokens, this.aiStepService);
+        // No AI steps on these pipelines: the document goes through as stored.
+        org.mockito.Mockito.lenient().when(this.aiStepService.apply(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(inv -> new process.ai.AiStepService.Outcome(inv.getArgument(3), null));
     }
 
     private static LookupData lookupValued(String value) {

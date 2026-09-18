@@ -69,6 +69,13 @@ public class AiPromptRestApi {
         try { return new ResponseEntity<>(this.service.runs(promptId, page, limit), HttpStatus.OK); } catch (Exception ex) { return this.failed("runs", ex); }
     }
 
+    /** The AI steps that ran for one job run -- the job history's card. */
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/runsForJob", method = RequestMethod.GET)
+    public ResponseEntity<?> runsForJob(@RequestParam Long jobQueueId) {
+        try { return new ResponseEntity<>(this.service.runsForJob(jobQueueId), HttpStatus.OK); } catch (Exception ex) { return this.failed("runsForJob", ex); }
+    }
+
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/versions", method = RequestMethod.GET)
     public ResponseEntity<?> versions(@RequestParam Long promptId) {

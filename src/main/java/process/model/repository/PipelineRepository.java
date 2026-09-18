@@ -48,6 +48,11 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
         @Param("status") String status, @Param("createdBy") long createdBy, @Param("q") String q,
         org.springframework.data.domain.Pageable pageable);
 
+    /** How many live pipelines carry an AI step on this prompt -- what keeps the prompt from going. */
+    @Query(value = "select count(distinct p.pipeline_key) from pipeline_field f join pipeline p on p.pipeline_key = f.pipeline_key " +
+        "where f.prompt_id = :promptId and cast(p.status as varchar) <> 'Delete'", nativeQuery = true)
+    long countUsingPrompt(@Param("promptId") Long promptId);
+
     /** The whole scope in five numbers, for the tiles above the list; unfiltered on purpose. */
     @Query(value = "select count(*) as total, count(*) filter (where cast(p.status as varchar) = 'Active') as active,\n" +
         "count(distinct p.source_task_type_id) as topics, count(*) filter (where p.source_task_type_id is null) as untopped,\n" +

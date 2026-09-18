@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 45.0-ai-steps
+      author: nabeel.amd93
+      description: "pipeline_field carries an AI step: prompt, variable map, on-error"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V45.0-ai-steps/V45__ai_steps.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE pipeline_field DROP COLUMN IF EXISTS on_error;
+              ALTER TABLE pipeline_field DROP COLUMN IF EXISTS variable_map;
+              ALTER TABLE pipeline_field DROP COLUMN IF EXISTS prompt_id;

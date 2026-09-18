@@ -8,9 +8,11 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
+import process.model.pojo.AiPrompt;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.Objects;
 import process.util.PagingUtil;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
@@ -52,7 +54,7 @@ public class PipelineServiceImpl {
 
     /** The types the task form can render. Anything else would render as a blank box. */
     private static final Set<String> FIELD_TYPES = new HashSet<>(Arrays.asList(
-        "text", "textarea", "number", "url", "select", "checkbox", "date"));
+        "text", "textarea", "number", "url", "select", "checkbox", "date", "ai"));
 
     /** Compiled once: {@link #choiceValues} asks this of every one-line option string. */
     private static final Pattern WHITESPACE = Pattern.compile("\\s");
@@ -64,6 +66,10 @@ public class PipelineServiceImpl {
     private final UserNameResolver userNameResolver;
 
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
+
+    /** Optional so the existing tests' constructor still stands; null means no AI-step check. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private process.model.repository.AiPromptRepository aiPromptRepository;
 
     public PipelineServiceImpl(PipelineRepository pipelineRepository, TenantRepository tenantRepository,
         UserNameResolver userNameResolver, SourceTaskTypeRepository sourceTaskTypeRepository) {
@@ -190,6 +196,7 @@ public class PipelineServiceImpl {
         if (!existing.isPresent() || !isOwnedByCaller(existing.get())) {
             return new ResponseDto(ERROR, "That pipeline no longer exists.");
         }
+        this.namePrompts(existing.get().getFields());
         return new ResponseDto(SUCCESS, String.format("%d field(s).", existing.get().getFields().size()),
             existing.get().getFields());
     }
@@ -245,6 +252,7 @@ public class PipelineServiceImpl {
             return new ResponseDto(SUCCESS, "No pipeline is defined with this id.", null);
         }
         this.attachTopics(found);
+        this.namePrompts(found.get(0).getFields());
         return new ResponseDto(SUCCESS, "Pipeline found.", found.get(0));
     }
 
@@ -343,9 +351,17 @@ public class PipelineServiceImpl {
             // has already had its say about them, and rewriting them here would only give the
             // server a second opinion on a format the task screen is the one that has to read.
             copy.setFieldOptions(field.getFieldOptions());
+            if ("ai".equals(copy.getFieldType())) {
+                copy.setPromptId(field.getPromptId());
+                copy.setVariableMap(field.getVariableMap());
+                copy.setOnError("continue".equals(field.getOnError()) ? "continue" : "fail");
+                copy.setRequired(false);
+            }
             copy.setPosition(position++);
             target.getFields().add(copy);
         }
+        String stepProblem = this.validateAiSteps(target);
+        if (stepProblem != null) return new ResponseDto(ERROR, stepProblem);
 
         try {
             Pipeline saved = this.pipelineRepository.save(target);
@@ -386,6 +402,53 @@ public class PipelineServiceImpl {
     // ---- helpers ---------------------------------------------------------------------------
 
     /** Package-private and static so the rules can be tested without a database behind them. */
+    /**
+     * An AI step names a prompt of this workspace that is active, maps every required variable
+     * of that prompt to a field that comes before it (a later field has no value yet when the
+     * step runs, and the step itself is its own output), and nothing else.
+     */
+    private String validateAiSteps(Pipeline form) {
+        if (this.aiPromptRepository == null) return null;
+        Set<String> before = new HashSet<>();
+        for (PipelineField field : form.getFields()) {
+            if (!"ai".equals(field.getFieldType())) { before.add(field.getTagKey()); continue; }
+            if (field.getPromptId() == null) return String.format("The AI step <%s> names no prompt.", field.getTagKey());
+            Optional<AiPrompt> prompt = this.aiPromptRepository.findById(field.getPromptId()).filter(p -> p.getStatus() != Status.Delete);
+            if (!prompt.isPresent() || !Objects.equals(prompt.get().getTenantId(), form.getTenantId())) {
+                return String.format("The AI step <%s> names a prompt this workspace cannot use.", field.getTagKey());
+            }
+            if (prompt.get().getStatus() != Status.Active) {
+                return String.format("The AI step <%s> names \"%s\", which is not active. Activate the prompt first.", field.getTagKey(), prompt.get().getName());
+            }
+            Map<String, String> map = new HashMap<>();
+            if (field.getVariableMap() != null && !field.getVariableMap().trim().isEmpty()) {
+                try { map = new com.google.gson.Gson().fromJson(field.getVariableMap(), new com.google.gson.reflect.TypeToken<Map<String, String>>() {}.getType()); }
+                catch (Exception ex) { return String.format("The AI step <%s> has an unreadable variable map.", field.getTagKey()); }
+            }
+            List<process.model.dto.AiPromptDto.Variable> variables = prompt.get().getVariables() == null ? new ArrayList<>()
+                : new com.google.gson.Gson().fromJson(prompt.get().getVariables(), new com.google.gson.reflect.TypeToken<List<process.model.dto.AiPromptDto.Variable>>() {}.getType());
+            for (process.model.dto.AiPromptDto.Variable v : variables) {
+                String source = map.get(v.name);
+                if (source == null || source.trim().isEmpty()) {
+                    if (Boolean.TRUE.equals(v.required)) return String.format("The AI step <%s> gives no field for the prompt's variable {{%s}}.", field.getTagKey(), v.name);
+                    continue;
+                }
+                if (!before.contains(source)) return String.format("The AI step <%s> reads <%s> for {{%s}}, but no field before it writes that tag.", field.getTagKey(), source, v.name);
+            }
+            before.add(field.getTagKey());
+        }
+        return null;
+    }
+
+    /** The prompt's name on each AI step, for the screens. */
+    void namePrompts(List<PipelineField> fields) {
+        if (this.aiPromptRepository == null || fields == null) return;
+        for (PipelineField f : fields) {
+            if (f.getPromptId() == null) continue;
+            this.aiPromptRepository.findById(f.getPromptId()).ifPresent(p -> f.setPromptName(p.getName()));
+        }
+    }
+
     static String validate(Pipeline form) {
         if (form == null) return "Nothing to save.";
         if (isBlank(form.getPipelineId())) return "Give the pipeline its id -- the one the worker routes on.";

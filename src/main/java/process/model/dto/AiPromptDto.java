@@ -46,6 +46,8 @@ public class AiPromptDto {
     /** On save: true activates the prompt with this version. */
     private Boolean activate;
     private Long runCount;
+    /** How many live pipelines run it as a step -- what keeps it from being deactivated or deleted. */
+    private Long pipelineCount;
     private Timestamp lastRunAt;
     private String lastRunStatus;
     private Timestamp dateCreated;
@@ -78,6 +80,7 @@ public class AiPromptDto {
     public String getStatus() { return status; } public void setStatus(String v) { status = v; }
     public Boolean getActivate() { return activate; } public void setActivate(Boolean v) { activate = v; }
     public Long getRunCount() { return runCount; } public void setRunCount(Long v) { runCount = v; }
+    public Long getPipelineCount() { return pipelineCount; } public void setPipelineCount(Long v) { pipelineCount = v; }
     public Timestamp getLastRunAt() { return lastRunAt; } public void setLastRunAt(Timestamp v) { lastRunAt = v; }
     public String getLastRunStatus() { return lastRunStatus; } public void setLastRunStatus(String v) { lastRunStatus = v; }
     public Timestamp getDateCreated() { return dateCreated; } public void setDateCreated(Timestamp v) { dateCreated = v; }

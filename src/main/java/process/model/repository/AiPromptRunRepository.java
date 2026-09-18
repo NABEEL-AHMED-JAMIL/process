@@ -17,6 +17,8 @@ public interface AiPromptRunRepository extends JpaRepository<AiPromptRun, Long> 
 
     Optional<AiPromptRun> findByJobQueueIdAndStepTag(Long jobQueueId, String stepTag);
 
+    java.util.List<AiPromptRun> findAllByJobQueueIdOrderByRunIdAsc(Long jobQueueId);
+
     Optional<AiPromptRun> findFirstByPromptIdOrderByRunIdDesc(Long promptId);
 
     long countByPromptId(Long promptId);

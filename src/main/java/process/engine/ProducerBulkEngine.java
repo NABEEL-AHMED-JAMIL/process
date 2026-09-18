@@ -11,6 +11,7 @@ import process.config.KafkaTemplateProvider;
 import process.emailer.EmailMessagesFactory;
 import process.engine.dto.JobPayloadDTO;
 import process.security.RunCallbackTokens;
+import process.ai.AiStepService;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -39,6 +40,7 @@ public class ProducerBulkEngine {
     public Logger logger = LogManager.getLogger(ProducerBulkEngine.class);
 
     private final RunCallbackTokens runCallbackTokens;
+    private final AiStepService aiStepService;
     private final BulkAction bulkAction;
     private final TransactionServiceImpl transactionService;
     private final EmailMessagesFactory emailMessagesFactory;
@@ -50,8 +52,9 @@ public class ProducerBulkEngine {
         EmailMessagesFactory emailMessagesFactory,
         KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
-        RunCallbackTokens runCallbackTokens) {
+        RunCallbackTokens runCallbackTokens, AiStepService aiStepService) {
         this.runCallbackTokens = runCallbackTokens;
+        this.aiStepService = aiStepService;
         this.bulkAction = bulkAction;
         this.transactionService = transactionService;
         this.emailMessagesFactory = emailMessagesFactory;
@@ -327,7 +330,17 @@ public class ProducerBulkEngine {
                     String partition = parsed.get().getPartition();
 
                     String key = UUID.randomUUID().toString();
-                    String payload = this.getSourceJobDetail(sourceJob, jobQueue);
+                    // The pipeline's AI steps run here, before the send, and write their answers
+                    // into the task's document; the worker then sees ordinary tags. A step that
+                    // fails (and says the run must) closes the run without a send.
+                    AiStepService.Outcome steps = this.aiStepService.apply(sourceJob.getTenantId(),
+                        sourceTask.getPipelineId(), jobQueue.getJobQueueId(), sourceTask.getTaskPayload());
+                    for (String note : steps.notes) this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), note);
+                    if (steps.failed()) {
+                        this.changeStatusForLastJob(jobQueue, String.format("Job %s: %s", jobQueue.getJobId(), steps.failure));
+                        return;
+                    }
+                    String payload = this.getSourceJobDetail(sourceJob, jobQueue, steps.payload);
                     try {
 
                         KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
@@ -482,7 +495,7 @@ public class ProducerBulkEngine {
         }
     }
 
-    private String getSourceJobDetail(SourceJob sourceJob, JobQueue jobQueue) {
+    private String getSourceJobDetail(SourceJob sourceJob, JobQueue jobQueue, String taskPayload) {
         JobPayloadDTO dto = new JobPayloadDTO();
         dto.setJobQueueId(jobQueue.getJobQueueId());
         dto.setJobId(jobQueue.getJobId());
@@ -503,7 +516,8 @@ public class ProducerBulkEngine {
             if (!ProcessUtil.isNull(pipelineId)) {
                 dto.setPipelineId(pipelineId.trim());
             }
-            dto.setTaskPayload(sourceJob.getTaskDetail().getTaskPayload());
+            // The document with any AI step's answers in it, not the task's stored one.
+            dto.setTaskPayload(taskPayload);
         }
         dto.setPriority(sourceJob.getPriority());
         return dto.toString();

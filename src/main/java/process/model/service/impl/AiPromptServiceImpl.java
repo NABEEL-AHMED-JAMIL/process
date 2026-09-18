@@ -19,6 +19,7 @@ import process.model.repository.AiPromptRepository;
 import process.model.repository.AiPromptRunRepository;
 import process.model.repository.AiPromptVersionRepository;
 import process.model.repository.TenantRepository;
+import process.model.repository.PipelineRepository;
 import process.security.TenantContext;
 import process.util.PagingUtil;
 import process.util.UserNameResolver;
@@ -43,14 +44,15 @@ public class AiPromptServiceImpl {
     private final AiPromptVersionRepository versions;
     private final AiPromptRunRepository runs;
     private final TenantRepository tenants;
+    private final PipelineRepository pipelines;
     private final AiModelConnectionServiceImpl connections;
     private final PromptRunner runner;
     private final UserNameResolver userNameResolver;
     private final Gson gson = new Gson();
 
     public AiPromptServiceImpl(AiPromptRepository prompts, AiPromptVersionRepository versions, AiPromptRunRepository runs,
-        TenantRepository tenants, AiModelConnectionServiceImpl connections, PromptRunner runner, UserNameResolver userNameResolver) {
-        this.prompts = prompts; this.versions = versions; this.runs = runs; this.tenants = tenants;
+        TenantRepository tenants, PipelineRepository pipelines, AiModelConnectionServiceImpl connections, PromptRunner runner, UserNameResolver userNameResolver) {
+        this.prompts = prompts; this.versions = versions; this.runs = runs; this.tenants = tenants; this.pipelines = pipelines;
         this.connections = connections; this.runner = runner; this.userNameResolver = userNameResolver;
     }
 
@@ -141,6 +143,10 @@ public class AiPromptServiceImpl {
         Optional<AiPrompt> found = this.scopedFind(promptId);
         if (!found.isPresent()) return new ResponseDto(ERROR, String.format("Prompt not found with %d.", promptId));
         Status next = "Active".equals(status) ? Status.Active : Status.Inactive;
+        if (next == Status.Inactive) {
+            long using = this.pipelines.countUsingPrompt(promptId);
+            if (using > 0) return new ResponseDto(ERROR, String.format("%d pipeline(s) run this prompt as a step. Take the step off them first.", using));
+        }
         found.get().setStatus(next);
         this.prompts.save(found.get());
         return new ResponseDto(SUCCESS, String.format("\"%s\" is now %s.", found.get().getName(), next == Status.Active ? "active" : "inactive"));
@@ -150,6 +156,8 @@ public class AiPromptServiceImpl {
     public ResponseDto delete(Long promptId) {
         Optional<AiPrompt> found = this.scopedFind(promptId);
         if (!found.isPresent()) return new ResponseDto(ERROR, String.format("Prompt not found with %d.", promptId));
+        long using = this.pipelines.countUsingPrompt(promptId);
+        if (using > 0) return new ResponseDto(ERROR, String.format("%d pipeline(s) run this prompt as a step. Take the step off them first.", using));
         found.get().setStatus(Status.Delete);
         this.prompts.save(found.get());
         return new ResponseDto(SUCCESS, "Prompt deleted. Runs already recorded keep their history.");
@@ -188,6 +196,25 @@ public class AiPromptServiceImpl {
         Page<AiPromptRun> found2 = this.runs.findAllByPromptIdOrderByRunIdDesc(promptId, window);
         return new ResponseDto(SUCCESS, String.format("%d run(s).", found2.getTotalElements()), found2.getContent(),
             PagingUtil.convertEntityToPagingDTO(found2.getTotalElements(), window));
+    }
+
+    /** The AI steps that ran for one job run, for its history; scoped to the caller's workspace. */
+    public ResponseDto runsForJob(Long jobQueueId) {
+        if (isNull(jobQueueId)) return new ResponseDto(ERROR, "jobQueueId missing.");
+        List<AiPromptRun> rows = this.runs.findAllByJobQueueIdOrderByRunIdAsc(jobQueueId).stream()
+            .filter(r -> TenantContext.isPlatformAdmin() || Objects.equals(r.getTenantId(), TenantContext.getTenantId()))
+            .collect(Collectors.toList());
+        Map<Long, String> names = new HashMap<>();
+        for (AiPromptRun r : rows) if (r.getPromptId() != null && !names.containsKey(r.getPromptId())) {
+            names.put(r.getPromptId(), this.prompts.findById(r.getPromptId()).map(AiPrompt::getName).orElse("prompt " + r.getPromptId()));
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (AiPromptRun r : rows) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("run", r); m.put("promptName", names.get(r.getPromptId()));
+            out.add(m);
+        }
+        return new ResponseDto(SUCCESS, String.format("%d AI step(s).", out.size()), out);
     }
 
     public ResponseDto versionsOf(Long promptId) {
@@ -245,6 +272,7 @@ public class AiPromptServiceImpl {
             d.setEffectiveModel(isNull(p.getModel()) ? c.get().getDefaultModel() : p.getModel());
         }
         if (withRuns) {
+            d.setPipelineCount(this.pipelines.countUsingPrompt(p.getPromptId()));
             d.setRunCount(this.runs.countByPromptId(p.getPromptId()));
             this.runs.findFirstByPromptIdOrderByRunIdDesc(p.getPromptId()).ifPresent(r -> { d.setLastRunAt(r.getDateCreated()); d.setLastRunStatus(r.getStatus()); });
         }
