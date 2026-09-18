@@ -75,6 +75,17 @@ public class AiStepService {
         Outcome outcome = new Outcome(null, null);
         for (PipelineField step : steps) {
             String tag = step.getTagKey();
+            if ("worker".equals(step.getRunIn())) {
+                // The worker runs this one: it goes into the document as an instruction, and the
+                // worker asks aiPrompt.json/run with the values it resolved (a file's text, say).
+                AiPrompt prompt = this.prompts.findById(step.getPromptId()).orElse(null);
+                if (prompt == null || prompt.getStatus() != Status.Active || !Objects.equals(prompt.getTenantId(), tenantId)) {
+                    return new Outcome(null, String.format("AI step <%s> names a prompt that is no longer active in this workspace.", tag));
+                }
+                xml.addStep(prompt.getPromptUuid(), prompt.getVersion(), tag, step.getOnError(), this.mapOf(step));
+                outcome.notes.add(String.format("AI step <%s>: handed to the worker (%s v%d).", tag, prompt.getName(), prompt.getVersion()));
+                continue;
+            }
             AiPromptRun run = this.runs.findByJobQueueIdAndStepTag(jobQueueId, tag).orElse(null);
             if (run == null || !"ok".equals(run.getStatus())) {
                 // A failed attempt makes way for the retry: the step is unique per run.
@@ -103,6 +114,43 @@ public class AiStepService {
     private static Outcome copyNotes(Outcome into, Outcome from) { into.notes.addAll(from.notes); return into; }
 
     private AiPromptRun runStep(Long tenantId, Long jobQueueId, PipelineField step, PayloadXml xml) {
+        Map<String, String> values = new HashMap<>();
+        for (Map.Entry<String, String> e : this.mapOf(step).entrySet()) {
+            String value = xml.get(e.getValue());
+            values.put(e.getKey(), value == null ? "" : value);
+        }
+        return this.runStepWithValues(tenantId, jobQueueId, step, values);
+    }
+
+    private Map<String, String> mapOf(PipelineField step) {
+        return step.getVariableMap() == null || step.getVariableMap().trim().isEmpty() ? Collections.emptyMap()
+            : this.gson.fromJson(step.getVariableMap(), new TypeToken<Map<String, String>>() {}.getType());
+    }
+
+    /**
+     * A worker's call for a step it was handed: the same run as a server step, with the values
+     * the worker resolved. The step has to be one the job's pipeline hands to the worker and
+     * name this prompt; anything else is refused before any call. Idempotent per (run, tag).
+     */
+    public AiPromptRun runForWorker(Long tenantId, String pipelineId, Long jobQueueId, String stepTag,
+        String promptUuid, Map<String, String> values) {
+        List<Pipeline> found = this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot(pipelineId == null ? "" : pipelineId.trim(), tenantId, Status.Delete);
+        PipelineField step = found.isEmpty() ? null : stepsOf(found.get(0)).stream()
+            .filter(f -> "worker".equals(f.getRunIn()) && f.getTagKey().equals(stepTag)).findFirst().orElse(null);
+        PromptRunner.Job job = new PromptRunner.Job();
+        job.tenantId = tenantId; job.kind = "run"; job.jobQueueId = jobQueueId; job.stepTag = stepTag;
+        if (step == null) return this.refused(job, "This run's pipeline hands no such step to the worker.");
+        job.promptId = step.getPromptId();
+        AiPrompt prompt = this.prompts.findById(step.getPromptId()).orElse(null);
+        if (prompt == null || !prompt.getPromptUuid().equals(promptUuid)) return this.refused(job, "The step does not name that prompt.");
+        AiPromptRun existing = this.runs.findByJobQueueIdAndStepTag(jobQueueId, stepTag).orElse(null);
+        if (existing != null && "ok".equals(existing.getStatus())) return existing;
+        if (existing != null) this.runs.delete(existing);
+        // The worker resolved the values (a file's contents, say); the document is not consulted.
+        return this.runStepWithValues(tenantId, jobQueueId, step, values == null ? Collections.emptyMap() : values);
+    }
+
+    private AiPromptRun runStepWithValues(Long tenantId, Long jobQueueId, PipelineField step, Map<String, String> values) {
         PromptRunner.Job job = new PromptRunner.Job();
         job.tenantId = tenantId; job.kind = "run"; job.jobQueueId = jobQueueId; job.stepTag = step.getTagKey(); job.promptId = step.getPromptId();
         AiPrompt prompt = this.prompts.findById(step.getPromptId()).filter(p -> p.getStatus() == Status.Active && Objects.equals(p.getTenantId(), tenantId)).orElse(null);
@@ -119,12 +167,7 @@ public class AiStepService {
         job.variables = prompt.getVariables() == null ? new ArrayList<>() : this.gson.fromJson(prompt.getVariables(), new TypeToken<List<AiPromptDto.Variable>>() {}.getType());
         job.outputMode = prompt.getOutputMode(); job.outputSchema = prompt.getOutputSchema();
         job.temperature = prompt.getTemperature(); job.maxTokens = prompt.getMaxTokens();
-        Map<String, String> map = step.getVariableMap() == null ? Collections.emptyMap()
-            : this.gson.fromJson(step.getVariableMap(), new TypeToken<Map<String, String>>() {}.getType());
-        for (Map.Entry<String, String> e : map.entrySet()) {
-            String value = xml.get(e.getValue());
-            job.values.put(e.getKey(), value == null ? "" : value);
-        }
+        job.values.putAll(values);
         return this.runner.run(job);
     }
 

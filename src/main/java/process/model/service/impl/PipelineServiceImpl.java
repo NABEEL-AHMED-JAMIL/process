@@ -355,6 +355,7 @@ public class PipelineServiceImpl {
                 copy.setPromptId(field.getPromptId());
                 copy.setVariableMap(field.getVariableMap());
                 copy.setOnError("continue".equals(field.getOnError()) ? "continue" : "fail");
+                copy.setRunIn("worker".equals(field.getRunIn()) ? "worker" : "server");
                 copy.setRequired(false);
             }
             copy.setPosition(position++);
@@ -410,8 +411,11 @@ public class PipelineServiceImpl {
     private String validateAiSteps(Pipeline form) {
         if (this.aiPromptRepository == null) return null;
         Set<String> before = new HashSet<>();
+        // Tags a worker step writes: a server step (which runs earlier, before dispatch) cannot read them.
+        Set<String> workerWritten = new HashSet<>();
         for (PipelineField field : form.getFields()) {
             if (!"ai".equals(field.getFieldType())) { before.add(field.getTagKey()); continue; }
+            boolean inWorker = "worker".equals(field.getRunIn());
             if (field.getPromptId() == null) return String.format("The AI step <%s> names no prompt.", field.getTagKey());
             Optional<AiPrompt> prompt = this.aiPromptRepository.findById(field.getPromptId()).filter(p -> p.getStatus() != Status.Delete);
             if (!prompt.isPresent() || !Objects.equals(prompt.get().getTenantId(), form.getTenantId())) {
@@ -433,9 +437,14 @@ public class PipelineServiceImpl {
                     if (Boolean.TRUE.equals(v.required)) return String.format("The AI step <%s> gives no field for the prompt's variable {{%s}}.", field.getTagKey(), v.name);
                     continue;
                 }
-                if (!before.contains(source)) return String.format("The AI step <%s> reads <%s> for {{%s}}, but no field before it writes that tag.", field.getTagKey(), source, v.name);
+                boolean asFile = source.startsWith("file:");
+                String tag = asFile ? source.substring(5) : source;
+                if (asFile && !inWorker) return String.format("The AI step <%s> reads a file for {{%s}}; only a step run in the worker can.", field.getTagKey(), v.name);
+                if (!before.contains(tag)) return String.format("The AI step <%s> reads <%s> for {{%s}}, but no field before it writes that tag.", field.getTagKey(), tag, v.name);
+                if (!inWorker && workerWritten.contains(tag)) return String.format("The AI step <%s> runs before dispatch but reads <%s>, which a worker step writes later.", field.getTagKey(), tag);
             }
             before.add(field.getTagKey());
+            if (inWorker) workerWritten.add(field.getTagKey());
         }
         return null;
     }

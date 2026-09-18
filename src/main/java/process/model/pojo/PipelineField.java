@@ -74,6 +74,9 @@ public class PipelineField {
     private String variableMap;
     @Column(name = "on_error")
     private String onError;
+    /** "server" (before dispatch, the default) or "worker" (the consumer runs it, and may read a file). */
+    @Column(name = "run_in")
+    private String runIn;
     /** The prompt's name, for the screens; not stored. */
     @Transient
     private String promptName;
@@ -84,6 +87,8 @@ public class PipelineField {
     public void setVariableMap(String variableMap) { this.variableMap = variableMap; }
     public String getOnError() { return onError; }
     public void setOnError(String onError) { this.onError = onError; }
+    public String getRunIn() { return runIn; }
+    public void setRunIn(String runIn) { this.runIn = runIn; }
     public String getPromptName() { return promptName; }
     public void setPromptName(String promptName) { this.promptName = promptName; }
 

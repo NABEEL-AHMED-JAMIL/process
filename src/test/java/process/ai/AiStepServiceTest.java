@@ -144,4 +144,50 @@ public class AiStepServiceTest {
         assertThat(out.failure).contains("no longer active");
         verifyNoInteractions(this.runner);
     }
+
+    @Test
+    void aWorkerStepIsHandedOverInTheDocumentNotRun() throws Exception {
+        Pipeline p = this.pipelineWithStep("continue");
+        PipelineField step = p.getFields().get(2); step.setRunIn("worker"); step.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"file:document\"}");
+        AiPrompt prompt = this.prompt(); prompt.setPromptUuid("uuid-9");
+        when(this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot("F1", TENANT, Status.Delete)).thenReturn(Collections.singletonList(p));
+        when(this.prompts.findById(1000L)).thenReturn(Optional.of(prompt));
+        AiStepService service = new AiStepService(this.pipelines, this.prompts, this.connections, this.runs, this.encryptionUtil, this.runner);
+
+        AiStepService.Outcome out = service.apply(TENANT, "F1", 55L, PAYLOAD);
+
+        assertThat(out.failed()).isFalse();
+        assertThat(out.payload).contains("<ai_step on_error=\"continue\" output=\"summary\" prompt=\"uuid-9\" version=\"3\">");
+        assertThat(out.payload).contains("<var as=\"text\" from=\"claim_id\" name=\"claim_id\"/>");
+        assertThat(out.payload).contains("<var as=\"file\" from=\"document\" name=\"document_text\"/>");
+        verifyNoInteractions(this.runner);
+    }
+
+    @Test
+    void theWorkersCallRunsOnlyAStepItWasHanded() {
+        Pipeline p = this.pipelineWithStep("fail");
+        PipelineField step = p.getFields().get(2); step.setRunIn("worker");
+        AiPrompt prompt = this.prompt(); prompt.setPromptUuid("uuid-9");
+        when(this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot("F1", TENANT, Status.Delete)).thenReturn(Collections.singletonList(p));
+        when(this.prompts.findById(1000L)).thenReturn(Optional.of(prompt));
+        when(this.runs.save(any(AiPromptRun.class))).thenAnswer(inv -> inv.getArgument(0));
+        AiStepService service = new AiStepService(this.pipelines, this.prompts, this.connections, this.runs, this.encryptionUtil, this.runner);
+
+        // A tag the pipeline does not hand over, and a prompt the step does not name: refused, no call.
+        assertThat(service.runForWorker(TENANT, "F1", 55L, "other", "uuid-9", Collections.emptyMap()).getError()).contains("no such step");
+        assertThat(service.runForWorker(TENANT, "F1", 55L, "summary", "uuid-else", Collections.emptyMap()).getError()).contains("does not name");
+        verifyNoInteractions(this.runner);
+
+        // The right step: the worker's values go straight into the run.
+        when(this.connections.findFirstByTenantIdAndIsDefaultTrueAndStatus(TENANT, Status.Active)).thenReturn(Optional.of(this.connection()));
+        when(this.runs.findByJobQueueIdAndStepTag(55L, "summary")).thenReturn(Optional.empty());
+        when(this.runner.run(any())).thenAnswer(inv -> {
+            PromptRunner.Job job = inv.getArgument(0);
+            assertThat(job.values).containsEntry("document_text", "the file's text, read by the worker");
+            return this.answered("done");
+        });
+        java.util.Map<String, String> values = new java.util.HashMap<>();
+        values.put("claim_id", "CLM-1"); values.put("document_text", "the file's text, read by the worker");
+        assertThat(service.runForWorker(TENANT, "F1", 55L, "summary", "uuid-9", values).getOutput()).isEqualTo("done");
+    }
 }

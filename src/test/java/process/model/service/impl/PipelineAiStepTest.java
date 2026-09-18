@@ -119,4 +119,22 @@ public class PipelineAiStepTest {
         assertThat(this.service.saveForm(pipelineWith("{\"claim_id\":\"claim_id\",\"document_text\":\"document\"}")).getMessage()).contains("not active");
         verify(this.pipelineRepository, never()).save(any());
     }
+
+    @Test
+    void aFileSourceNeedsAWorkerStepAndAServerStepCannotReadAWorkerStepsTag() {
+        when(this.aiPromptRepository.findById(1000L)).thenReturn(Optional.of(prompt(TENANT_A, Status.Active)));
+        // file: on a server step
+        ResponseDto onServer = this.service.saveForm(pipelineWith("{\"claim_id\":\"claim_id\",\"document_text\":\"file:document\"}"));
+        assertThat(onServer.getMessage()).contains("only a step run in the worker");
+        // the same on a worker step is fine
+        Pipeline p = pipelineWith("{\"claim_id\":\"claim_id\",\"document_text\":\"file:document\"}");
+        p.getFields().get(2).setRunIn("worker");
+        assertThat(this.service.saveForm(p).getStatus()).isEqualTo("SUCCESS");
+        // a server step after a worker step reading its tag
+        Pipeline q = pipelineWith("{\"claim_id\":\"claim_id\",\"document_text\":\"document\"}");
+        q.getFields().get(2).setRunIn("worker");
+        PipelineField later = field("verdict", "ai"); later.setPromptId(1000L); later.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"summary\"}");
+        q.getFields().add(later);
+        assertThat(this.service.saveForm(q).getMessage()).contains("runs before dispatch but reads <summary>");
+    }
 }

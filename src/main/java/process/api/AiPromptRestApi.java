@@ -82,6 +82,21 @@ public class AiPromptRestApi {
         try { return new ResponseEntity<>(this.service.versionsOf(promptId), HttpStatus.OK); } catch (Exception ex) { return this.failed("versions", ex); }
     }
 
+    /**
+     * The worker's call for an AI step handed to it: no user session, the run's own callback
+     * token (X-Worker-Token, as on /changeState) is the proof. Open in SecurityConfig for that
+     * reason; the service verifies the token before anything else.
+     */
+    @RequestMapping(value = "/run", method = RequestMethod.POST)
+    public ResponseEntity<?> run(@RequestHeader(value = "X-Worker-Token", required = false) String workerToken,
+        @RequestBody process.model.dto.AiWorkerRunDto dto) {
+        try {
+            ResponseDto answer = this.service.runForWorker(dto, workerToken);
+            if ("Unauthorized worker callback.".equals(answer.getMessage())) return new ResponseEntity<>(answer, HttpStatus.UNAUTHORIZED);
+            return new ResponseEntity<>(answer, HttpStatus.OK);
+        } catch (Exception ex) { return this.failed("run", ex); }
+    }
+
     private ResponseEntity<?> failed(String what, Exception ex) {
         this.logger.error("An error occurred while {} prompt", what, ex);
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

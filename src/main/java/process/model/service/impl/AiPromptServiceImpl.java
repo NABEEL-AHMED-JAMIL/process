@@ -7,6 +7,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.ai.PromptRunner;
+import process.ai.AiStepService;
+import process.model.dto.AiWorkerRunDto;
+import process.model.pojo.JobQueue;
+import process.model.pojo.SourceJob;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.SourceJobRepository;
+import process.security.RunCallbackTokens;
 import process.model.dto.AiPromptDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
@@ -46,13 +53,19 @@ public class AiPromptServiceImpl {
     private final TenantRepository tenants;
     private final PipelineRepository pipelines;
     private final AiModelConnectionServiceImpl connections;
+    private final AiStepService steps;
+    private final RunCallbackTokens runTokens;
+    private final JobQueueRepository jobQueues;
+    private final SourceJobRepository jobs;
     private final PromptRunner runner;
     private final UserNameResolver userNameResolver;
     private final Gson gson = new Gson();
 
     public AiPromptServiceImpl(AiPromptRepository prompts, AiPromptVersionRepository versions, AiPromptRunRepository runs,
-        TenantRepository tenants, PipelineRepository pipelines, AiModelConnectionServiceImpl connections, PromptRunner runner, UserNameResolver userNameResolver) {
+        TenantRepository tenants, PipelineRepository pipelines, AiModelConnectionServiceImpl connections, PromptRunner runner, UserNameResolver userNameResolver,
+        AiStepService steps, RunCallbackTokens runTokens, JobQueueRepository jobQueues, SourceJobRepository jobs) {
         this.prompts = prompts; this.versions = versions; this.runs = runs; this.tenants = tenants; this.pipelines = pipelines;
+        this.steps = steps; this.runTokens = runTokens; this.jobQueues = jobQueues; this.jobs = jobs;
         this.connections = connections; this.runner = runner; this.userNameResolver = userNameResolver;
     }
 
@@ -215,6 +228,30 @@ public class AiPromptServiceImpl {
             out.add(m);
         }
         return new ResponseDto(SUCCESS, String.format("%d AI step(s).", out.size()), out);
+    }
+
+    /**
+     * A worker's call for an AI step handed to it in the task's document. The proof is the
+     * run's own callback token, so a caller can only run the steps of the run it was handed;
+     * the step has to be one the job's pipeline hands to the worker and name this prompt.
+     * Every refusal reads the same to the caller; which check failed is logged.
+     */
+    public ResponseDto runForWorker(AiWorkerRunDto dto, String presentedToken) {
+        if (dto == null || dto.getJobQueueId() == null || dto.getStepTag() == null || dto.getPromptUuid() == null) {
+            return new ResponseDto(ERROR, "jobId, jobQueueId, promptUuid and stepTag are required.");
+        }
+        Optional<RunCallbackTokens.Refusal> refused = this.runTokens.verify(dto.getJobId(), dto.getJobQueueId(), presentedToken);
+        if (refused.isPresent()) {
+            org.slf4j.LoggerFactory.getLogger(AiPromptServiceImpl.class).warn("Rejected worker AI step for job {} run {}: {}.", dto.getJobId(), dto.getJobQueueId(), refused.get());
+            return new ResponseDto(ERROR, "Unauthorized worker callback.");
+        }
+        Optional<JobQueue> run = this.jobQueues.findById(dto.getJobQueueId());
+        Optional<SourceJob> job = run.flatMap(r -> this.jobs.findByJobIdAndJobStatus(r.getJobId(), Status.Active));
+        if (!job.isPresent() || job.get().getTaskDetail() == null) return new ResponseDto(ERROR, "This run has no task to run a step for.");
+        AiPromptRun answer = this.steps.runForWorker(job.get().getTenantId(), job.get().getTaskDetail().getPipelineId(),
+            dto.getJobQueueId(), dto.getStepTag(), dto.getPromptUuid(), dto.getVariables());
+        return new ResponseDto("ok".equals(answer.getStatus()) ? SUCCESS : ERROR,
+            "ok".equals(answer.getStatus()) ? String.format("Answered in %.1f s.", (answer.getLatencyMs() == null ? 0 : answer.getLatencyMs()) / 1000.0) : answer.getError(), answer);
     }
 
     public ResponseDto versionsOf(Long promptId) {

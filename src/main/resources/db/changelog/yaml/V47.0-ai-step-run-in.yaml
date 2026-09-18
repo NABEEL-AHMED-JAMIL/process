@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 47.0-ai-step-run-in
+      author: nabeel.amd93
+      description: "pipeline_field.run_in: an AI step runs on the server or in the worker"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V47.0-ai-step-run-in/V47__ai_step_run_in.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: ALTER TABLE pipeline_field DROP COLUMN IF EXISTS run_in;
