@@ -11,6 +11,8 @@ public interface SettingService {
 
     public ResponseDto appSetting() throws Exception;
 
+    public ResponseDto topicsForProfile(Long kafkaConnectionProfileId) throws Exception;
+
     public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 
     public ResponseDto updateSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;

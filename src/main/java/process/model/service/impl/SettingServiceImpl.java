@@ -313,6 +313,44 @@ public class SettingServiceImpl implements SettingService {
         return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
     }
 
+    /**
+     * The topics of one Kafka profile, each with its pipelines. The profile has to be one the
+     * caller can see -- their own workspace's or, for a platform admin, any -- so a tenant
+     * cannot read another workspace's topic names by guessing a profile id.
+     */
+    public ResponseDto topicsForProfile(Long kafkaConnectionProfileId) throws Exception {
+        if (isNull(kafkaConnectionProfileId)) {
+            return new ResponseDto(ERROR, "kafkaConnectionProfileId missing.");
+        }
+        Optional<KafkaConnectionProfile> profileOpt = this.kafkaConnectionProfileRepository.findById(kafkaConnectionProfileId)
+            .filter(p -> p.getStatus() != Status.Delete)
+            .filter(p -> TenantContext.isPlatformAdmin()
+                || (p.getTenantId() != null && p.getTenantId().equals(TenantContext.getTenantId())));
+        if (!profileOpt.isPresent()) {
+            return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
+        }
+        KafkaConnectionProfile profile = profileOpt.get();
+        boolean isDefault = Boolean.TRUE.equals(profile.getIsDefault());
+        List<SourceTaskTypeProjection> projections = this.sourceTaskTypeRepository.fetchTopicsForProfile(
+            kafkaConnectionProfileId, isDefault && profile.getTenantId() != null, profile.getTenantId());
+        Map<Long, String> profileNameById = Collections.singletonMap(kafkaConnectionProfileId, profile.getProfileName());
+        List<SourceTaskTypeDto> topics = projections.stream()
+            .map(projection -> this.mapSourceTaskTypeProjectionToDto(projection, profileNameById))
+            .collect(Collectors.toList());
+        // Every topic's pipelines in one query, then dealt out.
+        List<Long> ids = topics.stream().map(SourceTaskTypeDto::getSourceTaskTypeId).collect(Collectors.toList());
+        Map<Long, List<SourceTaskTypeDto.PipelineSummary>> byTopic = new java.util.HashMap<>();
+        if (!ids.isEmpty() && this.pipelineRepository != null) {
+            for (process.model.pojo.Pipeline p : this.pipelineRepository.findAllBySourceTaskTypeIdInAndStatusNotOrderByPipelineNameAsc(ids, Status.Delete)) {
+                byTopic.computeIfAbsent(p.getSourceTaskTypeId(), k -> new java.util.ArrayList<>()).add(
+                    new SourceTaskTypeDto.PipelineSummary(p.getPipelineKey(), p.getPipelineId(), p.getPipelineName(),
+                        p.getStatus() == null ? null : p.getStatus().name(), p.getFields() == null ? 0 : p.getFields().size()));
+            }
+        }
+        topics.forEach(t -> t.setPipelines(byTopic.getOrDefault(t.getSourceTaskTypeId(), Collections.emptyList())));
+        return new ResponseDto(SUCCESS, String.format("%d topic(s).", topics.size()), topics);
+    }
+
     private SourceTaskTypeDto mapSourceTaskTypeProjectionToDto(SourceTaskTypeProjection projection, Map<Long, String> profileNameById) {
         SourceTaskTypeDto dto = new SourceTaskTypeDto();
         dto.setSourceTaskTypeId(projection.getSourceTaskTypeId());

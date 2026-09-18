@@ -47,6 +47,9 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
     /** The pipelines that publish on one topic -- what the task screen offers once a topic is picked. */
     public List<Pipeline> findAllBySourceTaskTypeIdAndStatusNotOrderByPipelineNameAsc(Long sourceTaskTypeId, Status status);
 
+    /** The pipelines of many topics at once, for a pane that lists a profile's topics. */
+    public List<Pipeline> findAllBySourceTaskTypeIdInAndStatusNotOrderByPipelineNameAsc(java.util.Collection<Long> sourceTaskTypeIds, Status status);
+
     /** How many pipelines still name a topic; a topic with any cannot be deleted. */
     public long countBySourceTaskTypeIdAndStatusNot(Long sourceTaskTypeId, Status status);
 }

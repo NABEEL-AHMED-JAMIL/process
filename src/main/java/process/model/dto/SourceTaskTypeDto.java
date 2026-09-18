@@ -141,4 +141,26 @@ public class SourceTaskTypeDto implements AuditNamed {
     public void setCreatedBy(Long createdBy) {
         this.createdBy = createdBy;
     }
+
+    /** One line per pipeline on the topic -- what a profile's Topics table shows in the row. */
+    public static class PipelineSummary {
+        private Long pipelineKey;
+        private String pipelineId;
+        private String pipelineName;
+        private String status;
+        private int fields;
+        public PipelineSummary() { }
+        public PipelineSummary(Long pipelineKey, String pipelineId, String pipelineName, String status, int fields) {
+            this.pipelineKey = pipelineKey; this.pipelineId = pipelineId; this.pipelineName = pipelineName; this.status = status; this.fields = fields;
+        }
+        public Long getPipelineKey() { return pipelineKey; }
+        public String getPipelineId() { return pipelineId; }
+        public String getPipelineName() { return pipelineName; }
+        public String getStatus() { return status; }
+        public int getFields() { return fields; }
+    }
+
+    private java.util.List<PipelineSummary> pipelines;
+    public java.util.List<PipelineSummary> getPipelines() { return pipelines; }
+    public void setPipelines(java.util.List<PipelineSummary> pipelines) { this.pipelines = pipelines; }
 }

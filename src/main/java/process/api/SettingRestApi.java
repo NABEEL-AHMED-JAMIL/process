@@ -44,6 +44,17 @@ public class SettingRestApi {
         }
     }
 
+    /** The topics of one Kafka profile, each with its pipelines -- the Kafka pane asks per profile. */
+    @RequestMapping(value = "/topicsForProfile", method = RequestMethod.GET)
+    public ResponseEntity<?> topicsForProfile(@RequestParam Long kafkaConnectionProfileId) {
+        try {
+            return new ResponseEntity<>(this.settingService.topicsForProfile(kafkaConnectionProfileId), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while topicsForProfile.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @RequestMapping(value = "/addSourceTaskType", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTaskType(
         @RequestBody SourceTaskTypeDto tempSourceTaskType) {

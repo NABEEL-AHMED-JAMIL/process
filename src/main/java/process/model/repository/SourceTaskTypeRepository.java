@@ -63,4 +63,20 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "order by source_task_type.source_task_type_id asc", nativeQuery = true)
     public List<SourceTaskTypeProjection> fetchAllSourceTaskTypeForTenant(@Param("tenantId") Long tenantId);
 
+    /**
+     * The topics that publish through one Kafka profile: those that name it, plus -- when the
+     * profile is that workspace's default -- the workspace's topics that name no profile at all,
+     * since the resolver sends those here. Asked per profile so a workspace with ten thousand
+     * topics loads the pane it is looking at, not every pane at once.
+     */
+    @Query(value = FETCH_ALL_SOURCE_TASK_TYPE_SELECT +
+        "where source_task_type.task_type_status <> 'Delete' and ("
+        + "source_task_type.kafka_connection_profile_id = :profileId "
+        + "or (:includeUnrouted = true and source_task_type.kafka_connection_profile_id is null "
+        + "    and source_task_type.tenant_id = :tenantId))\n" +
+        "group by source_task_type.source_task_type_id\n" +
+        "order by source_task_type.service_name asc", nativeQuery = true)
+    public List<SourceTaskTypeProjection> fetchTopicsForProfile(@Param("profileId") Long profileId,
+        @Param("includeUnrouted") boolean includeUnrouted, @Param("tenantId") Long tenantId);
+
 }
