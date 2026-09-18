@@ -580,7 +580,15 @@ public class SettingServiceImpl implements SettingService {
         }
         boolean wasEncrypted = Boolean.TRUE.equals(lookupData.getEncrypted());
         boolean nowEncrypted = !isNull(tempLookupData.getEncrypted()) ? tempLookupData.getEncrypted() : wasEncrypted;
-        boolean hasNewValue = !isNull(tempLookupData.getLookupValue()) && !tempLookupData.getLookupValue().trim().isEmpty();
+        /*
+         * The mask the console shows for an encrypted value is NOT a value. It came back here
+         * whenever an encrypted row was edited for any other reason -- the form was pre-filled
+         * with what the list had shown -- and was taken as a new secret: encrypted, the row
+         * then held "••••••••"; unticked, the row held it in the clear. Either way the real
+         * secret was gone after the first edit.
+         */
+        String presented = isNull(tempLookupData.getLookupValue()) ? "" : tempLookupData.getLookupValue().trim();
+        boolean hasNewValue = !presented.isEmpty() && !MASKED_LOOKUP_VALUE.equals(presented);
 
         if (!wasEncrypted && !hasNewValue) {
             return new ResponseDto(ERROR, "LookupData value missing.");
