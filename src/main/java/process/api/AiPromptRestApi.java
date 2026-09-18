@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import process.model.dto.AiPromptDto;
 import process.model.dto.ResponseDto;
 import process.model.service.impl.AiPromptServiceImpl;
+import process.model.service.impl.ObjectTextServiceImpl;
 import process.util.ProcessUtil;
 import process.model.dto.AiWorkerRunDto;
 
@@ -24,8 +25,20 @@ public class AiPromptRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(AiPromptRestApi.class);
     private final AiPromptServiceImpl service;
+    private final ObjectTextServiceImpl objectText;
 
-    public AiPromptRestApi(AiPromptServiceImpl service) { this.service = service; }
+    public AiPromptRestApi(AiPromptServiceImpl service, ObjectTextServiceImpl objectText) { this.service = service; this.objectText = objectText; }
+
+    /**
+     * A file in a bucket as the text a variable can hold -- read the way the file chat reads
+     * it, whatever the type. Try it fills a variable from it; the storage browser's own check
+     * decides whether the caller may see the object at all.
+     */
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/objectText", method = RequestMethod.GET)
+    public ResponseEntity<?> objectText(@RequestParam String bucket, @RequestParam String key, @RequestParam(required = false) Integer maxChars) {
+        try { return new ResponseEntity<>(this.objectText.read(bucket, key, maxChars), HttpStatus.OK); } catch (Exception ex) { return this.failed("objectText", ex); }
+    }
 
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/list", method = RequestMethod.GET)

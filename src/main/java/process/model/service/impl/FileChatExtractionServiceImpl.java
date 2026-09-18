@@ -38,6 +38,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CharsetDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -233,8 +236,14 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
         } else {
             DocumentConverterFormatRegistry.FormatFamily family = DocumentConverterFormatRegistry.familyOfInput(extension);
             if (family == null) {
-                // The one case where "this file type isn't supported for chat" is the literally
-                // true answer, and the only one that should still reach the reader as null.
+                // No reader by name. Before giving up, look at the bytes: a file called NOTES, a
+                // .conf, a .dat that is really CSV -- an ETL bucket is full of text under names
+                // nobody registered. Genuinely binary content (parquet, a zip) still answers
+                // null, which is the one case where "not supported" is the literal truth.
+                byte[] bytes = this.readAllBytes(bucket, key);
+                if (looksLikeText(bytes)) {
+                    return this.rememberExtraction(textKey, this.truncate(new String(bytes, StandardCharsets.UTF_8), key));
+                }
                 return null;
             }
             pdfBytes = this.convertToPdf(bucket, key, extension);
@@ -580,6 +589,43 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
      * answer stops partway through a document -- which is exactly the question nobody could
      * answer while the cap was 60,000 and silent.
      */
+    /**
+     * Whether bytes are text a person could read: valid UTF-8 over the first few KB, and no
+     * NUL or stray control characters (tab, newline and return allowed). A conservative test:
+     * a binary format that happens to pass it is far rarer than a text file under an odd name.
+     */
+    static boolean looksLikeText(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return true;
+        }
+        int n = Math.min(bytes.length, 8192);
+        for (int i = 0; i < n; i++) {
+            int b = bytes[i] & 0xff;
+            if (b == 0 || (b < 0x20 && b != '\t' && b != '\n' && b != '\r' && b != 0x0c)) {
+                return false;
+            }
+        }
+        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
+        try {
+            // Cut at the sample edge could split a multi-byte character; back off up to 3 bytes.
+            int end = n;
+            for (int back = 0; back < 4 && end > 0; back++, end--) {
+                try {
+                    decoder.reset();
+                    decoder.decode(ByteBuffer.wrap(bytes, 0, end));
+                    return true;
+                } catch (CharacterCodingException ex) {
+                    if (end == bytes.length && bytes.length <= 8192) {
+                        return false;
+                    }
+                }
+            }
+            return false;
+        } finally {
+            decoder.reset();
+        }
+    }
+
     private String truncate(String text, String key) {
         // A real null check. ProcessUtil.isNull is also true for "", which turned every
         // zero-byte text object into null -- the value that means "no reader for this type" --

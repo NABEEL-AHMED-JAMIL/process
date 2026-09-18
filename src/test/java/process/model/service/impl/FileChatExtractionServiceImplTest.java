@@ -459,6 +459,27 @@ public class FileChatExtractionServiceImplTest {
         assertThat(service.extractText(BUCKET, "tone.txt", "etag-empty")).isEqualTo("");
     }
 
+    /** A file with no reader by name is read as text when its bytes are text, and refused when not. */
+    @Test
+    void anUnregisteredNameIsJudgedByItsBytes() throws Exception {
+        byte[] notes = "a file with no extension at all\n".getBytes(StandardCharsets.UTF_8);
+        byte[] parquet = new byte[] {'P', 'A', 'R', '1', 0, (byte) 0xff, 3, 9, 'P', 'A', 'R', '1'};
+        when(this.storageBrowserService.downloadObject(BUCKET, "NOTES", null, null))
+            .thenAnswer(invocation -> new ObjectContentDto(new ByteArrayInputStream(notes), "application/octet-stream", notes.length, "NOTES"));
+        when(this.storageBrowserService.downloadObject(BUCKET, "data.parquet", null, null))
+            .thenAnswer(invocation -> new ObjectContentDto(new ByteArrayInputStream(parquet), "application/octet-stream", parquet.length, "data.parquet"));
+        FileChatExtractionServiceImpl service = new FileChatExtractionServiceImpl(
+            this.storageBrowserService, this.audioTranscriptService,
+            this.documentConverter, this.documentFormatRegistry);
+        ReflectionTestUtils.setField(service, "cacheManager", this.cacheManager);
+
+        assertThat(service.extractText(BUCKET, "NOTES", "e1")).isEqualTo("a file with no extension at all\n");
+        assertThat(service.extractText(BUCKET, "data.parquet", "e2")).isNull();
+        assertThat(FileChatExtractionServiceImpl.looksLikeText("héllo, wörld — ✓\n".getBytes(StandardCharsets.UTF_8))).isTrue();
+        assertThat(FileChatExtractionServiceImpl.looksLikeText(new byte[] {(byte) 0xff, (byte) 0xfe, 0x41})).isFalse();
+        verifyNoInteractions(this.documentConverter);
+    }
+
     private FileChatExtractionServiceImpl service(byte[] pdfBytes, String ollamaBaseUrl) throws Exception {
         // A fresh stream per call: extraction reads the object again for every agent that has
         // not already got a description cached, and a consumed ByteArrayInputStream would look
