@@ -57,7 +57,7 @@ public class PromptFileLimitTest {
     }
 
     /**
-     * The actual defect: the AI_PROVIDER lookup row is spelt "AzureOpenAI" (no punctuation,
+     * The actual defect: the provider is spelt "AzureOpenAI" (no punctuation,
      * matching how the seed data and the frontend catalogue both write it), which upper-cases to
      * "AZUREOPENAI". The map key here used to be written "AZURE-OPENAI" -- a hyphen nothing ever
      * produces -- so every Azure OpenAI agent silently got Ollama's 24k local-model limit instead

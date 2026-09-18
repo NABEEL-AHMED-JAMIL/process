@@ -74,19 +74,16 @@ public class SettingServiceImpl implements SettingService {
             "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS"));
 
     /**
-     * Families a tenant may add to without owning what is already there.
+     * Families a tenant may add to without owning what is already there: the platform's rows
+     * are reachable by everyone and belong to nobody's workspace; a tenant admin's addition is
+     * stamped with their tenant and only they see, change or remove it. This is the difference
+     * from TENANT_OWNED_LOOKUPS above: there a tenant sees only its own rows.
      *
-     * AI_PROVIDER is the case this exists for. The providers the platform ships -- OpenAI,
-     * Anthropic, Ollama -- are reachable by everyone and belong to nobody's workspace, so a
-     * tenant sees them and can point a model at them, but must not be able to delete one out
-     * from under every other tenant. A tenant admin adding their own provider gets a row stamped
-     * with their tenant, which only they can see, change or remove.
-     *
-     * This is the difference from TENANT_OWNED_LOOKUPS above: there a tenant sees only its own
-     * rows, here it sees the platform's as well and may extend the list without editing it.
+     * Empty since V46. AI_PROVIDER was the one family here, and it went when providers became
+     * a fixed set on a model connection (Assistants > Model connections). The rule stays for
+     * the next family that needs it.
      */
-    private static final java.util.Set<String> TENANT_EXTENDABLE_LOOKUPS =
-        new java.util.HashSet<>(java.util.Collections.singletonList("AI_PROVIDER"));
+    private static final java.util.Set<String> TENANT_EXTENDABLE_LOOKUPS = java.util.Collections.emptySet();
 
     /**
      * Lookup families only a platform admin may see or touch.

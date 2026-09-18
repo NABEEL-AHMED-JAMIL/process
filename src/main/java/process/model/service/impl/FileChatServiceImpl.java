@@ -60,8 +60,8 @@ public class FileChatServiceImpl implements FileChatService {
         Map<String, Integer> limits = new HashMap<>();
         limits.put("ANTHROPIC", 400000);
         limits.put("OPENAI", 250000);
-        // Keyed on the AI_PROVIDER lookup value with punctuation stripped (see providerKey
-        // below), not the literal lookup spelling -- "AzureOpenAI" upper-cases to "AZUREOPENAI",
+        // Keyed on the connection's provider name with punctuation stripped (see providerKey
+        // below), not the literal spelling -- "AzureOpenAI" upper-cases to "AZUREOPENAI",
         // which never matched a key spelt "AZURE-OPENAI" here, so every Azure OpenAI agent
         // silently fell through to the 24k default meant for a local model with a small context
         // window, needlessly truncating a provider that can actually take 250k.
@@ -174,11 +174,10 @@ public class FileChatServiceImpl implements FileChatService {
             return limit;
         }
         if (!key.isEmpty()) {
-            // key empty means no agent chosen yet -- routine, not worth a log. A non-empty key
-            // that still misses means a real provider (from the tenant-extendable AI_PROVIDER
-            // lookup, addable through Settings with no code deploy) has no budget entry here and
-            // is silently getting the smallest default -- this is the one place that surfaces it,
-            // since nothing at agent-save time or startup cross-checks the lookup against this map.
+            // key empty means no prompt chosen yet -- routine, not worth a log. A non-empty key
+            // that still misses means a provider a model connection names (an OpenAI-compatible
+            // one) has no budget entry here and is silently getting the smallest default -- this
+            // is the one place that surfaces it.
             logger.warn("No configured prompt-file-char budget for provider '{}'; using the "
                 + "default of {} characters.", provider, DEFAULT_PROMPT_FILE_CHARS);
         }

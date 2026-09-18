@@ -40,8 +40,7 @@ public class TenantOwnedLookupTest {
     void engineStateStaysOnThePlatform() throws Exception {
         // Per-tenant copies of these would break the scheduler rather than isolate anything.
         for (String type : new String[] {
-            "SCHEDULER_LAST_RUN_TIME", "QUEUE_FETCH_LIMIT", "AUDIT_LOG_SYNC_LAST_RUN_TIME",
-            "AI_PROVIDER" }) {
+            "SCHEDULER_LAST_RUN_TIME", "QUEUE_FETCH_LIMIT", "AUDIT_LOG_SYNC_LAST_RUN_TIME" }) {
             assertFalse(isTenantOwned(type), type + " must stay platform-level");
         }
     }
@@ -74,7 +73,7 @@ public class TenantOwnedLookupTest {
     @Test
     void whatATenantWorksWithIsNotPlatformOnly() throws Exception {
         for (String type : new String[] {
-            "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS", "AI_PROVIDER" }) {
+            "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS" }) {
             assertFalse(isPlatformOnly(type), type + " should stay visible to a tenant");
         }
     }
@@ -105,14 +104,12 @@ public class TenantOwnedLookupTest {
     }
 
     @Test
-    void aTenantMayAddItsOwnProviderWithoutOwningThePlatformsOnes() throws Exception {
-        // AI_PROVIDER sits between the other two categories: a tenant sees the platform's
-        // providers and can add its own beside them, but cannot edit or delete what is shared.
-        assertTrue(isTenantExtendable("AI_PROVIDER"));
-        assertFalse(isTenantOwned("AI_PROVIDER"),
-            "extendable is not the same as owned -- owned would hide the platform's providers");
-        assertFalse(isPlatformOnly("AI_PROVIDER"),
-            "a tenant has to be able to see the providers it points models at");
+    void nothingIsExtendableSinceProvidersLeftTheLookups() throws Exception {
+        // AI_PROVIDER was the one extendable family; V46 removed it when providers became a
+        // fixed set on a model connection. The rule is kept for the next family, so a stray
+        // spelling must not resurrect it by accident.
+        assertFalse(isTenantExtendable("AI_PROVIDER"));
+        assertFalse(isTenantOwned("AI_PROVIDER"));
     }
 
     @Test

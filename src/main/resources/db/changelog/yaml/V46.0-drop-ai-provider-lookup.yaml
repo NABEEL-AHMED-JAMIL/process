@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 46.0-drop-ai-provider-lookup
+      author: nabeel.amd93
+      description: "the AI_PROVIDER lookup family goes; providers are a fixed set on a model connection"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V46.0-drop-ai-provider-lookup/V46__drop_ai_provider_lookup.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              INSERT INTO lookup_data (lookup_id, lookup_value, lookup_type, description)
+              VALUES (1020, 'AI Provider', 'AI_PROVIDER', 'AI providers') ON CONFLICT DO NOTHING;

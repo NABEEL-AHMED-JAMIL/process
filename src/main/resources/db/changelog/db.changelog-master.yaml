@@ -98,3 +98,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V44.0-ai-prompts.yaml
   - include:
       file: db/changelog/yaml/V45.0-ai-steps.yaml
+  - include:
+      file: db/changelog/yaml/V46.0-drop-ai-provider-lookup.yaml
