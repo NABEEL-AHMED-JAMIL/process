@@ -14,6 +14,7 @@ import javax.xml.transform.stream.StreamResult;
 import java.io.StringReader;
 import java.io.StringWriter;
 import org.xml.sax.InputSource;
+import java.util.Map;
 
 /**
  * Reads and writes one tag of a task's payload document (`<pipeline>…</pipeline>`), with the
@@ -67,13 +68,13 @@ public final class PayloadXml {
      * a step the worker runs. The worker resolves the variables (a file's contents, when asked),
      * calls aiPrompt.json/run, writes the answer to `output`, and drops the element.
      */
-    public void addStep(String promptUuid, int version, String outputTag, String onError, java.util.Map<String, String> variableMap) {
+    public void addStep(String promptUuid, int version, String outputTag, String onError, Map<String, String> variableMap) {
         Element step = this.doc.createElement("ai_step");
         step.setAttribute("prompt", promptUuid);
         step.setAttribute("version", String.valueOf(version));
         step.setAttribute("output", outputTag);
         step.setAttribute("on_error", onError == null ? "fail" : onError);
-        for (java.util.Map.Entry<String, String> e : variableMap.entrySet()) {
+        for (Map.Entry<String, String> e : variableMap.entrySet()) {
             Element var = this.doc.createElement("var");
             var.setAttribute("name", e.getKey());
             String source = e.getValue() == null ? "" : e.getValue();

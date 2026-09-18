@@ -28,6 +28,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import process.model.service.FileShareService;
 
 /**
  * The actual enforcement behind an agent's "Target file types" field. Before this, the field
@@ -52,7 +53,7 @@ public class FileChatTargetFileTypeTest {
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private process.model.service.FileShareService fileShareService;
+    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 

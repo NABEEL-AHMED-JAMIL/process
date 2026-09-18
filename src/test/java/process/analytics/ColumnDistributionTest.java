@@ -12,6 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * What a column's distribution has to be before it is worth drawing.
@@ -66,7 +69,7 @@ public class ColumnDistributionTest {
     @DisplayName("an empty distribution is empty bins, not a null the client has to guard")
     public void emptyIsEmptyList() {
         ColumnDistributionDto column = new ColumnDistributionDto("notes");
-        column.setBins(new java.util.ArrayList<DistributionBinDto>());
+        column.setBins(new ArrayList<DistributionBinDto>());
         assertNotNull(column.getBins());
         assertTrue(column.getBins().isEmpty());
         assertFalse(column.isExactValues());
@@ -95,7 +98,7 @@ public class ColumnDistributionTest {
     public void edgesAreContiguous() {
         // The shape binnedBars produces: every bar's `to` is the next bar's `from`, which is what
         // makes the half-open [from, to) rule cover the range exactly once.
-        List<DistributionBinDto> bars = java.util.Arrays.asList(
+        List<DistributionBinDto> bars = Arrays.asList(
             new DistributionBinDto("0", "10", 3L),
             new DistributionBinDto("10", "20", 5L),
             new DistributionBinDto("20", "30", 1L));
@@ -112,7 +115,7 @@ public class ColumnDistributionTest {
         // 1017.0533333333333, and that is what the chart's axis said. A bin edge is min + width*n
         // -- a synthetic boundary, not a value the file holds -- so precision past the scale it
         // divides carries no information and costs legibility.
-        java.lang.reflect.Method edge = Class.forName("process.analytics.DuckDbAnalyticsEngine")
+        Method edge = Class.forName("process.analytics.DuckDbAnalyticsEngine")
             .getDeclaredMethod("edge", double.class, double.class);
         edge.setAccessible(true);
 
@@ -133,7 +136,7 @@ public class ColumnDistributionTest {
     public void roundingPreservesContiguity() throws Exception {
         // Each bar's `to` is the next bar's `from`, and both go through the same rounding, so
         // the half-open [from, to) rule still covers the range exactly once.
-        java.lang.reflect.Method edge = Class.forName("process.analytics.DuckDbAnalyticsEngine")
+        Method edge = Class.forName("process.analytics.DuckDbAnalyticsEngine")
             .getDeclaredMethod("edge", double.class, double.class);
         edge.setAccessible(true);
         double low = 4.13d;

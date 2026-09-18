@@ -10,6 +10,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 /**
  * @author Nabeel Ahmed
@@ -43,10 +46,10 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
     @Query(value = ROW_SELECT + ROW_WHERE + "order by p.pipeline_key desc",
         countQuery = "select count(*) from pipeline p left join source_task_type t on t.source_task_type_id = p.source_task_type_id\n" + ROW_WHERE,
         nativeQuery = true)
-    org.springframework.data.domain.Page<PipelineRowProjection> pageRows(
+    Page<PipelineRowProjection> pageRows(
         @Param("tenantId") long tenantId, @Param("topicId") long topicId, @Param("untopped") boolean untopped,
         @Param("status") String status, @Param("createdBy") long createdBy, @Param("q") String q,
-        org.springframework.data.domain.Pageable pageable);
+        Pageable pageable);
 
     /** How many live pipelines carry an AI step on this prompt -- what keeps the prompt from going. */
     @Query(value = "select count(distinct p.pipeline_key) from pipeline_field f join pipeline p on p.pipeline_key = f.pipeline_key " +
@@ -96,7 +99,7 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
     public List<Pipeline> findAllBySourceTaskTypeIdAndStatusNotOrderByPipelineNameAsc(Long sourceTaskTypeId, Status status);
 
     /** The pipelines of many topics at once, for a pane that lists a profile's topics. */
-    public List<Pipeline> findAllBySourceTaskTypeIdInAndStatusNotOrderByPipelineNameAsc(java.util.Collection<Long> sourceTaskTypeIds, Status status);
+    public List<Pipeline> findAllBySourceTaskTypeIdInAndStatusNotOrderByPipelineNameAsc(Collection<Long> sourceTaskTypeIds, Status status);
 
     /** How many pipelines still name a topic; a topic with any cannot be deleted. */
     public long countBySourceTaskTypeIdAndStatusNot(Long sourceTaskTypeId, Status status);

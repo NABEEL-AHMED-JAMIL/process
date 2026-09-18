@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.List;
 
 /**
  * Every read of a dataset leaves a row behind, not just the ones somebody typed SQL for.
@@ -109,7 +110,7 @@ public class AnalyticsReadAuditTest {
         when(this.datasetResolver.resolve(anyString(), anyString())).thenReturn(datasetRef());
         when(this.analyticsQueryService.preview(any(), anyInt(), any(), any(), any()))
             .thenReturn(new DatasetPreviewDto(Collections.<String>emptyList(),
-                Collections.<java.util.List<String>>emptyList(), 0, 100, 150000L, false, true));
+                Collections.<List<String>>emptyList(), 0, 100, 150000L, false, true));
 
         api().preview(ALIAS, PATH, 3, 100, null, "amount", "DESC", "smith", null, false);
 
@@ -124,7 +125,7 @@ public class AnalyticsReadAuditTest {
         when(this.datasetResolver.resolve(anyString(), anyString())).thenReturn(datasetRef());
         when(this.analyticsQueryService.preview(any(), anyInt(), any(), any(), any()))
             .thenReturn(new DatasetPreviewDto(Collections.<String>emptyList(),
-                Collections.<java.util.List<String>>emptyList(), 0, 100, 150000L, false, true));
+                Collections.<List<String>>emptyList(), 0, 100, 150000L, false, true));
 
         api().preview(ALIAS, PATH, 0, 100, null, null, null, "Delgado", null, false);
 

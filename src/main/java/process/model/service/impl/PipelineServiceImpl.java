@@ -37,6 +37,13 @@ import java.util.stream.Collectors;
 
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import org.springframework.beans.factory.annotation.Autowired;
+import process.model.dto.AiPromptDto;
+import process.model.projection.PipelineRowProjection;
+import process.model.projection.PipelineSummaryProjection;
+import process.model.repository.AiPromptRepository;
 
 /**
  * Form definitions: what a pipeline's payload looks like, so tasks can be filled in.
@@ -68,8 +75,8 @@ public class PipelineServiceImpl {
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
 
     /** Optional so the existing tests' constructor still stands; null means no AI-step check. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private process.model.repository.AiPromptRepository aiPromptRepository;
+    @Autowired(required = false)
+    private AiPromptRepository aiPromptRepository;
 
     public PipelineServiceImpl(PipelineRepository pipelineRepository, TenantRepository tenantRepository,
         UserNameResolver userNameResolver, SourceTaskTypeRepository sourceTaskTypeRepository) {
@@ -100,10 +107,10 @@ public class PipelineServiceImpl {
 
     /** Names the topic on each row, one lookup for the whole list. */
     private void attachTopics(List<Pipeline> pipelines) {
-        java.util.Set<Long> ids = pipelines.stream().map(Pipeline::getSourceTaskTypeId)
-            .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> ids = pipelines.stream().map(Pipeline::getSourceTaskTypeId)
+            .filter(Objects::nonNull).collect(Collectors.toSet());
         if (ids.isEmpty()) return;
-        java.util.Map<Long, SourceTaskType> topics = new java.util.HashMap<>();
+        Map<Long, SourceTaskType> topics = new HashMap<>();
         this.sourceTaskTypeRepository.findAllById(ids).forEach(t -> topics.put(t.getSourceTaskTypeId(), t));
         for (Pipeline p : pipelines) {
             SourceTaskType t = p.getSourceTaskTypeId() == null ? null : topics.get(p.getSourceTaskTypeId());
@@ -146,15 +153,15 @@ public class PipelineServiceImpl {
         // Sorting is in the query itself; the Pageable only carries the window.
         Pageable window = PageRequest.of(page == null || page < 1 ? 0 : (int) (page - 1),
             limit == null || limit < 1 ? 50 : (int) Math.min(limit, 200));
-        Page<process.model.projection.PipelineRowProjection> found = this.pipelineRepository.pageRows(
+        Page<PipelineRowProjection> found = this.pipelineRepository.pageRows(
             scope, topicId, untopped, ProcessUtil.isNull(status) ? "" : status.trim(), createdBy, term, window);
         List<PipelineRowDto> forms = found.getContent().stream().map(PipelineRowDto::from).collect(Collectors.toList());
         // One lookup for the whole page rather than one per row.
         this.userNameResolver.attachNames(forms);
-        java.util.Set<Long> ids = forms.stream().map(PipelineRowDto::getSourceTaskTypeId)
-            .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> ids = forms.stream().map(PipelineRowDto::getSourceTaskTypeId)
+            .filter(Objects::nonNull).collect(Collectors.toSet());
         if (!ids.isEmpty()) {
-            java.util.Map<Long, SourceTaskType> topics = new java.util.HashMap<>();
+            Map<Long, SourceTaskType> topics = new HashMap<>();
             this.sourceTaskTypeRepository.findAllById(ids).forEach(t -> topics.put(t.getSourceTaskTypeId(), t));
             for (PipelineRowDto row : forms) {
                 SourceTaskType t = topics.get(row.getSourceTaskTypeId());
@@ -170,7 +177,7 @@ public class PipelineServiceImpl {
 
     /** The list answer: the page's rows and the whole scope's numbers side by side. */
     private static Map<String, Object> pageOf(List<PipelineRowDto> rows,
-        process.model.projection.PipelineSummaryProjection summary) {
+        PipelineSummaryProjection summary) {
         Map<String, Object> body = new HashMap<>();
         body.put("rows", rows);
         Map<String, Long> tiles = new HashMap<>();
@@ -426,12 +433,12 @@ public class PipelineServiceImpl {
             }
             Map<String, String> map = new HashMap<>();
             if (field.getVariableMap() != null && !field.getVariableMap().trim().isEmpty()) {
-                try { map = new com.google.gson.Gson().fromJson(field.getVariableMap(), new com.google.gson.reflect.TypeToken<Map<String, String>>() {}.getType()); }
+                try { map = new Gson().fromJson(field.getVariableMap(), new TypeToken<Map<String, String>>() {}.getType()); }
                 catch (Exception ex) { return String.format("The AI step <%s> has an unreadable variable map.", field.getTagKey()); }
             }
-            List<process.model.dto.AiPromptDto.Variable> variables = prompt.get().getVariables() == null ? new ArrayList<>()
-                : new com.google.gson.Gson().fromJson(prompt.get().getVariables(), new com.google.gson.reflect.TypeToken<List<process.model.dto.AiPromptDto.Variable>>() {}.getType());
-            for (process.model.dto.AiPromptDto.Variable v : variables) {
+            List<AiPromptDto.Variable> variables = prompt.get().getVariables() == null ? new ArrayList<>()
+                : new Gson().fromJson(prompt.get().getVariables(), new TypeToken<List<AiPromptDto.Variable>>() {}.getType());
+            for (AiPromptDto.Variable v : variables) {
                 String source = map.get(v.name);
                 if (source == null || source.trim().isEmpty()) {
                     if (Boolean.TRUE.equals(v.required)) return String.format("The AI step <%s> gives no field for the prompt's variable {{%s}}.", field.getTagKey(), v.name);

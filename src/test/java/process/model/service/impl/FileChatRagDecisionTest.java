@@ -33,6 +33,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import process.model.service.FileShareService;
 
 /**
  * The actual behaviour change: whether a question about a file is answered from retrieved
@@ -58,7 +59,7 @@ public class FileChatRagDecisionTest {
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private process.model.service.FileShareService fileShareService;
+    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 

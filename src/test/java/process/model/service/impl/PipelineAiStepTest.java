@@ -25,6 +25,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * An AI step is checked at save so a run never discovers the problem: the prompt is this
@@ -75,7 +77,7 @@ public class PipelineAiStepTest {
         Pipeline p = new Pipeline();
         p.setPipelineId("F1"); p.setPipelineName("Claims"); p.setSourceTaskTypeId(77L);
         PipelineField step = field("summary", "ai"); step.setPromptId(1000L); step.setVariableMap(variableMap); step.setOnError("continue");
-        java.util.List<PipelineField> fields = new java.util.ArrayList<>(Arrays.asList(field("claim_id", "text"), field("document", "textarea"), step));
+        List<PipelineField> fields = new ArrayList<>(Arrays.asList(field("claim_id", "text"), field("document", "textarea"), step));
         fields.addAll(Arrays.asList(after));
         p.setFields(fields);
         return p;

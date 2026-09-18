@@ -43,6 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.ERROR;
+import java.util.function.Consumer;
 
 /**
  * @author Nabeel Ahmed
@@ -90,7 +91,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         this.notificationCenterService = notificationCenterService;
     }
 
-    private ResponseDto resolveTenantIdForCreate(Long requestedTenantId, java.util.function.Consumer<Long> onResolved) {
+    private ResponseDto resolveTenantIdForCreate(Long requestedTenantId, Consumer<Long> onResolved) {
         if (!TenantContext.isPlatformAdmin()) {
             onResolved.accept(TenantContext.getTenantId());
             return null;

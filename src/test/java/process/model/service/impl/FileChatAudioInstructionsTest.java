@@ -24,6 +24,8 @@ import java.util.Collections;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import org.mockito.ArgumentMatchers;
+import process.model.service.FileShareService;
 
 /**
  * The same leak fixed for images (FileChatImageInstructionsTest) generalizes to audio: a
@@ -49,7 +51,7 @@ public class FileChatAudioInstructionsTest {
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private process.model.service.FileShareService fileShareService;
+    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -73,7 +75,7 @@ public class FileChatAudioInstructionsTest {
         config.setInstructions("You transcribe and summarize voicemails for the support team.");
         lenient().when(this.aiAgentService.resolveRuntimeConfig(AGENT_ID))
             .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "Resolved.", config));
-        lenient().when(this.aiAgentService.processAdHoc(org.mockito.ArgumentMatchers.any()))
+        lenient().when(this.aiAgentService.processAdHoc(ArgumentMatchers.any()))
             .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "Replied.", "the answer"));
     }
 

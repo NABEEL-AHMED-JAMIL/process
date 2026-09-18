@@ -13,6 +13,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /**
  * The RAG chunk store, driven against a real OpenSearch and a real Ollama embedding model --
@@ -49,8 +51,8 @@ public class OpenSearchRagClientIT {
 
     private static boolean probe(String url) {
         try {
-            java.net.HttpURLConnection connection = (java.net.HttpURLConnection)
-                new java.net.URL(url).openConnection();
+            HttpURLConnection connection = (HttpURLConnection)
+                new URL(url).openConnection();
             connection.setConnectTimeout(2000);
             connection.setReadTimeout(2000);
             connection.setRequestMethod("GET");

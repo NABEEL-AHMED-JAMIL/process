@@ -37,6 +37,10 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static process.util.ProcessUtil.SUCCESS;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.Arrays;
+import process.model.service.StorageBrowserService;
 
 /**
  * The certificate workflow end to end, with real crypto and a bucket in memory.
@@ -64,8 +68,8 @@ public class KafkaCertificateWorkflowTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        process.model.service.StorageBrowserService storage =
-            mock(process.model.service.StorageBrowserService.class);
+        StorageBrowserService storage =
+            mock(StorageBrowserService.class);
         doAnswer(this::rememberObject).when(storage)
             .uploadForWorkflow(anyString(), anyString(), any(), anyLong(), anyString());
         when(storage.readForWorkflow(anyString(), anyString())).thenAnswer(call -> {
@@ -89,8 +93,8 @@ public class KafkaCertificateWorkflowTest {
     }
 
     private Object rememberObject(InvocationOnMock call) throws Exception {
-        java.io.InputStream in = call.getArgument(2);
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        InputStream in = call.getArgument(2);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] chunk = new byte[8192];
         int read;
         while ((read = in.read(chunk)) != -1) {
@@ -204,7 +208,7 @@ public class KafkaCertificateWorkflowTest {
             KafkaSecretKind.CA_CERTIFICATE);
 
         ResponseDto built = this.service.generateTruststore(
-            java.util.Arrays.asList(first.getObjectKey(), second.getObjectKey()));
+            Arrays.asList(first.getObjectKey(), second.getObjectKey()));
         KafkaSecretDto truststore = (KafkaSecretDto) built.getData();
 
         char[] password = this.encryptionUtil.decrypt(truststore.getStorePasswordEnc()).toCharArray();

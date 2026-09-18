@@ -28,6 +28,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import process.ai.AiStepService;
 
 /**
  * Two ways the dispatcher used to stop working quietly.
@@ -54,7 +57,7 @@ public class ProducerBulkEngineDispatchGuardTest {
     @Mock private KafkaTemplateProvider kafkaTemplateProvider;
     @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private process.ai.AiStepService aiStepService;
+    @Mock private AiStepService aiStepService;
 
     private ProducerBulkEngine engine;
 
@@ -64,9 +67,9 @@ public class ProducerBulkEngineDispatchGuardTest {
             this.emailMessagesFactory, this.kafkaTemplateProvider, this.kafkaConnectionResolver,
             this.runCallbackTokens, this.aiStepService);
         // No AI steps on these pipelines: the document goes through as stored.
-        org.mockito.Mockito.lenient().when(this.aiStepService.apply(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-            .thenAnswer(inv -> new process.ai.AiStepService.Outcome(inv.getArgument(3), null));
+        Mockito.lenient().when(this.aiStepService.apply(ArgumentMatchers.any(), ArgumentMatchers.any(),
+            ArgumentMatchers.any(), ArgumentMatchers.any()))
+            .thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(3), null));
     }
 
     private static LookupData lookupValued(String value) {

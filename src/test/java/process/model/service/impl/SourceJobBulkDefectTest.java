@@ -35,6 +35,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
+import java.time.LocalDate;
+import java.util.Optional;
 
 /**
  * The two bulk paths, on the inputs they were never written for.
@@ -95,7 +97,7 @@ public class SourceJobBulkDefectTest {
             Row body = sheet.createRow(1);
             // Tomorrow, computed rather than written down: the validator refuses a start date in
             // the past, so a fixed one would pass today and fail for ever after.
-            String startDate = java.time.LocalDate.now().plusDays(1).toString();
+            String startDate = LocalDate.now().plusDays(1).toString();
             String[] cells = { "nightly load", taskIdCell, startDate, "", "02:00",
                 "Daily", recurrenceCell, "1", "False", "False", "False" };
             for (int i = 0; i < cells.length; i++) {
@@ -136,7 +138,7 @@ public class SourceJobBulkDefectTest {
     @Test
     void anUnknownNumericTaskIdStillReportsTheDeletedTaskMessage() throws Exception {
         when(this.transactionService.findByTaskDetailIdAndTaskStatus(9999L))
-            .thenReturn(java.util.Optional.empty());
+            .thenReturn(Optional.empty());
 
         ResponseDto response = this.service.uploadSourceJob(sheetWithTaskIdCell("9999"));
 
@@ -152,7 +154,7 @@ public class SourceJobBulkDefectTest {
         linkedTask.setTaskDetailId(1043L);
         linkedTask.setTenantId(TENANT_A);
         when(this.transactionService.findByTaskDetailIdAndTaskStatus(1043L))
-            .thenReturn(java.util.Optional.of(linkedTask));
+            .thenReturn(Optional.of(linkedTask));
 
         ResponseDto response = this.service.uploadSourceJob(sheetWithTaskIdCell("1043"));
 
@@ -168,7 +170,7 @@ public class SourceJobBulkDefectTest {
         linkedTask.setTaskDetailId(1043L);
         linkedTask.setTenantId(TENANT_A);
         when(this.transactionService.findByTaskDetailIdAndTaskStatus(1043L))
-            .thenReturn(java.util.Optional.of(linkedTask));
+            .thenReturn(Optional.of(linkedTask));
     }
 
     /**

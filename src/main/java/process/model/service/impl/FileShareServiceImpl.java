@@ -27,6 +27,7 @@ import java.util.zip.ZipOutputStream;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
+import java.util.Collections;
 
 /**
  * @author Nabeel Ahmed
@@ -75,7 +76,7 @@ public class FileShareServiceImpl implements FileShareService {
             if (bulk) {
                 return this.emailSelection(dto, senderName, dto.getKeys());
             }
-            return this.emailSelection(dto, senderName, java.util.Collections.singletonList(dto.getKey()));
+            return this.emailSelection(dto, senderName, Collections.singletonList(dto.getKey()));
         } catch (IllegalArgumentException limitExceeded) {
             return new ResponseDto(ERROR, limitExceeded.getMessage());
         } catch (Exception ex) {

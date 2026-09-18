@@ -10,6 +10,11 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import org.springframework.http.ResponseEntity;
+import process.api.AnalyticsBenchmarkRestApi;
+import process.model.dto.ResponseDto;
 
 /**
  * The half of the benchmark harness that NOTICES.
@@ -161,17 +166,17 @@ public class BenchmarkRegressionTest {
         // "1 regression" sends somebody to a log that is on a server. The sentence carries both
         // numbers so the verdict can be argued with from the response alone.
         AnalyticsBenchmarkService service =
-            org.mockito.Mockito.mock(AnalyticsBenchmarkService.class);
-        org.mockito.Mockito.when(service.runAndCompare(org.mockito.ArgumentMatchers.any()))
+            Mockito.mock(AnalyticsBenchmarkService.class);
+        Mockito.when(service.runAndCompare(ArgumentMatchers.any()))
             .thenReturn(BenchmarkRegression.compare(
                 Collections.singletonList(row("b2", "10mb", "QUERY", "PARQUET", 200L)),
                 Collections.singletonList(row("b1", "10mb", "QUERY", "PARQUET", 50L))));
 
-        process.api.AnalyticsBenchmarkRestApi api =
-            new process.api.AnalyticsBenchmarkRestApi(service, new AnalyticsLimits());
-        org.springframework.http.ResponseEntity<?> response = api.runBenchmark(null);
+        AnalyticsBenchmarkRestApi api =
+            new AnalyticsBenchmarkRestApi(service, new AnalyticsLimits());
+        ResponseEntity<?> response = api.runBenchmark(null);
 
-        process.model.dto.ResponseDto body = (process.model.dto.ResponseDto) response.getBody();
+        ResponseDto body = (ResponseDto) response.getBody();
         assertTrue(body.getMessage().contains("REGRESSION"), body.getMessage());
         assertTrue(body.getMessage().contains("50 ms"), body.getMessage());
         assertTrue(body.getMessage().contains("200 ms"), body.getMessage());
@@ -181,16 +186,16 @@ public class BenchmarkRegressionTest {
     void theEndpointDistinguishesNoBaselineFromNoRegression() throws Exception {
         // Different facts. Only one of them means the number can be trusted.
         AnalyticsBenchmarkService service =
-            org.mockito.Mockito.mock(AnalyticsBenchmarkService.class);
-        org.mockito.Mockito.when(service.runAndCompare(org.mockito.ArgumentMatchers.any()))
+            Mockito.mock(AnalyticsBenchmarkService.class);
+        Mockito.when(service.runAndCompare(ArgumentMatchers.any()))
             .thenReturn(BenchmarkRegression.compare(
                 Collections.singletonList(row("b1", "10mb", "QUERY", "CSV", 242L)),
                 Collections.<BenchmarkResult>emptyList()));
 
-        process.api.AnalyticsBenchmarkRestApi api =
-            new process.api.AnalyticsBenchmarkRestApi(service, new AnalyticsLimits());
-        process.model.dto.ResponseDto body =
-            (process.model.dto.ResponseDto) api.runBenchmark(null).getBody();
+        AnalyticsBenchmarkRestApi api =
+            new AnalyticsBenchmarkRestApi(service, new AnalyticsLimits());
+        ResponseDto body =
+            (ResponseDto) api.runBenchmark(null).getBody();
 
         assertTrue(body.getMessage().contains("nothing to compare against yet"), body.getMessage());
     }

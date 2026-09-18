@@ -32,6 +32,10 @@ import process.util.KafkaTopicPartitionUtil;
 import java.util.*;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import process.model.pojo.Pipeline;
+import process.model.repository.PipelineRepository;
 
 /**
  * @author Nabeel Ahmed
@@ -69,8 +73,8 @@ public class SettingServiceImpl implements SettingService {
      * give the scheduler several different ideas of when it last ran -- and AI_PROVIDER names
      * the providers the platform can reach at all.
      */
-    private static final java.util.Set<String> TENANT_OWNED_LOOKUPS =
-        new java.util.HashSet<>(java.util.Arrays.asList(
+    private static final Set<String> TENANT_OWNED_LOOKUPS =
+        new HashSet<>(Arrays.asList(
             "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS"));
 
     /**
@@ -83,7 +87,7 @@ public class SettingServiceImpl implements SettingService {
      * a fixed set on a model connection (Assistants > Model connections). The rule stays for
      * the next family that needs it.
      */
-    private static final java.util.Set<String> TENANT_EXTENDABLE_LOOKUPS = java.util.Collections.emptySet();
+    private static final Set<String> TENANT_EXTENDABLE_LOOKUPS = Collections.emptySet();
 
     /**
      * Lookup families only a platform admin may see or touch.
@@ -93,8 +97,8 @@ public class SettingServiceImpl implements SettingService {
      * one caps how much the dispatcher pulls per cycle, and one names where system mail goes.
      * A tenant admin has no use for them and every reason not to be able to edit them.
      */
-    private static final java.util.Set<String> PLATFORM_ONLY_LOOKUPS =
-        new java.util.HashSet<>(java.util.Arrays.asList(
+    private static final Set<String> PLATFORM_ONLY_LOOKUPS =
+        new HashSet<>(Arrays.asList(
             "QUEUE_FETCH_LIMIT", "SCHEDULER_LAST_RUN_TIME",
             "AUDIT_LOG_SYNC_LAST_RUN_TIME"));
 
@@ -143,8 +147,8 @@ public class SettingServiceImpl implements SettingService {
      * /settings/lookup with no warning. The two resume-timestamp settings are excluded on
      * purpose: they hold timestamps, not numbers.
      */
-    private static final java.util.Set<String> NUMERIC_PLATFORM_LOOKUPS =
-        new java.util.HashSet<>(java.util.Collections.singletonList("QUEUE_FETCH_LIMIT"));
+    private static final Set<String> NUMERIC_PLATFORM_LOOKUPS =
+        new HashSet<>(Collections.singletonList("QUEUE_FETCH_LIMIT"));
 
     /**
      * Whether an edit would leave an engine setting in a state the engine cannot read.
@@ -205,7 +209,7 @@ public class SettingServiceImpl implements SettingService {
             return "This provider belongs to the platform and is shared with every workspace. "
                 + "You can add your own, but not change this one.";
         }
-        if (!java.util.Objects.equals(lookupData.getTenantId(), TenantContext.getTenantId())) {
+        if (!Objects.equals(lookupData.getTenantId(), TenantContext.getTenantId())) {
             return "That entry belongs to another workspace.";
         }
         return null;
@@ -233,8 +237,8 @@ public class SettingServiceImpl implements SettingService {
      * Field-injected and optional: the guard on deleting a topic is the only thing here that
      * reads pipelines, and the eleven-argument constructor is built by hand in six tests.
      */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private process.model.repository.PipelineRepository pipelineRepository;
+    @Autowired(required = false)
+    private PipelineRepository pipelineRepository;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
     private final LookupDataCacheService lookupDataCacheService;
@@ -358,7 +362,7 @@ public class SettingServiceImpl implements SettingService {
             String term = isNull(q) || q.trim().isEmpty() ? "" : "%" + q.trim().toLowerCase() + "%";
             int cap = limit == null || limit < 1 ? 50 : Math.min(limit, 500);
             topics = this.sourceTaskTypeRepository.searchTopicOptions(admin ? 0L : mine, term,
-                org.springframework.data.domain.PageRequest.of(0, cap));
+                PageRequest.of(0, cap));
         }
         return new ResponseDto(SUCCESS, String.format("%d topic(s).", topics.size()), topics);
     }
@@ -389,10 +393,10 @@ public class SettingServiceImpl implements SettingService {
             .collect(Collectors.toList());
         // Every topic's pipelines in one query, then dealt out.
         List<Long> ids = topics.stream().map(SourceTaskTypeDto::getSourceTaskTypeId).collect(Collectors.toList());
-        Map<Long, List<SourceTaskTypeDto.PipelineSummary>> byTopic = new java.util.HashMap<>();
+        Map<Long, List<SourceTaskTypeDto.PipelineSummary>> byTopic = new HashMap<>();
         if (!ids.isEmpty() && this.pipelineRepository != null) {
-            for (process.model.pojo.Pipeline p : this.pipelineRepository.findAllBySourceTaskTypeIdInAndStatusNotOrderByPipelineNameAsc(ids, Status.Delete)) {
-                byTopic.computeIfAbsent(p.getSourceTaskTypeId(), k -> new java.util.ArrayList<>()).add(
+            for (Pipeline p : this.pipelineRepository.findAllBySourceTaskTypeIdInAndStatusNotOrderByPipelineNameAsc(ids, Status.Delete)) {
+                byTopic.computeIfAbsent(p.getSourceTaskTypeId(), k -> new ArrayList<>()).add(
                     new SourceTaskTypeDto.PipelineSummary(p.getPipelineKey(), p.getPipelineId(), p.getPipelineName(),
                         p.getStatus() == null ? null : p.getStatus().name(), p.getFields() == null ? 0 : p.getFields().size()));
             }

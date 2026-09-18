@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.Status;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -160,7 +161,7 @@ public class SourceTaskTypeDto implements AuditNamed {
         public int getFields() { return fields; }
     }
 
-    private java.util.List<PipelineSummary> pipelines;
-    public java.util.List<PipelineSummary> getPipelines() { return pipelines; }
-    public void setPipelines(java.util.List<PipelineSummary> pipelines) { this.pipelines = pipelines; }
+    private List<PipelineSummary> pipelines;
+    public List<PipelineSummary> getPipelines() { return pipelines; }
+    public void setPipelines(List<PipelineSummary> pipelines) { this.pipelines = pipelines; }
 }

@@ -8,6 +8,7 @@ import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.List;
 
 /**
  * A page of saved results: a name, a sentence saying what it is for, and the widgets on it.
@@ -92,7 +93,7 @@ public class AnalyticsDashboard implements Audited {
      * is rather than arriving through a cascade that the tenant filter never sees.
      */
     @Transient
-    private java.util.List<AnalyticsDashboardWidget> widgets;
+    private List<AnalyticsDashboardWidget> widgets;
 
     public AnalyticsDashboard() {}
 
@@ -117,8 +118,8 @@ public class AnalyticsDashboard implements Audited {
     public Timestamp getDateUpdated() { return dateUpdated; }
     public void setDateUpdated(Timestamp dateUpdated) { this.dateUpdated = dateUpdated; }
 
-    public java.util.List<AnalyticsDashboardWidget> getWidgets() { return widgets; }
-    public void setWidgets(java.util.List<AnalyticsDashboardWidget> widgets) { this.widgets = widgets; }
+    public List<AnalyticsDashboardWidget> getWidgets() { return widgets; }
+    public void setWidgets(List<AnalyticsDashboardWidget> widgets) { this.widgets = widgets; }
 
     @Override
     public String toString() {

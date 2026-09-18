@@ -24,6 +24,10 @@ import java.net.URI;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
+import io.minio.messages.Bucket;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
+import org.springframework.cache.CacheManager;
 
 /**
  * Turns a stored StorageConnection into a ready-to-use ObjectStorageService bound to that
@@ -41,7 +45,7 @@ import java.util.List;
 public class StorageClientFactory {
 
     /** Backs the short-lived FTP directory-listing cache; see RedisConfig. */
-    private final org.springframework.cache.CacheManager cacheManager;
+    private final CacheManager cacheManager;
 
     private static final Logger logger = LoggerFactory.getLogger(StorageClientFactory.class);
 
@@ -53,7 +57,7 @@ public class StorageClientFactory {
     private boolean allowInstanceRole;
 
     public StorageClientFactory(EncryptionUtil encryptionUtil,
-        org.springframework.cache.CacheManager cacheManager) {
+        CacheManager cacheManager) {
         this.cacheManager = cacheManager;
         this.encryptionUtil = encryptionUtil;
     }
@@ -125,16 +129,16 @@ public class StorageClientFactory {
         switch (connection.getProvider()) {
             case MINIO:
                 return this.minioClient(connection).listBuckets().stream()
-                    .map(io.minio.messages.Bucket::name)
+                    .map(Bucket::name)
                     .sorted(String.CASE_INSENSITIVE_ORDER)
-                    .collect(java.util.stream.Collectors.toList());
+                    .collect(Collectors.toList());
             case S3:
                 return this.s3Client(connection).listBuckets().buckets().stream()
                     .map(software.amazon.awssdk.services.s3.model.Bucket::name)
                     .sorted(String.CASE_INSENSITIVE_ORDER)
-                    .collect(java.util.stream.Collectors.toList());
+                    .collect(Collectors.toList());
             case AZURE:
-                java.util.List<String> containers = new java.util.ArrayList<>();
+                List<String> containers = new ArrayList<>();
                 this.blobServiceClient(connection).listBlobContainers()
                     .forEach(item -> containers.add(item.getName()));
                 containers.sort(String.CASE_INSENSITIVE_ORDER);

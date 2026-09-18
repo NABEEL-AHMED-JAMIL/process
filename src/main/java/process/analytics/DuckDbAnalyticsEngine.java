@@ -41,6 +41,11 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * The only place in this application where an analytics query runs, and the only class that knows
@@ -1251,10 +1256,10 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      * because inventing a format for a type this method has not seen would be the same mistake.
      */
     private static String timeOf(Object value) {
-        if (value instanceof java.time.LocalTime) {
-            java.time.LocalTime time = (java.time.LocalTime) value;
+        if (value instanceof LocalTime) {
+            LocalTime time = (LocalTime) value;
             return time.getNano() == 0
-                ? time.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                ? time.format(DateTimeFormatter.ofPattern("HH:mm:ss"))
                 : time.toString();
         }
         return String.valueOf(value);
@@ -1351,7 +1356,7 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
 
     /** A DATE as a date. The time it is rendered with is a time the column does not have. */
     private static String asDate(Object value) {
-        if (value instanceof java.sql.Date) {
+        if (value instanceof Date) {
             // java.sql.Date.toString is already yyyy-MM-dd, and going via toLocalDate() would
             // reinterpret the value in the JVM's zone on the way past.
             return value.toString();
@@ -1359,8 +1364,8 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         if (value instanceof LocalDate) {
             return value.toString();
         }
-        if (value instanceof java.sql.Timestamp) {
-            return ((java.sql.Timestamp) value).toLocalDateTime().toLocalDate().toString();
+        if (value instanceof Timestamp) {
+            return ((Timestamp) value).toLocalDateTime().toLocalDate().toString();
         }
         if (value instanceof LocalDateTime) {
             return ((LocalDateTime) value).toLocalDate().toString();
@@ -1380,8 +1385,8 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      */
     private static String asTimestamp(Object value) {
         LocalDateTime moment;
-        if (value instanceof java.sql.Timestamp) {
-            moment = ((java.sql.Timestamp) value).toLocalDateTime();
+        if (value instanceof Timestamp) {
+            moment = ((Timestamp) value).toLocalDateTime();
         } else if (value instanceof LocalDateTime) {
             moment = (LocalDateTime) value;
         } else if (value instanceof OffsetDateTime) {
@@ -1596,12 +1601,12 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
         int bins = ColumnDistributionDto.BINS;
         double width = (high - low) / bins;
 
-        java.util.Map<Integer, Long> counted = this.run(dataset,
+        Map<Integer, Long> counted = this.run(dataset,
             "SELECT least(floor((" + quoted + " - " + low + ") / " + width + "), " + (bins - 1)
                 + ")::INTEGER AS bucket, count(*) AS rows FROM " + scan
                 + " WHERE " + quoted + " IS NOT NULL GROUP BY 1",
             resultSet -> {
-                java.util.Map<Integer, Long> rows = new java.util.HashMap<Integer, Long>();
+                Map<Integer, Long> rows = new HashMap<Integer, Long>();
                 while (resultSet.next()) {
                     rows.put(resultSet.getInt("bucket"), resultSet.getLong("rows"));
                 }
@@ -1640,8 +1645,8 @@ public class DuckDbAnalyticsEngine implements AnalyticsEngine {
      */
     private static String edge(double value, double width) {
         int decimals = width >= 100 ? 0 : width >= 1 ? 2 : width >= 0.01 ? 4 : 8;
-        return java.math.BigDecimal.valueOf(value)
-            .setScale(decimals, java.math.RoundingMode.HALF_UP)
+        return BigDecimal.valueOf(value)
+            .setScale(decimals, RoundingMode.HALF_UP)
             .stripTrailingZeros().toPlainString();
     }
 

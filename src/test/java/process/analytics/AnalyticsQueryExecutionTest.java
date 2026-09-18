@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import ch.qos.logback.classic.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -119,7 +120,7 @@ public class AnalyticsQueryExecutionTest {
     /** Scan expression to the relation that stands in for it. The only substitution in this file. */
     private final Map<String, String> standIns = new LinkedHashMap<>();
 
-    private ch.qos.logback.classic.Logger serviceLogger;
+    private Logger serviceLogger;
     private ListAppender<ILoggingEvent> logged;
     private Level originalLevel;
 
@@ -146,7 +147,7 @@ public class AnalyticsQueryExecutionTest {
         // warning and the unmapped-failure error all moved to DuckDbAnalyticsEngine when the
         // engine seam was introduced, and an appender on the old name would record nothing while
         // every assertion below still read as though it were watching.
-        this.serviceLogger = (ch.qos.logback.classic.Logger)
+        this.serviceLogger = (Logger)
             LoggerFactory.getLogger(DuckDbAnalyticsEngine.class);
         this.originalLevel = this.serviceLogger.getLevel();
         this.serviceLogger.setLevel(Level.INFO);

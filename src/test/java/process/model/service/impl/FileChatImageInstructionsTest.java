@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import process.model.service.FileShareService;
 
 /**
  * A real, reported leak: a vision agent describing an image volunteered the file's raw MinIO
@@ -55,7 +56,7 @@ public class FileChatImageInstructionsTest {
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private process.model.service.FileShareService fileShareService;
+    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 

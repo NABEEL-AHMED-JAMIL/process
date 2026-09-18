@@ -40,6 +40,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import java.math.BigInteger;
 
 /**
  * Three things a task's own endpoints got wrong about the request they were given.
@@ -219,7 +220,7 @@ public class SourceTaskLifecycleDefectTest {
     void theLinkedJobsEndpointPagesAndCountsWhatItWasAsked() throws Exception {
         Pageable paging = PagingUtil.ApplyPaging("sj.job_id", "asc", 2L, 25L);
         this.queryBuilderReturnsDistinguishableSql();
-        when(this.queryService.executeQueryForSingleResult("count-sql")).thenReturn(java.math.BigInteger.valueOf(400L));
+        when(this.queryService.executeQueryForSingleResult("count-sql")).thenReturn(BigInteger.valueOf(400L));
         when(this.queryService.executeQuery("rows-sql", paging)).thenReturn(oneLinkedJobRow());
 
         ResponseDto response = this.service.fetchAllLinkJobsWithSourceTaskId(
@@ -269,7 +270,7 @@ public class SourceTaskLifecycleDefectTest {
 
     private static List<Object[]> oneLinkedJobRow() {
         return Collections.singletonList(new Object[] {
-            java.math.BigInteger.valueOf(5073L), "Pacific hurricanes", "Active", "Auto", "Completed",
+            BigInteger.valueOf(5073L), "Pacific hurricanes", "Active", "Auto", "Completed",
             "2026-08-27 12:25:03", 1, Timestamp.valueOf("2026-08-27 12:25:03").toString() });
     }
 
@@ -277,7 +278,7 @@ public class SourceTaskLifecycleDefectTest {
     void anEmptyPageStillReportsTheTotal() throws Exception {
         Pageable paging = PagingUtil.ApplyPaging("sj.job_id", "asc", 99L, 25L);
         this.queryBuilderReturnsDistinguishableSql();
-        when(this.queryService.executeQueryForSingleResult("count-sql")).thenReturn(java.math.BigInteger.valueOf(400L));
+        when(this.queryService.executeQueryForSingleResult("count-sql")).thenReturn(BigInteger.valueOf(400L));
         when(this.queryService.executeQuery("rows-sql", paging)).thenReturn(Arrays.asList());
 
         ResponseDto response = this.service.fetchAllLinkJobsWithSourceTaskId(

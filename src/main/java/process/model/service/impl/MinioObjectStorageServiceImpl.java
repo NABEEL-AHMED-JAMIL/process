@@ -24,6 +24,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import io.minio.GetObjectResponse;
+import io.minio.messages.DeleteError;
 
 /**
  * @author Nabeel Ahmed
@@ -102,7 +104,7 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
                 contentLength = end - rangeStart + 1;
                 argsBuilder.offset(rangeStart).length(contentLength);
             }
-            io.minio.GetObjectResponse response = this.minioClient.getObject(argsBuilder.build());
+            GetObjectResponse response = this.minioClient.getObject(argsBuilder.build());
             return new ObjectContentDto(response, ContentTypeUtil.contentTypeFor(key), contentLength, totalSize, this.fileNameOf(key));
         } catch (Exception e) {
             throw new RuntimeException("Could not fetch MinIO object content " + bucket + "/" + key, e);
@@ -142,9 +144,9 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
     public void deleteObjects(String bucket, List<String> keys) {
         try {
             List<DeleteObject> toDelete = keys.stream().map(DeleteObject::new).collect(Collectors.toList());
-            for (Result<io.minio.messages.DeleteError> result
+            for (Result<DeleteError> result
                 : this.minioClient.removeObjects(RemoveObjectsArgs.builder().bucket(bucket).objects(toDelete).build())) {
-                io.minio.messages.DeleteError error = result.get();
+                DeleteError error = result.get();
                 throw new RuntimeException("Could not delete MinIO object " + bucket + "/" + error.objectName() + ": " + error.message());
             }
         } catch (RuntimeException e) {

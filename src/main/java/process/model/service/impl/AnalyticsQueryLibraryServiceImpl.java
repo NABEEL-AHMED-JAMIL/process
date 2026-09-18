@@ -32,6 +32,7 @@ import java.util.regex.Pattern;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
+import java.util.Locale;
 
 /**
  * @author Nabeel Ahmed
@@ -350,7 +351,7 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
             return null;
         }
         String trimmed = message.trim();
-        String lower = trimmed.toLowerCase(java.util.Locale.ROOT);
+        String lower = trimmed.toLowerCase(Locale.ROOT);
         boolean carriesSomethingPrivate = LOCATION.matcher(trimmed).find();
         for (String word : NEVER_RECORDED) {
             carriesSomethingPrivate = carriesSomethingPrivate || lower.contains(word);

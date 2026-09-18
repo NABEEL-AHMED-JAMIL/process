@@ -42,6 +42,8 @@ import java.util.stream.Collectors;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.admin.ConsumerGroupListing;
 
 /**
  * @author Nabeel Ahmed
@@ -361,13 +363,13 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         List<String> reading = new ArrayList<>();
         try {
             List<String> ids = new ArrayList<>();
-            for (org.apache.kafka.clients.admin.ConsumerGroupListing g : adminClient.listConsumerGroups().all().get(10, TimeUnit.SECONDS)) {
+            for (ConsumerGroupListing g : adminClient.listConsumerGroups().all().get(10, TimeUnit.SECONDS)) {
                 ids.add(g.groupId());
             }
             if (ids.isEmpty()) return reading;
-            Map<String, org.apache.kafka.clients.admin.ConsumerGroupDescription> described =
+            Map<String, ConsumerGroupDescription> described =
                 adminClient.describeConsumerGroups(ids).all().get(10, TimeUnit.SECONDS);
-            for (org.apache.kafka.clients.admin.ConsumerGroupDescription d : described.values()) {
+            for (ConsumerGroupDescription d : described.values()) {
                 boolean onTopic = d.members().stream().anyMatch(m -> m.assignment().topicPartitions().stream()
                     .anyMatch(tp -> topicName.equals(tp.topic())));
                 if (onTopic) reading.add(d.groupId());

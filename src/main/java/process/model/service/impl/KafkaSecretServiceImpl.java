@@ -35,6 +35,7 @@ import java.util.UUID;
 
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
+import java.util.Date;
 
 /**
  * @author Nabeel Ahmed
@@ -243,7 +244,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
             dto.setIssuer(this.commonName(first.getIssuerX500Principal().getName()));
             dto.setExpiresOn(DAY.format(first.getNotAfter().toInstant()
                 .atZone(ZoneId.systemDefault()).toLocalDate()));
-            dto.setExpired(first.getNotAfter().before(new java.util.Date()));
+            dto.setExpired(first.getNotAfter().before(new Date()));
             return dto;
         }
         if (kind == KafkaSecretKind.CLIENT_PRIVATE_KEY) {

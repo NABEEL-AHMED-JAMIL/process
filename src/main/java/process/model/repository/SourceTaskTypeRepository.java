@@ -10,6 +10,8 @@ import process.model.projection.SourceTaskTypeProjection;
 import process.model.projection.TopicOptionProjection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
+import org.springframework.data.domain.Pageable;
 
 /**
  * @author Nabeel Ahmed
@@ -32,11 +34,11 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "and (:q = '' or lower(service_name) like :q or lower(coalesce(queue_topic_partition, '')) like :q)\n" +
         "order by service_name asc", nativeQuery = true)
     public List<TopicOptionProjection> searchTopicOptions(@Param("tenantId") long tenantId, @Param("q") String q,
-        org.springframework.data.domain.Pageable limit);
+        Pageable limit);
 
     /** The picker rows for known ids -- how a box shows the label of a value it was handed. */
     @Query(value = TOPIC_OPTION_SELECT + "and source_task_type_id in (:ids) order by service_name asc", nativeQuery = true)
-    public List<TopicOptionProjection> fetchTopicOptionsByIds(@Param("ids") java.util.Collection<Long> ids);
+    public List<TopicOptionProjection> fetchTopicOptionsByIds(@Param("ids") Collection<Long> ids);
 
     /** One Kafka profile's topics as picker rows; on the default profile the workspace's unrouted topics ride along. */
     @Query(value = TOPIC_OPTION_SELECT +

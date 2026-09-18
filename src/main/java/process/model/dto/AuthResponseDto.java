@@ -2,6 +2,7 @@ package process.model.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -35,7 +36,7 @@ public class AuthResponseDto {
      * The pages this person may open, as PageKey keys, so the menu is right on the first paint
      * rather than after a second request. Every key for an admin; null is never sent.
      */
-    private java.util.List<String> pageKeys;
+    private List<String> pageKeys;
     private String pageAccessProfileName;
 
     public String getAccessToken() {
@@ -119,8 +120,8 @@ public class AuthResponseDto {
         this.mustChangePassword = mustChangePassword;
     }
 
-    public java.util.List<String> getPageKeys() { return pageKeys; }
-    public void setPageKeys(java.util.List<String> pageKeys) { this.pageKeys = pageKeys; }
+    public List<String> getPageKeys() { return pageKeys; }
+    public void setPageKeys(List<String> pageKeys) { this.pageKeys = pageKeys; }
     public String getPageAccessProfileName() { return pageAccessProfileName; }
     public void setPageAccessProfileName(String pageAccessProfileName) { this.pageAccessProfileName = pageAccessProfileName; }
 }

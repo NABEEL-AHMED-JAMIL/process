@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import java.util.ArrayList;
 
 /**
  * What a form definition must satisfy before it can be saved.
@@ -34,7 +35,7 @@ public class PipelineValidationTest {
         form.setSourceTaskTypeId(9001L);
         form.setPipelineId("F768926");
         form.setPipelineName("Hurricane payload");
-        form.setFields(new java.util.ArrayList<>(Arrays.asList(fields)));
+        form.setFields(new ArrayList<>(Arrays.asList(fields)));
         return form;
     }
 

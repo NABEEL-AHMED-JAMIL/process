@@ -29,6 +29,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import java.util.Map;
+import org.assertj.core.api.Assertions;
+import org.mockito.Mockito;
+import process.model.pojo.UserPageAccess;
+import process.model.service.PageAccessService;
 
 /**
  * Who may open what: the one rule, from the top.
@@ -158,9 +163,9 @@ public class PageAccessResolutionTest {
         PageAccessProfile gone = profile(501L, TENANT_A, Status.Delete, "jobs"); gone.setProfileName("Old");
         when(this.profileRepository.findAllById(any())).thenReturn(Arrays.asList(a, gone));
 
-        java.util.Map<Long, String> names = this.service.profileNamesFor(Arrays.asList(500L, null, 501L, 500L));
+        Map<Long, String> names = this.service.profileNamesFor(Arrays.asList(500L, null, 501L, 500L));
 
-        assertThat(names).containsExactly(org.assertj.core.api.Assertions.entry(500L, "Operator"));
+        assertThat(names).containsExactly(Assertions.entry(500L, "Operator"));
         assertThat(this.service.profileNamesFor(Arrays.asList((Long) null))).isEmpty();
         assertThat(this.service.profileNamesFor(null)).isEmpty();
     }
@@ -171,9 +176,9 @@ public class PageAccessResolutionTest {
         when(this.profileRepository.findById(500L))
             .thenReturn(Optional.of(profile(500L, TENANT_A, Status.Active, "jobs", "queue")));
         when(this.exceptionRepository.findByIdAppUserId(7L)).thenReturn(Arrays.asList(
-            new process.model.pojo.UserPageAccess(7L, "reports", true, 9L),
-            new process.model.pojo.UserPageAccess(7L, "queue", false, 9L),
-            new process.model.pojo.UserPageAccess(7L, "page-that-was-removed", true, 9L)));
+            new UserPageAccess(7L, "reports", true, 9L),
+            new UserPageAccess(7L, "queue", false, 9L),
+            new UserPageAccess(7L, "page-that-was-removed", true, 9L)));
 
         assertThat(this.service.effectivePages(user(UserRole.TENANT_USER, TENANT_A, 500L)))
             .containsExactlyInAnyOrder(PageKey.JOBS, PageKey.REPORTS);
@@ -183,7 +188,7 @@ public class PageAccessResolutionTest {
     @Test
     void exceptionsNeverTouchAnAdmin() {
         assertThat(this.service.effectivePages(user(UserRole.TENANT_ADMIN, TENANT_A, null))).isEqualTo(PageKey.all());
-        org.mockito.Mockito.verify(this.exceptionRepository, org.mockito.Mockito.never()).findByIdAppUserId(any());
+        Mockito.verify(this.exceptionRepository, Mockito.never()).findByIdAppUserId(any());
     }
 
     /** The user list's summary: three reads for the whole page, admins read as everything. */
@@ -196,9 +201,9 @@ public class PageAccessResolutionTest {
         AppUser ava = user(UserRole.TENANT_USER, TENANT_A, null); ava.setAppUserId(45L);
         AppUser daniel = user(UserRole.TENANT_ADMIN, TENANT_A, null); daniel.setAppUserId(9L);
         when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Arrays.asList(
-            new process.model.pojo.UserPageAccess(44L, "reports", true, 9L)));
+            new UserPageAccess(44L, "reports", true, 9L)));
 
-        java.util.Map<Long, process.model.service.PageAccessService.AccessSummary> summary =
+        Map<Long, PageAccessService.AccessSummary> summary =
             this.service.accessSummaryFor(Arrays.asList(olivia, ava, daniel));
 
         assertThat(summary.get(44L).profileName).isEqualTo("Operator");
@@ -208,6 +213,6 @@ public class PageAccessResolutionTest {
         assertThat(summary.get(45L).defaultProfileName).isEqualTo("Operator");
         assertThat(summary.get(45L).pageCount).isEqualTo(2);
         assertThat(summary.get(9L).pageCount).isEqualTo(PageKey.values().length);
-        org.mockito.Mockito.verify(this.profileRepository, org.mockito.Mockito.never()).findById(any());
+        Mockito.verify(this.profileRepository, Mockito.never()).findById(any());
     }
 }

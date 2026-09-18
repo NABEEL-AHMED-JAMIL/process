@@ -6,6 +6,7 @@ import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /** Proves the harness itself works: a real token reaches a real endpoint through the real chain. */
 public class HarnessSmokeIT extends E2ESupport {
@@ -21,7 +22,7 @@ public class HarnessSmokeIT extends E2ESupport {
 
     @Test
     void noTokenIsRefused() throws Exception {
-        this.mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+        this.mvc.perform(MockMvcRequestBuilders
                 .get("/appUser.json/me"))
             .andExpect(status().isUnauthorized());
     }

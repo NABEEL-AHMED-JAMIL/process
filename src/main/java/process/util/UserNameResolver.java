@@ -11,6 +11,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Objects;
+import java.util.function.Function;
+import org.springframework.data.repository.CrudRepository;
+import process.model.dto.AuditNamed;
+import process.model.pojo.Audited;
 
 /**
  * Turns the app-user ids stored in created_by / updated_by into something a person can read.
@@ -37,7 +44,7 @@ public class UserNameResolver {
      */
     public Map<Long, String> namesFor(Collection<Long> userIds) {
         Set<Long> wanted = userIds == null ? new HashSet<>() : userIds.stream()
-            .filter(java.util.Objects::nonNull)
+            .filter(Objects::nonNull)
             .collect(Collectors.toSet());
         if (wanted.isEmpty()) {
             return new HashMap<>();
@@ -57,12 +64,12 @@ public class UserNameResolver {
      * few hundred jobs is a few hundred round trips. Both columns are gathered first, so a list
      * costs exactly one query no matter how long it is.
      */
-    public void attachNames(Collection<? extends process.model.pojo.Audited> rows) {
+    public void attachNames(Collection<? extends Audited> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
         Set<Long> ids = new HashSet<>();
-        for (process.model.pojo.Audited row : rows) {
+        for (Audited row : rows) {
             if (row.getCreatedBy() != null) {
                 ids.add(row.getCreatedBy());
             }
@@ -71,7 +78,7 @@ public class UserNameResolver {
             }
         }
         Map<Long, String> names = namesFor(ids);
-        for (process.model.pojo.Audited row : rows) {
+        for (Audited row : rows) {
             row.setCreatedByName(names.get(row.getCreatedBy()));
             row.setUpdatedByName(names.get(row.getUpdatedBy()));
         }
@@ -83,26 +90,26 @@ public class UserNameResolver {
      * Two queries for a whole page -- one for the rows, one for the people -- regardless of how
      * many rows there are. A DTO whose entity has since been deleted simply keeps no name.
      */
-    public <E extends process.model.pojo.Audited> void attachToDtos(
-        java.util.List<? extends process.model.dto.AuditNamed> dtos,
-        org.springframework.data.repository.CrudRepository<E, Long> repository,
-        java.util.function.Function<E, Long> idOf) {
+    public <E extends Audited> void attachToDtos(
+        List<? extends AuditNamed> dtos,
+        CrudRepository<E, Long> repository,
+        Function<E, Long> idOf) {
         if (dtos == null || dtos.isEmpty()) {
             return;
         }
-        Set<Long> ids = dtos.stream().map(process.model.dto.AuditNamed::auditKey)
-            .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> ids = dtos.stream().map(AuditNamed::auditKey)
+            .filter(Objects::nonNull).collect(Collectors.toSet());
         if (ids.isEmpty()) {
             return;
         }
-        List<E> entities = new java.util.ArrayList<>();
+        List<E> entities = new ArrayList<>();
         repository.findAllById(ids).forEach(entities::add);
         attachNames(entities);
         Map<Long, E> byId = new HashMap<>();
         for (E entity : entities) {
             byId.put(idOf.apply(entity), entity);
         }
-        for (process.model.dto.AuditNamed dto : dtos) {
+        for (AuditNamed dto : dtos) {
             E entity = byId.get(dto.auditKey());
             if (entity != null) {
                 dto.setCreatedByName(entity.getCreatedByName());
@@ -113,9 +120,9 @@ public class UserNameResolver {
     }
 
     /** One row, for the single-record reads. */
-    public void attachNames(process.model.pojo.Audited row) {
+    public void attachNames(Audited row) {
         if (row != null) {
-            attachNames(java.util.Collections.singletonList(row));
+            attachNames(Collections.singletonList(row));
         }
     }
 

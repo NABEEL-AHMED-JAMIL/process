@@ -35,6 +35,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.google.gson.Gson;
+import java.lang.ref.WeakReference;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 
 /**
  * ADVERSARIAL PROBE -- written by a review pass, not by the implementing agent.
@@ -240,14 +244,14 @@ public class AdversarialWave1ProbeTest {
             // Weak-reference proof: a Handle from a query that COMPLETED and closed should be
             // collectable. If the cancelled watchdog task is still sitting in the delay queue it
             // pins the Handle, and through it the closed java.sql.Statement.
-            java.lang.ref.WeakReference<Object> pinned;
+            WeakReference<Object> pinned;
             RunningQueries.Handle handle = this.running.open("weak-1");
-            pinned = new java.lang.ref.WeakReference<>(handle);
-            java.lang.reflect.Method inSession = DuckDbAnalyticsEngine.class.getDeclaredMethod(
+            pinned = new WeakReference<>(handle);
+            Method inSession = DuckDbAnalyticsEngine.class.getDeclaredMethod(
                 "inSession", DatasetRef.class, RunningQueries.Handle.class,
                 Class.forName("process.analytics.DuckDbAnalyticsEngine$SessionWork"));
             inSession.setAccessible(true);
-            Object work = java.lang.reflect.Proxy.newProxyInstance(
+            Object work = Proxy.newProxyInstance(
                 getClass().getClassLoader(),
                 new Class<?>[] { Class.forName("process.analytics.DuckDbAnalyticsEngine$SessionWork") },
                 (p, m, a) -> "done");
@@ -297,7 +301,7 @@ public class AdversarialWave1ProbeTest {
             "(SELECT i AS a, i AS b, i AS c FROM range(50) t(i))");
         DuckDbAnalyticsEngine engine = new DuckDbAnalyticsEngine(this.sessions, tight, this.running);
         try {
-            process.analytics.dto.QueryResultDto result =
+            QueryResultDto result =
                 engine.query(this.sales, null, "SELECT * FROM dataset", "cells-1");
 
             assertThat(result.getColumns()).hasSize(3);
@@ -335,10 +339,10 @@ public class AdversarialWave1ProbeTest {
         DuckDbAnalyticsEngine big = new DuckDbAnalyticsEngine(this.sessions, shipped, this.running);
         try {
             long before = usedHeap();
-            process.analytics.dto.QueryResultDto result =
+            QueryResultDto result =
                 big.query(this.sales, null, "SELECT * FROM dataset", "big-1");
             long after = usedHeap();
-            com.google.gson.Gson gson = new com.google.gson.Gson();
+            Gson gson = new Gson();
             String json = gson.toJson(result);
             System.out.println("PROBE5 rows=" + result.getRowCount()
                 + " truncated=" + result.isTruncated()

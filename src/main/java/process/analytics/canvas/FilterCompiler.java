@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Turns a filter tree into a WHERE clause that contains no value a user sent.
@@ -103,7 +104,7 @@ public final class FilterCompiler {
 
     /** The relative windows a RELATIVE_DATE may name. Closed, because each one is a decision. */
     /** A time carrying an offset, which LocalTime cannot parse but a TIMETZ column holds. */
-    private static final java.util.regex.Pattern OFFSET_TIME = java.util.regex.Pattern.compile(
+    private static final Pattern OFFSET_TIME = Pattern.compile(
         "\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?\\s*[+-]\\d{2}(:?\\d{2})?");
 
     private static final String LAST_N_DAYS = "LAST_N_DAYS:";

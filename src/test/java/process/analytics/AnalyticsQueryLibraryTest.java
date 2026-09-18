@@ -845,7 +845,7 @@ public class AnalyticsQueryLibraryTest {
         when(this.analyticsQueryRepository.findByAnalyticsQueryId(42L))
             .thenReturn(Optional.of(mine));
         when(this.analyticsDashboardWidgetRepository.findByAnalyticsQueryId(42L))
-            .thenReturn(java.util.Arrays.asList(new AnalyticsDashboardWidget(),
+            .thenReturn(Arrays.asList(new AnalyticsDashboardWidget(),
                 new AnalyticsDashboardWidget()));
 
         ResponseDto response = this.service.deleteQuery(42L);
@@ -865,7 +865,7 @@ public class AnalyticsQueryLibraryTest {
         when(this.analyticsQueryRepository.findByAnalyticsQueryId(43L))
             .thenReturn(Optional.of(savedQueryOwnedBy(ACME, 43L)));
         when(this.analyticsDashboardWidgetRepository.findByAnalyticsQueryId(43L))
-            .thenReturn(java.util.Collections.emptyList());
+            .thenReturn(Collections.emptyList());
 
         ResponseDto response = this.service.deleteQuery(43L);
 

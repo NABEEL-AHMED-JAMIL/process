@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import process.model.enums.UserRole;
 
 /**
  * Five reports, twenty-seven widgets, over the 150,000-row benchmark fixture.
@@ -209,7 +210,7 @@ public class AnalyticsReportsE2EIT extends ReportBuildingSupport {
         // shape, and the thing worth checking is that a TENANT admin's own listing does not gain
         // somebody else's dashboards by way of it.
         long mine = this.build(reports().get(0), CONNECTION, DATASET, null);
-        AppUser other = this.newUser(process.model.enums.UserRole.TENANT_ADMIN,
+        AppUser other = this.newUser(UserRole.TENANT_ADMIN,
             this.newTenant("other-workspace"));
 
         MvcResult result = this.mvc.perform(

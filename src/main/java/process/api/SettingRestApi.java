@@ -13,6 +13,7 @@ import process.model.dto.ConfigurationMakerRequest;
 import process.model.service.SettingService;
 import process.util.ProcessUtil;
 import process.util.XmlOutTagInfoUtil;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -58,7 +59,7 @@ public class SettingRestApi {
     /** Topics as picker rows: a search (q, limit), known ids, or one Kafka profile's -- never all ten thousand. */
     @RequestMapping(value = "/topics", method = RequestMethod.GET)
     public ResponseEntity<?> topics(@RequestParam(required = false) String q, @RequestParam(required = false) Integer limit,
-        @RequestParam(required = false) java.util.List<Long> ids, @RequestParam(required = false) Long kafkaConnectionProfileId) {
+        @RequestParam(required = false) List<Long> ids, @RequestParam(required = false) Long kafkaConnectionProfileId) {
         try {
             return new ResponseEntity<>(this.settingService.topics(q, limit, ids, kafkaConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {

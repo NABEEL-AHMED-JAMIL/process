@@ -37,6 +37,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipException;
 
 /**
  * @author Nabeel Ahmed
@@ -188,8 +192,8 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     private ObjectContentDto previewGzip(String bucket, String key) {
         ObjectContentDto compressed = this.resolveServiceForCaller(bucket, key).getObjectContent(bucket, key, null, null);
         String innerName = key.substring(0, key.length() - ".gz".length());
-        try (java.util.zip.GZIPInputStream gzip = new java.util.zip.GZIPInputStream(compressed.getContent());
-             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+        try (GZIPInputStream gzip = new GZIPInputStream(compressed.getContent());
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = gzip.read(buffer)) != -1) {
@@ -203,11 +207,11 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             }
             byte[] decompressed = out.toByteArray();
             return new ObjectContentDto(
-                new java.io.ByteArrayInputStream(decompressed),
+                new ByteArrayInputStream(decompressed),
                 ContentTypeUtil.contentTypeFor(innerName),
                 decompressed.length,
                 this.fileNameOf(innerName));
-        } catch (java.util.zip.ZipException e) {
+        } catch (ZipException e) {
             throw new IllegalArgumentException(
                 "This file has a .gz name but isn't valid gzip data -- download it instead.");
         } catch (IOException e) {

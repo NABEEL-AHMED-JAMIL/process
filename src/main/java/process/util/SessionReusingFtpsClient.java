@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.Socket;
 import java.util.Locale;
+import java.lang.reflect.Method;
 
 /**
  * An FTPSClient that reuses the control connection's TLS session on the data connection.
@@ -61,7 +62,7 @@ public class SessionReusingFtpsClient extends FTPSClient {
             Field cacheField = context.getClass().getDeclaredField("sessionHostPortCache");
             cacheField.setAccessible(true);
             Object cache = cacheField.get(context);
-            java.lang.reflect.Method put = cache.getClass().getDeclaredMethod(
+            Method put = cache.getClass().getDeclaredMethod(
                 "put", Object.class, Object.class);
             put.setAccessible(true);
 

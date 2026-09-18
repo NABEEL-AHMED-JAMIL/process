@@ -50,6 +50,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.Comparator;
+import java.util.stream.Stream;
 
 /**
  * @author Nabeel Ahmed
@@ -462,8 +464,8 @@ public class KafkaTemplateProvider {
         if (!Files.exists(dir)) {
             return;
         }
-        try (java.util.stream.Stream<Path> walk = Files.walk(dir)) {
-            walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> {
                 try {
                     Files.delete(p);
                 } catch (IOException ex) {

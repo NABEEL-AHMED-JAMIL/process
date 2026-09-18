@@ -37,6 +37,11 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.List;
+import org.mockito.ArgumentMatchers;
+import process.model.dto.AccessPersonDto;
+import process.model.pojo.Tenant;
+import process.model.pojo.UserPageAccess;
 
 /**
  * The profiles themselves: who may touch them, and what a save has to refuse.
@@ -177,7 +182,7 @@ public class PageAccessProfileScopeTest {
     @Test
     void aPlatformAdminMakesAProfileInTheWorkspaceItNames() throws Exception {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "platform@example.com");
-        when(this.tenantRepository.findById(TENANT_B)).thenReturn(Optional.of(new process.model.pojo.Tenant()));
+        when(this.tenantRepository.findById(TENANT_B)).thenReturn(Optional.of(new Tenant()));
         when(this.profileRepository.countByTenantIdAndStatus(TENANT_B, Status.Active)).thenReturn(0L);
 
         PageAccessProfileDto draft = dto("Operator", "jobs");
@@ -247,7 +252,7 @@ public class PageAccessProfileScopeTest {
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
         verify(this.notificationCenterService).create(eq(TENANT_A), eq(44L), eq(NotificationType.PAGE_ACCESS_CHANGED),
-            any(), eq("Your page access changed"), org.mockito.ArgumentMatchers.contains("Source Jobs, Reports"), eq("/dashboard"));
+            any(), eq("Your page access changed"), ArgumentMatchers.contains("Source Jobs, Reports"), eq("/dashboard"));
     }
 
     @Test
@@ -280,7 +285,7 @@ public class PageAccessProfileScopeTest {
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
         assertThat(response.getMessage()).isEqualTo("Asked Daniel Carter to open Analytics Studio for you.");
         verify(this.notificationCenterService).create(eq(TENANT_A), eq(ADMIN_A), eq(NotificationType.PAGE_ACCESS_REQUESTED),
-            any(), eq("Page access requested"), org.mockito.ArgumentMatchers.contains("Olivia Bennett"), eq("/users"));
+            any(), eq("Page access requested"), ArgumentMatchers.contains("Olivia Bennett"), eq("/users"));
         verify(this.notificationCenterService, never()).create(any(), eq(45L), any(), any(), any(), any(), any());
     }
 
@@ -321,9 +326,9 @@ public class PageAccessProfileScopeTest {
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
         @SuppressWarnings("unchecked")
-        java.util.List<process.model.dto.AccessPersonDto> rows = (java.util.List<process.model.dto.AccessPersonDto>) response.getData();
+        List<AccessPersonDto> rows = (List<AccessPersonDto>) response.getData();
         // Sorted by name, admins left out, the unassigned person shown on the default.
-        assertThat(rows).extracting(process.model.dto.AccessPersonDto::getFullName).containsExactly("Ava Patel", "Olivia Bennett");
+        assertThat(rows).extracting(AccessPersonDto::getFullName).containsExactly("Ava Patel", "Olivia Bennett");
         assertThat(rows.get(0).getPageAccessProfileName()).isNull();
         assertThat(rows.get(0).getPageKeys()).isEqualTo(Arrays.asList("jobs", "queue"));
         assertThat(rows.get(1).getPageAccessProfileName()).isEqualTo("Operator");
@@ -345,7 +350,7 @@ public class PageAccessProfileScopeTest {
         assertThat(olivia.getPageAccessProfileId()).isEqualTo(2L);
         verify(this.appUserRepository).save(olivia);
         verify(this.notificationCenterService).create(eq(TENANT_A), eq(44L), eq(NotificationType.PAGE_ACCESS_CHANGED),
-            any(), eq("Your page access changed"), org.mockito.ArgumentMatchers.contains("Analyst"), eq("/dashboard"));
+            any(), eq("Your page access changed"), ArgumentMatchers.contains("Analyst"), eq("/dashboard"));
     }
 
     @Test
@@ -388,7 +393,7 @@ public class PageAccessProfileScopeTest {
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
         assertThat(response.getMessage()).isEqualTo("Reports is now open for Olivia Bennett (an exception to their profile).");
-        ArgumentCaptor<process.model.pojo.UserPageAccess> saved = ArgumentCaptor.forClass(process.model.pojo.UserPageAccess.class);
+        ArgumentCaptor<UserPageAccess> saved = ArgumentCaptor.forClass(UserPageAccess.class);
         verify(this.exceptionRepository).save(saved.capture());
         assertThat(saved.getValue().getPageKey()).isEqualTo("reports");
         assertThat(saved.getValue().isAllowed()).isTrue();
@@ -443,11 +448,11 @@ public class PageAccessProfileScopeTest {
         when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete))
             .thenReturn(Collections.singletonList(person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L)));
         when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Arrays.asList(
-            new process.model.pojo.UserPageAccess(44L, "reports", true, ADMIN_A),
-            new process.model.pojo.UserPageAccess(44L, "queue", false, ADMIN_A)));
+            new UserPageAccess(44L, "reports", true, ADMIN_A),
+            new UserPageAccess(44L, "queue", false, ADMIN_A)));
 
         @SuppressWarnings("unchecked")
-        java.util.List<process.model.dto.AccessPersonDto> rows = (java.util.List<process.model.dto.AccessPersonDto>) this.service.listPeople(null).getData();
+        List<AccessPersonDto> rows = (List<AccessPersonDto>) this.service.listPeople(null).getData();
 
         assertThat(rows.get(0).getPageKeys()).containsExactly("jobs", "reports");
         assertThat(rows.get(0).getAllowedExceptions()).containsExactly("reports");
@@ -467,7 +472,7 @@ public class PageAccessProfileScopeTest {
             person(ADMIN_A, TENANT_A, UserRole.TENANT_ADMIN, "Daniel Carter", null)));
 
         @SuppressWarnings("unchecked")
-        java.util.List<PageAccessProfileDto> dtos = (java.util.List<PageAccessProfileDto>) this.service.listProfiles(null).getData();
+        List<PageAccessProfileDto> dtos = (List<PageAccessProfileDto>) this.service.listProfiles(null).getData();
         PageAccessProfileDto analyst = dtos.get(0), operator = dtos.get(1);
 
         assertThat(analyst.getUserCount()).isEqualTo(0L);

@@ -6,6 +6,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.lang.reflect.Modifier;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * That changing the model catalogue is a platform decision and reading it is not.
@@ -71,10 +73,10 @@ public class OllamaAuthorizationTest {
         // authenticated caller. This fails when an endpoint is added without deciding who may
         // call it, rather than leaving that to be noticed in production.
         for (Method method : OllamaRestApi.class.getDeclaredMethods()) {
-            if (method.isSynthetic() || !java.lang.reflect.Modifier.isPublic(method.getModifiers())) {
+            if (method.isSynthetic() || !Modifier.isPublic(method.getModifiers())) {
                 continue;
             }
-            if (method.getAnnotation(org.springframework.web.bind.annotation.RequestMapping.class) == null) {
+            if (method.getAnnotation(RequestMapping.class) == null) {
                 continue;
             }
             assertThat(method.getAnnotation(PreAuthorize.class))

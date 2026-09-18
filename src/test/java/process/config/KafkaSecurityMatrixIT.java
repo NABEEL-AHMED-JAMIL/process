@@ -34,6 +34,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.apache.kafka.common.KafkaException;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * Every security configuration the console can produce, against a real broker.
@@ -271,7 +273,7 @@ public class KafkaSecurityMatrixIT {
         Map<String, Object> props = provider.commonClientProps(profile);
 
         assertThatThrownBy(() -> this.describeCluster(props))
-            .isInstanceOfAny(ExecutionException.class, org.apache.kafka.common.KafkaException.class);
+            .isInstanceOfAny(ExecutionException.class, KafkaException.class);
     }
 
     /**
@@ -296,7 +298,7 @@ public class KafkaSecurityMatrixIT {
         // Rejected by the broker as a wrong password -- not rejected by the client as a malformed
         // JAAS entry, which is what an unescaped quote would produce.
         assertThatThrownBy(() -> this.describeCluster(props))
-            .isInstanceOfAny(ExecutionException.class, org.apache.kafka.common.KafkaException.class);
+            .isInstanceOfAny(ExecutionException.class, KafkaException.class);
     }
 
     /** additionalProperties must not be able to restate the security settings. */
@@ -316,7 +318,7 @@ public class KafkaSecurityMatrixIT {
 
     /** The declared store type has to match the file, whichever format it is. */
     @ParameterizedTest(name = "{0} is declared as {1}")
-    @org.junit.jupiter.params.provider.CsvSource({
+    @CsvSource({
         "client.truststore.p12, PKCS12",
         "client.truststore.jks, JKS" })
     void declaresTheStoreTypeThatMatchesTheFile(String file, String expectedType) throws Exception {

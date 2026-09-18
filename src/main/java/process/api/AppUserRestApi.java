@@ -14,6 +14,7 @@ import process.model.dto.AppUserDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AppUserService;
 import process.util.ProcessUtil;
+import java.util.Map;
 
 /**
  * @author Nabeel Ahmed
@@ -146,7 +147,7 @@ public class AppUserRestApi {
      */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/changeOwnPassword", method = RequestMethod.PUT)
-    public ResponseEntity<?> changeOwnPassword(@RequestBody java.util.Map<String, String> body) {
+    public ResponseEntity<?> changeOwnPassword(@RequestBody Map<String, String> body) {
         try {
             String current = body == null ? null : body.get("currentPassword");
             String updated = body == null ? null : body.get("newPassword");

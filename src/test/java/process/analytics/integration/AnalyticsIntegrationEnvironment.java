@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 
 /**
  * The infrastructure the analytics integration suites need, and the single decision about what
@@ -612,9 +614,9 @@ final class AnalyticsIntegrationEnvironment {
             .build();
         try {
             client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
-        } catch (software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException ignored) {
+        } catch (BucketAlreadyOwnedByYouException ignored) {
             // Every run after the first.
-        } catch (software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException ignored) {
+        } catch (BucketAlreadyExistsException ignored) {
             // Same, on an endpoint that reports it the other way.
         } finally {
             client.close();

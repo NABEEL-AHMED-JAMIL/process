@@ -38,6 +38,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.hamcrest.Matchers;
 
 /**
  * Kafka certificates and connection profiles, driven over real HTTP.
@@ -306,7 +307,7 @@ public class KafkaSecretE2EIT extends E2ESupport {
             // failure the caller can act on.
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("ERROR"))
-            .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("X.509")))
+            .andExpect(jsonPath("$.message").value(Matchers.containsString("X.509")))
             .andExpect(jsonPath("$.data").doesNotExist());
 
         assertThat(this.objects).isEmpty();
@@ -324,9 +325,9 @@ public class KafkaSecretE2EIT extends E2ESupport {
         this.mvc.perform(this.uploadAs(admin, pkcs1, KafkaSecretKind.CLIENT_PRIVATE_KEY))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("ERROR"))
-            .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("PKCS#1")))
+            .andExpect(jsonPath("$.message").value(Matchers.containsString("PKCS#1")))
             .andExpect(jsonPath("$.message").value(
-                org.hamcrest.Matchers.containsString("openssl pkcs8 -topk8 -nocrypt")));
+                Matchers.containsString("openssl pkcs8 -topk8 -nocrypt")));
 
         // A key that cannot be read must not be left in the bucket for a later request to find.
         assertThat(this.objects).isEmpty();

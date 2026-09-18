@@ -31,6 +31,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import java.util.Collections;
+import org.mockito.Mockito;
+import org.springframework.web.client.ResourceAccessException;
 
 /**
  * The encoding of the _bulk body, and the losses that not setting it caused.
@@ -309,7 +312,7 @@ public class RagBulkEncodingTest {
     @DisplayName("17. a transport failure reports nothing stored and names the cause")
     void transportFailureIsReported() {
         doReturn(null).when(this.restTemplate).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class));
-        org.mockito.Mockito.doThrow(new org.springframework.web.client.ResourceAccessException("connect timed out"))
+        Mockito.doThrow(new ResourceAccessException("connect timed out"))
             .when(this.restTemplate).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class));
         List<float[]> vectors = Arrays.asList(new float[] { 1f });
         OpenSearchRagClient.IndexOutcome outcome = this.client.indexChunks(1L, "b", "k", "e",
@@ -322,7 +325,7 @@ public class RagBulkEncodingTest {
     @DisplayName("18. nothing to index is complete rather than a failure")
     void nothingToIndexIsComplete() {
         OpenSearchRagClient.IndexOutcome outcome = this.client.indexChunks(1L, "b", "k", "e",
-            java.util.Collections.<String>emptyList(), java.util.Collections.<float[]>emptyList(), "m");
+            Collections.<String>emptyList(), Collections.<float[]>emptyList(), "m");
         assertEquals(0, outcome.getAttempted());
         assertTrue(outcome.isComplete());
         assertNull(outcome.getFailureSummary());

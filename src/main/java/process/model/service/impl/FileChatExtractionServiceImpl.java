@@ -50,6 +50,9 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import static process.util.ProcessUtil.*;
+import java.io.ByteArrayInputStream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipException;
 
 /**
  * @author Nabeel Ahmed
@@ -251,9 +254,9 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
         String innerExtension = ContentTypeUtil.extensionOf(innerName);
         byte[] compressed = this.readAllBytes(bucket, key);
         byte[] decompressed;
-        try (java.util.zip.GZIPInputStream gzip =
-                 new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(compressed));
-             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+        try (GZIPInputStream gzip =
+                 new GZIPInputStream(new ByteArrayInputStream(compressed));
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[8192];
             int read;
             // Stop once there is comfortably more than truncate() will keep, so a multi-GB
@@ -262,7 +265,7 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
                 out.write(buffer, 0, read);
             }
             decompressed = out.toByteArray();
-        } catch (java.util.zip.ZipException e) {
+        } catch (ZipException e) {
             logger.warn("File Chat: {} has a .gz name but isn't valid gzip: {}", key, e.getMessage());
             return null;
         }

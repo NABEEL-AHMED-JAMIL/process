@@ -33,6 +33,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import process.util.ProcessUtil;
 
 /**
  * What a tenant may reach of a Kafka profile it does not own, which is now nothing at all.
@@ -203,7 +204,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_B);
         ResponseDto response = this.service.testConnection(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         // Never probed at all, so no connection was opened on the platform's behalf.
         verify(this.kafkaTemplateProvider, never()).commonClientProps(any());
         verify(this.profileRepository, never()).save(any());
@@ -278,7 +279,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.testConnection(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).contains("Enter the SASL password again");
         // Nothing was built, so nothing was decrypted and nothing left the process.
         verify(this.kafkaTemplateProvider, never()).commonClientProps(any());
@@ -337,7 +338,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.updateProfile(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).contains("Enter the SASL password again");
         verify(this.profileRepository, never()).save(any());
         assertThat(stored.getBootstrapServers()).isEqualTo("stored-broker:9092");
@@ -362,7 +363,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.updateProfile(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.SUCCESS);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
         verify(this.profileRepository).save(any());
     }
 
@@ -379,7 +380,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.addProfile(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).contains("saslMechanism");
         verify(this.profileRepository, never()).save(any());
     }
@@ -396,7 +397,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.addProfile(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.SUCCESS);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
     }
 
     @Test
@@ -490,7 +491,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.updateProfile(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         verify(this.profileRepository, never()).save(any());
     }
 
@@ -519,7 +520,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.testConnection(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).doesNotContain("10.0.4.17");
         assertThat(response.getMessage()).doesNotContain("bootstrap.servers");
     }
@@ -537,7 +538,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.testTopicConnection("orders-in");
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).doesNotContain("bootstrap.servers");
         assertThat(response.getMessage()).doesNotContain("stored-broker");
         assertThat(response.getMessage()).contains("the detail is in the server log");
@@ -552,7 +553,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.testTopicConnection("orders-in", theirs.getKafkaConnectionProfileId());
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).contains("Profile not found");
         verify(this.kafkaConnectionResolver, never()).resolve(any(), any());
     }
@@ -567,7 +568,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.addProfile(dto);
 
-        assertThat(response.getStatus()).isEqualTo(process.util.ProcessUtil.ERROR);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).contains("host:port");
         verify(this.profileRepository, never()).save(any());
     }

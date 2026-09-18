@@ -43,6 +43,9 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
+import java.util.ArrayList;
+import org.mockito.Mockito;
+import org.springframework.data.domain.Pageable;
 
 /**
  * A form definition describes one pipeline's payload for one tenant -- the same per-workspace
@@ -85,7 +88,7 @@ public class PipelineServiceImplTenantIsolationTest {
         this.tenantAForm.setPipelineName("Tenant A's form");
         this.tenantAForm.setTenantId(TENANT_A);
         this.tenantAForm.setStatus(Status.Active);
-        this.tenantAForm.setFields(new java.util.ArrayList<>(Collections.singletonList(field("bucket", "Bucket"))));
+        this.tenantAForm.setFields(new ArrayList<>(Collections.singletonList(field("bucket", "Bucket"))));
 
         lenient().when(this.userNameResolver.namesFor(any())).thenReturn(Collections.emptyMap());
     }
@@ -96,8 +99,8 @@ public class PipelineServiceImplTenantIsolationTest {
     private void theTopicExists() {
         SourceTaskType topic = new SourceTaskType();
         topic.setSourceTaskTypeId(TOPIC_ID);
-        topic.setStatus(process.model.enums.Status.Active);
-        org.mockito.Mockito.lenient().when(this.sourceTaskTypeRepository.findById(TOPIC_ID)).thenReturn(java.util.Optional.of(topic));
+        topic.setStatus(Status.Active);
+        Mockito.lenient().when(this.sourceTaskTypeRepository.findById(TOPIC_ID)).thenReturn(Optional.of(topic));
     }
 
     private PipelineField field(String tag, String label) {
@@ -126,7 +129,7 @@ public class PipelineServiceImplTenantIsolationTest {
         return row;
     }
 
-    private static final org.springframework.data.domain.Pageable ANY_WINDOW = null;
+    private static final Pageable ANY_WINDOW = null;
 
     private void summaryOf(long tenantId) {
         PipelineSummaryProjection summary = mock(PipelineSummaryProjection.class);

@@ -21,6 +21,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import java.util.Arrays;
 
 /**
  * The machinery for building reports through the real API, shared by every report catalogue.
@@ -126,7 +127,7 @@ public abstract class ReportBuildingSupport extends E2ESupport {
     protected static Map<String, Object> allOf(Map<String, Object>... clauses) {
         Map<String, Object> group = new LinkedHashMap<String, Object>();
         group.put("op", "AND");
-        group.put("clauses", new ArrayList<Map<String, Object>>(java.util.Arrays.asList(clauses)));
+        group.put("clauses", new ArrayList<Map<String, Object>>(Arrays.asList(clauses)));
         return group;
     }
 

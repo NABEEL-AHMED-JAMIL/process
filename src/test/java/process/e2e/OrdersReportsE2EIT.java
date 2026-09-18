@@ -14,6 +14,8 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import java.util.LinkedHashMap;
+import process.model.enums.Status;
 
 /**
  * Twenty reports over the 250,000-row orders dataset, one per analytical use case.
@@ -479,7 +481,7 @@ public class OrdersReportsE2EIT extends ReportBuildingSupport {
     }
 
     private Map<String, Object> withDataset(Map<String, Object> config) {
-        Map<String, Object> request = new java.util.LinkedHashMap<String, Object>(config);
+        Map<String, Object> request = new LinkedHashMap<String, Object>(config);
         request.put("connection", LOCAL_CONNECTION);
         request.put("path", DATASET);
         return request;
@@ -518,7 +520,7 @@ public class OrdersReportsE2EIT extends ReportBuildingSupport {
         assumeTrue(SEEDING, "Run with -Danalytics.seed.reports=true to actually write these");
 
         this.admin = this.appUserRepository
-            .findByUsernameAndStatusNot("admin@platform.local", process.model.enums.Status.Delete)
+            .findByUsernameAndStatusNot("admin@platform.local", Status.Delete)
             .orElseThrow(() -> new IllegalStateException("admin@platform.local is not here"));
 
         List<Long> ids = new ArrayList<Long>();

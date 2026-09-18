@@ -22,6 +22,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.assertj.core.api.Assertions;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * The two buckets the platform keeps for itself have to exist for the application to work.
@@ -69,7 +74,7 @@ public class DefaultBucketBootstrapTest {
 
     private List<StorageConnection> saved() {
         ArgumentCaptor<StorageConnection> captor = ArgumentCaptor.forClass(StorageConnection.class);
-        verify(this.storageConnectionRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+        verify(this.storageConnectionRepository, Mockito.atLeastOnce()).save(captor.capture());
         return captor.getAllValues();
     }
 
@@ -126,7 +131,7 @@ public class DefaultBucketBootstrapTest {
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
-        verify(this.storageConnectionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(this.storageConnectionRepository, never()).save(ArgumentMatchers.any());
     }
 
     /**
@@ -141,7 +146,7 @@ public class DefaultBucketBootstrapTest {
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
-        verify(this.storageConnectionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(this.storageConnectionRepository, never()).save(ArgumentMatchers.any());
     }
 
     /**
@@ -198,14 +203,14 @@ public class DefaultBucketBootstrapTest {
     @Test
     void aFailureArrivingAtCommitDoesNotStopTheApplicationStarting() {
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
-        java.util.concurrent.atomic.AtomicInteger commits = new java.util.concurrent.atomic.AtomicInteger();
-        org.mockito.Mockito.doAnswer(invocation -> {
+        AtomicInteger commits = new AtomicInteger();
+        Mockito.doAnswer(invocation -> {
             if (commits.incrementAndGet() == 1) {
-                throw new org.springframework.dao.DataIntegrityViolationException(
+                throw new DataIntegrityViolationException(
                     "duplicate key value violates unique constraint \"uq_storage_connection_alias\"");
             }
             return null;
-        }).when(transactionManager).commit(org.mockito.ArgumentMatchers.any());
+        }).when(transactionManager).commit(ArgumentMatchers.any());
 
         StorageConnectionBootstrap bootstrap = new StorageConnectionBootstrap(
             this.lookupDataRepository, this.storageConnectionRepository, this.encryptionUtil,
@@ -213,7 +218,7 @@ public class DefaultBucketBootstrapTest {
         this.configureAws(bootstrap);
         when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.empty());
 
-        org.assertj.core.api.Assertions.assertThatCode(() -> bootstrap.run(mock(ApplicationArguments.class)))
+        Assertions.assertThatCode(() -> bootstrap.run(mock(ApplicationArguments.class)))
             .as("a bootstrap failure must never stop the application from starting")
             .doesNotThrowAnyException();
 

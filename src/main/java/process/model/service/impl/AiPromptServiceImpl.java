@@ -36,6 +36,10 @@ import java.util.stream.Collectors;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
+import com.google.gson.JsonParser;
+import java.time.LocalDate;
+import org.slf4j.LoggerFactory;
+import process.model.projection.AiUsageProjection;
 
 /**
  * Prompts: what a step says to a model. Scoped like pipelines -- a tenant's own, a platform
@@ -242,7 +246,7 @@ public class AiPromptServiceImpl {
         }
         Optional<RunCallbackTokens.Refusal> refused = this.runTokens.verify(dto.getJobId(), dto.getJobQueueId(), presentedToken);
         if (refused.isPresent()) {
-            org.slf4j.LoggerFactory.getLogger(AiPromptServiceImpl.class).warn("Rejected worker AI step for job {} run {}: {}.", dto.getJobId(), dto.getJobQueueId(), refused.get());
+            LoggerFactory.getLogger(AiPromptServiceImpl.class).warn("Rejected worker AI step for job {} run {}: {}.", dto.getJobId(), dto.getJobQueueId(), refused.get());
             return new ResponseDto(ERROR, "Unauthorized worker callback.");
         }
         Optional<JobQueue> run = this.jobQueues.findById(dto.getJobQueueId());
@@ -252,6 +256,16 @@ public class AiPromptServiceImpl {
             dto.getJobQueueId(), dto.getStepTag(), dto.getItem(), dto.getPromptUuid(), dto.getVariables());
         return new ResponseDto("ok".equals(answer.getStatus()) ? SUCCESS : ERROR,
             "ok".equals(answer.getStatus()) ? String.format("Answered in %.1f s.", (answer.getLatencyMs() == null ? 0 : answer.getLatencyMs()) / 1000.0) : answer.getError(), answer);
+    }
+
+    /** What the model calls in a date range cost, per prompt -- the Reports page's AI section. */
+    public ResponseDto usage(String from, String to) {
+        LocalDate start = isNull(from) || from.isEmpty() ? LocalDate.now().minusDays(30) : LocalDate.parse(from);
+        LocalDate end = isNull(to) || to.isEmpty() ? LocalDate.now() : LocalDate.parse(to);
+        long scope = TenantContext.isPlatformAdmin() ? 0L : (TenantContext.getTenantId() == null ? -1L : TenantContext.getTenantId());
+        List<AiUsageProjection> rows = scope == -1L ? Collections.emptyList()
+            : this.runs.usageByPrompt(Timestamp.valueOf(start.atStartOfDay()), Timestamp.valueOf(end.plusDays(1).atStartOfDay()), scope);
+        return new ResponseDto(SUCCESS, String.format("%d prompt(s) used.", rows.size()), rows);
     }
 
     public ResponseDto versionsOf(Long promptId) {
@@ -274,7 +288,7 @@ public class AiPromptServiceImpl {
         if (dto.getTemperature() != null && (dto.getTemperature() < 0 || dto.getTemperature() > 2)) return new ResponseDto(ERROR, "Temperature is 0 to 2.");
         if (dto.getMaxTokens() != null && dto.getMaxTokens() < 1) return new ResponseDto(ERROR, "Max tokens must be at least 1.");
         if ("json".equals(dto.getOutputMode()) && !isNull(dto.getOutputSchema()) && !dto.getOutputSchema().trim().isEmpty()) {
-            try { com.google.gson.JsonParser.parseString(dto.getOutputSchema()).getAsJsonObject(); }
+            try { JsonParser.parseString(dto.getOutputSchema()).getAsJsonObject(); }
             catch (Exception ex) { return new ResponseDto(ERROR, "The output schema is not a JSON object."); }
         }
         if (TenantContext.isPlatformAdmin() && dto.getPromptId() == null && dto.getTenantId() == null) {

@@ -35,6 +35,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static process.util.ProcessUtil.SUCCESS;
+import java.util.Base64;
+import process.model.pojo.KafkaConnectionProfile;
 
 /**
  * Provisions one Kafka connection profile of every security configuration for a real tenant, then
@@ -140,7 +142,7 @@ public class AjwaKafkaProvisioningDriver {
     // ---- certificates ----------------------------------------------------------------------
 
     private MockMultipartFile pem(String name, String label, byte[] der) {
-        String body = java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
+        String body = Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
             .encodeToString(der);
         String text = "-----BEGIN " + label + "-----\n" + body + "\n-----END " + label + "-----\n";
         return new MockMultipartFile("file", name, "application/x-pem-file",
@@ -225,7 +227,7 @@ public class AjwaKafkaProvisioningDriver {
         Long savedId = this.profileRepository.findAll().stream()
             .filter(p -> dto.getProfileName().equals(p.getProfileName()))
             .filter(p -> p.getStatus() != Status.Delete)
-            .map(process.model.pojo.KafkaConnectionProfile::getKafkaConnectionProfileId)
+            .map(KafkaConnectionProfile::getKafkaConnectionProfileId)
             .max(Long::compareTo)
             .orElse(null);
         if (savedId == null) {

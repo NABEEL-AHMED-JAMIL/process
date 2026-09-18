@@ -29,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import java.util.Arrays;
 
 /**
  * Jobs are the core tenant-scoped record, and nothing tested that one tenant cannot reach
@@ -232,7 +233,7 @@ public class SourceJobServiceImplTenantIsolationTest {
     @Test
     void onlyAFailedRunCarriesItsMessage() throws Exception {
         TenantContext.set(5L, "TENANT_USER", 1000L, "someone@tenant.example");
-        when(this.jobQueueRepository.findRecentRunsForAssignee(1000L, 8)).thenReturn(java.util.Arrays.asList(
+        when(this.jobQueueRepository.findRecentRunsForAssignee(1000L, 8)).thenReturn(Arrays.asList(
             new Object[] { 1L, 2L, "Fine job", "Completed", Timestamp.valueOf("2026-08-27 12:00:00"),
                 Timestamp.valueOf("2026-08-27 12:01:00"), "finished cleanly" },
             new Object[] { 2L, 3L, "Broken job", "Failed", Timestamp.valueOf("2026-08-27 13:00:00"),

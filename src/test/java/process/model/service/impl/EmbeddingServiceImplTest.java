@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import java.io.InputStream;
 
 /**
  * What actually leaves this process, checked against a real local HTTP server rather than a mock
@@ -89,7 +90,7 @@ public class EmbeddingServiceImplTest {
     private void handleEmbed(HttpExchange exchange) throws IOException {
         int requestNumber = this.embedRequestCount.incrementAndGet();
         String requestBody;
-        try (java.io.InputStream is = exchange.getRequestBody()) {
+        try (InputStream is = exchange.getRequestBody()) {
             requestBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
         JsonObject request = this.gson.fromJson(requestBody, JsonObject.class);

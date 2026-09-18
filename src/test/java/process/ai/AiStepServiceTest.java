@@ -195,7 +195,7 @@ public class AiStepServiceTest {
             return this.answered("one");
         });
         AiStepService service = new AiStepService(this.pipelines, this.prompts, this.connections, this.runs, this.encryptionUtil, this.runner);
-        java.util.Map<String, String> values = new java.util.HashMap<>(); values.put("claim_id", "claims/in/a.txt"); values.put("document_text", "claim A");
+        Map<String, String> values = new HashMap<>(); values.put("claim_id", "claims/in/a.txt"); values.put("document_text", "claim A");
         assertThat(service.runForWorker(TENANT, "F1", 55L, "summary", "claims/in/a.txt", "uuid-9", values).getOutput()).isEqualTo("one");
     }
 
@@ -222,7 +222,7 @@ public class AiStepServiceTest {
             assertThat(job.values).containsEntry("document_text", "the file's text, read by the worker");
             return this.answered("done");
         });
-        java.util.Map<String, String> values = new java.util.HashMap<>();
+        Map<String, String> values = new HashMap<>();
         values.put("claim_id", "CLM-1"); values.put("document_text", "the file's text, read by the worker");
         assertThat(service.runForWorker(TENANT, "F1", 55L, "summary", "uuid-9", values).getOutput()).isEqualTo("done");
     }

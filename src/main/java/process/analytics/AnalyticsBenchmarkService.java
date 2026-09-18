@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 
 /**
  * Measures what a read of a dataset actually costs on this deployment, and writes it down.
@@ -203,7 +204,7 @@ public class AnalyticsBenchmarkService {
      * Not fair() and not queued: a second benchmark is turned away immediately rather than made to
      * wait, because waiting would hold a Tomcat thread for the length of the first one.
      */
-    private final java.util.concurrent.Semaphore onlyOneAtATime = new java.util.concurrent.Semaphore(1);
+    private final Semaphore onlyOneAtATime = new Semaphore(1);
 
     public AnalyticsBenchmarkService(DatasetResolver datasetResolver,
         AnalyticsQueryService analyticsQueryService, AnalyticsLimits limits,

@@ -3,6 +3,7 @@ package process.model.service;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -15,7 +16,7 @@ public interface SettingService {
 
     public ResponseDto lookups() throws Exception;
 
-    public ResponseDto topics(String q, Integer limit, java.util.List<Long> ids, Long kafkaConnectionProfileId) throws Exception;
+    public ResponseDto topics(String q, Integer limit, List<Long> ids, Long kafkaConnectionProfileId) throws Exception;
 
     public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 

@@ -28,6 +28,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
+import java.util.Optional;
+import org.mockito.Mockito;
 
 /**
  * A dropdown's choices, which now carry a stored value AND a displayed label.
@@ -73,8 +75,8 @@ public class PipelineSelectChoiceTest {
     private void theTopicExists() {
         SourceTaskType topic = new SourceTaskType();
         topic.setSourceTaskTypeId(TOPIC_ID);
-        topic.setStatus(process.model.enums.Status.Active);
-        org.mockito.Mockito.lenient().when(this.sourceTaskTypeRepository.findById(TOPIC_ID)).thenReturn(java.util.Optional.of(topic));
+        topic.setStatus(Status.Active);
+        Mockito.lenient().when(this.sourceTaskTypeRepository.findById(TOPIC_ID)).thenReturn(Optional.of(topic));
     }
 
     private PipelineField select(String options, String defaultValue) {

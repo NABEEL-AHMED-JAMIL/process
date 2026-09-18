@@ -442,7 +442,7 @@ public class AnalyticsRestApiTest {
         AnalyticsRestApi api = new AnalyticsRestApi(this.datasetResolver,
             this.analyticsQueryService, null, null, off);
 
-        for (ResponseEntity<?> response : java.util.Arrays.asList(
+        for (ResponseEntity<?> response : Arrays.asList(
             api.schema("store", "sales.csv"),
             api.preview("store", "sales.csv", 0, null, null, null, null, null, null, false),
             api.profile("store", "sales.csv"))) {

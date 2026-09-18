@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.Collections;
 
 /**
  * Ollama-backed embeddings. Local and free, which is the right default for a RAG pipeline whose
@@ -266,7 +267,7 @@ public class EmbeddingServiceImpl implements EmbeddingService {
 
     @Override
     public float[] embed(String text) throws Exception {
-        return this.embedAll(java.util.Collections.singletonList(text)).get(0);
+        return this.embedAll(Collections.singletonList(text)).get(0);
     }
 
     /**

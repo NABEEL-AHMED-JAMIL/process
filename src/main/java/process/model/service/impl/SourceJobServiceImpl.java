@@ -33,6 +33,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 import process.socket.JobEventPublisher;
+import java.sql.Timestamp;
 
 /**
  * @author Nabeel Ahmed
@@ -951,7 +952,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (value instanceof LocalDateTime) {
             return (LocalDateTime) value;
         }
-        return value instanceof java.sql.Timestamp ? ((java.sql.Timestamp) value).toLocalDateTime() : null;
+        return value instanceof Timestamp ? ((Timestamp) value).toLocalDateTime() : null;
     }
 
 }

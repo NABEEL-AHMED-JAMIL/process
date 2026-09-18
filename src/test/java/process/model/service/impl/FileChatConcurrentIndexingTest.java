@@ -34,6 +34,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import process.model.service.FileShareService;
 
 /**
  * Two concurrent requests for the SAME not-yet-indexed file (bucket+key+etag) must chunk, embed
@@ -60,7 +61,7 @@ public class FileChatConcurrentIndexingTest {
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private process.model.service.FileShareService fileShareService;
+    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 

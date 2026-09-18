@@ -19,6 +19,7 @@ import java.util.Properties;
 import java.util.HashMap;
 import java.util.Map;
 import static process.util.ProcessUtil.isNull;
+import java.util.LinkedHashMap;
 
 /**
  * @author Nabeel Ahmed
@@ -269,11 +270,11 @@ public class EmailMessagesFactory {
      * Matching is on the key name so a body added later is covered without anyone remembering
      * to come back here.
      */
-    private static String safeToLog(java.util.Map<String, Object> bodyMap) {
+    private static String safeToLog(Map<String, Object> bodyMap) {
         if (bodyMap == null) {
             return "{}";
         }
-        java.util.Map<String, Object> safe = new java.util.LinkedHashMap<>();
+        Map<String, Object> safe = new LinkedHashMap<>();
         bodyMap.forEach((key, value) -> {
             String name = key == null ? "" : key.toLowerCase();
             boolean secret = name.contains("password") || name.contains("token")

@@ -2,6 +2,7 @@ package process.model.service;
 
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
@@ -12,6 +13,6 @@ public interface NotifyService {
 
     public ResponseDto addLogs(SourceJobQueueDto jobQueueDto);
 
-    public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, java.util.List<String> messages);
+    public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, List<String> messages);
 
 }

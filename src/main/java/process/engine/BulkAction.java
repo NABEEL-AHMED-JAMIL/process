@@ -333,7 +333,7 @@ public class BulkAction {
     }
 
     /** Many lines at once, for a worker that buffers rather than posting per line. */
-    public void saveJobAuditLogs(Long jobQueueId, java.util.List<String> logDetails) {
+    public void saveJobAuditLogs(Long jobQueueId, List<String> logDetails) {
         this.transactionService.saveJobAuditLogs(jobQueueId, logDetails);
     }
 
@@ -348,7 +348,7 @@ public class BulkAction {
     }
 
     /** The batched form of the checked write. */
-    public void saveJobAuditLogs(Long jobId, Long jobQueueId, java.util.List<String> logDetails) {
+    public void saveJobAuditLogs(Long jobId, Long jobQueueId, List<String> logDetails) {
         this.transactionService.saveJobAuditLogs(jobId, jobQueueId, logDetails);
     }
 

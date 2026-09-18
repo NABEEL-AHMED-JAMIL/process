@@ -605,9 +605,9 @@ public class AnalysisQueryBuilderTest {
      * Only that scale. A DECLARED scale is left alone, exactly as the engine leaves it.
      */
     private static String rendered(Object value) {
-        if (value instanceof java.math.BigDecimal
-            && ((java.math.BigDecimal) value).scale() == 15) {
-            java.math.BigDecimal stripped = ((java.math.BigDecimal) value).stripTrailingZeros();
+        if (value instanceof BigDecimal
+            && ((BigDecimal) value).scale() == 15) {
+            BigDecimal stripped = ((BigDecimal) value).stripTrailingZeros();
             return stripped.scale() <= 0
                 ? stripped.setScale(0).toPlainString()
                 : stripped.toPlainString();
@@ -735,17 +735,17 @@ public class AnalysisQueryBuilderTest {
     @Test
     void theExactSumIsRightWhereTheFloatSumIsNot() throws Exception {
         // 0.1 + 0.2 as doubles is 0.30000000000000004. Through the text form it is 0.3.
-        try (java.sql.Statement statement = engine.createStatement()) {
+        try (Statement statement = engine.createStatement()) {
             statement.execute("CREATE OR REPLACE TEMP VIEW pennies AS "
                 + "SELECT * FROM (VALUES (0.1::DOUBLE), (0.2::DOUBLE)) AS t(amount)");
-            try (java.sql.ResultSet loose = statement.executeQuery(
+            try (ResultSet loose = statement.executeQuery(
                     "SELECT sum(amount) FROM pennies")) {
                 loose.next();
                 assertThat(loose.getString(1)).isEqualTo("0.30000000000000004");
             }
         }
-        try (java.sql.Statement statement = engine.createStatement();
-             java.sql.ResultSet exact = statement.executeQuery(
+        try (Statement statement = engine.createStatement();
+             ResultSet exact = statement.executeQuery(
                  "SELECT sum(CAST(CAST(amount AS VARCHAR) AS DECIMAL(38,15))) FROM pennies")) {
             exact.next();
             assertThat(exact.getBigDecimal(1).stripTrailingZeros().toPlainString()).isEqualTo("0.3");
@@ -765,7 +765,7 @@ public class AnalysisQueryBuilderTest {
     void adateColumnCanBeGroupedByMonth() throws Exception {
         AnalysisRequest request = analysis(dimensions("booked_on"),
             measure("amount", AnalysisRequest.Aggregation.SUM));
-        request.setGrains(java.util.Arrays.asList(AnalysisRequest.Grain.MONTH));
+        request.setGrains(Arrays.asList(AnalysisRequest.Grain.MONTH));
 
         AnalysisQueryBuilder.Plan plan = plan(request);
 
@@ -782,7 +782,7 @@ public class AnalysisQueryBuilderTest {
     void amonthlyGroupingReturnsOneRowPerMonth() throws Exception {
         AnalysisRequest request = analysis(dimensions("booked_on"),
             measure("amount", AnalysisRequest.Aggregation.SUM));
-        request.setGrains(java.util.Arrays.asList(AnalysisRequest.Grain.MONTH));
+        request.setGrains(Arrays.asList(AnalysisRequest.Grain.MONTH));
 
         List<List<String>> rows = rows(plan(request));
 
@@ -814,7 +814,7 @@ public class AnalysisQueryBuilderTest {
     void agrainOnAtextColumnIsRefusedWithAsentence() {
         AnalysisRequest request = analysis(dimensions("region"),
             measure("amount", AnalysisRequest.Aggregation.SUM));
-        request.setGrains(java.util.Arrays.asList(AnalysisRequest.Grain.MONTH));
+        request.setGrains(Arrays.asList(AnalysisRequest.Grain.MONTH));
 
         assertThatThrownBy(() -> plan(request))
             .isInstanceOf(AnalyticsException.class)
@@ -832,7 +832,7 @@ public class AnalysisQueryBuilderTest {
     void thesameDateColumnMayBeGroupedAtTwoGrains() throws Exception {
         AnalysisRequest request = analysis(dimensions("booked_on", "booked_on"),
             measure("amount", AnalysisRequest.Aggregation.SUM));
-        request.setGrains(java.util.Arrays.asList(
+        request.setGrains(Arrays.asList(
             AnalysisRequest.Grain.YEAR, AnalysisRequest.Grain.MONTH));
 
         AnalysisQueryBuilder.Plan plan = plan(request);
@@ -847,7 +847,7 @@ public class AnalysisQueryBuilderTest {
     void thesameColumnAtTheSameGrainTwiceIsStillRefused() {
         AnalysisRequest request = analysis(dimensions("booked_on", "booked_on"),
             measure("amount", AnalysisRequest.Aggregation.SUM));
-        request.setGrains(java.util.Arrays.asList(
+        request.setGrains(Arrays.asList(
             AnalysisRequest.Grain.MONTH, AnalysisRequest.Grain.MONTH));
 
         assertThatThrownBy(() -> plan(request))
@@ -860,7 +860,7 @@ public class AnalysisQueryBuilderTest {
     void atopNoverAgrainedDimensionRanksTheBuckets() throws Exception {
         AnalysisRequest request = analysis(dimensions("booked_on"),
             measure("amount", AnalysisRequest.Aggregation.SUM));
-        request.setGrains(java.util.Arrays.asList(AnalysisRequest.Grain.MONTH));
+        request.setGrains(Arrays.asList(AnalysisRequest.Grain.MONTH));
         AnalysisRequest.TopN topN = new AnalysisRequest.TopN();
         topN.setLimit(1);
         topN.setIncludeOther(false);

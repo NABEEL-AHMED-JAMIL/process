@@ -12,6 +12,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import ch.qos.logback.classic.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.analytics.dto.DatasetPreviewDto;
@@ -123,7 +124,7 @@ public class AnalyticsQueryServiceTest {
     private DatasetRef dataset;
     private AnalyticsQueryService service;
 
-    private ch.qos.logback.classic.Logger serviceLogger;
+    private Logger serviceLogger;
     private ListAppender<ILoggingEvent> logged;
     private Level originalLevel;
 
@@ -146,7 +147,7 @@ public class AnalyticsQueryServiceTest {
         // warning and the unmapped-failure error all moved to DuckDbAnalyticsEngine when the
         // engine seam was introduced, and an appender on the old name would record nothing while
         // every assertion below still read as though it were watching.
-        this.serviceLogger = (ch.qos.logback.classic.Logger)
+        this.serviceLogger = (Logger)
             LoggerFactory.getLogger(DuckDbAnalyticsEngine.class);
         this.originalLevel = this.serviceLogger.getLevel();
         // Pinned at INFO rather than left at logback.xml's debug: at debug a demoted read line

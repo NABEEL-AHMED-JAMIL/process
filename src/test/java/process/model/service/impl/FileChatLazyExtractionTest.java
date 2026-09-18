@@ -27,6 +27,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import java.util.Map;
+import process.model.service.FileShareService;
 
 /**
  * A file already indexed in OpenSearch for this exact bucket/key/etag must never have its raw
@@ -53,7 +55,7 @@ public class FileChatLazyExtractionTest {
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private process.model.service.FileShareService fileShareService;
+    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -164,7 +166,7 @@ public class FileChatLazyExtractionTest {
         verify(this.fileChatExtractionService, never())
             .extractText(anyString(), anyString(), anyString());
         @SuppressWarnings("unchecked")
-        java.util.Map<String, Object> readiness = (java.util.Map<String, Object>) response.getData();
+        Map<String, Object> readiness = (Map<String, Object>) response.getData();
         assertThat(readiness.get("usingRetrieval")).isEqualTo(true);
         assertThat(readiness.get("truncated")).isEqualTo(false);
     }
@@ -193,7 +195,7 @@ public class FileChatLazyExtractionTest {
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
         @SuppressWarnings("unchecked")
-        java.util.Map<String, Object> readiness = (java.util.Map<String, Object>) response.getData();
+        Map<String, Object> readiness = (Map<String, Object>) response.getData();
         assertThat(readiness.get("usingRetrieval"))
             .as("retrieval cannot run without the embedding model, so the panel must not claim it will")
             .isEqualTo(false);

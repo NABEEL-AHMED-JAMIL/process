@@ -27,6 +27,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.List;
 
 /**
  * A pipeline publishes on one topic (V43). The topic is required, has to exist, and has to be
@@ -122,7 +123,7 @@ public class PipelineTopicTest {
         when(this.pipelineRepository.findAllBySourceTaskTypeIdAndStatusNotOrderByPipelineNameAsc(80L, Status.Delete))
             .thenReturn(Collections.singletonList(saved));
         ResponseDto listed = this.service.listForTopic(80L);
-        Pipeline row = ((java.util.List<Pipeline>) listed.getData()).get(0);
+        Pipeline row = ((List<Pipeline>) listed.getData()).get(0);
         assertThat(row.getTopicName()).isEqualTo("Claims intake");
         assertThat(row.getKafkaTopic()).isEqualTo("claims-intake");
     }
@@ -137,7 +138,7 @@ public class PipelineTopicTest {
         when(this.sourceTaskTypeRepository.findAllById(any())).thenReturn(Collections.emptyList());
 
         @SuppressWarnings("unchecked")
-        java.util.List<Pipeline> rows = (java.util.List<Pipeline>) this.service.listForTopic(80L).getData();
+        List<Pipeline> rows = (List<Pipeline>) this.service.listForTopic(80L).getData();
         assertThat(rows).containsExactly(mine);
     }
 }

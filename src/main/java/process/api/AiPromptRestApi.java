@@ -10,6 +10,7 @@ import process.model.dto.AiPromptDto;
 import process.model.dto.ResponseDto;
 import process.model.service.impl.AiPromptServiceImpl;
 import process.util.ProcessUtil;
+import process.model.dto.AiWorkerRunDto;
 
 /**
  * Prompts. Reading is TENANT_USER -- a person must be able to see what the step on their
@@ -76,6 +77,13 @@ public class AiPromptRestApi {
         try { return new ResponseEntity<>(this.service.runsForJob(jobQueueId), HttpStatus.OK); } catch (Exception ex) { return this.failed("runsForJob", ex); }
     }
 
+    /** Calls, failures, tokens and latency per prompt over a range, for Reports. */
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/usage", method = RequestMethod.GET)
+    public ResponseEntity<?> usage(@RequestParam(required = false) String from, @RequestParam(required = false) String to) {
+        try { return new ResponseEntity<>(this.service.usage(from, to), HttpStatus.OK); } catch (Exception ex) { return this.failed("usage", ex); }
+    }
+
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/versions", method = RequestMethod.GET)
     public ResponseEntity<?> versions(@RequestParam Long promptId) {
@@ -89,7 +97,7 @@ public class AiPromptRestApi {
      */
     @RequestMapping(value = "/run", method = RequestMethod.POST)
     public ResponseEntity<?> run(@RequestHeader(value = "X-Worker-Token", required = false) String workerToken,
-        @RequestBody process.model.dto.AiWorkerRunDto dto) {
+        @RequestBody AiWorkerRunDto dto) {
         try {
             ResponseDto answer = this.service.runForWorker(dto, workerToken);
             if ("Unauthorized worker callback.".equals(answer.getMessage())) return new ResponseEntity<>(answer, HttpStatus.UNAUTHORIZED);
