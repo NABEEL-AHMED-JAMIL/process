@@ -134,25 +134,40 @@ public class AiStepService {
      */
     public AiPromptRun runForWorker(Long tenantId, String pipelineId, Long jobQueueId, String stepTag,
         String promptUuid, Map<String, String> values) {
+        return this.runForWorker(tenantId, pipelineId, jobQueueId, stepTag, null, promptUuid, values);
+    }
+
+    /**
+     * With `item`, a step the worker runs once per input object: the step is still found by its
+     * tag, but the run row is keyed on tag#item so every object is its own run -- idempotent per
+     * object, counted per object, listed per object in the history.
+     */
+    public AiPromptRun runForWorker(Long tenantId, String pipelineId, Long jobQueueId, String stepTag, String item,
+        String promptUuid, Map<String, String> values) {
         List<Pipeline> found = this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot(pipelineId == null ? "" : pipelineId.trim(), tenantId, Status.Delete);
         PipelineField step = found.isEmpty() ? null : stepsOf(found.get(0)).stream()
             .filter(f -> "worker".equals(f.getRunIn()) && f.getTagKey().equals(stepTag)).findFirst().orElse(null);
+        String rowTag = item == null || item.trim().isEmpty() ? stepTag : stepTag + "#" + item.trim();
         PromptRunner.Job job = new PromptRunner.Job();
-        job.tenantId = tenantId; job.kind = "run"; job.jobQueueId = jobQueueId; job.stepTag = stepTag;
+        job.tenantId = tenantId; job.kind = "run"; job.jobQueueId = jobQueueId; job.stepTag = rowTag;
         if (step == null) return this.refused(job, "This run's pipeline hands no such step to the worker.");
         job.promptId = step.getPromptId();
         AiPrompt prompt = this.prompts.findById(step.getPromptId()).orElse(null);
         if (prompt == null || !prompt.getPromptUuid().equals(promptUuid)) return this.refused(job, "The step does not name that prompt.");
-        AiPromptRun existing = this.runs.findByJobQueueIdAndStepTag(jobQueueId, stepTag).orElse(null);
+        AiPromptRun existing = this.runs.findByJobQueueIdAndStepTag(jobQueueId, rowTag).orElse(null);
         if (existing != null && "ok".equals(existing.getStatus())) return existing;
         if (existing != null) this.runs.delete(existing);
         // The worker resolved the values (a file's contents, say); the document is not consulted.
-        return this.runStepWithValues(tenantId, jobQueueId, step, values == null ? Collections.emptyMap() : values);
+        return this.runStepWithValues(tenantId, jobQueueId, step, rowTag, values == null ? Collections.emptyMap() : values);
     }
 
     private AiPromptRun runStepWithValues(Long tenantId, Long jobQueueId, PipelineField step, Map<String, String> values) {
+        return this.runStepWithValues(tenantId, jobQueueId, step, step.getTagKey(), values);
+    }
+
+    private AiPromptRun runStepWithValues(Long tenantId, Long jobQueueId, PipelineField step, String rowTag, Map<String, String> values) {
         PromptRunner.Job job = new PromptRunner.Job();
-        job.tenantId = tenantId; job.kind = "run"; job.jobQueueId = jobQueueId; job.stepTag = step.getTagKey(); job.promptId = step.getPromptId();
+        job.tenantId = tenantId; job.kind = "run"; job.jobQueueId = jobQueueId; job.stepTag = rowTag; job.promptId = step.getPromptId();
         AiPrompt prompt = this.prompts.findById(step.getPromptId()).filter(p -> p.getStatus() == Status.Active && Objects.equals(p.getTenantId(), tenantId)).orElse(null);
         if (prompt == null) return this.refused(job, "The prompt this step names is no longer active in this workspace.");
         job.promptVersion = prompt.getVersion();

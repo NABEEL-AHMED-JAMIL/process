@@ -77,9 +77,15 @@ public final class PayloadXml {
             Element var = this.doc.createElement("var");
             var.setAttribute("name", e.getKey());
             String source = e.getValue() == null ? "" : e.getValue();
-            boolean file = source.startsWith("file:");
-            var.setAttribute("from", file ? source.substring(5) : source);
-            var.setAttribute("as", file ? "file" : "text");
+            if (source.startsWith("object:")) {
+                // Once per object under the task's input folder: its contents, or its key.
+                var.setAttribute("from", "object");
+                var.setAttribute("as", "name".equals(source.substring(7)) ? "name" : "text");
+            } else {
+                boolean file = source.startsWith("file:");
+                var.setAttribute("from", file ? source.substring(5) : source);
+                var.setAttribute("as", file ? "file" : "text");
+            }
             step.appendChild(var);
         }
         Node root = this.doc.getDocumentElement();

@@ -249,7 +249,7 @@ public class AiPromptServiceImpl {
         Optional<SourceJob> job = run.flatMap(r -> this.jobs.findByJobIdAndJobStatus(r.getJobId(), Status.Active));
         if (!job.isPresent() || job.get().getTaskDetail() == null) return new ResponseDto(ERROR, "This run has no task to run a step for.");
         AiPromptRun answer = this.steps.runForWorker(job.get().getTenantId(), job.get().getTaskDetail().getPipelineId(),
-            dto.getJobQueueId(), dto.getStepTag(), dto.getPromptUuid(), dto.getVariables());
+            dto.getJobQueueId(), dto.getStepTag(), dto.getItem(), dto.getPromptUuid(), dto.getVariables());
         return new ResponseDto("ok".equals(answer.getStatus()) ? SUCCESS : ERROR,
             "ok".equals(answer.getStatus()) ? String.format("Answered in %.1f s.", (answer.getLatencyMs() == null ? 0 : answer.getLatencyMs()) / 1000.0) : answer.getError(), answer);
     }

@@ -164,6 +164,42 @@ public class AiStepServiceTest {
     }
 
     @Test
+    void aStepOverTheInputObjectsIsHandedOverWithObjectVariables() throws Exception {
+        Pipeline p = this.pipelineWithStep("continue");
+        PipelineField step = p.getFields().get(2); step.setRunIn("worker");
+        step.setVariableMap("{\"claim_id\":\"object:name\",\"document_text\":\"object:text\"}");
+        AiPrompt prompt = this.prompt(); prompt.setPromptUuid("uuid-9");
+        when(this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot("F1", TENANT, Status.Delete)).thenReturn(Collections.singletonList(p));
+        when(this.prompts.findById(1000L)).thenReturn(Optional.of(prompt));
+        AiStepService service = new AiStepService(this.pipelines, this.prompts, this.connections, this.runs, this.encryptionUtil, this.runner);
+
+        AiStepService.Outcome out = service.apply(TENANT, "F1", 55L, PAYLOAD);
+
+        // The vars have to be in the element: without them the worker had nothing to loop over.
+        assertThat(out.payload).contains("<var as=\"name\" from=\"object\" name=\"claim_id\"/>");
+        assertThat(out.payload).contains("<var as=\"text\" from=\"object\" name=\"document_text\"/>");
+    }
+
+    @Test
+    void aPerObjectRunIsItsOwnRowKeyedOnTheObject() {
+        Pipeline p = this.pipelineWithStep("continue");
+        PipelineField step = p.getFields().get(2); step.setRunIn("worker");
+        AiPrompt prompt = this.prompt(); prompt.setPromptUuid("uuid-9");
+        when(this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot("F1", TENANT, Status.Delete)).thenReturn(Collections.singletonList(p));
+        when(this.prompts.findById(1000L)).thenReturn(Optional.of(prompt));
+        when(this.connections.findFirstByTenantIdAndIsDefaultTrueAndStatus(TENANT, Status.Active)).thenReturn(Optional.of(this.connection()));
+        when(this.runs.findByJobQueueIdAndStepTag(55L, "summary#claims/in/a.txt")).thenReturn(Optional.empty());
+        when(this.runner.run(any())).thenAnswer(inv -> {
+            PromptRunner.Job job = inv.getArgument(0);
+            assertThat(job.stepTag).isEqualTo("summary#claims/in/a.txt");
+            return this.answered("one");
+        });
+        AiStepService service = new AiStepService(this.pipelines, this.prompts, this.connections, this.runs, this.encryptionUtil, this.runner);
+        java.util.Map<String, String> values = new java.util.HashMap<>(); values.put("claim_id", "claims/in/a.txt"); values.put("document_text", "claim A");
+        assertThat(service.runForWorker(TENANT, "F1", 55L, "summary", "claims/in/a.txt", "uuid-9", values).getOutput()).isEqualTo("one");
+    }
+
+    @Test
     void theWorkersCallRunsOnlyAStepItWasHanded() {
         Pipeline p = this.pipelineWithStep("fail");
         PipelineField step = p.getFields().get(2); step.setRunIn("worker");

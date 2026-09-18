@@ -437,6 +437,12 @@ public class PipelineServiceImpl {
                     if (Boolean.TRUE.equals(v.required)) return String.format("The AI step <%s> gives no field for the prompt's variable {{%s}}.", field.getTagKey(), v.name);
                     continue;
                 }
+                if (source.startsWith("object:")) {
+                    // Each input object's contents or key: a worker loop over <input_folder>.
+                    if (!inWorker) return String.format("The AI step <%s> reads each input object for {{%s}}; only a step run in the worker can.", field.getTagKey(), v.name);
+                    if (!before.contains("input_folder")) return String.format("The AI step <%s> reads each input object for {{%s}}, but no field before it writes <input_folder>.", field.getTagKey(), v.name);
+                    continue;
+                }
                 boolean asFile = source.startsWith("file:");
                 String tag = asFile ? source.substring(5) : source;
                 if (asFile && !inWorker) return String.format("The AI step <%s> reads a file for {{%s}}; only a step run in the worker can.", field.getTagKey(), v.name);

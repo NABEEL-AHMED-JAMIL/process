@@ -11,6 +11,8 @@ public class AiWorkerRunDto {
     private String promptUuid;
     private Integer version;
     private String stepTag;
+    /** For a step run once per input object: the object's key, so each run is its own row. */
+    private String item;
     private Map<String, String> variables;
 
     public Long getJobId() { return jobId; } public void setJobId(Long v) { jobId = v; }
@@ -18,5 +20,6 @@ public class AiWorkerRunDto {
     public String getPromptUuid() { return promptUuid; } public void setPromptUuid(String v) { promptUuid = v; }
     public Integer getVersion() { return version; } public void setVersion(Integer v) { version = v; }
     public String getStepTag() { return stepTag; } public void setStepTag(String v) { stepTag = v; }
+    public String getItem() { return item; } public void setItem(String v) { item = v; }
     public Map<String, String> getVariables() { return variables; } public void setVariables(Map<String, String> v) { variables = v; }
 }
