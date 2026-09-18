@@ -22,7 +22,6 @@ import process.util.EncryptionUtil;
 import process.util.UserNameResolver;
 import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.ERROR;
@@ -226,14 +225,14 @@ public class AiModelConnectionServiceImpl {
         d.setCreatedByName(c.getCreatedByName()); d.setUpdatedByName(c.getUpdatedByName());
         if (withUsage) {
             d.setPromptCount(this.prompts.countByConnectionIdAndStatusNot(c.getConnectionId(), Status.Delete));
-            Timestamp monthAgo = Timestamp.valueOf(LocalDate.now(ZoneOffset.UTC).minusDays(30).atStartOfDay());
+            Timestamp monthAgo = Timestamp.valueOf(LocalDate.now().minusDays(30).atStartOfDay());
             Object[] usage = this.runs.usageSince(c.getConnectionId(), monthAgo);
             // A single-row aggregate comes back as one Object[] -- or, with some drivers, an Object[] wrapping it.
             Object[] row = usage != null && usage.length == 1 && usage[0] instanceof Object[] ? (Object[]) usage[0] : usage;
             if (row != null && row.length >= 3) {
                 d.setRuns30d(((Number) row[0]).longValue()); d.setTokensIn30d(((Number) row[1]).longValue()); d.setTokensOut30d(((Number) row[2]).longValue());
             }
-            d.setTokensToday(this.runs.tokensSince(c.getConnectionId(), Timestamp.valueOf(LocalDate.now(ZoneOffset.UTC).atStartOfDay())));
+            d.setTokensToday(this.runs.tokensSince(c.getConnectionId(), Timestamp.valueOf(LocalDate.now().atStartOfDay())));
         }
         return d;
     }

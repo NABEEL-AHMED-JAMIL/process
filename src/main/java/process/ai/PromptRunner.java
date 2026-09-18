@@ -13,7 +13,6 @@ import process.model.pojo.AiPromptRun;
 import process.model.repository.AiPromptRunRepository;
 import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -140,6 +139,12 @@ public class PromptRunner {
                 }
             }
             row.setOutput(text); row.setTokensIn(tokensIn); row.setTokensOut(tokensOut); row.setStatus("ok");
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            // A refusal this class made itself -- an empty required variable, the budget, JSON
+            // that never validated, a missing connection: one line says it all, no stack.
+            this.logger.warn("Prompt run refused (prompt {}, kind {}): {}", job.promptId, job.kind, ex.getMessage());
+            row.setStatus("failed");
+            row.setError(ex.getMessage());
         } catch (Exception ex) {
             this.logger.warn("Prompt run failed (prompt {}, kind {})", job.promptId, job.kind, ex);
             row.setStatus("failed");
@@ -151,10 +156,11 @@ public class PromptRunner {
         return this.runs.save(row);
     }
 
+    /** The day is the server's own -- the clock every run row is stamped with -- not UTC's. */
     private void checkBudget(AiModelConnection c) {
         if (c == null) throw new IllegalStateException("No model connection: name one on the prompt or set a workspace default.");
         if (c.getDailyTokenBudget() == null) return;
-        long spent = this.runs.tokensSince(c.getConnectionId(), Timestamp.valueOf(LocalDate.now(ZoneOffset.UTC).atStartOfDay()));
+        long spent = this.runs.tokensSince(c.getConnectionId(), Timestamp.valueOf(LocalDate.now().atStartOfDay()));
         if (spent >= c.getDailyTokenBudget()) {
             throw new IllegalStateException(String.format("Daily token budget reached on \"%s\" (%,d of %,d today). No call was made.",
                 c.getName(), spent, c.getDailyTokenBudget()));

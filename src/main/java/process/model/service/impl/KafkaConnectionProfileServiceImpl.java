@@ -32,6 +32,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.sql.Timestamp;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -355,6 +356,30 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
      * for the tenant, which may be the platform's own, a row that tenant is not even shown. It stays
      * in the log for whoever runs the server.
      */
+    /** The consumer groups with a live member assigned a partition of this topic; empty when none. */
+    private List<String> consumerGroupsOf(AdminClient adminClient, String topicName) {
+        List<String> reading = new ArrayList<>();
+        try {
+            List<String> ids = new ArrayList<>();
+            for (org.apache.kafka.clients.admin.ConsumerGroupListing g : adminClient.listConsumerGroups().all().get(10, TimeUnit.SECONDS)) {
+                ids.add(g.groupId());
+            }
+            if (ids.isEmpty()) return reading;
+            Map<String, org.apache.kafka.clients.admin.ConsumerGroupDescription> described =
+                adminClient.describeConsumerGroups(ids).all().get(10, TimeUnit.SECONDS);
+            for (org.apache.kafka.clients.admin.ConsumerGroupDescription d : described.values()) {
+                boolean onTopic = d.members().stream().anyMatch(m -> m.assignment().topicPartitions().stream()
+                    .anyMatch(tp -> topicName.equals(tp.topic())));
+                if (onTopic) reading.add(d.groupId());
+            }
+        } catch (Exception ex) {
+            // A cluster that refuses group metadata still answered the describe above; the
+            // topic test stays a pass and just cannot say who reads it.
+            this.logger.warn("Could not list consumer groups for topic '{}': {}", topicName, ex.getMessage());
+        }
+        return reading;
+    }
+
     private String failureReason(Exception ex) {
         Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
         if (cause instanceof SaslAuthenticationException) {
@@ -401,8 +426,19 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         try (AdminClient adminClient = AdminClient.create(adminProps)) {
             DescribeTopicsResult result = adminClient.describeTopics(Collections.singleton(topicName));
             TopicDescription description = result.values().get(topicName).get(10, TimeUnit.SECONDS);
+            // Reachable is not the same as consumed. A run dispatched to a topic no worker reads
+            // sits at Start until the stall sweep closes it hours later, and nothing on the way
+            // says why; two of today's runs went that way. The groups with a member assigned a
+            // partition of this topic are what the answer names -- none is a warning, not a pass.
+            List<String> groups = this.consumerGroupsOf(adminClient, topicName);
+            if (groups.isEmpty()) {
+                return new ResponseDto(SUCCESS, String.format(
+                    "Topic \"%s\" is reachable -- %d partition(s) -- but no consumer is reading it right now. A run dispatched to it will wait until a worker subscribes.",
+                    topicName, description.partitions().size()));
+            }
             return new ResponseDto(SUCCESS, String.format(
-                "Topic \"%s\" is reachable -- %d partition(s).", topicName, description.partitions().size()));
+                "Topic \"%s\" is reachable -- %d partition(s), read by %s.", topicName, description.partitions().size(),
+                String.join(", ", groups)));
         } catch (Exception ex) {
             this.logger.warn("Kafka topic test failed for '{}': {}", topicName, ex.getMessage(), ex);
             Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
