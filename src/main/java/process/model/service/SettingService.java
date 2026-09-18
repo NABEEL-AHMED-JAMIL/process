@@ -15,7 +15,7 @@ public interface SettingService {
 
     public ResponseDto lookups() throws Exception;
 
-    public ResponseDto topics() throws Exception;
+    public ResponseDto topics(String q, Integer limit, java.util.List<Long> ids, Long kafkaConnectionProfileId) throws Exception;
 
     public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 

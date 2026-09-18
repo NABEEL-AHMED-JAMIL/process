@@ -11,6 +11,11 @@ import process.config.KafkaTemplateProvider;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.KafkaConnectionProfile;
+import java.util.List;
+import java.util.Arrays;
+import org.springframework.data.domain.Pageable;
+import org.mockito.ArgumentCaptor;
+import process.model.projection.TopicOptionProjection;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
@@ -31,6 +36,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 
 /**
  * The Kafka pane asks for one profile's topics at a time. The profile has to be the caller's
@@ -109,5 +116,70 @@ public class TopicsForProfileTest {
         this.service.topicsForProfile(9L);
 
         verify(this.sourceTaskTypeRepository).fetchTopicsForProfile(eq(9L), eq(false), eq(MINE));
+    }
+
+    // ---- topics(): the picker rows, three ways in, each scoped ---------------------------------
+
+    private static TopicOptionProjection option(long id, Long tenantId) {
+        // Only the tenant is read by the filter; lenient so an unread id is not an error.
+        TopicOptionProjection t = mock(TopicOptionProjection.class);
+        lenient().when(t.getSourceTaskTypeId()).thenReturn(id);
+        when(t.getTenantId()).thenReturn(tenantId);
+        return t;
+    }
+
+    @Test
+    void aSearchIsScopedToTheWorkspaceAndCapped() throws Exception {
+        when(this.sourceTaskTypeRepository.searchTopicOptions(eq(MINE), eq("%claims%"), any())).thenReturn(Collections.emptyList());
+
+        ResponseDto response = this.service.topics(" Claims ", 20, null, null);
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        ArgumentCaptor<Pageable> window = ArgumentCaptor.forClass(Pageable.class);
+        verify(this.sourceTaskTypeRepository).searchTopicOptions(eq(MINE), eq("%claims%"), window.capture());
+        assertThat(window.getValue().getPageSize()).isEqualTo(20);
+    }
+
+    @Test
+    void aPlatformAdminSearchesEveryWorkspace() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        when(this.sourceTaskTypeRepository.searchTopicOptions(eq(0L), eq(""), any())).thenReturn(Collections.emptyList());
+
+        this.service.topics(null, null, null, null);
+
+        ArgumentCaptor<Pageable> window = ArgumentCaptor.forClass(Pageable.class);
+        verify(this.sourceTaskTypeRepository).searchTopicOptions(eq(0L), eq(""), window.capture());
+        assertThat(window.getValue().getPageSize()).isEqualTo(50);
+    }
+
+    @Test
+    void resolvingIdsDropsAnotherWorkspacesRows() throws Exception {
+        TopicOptionProjection mine = option(11L, MINE);
+        TopicOptionProjection theirs = option(12L, THEIRS);
+        when(this.sourceTaskTypeRepository.fetchTopicOptionsByIds(Arrays.asList(11L, 12L))).thenReturn(Arrays.asList(mine, theirs));
+
+        ResponseDto response = this.service.topics(null, null, Arrays.asList(11L, 12L), null);
+
+        assertThat((List<Object>) response.getData()).containsExactly(mine);
+    }
+
+    @Test
+    void aProfilesTopicsReadAsNotFoundForAnotherWorkspacesProfile() throws Exception {
+        when(this.kafkaConnectionProfileRepository.findById(7L)).thenReturn(Optional.of(profile(7L, THEIRS, true)));
+
+        ResponseDto response = this.service.topics(null, null, null, 7L);
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        verify(this.sourceTaskTypeRepository, never()).fetchTopicOptionsForProfile(anyLong(), anyBoolean(), anyLong());
+    }
+
+    @Test
+    void aDefaultProfilesPickerRowsCarryTheUnroutedTopicsToo() throws Exception {
+        when(this.kafkaConnectionProfileRepository.findById(8L)).thenReturn(Optional.of(profile(8L, MINE, true)));
+        when(this.sourceTaskTypeRepository.fetchTopicOptionsForProfile(8L, true, MINE)).thenReturn(Collections.emptyList());
+
+        this.service.topics(null, null, null, 8L);
+
+        verify(this.sourceTaskTypeRepository).fetchTopicOptionsForProfile(eq(8L), eq(true), eq(MINE));
     }
 }

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Repository;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
 import process.model.projection.PipelineRowProjection;
+import process.model.projection.PipelineSummaryProjection;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
@@ -21,15 +22,39 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
         "cast(p.status as varchar) as status, p.date_created as dateCreated, p.created_by as createdBy, p.updated_by as updatedBy,\n" +
         "(select count(*) from pipeline_field f where f.pipeline_key = p.pipeline_key) as fieldCount,\n" +
         "(select count(*) from pipeline_field f where f.pipeline_key = p.pipeline_key and f.required) as requiredCount\n" +
-        "from pipeline p where cast(p.status as varchar) <> 'Delete'\n";
+        "from pipeline p left join source_task_type t on t.source_task_type_id = p.source_task_type_id\n";
 
-    /** Every workspace's rows, for a platform admin; counts stand in for the fields. */
-    @Query(value = ROW_SELECT + "order by p.pipeline_key desc", nativeQuery = true)
-    List<PipelineRowProjection> listRows();
+    /**
+     * The filters a list page carries, each as a value that means "any" when absent (0, '',
+     * false) rather than null -- Postgres cannot type a null parameter in a native query. A
+     * search term arrives already lower-cased and wrapped in % so the query stays one line.
+     */
+    String ROW_WHERE = "where cast(p.status as varchar) <> 'Delete'\n" +
+        "and (:tenantId = 0 or p.tenant_id = :tenantId)\n" +
+        "and (:topicId = 0 or p.source_task_type_id = :topicId)\n" +
+        "and (:untopped = false or p.source_task_type_id is null)\n" +
+        "and (:status = '' or cast(p.status as varchar) = :status)\n" +
+        "and (:createdBy = 0 or p.created_by = :createdBy)\n" +
+        "and (:q = '' or lower(p.pipeline_name) like :q or lower(p.pipeline_id) like :q\n" +
+        "     or lower(coalesce(p.description, '')) like :q or lower(coalesce(t.service_name, '')) like :q\n" +
+        "     or lower(coalesce(t.queue_topic_partition, '')) like :q)\n";
 
-    /** One workspace's rows; counts stand in for the fields. */
-    @Query(value = ROW_SELECT + "and p.tenant_id = :tenantId order by p.pipeline_key desc", nativeQuery = true)
-    List<PipelineRowProjection> listRowsForTenant(@Param("tenantId") Long tenantId);
+    /** One page of rows under the filters; counts stand in for the fields. Newest first. */
+    @Query(value = ROW_SELECT + ROW_WHERE + "order by p.pipeline_key desc",
+        countQuery = "select count(*) from pipeline p left join source_task_type t on t.source_task_type_id = p.source_task_type_id\n" + ROW_WHERE,
+        nativeQuery = true)
+    org.springframework.data.domain.Page<PipelineRowProjection> pageRows(
+        @Param("tenantId") long tenantId, @Param("topicId") long topicId, @Param("untopped") boolean untopped,
+        @Param("status") String status, @Param("createdBy") long createdBy, @Param("q") String q,
+        org.springframework.data.domain.Pageable pageable);
+
+    /** The whole scope in five numbers, for the tiles above the list; unfiltered on purpose. */
+    @Query(value = "select count(*) as total, count(*) filter (where cast(p.status as varchar) = 'Active') as active,\n" +
+        "count(distinct p.source_task_type_id) as topics, count(*) filter (where p.source_task_type_id is null) as untopped,\n" +
+        "(select count(*) from pipeline_field f join pipeline q on q.pipeline_key = f.pipeline_key\n" +
+        "  where cast(q.status as varchar) <> 'Delete' and (:tenantId = 0 or q.tenant_id = :tenantId)) as fields\n" +
+        "from pipeline p where cast(p.status as varchar) <> 'Delete' and (:tenantId = 0 or p.tenant_id = :tenantId)", nativeQuery = true)
+    PipelineSummaryProjection summarise(@Param("tenantId") long tenantId);
 
     /** Everything a platform admin sees -- every tenant's forms, in one list. */
     public List<Pipeline> findAllByStatusNot(Status status);

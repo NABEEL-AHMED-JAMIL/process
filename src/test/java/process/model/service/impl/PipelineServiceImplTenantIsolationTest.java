@@ -9,6 +9,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
+import java.util.Map;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Page;
+import process.model.dto.PagingDto;
+import process.model.projection.PipelineSummaryProjection;
 import process.model.dto.PipelineRowDto;
 import process.model.projection.PipelineRowProjection;
 import process.model.pojo.PipelineField;
@@ -31,6 +37,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 import static process.util.ProcessUtil.ERROR;
@@ -118,55 +126,93 @@ public class PipelineServiceImplTenantIsolationTest {
         return row;
     }
 
-    @Test
-    void aTenantNeverSeesAnotherTenantsForms() {
-        this.actAsTenant(TENANT_B);
-        when(this.pipelineRepository.listRowsForTenant(TENANT_B)).thenReturn(Collections.emptyList());
+    private static final org.springframework.data.domain.Pageable ANY_WINDOW = null;
 
-        ResponseDto response = this.service.listForms();
+    private void summaryOf(long tenantId) {
+        PipelineSummaryProjection summary = mock(PipelineSummaryProjection.class);
+        when(summary.getTotal()).thenReturn(1L);
+        when(this.pipelineRepository.summarise(tenantId)).thenReturn(summary);
+    }
 
-        assertThat((List<?>) response.getData()).isEmpty();
-        verify(this.pipelineRepository, never()).listRows();
+    @SuppressWarnings("unchecked")
+    private static List<PipelineRowDto> rowsOf(ResponseDto response) {
+        return (List<PipelineRowDto>) ((Map<String, Object>) response.getData()).get("rows");
     }
 
     @Test
-    void aTenantSeesItsOwnForms() {
+    void aTenantNeverSeesAnotherTenantsForms() {
+        this.actAsTenant(TENANT_B);
+        when(this.pipelineRepository.pageRows(eq(TENANT_B), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
+            .thenReturn(Page.empty());
+        this.summaryOf(TENANT_B);
+
+        ResponseDto response = this.service.listForms(1L, 50L, null, null, null, TENANT_A, false);
+
+        // The tenantId a tenant sends is ignored: the scope is its own workspace, always.
+        assertThat(rowsOf(response)).isEmpty();
+        verify(this.pipelineRepository, never()).pageRows(eq(TENANT_A), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
+        verify(this.pipelineRepository, never()).pageRows(eq(0L), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
+    }
+
+    @Test
+    void aTenantSeesItsOwnFormsOnePageAtATime() {
         this.actAsTenant(TENANT_A);
-        // Built before the stubbing: a mock set up inside thenReturn(...) is a nested, unfinished stub.
         PipelineRowProjection row = this.tenantARow();
-        when(this.pipelineRepository.listRowsForTenant(TENANT_A)).thenReturn(Collections.singletonList(row));
+        when(this.pipelineRepository.pageRows(eq(TENANT_A), eq(0L), eq(false), eq(""), eq(0L), eq("%claims%"), any()))
+            .thenReturn(new PageImpl<>(Collections.singletonList(row), PageRequest.of(1, 50), 51));
+        this.summaryOf(TENANT_A);
 
-        ResponseDto response = this.service.listForms();
+        ResponseDto response = this.service.listForms(2L, 50L, "Claims", "", "", null, false);
 
-        List<PipelineRowDto> rows = (List<PipelineRowDto>) (List<?>) response.getData();
+        List<PipelineRowDto> rows = rowsOf(response);
         assertThat(rows).extracting(PipelineRowDto::getPipelineId).containsExactly(PIPELINE);
         // The row says how many fields there are rather than carrying them.
         assertThat(rows.get(0).getFieldCount()).isEqualTo(3L);
         assertThat(rows.get(0).getRequiredCount()).isEqualTo(1L);
+        // The paging block says where this page sits in the filtered whole.
+        PagingDto paging = (PagingDto) response.getPaging();
+        assertThat(paging.getTotalRecord()).isEqualTo(51L);
+        assertThat(paging.getCurrentPage()).isEqualTo(2L);
     }
 
     @Test
-    void aPlatformAdminSeesEveryTenantsForms() {
+    void aPlatformAdminSeesEveryTenantsFormsOrOneWorkspacesOnAsk() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
         PipelineRowProjection row = this.tenantARow();
-        when(this.pipelineRepository.listRows()).thenReturn(Collections.singletonList(row));
+        when(this.pipelineRepository.pageRows(eq(0L), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
+            .thenReturn(new PageImpl<>(Collections.singletonList(row)));
+        this.summaryOf(0L);
 
-        ResponseDto response = this.service.listForms();
+        ResponseDto response = this.service.listForms(null, null, null, null, null, null, false);
+        assertThat(rowsOf(response)).extracting(PipelineRowDto::getPipelineId).containsExactly(PIPELINE);
 
-        assertThat((List<PipelineRowDto>) (List<?>) response.getData())
-            .extracting(PipelineRowDto::getPipelineId).containsExactly(PIPELINE);
-        verify(this.pipelineRepository, never()).listRowsForTenant(anyLong());
+        // Asking for one workspace narrows the query to it.
+        when(this.pipelineRepository.pageRows(eq(TENANT_B), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
+            .thenReturn(Page.empty());
+        this.summaryOf(TENANT_B);
+        assertThat(rowsOf(this.service.listForms(null, null, null, null, null, TENANT_B, false))).isEmpty();
+    }
+
+    @Test
+    void theNoTopicFilterAsksForUntoppedRowsAndOnlyMineForTheCallersOwn() {
+        this.actAsTenant(TENANT_A);
+        when(this.pipelineRepository.pageRows(eq(TENANT_A), eq(0L), eq(true), eq("Active"), eq(9000L), eq(""), any()))
+            .thenReturn(Page.empty());
+        this.summaryOf(TENANT_A);
+
+        ResponseDto response = this.service.listForms(1L, 50L, "", "none", "Active", null, true);
+
+        assertThat(rowsOf(response)).isEmpty();
     }
 
     @Test
     void aTenantlessNonAdminCallerSeesNothingRatherThanQueryingWithANullTenant() {
         TenantContext.set(null, "TENANT_ADMIN", 9000L, "no-tenant@example.com");
 
-        ResponseDto response = this.service.listForms();
+        ResponseDto response = this.service.listForms(1L, 50L, null, null, null, null, false);
 
-        assertThat((List<?>) response.getData()).isEmpty();
-        verify(this.pipelineRepository, never()).listRowsForTenant(any());
-        verify(this.pipelineRepository, never()).listRows();
+        assertThat(rowsOf(response)).isEmpty();
+        verify(this.pipelineRepository, never()).pageRows(anyLong(), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
     }
 
     // ---- fieldsFor: the fields of one row, scoped like delete ----------------------------------

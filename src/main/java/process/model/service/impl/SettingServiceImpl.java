@@ -329,14 +329,40 @@ public class SettingServiceImpl implements SettingService {
     }
 
     /**
-     * Every topic the caller may pick, as picker rows (id, name, Kafka topic, state, profile,
-     * workspace) and nothing more; see {@link TopicOptionProjection}. Scoped like appSetting.
+     * Topics as picker rows (id, name, Kafka topic, state, profile, workspace) and nothing more;
+     * see {@link TopicOptionProjection}. Three ways in, each scoped to what the caller may see:
+     * {@code ids} resolves the rows a box was handed (an edited task's topic, a ?topic= link);
+     * {@code kafkaConnectionProfileId} lists one profile's topics for a profile-first pick; and
+     * otherwise {@code q} searches by name or Kafka topic, capped at {@code limit}, so a box
+     * over ten thousand topics fetches fifty rather than all of them.
      */
-    public ResponseDto topics() throws Exception {
-        List<TopicOptionProjection> topics = TenantContext.isPlatformAdmin()
-            ? this.sourceTaskTypeRepository.fetchTopicOptions()
-            : TenantContext.getTenantId() == null ? Collections.emptyList()
-            : this.sourceTaskTypeRepository.fetchTopicOptionsForTenant(TenantContext.getTenantId());
+    public ResponseDto topics(String q, Integer limit, List<Long> ids, Long kafkaConnectionProfileId) throws Exception {
+        boolean admin = TenantContext.isPlatformAdmin();
+        Long mine = TenantContext.getTenantId();
+        if (!admin && mine == null) {
+            return new ResponseDto(SUCCESS, "0 topic(s).", Collections.emptyList());
+        }
+        List<TopicOptionProjection> topics;
+        if (ids != null && !ids.isEmpty()) {
+            topics = this.sourceTaskTypeRepository.fetchTopicOptionsByIds(ids).stream()
+                .filter(t -> admin || mine.equals(t.getTenantId()))
+                .collect(Collectors.toList());
+        } else if (kafkaConnectionProfileId != null) {
+            Optional<KafkaConnectionProfile> profile = this.kafkaConnectionProfileRepository.findById(kafkaConnectionProfileId)
+                .filter(p -> p.getStatus() != Status.Delete)
+                .filter(p -> admin || (p.getTenantId() != null && p.getTenantId().equals(mine)));
+            if (!profile.isPresent()) {
+                return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
+            }
+            boolean isDefault = Boolean.TRUE.equals(profile.get().getIsDefault()) && profile.get().getTenantId() != null;
+            topics = this.sourceTaskTypeRepository.fetchTopicOptionsForProfile(kafkaConnectionProfileId, isDefault,
+                profile.get().getTenantId() == null ? 0L : profile.get().getTenantId());
+        } else {
+            String term = isNull(q) || q.trim().isEmpty() ? "" : "%" + q.trim().toLowerCase() + "%";
+            int cap = limit == null || limit < 1 ? 50 : Math.min(limit, 500);
+            topics = this.sourceTaskTypeRepository.searchTopicOptions(admin ? 0L : mine, term,
+                org.springframework.data.domain.PageRequest.of(0, cap));
+        }
         return new ResponseDto(SUCCESS, String.format("%d topic(s).", topics.size()), topics);
     }
 

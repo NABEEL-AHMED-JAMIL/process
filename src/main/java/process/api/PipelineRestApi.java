@@ -41,9 +41,13 @@ public class PipelineRestApi {
     }
 
     @RequestMapping(value = {"/list", "/listForms"}, method = RequestMethod.GET)
-    public ResponseEntity<?> listForms() {
+    public ResponseEntity<?> listForms(
+        @RequestParam(required = false) Long page, @RequestParam(required = false) Long limit,
+        @RequestParam(required = false) String q, @RequestParam(required = false) String topic,
+        @RequestParam(required = false) String status, @RequestParam(required = false) Long tenantId,
+        @RequestParam(required = false, defaultValue = "false") boolean onlyMine) {
         try {
-            return new ResponseEntity<>(this.pipelineService.listForms(), HttpStatus.OK);
+            return new ResponseEntity<>(this.pipelineService.listForms(page, limit, q, topic, status, tenantId, onlyMine), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listing task forms", ex);
             return internalError();
@@ -60,9 +64,12 @@ public class PipelineRestApi {
      */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/listPipelines", method = RequestMethod.GET)
-    public ResponseEntity<?> listPipelines() {
+    public ResponseEntity<?> listPipelines(
+        @RequestParam(required = false) Long page, @RequestParam(required = false) Long limit,
+        @RequestParam(required = false) String q, @RequestParam(required = false) String topic,
+        @RequestParam(required = false) String status) {
         try {
-            return new ResponseEntity<>(this.pipelineService.listForms(), HttpStatus.OK);
+            return new ResponseEntity<>(this.pipelineService.listForms(page, limit, q, topic, status, null, false), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listing pipelines", ex);
             return internalError();

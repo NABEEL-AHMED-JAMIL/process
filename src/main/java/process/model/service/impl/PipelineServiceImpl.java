@@ -8,6 +8,13 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Collections;
+import process.util.PagingUtil;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
 import process.model.dto.PipelineRowDto;
 import process.model.pojo.PipelineField;
 import process.model.pojo.Tenant;
@@ -100,25 +107,43 @@ public class PipelineServiceImpl {
         }
     }
 
-    public ResponseDto listForms() {
-        // A tenant sees only its own definitions -- same rule Storage/Kafka Connections apply --
-        // a platform admin sees every tenant's. A tenant-role caller with no tenant of its own
-        // (should not happen in practice, but fails closed rather than querying with a null and
-        // hoping the SQL "= null" never-matches semantics are what the reader expects) sees none.
-        //
-        // Rows, not entities: the entity drags every field along, and a list of ten thousand
-        // pipelines was twenty megabytes of fields nobody had opened. A row carries the counts;
-        // the fields come through fieldsFor when a row is opened.
-        List<process.model.projection.PipelineRowProjection> rows;
+    /**
+     * One page of the Pipelines list under its filters, plus the tiles' numbers for the whole
+     * scope. A tenant sees only its own definitions -- same rule Storage/Kafka Connections
+     * apply -- a platform admin sees every tenant's, narrowed to one with {@code tenantId}. A
+     * tenant-role caller with no tenant of its own (should not happen in practice, but fails
+     * closed rather than querying with a null and hoping the SQL "= null" never-matches
+     * semantics are what the reader expects) sees none.
+     *
+     * Rows, not entities: the entity drags every field along, and a list of ten thousand
+     * pipelines was twenty megabytes of fields nobody had opened. A row carries the counts;
+     * the fields come through fieldsFor when a row is opened. And a page, not the list: the
+     * screen showed all ten thousand at once before.
+     *
+     * @param topic a topic id, {@code "none"} for pipelines still without one, or blank for any
+     */
+    public ResponseDto listForms(Long page, Long limit, String q, String topic, String status,
+        Long tenantId, boolean onlyMine) {
+        long scope;
         if (TenantContext.isPlatformAdmin()) {
-            rows = this.pipelineRepository.listRows();
+            scope = tenantId == null ? 0L : tenantId;
         } else if (TenantContext.getTenantId() != null) {
-            rows = this.pipelineRepository.listRowsForTenant(TenantContext.getTenantId());
+            scope = TenantContext.getTenantId();
         } else {
-            rows = new ArrayList<>();
+            return new ResponseDto(SUCCESS, "0 pipeline(s).", pageOf(Collections.emptyList(), null),
+                PagingUtil.convertEntityToPagingDTO(0L, PagingUtil.ApplyPaging("pipeline_key", "desc", 1L, limit)));
         }
-        List<PipelineRowDto> forms = rows.stream().map(PipelineRowDto::from).collect(Collectors.toList());
-        // One lookup for the whole list rather than one per row.
+        boolean untopped = "none".equalsIgnoreCase(topic);
+        long topicId = untopped || ProcessUtil.isNull(topic) || topic.trim().isEmpty() ? 0L : Long.parseLong(topic.trim());
+        String term = ProcessUtil.isNull(q) || q.trim().isEmpty() ? "" : "%" + q.trim().toLowerCase() + "%";
+        long createdBy = onlyMine && TenantContext.getAppUserId() != null ? TenantContext.getAppUserId() : 0L;
+        // Sorting is in the query itself; the Pageable only carries the window.
+        Pageable window = PageRequest.of(page == null || page < 1 ? 0 : (int) (page - 1),
+            limit == null || limit < 1 ? 50 : (int) Math.min(limit, 200));
+        Page<process.model.projection.PipelineRowProjection> found = this.pipelineRepository.pageRows(
+            scope, topicId, untopped, ProcessUtil.isNull(status) ? "" : status.trim(), createdBy, term, window);
+        List<PipelineRowDto> forms = found.getContent().stream().map(PipelineRowDto::from).collect(Collectors.toList());
+        // One lookup for the whole page rather than one per row.
         this.userNameResolver.attachNames(forms);
         java.util.Set<Long> ids = forms.stream().map(PipelineRowDto::getSourceTaskTypeId)
             .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
@@ -132,7 +157,24 @@ public class PipelineServiceImpl {
                 row.setKafkaTopic(KafkaTopicPartitionUtil.parse(t.getQueueTopicPartition()).map(KafkaTopicPartitionUtil.Parsed::getTopic).orElse(null));
             }
         }
-        return new ResponseDto(SUCCESS, String.format("%d pipeline(s).", forms.size()), forms);
+        return new ResponseDto(SUCCESS, String.format("%d pipeline(s).", found.getTotalElements()),
+            pageOf(forms, this.pipelineRepository.summarise(scope)),
+            PagingUtil.convertEntityToPagingDTO(found.getTotalElements(), window));
+    }
+
+    /** The list answer: the page's rows and the whole scope's numbers side by side. */
+    private static Map<String, Object> pageOf(List<PipelineRowDto> rows,
+        process.model.projection.PipelineSummaryProjection summary) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("rows", rows);
+        Map<String, Long> tiles = new HashMap<>();
+        tiles.put("total", summary == null ? 0L : summary.getTotal());
+        tiles.put("active", summary == null ? 0L : summary.getActive());
+        tiles.put("topics", summary == null ? 0L : summary.getTopics());
+        tiles.put("fields", summary == null ? 0L : summary.getFields());
+        tiles.put("untopped", summary == null ? 0L : summary.getUntopped());
+        body.put("summary", tiles);
+        return body;
     }
 
     /**

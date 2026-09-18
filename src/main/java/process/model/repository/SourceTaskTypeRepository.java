@@ -22,13 +22,29 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "CONCAT(UPPER(SUBSTR(CAST(task_type_status as varchar), 1, 1)), LOWER(SUBSTR(CAST(task_type_status as varchar), 2))) as status\n" +
         "from source_task_type where task_type_status <> 'Delete'\n";
 
-    /** Every topic a platform admin can pick, as six columns; see {@link TopicOptionProjection}. */
-    @Query(value = TOPIC_OPTION_SELECT + "order by service_name asc", nativeQuery = true)
-    public List<TopicOptionProjection> fetchTopicOptions();
+    /**
+     * The topics a picker offers for what was typed: the first {@code limit} whose name or
+     * Kafka topic contains the (already lower-cased, %-wrapped) term; blank matches everything.
+     * A tenant id of 0 means every workspace -- a platform admin's view.
+     */
+    @Query(value = TOPIC_OPTION_SELECT +
+        "and (:tenantId = 0 or tenant_id = :tenantId)\n" +
+        "and (:q = '' or lower(service_name) like :q or lower(coalesce(queue_topic_partition, '')) like :q)\n" +
+        "order by service_name asc", nativeQuery = true)
+    public List<TopicOptionProjection> searchTopicOptions(@Param("tenantId") long tenantId, @Param("q") String q,
+        org.springframework.data.domain.Pageable limit);
 
-    /** One workspace's topics, as six columns. */
-    @Query(value = TOPIC_OPTION_SELECT + "and tenant_id = :tenantId order by service_name asc", nativeQuery = true)
-    public List<TopicOptionProjection> fetchTopicOptionsForTenant(@Param("tenantId") Long tenantId);
+    /** The picker rows for known ids -- how a box shows the label of a value it was handed. */
+    @Query(value = TOPIC_OPTION_SELECT + "and source_task_type_id in (:ids) order by service_name asc", nativeQuery = true)
+    public List<TopicOptionProjection> fetchTopicOptionsByIds(@Param("ids") java.util.Collection<Long> ids);
+
+    /** One Kafka profile's topics as picker rows; on the default profile the workspace's unrouted topics ride along. */
+    @Query(value = TOPIC_OPTION_SELECT +
+        "and (kafka_connection_profile_id = :profileId\n" +
+        "     or (:includeUnrouted = true and kafka_connection_profile_id is null and tenant_id = :tenantId))\n" +
+        "order by service_name asc", nativeQuery = true)
+    public List<TopicOptionProjection> fetchTopicOptionsForProfile(@Param("profileId") long profileId,
+        @Param("includeUnrouted") boolean includeUnrouted, @Param("tenantId") long tenantId);
 
     public Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
 

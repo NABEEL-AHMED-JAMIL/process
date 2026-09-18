@@ -55,11 +55,12 @@ public class SettingRestApi {
         }
     }
 
-    /** Every topic the caller may pick, as picker rows -- a fraction of appSetting's per-topic detail. */
+    /** Topics as picker rows: a search (q, limit), known ids, or one Kafka profile's -- never all ten thousand. */
     @RequestMapping(value = "/topics", method = RequestMethod.GET)
-    public ResponseEntity<?> topics() {
+    public ResponseEntity<?> topics(@RequestParam(required = false) String q, @RequestParam(required = false) Integer limit,
+        @RequestParam(required = false) java.util.List<Long> ids, @RequestParam(required = false) Long kafkaConnectionProfileId) {
         try {
-            return new ResponseEntity<>(this.settingService.topics(), HttpStatus.OK);
+            return new ResponseEntity<>(this.settingService.topics(q, limit, ids, kafkaConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while topics.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
