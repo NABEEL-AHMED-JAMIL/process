@@ -104,3 +104,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V47.0-ai-step-run-in.yaml
   - include:
       file: db/changelog/yaml/V48.0-billing.yaml
+  - include:
+      file: db/changelog/yaml/V49.0-rate-cards.yaml

@@ -194,8 +194,33 @@ public class MeterClient {
         return this.get(b.toUriString());
     }
 
+    /** The default card in effect today. */
     public Map<String, Object> rateCard() {
         return this.get(this.url + "/v1/ratecard");
+    }
+
+    /** One version, whoever it is for. */
+    public Map<String, Object> rateCard(int version) {
+        return this.get(this.url + "/v1/ratecard?version=" + version);
+    }
+
+    /** The card that prices a workspace on a day: its own if it has one in effect, else the default. */
+    public Map<String, Object> rateCardFor(Long tenantId, LocalDate day) {
+        UriComponentsBuilder b = UriComponentsBuilder.fromHttpUrl(this.url + "/v1/ratecard").queryParam("day", day);
+        if (tenantId != null) b.queryParam("tenantId", tenantId);
+        return this.get(b.toUriString());
+    }
+
+    /** Every version ever saved, newest first. */
+    public Map<String, Object> rateCards() {
+        return this.get(this.url + "/v1/ratecards");
+    }
+
+    /** A new version. Old versions are never changed; the meter answers the saved card. */
+    public Map<String, Object> saveRateCard(Map<String, Object> card) {
+        ResponseEntity<String> response = this.http.exchange(this.url + "/v1/ratecard", HttpMethod.PUT,
+            new HttpEntity<>(this.gson.toJson(card), this.headers()), String.class);
+        return this.asMap(response.getBody());
     }
 
     public Map<String, Object> rollup(int sinceHours) {

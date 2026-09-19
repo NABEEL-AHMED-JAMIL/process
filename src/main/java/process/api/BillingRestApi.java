@@ -80,7 +80,7 @@ public class BillingRestApi {
         row.put("periodStart", i.getPeriodStart()); row.put("periodEnd", i.getPeriodEnd()); row.put("status", i.getStatus()); row.put("currency", i.getCurrency());
         row.put("subtotal", i.getSubtotal()); row.put("taxRatePercent", i.getTaxRatePercent()); row.put("tax", i.getTax()); row.put("total", i.getTotal()); row.put("balance", i.getBalance());
         row.put("note", i.getNote()); row.put("issuedAt", i.getIssuedAt()); row.put("dueAt", i.getDueAt()); row.put("paidAt", i.getPaidAt()); row.put("voidedAt", i.getVoidedAt());
-        row.put("rateCardVersion", i.getRateCardVersion()); row.put("dateCreated", i.getDateCreated());
+        row.put("rateCardVersion", i.getRateCardVersion()); row.put("rateCardName", i.getRateCardName()); row.put("dateCreated", i.getDateCreated());
         return row;
     }
 
@@ -347,9 +347,53 @@ public class BillingRestApi {
             from == null ? null : LocalDate.parse(from), to == null ? null : LocalDate.parse(to), page, limit)));
     }
 
+    // ---- rate cards: the calculation, versioned ---------------------------------------------
+
+    /**
+     * One version by number, or the card that prices a workspace on a day (today by default).
+     * A workspace admin reads their own card only; a platform admin any.
+     */
     @RequestMapping(value = "/rateCard", method = RequestMethod.GET)
-    public ResponseEntity<?> rateCard() {
-        return this.answer("Rate card read.", this.meter::rateCard);
+    public ResponseEntity<?> rateCard(@RequestParam(required = false) Integer version, @RequestParam(required = false) Long tenantId,
+        @RequestParam(required = false) String day) {
+        if (version != null && !TenantContext.isPlatformAdmin()) return this.refused("Only the platform reads rate card versions.");
+        Long scoped = this.scope(tenantId);
+        LocalDate on = day == null ? LocalDate.now() : LocalDate.parse(day);
+        return this.answer("Rate card read.", () -> version != null ? this.meter.rateCard(version) : this.meter.rateCardFor(scoped, on));
+    }
+
+    /** Every version, newest first: the default cards and the ones a workspace has of its own. */
+    @RequestMapping(value = "/rateCards", method = RequestMethod.GET)
+    public ResponseEntity<?> rateCards() {
+        if (!TenantContext.isPlatformAdmin()) return this.refused("Only the platform reads the rate cards.");
+        return this.answer("Rate cards read.", () -> {
+            Map<String, Object> out = this.meter.rateCards();
+            Map<Long, String> tenantNames = this.billing.tenantNames();
+            if (out.get("cards") instanceof List) {
+                for (Object o : (List<?>) out.get("cards")) {
+                    if (!(o instanceof Map)) continue;
+                    @SuppressWarnings("unchecked") Map<String, Object> card = (Map<String, Object>) o;
+                    Object tenant = card.get("tenant_id");
+                    card.put("tenantName", tenant instanceof Number ? tenantNames.get(((Number) tenant).longValue()) : null);
+                }
+            }
+            return out;
+        });
+    }
+
+    /**
+     * A new version of the calculation. Nothing is edited in place: the version saved here prices
+     * every bill drafted for a period from its effective date on, for the workspace it names or,
+     * without one, for every workspace that has no card of its own. Bills already drafted keep
+     * the version they were priced with.
+     */
+    @RequestMapping(value = "/rateCard", method = RequestMethod.PUT)
+    public ResponseEntity<?> saveRateCard(@RequestBody Map<String, Object> card) {
+        if (!TenantContext.isPlatformAdmin()) return this.refused("Only the platform changes the calculation.");
+        Object name = card.get("name");
+        if (name == null || String.valueOf(name).trim().isEmpty()) return this.refused("Give the version a name -- what changed, or who it is for.");
+        if (card.get("effective_from") == null) return this.refused("Say when the version takes effect.");
+        return this.answer("Rate card version saved.", () -> this.meter.saveRateCard(card));
     }
 
     /** Rolls the last two days again, for a Refresh that wants the latest events priced now. */

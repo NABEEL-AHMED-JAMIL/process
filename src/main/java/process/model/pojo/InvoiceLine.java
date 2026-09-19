@@ -28,6 +28,10 @@ public class InvoiceLine {
     @Column(name = "amount") private BigDecimal amount;
     @Column(name = "period_label") private String periodLabel;
     @Column(name = "manual") private Boolean manual;
+    @Column(name = "included_quantity") private BigDecimal includedQuantity;
+    @Column(name = "billable_quantity") private BigDecimal billableQuantity;
+    /** What the calculation applied, as the meter told it: the tier bands, in JSON. */
+    @Column(name = "pricing_detail") private String pricingDetail;
 
     public Long getInvoiceLineId() { return invoiceLineId; } public void setInvoiceLineId(Long v) { invoiceLineId = v; }
     public Long getInvoiceId() { return invoiceId; } public void setInvoiceId(Long v) { invoiceId = v; }
@@ -41,4 +45,7 @@ public class InvoiceLine {
     public BigDecimal getAmount() { return amount; } public void setAmount(BigDecimal v) { amount = v; }
     public String getPeriodLabel() { return periodLabel; } public void setPeriodLabel(String v) { periodLabel = v; }
     public Boolean getManual() { return manual; } public void setManual(Boolean v) { manual = v; }
+    public BigDecimal getIncludedQuantity() { return includedQuantity; } public void setIncludedQuantity(BigDecimal v) { includedQuantity = v; }
+    public BigDecimal getBillableQuantity() { return billableQuantity; } public void setBillableQuantity(BigDecimal v) { billableQuantity = v; }
+    public String getPricingDetail() { return pricingDetail; } public void setPricingDetail(String v) { pricingDetail = v; }
 }

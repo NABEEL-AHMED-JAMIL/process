@@ -105,9 +105,11 @@ class BillingServiceTest {
         Tenant tenant = new Tenant(); tenant.setTenantId(TENANT); tenant.setTenantName("MedAxis Care Network");
         lenient().when(this.tenants.findById(TENANT)).thenReturn(Optional.of(tenant));
         lenient().when(this.meter.isConfigured()).thenReturn(true);
-        lenient().when(this.meter.rateCard()).thenReturn(map("version", 1));
-        lenient().when(this.meter.usage(eq(TENANT), any(), any(), eq("meter"))).thenReturn(map("rows", Arrays.asList(
-            map("meter", "seats.user_days", "label", "Seats", "unit", "user-day", "per", 1, "unitPrice", "0.33", "quantity", "140", "amount", "46.2"),
+        lenient().when(this.meter.usage(eq(TENANT), any(), any(), eq("meter"))).thenReturn(map(
+            "rateCard", map("version", 1, "name", "Standard", "tenantSpecific", false, "effectiveFrom", "2026-01-01"),
+            "rows", Arrays.asList(
+            map("meter", "seats.user_days", "label", "Seats", "unit", "user-day", "per", 1, "unitPrice", "0.33", "quantity", "140", "amount", "46.2",
+                "includedQuantity", "10", "billableQuantity", "130", "tiers", Arrays.asList(map("from", 0, "to", 100, "units", 100, "unit_price", "0.4"), map("from", 100, "to", null, "units", 30, "unit_price", "0.2"))),
             map("meter", "storage.bytes.deleted", "label", "Bytes deleted (data churn)", "unit", "byte", "per", 1073741824, "unitPrice", "0.01", "quantity", "41016604262", "amount", "0.382"),
             map("meter", "storage.bytes.read", "label", "Bytes read", "unit", "byte", "per", 1073741824, "unitPrice", "0", "quantity", "0", "amount", "0"))));
 
@@ -133,6 +135,14 @@ class BillingServiceTest {
         assertThat(draft.getTax()).isEqualByComparingTo("0");
         assertThat(draft.getTotal()).isEqualByComparingTo("46.58");
         assertThat(draft.getRateCardVersion()).isEqualTo(1);
+        assertThat(draft.getRateCardName()).isEqualTo("Standard");
+        // The calculation the meter applied is frozen with the line: allowance, billable, tier bands.
+        InvoiceLine seats = this.service.linesOf(draft.getInvoiceId()).get(0);
+        assertThat(seats.getIncludedQuantity()).isEqualByComparingTo("10");
+        assertThat(seats.getBillableQuantity()).isEqualByComparingTo("130");
+        assertThat(BillingService.tierBands(seats)).hasSize(2);
+        assertThat(BillingService.tierBands(seats).get(1).get("to")).isNull();
+        assertThat(BillingService.tierBands(this.service.linesOf(draft.getInvoiceId()).get(1))).isEmpty();
 
         // A tax number alone is not tax; a number and a rate are.
         this.account.setTaxId("GB123456789");

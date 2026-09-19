@@ -24,6 +24,8 @@ import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
 
+import com.google.gson.Gson;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -152,11 +154,22 @@ public class BillingService {
                     line.setQuantity(decimal(row.get("quantity"))); line.setUnit(String.valueOf(row.get("unit")));
                     line.setPer(row.get("per") == null ? 1 : ((Number) row.get("per")).intValue());
                     line.setUnitPrice(decimal(row.get("unitPrice"))); line.setAmount(amount); line.setManual(false);
+                    line.setIncludedQuantity(decimal(row.get("includedQuantity")));
+                    line.setBillableQuantity(row.get("billableQuantity") == null ? line.getQuantity() : decimal(row.get("billableQuantity")));
+                    if (row.get("tiers") instanceof List && !((List<?>) row.get("tiers")).isEmpty()) {
+                        line.setPricingDetail(new Gson().toJson(row.get("tiers")));
+                    }
                     fresh.add(line);
                 }
             }
-            Map<String, Object> card = this.meter.rateCard();
-            if (card.get("version") instanceof Number) invoice.setRateCardVersion(((Number) card.get("version")).intValue());
+            // The card the meter priced this period with -- the workspace's own or the default, as
+            // it stood at the start of the period. A later version never touches this bill.
+            Object card = usage.get("rateCard");
+            if (card instanceof Map) {
+                Map<?, ?> c = (Map<?, ?>) card;
+                if (c.get("version") instanceof Number) invoice.setRateCardVersion(((Number) c.get("version")).intValue());
+                if (c.get("name") != null) invoice.setRateCardName(String.valueOf(c.get("name")));
+            }
         }
         // Copies, not the managed rows with their ids nulled -- Hibernate refuses an identifier
         // that changed under it, and the old rows are gone with deleteByInvoiceId above.
@@ -482,11 +495,23 @@ public class BillingService {
         if (invoice.getIssuedAt() != null) doc.facts.add(new String[] {"Issued", DAY.format(invoice.getIssuedAt().toLocalDateTime().toLocalDate())});
         if (invoice.getDueAt() != null) doc.facts.add(new String[] {"Due", DAY.format(invoice.getDueAt().toLocalDateTime().toLocalDate()) + " (net " + account.getPaymentTermsDays() + ")"});
         if (credit && invoice.getReferencesInvoiceId() != null) this.invoices.findById(invoice.getReferencesInvoiceId()).ifPresent(o -> doc.facts.add(new String[] {"Against", o.getNumber()}));
-        if (invoice.getRateCardVersion() != null) doc.facts.add(new String[] {"Rate card", "v" + invoice.getRateCardVersion()});
+        if (invoice.getRateCardVersion() != null) {
+            doc.facts.add(new String[] {"Rate card", (invoice.getRateCardName() == null ? "" : invoice.getRateCardName() + " ") + "v" + invoice.getRateCardVersion()});
+        }
         doc.lines = new ArrayList<>();
         for (InvoiceLine l : invoiceLines) {
             doc.lines.add(new BillingPdf.Line(l.getDescription() + (l.getPeriodLabel() == null ? "" : " (" + l.getPeriodLabel() + ")"),
                 BillingPdf.quantity(l.getQuantity(), l.getUnit()), BillingPdf.rate(l.getUnitPrice(), l.getPer(), l.getUnit()), BillingPdf.money(l.getAmount(), null)));
+            // What the calculation applied, under the line: the allowance and each tier band.
+            if (l.getIncludedQuantity() != null && l.getIncludedQuantity().signum() > 0) {
+                doc.lines.add(new BillingPdf.Line("    includes " + BillingPdf.quantity(l.getIncludedQuantity(), l.getUnit()) + " at no charge; "
+                    + BillingPdf.quantity(l.getBillableQuantity(), l.getUnit()) + " billable", "", "", ""));
+            }
+            for (Map<String, Object> band : tierBands(l)) {
+                doc.lines.add(new BillingPdf.Line("    " + BillingPdf.quantity(decimal(band.get("units")), l.getUnit()) + " from "
+                    + BillingPdf.quantity(decimal(band.get("from")), l.getUnit()) + (band.get("to") == null ? " up" : " to " + BillingPdf.quantity(decimal(band.get("to")), l.getUnit())),
+                    "", BillingPdf.rate(decimal(band.get("unit_price")), l.getPer(), l.getUnit()), ""));
+            }
         }
         doc.totals = new ArrayList<>();
         doc.totals.add(new String[] {"Subtotal", BillingPdf.money(invoice.getSubtotal(), doc.currency)});
@@ -498,6 +523,17 @@ public class BillingService {
         doc.totals.add(new String[] {"Total", BillingPdf.money(invoice.getTotal(), doc.currency)});
         doc.note = invoice.getNote();
         return doc;
+    }
+
+    /** The tier bands a frozen line carries, as the meter reported them; none for a flat price. */
+    @SuppressWarnings("unchecked")
+    public static List<Map<String, Object>> tierBands(InvoiceLine line) {
+        if (line.getPricingDetail() == null || line.getPricingDetail().isEmpty()) return new ArrayList<>();
+        try {
+            return new Gson().fromJson(line.getPricingDetail(), List.class);
+        } catch (RuntimeException ex) {
+            return new ArrayList<>();
+        }
     }
 
     BillingPdf.Doc receiptDoc(Payment p, Invoice invoice, BillingAccount account) {

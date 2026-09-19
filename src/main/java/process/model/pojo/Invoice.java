@@ -39,6 +39,7 @@ public class Invoice {
     @Column(name = "voided_at") private Timestamp voidedAt;
     @Column(name = "pdf_object_key") private String pdfObjectKey;
     @Column(name = "rate_card_version") private Integer rateCardVersion;
+    @Column(name = "rate_card_name") private String rateCardName;
     @Column(name = "date_created") private Timestamp dateCreated;
     @Column(name = "date_updated") private Timestamp dateUpdated;
     @Column(name = "created_by") private Long createdBy;
@@ -65,6 +66,7 @@ public class Invoice {
     public Timestamp getVoidedAt() { return voidedAt; } public void setVoidedAt(Timestamp v) { voidedAt = v; }
     public String getPdfObjectKey() { return pdfObjectKey; } public void setPdfObjectKey(String v) { pdfObjectKey = v; }
     public Integer getRateCardVersion() { return rateCardVersion; } public void setRateCardVersion(Integer v) { rateCardVersion = v; }
+    public String getRateCardName() { return rateCardName; } public void setRateCardName(String v) { rateCardName = v; }
     public Timestamp getDateCreated() { return dateCreated; } public void setDateCreated(Timestamp v) { dateCreated = v; }
     public Timestamp getDateUpdated() { return dateUpdated; } public void setDateUpdated(Timestamp v) { dateUpdated = v; }
     public Long getCreatedBy() { return createdBy; } public void setCreatedBy(Long v) { createdBy = v; }
