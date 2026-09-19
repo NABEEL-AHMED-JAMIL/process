@@ -102,3 +102,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V46.0-drop-ai-provider-lookup.yaml
   - include:
       file: db/changelog/yaml/V47.0-ai-step-run-in.yaml
+  - include:
+      file: db/changelog/yaml/V48.0-billing.yaml

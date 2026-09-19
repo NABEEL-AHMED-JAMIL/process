@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 48.0-billing
+      author: nabeel.amd93
+      description: "Billing: accounts, invoices and their lines, payments, documents"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V48.0-billing/V48__billing.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP TABLE IF EXISTS billing_document; DROP TABLE IF EXISTS payment; DROP TABLE IF EXISTS invoice_line; DROP TABLE IF EXISTS invoice; DROP TABLE IF EXISTS billing_account;
