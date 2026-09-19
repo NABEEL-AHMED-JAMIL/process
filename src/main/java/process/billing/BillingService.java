@@ -370,6 +370,15 @@ public class BillingService {
         return this.storage.readForWorkflow(this.bucket, doc.getObjectKey());
     }
 
+    /** Payment slips awaiting the platform's verification, for one workspace or all. */
+    public List<Payment> pendingPayments(Long tenantId) {
+        List<Payment> out = new ArrayList<>();
+        for (Payment p : this.payments.findByStatusOrderByDateCreatedAsc("submitted")) {
+            if (tenantId == null || tenantId.equals(p.getTenantId())) out.add(p);
+        }
+        return out;
+    }
+
     public List<BillingDocument> documentsFor(Long tenantId) {
         return tenantId == null ? this.documents.findAllByOrderByIssuedAtDesc() : this.documents.findByTenantIdOrderByIssuedAtDesc(tenantId);
     }
@@ -488,7 +497,7 @@ public class BillingService {
     BillingPdf.Doc invoiceDoc(Invoice invoice, List<InvoiceLine> invoiceLines, BillingAccount account) {
         BillingPdf.Doc doc = new BillingPdf.Doc();
         boolean credit = "credit_note".equals(invoice.getKind());
-        doc.title = credit ? "Credit note" : "Invoice"; doc.number = invoice.getNumber(); doc.currency = invoice.getCurrency();
+        doc.title = credit ? "Credit note" : "Invoice"; doc.number = invoice.getNumber(); doc.currency = invoice.getCurrency(); doc.qrText = invoice.getNumber();
         doc.billedTo = this.billedTo(account); doc.taxId = account.getTaxId();
         doc.facts = new ArrayList<>();
         doc.facts.add(new String[] {"Period", DAY.format(invoice.getPeriodStart()) + " - " + DAY.format(invoice.getPeriodEnd())});
@@ -538,7 +547,7 @@ public class BillingService {
 
     BillingPdf.Doc receiptDoc(Payment p, Invoice invoice, BillingAccount account) {
         BillingPdf.Doc doc = new BillingPdf.Doc();
-        doc.title = "Receipt"; doc.number = p.getReceiptNumber(); doc.currency = invoice.getCurrency();
+        doc.title = "Receipt"; doc.number = p.getReceiptNumber(); doc.currency = invoice.getCurrency(); doc.qrText = p.getReceiptNumber();
         doc.billedTo = this.billedTo(account); doc.taxId = account.getTaxId();
         doc.facts = new ArrayList<>();
         doc.facts.add(new String[] {"Received", DAY.format(p.getReceivedAt().toLocalDateTime().toLocalDate())});

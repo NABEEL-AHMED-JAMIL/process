@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 import process.billing.BillingService;
+import process.billing.InvoiceQr;
 import process.billing.MeterClient;
 import process.model.dto.ObjectContentDto;
 import process.model.pojo.BillingAccount;
@@ -28,6 +29,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -103,9 +105,34 @@ public class BillingRestApi {
         Long scoped = this.scope(tenantId);
         if (scoped == null && !TenantContext.isPlatformAdmin()) return this.refused("No workspace to read.");
         Map<Long, String> tenantNames = this.billing.tenantNames();
+        // The documents each invoice has -- invoice, slip, receipt, credit note -- for the list's column.
+        Map<Long, List<String>> kinds = new HashMap<>();
+        Map<Long, Integer> pending = new HashMap<>();
+        for (BillingDocument d : this.billing.documentsFor(scoped)) {
+            if (d.getInvoiceId() == null) continue;
+            List<String> here = kinds.computeIfAbsent(d.getInvoiceId(), k -> new ArrayList<>());
+            if (!here.contains(d.getKind())) here.add(d.getKind());
+        }
+        for (Payment p : this.billing.pendingPayments(scoped)) pending.merge(p.getInvoiceId(), 1, Integer::sum);
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Invoice i : this.billing.invoicesFor(scoped)) rows.add(this.invoiceRow(i, tenantNames));
+        for (Invoice i : this.billing.invoicesFor(scoped)) {
+            Map<String, Object> row = this.invoiceRow(i, tenantNames);
+            row.put("documentKinds", kinds.getOrDefault(i.getInvoiceId(), new ArrayList<>()));
+            row.put("pendingPayments", pending.getOrDefault(i.getInvoiceId(), 0));
+            rows.add(row);
+        }
         return this.ok("Invoices.", rows);
+    }
+
+    /** The invoice's number as a QR code, for the page; the PDF carries the same one. */
+    @RequestMapping(value = "/invoice/qr", method = RequestMethod.GET)
+    public ResponseEntity<?> invoiceQr(@RequestParam String number, @RequestParam(required = false, defaultValue = "160") int size) throws IOException {
+        Optional<Invoice> found = this.billing.byNumber(number);
+        if (!found.isPresent() || !this.mayTouch(found.get().getTenantId())) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.IMAGE_PNG);
+        headers.setCacheControl("private, max-age=86400");
+        return new ResponseEntity<>(InvoiceQr.png(found.get().getNumber(), Math.max(64, Math.min(size, 1024))), headers, HttpStatus.OK);
     }
 
     @RequestMapping(value = "/invoice", method = RequestMethod.GET)

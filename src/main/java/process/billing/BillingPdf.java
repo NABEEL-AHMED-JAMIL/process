@@ -6,6 +6,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -49,6 +50,8 @@ public final class BillingPdf {
         public List<String[]> totals;   // [label, value] pairs: Subtotal, VAT 20 %, Total, Paid, Balance
         public String note;
         public String currency = "USD";
+        /** The text the QR code on the page carries -- the document's number; none when null. */
+        public String qrText;
     }
 
     public static String money(BigDecimal v, String currency) {
@@ -89,6 +92,12 @@ public final class BillingPdf {
             w.text(REGULAR, 11, doc.number);
             w.rightText(BOLD, 11, doc.issuer, w.top() + 22);
             w.rightText(REGULAR, 9, doc.issuerLine, w.top() + 10);
+            if (doc.qrText != null && !doc.qrText.isEmpty()) {
+                // The number as a QR code beside the issuer: scan the page, get the bill.
+                float side = 64f;
+                w.image(InvoiceQr.png(doc.qrText, 256), w.width - MARGIN - side, w.top() - side - 4, side);
+                w.gap(side + 4);
+            }
             w.gap(14);
             w.rule();
             w.gap(10);
@@ -158,7 +167,7 @@ public final class BillingPdf {
         private PDPage page;
         private PDPageContentStream stream;
         float y;
-        private final float width;
+        final float width;
 
         Writer(PDDocument pdf) throws IOException {
             this.pdf = pdf;
@@ -198,7 +207,10 @@ public final class BillingPdf {
 
         void rightPair(String label, String value) throws IOException {
             this.y -= 13;
-            this.drawRight(BOLD, 9, this.width - MARGIN - 130, this.y, label);
+            // The label sits left of the value, however long the value is -- a rate card's name
+            // ran under "Rate card" when the label had a fixed place.
+            float valueWidth = REGULAR.getStringWidth(safe(value)) / 1000f * 10;
+            this.drawRight(BOLD, 9, this.width - MARGIN - Math.max(130, valueWidth + 10), this.y, label);
             this.drawRight(REGULAR, 10, this.width - MARGIN, this.y, value);
         }
 
@@ -206,6 +218,11 @@ public final class BillingPdf {
             this.y -= size + 4;
             this.drawRight(font, size, this.width - MARGIN - 110, this.y, label);
             this.drawRight(font, size, this.width - MARGIN, this.y, value);
+        }
+
+        void image(byte[] png, float x, float atY, float side) throws IOException {
+            PDImageXObject image = PDImageXObject.createFromByteArray(this.pdf, png, "qr");
+            this.stream.drawImage(image, x, atY, side, side);
         }
 
         void rule() throws IOException {
