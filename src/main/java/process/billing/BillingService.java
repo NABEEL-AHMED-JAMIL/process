@@ -119,6 +119,7 @@ public class BillingService {
     /** The month's draft, built (or rebuilt) from the meter. An issued invoice for the month is left alone. */
     @Transactional
     public Invoice draft(Long tenantId, YearMonth period) {
+        if (tenantId == null || !this.tenants.existsById(tenantId)) throw new IllegalArgumentException("No such workspace.");
         LocalDate start = period.atDay(1), end = period.atEndOfMonth();
         Optional<Invoice> existingDraft = this.invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatus(tenantId, start, "invoice", DRAFT);
         Invoice invoice = existingDraft.orElseGet(() -> {
@@ -186,6 +187,25 @@ public class BillingService {
         return this.invoices.save(invoice);
     }
 
+    // ---- what a request may carry: the columns' widths and the sums that make sense -----------
+
+    static final int DESCRIPTION_MAX = 300;
+    static final int NOTE_MAX = 600;
+    static final int REFERENCE_MAX = 120;
+    /** A manual line's unit price, either sign (a discount is a negative line); beyond this is a typo. */
+    static final BigDecimal UNIT_PRICE_MAX = new BigDecimal("1000000");
+    static final BigDecimal QUANTITY_MAX = new BigDecimal("1000000000");
+    static final List<String> PAYMENT_METHODS = Arrays.asList("bank", "card", "cash", "manual");
+    /** A payment slip: a PDF or a picture of the transfer, up to this many bytes. */
+    static final long SLIP_MAX_BYTES = 10L * 1024 * 1024;
+
+    static String text(String value, String what, int max, boolean required) {
+        String v = value == null ? "" : value.trim();
+        if (required && v.isEmpty()) throw new IllegalArgumentException(what + " is required.");
+        if (v.length() > max) throw new IllegalArgumentException(what + " can be at most " + max + " characters.");
+        return v.isEmpty() ? null : v;
+    }
+
     private void total(Invoice invoice, List<InvoiceLine> invoiceLines, BillingAccount account) {
         BigDecimal subtotal = BigDecimal.ZERO;
         for (InvoiceLine line : invoiceLines) subtotal = subtotal.add(line.getAmount() == null ? BigDecimal.ZERO : line.getAmount());
@@ -194,6 +214,15 @@ public class BillingService {
         BigDecimal tax = subtotal.multiply(rate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         invoice.setSubtotal(subtotal); invoice.setTaxRatePercent(rate); invoice.setTax(tax); invoice.setTotal(subtotal.add(tax));
         invoice.setBalance(invoice.getTotal().subtract(this.paidOn(invoice)));
+    }
+
+    /** What credit notes already took off an invoice: the sum of their totals, as a positive figure. */
+    private BigDecimal creditedOn(Invoice invoice) {
+        BigDecimal credited = BigDecimal.ZERO;
+        for (Invoice n : this.invoices.findByReferencesInvoiceId(invoice.getInvoiceId())) {
+            if ("credit_note".equals(n.getKind()) && !VOID.equals(n.getStatus())) credited = credited.add(n.getTotal().negate());
+        }
+        return credited;
     }
 
     private BigDecimal paidOn(Invoice invoice) {
@@ -208,8 +237,11 @@ public class BillingService {
     @Transactional
     public InvoiceLine addManualLine(Long invoiceId, String description, BigDecimal quantity, BigDecimal unitPrice) {
         Invoice invoice = this.mustBeDraft(invoiceId);
+        String what = text(description, "A description", DESCRIPTION_MAX, true);
+        if (quantity == null || quantity.signum() <= 0 || quantity.compareTo(QUANTITY_MAX) > 0) throw new IllegalArgumentException("A quantity above zero.");
+        if (unitPrice == null || unitPrice.abs().compareTo(UNIT_PRICE_MAX) > 0) throw new IllegalArgumentException("A unit price up to " + UNIT_PRICE_MAX.toPlainString() + " either way.");
         InvoiceLine line = new InvoiceLine();
-        line.setInvoiceId(invoiceId); line.setDescription(description); line.setQuantity(quantity); line.setUnit("each"); line.setPer(1);
+        line.setInvoiceId(invoiceId); line.setDescription(what); line.setQuantity(quantity); line.setUnit("each"); line.setPer(1);
         line.setUnitPrice(unitPrice); line.setAmount(quantity.multiply(unitPrice).setScale(5, RoundingMode.HALF_UP)); line.setManual(true);
         line.setSort((int) this.lines.findByInvoiceIdOrderBySortAsc(invoiceId).size());
         line = this.lines.save(line);
@@ -241,9 +273,10 @@ public class BillingService {
     public Invoice voidInvoice(Long invoiceId, String reason) {
         Invoice invoice = this.find(invoiceId);
         if (VOID.equals(invoice.getStatus())) return invoice;
+        String why = text(reason, "A reason", NOTE_MAX / 2, true);
         if (this.paidOn(invoice).signum() > 0) throw new IllegalStateException("A partly paid invoice cannot be voided; issue a credit note for the rest.");
         invoice.setStatus(VOID); invoice.setVoidedAt(now()); invoice.setBalance(BigDecimal.ZERO);
-        invoice.setNote(((invoice.getNote() == null ? "" : invoice.getNote() + " ") + "Voided: " + reason).trim());
+        invoice.setNote(text(((invoice.getNote() == null ? "" : invoice.getNote() + " ") + "Voided: " + why).trim(), "The note", NOTE_MAX, false));
         invoice.setDateUpdated(now()); invoice.setUpdatedBy(TenantContext.getAppUserId());
         return this.invoices.save(invoice);
     }
@@ -252,15 +285,20 @@ public class BillingService {
     @Transactional
     public Invoice creditNote(Long invoiceId, BigDecimal amount, String reason) throws IOException {
         Invoice original = this.find(invoiceId);
-        if (!Arrays.asList(ISSUED, PARTIAL, OVERDUE, PAID).contains(original.getStatus())) throw new IllegalStateException("Only an issued invoice can be credited.");
+        if (!"invoice".equals(original.getKind()) || !Arrays.asList(ISSUED, PARTIAL, OVERDUE, PAID).contains(original.getStatus())) throw new IllegalStateException("Only an issued invoice can be credited.");
         if (amount == null || amount.signum() <= 0) throw new IllegalArgumentException("A credit note needs an amount above zero.");
+        String why = text(reason, "A reason", NOTE_MAX, true);
+        BigDecimal creditable = original.getTotal().subtract(this.creditedOn(original)).setScale(2, RoundingMode.HALF_UP);
+        if (amount.setScale(2, RoundingMode.HALF_UP).compareTo(creditable) > 0) {
+            throw new IllegalArgumentException("At most " + creditable.toPlainString() + " can still be credited against " + original.getNumber() + ".");
+        }
         BillingAccount account = this.accountFor(original.getTenantId());
         Invoice note = new Invoice();
         note.setTenantId(original.getTenantId()); note.setKind("credit_note"); note.setReferencesInvoiceId(original.getInvoiceId());
         note.setPeriodStart(original.getPeriodStart()); note.setPeriodEnd(original.getPeriodEnd()); note.setStatus(ISSUED);
         note.setNumber(this.nextNumber("CN", YearMonth.from(original.getPeriodStart()))); note.setCurrency(original.getCurrency());
         note.setSubtotal(amount.negate()); note.setTaxRatePercent(BigDecimal.ZERO); note.setTax(BigDecimal.ZERO); note.setTotal(amount.negate()); note.setBalance(BigDecimal.ZERO);
-        note.setNote(reason); note.setIssuedAt(now()); note.setDateCreated(now()); note.setCreatedBy(TenantContext.getAppUserId());
+        note.setNote(why); note.setIssuedAt(now()); note.setDateCreated(now()); note.setCreatedBy(TenantContext.getAppUserId());
         note = this.invoices.save(note);
         InvoiceLine line = new InvoiceLine();
         line.setInvoiceId(note.getInvoiceId()); line.setSort(0); line.setDescription("Credit against " + original.getNumber() + (reason == null ? "" : " - " + reason));
@@ -286,21 +324,67 @@ public class BillingService {
     @Transactional
     public Payment submitPayment(Long invoiceId, BigDecimal amount, String method, String reference, String note, MultipartFile slip) throws IOException {
         Invoice invoice = this.find(invoiceId);
-        if (!Arrays.asList(ISSUED, PARTIAL, OVERDUE).contains(invoice.getStatus())) throw new IllegalStateException("This invoice is not open for payment.");
+        if (!"invoice".equals(invoice.getKind()) || !Arrays.asList(ISSUED, PARTIAL, OVERDUE).contains(invoice.getStatus())) throw new IllegalStateException("This invoice is not open for payment.");
         if (amount == null || amount.signum() <= 0) throw new IllegalArgumentException("A payment needs an amount above zero.");
+        BigDecimal paying = amount.setScale(2, RoundingMode.HALF_UP);
+        // Slips already submitted and not yet verified count against the balance too, so two
+        // slips cannot together say more was paid than is owed.
+        BigDecimal open = invoice.getBalance().subtract(this.submittedOn(invoice)).setScale(2, RoundingMode.HALF_UP);
+        if (paying.compareTo(open) > 0) throw new IllegalArgumentException("At most " + open.max(BigDecimal.ZERO).toPlainString() + " is still owed on " + invoice.getNumber() + ".");
+        String how = method == null || method.trim().isEmpty() ? "bank" : method.trim().toLowerCase();
+        if (!PAYMENT_METHODS.contains(how)) throw new IllegalArgumentException("The payment method must be one of " + String.join(", ", PAYMENT_METHODS) + ".");
+        SlipContent content = slip == null || slip.isEmpty() ? null : SlipContent.of(slip);
         Payment p = new Payment();
-        p.setTenantId(invoice.getTenantId()); p.setInvoiceId(invoiceId); p.setAmount(amount.setScale(2, RoundingMode.HALF_UP));
-        p.setMethod(method == null || method.trim().isEmpty() ? "bank" : method.trim()); p.setReference(reference); p.setNote(note);
+        p.setTenantId(invoice.getTenantId()); p.setInvoiceId(invoiceId); p.setAmount(paying);
+        p.setMethod(how); p.setReference(text(reference, "The reference", REFERENCE_MAX, false)); p.setNote(text(note, "The note", NOTE_MAX, false));
         p.setStatus("submitted"); p.setSubmittedBy(TenantContext.getAppUserId()); p.setDateCreated(now());
         p = this.payments.save(p);
-        if (slip != null && !slip.isEmpty()) {
-            String name = slip.getOriginalFilename() == null ? "slip" : slip.getOriginalFilename().replaceAll("[^A-Za-z0-9._-]", "_");
-            BillingDocument doc = this.store(invoice.getTenantId(), invoiceId, p.getPaymentId(), "payment_slip", null, name,
-                slip.getContentType() == null ? "application/octet-stream" : slip.getContentType(), slip.getBytes(), p.getAmount());
+        if (content != null) {
+            BillingDocument doc = this.store(invoice.getTenantId(), invoiceId, p.getPaymentId(), "payment_slip", null, content.fileName,
+                content.contentType, content.bytes, p.getAmount());
             p.setSlipObjectKey(doc.getObjectKey());
             p = this.payments.save(p);
         }
         return p;
+    }
+
+    /** Payments submitted and awaiting verification -- promised, not yet counted. */
+    private BigDecimal submittedOn(Invoice invoice) {
+        BigDecimal promised = BigDecimal.ZERO;
+        for (Payment p : this.payments.findByInvoiceIdOrderByDateCreatedAsc(invoice.getInvoiceId())) {
+            if ("submitted".equals(p.getStatus())) promised = promised.add(p.getAmount());
+        }
+        return promised;
+    }
+
+    /**
+     * A payment slip as the platform will keep it: the bytes say what it is (a PDF, a PNG, a
+     * JPEG), never the name or the type the browser sent; the name is reduced to a safe one.
+     */
+    static final class SlipContent {
+        final String fileName; final String contentType; final byte[] bytes;
+        private SlipContent(String fileName, String contentType, byte[] bytes) { this.fileName = fileName; this.contentType = contentType; this.bytes = bytes; }
+
+        static SlipContent of(MultipartFile slip) throws IOException {
+            if (slip.getSize() > SLIP_MAX_BYTES) throw new IllegalArgumentException("A slip can be at most " + (SLIP_MAX_BYTES / 1024 / 1024) + " MB.");
+            byte[] bytes = slip.getBytes();
+            String type = sniff(bytes);
+            if (type == null) throw new IllegalArgumentException("A slip must be a PDF, a PNG or a JPEG.");
+            String extension = "application/pdf".equals(type) ? ".pdf" : "image/png".equals(type) ? ".png" : ".jpg";
+            String base = slip.getOriginalFilename() == null ? "slip" : slip.getOriginalFilename().replaceAll("[^A-Za-z0-9._-]", "_").replaceAll("^[._]+", "");
+            base = base.replaceAll("\\.[A-Za-z0-9]{1,5}$", "");
+            if (base.isEmpty()) base = "slip";
+            if (base.length() > 80) base = base.substring(0, 80);
+            return new SlipContent(base + extension, type, bytes);
+        }
+
+        /** The type from the first bytes: PDF, PNG or JPEG, else nothing. */
+        static String sniff(byte[] b) {
+            if (b.length >= 5 && b[0] == '%' && b[1] == 'P' && b[2] == 'D' && b[3] == 'F' && b[4] == '-') return "application/pdf";
+            if (b.length >= 8 && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G' && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) return "image/png";
+            if (b.length >= 3 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF) return "image/jpeg";
+            return null;
+        }
     }
 
     /** The platform confirms the money arrived: the balance moves and a receipt is issued. */
@@ -310,7 +394,8 @@ public class BillingService {
         if (!"submitted".equals(p.getStatus())) throw new IllegalStateException("This payment was already " + p.getStatus() + ".");
         Invoice invoice = this.find(p.getInvoiceId());
         p.setStatus(accept ? "verified" : "rejected"); p.setVerifiedBy(TenantContext.getAppUserId()); p.setVerifiedAt(now());
-        if (note != null && !note.trim().isEmpty()) p.setNote(((p.getNote() == null ? "" : p.getNote() + " ") + note).trim());
+        String remark = text(note, "The note", NOTE_MAX / 2, false);
+        if (remark != null) p.setNote(text(((p.getNote() == null ? "" : p.getNote() + " ") + remark).trim(), "The note", NOTE_MAX, false));
         if (accept) {
             p.setReceivedAt(p.getReceivedAt() == null ? now() : p.getReceivedAt());
             p.setReceiptNumber(this.nextNumber("RCP", YearMonth.now()));

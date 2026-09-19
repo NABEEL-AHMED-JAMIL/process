@@ -41,6 +41,8 @@ import process.security.TenantContext;
 import process.util.ProcessUtil;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.regex.Pattern;
 
 /**
  * Cost & usage: what the console reads from the meter for a workspace.
@@ -67,8 +69,26 @@ public class BillingRestApi {
 
     // ---- accounts, invoices, payments, documents, analytics --------------------------------
 
+    /** INV-2026-09-0004, CN-…, RCP-… -- anything else is not a number this console issued. */
+    private static final Pattern NUMBER = Pattern.compile("[A-Z]{2,3}-\\d{4}-\\d{2}-\\d{4}");
+    private static final String COULD_NOT = "The request could not be completed.";
+
     private ResponseEntity<?> ok(String message, Object data) { return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, message, data), HttpStatus.OK); }
     private ResponseEntity<?> refused(String message) { return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, message), HttpStatus.OK); }
+
+    /**
+     * A refusal the caller can act on keeps its sentence -- a rule of the service, a date that
+     * did not parse. Anything else (the database, the bucket, the PDF) is logged and answered
+     * in one plain sentence, so an internal message never reaches a client.
+     */
+    private ResponseEntity<?> refused(String what, Exception ex) {
+        if (ex instanceof IllegalArgumentException || ex instanceof IllegalStateException) return this.refused(ex.getMessage());
+        if (ex instanceof DateTimeParseException) return this.refused("Not a valid date or period: " + ((DateTimeParseException) ex).getParsedString());
+        this.logger.warn("billing {} failed", what, ex);
+        return this.refused(COULD_NOT);
+    }
+
+    private static boolean isNumber(String number) { return number != null && NUMBER.matcher(number).matches(); }
 
     /** A tenant admin may touch their own workspace's rows only; a platform admin any. */
     private boolean mayTouch(Long tenantId) {
@@ -127,16 +147,19 @@ public class BillingRestApi {
     /** The invoice's number as a QR code, for the page; the PDF carries the same one. */
     @RequestMapping(value = "/invoice/qr", method = RequestMethod.GET)
     public ResponseEntity<?> invoiceQr(@RequestParam String number, @RequestParam(required = false, defaultValue = "160") int size) throws IOException {
+        if (!isNumber(number)) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         Optional<Invoice> found = this.billing.byNumber(number);
         if (!found.isPresent() || !this.mayTouch(found.get().getTenantId())) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.IMAGE_PNG);
         headers.setCacheControl("private, max-age=86400");
+        headers.add("X-Content-Type-Options", "nosniff");
         return new ResponseEntity<>(InvoiceQr.png(found.get().getNumber(), Math.max(64, Math.min(size, 1024))), headers, HttpStatus.OK);
     }
 
     @RequestMapping(value = "/invoice", method = RequestMethod.GET)
     public ResponseEntity<?> invoice(@RequestParam String number) {
+        if (!isNumber(number)) return this.refused("No such invoice.");
         Optional<Invoice> found = this.billing.byNumber(number);
         if (!found.isPresent() || !this.mayTouch(found.get().getTenantId())) return this.refused("No such invoice.");
         Invoice i = found.get();
@@ -185,35 +208,35 @@ public class BillingRestApi {
         try {
             Invoice i = this.billing.draft(tenantId, YearMonth.parse(period));
             return this.ok(String.format("Draft %s for %s: %s %s.", i.getNumber(), period, i.getCurrency(), i.getTotal()), this.invoiceRow(i, this.billing.tenantNames()));
-        } catch (RuntimeException ex) { return this.refused(ex.getMessage()); }
+        } catch (RuntimeException ex) { return this.refused("draft", ex); }
     }
 
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/invoice/line", method = RequestMethod.POST)
     public ResponseEntity<?> addLine(@RequestParam Long invoiceId, @RequestParam String description, @RequestParam BigDecimal quantity, @RequestParam BigDecimal unitPrice) {
         try { return this.ok("Line added.", this.billing.addManualLine(invoiceId, description, quantity, unitPrice)); }
-        catch (RuntimeException ex) { return this.refused(ex.getMessage()); }
+        catch (RuntimeException ex) { return this.refused("line", ex); }
     }
 
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/invoice/issue", method = RequestMethod.POST)
     public ResponseEntity<?> issue(@RequestParam Long invoiceId) {
         try { Invoice i = this.billing.issue(invoiceId); return this.ok(String.format("%s issued: %s %s, due %s.", i.getNumber(), i.getCurrency(), i.getTotal(), i.getDueAt()), this.invoiceRow(i, this.billing.tenantNames())); }
-        catch (Exception ex) { this.logger.warn("issue failed: {}", ex.toString()); return this.refused(ex.getMessage()); }
+        catch (Exception ex) { return this.refused("issue", ex); }
     }
 
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/invoice/void", method = RequestMethod.POST)
     public ResponseEntity<?> voidInvoice(@RequestParam Long invoiceId, @RequestParam String reason) {
         try { return this.ok("Invoice voided.", this.invoiceRow(this.billing.voidInvoice(invoiceId, reason), this.billing.tenantNames())); }
-        catch (RuntimeException ex) { return this.refused(ex.getMessage()); }
+        catch (RuntimeException ex) { return this.refused("void", ex); }
     }
 
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/invoice/creditNote", method = RequestMethod.POST)
     public ResponseEntity<?> creditNote(@RequestParam Long invoiceId, @RequestParam BigDecimal amount, @RequestParam String reason) {
         try { Invoice n = this.billing.creditNote(invoiceId, amount, reason); return this.ok(String.format("Credit note %s issued for %s.", n.getNumber(), amount), this.invoiceRow(n, this.billing.tenantNames())); }
-        catch (Exception ex) { return this.refused(ex.getMessage()); }
+        catch (Exception ex) { return this.refused("credit note", ex); }
     }
 
     /** A workspace says it paid: amount, method, reference and the slip. */
@@ -225,14 +248,14 @@ public class BillingRestApi {
             if (!this.mayTouch(i.getTenantId())) return this.refused("No such invoice.");
             Payment p = this.billing.submitPayment(invoiceId, amount, method, reference, note, slip);
             return this.ok(String.format("Payment of %s recorded; it counts once the platform verifies it.", p.getAmount()), p);
-        } catch (Exception ex) { return this.refused(ex.getMessage()); }
+        } catch (Exception ex) { return this.refused("payment", ex); }
     }
 
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/payment/verify", method = RequestMethod.POST)
     public ResponseEntity<?> verifyPayment(@RequestParam Long paymentId, @RequestParam boolean accept, @RequestParam(required = false) String note) {
         try { Payment p = this.billing.verifyPayment(paymentId, accept, note); return this.ok(accept ? "Payment verified; receipt " + p.getReceiptNumber() + " issued." : "Payment rejected.", p); }
-        catch (Exception ex) { return this.refused(ex.getMessage()); }
+        catch (Exception ex) { return this.refused("verify", ex); }
     }
 
     @RequestMapping(value = "/documents", method = RequestMethod.GET)
@@ -257,10 +280,14 @@ public class BillingRestApi {
             if (!this.mayTouch(d.getTenantId())) return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "No such document."), HttpStatus.NOT_FOUND);
             ObjectContentDto content = this.billing.bytesOf(d);
             HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, ("attachment".equals(disposition) ? "attachment" : "inline") + "; filename=\"" + d.getFileName() + "\"");
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, ("attachment".equals(disposition) ? "attachment" : "inline") + "; filename=\"" + d.getFileName().replace("\"", "") + "\"");
+            headers.add("X-Content-Type-Options", "nosniff");
             return ResponseEntity.ok().headers(headers).contentType(MediaType.parseMediaType(d.getContentType() == null ? "application/octet-stream" : d.getContentType()))
                 .contentLength(content.getSize()).body(new InputStreamResource(content.getContent()));
-        } catch (RuntimeException ex) { return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, ex.getMessage()), HttpStatus.NOT_FOUND); }
+        } catch (RuntimeException ex) {
+            if (!(ex instanceof IllegalArgumentException)) this.logger.warn("billing document {} failed", documentId, ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "No such document."), HttpStatus.NOT_FOUND);
+        }
     }
 
     @RequestMapping(value = "/statement", method = RequestMethod.POST)
@@ -268,7 +295,7 @@ public class BillingRestApi {
         Long scoped = this.scope(tenantId);
         if (scoped == null) return this.refused("No workspace to prepare a statement for.");
         try { BillingDocument d = this.billing.statement(scoped, LocalDate.parse(from), LocalDate.parse(to)); return this.ok("Statement " + d.getNumber() + " prepared.", this.documentRow(d, null, null)); }
-        catch (Exception ex) { return this.refused(ex.getMessage()); }
+        catch (Exception ex) { return this.refused("statement", ex); }
     }
 
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
@@ -281,16 +308,18 @@ public class BillingRestApi {
                 try { out.put("usageByTenant", this.meter.usage(null, LocalDate.parse(from), LocalDate.parse(to), "tenant").get("rows")); } catch (RuntimeException ex) { out.put("usageByTenant", null); }
             }
             return this.ok("Billing analytics.", out);
-        } catch (RuntimeException ex) { return this.refused(ex.getMessage()); }
+        } catch (RuntimeException ex) { return this.refused("analytics", ex); }
     }
 
     /** Close a month for every active workspace: a draft each, from the meter. Platform admin. */
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/closeMonth", method = RequestMethod.POST)
     public ResponseEntity<?> closeMonth(@RequestParam String period) {
+        YearMonth month;
+        try { month = YearMonth.parse(period); } catch (DateTimeParseException ex) { return this.refused("close month", ex); }
         int drafted = 0;
         for (Map.Entry<Long, String> t : this.billing.tenantNames().entrySet()) {
-            try { this.billing.draft(t.getKey(), YearMonth.parse(period)); drafted++; }
+            try { this.billing.draft(t.getKey(), month); drafted++; }
             catch (RuntimeException ex) { this.logger.warn("draft for tenant {} failed: {}", t.getKey(), ex.toString()); }
         }
         return this.ok(String.format("%d draft(s) for %s.", drafted, period), drafted);

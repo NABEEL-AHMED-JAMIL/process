@@ -3,6 +3,7 @@ package process.billing;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -104,6 +105,8 @@ class BillingServiceTest {
 
         Tenant tenant = new Tenant(); tenant.setTenantId(TENANT); tenant.setTenantName("MedAxis Care Network");
         lenient().when(this.tenants.findById(TENANT)).thenReturn(Optional.of(tenant));
+        lenient().when(this.tenants.existsById(TENANT)).thenReturn(true);
+        lenient().when(invoices.findByReferencesInvoiceId(anyLong())).thenAnswer(inv -> { List<Invoice> out = new ArrayList<>(); for (Invoice i : this.invoiceRows.values()) if (inv.<Long>getArgument(0).equals(i.getReferencesInvoiceId())) out.add(i); return out; });
         lenient().when(this.meter.isConfigured()).thenReturn(true);
         lenient().when(this.meter.usage(eq(TENANT), any(), any(), eq("meter"))).thenReturn(map(
             "rateCard", map("version", 1, "name", "Standard", "tenantSpecific", false, "effectiveFrom", "2026-01-01"),
@@ -225,6 +228,57 @@ class BillingServiceTest {
         assertThat(original.getStatus()).isEqualTo("partially_paid");
         assertThat(this.docRows).extracting(BillingDocument::getKind).containsExactly("invoice", "credit_note");
         assertThatThrownBy(() -> this.service.voidInvoice(issued.getInvoiceId(), "x")).hasMessageContaining("partly paid");
+        // Never more than what was billed and not yet credited: 46.58 - 6.58 = 40.00 is the most left.
+        assertThatThrownBy(() -> this.service.creditNote(issued.getInvoiceId(), new BigDecimal("40.01"), "too much"))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("At most 40.00");
+        assertThatThrownBy(() -> this.service.creditNote(issued.getInvoiceId(), new BigDecimal("1"), "  ")).hasMessageContaining("reason is required");
+        Invoice rest = this.service.creditNote(issued.getInvoiceId(), new BigDecimal("40"), "the rest");
+        assertThat(rest.getTotal()).isEqualByComparingTo("-40");
+        // A credit note is not an invoice: nothing is paid against it, nothing credited against it.
+        assertThatThrownBy(() -> this.service.submitPayment(rest.getInvoiceId(), BigDecimal.ONE, "bank", null, null, null)).hasMessageContaining("not open for payment");
+        assertThatThrownBy(() -> this.service.creditNote(rest.getInvoiceId(), BigDecimal.ONE, "x")).hasMessageContaining("Only an issued invoice");
+        assertThat(this.service.find(issued.getInvoiceId()).getStatus()).isEqualTo("paid");
+    }
+
+    @Test
+    void whatARequestMayCarryIsBounded() throws Exception {
+        Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
+        assertThatThrownBy(() -> this.service.draft(999999L, YearMonth.of(2026, 9))).hasMessageContaining("No such workspace");
+        assertThatThrownBy(() -> this.service.addManualLine(draft.getInvoiceId(), "x", new BigDecimal("-1"), BigDecimal.ONE)).hasMessageContaining("quantity above zero");
+        assertThatThrownBy(() -> this.service.addManualLine(draft.getInvoiceId(), "x", BigDecimal.ZERO, BigDecimal.ONE)).hasMessageContaining("quantity above zero");
+        assertThatThrownBy(() -> this.service.addManualLine(draft.getInvoiceId(), "x", BigDecimal.ONE, new BigDecimal("1000000000000"))).hasMessageContaining("unit price");
+        assertThatThrownBy(() -> this.service.addManualLine(draft.getInvoiceId(), new String(new char[301]).replace('\0', 'x'), BigDecimal.ONE, BigDecimal.ONE)).hasMessageContaining("at most 300");
+        assertThatThrownBy(() -> this.service.addManualLine(draft.getInvoiceId(), " ", BigDecimal.ONE, BigDecimal.ONE)).hasMessageContaining("description is required");
+        // A discount is a manual line with a negative price -- allowed, within reason.
+        assertThat(this.service.addManualLine(draft.getInvoiceId(), "Loyalty discount", BigDecimal.ONE, new BigDecimal("-5")).getAmount()).isEqualByComparingTo("-5");
+
+        Invoice issued = this.service.issue(draft.getInvoiceId());
+        BigDecimal owed = issued.getBalance();
+        assertThatThrownBy(() -> this.service.submitPayment(issued.getInvoiceId(), owed.add(new BigDecimal("0.01")), "bank", null, null, null)).hasMessageContaining("At most " + owed.toPlainString());
+        assertThatThrownBy(() -> this.service.submitPayment(issued.getInvoiceId(), BigDecimal.ONE, "bitcoin", null, null, null)).hasMessageContaining("payment method");
+        assertThatThrownBy(() -> this.service.submitPayment(issued.getInvoiceId(), BigDecimal.ONE, "bank", new String(new char[121]).replace('\0', 'r'), null, null)).hasMessageContaining("reference");
+        // Two slips cannot together promise more than is owed.
+        this.service.submitPayment(issued.getInvoiceId(), owed.subtract(BigDecimal.ONE), "bank", "TRF-A", null, null);
+        assertThatThrownBy(() -> this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("1.01"), "bank", "TRF-B", null, null)).hasMessageContaining("At most 1.00");
+        assertThat(this.service.submitPayment(issued.getInvoiceId(), BigDecimal.ONE, "CARD", "TRF-B", null, null).getMethod()).isEqualTo("card");
+    }
+
+    @Test
+    void aSlipIsWhatItsBytesSayItIs() throws Exception {
+        Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
+        MockMultipartFile html = new MockMultipartFile("slip", "slip.png", "image/png", "<script>alert(1)</script>".getBytes());
+        assertThatThrownBy(() -> this.service.submitPayment(issued.getInvoiceId(), BigDecimal.ONE, "bank", null, null, html)).hasMessageContaining("PDF, a PNG or a JPEG");
+        byte[] png = new byte[] { (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0 };
+        MockMultipartFile traversal = new MockMultipartFile("slip", "../../etc/passwd\"; x.html", "text/html", png);
+        Payment p = this.service.submitPayment(issued.getInvoiceId(), BigDecimal.ONE, "bank", null, null, traversal);
+        BillingDocument slip = this.docRows.get(this.docRows.size() - 1);
+        assertThat(slip.getKind()).isEqualTo("payment_slip");
+        assertThat(slip.getContentType()).isEqualTo("image/png");                 // the bytes, not the browser's word
+        assertThat(slip.getFileName()).matches("[A-Za-z0-9_][A-Za-z0-9._-]*\\.png");
+        assertThat(slip.getFileName()).doesNotContain("/").doesNotStartWith(".");
+        assertThat(p.getSlipObjectKey()).doesNotContain("..");
+        byte[] big = new byte[(int) BillingService.SLIP_MAX_BYTES + 1]; System.arraycopy("%PDF-".getBytes(), 0, big, 0, 5);
+        assertThatThrownBy(() -> this.service.submitPayment(issued.getInvoiceId(), BigDecimal.ONE, "bank", null, null, new MockMultipartFile("slip", "big.pdf", "application/pdf", big))).hasMessageContaining("at most 10 MB");
     }
 
     @Test

@@ -12,6 +12,7 @@ import java.util.Optional;
 @Repository
 public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     Optional<Invoice> findByNumber(String number);
+    List<Invoice> findByReferencesInvoiceId(Long invoiceId);
     List<Invoice> findByTenantIdOrderByPeriodStartDescInvoiceIdDesc(Long tenantId);
     List<Invoice> findAllByOrderByPeriodStartDescInvoiceIdDesc();
     Optional<Invoice> findFirstByTenantIdAndPeriodStartAndKindAndStatus(Long tenantId, LocalDate periodStart, String kind, String status);

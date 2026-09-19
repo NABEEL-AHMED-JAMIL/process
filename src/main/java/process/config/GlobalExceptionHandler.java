@@ -9,6 +9,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import process.analytics.AnalyticsException;
 import process.model.dto.ResponseDto;
@@ -54,6 +55,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()), HttpStatus.OK);
     }
 
+    /** ?invoiceId=abc for a Long: the client's mistake, said plainly, without the converter's own sentence. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ResponseDto> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        logger.warn("Request value '{}' has the wrong type for {}", ex.getName(), ex.getRequiredType() == null ? "?" : ex.getRequiredType().getSimpleName());
+        return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "The value of '" + ex.getName() + "' is not valid."), HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ResponseDto> handleUncaught(Exception ex) {
         logger.error("Unhandled exception reached GlobalExceptionHandler", ex);
@@ -66,7 +74,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body,
         HttpHeaders headers, HttpStatus status, WebRequest request) {
         logger.warn("Request handling exception resolved to {}: {}", status, ex.getMessage());
-        return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()), headers, status);
+        // A 4xx sentence names what the client got wrong (a missing parameter, an unreadable
+        // body); a 5xx sentence is the framework's own and stays in the log.
+        String message = status.is5xxServerError() ? ProcessUtil.INTERNAL_ERROR_500 : ex.getMessage();
+        return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, message), headers, status);
     }
 
 }
