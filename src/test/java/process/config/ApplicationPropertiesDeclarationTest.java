@@ -57,7 +57,11 @@ public class ApplicationPropertiesDeclarationTest {
         // the property: AnalyticsLimits carries the measurement that declined it.
         "analytics.enabled",
         "analytics.benchmark.enabled",
-        "analytics.parquet.conversion-enabled");
+        "analytics.parquet.conversion-enabled",
+        // The meter is a switch too: blank means the console runs unmetered, and an operator
+        // must be able to see that is what is happening.
+        "meter.url",
+        "meter.service-key");
 
     /** Nothing in this list may ever be committed with a value beside it. */
     private static final List<String> SECRETS = Arrays.asList(
@@ -66,7 +70,8 @@ public class ApplicationPropertiesDeclarationTest {
         "jwt.secret.key",
         "lookup.encryption.key",
         "aws.access-key",
-        "aws.secret-key");
+        "aws.secret-key",
+        "meter.service-key");
 
     private Properties load(String resource) throws IOException {
         InputStream stream = this.getClass().getClassLoader().getResourceAsStream(resource);

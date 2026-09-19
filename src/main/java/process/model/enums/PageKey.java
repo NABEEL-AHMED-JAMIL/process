@@ -54,7 +54,11 @@ public enum PageKey {
     // Prompts replaced AI Agents on 2026-09-18 (V44 renames the grants). /aiAgent.json stays in
     // the group: the file chat and the job assistant still read prompts through its aliases.
     AI_PROMPTS("ai-prompts", "Prompts", "Assistants", "/assistants/prompts",
-        "/aiPrompt.json", "/aiAgent.json");
+        "/aiPrompt.json", "/aiAgent.json"),
+    // Cost & usage: what the workspace used and what it costs. A tenant admin's page; an
+    // access profile may withhold it from an admin who should not see money.
+    BILLING("billing", "Cost & usage", "Administration", "/administration/billing",
+        "/billing.json");
 
     /**
      * Calls under an enforced group that every signed-in person may make regardless of pages.

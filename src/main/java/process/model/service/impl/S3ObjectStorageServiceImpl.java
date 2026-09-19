@@ -196,6 +196,23 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
         }
     }
 
+    @Override
+    public List<ObjectSummaryDto> listAllObjects(String bucket, String prefix, int max) {
+        try {
+            List<ObjectSummaryDto> objects = new ArrayList<>();
+            ListObjectsV2Request.Builder request = ListObjectsV2Request.builder().bucket(bucket);
+            if (prefix != null && !prefix.isEmpty()) request.prefix(prefix);
+            for (S3Object s3Object : this.s3Client.listObjectsV2Paginator(request.build()).contents()) {
+                if (s3Object.key().endsWith("/")) continue;
+                objects.add(new ObjectSummaryDto(this.fileNameOf(s3Object.key()), s3Object.key(), false, s3Object.size(), null));
+                if (objects.size() >= max) break;
+            }
+            return objects;
+        } catch (Exception e) {
+            throw new RuntimeException("Could not list S3 objects under bucket=" + bucket + " prefix=" + prefix, e);
+        }
+    }
+
     private List<String> listAllKeysUnderPrefix(String bucket, String prefix) {
         try {
             List<String> keys = new ArrayList<>();

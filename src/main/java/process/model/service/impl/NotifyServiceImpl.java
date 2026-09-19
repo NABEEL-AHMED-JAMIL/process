@@ -1,6 +1,9 @@
 package process.model.service.impl;
 
 import org.slf4j.Logger;
+import process.billing.MeterClient;
+import process.billing.UsageEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -25,6 +28,11 @@ import process.socket.JobEventPublisher;
 @Service
 @Transactional
 public class NotifyServiceImpl implements NotifyService {
+
+    /** The meter, when the console has one; optional so hand-built instances in tests need none. */
+    @Autowired(required = false)
+    private MeterClient meter;
+
 
     private Logger logger = LoggerFactory.getLogger(NotifyServiceImpl.class);
 
@@ -93,6 +101,12 @@ public class NotifyServiceImpl implements NotifyService {
         if (newStatus == JobStatus.Failed || newStatus == JobStatus.Completed) {
             logger.info("Setting end date for job {}", jobQueue.getJobId());
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), jobQueue.getEndTime());
+            // One run, once: Completed and Failed both did the work; the run id is the key.
+            if (this.meter != null && job.get().getTenantId() != null) {
+                this.meter.report(UsageEvent.of(job.get().getTenantId(), "pipeline.runs", 1, "run", "run#" + jobQueue.getJobQueueId())
+                    .subject("job", String.valueOf(jobQueue.getJobId())).run(jobQueue.getJobQueueId()).source("console")
+                    .note(newStatus.name()));
+            }
         }
         switch (newStatus) {
             case Failed:

@@ -188,6 +188,23 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
         }
     }
 
+    @Override
+    public List<ObjectSummaryDto> listAllObjects(String bucket, String prefix, int max) {
+        try {
+            List<ObjectSummaryDto> objects = new ArrayList<>();
+            ListObjectsArgs args = ListObjectsArgs.builder().bucket(bucket).prefix(prefix == null ? "" : prefix).recursive(true).build();
+            for (Result<Item> result : this.minioClient.listObjects(args)) {
+                Item item = result.get();
+                if (item.isDir()) continue;
+                objects.add(new ObjectSummaryDto(this.fileNameOf(item.objectName()), item.objectName(), false, item.size(), null));
+                if (objects.size() >= max) break;
+            }
+            return objects;
+        } catch (Exception e) {
+            throw new RuntimeException("Could not list MinIO objects under bucket=" + bucket + " prefix=" + prefix, e);
+        }
+    }
+
     private List<String> listAllKeysUnderPrefix(String bucket, String prefix) {
         try {
             List<String> keys = new ArrayList<>();

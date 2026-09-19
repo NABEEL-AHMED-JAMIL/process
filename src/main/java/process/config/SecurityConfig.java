@@ -43,6 +43,8 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // A worker running an AI step it was handed: proved by the run's callback token,
                 // checked in AiPromptServiceImpl.runForWorker, the same way the callbacks above are.
                 .antMatchers(HttpMethod.POST, "/aiPrompt.json/run").permitAll()
+                // The meter asks whether a run's token is live; the token is the proof.
+                .antMatchers(HttpMethod.POST, "/meter.json/verifyRun").permitAll()
 
                 // Whoever is asking for a workspace has no account yet, which is the point of
                 // the request. Only submit is open; reading and deciding need a platform admin.

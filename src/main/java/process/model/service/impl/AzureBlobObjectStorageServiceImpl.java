@@ -175,6 +175,23 @@ public class AzureBlobObjectStorageServiceImpl implements ObjectStorageService {
         this.deleteObjects(bucket, oldKeys);
     }
 
+    @Override
+    public List<ObjectSummaryDto> listAllObjects(String bucket, String prefix, int max) {
+        try {
+            ListBlobsOptions options = new ListBlobsOptions().setPrefix(prefix == null ? "" : prefix);
+            List<ObjectSummaryDto> objects = new ArrayList<>();
+            for (BlobItem item : this.blobServiceClient().getBlobContainerClient(bucket).listBlobs(options, null)) {
+                if (item.getName().endsWith("/")) continue;
+                Long size = item.getProperties() == null ? null : item.getProperties().getContentLength();
+                objects.add(new ObjectSummaryDto(item.getName().contains("/") ? item.getName().substring(item.getName().lastIndexOf('/') + 1) : item.getName(), item.getName(), false, size, null));
+                if (objects.size() >= max) break;
+            }
+            return objects;
+        } catch (Exception e) {
+            throw new RuntimeException("Could not list Azure blobs under container=" + bucket + " prefix=" + prefix, e);
+        }
+    }
+
     private List<String> listAllKeysUnderPrefix(String bucket, String prefix) {
         try {
             ListBlobsOptions options = new ListBlobsOptions().setPrefix(prefix);

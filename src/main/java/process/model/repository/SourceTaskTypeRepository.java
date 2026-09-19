@@ -52,6 +52,16 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
 
     long countByTenantIdAndStatusNot(Long tenantId, Status status);
 
+    /**
+     * Topics a workspace is actually running: an active topic with at least one live task on
+     * it. A catalogue of ten thousand seeded topics nobody sends to is not ten thousand
+     * topic-hours a night; the ones with a task are what the platform keeps consumers for.
+     */
+    @Query(value = "select count(distinct st.source_task_type_id) from source_task st"
+        + " join source_task_type stt on stt.source_task_type_id = st.source_task_type_id"
+        + " where stt.tenant_id = :tenantId and stt.task_type_status = 'Active' and st.task_status <> 'Delete'", nativeQuery = true)
+    long countTopicsInUse(@Param("tenantId") Long tenantId);
+
     public List<SourceTaskType> findByStatus(Status status);
 
     /**

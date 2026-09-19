@@ -1,6 +1,9 @@
 package process.ai;
 
 import com.google.gson.Gson;
+import process.billing.MeterClient;
+import process.billing.UsageEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -32,6 +35,11 @@ import java.util.regex.Pattern;
  */
 @Component
 public class PromptRunner {
+
+    /** The meter, when the console has one; optional so hand-built instances in tests need none. */
+    @Autowired(required = false)
+    private MeterClient meter;
+
 
     private final Logger logger = LoggerFactory.getLogger(PromptRunner.class);
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\}\\}");
@@ -153,7 +161,30 @@ public class PromptRunner {
         } finally {
             row.setLatencyMs((int) Math.min(System.currentTimeMillis() - started, Integer.MAX_VALUE));
         }
-        return this.runs.save(row);
+        AiPromptRun saved = this.runs.save(row);
+        this.metered(job, saved);
+        return saved;
+    }
+
+    /**
+     * The tokens this run spent, told to the meter. A refusal that made no call spends nothing
+     * and reports nothing; a call that failed after the model answered still spent its input.
+     * The run id is the dedupe key: the same run row is never billed twice.
+     */
+    private void metered(Job job, AiPromptRun saved) {
+        if (this.meter == null || job.tenantId == null || saved.getRunId() == null) {
+            return;
+        }
+        String model = job.model == null ? "" : job.model;
+        String subjectId = job.promptId == null ? "prompt" : String.valueOf(job.promptId);
+        if (saved.getTokensIn() != null && saved.getTokensIn() > 0) {
+            this.meter.report(UsageEvent.of(job.tenantId, "ai.tokens.in", saved.getTokensIn(), "token", "ai-run#" + saved.getRunId() + "#in")
+                .subject("prompt", subjectId).actor(job.actor).run(job.jobQueueId).source("runner").note(model));
+        }
+        if (saved.getTokensOut() != null && saved.getTokensOut() > 0) {
+            this.meter.report(UsageEvent.of(job.tenantId, "ai.tokens.out", saved.getTokensOut(), "token", "ai-run#" + saved.getRunId() + "#out")
+                .subject("prompt", subjectId).actor(job.actor).run(job.jobQueueId).source("runner").note(model));
+        }
     }
 
     /** The day is the server's own -- the clock every run row is stamped with -- not UTC's. */

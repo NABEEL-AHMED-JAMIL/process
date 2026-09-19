@@ -3,6 +3,7 @@ package process.model.service.impl;
 import process.model.dto.BrowseObjectsResponseDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
+import process.model.dto.ObjectSummaryDto;
 import process.model.service.ObjectStorageService;
 import java.io.InputStream;
 import java.util.List;
@@ -66,6 +67,11 @@ public class BucketRewritingStorageService implements ObjectStorageService {
     @Override
     public void deleteFolder(String bucket, String folderPrefix) {
         this.delegate.deleteFolder(this.realBucket, folderPrefix);
+    }
+
+    @Override
+    public List<ObjectSummaryDto> listAllObjects(String bucket, String prefix, int max) {
+        return this.delegate.listAllObjects(this.realBucket, prefix, max);
     }
 
     @Override

@@ -163,6 +163,10 @@ services:
       # this invalidates every already-issued token (everyone gets logged out) -- override via
       # a real JWT_SECRET_KEY env var in any environment with real users.
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-4z8qN3vW9pT2xR7mK5jL1sC6bF0yH8dQ4nE9tV2rU7w=}
+      # The metering service (job-search's etl_meter): usage is reported there and read back
+      # for Cost & usage. Empty METER_URL means the console runs without metering.
+      METER_URL: ${METER_URL:-http://host.docker.internal:8200}
+      METER_SERVICE_KEY: ${METER_SERVICE_KEY:-}
       # Bucket Browser storage. Credentials now live in the storage_connection table
       # (encrypted, managed under Settings > Storage Connections) -- StorageConnectionBootstrap
       # copied whatever was configured here into that table on first startup. These are kept

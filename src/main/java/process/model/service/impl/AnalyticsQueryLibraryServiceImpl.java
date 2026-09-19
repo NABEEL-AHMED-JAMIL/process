@@ -1,6 +1,9 @@
 package process.model.service.impl;
 
 import org.slf4j.Logger;
+import process.billing.MeterClient;
+import process.billing.UsageEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,10 @@ import java.util.Locale;
  * */
 @Service
 public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibraryService {
+
+    /** The meter, when the console has one; optional so hand-built instances in tests need none. */
+    @Autowired(required = false)
+    private MeterClient meter;
 
     private final Logger logger = LoggerFactory.getLogger(AnalyticsQueryLibraryServiceImpl.class);
 
@@ -316,7 +323,12 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
             record.setDurationMs(run.getDurationMs());
             record.setErrorMessage(this.recordableMessage(run.getErrorMessage()));
             record.setDateCreated(new Timestamp(System.currentTimeMillis()));
-            return this.analyticsQueryRunRepository.save(record);
+            AnalyticsQueryRun saved = this.analyticsQueryRunRepository.save(record);
+            if (this.meter != null && saved.getTenantId() != null) {
+                this.meter.report(UsageEvent.of(saved.getTenantId(), "analytics.queries", 1, "query", "analytics-run#" + saved.getAnalyticsQueryRunId())
+                    .subject("dataset", saved.getDatasetPath()).actor(TenantContext.getAppUserId()).source("console").note(saved.getRunStatus()));
+            }
+            return saved;
         } catch (Exception ex) {
             this.logger.error("An error occurred while recording an analytics query run.", ex);
             return null;

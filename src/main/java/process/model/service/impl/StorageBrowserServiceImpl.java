@@ -13,6 +13,7 @@ import process.model.dto.BucketSummaryDto;
 import process.model.dto.LookupDataDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
+import process.model.dto.ObjectSummaryDto;
 import process.config.StorageClientFactory;
 import process.config.StoragePropertyDefaults;
 import process.model.enums.Status;
@@ -21,6 +22,10 @@ import process.model.repository.StorageConnectionRepository;
 import process.model.service.ObjectStorageService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
+import process.billing.MeterClient;
+import process.billing.UsageEvent;
+import org.springframework.beans.factory.annotation.Autowired;
+import java.util.UUID;
 import process.util.AudioTranscodeUtil;
 import process.util.ContentTypeUtil;
 import java.io.IOException;
@@ -63,6 +68,82 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     /** The same property KafkaSecretServiceImpl writes every certificate and store to. */
     private final String configBucket;
     private final Map<String, ObjectStorageService> objectStorageServicesByProvider;
+
+    /**
+     * The meter, when the console has one. A field, optional: the constructor is shared with
+     * tests that build this service by hand and have no meter to give it.
+     */
+    @Autowired(required = false)
+    private MeterClient meter;
+
+    // ---- usage -----------------------------------------------------------------------------
+
+    /**
+     * What a storage operation costs, told to the meter. The caller's workspace pays: a
+     * platform admin working in a platform bucket has no workspace and is not metered.
+     *
+     * A delete is reported with the object's size, taken BEFORE the delete -- what left the
+     * bucket is the churn the bill shows; after the delete there is nothing to measure.
+     */
+    private void metered(String meterName, double quantity, String unit, String bucket, String subjectType, String subjectId, String note) {
+        if (this.meter == null || quantity == 0) {
+            return;
+        }
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            return;
+        }
+        this.meter.report(UsageEvent.of(tenantId, meterName, quantity, unit, "console#" + UUID.randomUUID())
+            .subject(subjectType, subjectId).actor(TenantContext.getAppUserId()).source("console").note(note));
+    }
+
+    private void meteredWrite(String bucket, long bytes) {
+        this.metered("storage.ops.write", 1, "op", bucket, "bucket", bucket, null);
+        this.metered("storage.bytes.written", UsageEvent.gb(bytes), "GB", bucket, "bucket", bucket, null);
+    }
+
+    private void meteredRead(String bucket, long bytes, String note) {
+        this.metered("storage.ops.read", 1, "op", bucket, "bucket", bucket, note);
+        if (bytes > 0) {
+            this.metered("storage.bytes.read", UsageEvent.gb(bytes), "GB", bucket, "bucket", bucket, null);
+        }
+    }
+
+    private void meteredDelete(String bucket, String key, long bytes) {
+        this.metered("storage.ops.delete", 1, "op", bucket, "bucket", bucket, null);
+        if (bytes > 0) {
+            this.metered("storage.bytes.deleted", UsageEvent.gb(bytes), "GB", bucket, "object", bucket + "/" + key, null);
+        }
+    }
+
+    /** The size of an object about to go, or 0 when it cannot be read -- never a reason to refuse the delete. */
+    private long sizeOf(ObjectStorageService service, String bucket, String key) {
+        if (this.meter == null) {
+            return 0;
+        }
+        try {
+            ObjectMetadataDto metadata = service.getObjectMetadata(bucket, key);
+            return metadata == null || metadata.getSize() == null ? 0 : metadata.getSize();
+        } catch (RuntimeException ex) {
+            return 0;
+        }
+    }
+
+    /** Every object under a prefix with its size, for a folder delete or rename. */
+    private Map<String, Long> sizesUnder(ObjectStorageService service, String bucket, String prefix) {
+        Map<String, Long> sizes = new HashMap<>();
+        if (this.meter == null) {
+            return sizes;
+        }
+        try {
+            for (ObjectSummaryDto o : service.listAllObjects(bucket, prefix, 200_000)) {
+                sizes.put(o.getKey(), o.getSize() == null ? 0L : o.getSize());
+            }
+        } catch (RuntimeException ex) {
+            logger.warn("meter: could not size {}/{} before the operation: {}", bucket, prefix, ex.getMessage());
+        }
+        return sizes;
+    }
 
     public StorageBrowserServiceImpl(
         LookupDataCacheService lookupDataCacheService,
@@ -146,6 +227,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     public BrowseObjectsResponseDto listObjects(String bucket, String prefix, String continuationToken, int maxKeys) {
         this.requireSafeKey(prefix);
         int pageSize = maxKeys <= 0 ? DEFAULT_PAGE_SIZE : Math.min(maxKeys, MAX_PAGE_SIZE);
+        this.meteredRead(bucket, 0, "list");
         return this.resolveServiceForCaller(bucket, null).listObjects(bucket, prefix, continuationToken, pageSize);
     }
 
@@ -227,7 +309,9 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     @Override
     public ObjectContentDto downloadObject(String bucket, String key, Long rangeStart, Long rangeEnd) {
         this.requireSafeKey(key);
-        return this.resolveServiceForCaller(bucket, key).getObjectContent(bucket, key, rangeStart, rangeEnd);
+        ObjectContentDto content = this.resolveServiceForCaller(bucket, key).getObjectContent(bucket, key, rangeStart, rangeEnd);
+        this.meteredRead(bucket, content == null ? 0 : content.getSize(), "download");
+        return content;
     }
 
     /**
@@ -302,6 +386,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (!AudioTranscodeUtil.isAudioExtension(extension)) {
             try {
                 service.uploadObject(bucket, key, file.getInputStream(), file.getSize(), file.getContentType());
+                this.meteredWrite(bucket, file.getSize());
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not read uploaded file " + safeFileName, e);
             }
@@ -330,6 +415,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
     @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void uploadObject(String bucket, String key, InputStream inputStream, long size, String contentType) {
+        this.meteredWrite(bucket, size);
         this.requireSafeKey(key);
         this.resolveServiceForCaller(bucket, key).uploadObject(bucket, key, inputStream, size, contentType);
     }
@@ -378,7 +464,10 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void deleteObject(String bucket, String key) {
         this.requireSafeKey(key);
-        this.resolveServiceForCaller(bucket, key).deleteObject(bucket, key);
+        ObjectStorageService service = this.resolveServiceForCaller(bucket, key);
+        long size = this.sizeOf(service, bucket, key);
+        service.deleteObject(bucket, key);
+        this.meteredDelete(bucket, key, size);
     }
 
     @Override
@@ -391,7 +480,15 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         for (String key : keys) {
             this.requireSafeKey(key);
         }
-        this.resolveServiceForCaller(bucket, null).deleteObjects(bucket, keys);
+        ObjectStorageService service = this.resolveServiceForCaller(bucket, null);
+        Map<String, Long> sizes = new HashMap<>();
+        for (String key : keys) {
+            sizes.put(key, this.sizeOf(service, bucket, key));
+        }
+        service.deleteObjects(bucket, keys);
+        for (String key : keys) {
+            this.meteredDelete(bucket, key, sizes.getOrDefault(key, 0L));
+        }
     }
 
     @Override
@@ -402,7 +499,12 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     public void deleteFolder(String bucket, String folderKey) {
         this.requireFolderKey(folderKey);
         this.requireSafeKey(folderKey);
-        this.resolveServiceForCaller(bucket, folderKey).deleteFolder(bucket, folderKey);
+        ObjectStorageService service = this.resolveServiceForCaller(bucket, folderKey);
+        Map<String, Long> sizes = this.sizesUnder(service, bucket, folderKey);
+        service.deleteFolder(bucket, folderKey);
+        for (Map.Entry<String, Long> gone : sizes.entrySet()) {
+            this.meteredDelete(bucket, gone.getKey(), gone.getValue());
+        }
     }
 
     @Override
@@ -430,7 +532,14 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (newPrefix.equals(folderKey)) {
             return;
         }
-        this.resolveServiceForCaller(bucket, folderKey).renameFolder(bucket, folderKey, newPrefix);
+        ObjectStorageService service = this.resolveServiceForCaller(bucket, folderKey);
+        // A rename is a copy and a delete of every object under the prefix: written once, deleted once.
+        Map<String, Long> sizes = this.sizesUnder(service, bucket, folderKey);
+        service.renameFolder(bucket, folderKey, newPrefix);
+        for (Map.Entry<String, Long> moved : sizes.entrySet()) {
+            this.meteredWrite(bucket, moved.getValue());
+            this.meteredDelete(bucket, moved.getKey(), moved.getValue());
+        }
     }
 
     private void requireFolderKey(String folderKey) {

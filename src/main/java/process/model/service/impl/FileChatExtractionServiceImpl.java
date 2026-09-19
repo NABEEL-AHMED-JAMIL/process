@@ -1,6 +1,10 @@
 package process.model.service.impl;
 
 import com.google.gson.Gson;
+import process.billing.MeterClient;
+import process.security.TenantContext;
+import process.billing.UsageEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import okhttp3.MediaType;
@@ -62,6 +66,11 @@ import java.util.zip.ZipException;
  * */
 @Service
 public class FileChatExtractionServiceImpl implements FileChatExtractionService {
+
+    /** The meter, when the console has one; optional so hand-built instances in tests need none. */
+    @Autowired(required = false)
+    private MeterClient meter;
+
 
     private static final Logger logger = LoggerFactory.getLogger(FileChatExtractionServiceImpl.class);
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -411,6 +420,13 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
         // key was written down first. A description still readable for seven days after the
         // panel that produced it was closed is exactly what that eviction exists to prevent.
         this.rememberVisionKey(bucket, key, etag, visionKey);
+        // One image described by the vision model, once per (file, agent) -- the cache above
+        // is why the same file opened twice is not two calls, and the key is the same reason
+        // it is not two events.
+        if (this.meter != null && TenantContext.getTenantId() != null) {
+            this.meter.report(UsageEvent.of(TenantContext.getTenantId(), "ai.vision.images", 1, "image", "vision#" + visionKey)
+                .subject("object", bucket + "/" + key).actor(TenantContext.getAppUserId()).source("console"));
+        }
         return this.rememberExtraction(visionKey, description);
     }
 

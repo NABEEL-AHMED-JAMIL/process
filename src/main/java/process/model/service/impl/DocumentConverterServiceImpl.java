@@ -1,6 +1,10 @@
 package process.model.service.impl;
 
 import org.jodconverter.core.DocumentConverter;
+import process.billing.MeterClient;
+import java.util.UUID;
+import process.billing.UsageEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.jodconverter.core.document.DocumentFormat;
 import org.jodconverter.core.document.DocumentFormatRegistry;
 import org.slf4j.Logger;
@@ -42,6 +46,11 @@ import static process.util.ProcessUtil.*;
  * */
 @Service
 public class DocumentConverterServiceImpl implements DocumentConverterService {
+
+    /** The meter, when the console has one; optional so hand-built instances in tests need none. */
+    @Autowired(required = false)
+    private MeterClient meter;
+
 
     private Logger logger = LoggerFactory.getLogger(DocumentConverterServiceImpl.class);
 
@@ -234,6 +243,10 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
             task.setOutputStorageKey("pending");
             task.setStatus(Status.Active);
             this.documentConverterTaskRepository.save(task);
+            if (this.meter != null && task.getTenantId() != null) {
+                this.meter.report(UsageEvent.of(task.getTenantId(), "convert.documents", 1, "document", "convert#" + UUID.randomUUID())
+                    .subject("file", safeFileName).actor(TenantContext.getAppUserId()).source("console").note(inputExtension + "->" + normalizedOutputFormat));
+            }
 
             String prefix = folder + "/" + task.getDocumentConverterTaskId() + "/";
             String inputKey = prefix + "input/" + safeFileName;
