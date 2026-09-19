@@ -123,14 +123,17 @@ public class RunCallbackTokensTest {
     }
 
     @Test
-    void retiringSpendsTheTokenSoAReplayFindsNothing() {
+    void retiringSpendsTheTokenForCallbacksAndKeepsItForReportsForADay() {
         String token = this.tokens.issue(this.run);
+        this.run.setJobStatus(JobStatus.Completed);
         this.tokens.retire(RUN);
 
-        assertThat(this.run.getCallbackTokenHash()).isNull();
-        assertThat(this.run.getCallbackTokenExpiresAt()).isNull();
-        // With no hash, only the legacy secret would be accepted -- and the run's token is not it.
-        assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.NOT_ISSUED);
+        // The hash stays: a report can still prove it is this run's...
+        assertThat(this.run.getCallbackTokenHash()).isNotNull();
+        assertThat(this.run.getCallbackTokenExpiresAt()).isAfter(LocalDateTime.now().plusHours(23));
+        assertThat(this.tokens.verifyForReport(JOB, RUN, token)).isEmpty();
+        // ...while a callback on the finished run is refused whatever it carries.
+        assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.RUN_OVER);
     }
 
     /** A run dispatched before tokens existed carries no hash; the shared secret still proves it. */
@@ -155,5 +158,23 @@ public class RunCallbackTokensTest {
         this.tokens.retire(RUN);
         verify(this.jobQueueRepository, never()).save(any());
         this.tokens.retire(null);
+    }
+
+    /**
+     * A usage report may arrive after the run is over -- the worker reports as it closes, and a
+     * batch spooled through a meter outage comes with the next run. The token's own expiry
+     * still bounds it; a wrong token is still a wrong token.
+     */
+    @Test
+    void aReportIsAcceptedForARunThatIsOverUntilTheTokenExpires() {
+        String token = this.tokens.issue(this.run);
+        this.run.setJobStatus(JobStatus.Completed);
+
+        assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.RUN_OVER);
+        assertThat(this.tokens.verifyForReport(JOB, RUN, token)).isEmpty();
+        assertThat(this.tokens.verifyForReport(JOB, RUN, "not-it")).contains(RunCallbackTokens.Refusal.MISMATCH);
+
+        this.run.setCallbackTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
+        assertThat(this.tokens.verifyForReport(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.EXPIRED);
     }
 }

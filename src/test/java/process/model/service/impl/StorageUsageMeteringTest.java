@@ -88,8 +88,8 @@ class StorageUsageMeteringTest {
         List<UsageEvent> events = this.reported();
         assertThat(events).extracting(e -> e.meter).containsExactly("storage.ops.delete", "storage.bytes.deleted");
         UsageEvent bytes = events.get(1);
-        assertThat(bytes.quantity).isEqualTo(2.0);
-        assertThat(bytes.unit).isEqualTo("GB");
+        assertThat(bytes.quantity).isEqualTo(2.0 * 1024 * 1024 * 1024);
+        assertThat(bytes.unit).isEqualTo("byte");
         assertThat(bytes.tenantId).isEqualTo(TENANT);
         assertThat(bytes.actorUserId).isEqualTo(4385L);
         assertThat(bytes.subjectType).isEqualTo("object");
@@ -108,7 +108,7 @@ class StorageUsageMeteringTest {
         verify(this.store).deleteFolder(BUCKET, "old/");
         List<UsageEvent> events = this.reported();
         assertThat(events.stream().filter(e -> e.meter.equals("storage.ops.delete")).count()).isEqualTo(2);
-        assertThat(events.stream().filter(e -> e.meter.equals("storage.bytes.deleted")).mapToDouble(e -> e.quantity).sum()).isEqualTo(4.0);
+        assertThat(events.stream().filter(e -> e.meter.equals("storage.bytes.deleted")).mapToDouble(e -> e.quantity).sum()).isEqualTo(4.0 * 1024 * 1024 * 1024);
     }
 
     @Test
@@ -126,7 +126,7 @@ class StorageUsageMeteringTest {
         this.service.uploadObject(BUCKET, "in/x.csv", new java.io.ByteArrayInputStream(new byte[10]), 512L * 1024 * 1024, "text/csv");
         List<UsageEvent> events = this.reported();
         assertThat(events).extracting(e -> e.meter).containsExactly("storage.ops.write", "storage.bytes.written");
-        assertThat(events.get(1).quantity).isEqualTo(0.5);
+        assertThat(events.get(1).quantity).isEqualTo(512.0 * 1024 * 1024);
     }
 
     @Test

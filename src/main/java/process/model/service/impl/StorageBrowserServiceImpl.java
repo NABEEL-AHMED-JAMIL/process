@@ -99,20 +99,20 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
 
     private void meteredWrite(String bucket, long bytes) {
         this.metered("storage.ops.write", 1, "op", bucket, "bucket", bucket, null);
-        this.metered("storage.bytes.written", UsageEvent.gb(bytes), "GB", bucket, "bucket", bucket, null);
+        this.metered("storage.bytes.written", bytes, "byte", bucket, "bucket", bucket, null);
     }
 
     private void meteredRead(String bucket, long bytes, String note) {
         this.metered("storage.ops.read", 1, "op", bucket, "bucket", bucket, note);
         if (bytes > 0) {
-            this.metered("storage.bytes.read", UsageEvent.gb(bytes), "GB", bucket, "bucket", bucket, null);
+            this.metered("storage.bytes.read", bytes, "byte", bucket, "bucket", bucket, null);
         }
     }
 
     private void meteredDelete(String bucket, String key, long bytes) {
         this.metered("storage.ops.delete", 1, "op", bucket, "bucket", bucket, null);
         if (bytes > 0) {
-            this.metered("storage.bytes.deleted", UsageEvent.gb(bytes), "GB", bucket, "object", bucket + "/" + key, null);
+            this.metered("storage.bytes.deleted", bytes, "byte", bucket, "object", bucket + "/" + key, null);
         }
     }
 

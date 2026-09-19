@@ -95,6 +95,22 @@ public class RunCallbackTokens {
      * "expired" or "wrong job" would confirm a guess.
      */
     public Optional<Refusal> verify(Long jobId, Long jobQueueId, String presented) {
+        return this.verify(jobId, jobQueueId, presented, true);
+    }
+
+    /**
+     * The same proof, for a usage report rather than a callback. A run that is over may still
+     * report what it used -- the worker sends its batch as the run closes, and a spooled batch
+     * from a meter outage arrives with the next run -- so RUN_OVER is not a refusal here; the
+     * token's own expiry still is, which bounds how late a report can be. Nothing a report can
+     * do changes the run, so the replay concern that makes RUN_OVER a refusal for callbacks
+     * does not apply: the meter deduplicates by key.
+     */
+    public Optional<Refusal> verifyForReport(Long jobId, Long jobQueueId, String presented) {
+        return this.verify(jobId, jobQueueId, presented, false);
+    }
+
+    private Optional<Refusal> verify(Long jobId, Long jobQueueId, String presented, boolean refuseWhenOver) {
         if (jobQueueId == null) {
             return Optional.of(Refusal.NO_SUCH_RUN);
         }
@@ -106,7 +122,7 @@ public class RunCallbackTokens {
         if (jobId == null || !jobId.equals(run.getJobId())) {
             return Optional.of(Refusal.WRONG_JOB);
         }
-        if (run.getJobStatus() != null && OVER.contains(run.getJobStatus())) {
+        if (refuseWhenOver && run.getJobStatus() != null && OVER.contains(run.getJobStatus())) {
             return Optional.of(Refusal.RUN_OVER);
         }
         String token = presented == null ? "" : presented.trim();
@@ -126,7 +142,16 @@ public class RunCallbackTokens {
         return Optional.empty();
     }
 
-    /** The run has ended: its token is spent, and a replayed callback finds nothing to match. */
+    /** How long after a run ends its token may still vouch for a usage report. */
+    static final long REPORT_GRACE_HOURS = 24;
+
+    /**
+     * The run has ended: its token is spent for callbacks -- the OVER check above refuses them
+     * whatever the row carries -- but stays good for a usage report for a day. The worker
+     * reports as the run closes, and a batch spooled through a meter outage arrives with the
+     * next run; both must still be provably this run's. Clearing the hash here used to make
+     * every late report NOT_ISSUED, which is a lost line on the bill, not a defence.
+     */
     @Transactional
     public void retire(Long jobQueueId) {
         if (jobQueueId == null) {
@@ -136,10 +161,9 @@ public class RunCallbackTokens {
             if (run.getCallbackTokenHash() == null) {
                 return;
             }
-            run.setCallbackTokenHash(null);
-            run.setCallbackTokenExpiresAt(null);
+            run.setCallbackTokenExpiresAt(LocalDateTime.now().plusHours(REPORT_GRACE_HOURS));
             this.jobQueueRepository.save(run);
-            logger.debug("Retired the callback token for run {}.", jobQueueId);
+            logger.debug("Retired the callback token for run {}; good for reports until {}.", jobQueueId, run.getCallbackTokenExpiresAt());
         });
     }
 

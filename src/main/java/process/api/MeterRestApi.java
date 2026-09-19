@@ -48,7 +48,7 @@ public class MeterRestApi {
 
     @RequestMapping(value = "/verifyRun", method = RequestMethod.POST)
     public ResponseEntity<?> verifyRun(@RequestHeader(value = "X-Worker-Token", required = false) String token, @RequestBody VerifyRunDto dto) {
-        Optional<RunCallbackTokens.Refusal> refused = this.runTokens.verify(dto.jobId, dto.jobQueueId, token);
+        Optional<RunCallbackTokens.Refusal> refused = this.runTokens.verifyForReport(dto.jobId, dto.jobQueueId, token);
         if (refused.isPresent()) {
             this.logger.warn("meter verifyRun refused for run {}: {}", dto.jobQueueId, refused.get());
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "Unauthorized worker callback."), HttpStatus.UNAUTHORIZED);

@@ -37,6 +37,6 @@ public class UsageEvent {
     public UsageEvent note(String note) { this.note = note; return this; }
     public UsageEvent at(Instant when) { this.occurredAt = when; return this; }
 
-    /** Bytes as the GB the storage meters are priced in. */
+    /** Bytes as GB, for the one meter measured in GB-hours; the byte meters carry bytes. */
     public static double gb(long bytes) { return bytes / (1024.0 * 1024 * 1024); }
 }
