@@ -2,6 +2,7 @@ package process.model.service.impl;
 
 import org.slf4j.Logger;
 import process.billing.MeterClient;
+import process.billing.Meter;
 import process.billing.UsageEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.LoggerFactory;
@@ -325,7 +326,7 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
             record.setDateCreated(new Timestamp(System.currentTimeMillis()));
             AnalyticsQueryRun saved = this.analyticsQueryRunRepository.save(record);
             if (this.meter != null && saved.getTenantId() != null) {
-                this.meter.report(UsageEvent.of(saved.getTenantId(), "analytics.queries", 1, "query", "analytics-run#" + saved.getAnalyticsQueryRunId())
+                this.meter.report(UsageEvent.of(saved.getTenantId(), Meter.ANALYTICS_QUERIES, 1, "analytics-run#" + saved.getAnalyticsQueryRunId())
                     .subject("dataset", saved.getDatasetPath()).actor(TenantContext.getAppUserId()).source("console").note(saved.getRunStatus()));
             }
             return saved;

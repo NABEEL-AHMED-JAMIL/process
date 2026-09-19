@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.TenantCode;
 import org.slf4j.Logger;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
@@ -156,7 +157,7 @@ public class TenantServiceImpl implements TenantService {
     }
 
     private String normalizeCode(String tenantCode) {
-        return tenantCode.trim().toLowerCase().replaceAll("[^a-z0-9-]", "-");
+        return TenantCode.from(tenantCode);
     }
 
     private TenantDto mapToDto(Tenant tenant) {

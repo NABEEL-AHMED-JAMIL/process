@@ -2,6 +2,7 @@ package process.ai;
 
 import com.google.gson.Gson;
 import process.billing.MeterClient;
+import process.billing.Meter;
 import process.billing.UsageEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.google.gson.JsonElement;
@@ -178,11 +179,11 @@ public class PromptRunner {
         String model = job.model == null ? "" : job.model;
         String subjectId = job.promptId == null ? "prompt" : String.valueOf(job.promptId);
         if (saved.getTokensIn() != null && saved.getTokensIn() > 0) {
-            this.meter.report(UsageEvent.of(job.tenantId, "ai.tokens.in", saved.getTokensIn(), "token", "ai-run#" + saved.getRunId() + "#in")
+            this.meter.report(UsageEvent.of(job.tenantId, Meter.AI_TOKENS_IN, saved.getTokensIn(), "ai-run#" + saved.getRunId() + "#in")
                 .subject("prompt", subjectId).actor(job.actor).run(job.jobQueueId).source("runner").note(model));
         }
         if (saved.getTokensOut() != null && saved.getTokensOut() > 0) {
-            this.meter.report(UsageEvent.of(job.tenantId, "ai.tokens.out", saved.getTokensOut(), "token", "ai-run#" + saved.getRunId() + "#out")
+            this.meter.report(UsageEvent.of(job.tenantId, Meter.AI_TOKENS_OUT, saved.getTokensOut(), "ai-run#" + saved.getRunId() + "#out")
                 .subject("prompt", subjectId).actor(job.actor).run(job.jobQueueId).source("runner").note(model));
         }
     }

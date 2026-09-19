@@ -8,6 +8,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import process.config.StoragePropertyDefaults;
 import process.model.dto.ObjectContentDto;
+import process.model.enums.BillingDocumentKind;
+import process.model.enums.InvoiceKind;
+import process.model.enums.InvoiceStatus;
+import process.model.enums.PaymentMethod;
+import process.model.enums.PaymentStatus;
 import process.model.pojo.BillingAccount;
 import process.model.pojo.BillingDocument;
 import process.model.pojo.Invoice;
@@ -63,7 +68,6 @@ import java.util.Set;
 public class BillingService {
 
     private static final Logger logger = LoggerFactory.getLogger(BillingService.class);
-    static final String DRAFT = "draft", ISSUED = "issued", PARTIAL = "partially_paid", PAID = "paid", OVERDUE = "overdue", VOID = "void";
     static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM yyyy");
 
     private final MeterClient meter;
@@ -121,11 +125,11 @@ public class BillingService {
     public Invoice draft(Long tenantId, YearMonth period) {
         if (tenantId == null || !this.tenants.existsById(tenantId)) throw new IllegalArgumentException("No such workspace.");
         LocalDate start = period.atDay(1), end = period.atEndOfMonth();
-        Optional<Invoice> existingDraft = this.invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatus(tenantId, start, "invoice", DRAFT);
+        Optional<Invoice> existingDraft = this.invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatus(tenantId, start, InvoiceKind.INVOICE.value(), InvoiceStatus.DRAFT.value());
         Invoice invoice = existingDraft.orElseGet(() -> {
             Invoice i = new Invoice();
-            i.setTenantId(tenantId); i.setKind("invoice"); i.setPeriodStart(start); i.setPeriodEnd(end); i.setStatus(DRAFT);
-            i.setNumber(this.nextNumber("INV", period)); i.setDateCreated(now()); i.setCreatedBy(TenantContext.getAppUserId());
+            i.setTenantId(tenantId); i.setKind(InvoiceKind.INVOICE.value()); i.setPeriodStart(start); i.setPeriodEnd(end); i.setStatus(InvoiceStatus.DRAFT.value());
+            i.setNumber(this.nextNumber(InvoiceKind.INVOICE.numberPrefix(), period)); i.setDateCreated(now()); i.setCreatedBy(TenantContext.getAppUserId());
             // Totalled once the lines are in; the row is saved first so the lines have an id to hang on.
             i.setSubtotal(BigDecimal.ZERO); i.setTaxRatePercent(BigDecimal.ZERO); i.setTax(BigDecimal.ZERO); i.setTotal(BigDecimal.ZERO); i.setBalance(BigDecimal.ZERO);
             return i;
@@ -195,7 +199,6 @@ public class BillingService {
     /** A manual line's unit price, either sign (a discount is a negative line); beyond this is a typo. */
     static final BigDecimal UNIT_PRICE_MAX = new BigDecimal("1000000");
     static final BigDecimal QUANTITY_MAX = new BigDecimal("1000000000");
-    static final List<String> PAYMENT_METHODS = Arrays.asList("bank", "card", "cash", "manual");
     /** A payment slip: a PDF or a picture of the transfer, up to this many bytes. */
     static final long SLIP_MAX_BYTES = 10L * 1024 * 1024;
 
@@ -220,7 +223,7 @@ public class BillingService {
     private BigDecimal creditedOn(Invoice invoice) {
         BigDecimal credited = BigDecimal.ZERO;
         for (Invoice n : this.invoices.findByReferencesInvoiceId(invoice.getInvoiceId())) {
-            if ("credit_note".equals(n.getKind()) && !VOID.equals(n.getStatus())) credited = credited.add(n.getTotal().negate());
+            if (InvoiceKind.CREDIT_NOTE.is(n.getKind()) && !InvoiceStatus.VOID.is(n.getStatus())) credited = credited.add(n.getTotal().negate());
         }
         return credited;
     }
@@ -229,7 +232,7 @@ public class BillingService {
         if (invoice.getInvoiceId() == null) return BigDecimal.ZERO;
         BigDecimal paid = BigDecimal.ZERO;
         for (Payment p : this.payments.findByInvoiceIdOrderByDateCreatedAsc(invoice.getInvoiceId())) {
-            if ("verified".equals(p.getStatus())) paid = paid.add(p.getAmount());
+            if (PaymentStatus.VERIFIED.is(p.getStatus())) paid = paid.add(p.getAmount());
         }
         return paid;
     }
@@ -256,14 +259,14 @@ public class BillingService {
         BillingAccount account = this.accountFor(invoice.getTenantId());
         List<InvoiceLine> invoiceLines = this.lines.findByInvoiceIdOrderBySortAsc(invoiceId);
         this.total(invoice, invoiceLines, account);
-        invoice.setStatus(invoice.getTotal().signum() == 0 ? PAID : ISSUED);
+        invoice.setStatus((invoice.getTotal().signum() == 0 ? InvoiceStatus.PAID : InvoiceStatus.ISSUED).value());
         invoice.setIssuedAt(now());
         invoice.setDueAt(Timestamp.valueOf(invoice.getIssuedAt().toLocalDateTime().plusDays(account.getPaymentTermsDays() == null ? 30 : account.getPaymentTermsDays())));
-        if (PAID.equals(invoice.getStatus())) invoice.setPaidAt(invoice.getIssuedAt());
+        if (InvoiceStatus.PAID.is(invoice.getStatus())) invoice.setPaidAt(invoice.getIssuedAt());
         invoice.setDateUpdated(now()); invoice.setUpdatedBy(TenantContext.getAppUserId());
         invoice = this.invoices.save(invoice);
         byte[] pdf = BillingPdf.render(this.invoiceDoc(invoice, invoiceLines, account));
-        BillingDocument doc = this.store(invoice.getTenantId(), invoice.getInvoiceId(), null, "invoice", invoice.getNumber(),
+        BillingDocument doc = this.store(invoice.getTenantId(), invoice.getInvoiceId(), null, BillingDocumentKind.INVOICE, invoice.getNumber(),
             invoice.getNumber() + ".pdf", "application/pdf", pdf, invoice.getTotal());
         invoice.setPdfObjectKey(doc.getObjectKey());
         return this.invoices.save(invoice);
@@ -272,10 +275,10 @@ public class BillingService {
     @Transactional
     public Invoice voidInvoice(Long invoiceId, String reason) {
         Invoice invoice = this.find(invoiceId);
-        if (VOID.equals(invoice.getStatus())) return invoice;
+        if (InvoiceStatus.VOID.is(invoice.getStatus())) return invoice;
         String why = text(reason, "A reason", NOTE_MAX / 2, true);
         if (this.paidOn(invoice).signum() > 0) throw new IllegalStateException("A partly paid invoice cannot be voided; issue a credit note for the rest.");
-        invoice.setStatus(VOID); invoice.setVoidedAt(now()); invoice.setBalance(BigDecimal.ZERO);
+        invoice.setStatus(InvoiceStatus.VOID.value()); invoice.setVoidedAt(now()); invoice.setBalance(BigDecimal.ZERO);
         invoice.setNote(text(((invoice.getNote() == null ? "" : invoice.getNote() + " ") + "Voided: " + why).trim(), "The note", NOTE_MAX, false));
         invoice.setDateUpdated(now()); invoice.setUpdatedBy(TenantContext.getAppUserId());
         return this.invoices.save(invoice);
@@ -285,7 +288,7 @@ public class BillingService {
     @Transactional
     public Invoice creditNote(Long invoiceId, BigDecimal amount, String reason) throws IOException {
         Invoice original = this.find(invoiceId);
-        if (!"invoice".equals(original.getKind()) || !Arrays.asList(ISSUED, PARTIAL, OVERDUE, PAID).contains(original.getStatus())) throw new IllegalStateException("Only an issued invoice can be credited.");
+        if (!InvoiceKind.INVOICE.is(original.getKind()) || !InvoiceStatus.of(original.getStatus()).isCreditable()) throw new IllegalStateException("Only an issued invoice can be credited.");
         if (amount == null || amount.signum() <= 0) throw new IllegalArgumentException("A credit note needs an amount above zero.");
         String why = text(reason, "A reason", NOTE_MAX, true);
         BigDecimal creditable = original.getTotal().subtract(this.creditedOn(original)).setScale(2, RoundingMode.HALF_UP);
@@ -294,9 +297,9 @@ public class BillingService {
         }
         BillingAccount account = this.accountFor(original.getTenantId());
         Invoice note = new Invoice();
-        note.setTenantId(original.getTenantId()); note.setKind("credit_note"); note.setReferencesInvoiceId(original.getInvoiceId());
-        note.setPeriodStart(original.getPeriodStart()); note.setPeriodEnd(original.getPeriodEnd()); note.setStatus(ISSUED);
-        note.setNumber(this.nextNumber("CN", YearMonth.from(original.getPeriodStart()))); note.setCurrency(original.getCurrency());
+        note.setTenantId(original.getTenantId()); note.setKind(InvoiceKind.CREDIT_NOTE.value()); note.setReferencesInvoiceId(original.getInvoiceId());
+        note.setPeriodStart(original.getPeriodStart()); note.setPeriodEnd(original.getPeriodEnd()); note.setStatus(InvoiceStatus.ISSUED.value());
+        note.setNumber(this.nextNumber(InvoiceKind.CREDIT_NOTE.numberPrefix(), YearMonth.from(original.getPeriodStart()))); note.setCurrency(original.getCurrency());
         note.setSubtotal(amount.negate()); note.setTaxRatePercent(BigDecimal.ZERO); note.setTax(BigDecimal.ZERO); note.setTotal(amount.negate()); note.setBalance(BigDecimal.ZERO);
         note.setNote(why); note.setIssuedAt(now()); note.setDateCreated(now()); note.setCreatedBy(TenantContext.getAppUserId());
         note = this.invoices.save(note);
@@ -305,13 +308,13 @@ public class BillingService {
         line.setQuantity(BigDecimal.ONE); line.setUnit("each"); line.setPer(1); line.setUnitPrice(amount.negate()); line.setAmount(amount.negate()); line.setManual(true);
         this.lines.save(line);
         byte[] pdf = BillingPdf.render(this.invoiceDoc(note, Arrays.asList(line), account));
-        BillingDocument doc = this.store(note.getTenantId(), note.getInvoiceId(), null, "credit_note", note.getNumber(), note.getNumber() + ".pdf", "application/pdf", pdf, note.getTotal());
+        BillingDocument doc = this.store(note.getTenantId(), note.getInvoiceId(), null, BillingDocumentKind.CREDIT_NOTE, note.getNumber(), note.getNumber() + ".pdf", "application/pdf", pdf, note.getTotal());
         note.setPdfObjectKey(doc.getObjectKey());
         note = this.invoices.save(note);
         // Applied to the original as a verified payment of kind credit_note.
         Payment applied = new Payment();
         applied.setTenantId(original.getTenantId()); applied.setInvoiceId(original.getInvoiceId()); applied.setAmount(amount);
-        applied.setMethod("credit_note"); applied.setReference(note.getNumber()); applied.setStatus("verified");
+        applied.setMethod(PaymentMethod.CREDIT_NOTE.value()); applied.setReference(note.getNumber()); applied.setStatus(PaymentStatus.VERIFIED.value());
         applied.setVerifiedBy(TenantContext.getAppUserId()); applied.setVerifiedAt(now()); applied.setReceivedAt(now()); applied.setDateCreated(now());
         this.payments.save(applied);
         this.settle(original);
@@ -324,23 +327,23 @@ public class BillingService {
     @Transactional
     public Payment submitPayment(Long invoiceId, BigDecimal amount, String method, String reference, String note, MultipartFile slip) throws IOException {
         Invoice invoice = this.find(invoiceId);
-        if (!"invoice".equals(invoice.getKind()) || !Arrays.asList(ISSUED, PARTIAL, OVERDUE).contains(invoice.getStatus())) throw new IllegalStateException("This invoice is not open for payment.");
+        if (!InvoiceKind.INVOICE.is(invoice.getKind()) || !InvoiceStatus.of(invoice.getStatus()).isOpen()) throw new IllegalStateException("This invoice is not open for payment.");
         if (amount == null || amount.signum() <= 0) throw new IllegalArgumentException("A payment needs an amount above zero.");
         BigDecimal paying = amount.setScale(2, RoundingMode.HALF_UP);
         // Slips already submitted and not yet verified count against the balance too, so two
         // slips cannot together say more was paid than is owed.
         BigDecimal open = invoice.getBalance().subtract(this.submittedOn(invoice)).setScale(2, RoundingMode.HALF_UP);
         if (paying.compareTo(open) > 0) throw new IllegalArgumentException("At most " + open.max(BigDecimal.ZERO).toPlainString() + " is still owed on " + invoice.getNumber() + ".");
-        String how = method == null || method.trim().isEmpty() ? "bank" : method.trim().toLowerCase();
-        if (!PAYMENT_METHODS.contains(how)) throw new IllegalArgumentException("The payment method must be one of " + String.join(", ", PAYMENT_METHODS) + ".");
+        PaymentMethod how = method == null || method.trim().isEmpty() ? PaymentMethod.BANK : PaymentMethod.chosen(method.trim().toLowerCase());
+        if (how == null) throw new IllegalArgumentException("The payment method must be one of " + PaymentMethod.chosenList() + ".");
         SlipContent content = slip == null || slip.isEmpty() ? null : SlipContent.of(slip);
         Payment p = new Payment();
         p.setTenantId(invoice.getTenantId()); p.setInvoiceId(invoiceId); p.setAmount(paying);
-        p.setMethod(how); p.setReference(text(reference, "The reference", REFERENCE_MAX, false)); p.setNote(text(note, "The note", NOTE_MAX, false));
-        p.setStatus("submitted"); p.setSubmittedBy(TenantContext.getAppUserId()); p.setDateCreated(now());
+        p.setMethod(how.value()); p.setReference(text(reference, "The reference", REFERENCE_MAX, false)); p.setNote(text(note, "The note", NOTE_MAX, false));
+        p.setStatus(PaymentStatus.SUBMITTED.value()); p.setSubmittedBy(TenantContext.getAppUserId()); p.setDateCreated(now());
         p = this.payments.save(p);
         if (content != null) {
-            BillingDocument doc = this.store(invoice.getTenantId(), invoiceId, p.getPaymentId(), "payment_slip", null, content.fileName,
+            BillingDocument doc = this.store(invoice.getTenantId(), invoiceId, p.getPaymentId(), BillingDocumentKind.PAYMENT_SLIP, null, content.fileName,
                 content.contentType, content.bytes, p.getAmount());
             p.setSlipObjectKey(doc.getObjectKey());
             p = this.payments.save(p);
@@ -352,7 +355,7 @@ public class BillingService {
     private BigDecimal submittedOn(Invoice invoice) {
         BigDecimal promised = BigDecimal.ZERO;
         for (Payment p : this.payments.findByInvoiceIdOrderByDateCreatedAsc(invoice.getInvoiceId())) {
-            if ("submitted".equals(p.getStatus())) promised = promised.add(p.getAmount());
+            if (PaymentStatus.SUBMITTED.is(p.getStatus())) promised = promised.add(p.getAmount());
         }
         return promised;
     }
@@ -391,18 +394,18 @@ public class BillingService {
     @Transactional
     public Payment verifyPayment(Long paymentId, boolean accept, String note) throws IOException {
         Payment p = this.payments.findById(paymentId).orElseThrow(() -> new IllegalArgumentException("No such payment."));
-        if (!"submitted".equals(p.getStatus())) throw new IllegalStateException("This payment was already " + p.getStatus() + ".");
+        if (!PaymentStatus.SUBMITTED.is(p.getStatus())) throw new IllegalStateException("This payment was already " + p.getStatus() + ".");
         Invoice invoice = this.find(p.getInvoiceId());
-        p.setStatus(accept ? "verified" : "rejected"); p.setVerifiedBy(TenantContext.getAppUserId()); p.setVerifiedAt(now());
+        p.setStatus((accept ? PaymentStatus.VERIFIED : PaymentStatus.REJECTED).value()); p.setVerifiedBy(TenantContext.getAppUserId()); p.setVerifiedAt(now());
         String remark = text(note, "The note", NOTE_MAX / 2, false);
         if (remark != null) p.setNote(text(((p.getNote() == null ? "" : p.getNote() + " ") + remark).trim(), "The note", NOTE_MAX, false));
         if (accept) {
             p.setReceivedAt(p.getReceivedAt() == null ? now() : p.getReceivedAt());
-            p.setReceiptNumber(this.nextNumber("RCP", YearMonth.now()));
+            p.setReceiptNumber(this.nextNumber(BillingDocumentKind.RECEIPT.numberPrefix(), YearMonth.now()));
             p = this.payments.save(p);
             BillingAccount account = this.accountFor(invoice.getTenantId());
             byte[] pdf = BillingPdf.render(this.receiptDoc(p, invoice, account));
-            BillingDocument doc = this.store(invoice.getTenantId(), invoice.getInvoiceId(), p.getPaymentId(), "receipt", p.getReceiptNumber(),
+            BillingDocument doc = this.store(invoice.getTenantId(), invoice.getInvoiceId(), p.getPaymentId(), BillingDocumentKind.RECEIPT, p.getReceiptNumber(),
                 p.getReceiptNumber() + ".pdf", "application/pdf", pdf, p.getAmount());
             logger.info("Receipt {} issued for {} against {}", p.getReceiptNumber(), p.getAmount(), invoice.getNumber());
             this.settle(invoice);
@@ -414,10 +417,10 @@ public class BillingService {
     private void settle(Invoice invoice) {
         BigDecimal paid = this.paidOn(invoice);
         invoice.setBalance(invoice.getTotal().subtract(paid).max(BigDecimal.ZERO));
-        if (invoice.getBalance().signum() == 0) { invoice.setStatus(PAID); invoice.setPaidAt(now()); }
-        else if (paid.signum() > 0) invoice.setStatus(PARTIAL);
-        else if (invoice.getDueAt() != null && invoice.getDueAt().before(now())) invoice.setStatus(OVERDUE);
-        else invoice.setStatus(ISSUED);
+        if (invoice.getBalance().signum() == 0) { invoice.setStatus(InvoiceStatus.PAID.value()); invoice.setPaidAt(now()); }
+        else if (paid.signum() > 0) invoice.setStatus(InvoiceStatus.PARTIALLY_PAID.value());
+        else if (invoice.getDueAt() != null && invoice.getDueAt().before(now())) invoice.setStatus(InvoiceStatus.OVERDUE.value());
+        else invoice.setStatus(InvoiceStatus.ISSUED.value());
         invoice.setDateUpdated(now());
         this.invoices.save(invoice);
     }
@@ -426,9 +429,9 @@ public class BillingService {
     @Transactional
     public int markOverdue() {
         int marked = 0;
-        for (Invoice invoice : this.invoices.findByStatusIn(Arrays.asList(ISSUED, PARTIAL))) {
+        for (Invoice invoice : this.invoices.findByStatusIn(InvoiceStatus.values(InvoiceStatus.ISSUED, InvoiceStatus.PARTIALLY_PAID))) {
             if (invoice.getDueAt() != null && invoice.getDueAt().before(now()) && invoice.getBalance().signum() > 0) {
-                invoice.setStatus(OVERDUE); invoice.setDateUpdated(now()); this.invoices.save(invoice); marked++;
+                invoice.setStatus(InvoiceStatus.OVERDUE.value()); invoice.setDateUpdated(now()); this.invoices.save(invoice); marked++;
             }
         }
         return marked;
@@ -436,12 +439,12 @@ public class BillingService {
 
     // ---- documents -------------------------------------------------------------------------
 
-    private BillingDocument store(Long tenantId, Long invoiceId, Long paymentId, String kind, String number, String fileName,
+    private BillingDocument store(Long tenantId, Long invoiceId, Long paymentId, BillingDocumentKind kind, String number, String fileName,
         String contentType, byte[] bytes, BigDecimal amount) {
-        String key = String.format("billing/%d/%s/%s/%s", tenantId, YearMonth.now().getYear(), kind, System.currentTimeMillis() + "-" + fileName);
+        String key = String.format("billing/%d/%s/%s/%s", tenantId, YearMonth.now().getYear(), kind.value(), System.currentTimeMillis() + "-" + fileName);
         this.storage.uploadForWorkflow(this.bucket, key, new ByteArrayInputStream(bytes), bytes.length, contentType);
         BillingDocument doc = new BillingDocument();
-        doc.setTenantId(tenantId); doc.setInvoiceId(invoiceId); doc.setPaymentId(paymentId); doc.setKind(kind); doc.setNumber(number);
+        doc.setTenantId(tenantId); doc.setInvoiceId(invoiceId); doc.setPaymentId(paymentId); doc.setKind(kind.value()); doc.setNumber(number);
         doc.setFileName(fileName); doc.setContentType(contentType); doc.setSizeBytes((long) bytes.length); doc.setObjectKey(key);
         doc.setAmount(amount); doc.setIssuedAt(now()); doc.setCreatedBy(TenantContext.getAppUserId());
         return this.documents.save(doc);
@@ -458,7 +461,7 @@ public class BillingService {
     /** Payment slips awaiting the platform's verification, for one workspace or all. */
     public List<Payment> pendingPayments(Long tenantId) {
         List<Payment> out = new ArrayList<>();
-        for (Payment p : this.payments.findByStatusOrderByDateCreatedAsc("submitted")) {
+        for (Payment p : this.payments.findByStatusOrderByDateCreatedAsc(PaymentStatus.SUBMITTED.value())) {
             if (tenantId == null || tenantId.equals(p.getTenantId())) out.add(p);
         }
         return out;
@@ -481,13 +484,13 @@ public class BillingService {
         BigDecimal invoiced = BigDecimal.ZERO, paid = BigDecimal.ZERO, balance = BigDecimal.ZERO;
         for (int i = all.size() - 1; i >= 0; i--) {
             Invoice inv = all.get(i);
-            if (VOID.equals(inv.getStatus()) || DRAFT.equals(inv.getStatus()) || inv.getIssuedAt() == null) continue;
+            if (InvoiceStatus.VOID.is(inv.getStatus()) || InvoiceStatus.DRAFT.is(inv.getStatus()) || inv.getIssuedAt() == null) continue;
             LocalDate day = inv.getIssuedAt().toLocalDateTime().toLocalDate();
             if (day.isBefore(from) || day.isAfter(to)) continue;
-            doc.lines.add(new BillingPdf.Line(DAY.format(day) + "  " + ("credit_note".equals(inv.getKind()) ? "Credit note " : "Invoice ") + inv.getNumber(), "", "", BillingPdf.money(inv.getTotal(), null)));
+            doc.lines.add(new BillingPdf.Line(DAY.format(day) + "  " + (InvoiceKind.CREDIT_NOTE.is(inv.getKind()) ? "Credit note " : "Invoice ") + inv.getNumber(), "", "", BillingPdf.money(inv.getTotal(), null)));
             invoiced = invoiced.add(inv.getTotal());
             for (Payment p : this.payments.findByInvoiceIdOrderByDateCreatedAsc(inv.getInvoiceId())) {
-                if (!"verified".equals(p.getStatus()) || "credit_note".equals(p.getMethod())) continue;
+                if (!PaymentStatus.VERIFIED.is(p.getStatus()) || PaymentMethod.CREDIT_NOTE.is(p.getMethod())) continue;
                 doc.lines.add(new BillingPdf.Line("    Payment " + (p.getReference() == null ? "" : p.getReference()) + " (" + p.getMethod() + ")", "", "", BillingPdf.money(p.getAmount().negate(), null)));
                 paid = paid.add(p.getAmount());
             }
@@ -498,7 +501,7 @@ public class BillingService {
         doc.totals.add(new String[] {"Paid", BillingPdf.money(paid, doc.currency)});
         doc.totals.add(new String[] {"Balance open", BillingPdf.money(balance, doc.currency)});
         byte[] pdf = BillingPdf.render(doc);
-        return this.store(tenantId, null, null, "statement", doc.number, doc.number + ".pdf", "application/pdf", pdf, balance);
+        return this.store(tenantId, null, null, BillingDocumentKind.STATEMENT, doc.number, doc.number + ".pdf", "application/pdf", pdf, balance);
     }
 
     // ---- reads -----------------------------------------------------------------------------
@@ -544,18 +547,18 @@ public class BillingService {
                 row.put("invoiced", BigDecimal.ZERO); row.put("collected", BigDecimal.ZERO); row.put("open", BigDecimal.ZERO); row.put("overdue", BigDecimal.ZERO); row.put("status", "");
                 return row;
             });
-            if (DRAFT.equals(inv.getStatus())) { drafts = drafts.add(inv.getTotal()); m.merge("drafts", inv.getTotal(), BigDecimal::add); continue; }
-            if (VOID.equals(inv.getStatus())) continue;
+            if (InvoiceStatus.DRAFT.is(inv.getStatus())) { drafts = drafts.add(inv.getTotal()); m.merge("drafts", inv.getTotal(), BigDecimal::add); continue; }
+            if (InvoiceStatus.VOID.is(inv.getStatus())) continue;
             BigDecimal total = inv.getTotal(), paidAmount = inv.getTotal().subtract(inv.getBalance() == null ? BigDecimal.ZERO : inv.getBalance());
             invoiced = invoiced.add(total); m.merge("invoiced", total, BigDecimal::add); t.put("invoiced", ((BigDecimal) t.get("invoiced")).add(total));
             collected = collected.add(paidAmount); m.merge("collected", paidAmount, BigDecimal::add); t.put("collected", ((BigDecimal) t.get("collected")).add(paidAmount));
             if (inv.getBalance() != null && inv.getBalance().signum() > 0) {
                 open = open.add(inv.getBalance()); m.merge("open", inv.getBalance(), BigDecimal::add); t.put("open", ((BigDecimal) t.get("open")).add(inv.getBalance()));
-                if (OVERDUE.equals(inv.getStatus())) { overdue = overdue.add(inv.getBalance()); overdueCount++; t.put("overdue", ((BigDecimal) t.get("overdue")).add(inv.getBalance())); t.put("status", OVERDUE); }
-                else if (!OVERDUE.equals(t.get("status"))) t.put("status", inv.getStatus());
-            } else if (!"".equals(t.get("status")) && !OVERDUE.equals(t.get("status"))) {
-                t.put("status", PAID);
-            } else if ("".equals(t.get("status"))) t.put("status", PAID);
+                if (InvoiceStatus.OVERDUE.is(inv.getStatus())) { overdue = overdue.add(inv.getBalance()); overdueCount++; t.put("overdue", ((BigDecimal) t.get("overdue")).add(inv.getBalance())); t.put("status", InvoiceStatus.OVERDUE.value()); }
+                else if (!InvoiceStatus.OVERDUE.value().equals(t.get("status"))) t.put("status", inv.getStatus());
+            } else if (!"".equals(t.get("status")) && !InvoiceStatus.OVERDUE.value().equals(t.get("status"))) {
+                t.put("status", InvoiceStatus.PAID.value());
+            } else if ("".equals(t.get("status"))) t.put("status", InvoiceStatus.PAID.value());
             if (inv.getPaidAt() != null && inv.getIssuedAt() != null) daysToPay.add(new long[] {(inv.getPaidAt().getTime() - inv.getIssuedAt().getTime()) / 86_400_000L});
         }
         List<Map<String, Object>> months = new ArrayList<>();
@@ -566,7 +569,7 @@ public class BillingService {
         if (!daysToPay.isEmpty()) { daysToPay.sort((a, b) -> Long.compare(a[0], b[0])); median = daysToPay.get(daysToPay.size() / 2)[0]; }
         out.put("invoiced", invoiced); out.put("collected", collected); out.put("open", open); out.put("overdue", overdue); out.put("overdueCount", overdueCount);
         out.put("drafts", drafts); out.put("medianDaysToPay", median); out.put("months", months); out.put("tenants", new ArrayList<>(byTenant.values()));
-        out.put("pendingPayments", this.payments.findByStatusOrderByDateCreatedAsc("submitted").size());
+        out.put("pendingPayments", this.payments.findByStatusOrderByDateCreatedAsc(PaymentStatus.SUBMITTED.value()).size());
         return out;
     }
 
@@ -581,7 +584,7 @@ public class BillingService {
 
     BillingPdf.Doc invoiceDoc(Invoice invoice, List<InvoiceLine> invoiceLines, BillingAccount account) {
         BillingPdf.Doc doc = new BillingPdf.Doc();
-        boolean credit = "credit_note".equals(invoice.getKind());
+        boolean credit = InvoiceKind.CREDIT_NOTE.is(invoice.getKind());
         doc.title = credit ? "Credit note" : "Invoice"; doc.number = invoice.getNumber(); doc.currency = invoice.getCurrency(); doc.qrText = invoice.getNumber();
         doc.billedTo = this.billedTo(account); doc.taxId = account.getTaxId();
         doc.facts = new ArrayList<>();
@@ -652,16 +655,16 @@ public class BillingService {
 
     private Invoice mustBeDraft(Long invoiceId) {
         Invoice invoice = this.find(invoiceId);
-        if (!DRAFT.equals(invoice.getStatus())) throw new IllegalStateException("Only a draft can be changed; this invoice is " + invoice.getStatus() + ".");
+        if (!InvoiceStatus.DRAFT.is(invoice.getStatus())) throw new IllegalStateException("Only a draft can be changed; this invoice is " + invoice.getStatus() + ".");
         return invoice;
     }
 
     private String nextNumber(String prefix, YearMonth period) {
-        String base = prefix + "-" + period;
+        String base = BillingNumber.base(prefix, period);
+        if (BillingDocumentKind.RECEIPT.numberPrefix().equals(prefix)) return BillingNumber.format(base, this.payments.findAll().size() + 1);
         long n = this.invoices.countByNumberPrefix(base + "-") + 1;
         String candidate;
-        do { candidate = String.format("%s-%04d", base, n++); } while (this.invoices.findByNumber(candidate).isPresent() && !"RCP".equals(prefix));
-        if ("RCP".equals(prefix)) candidate = String.format("%s-%04d", base, this.payments.findAll().size() + 1);
+        do { candidate = BillingNumber.format(base, (int) n++); } while (this.invoices.findByNumber(candidate).isPresent());
         return candidate;
     }
 

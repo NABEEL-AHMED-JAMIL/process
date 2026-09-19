@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import process.util.validation.EmailValidator;
+import process.util.TenantCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,7 +29,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 import static process.util.ProcessUtil.ERROR_MESSAGE;
 import static process.util.ProcessUtil.SUCCESS;
@@ -48,7 +49,6 @@ public class TenantRequestServiceImpl {
     private static final Logger logger = LoggerFactory.getLogger(TenantRequestServiceImpl.class);
     private static final String ERROR = ERROR_MESSAGE;
 
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s.]+\\.[^@\\s]+$");
     /** Long enough that guessing is pointless in the short window before it is spent. */
     private static final int GENERATED_PASSWORD_LENGTH = 16;
     /**
@@ -94,7 +94,7 @@ public class TenantRequestServiceImpl {
             return new ResponseDto(ERROR, "Tell us your name.");
         }
         String email = safe(submitted.getContactEmail()).toLowerCase(Locale.ROOT);
-        if (email.isEmpty() || !EMAIL.matcher(email).matches()) {
+        if (!EmailValidator.isValid(email)) {
             return new ResponseDto(ERROR, "That does not look like an email address.");
         }
 
@@ -229,11 +229,9 @@ public class TenantRequestServiceImpl {
         return new ResponseDto(SUCCESS, "Request rejected.");
     }
 
-    /** A tenant code from a company name: lower case, words joined by hyphens. */
+    /** A tenant code from a company name: the one rule in {@link TenantCode}. */
     private static String normaliseCode(String value) {
-        return safe(value).toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9]+", "-")
-            .replaceAll("(^-+|-+$)", "");
+        return TenantCode.from(safe(value));
     }
 
     private static boolean isBlank(String value) { return value == null || value.trim().isEmpty(); }

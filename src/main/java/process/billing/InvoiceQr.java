@@ -21,7 +21,17 @@ import java.util.Map;
  */
 public final class InvoiceQr {
 
+    /** Pixels square: what the page asks for by default, and the least and most it may ask for. */
+    public static final int DEFAULT_SIZE = 160;
+    public static final int MIN_SIZE = 64;
+    public static final int MAX_SIZE = 1024;
+
     private InvoiceQr() {}
+
+    /** A requested size held to the bounds; none at all is the default. */
+    public static int sizeOf(Integer requested) {
+        return requested == null ? DEFAULT_SIZE : Math.max(MIN_SIZE, Math.min(requested, MAX_SIZE));
+    }
 
     /** The modules of a code for the text, with a one-module quiet zone. */
     public static BitMatrix matrix(String text, int size) {

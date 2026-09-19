@@ -7,6 +7,9 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.model.enums.InvoiceKind;
+import process.model.enums.InvoiceStatus;
+import process.model.enums.PaymentStatus;
 import process.model.pojo.BillingAccount;
 import process.model.pojo.BillingDocument;
 import process.model.pojo.Invoice;
@@ -132,7 +135,7 @@ class BillingServiceTest {
     void aDraftIsTheMetersLinesTotalledWithNoTaxUnlessTheAccountCarriesANumberAndARate() {
         Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
         assertThat(draft.getNumber()).isEqualTo("INV-2026-09-0001");
-        assertThat(draft.getStatus()).isEqualTo("draft");
+        assertThat(draft.getStatus()).isEqualTo(InvoiceStatus.DRAFT.value());
         assertThat(this.service.linesOf(draft.getInvoiceId())).extracting(InvoiceLine::getMeter).containsExactly("seats.user_days", "storage.bytes.deleted");
         assertThat(draft.getSubtotal()).isEqualByComparingTo("46.58");
         assertThat(draft.getTax()).isEqualByComparingTo("0");
@@ -167,7 +170,7 @@ class BillingServiceTest {
         assertThat(redrafted.getTotal()).isEqualByComparingTo("52.62");
 
         Invoice issued = this.service.issue(redrafted.getInvoiceId());
-        assertThat(issued.getStatus()).isEqualTo("issued");
+        assertThat(issued.getStatus()).isEqualTo(InvoiceStatus.ISSUED.value());
         assertThat(issued.getIssuedAt()).isNotNull();
         assertThat(issued.getDueAt().getTime() - issued.getIssuedAt().getTime()).isEqualTo(30L * 86_400_000);
         assertThat(issued.getBalance()).isEqualByComparingTo("52.62");
@@ -183,22 +186,22 @@ class BillingServiceTest {
         Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
         TenantContext.set(TENANT, "TENANT_ADMIN", 4385L, "emily@medaxis");
         Payment submitted = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("20"), "bank", "TRF-1", null, null);
-        assertThat(submitted.getStatus()).isEqualTo("submitted");
+        assertThat(submitted.getStatus()).isEqualTo(PaymentStatus.SUBMITTED.value());
         assertThat(this.service.find(issued.getInvoiceId()).getBalance()).isEqualByComparingTo("46.58");   // nothing moved yet
 
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
         Payment verified = this.service.verifyPayment(submitted.getPaymentId(), true, null);
-        assertThat(verified.getStatus()).isEqualTo("verified");
+        assertThat(verified.getStatus()).isEqualTo(PaymentStatus.VERIFIED.value());
         assertThat(verified.getReceiptNumber()).startsWith("RCP-");
         Invoice partly = this.service.find(issued.getInvoiceId());
-        assertThat(partly.getStatus()).isEqualTo("partially_paid");
+        assertThat(partly.getStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID.value());
         assertThat(partly.getBalance()).isEqualByComparingTo("26.58");
         assertThat(this.docRows).extracting(BillingDocument::getKind).containsExactly("invoice", "receipt");
 
         Payment rest = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("26.58"), "bank", "TRF-2", null, null);
         this.service.verifyPayment(rest.getPaymentId(), true, null);
         Invoice paid = this.service.find(issued.getInvoiceId());
-        assertThat(paid.getStatus()).isEqualTo("paid");
+        assertThat(paid.getStatus()).isEqualTo(InvoiceStatus.PAID.value());
         assertThat(paid.getBalance()).isEqualByComparingTo("0");
         assertThat(paid.getPaidAt()).isNotNull();
         assertThatThrownBy(() -> this.service.submitPayment(issued.getInvoiceId(), BigDecimal.ONE, "bank", null, null, null))
@@ -211,7 +214,7 @@ class BillingServiceTest {
         Payment p = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("46.58"), "bank", "TRF-X", null, null);
         this.service.verifyPayment(p.getPaymentId(), false, "no transfer received");
         assertThat(this.service.find(issued.getInvoiceId()).getBalance()).isEqualByComparingTo("46.58");
-        assertThat(this.service.find(issued.getInvoiceId()).getStatus()).isEqualTo("issued");
+        assertThat(this.service.find(issued.getInvoiceId()).getStatus()).isEqualTo(InvoiceStatus.ISSUED.value());
         assertThatThrownBy(() -> this.service.verifyPayment(p.getPaymentId(), true, null)).hasMessageContaining("already rejected");
     }
 
@@ -219,13 +222,13 @@ class BillingServiceTest {
     void aCreditNoteIsANegativeInvoiceAppliedToTheOriginal() throws Exception {
         Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
         Invoice note = this.service.creditNote(issued.getInvoiceId(), new BigDecimal("6.58"), "duplicate conversion runs");
-        assertThat(note.getKind()).isEqualTo("credit_note");
+        assertThat(note.getKind()).isEqualTo(InvoiceKind.CREDIT_NOTE.value());
         assertThat(note.getNumber()).isEqualTo("CN-2026-09-0001");
         assertThat(note.getTotal()).isEqualByComparingTo("-6.58");
         assertThat(note.getReferencesInvoiceId()).isEqualTo(issued.getInvoiceId());
         Invoice original = this.service.find(issued.getInvoiceId());
         assertThat(original.getBalance()).isEqualByComparingTo("40.00");
-        assertThat(original.getStatus()).isEqualTo("partially_paid");
+        assertThat(original.getStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID.value());
         assertThat(this.docRows).extracting(BillingDocument::getKind).containsExactly("invoice", "credit_note");
         assertThatThrownBy(() -> this.service.voidInvoice(issued.getInvoiceId(), "x")).hasMessageContaining("partly paid");
         // Never more than what was billed and not yet credited: 46.58 - 6.58 = 40.00 is the most left.
@@ -237,7 +240,7 @@ class BillingServiceTest {
         // A credit note is not an invoice: nothing is paid against it, nothing credited against it.
         assertThatThrownBy(() -> this.service.submitPayment(rest.getInvoiceId(), BigDecimal.ONE, "bank", null, null, null)).hasMessageContaining("not open for payment");
         assertThatThrownBy(() -> this.service.creditNote(rest.getInvoiceId(), BigDecimal.ONE, "x")).hasMessageContaining("Only an issued invoice");
-        assertThat(this.service.find(issued.getInvoiceId()).getStatus()).isEqualTo("paid");
+        assertThat(this.service.find(issued.getInvoiceId()).getStatus()).isEqualTo(InvoiceStatus.PAID.value());
     }
 
     @Test
@@ -287,7 +290,7 @@ class BillingServiceTest {
         assertThat(this.service.markOverdue()).isEqualTo(0);
         issued.setDueAt(new java.sql.Timestamp(System.currentTimeMillis() - 86_400_000));
         assertThat(this.service.markOverdue()).isEqualTo(1);
-        assertThat(this.service.find(issued.getInvoiceId()).getStatus()).isEqualTo("overdue");
+        assertThat(this.service.find(issued.getInvoiceId()).getStatus()).isEqualTo(InvoiceStatus.OVERDUE.value());
     }
 
     @Test
@@ -306,6 +309,6 @@ class BillingServiceTest {
         when(this.meter.usage(eq(TENANT), any(), any(), eq("meter"))).thenReturn(map("rows", new ArrayList<>()));
         Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 8)).getInvoiceId());
         assertThat(issued.getTotal()).isEqualByComparingTo("0");
-        assertThat(issued.getStatus()).isEqualTo("paid");
+        assertThat(issued.getStatus()).isEqualTo(InvoiceStatus.PAID.value());
     }
 }

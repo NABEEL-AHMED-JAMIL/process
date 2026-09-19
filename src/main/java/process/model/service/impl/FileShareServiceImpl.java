@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.validation.EmailValidator;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +22,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
-import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import static process.util.ProcessUtil.ERROR;
@@ -37,7 +37,6 @@ public class FileShareServiceImpl implements FileShareService {
 
     private static final Logger logger = LoggerFactory.getLogger(FileShareServiceImpl.class);
 
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     private static final long MAX_SHARE_BYTES = 20L * 1024 * 1024;
 
@@ -60,7 +59,7 @@ public class FileShareServiceImpl implements FileShareService {
         if (!bulk && (isNull(dto.getKey()) || dto.getKey().trim().isEmpty())) {
             return new ResponseDto(ERROR, "key missing.");
         }
-        if (isNull(dto.getRecipientEmail()) || !EMAIL_PATTERN.matcher(dto.getRecipientEmail().trim()).matches()) {
+        if (!EmailValidator.isValid(dto.getRecipientEmail())) {
             return new ResponseDto(ERROR, "Enter a valid recipient email address.");
         }
         boolean bucketOwnedByCaller = this.storageBrowserService.listBuckets().stream()
@@ -120,7 +119,7 @@ public class FileShareServiceImpl implements FileShareService {
     @Override
     public ResponseDto emailGeneratedFile(String recipientEmail, String itemName, String filename,
         String contentType, byte[] bytes, String message) throws Exception {
-        if (isNull(recipientEmail) || !EMAIL_PATTERN.matcher(recipientEmail.trim()).matches()) {
+        if (!EmailValidator.isValid(recipientEmail)) {
             return new ResponseDto(ERROR, "Enter a valid recipient email address.");
         }
         if (bytes == null || bytes.length == 0) {

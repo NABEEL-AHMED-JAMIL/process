@@ -24,9 +24,9 @@ public class UsageEvent {
     public String dedupeKey;
     public String note;
 
-    public static UsageEvent of(Long tenantId, String meter, double quantity, String unit, String dedupeKey) {
+    public static UsageEvent of(Long tenantId, Meter meter, double quantity, String dedupeKey) {
         UsageEvent e = new UsageEvent();
-        e.tenantId = tenantId; e.meter = meter; e.quantity = quantity; e.unit = unit; e.dedupeKey = dedupeKey;
+        e.tenantId = tenantId; e.meter = meter.key(); e.quantity = quantity; e.unit = meter.unit(); e.dedupeKey = dedupeKey;
         return e;
     }
 

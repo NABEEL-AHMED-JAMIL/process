@@ -3,6 +3,7 @@ package process.model.service.impl;
 import org.jodconverter.core.DocumentConverter;
 import process.billing.MeterClient;
 import java.util.UUID;
+import process.billing.Meter;
 import process.billing.UsageEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.jodconverter.core.document.DocumentFormat;
@@ -244,7 +245,7 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
             task.setStatus(Status.Active);
             this.documentConverterTaskRepository.save(task);
             if (this.meter != null && task.getTenantId() != null) {
-                this.meter.report(UsageEvent.of(task.getTenantId(), "convert.documents", 1, "document", "convert#" + UUID.randomUUID())
+                this.meter.report(UsageEvent.of(task.getTenantId(), Meter.CONVERT_DOCUMENTS, 1, "convert#" + UUID.randomUUID())
                     .subject("file", safeFileName).actor(TenantContext.getAppUserId()).source("console").note(inputExtension + "->" + normalizedOutputFormat));
             }
 

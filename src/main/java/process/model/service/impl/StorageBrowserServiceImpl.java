@@ -23,6 +23,7 @@ import process.model.service.ObjectStorageService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.billing.MeterClient;
+import process.billing.Meter;
 import process.billing.UsageEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import java.util.UUID;
@@ -85,7 +86,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
      * A delete is reported with the object's size, taken BEFORE the delete -- what left the
      * bucket is the churn the bill shows; after the delete there is nothing to measure.
      */
-    private void metered(String meterName, double quantity, String unit, String bucket, String subjectType, String subjectId, String note) {
+    private void metered(Meter meter, double quantity, String bucket, String subjectType, String subjectId, String note) {
         if (this.meter == null || quantity == 0) {
             return;
         }
@@ -93,26 +94,26 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         if (tenantId == null) {
             return;
         }
-        this.meter.report(UsageEvent.of(tenantId, meterName, quantity, unit, "console#" + UUID.randomUUID())
+        this.meter.report(UsageEvent.of(tenantId, meter, quantity, "console#" + UUID.randomUUID())
             .subject(subjectType, subjectId).actor(TenantContext.getAppUserId()).source("console").note(note));
     }
 
     private void meteredWrite(String bucket, long bytes) {
-        this.metered("storage.ops.write", 1, "op", bucket, "bucket", bucket, null);
-        this.metered("storage.bytes.written", bytes, "byte", bucket, "bucket", bucket, null);
+        this.metered(Meter.STORAGE_OPS_WRITE, 1, bucket, "bucket", bucket, null);
+        this.metered(Meter.STORAGE_BYTES_WRITTEN, bytes, bucket, "bucket", bucket, null);
     }
 
     private void meteredRead(String bucket, long bytes, String note) {
-        this.metered("storage.ops.read", 1, "op", bucket, "bucket", bucket, note);
+        this.metered(Meter.STORAGE_OPS_READ, 1, bucket, "bucket", bucket, note);
         if (bytes > 0) {
-            this.metered("storage.bytes.read", bytes, "byte", bucket, "bucket", bucket, null);
+            this.metered(Meter.STORAGE_BYTES_READ, bytes, bucket, "bucket", bucket, null);
         }
     }
 
     private void meteredDelete(String bucket, String key, long bytes) {
-        this.metered("storage.ops.delete", 1, "op", bucket, "bucket", bucket, null);
+        this.metered(Meter.STORAGE_OPS_DELETE, 1, bucket, "bucket", bucket, null);
         if (bytes > 0) {
-            this.metered("storage.bytes.deleted", bytes, "byte", bucket, "object", bucket + "/" + key, null);
+            this.metered(Meter.STORAGE_BYTES_DELETED, bytes, bucket, "object", bucket + "/" + key, null);
         }
     }
 

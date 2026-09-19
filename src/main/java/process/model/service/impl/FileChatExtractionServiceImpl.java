@@ -3,6 +3,7 @@ package process.model.service.impl;
 import com.google.gson.Gson;
 import process.billing.MeterClient;
 import process.security.TenantContext;
+import process.billing.Meter;
 import process.billing.UsageEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.google.gson.JsonArray;
@@ -424,7 +425,7 @@ public class FileChatExtractionServiceImpl implements FileChatExtractionService 
         // is why the same file opened twice is not two calls, and the key is the same reason
         // it is not two events.
         if (this.meter != null && TenantContext.getTenantId() != null) {
-            this.meter.report(UsageEvent.of(TenantContext.getTenantId(), "ai.vision.images", 1, "image", "vision#" + visionKey)
+            this.meter.report(UsageEvent.of(TenantContext.getTenantId(), Meter.AI_VISION_IMAGES, 1, "vision#" + visionKey)
                 .subject("object", bucket + "/" + key).actor(TenantContext.getAppUserId()).source("console"));
         }
         return this.rememberExtraction(visionKey, description);

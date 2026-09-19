@@ -41,11 +41,11 @@ class MeterClientTest {
             .andRespond(withSuccess("{\"accepted\":2,\"duplicates\":0,\"rejected\":[]}", MediaType.APPLICATION_JSON));
 
         MeterClient client = new MeterClient("http://meter:8200", "k", http);
-        client.report(UsageEvent.of(2905L, "storage.bytes.deleted", 0.5, "GB", "console#1").subject("object", "b/claims/a.txt"));
-        client.report(UsageEvent.of(2905L, "storage.ops.delete", 1, "op", "console#2"));
+        client.report(UsageEvent.of(2905L, Meter.STORAGE_BYTES_DELETED, 0.5, "console#1").subject("object", "b/claims/a.txt"));
+        client.report(UsageEvent.of(2905L, Meter.STORAGE_OPS_DELETE, 1, "console#2"));
         // Never reported: no workspace, or nothing used.
-        client.report(UsageEvent.of(null, "storage.ops.delete", 1, "op", "console#3"));
-        client.report(UsageEvent.of(2905L, "storage.ops.delete", 0, "op", "console#4"));
+        client.report(UsageEvent.of(null, Meter.STORAGE_OPS_DELETE, 1, "console#3"));
+        client.report(UsageEvent.of(2905L, Meter.STORAGE_OPS_DELETE, 0, "console#4"));
 
         assertThat(client.flush()).isEqualTo(2);
         server.verify();
@@ -59,7 +59,7 @@ class MeterClientTest {
             server.expect(requestTo("http://meter:8200/v1/events")).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
         }
         MeterClient client = new MeterClient("http://meter:8200", "k", http);
-        client.report(UsageEvent.of(2905L, "pipeline.runs", 1, "run", "run#1"));
+        client.report(UsageEvent.of(2905L, Meter.PIPELINE_RUNS, 1, "run#1"));
         assertThat(client.flush()).isEqualTo(0);
         server.verify();
     }
@@ -68,7 +68,7 @@ class MeterClientTest {
     void unconfiguredMeansNothingIsSentAndReadsAreEmpty() {
         MeterClient client = new MeterClient("", "", new RestTemplate());
         assertThat(client.isConfigured()).isFalse();
-        client.report(UsageEvent.of(2905L, "pipeline.runs", 1, "run", "run#1"));
+        client.report(UsageEvent.of(2905L, Meter.PIPELINE_RUNS, 1, "run#1"));
         assertThat(client.flush()).isEqualTo(0);
         assertThat(client.rateCard()).isEmpty();
     }

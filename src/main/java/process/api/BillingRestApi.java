@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 import process.billing.BillingService;
+import process.billing.BillingNumber;
 import process.billing.InvoiceQr;
 import process.billing.MeterClient;
 import process.model.dto.ObjectContentDto;
@@ -42,7 +43,6 @@ import process.util.ProcessUtil;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import java.util.regex.Pattern;
 
 /**
  * Cost & usage: what the console reads from the meter for a workspace.
@@ -69,8 +69,6 @@ public class BillingRestApi {
 
     // ---- accounts, invoices, payments, documents, analytics --------------------------------
 
-    /** INV-2026-09-0004, CN-…, RCP-… -- anything else is not a number this console issued. */
-    private static final Pattern NUMBER = Pattern.compile("[A-Z]{2,3}-\\d{4}-\\d{2}-\\d{4}");
     private static final String COULD_NOT = "The request could not be completed.";
 
     private ResponseEntity<?> ok(String message, Object data) { return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, message, data), HttpStatus.OK); }
@@ -88,7 +86,6 @@ public class BillingRestApi {
         return this.refused(COULD_NOT);
     }
 
-    private static boolean isNumber(String number) { return number != null && NUMBER.matcher(number).matches(); }
 
     /** A tenant admin may touch their own workspace's rows only; a platform admin any. */
     private boolean mayTouch(Long tenantId) {
@@ -146,20 +143,20 @@ public class BillingRestApi {
 
     /** The invoice's number as a QR code, for the page; the PDF carries the same one. */
     @RequestMapping(value = "/invoice/qr", method = RequestMethod.GET)
-    public ResponseEntity<?> invoiceQr(@RequestParam String number, @RequestParam(required = false, defaultValue = "160") int size) throws IOException {
-        if (!isNumber(number)) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+    public ResponseEntity<?> invoiceQr(@RequestParam String number, @RequestParam(required = false) Integer size) throws IOException {
+        if (!BillingNumber.isValid(number)) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         Optional<Invoice> found = this.billing.byNumber(number);
         if (!found.isPresent() || !this.mayTouch(found.get().getTenantId())) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.IMAGE_PNG);
         headers.setCacheControl("private, max-age=86400");
         headers.add("X-Content-Type-Options", "nosniff");
-        return new ResponseEntity<>(InvoiceQr.png(found.get().getNumber(), Math.max(64, Math.min(size, 1024))), headers, HttpStatus.OK);
+        return new ResponseEntity<>(InvoiceQr.png(found.get().getNumber(), InvoiceQr.sizeOf(size)), headers, HttpStatus.OK);
     }
 
     @RequestMapping(value = "/invoice", method = RequestMethod.GET)
     public ResponseEntity<?> invoice(@RequestParam String number) {
-        if (!isNumber(number)) return this.refused("No such invoice.");
+        if (!BillingNumber.isValid(number)) return this.refused("No such invoice.");
         Optional<Invoice> found = this.billing.byNumber(number);
         if (!found.isPresent() || !this.mayTouch(found.get().getTenantId())) return this.refused("No such invoice.");
         Invoice i = found.get();

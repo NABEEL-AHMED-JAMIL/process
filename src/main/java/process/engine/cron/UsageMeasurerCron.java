@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import process.billing.MeterClient;
+import process.billing.Meter;
 import process.billing.UsageEvent;
 import process.config.StorageClientFactory;
 import process.model.dto.ObjectSummaryDto;
@@ -54,6 +55,9 @@ public class UsageMeasurerCron {
         this.storageClientFactory = storageClientFactory; this.users = users; this.topics = topics;
     }
 
+    /** A nightly measurement stands for the whole day: GB-hours and topic-hours are the count times this. */
+    private static final int HOURS_PER_DAY = 24;
+
     @Scheduled(cron = "${meter.measure.cron:0 0 2 * * *}")
     @SchedulerLock(name = "measureUsage", lockAtLeastFor = "1M", lockAtMostFor = "2H")
     public void measureNightly() {
@@ -92,7 +96,7 @@ public class UsageMeasurerCron {
             if (bytes < 0) {
                 continue;
             }
-            this.meter.report(UsageEvent.of(tenantId, "storage.gb_hours", UsageEvent.gb(bytes) * 24, "GB-hour",
+            this.meter.report(UsageEvent.of(tenantId, Meter.STORAGE_GB_HOURS, UsageEvent.gb(bytes) * HOURS_PER_DAY,
                     "measure#" + tenantId + "#storage#" + connection.getStorageConnectionId() + "#" + day)
                 .subject("bucket", connection.getAlias()).source("measurer").at(at).note(bytes + " bytes at 02:00"));
             events++;
@@ -100,14 +104,14 @@ public class UsageMeasurerCron {
         // Seats: every user who is not deleted, one user-day each.
         long seats = this.users.countByTenantIdAndStatusNot(tenantId, Status.Delete);
         if (seats > 0) {
-            this.meter.report(UsageEvent.of(tenantId, "seats.user_days", seats, "user-day", "measure#" + tenantId + "#seats#" + day)
+            this.meter.report(UsageEvent.of(tenantId, Meter.SEATS_USER_DAYS, seats, "measure#" + tenantId + "#seats#" + day)
                 .source("measurer").at(at));
             events++;
         }
         // Topics the workspace runs -- active, with a live task on them -- 24 topic-hours each.
         long topicCount = this.topics.countTopicsInUse(tenantId);
         if (topicCount > 0) {
-            this.meter.report(UsageEvent.of(tenantId, "kafka.topic_hours", topicCount * 24, "topic-hour", "measure#" + tenantId + "#topics#" + day)
+            this.meter.report(UsageEvent.of(tenantId, Meter.KAFKA_TOPIC_HOURS, topicCount * HOURS_PER_DAY, "measure#" + tenantId + "#topics#" + day)
                 .source("measurer").at(at));
             events++;
         }
