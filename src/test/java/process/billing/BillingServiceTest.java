@@ -90,6 +90,7 @@ class BillingServiceTest {
             this.invoiceRows.values().stream().filter(i -> i.getTenantId().equals(inv.getArgument(0)) && i.getPeriodStart().equals(inv.getArgument(1)) && i.getKind().equals(inv.getArgument(2)) && i.getStatus().equals(inv.getArgument(3))).findFirst());
         lenient().when(invoices.findByStatusIn(any())).thenAnswer(inv -> { List<String> s = inv.getArgument(0); List<Invoice> out = new ArrayList<>(); for (Invoice i : this.invoiceRows.values()) if (s.contains(i.getStatus())) out.add(i); return out; });
         lenient().when(invoices.findByTenantIdOrderByPeriodStartDescInvoiceIdDesc(anyLong())).thenAnswer(inv -> new ArrayList<>(this.invoiceRows.values()));
+        lenient().when(invoices.findByPeriodStartBetweenOrderByTenantIdAscPeriodStartAsc(any(), any())).thenAnswer(inv -> new ArrayList<>(this.invoiceRows.values()));
 
         InvoiceLineRepository lines = mock(InvoiceLineRepository.class);
         lenient().when(lines.save(any())).thenAnswer(inv -> { InvoiceLine l = inv.getArgument(0); if (l.getInvoiceLineId() == null) l.setInvoiceLineId(this.ids.incrementAndGet()); this.lineRows.put(l.getInvoiceLineId(), l); return l; });
@@ -102,6 +103,7 @@ class BillingServiceTest {
         lenient().when(payments.findById(anyLong())).thenAnswer(inv -> Optional.ofNullable(this.paymentRows.get(inv.<Long>getArgument(0))));
         lenient().when(payments.findByInvoiceIdOrderByDateCreatedAsc(anyLong())).thenAnswer(inv -> { List<Payment> out = new ArrayList<>(); for (Payment p : this.paymentRows.values()) if (p.getInvoiceId().equals(inv.getArgument(0))) out.add(p); return out; });
         lenient().when(payments.findAll()).thenAnswer(inv -> new ArrayList<>(this.paymentRows.values()));
+        lenient().when(payments.findByStatusOrderByDateCreatedAsc(anyString())).thenAnswer(inv -> { List<Payment> out = new ArrayList<>(); for (Payment p : this.paymentRows.values()) if (p.getStatus().equals(inv.getArgument(0))) out.add(p); return out; });
 
         BillingDocumentRepository documents = mock(BillingDocumentRepository.class);
         lenient().when(documents.save(any())).thenAnswer(inv -> { BillingDocument d = inv.getArgument(0); d.setBillingDocumentId(this.ids.incrementAndGet()); this.docRows.add(d); return d; });
@@ -244,6 +246,32 @@ class BillingServiceTest {
     }
 
     @Test
+    void aCreditOnAPaidBillIsARefundOwedAndNeverCountsAsCollected() throws Exception {
+        Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
+        Payment p = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("46.58"), "bank", "TRF-1", null, null);
+        this.service.verifyPayment(p.getPaymentId(), true, null);
+        // A credit against a paid bill: capped at what was billed, applied to nothing -- the bill stays paid in full.
+        assertThatThrownBy(() -> this.service.creditNote(issued.getInvoiceId(), new BigDecimal("46.59"), "x")).hasMessageContaining("At most 46.58");
+        Invoice refund = this.service.creditNote(issued.getInvoiceId(), new BigDecimal("10"), "overcharged");
+        assertThat(refund.getTotal()).isEqualByComparingTo("-10");
+        Invoice paid = this.service.find(issued.getInvoiceId());
+        assertThat(paid.getStatus()).isEqualTo(InvoiceStatus.PAID.value());
+        assertThat(paid.getBalance()).isEqualByComparingTo("0");
+        assertThat(this.service.paymentsOf(issued.getInvoiceId())).hasSize(1);       // no credit_note payment row
+        // Analytics: invoiced is net of the credit, collected is the money that arrived.
+        Map<String, Object> a = this.service.analytics(java.time.LocalDate.of(2026, 9, 1), java.time.LocalDate.of(2026, 9, 30));
+        assertThat((BigDecimal) a.get("invoiced")).isEqualByComparingTo("36.58");
+        assertThat((BigDecimal) a.get("collected")).isEqualByComparingTo("46.58");
+        // And a credit applied to an open bill is not "collected" either.
+        Invoice second = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 8)).getInvoiceId());
+        this.service.creditNote(second.getInvoiceId(), new BigDecimal("6.58"), "goodwill");
+        Map<String, Object> b = this.service.analytics(java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 9, 30));
+        assertThat((BigDecimal) b.get("invoiced")).isEqualByComparingTo("76.58");    // 36.58 + 46.58 - 6.58
+        assertThat((BigDecimal) b.get("collected")).isEqualByComparingTo("46.58");
+        assertThat((BigDecimal) b.get("open")).isEqualByComparingTo("40.00");
+    }
+
+    @Test
     void whatARequestMayCarryIsBounded() throws Exception {
         Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
         assertThatThrownBy(() -> this.service.draft(999999L, YearMonth.of(2026, 9))).hasMessageContaining("No such workspace");
@@ -302,6 +330,24 @@ class BillingServiceTest {
         assertThat(statement.getKind()).isEqualTo("statement");
         assertThat(statement.getAmount()).isEqualByComparingTo("36.58");      // the balance open
         assertThat(statement.getFileName()).endsWith(".pdf");
+    }
+
+    @Test
+    void theSummaryIsTheBillInOneGlance() throws Exception {
+        Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
+        Payment p = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("10"), "bank", "TRF-1", null, null);
+        Map<String, Object> s = this.service.summary(TENANT);
+        assertThat(s.get("currency")).isEqualTo("USD");
+        assertThat((BigDecimal) s.get("monthToDate")).isEqualByComparingTo("46.58");        // the meter's rows for this month
+        assertThat(s.get("rateCardName")).isEqualTo("Standard");
+        assertThat((BigDecimal) s.get("openBalance")).isEqualByComparingTo("46.58");        // the slip is not verified yet
+        assertThat(s.get("openCount")).isEqualTo(1);
+        assertThat(s.get("pendingSlips")).isEqualTo(1);
+        assertThat(s.get("nextDueNumber")).isEqualTo(issued.getNumber());
+        assertThat(s.get("latestNumber")).isEqualTo(issued.getNumber());
+        this.service.verifyPayment(p.getPaymentId(), true, null);
+        assertThat((BigDecimal) this.service.summary(TENANT).get("openBalance")).isEqualByComparingTo("36.58");
+        assertThat(this.service.summary(TENANT).get("pendingSlips")).isEqualTo(0);
     }
 
     @Test

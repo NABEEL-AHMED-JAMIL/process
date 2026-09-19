@@ -219,6 +219,15 @@ public class BillingService {
         invoice.setBalance(invoice.getTotal().subtract(this.paidOn(invoice)));
     }
 
+    /** Verified payments that were money -- a credit note applied is not collected. */
+    private BigDecimal moneyPaidOn(Invoice invoice) {
+        BigDecimal paid = BigDecimal.ZERO;
+        for (Payment p : this.payments.findByInvoiceIdOrderByDateCreatedAsc(invoice.getInvoiceId())) {
+            if (PaymentStatus.VERIFIED.is(p.getStatus()) && !PaymentMethod.CREDIT_NOTE.is(p.getMethod())) paid = paid.add(p.getAmount());
+        }
+        return paid;
+    }
+
     /** What credit notes already took off an invoice: the sum of their totals, as a positive figure. */
     private BigDecimal creditedOn(Invoice invoice) {
         BigDecimal credited = BigDecimal.ZERO;
@@ -291,7 +300,10 @@ public class BillingService {
         if (!InvoiceKind.INVOICE.is(original.getKind()) || !InvoiceStatus.of(original.getStatus()).isCreditable()) throw new IllegalStateException("Only an issued invoice can be credited.");
         if (amount == null || amount.signum() <= 0) throw new IllegalArgumentException("A credit note needs an amount above zero.");
         String why = text(reason, "A reason", NOTE_MAX, true);
-        BigDecimal creditable = original.getTotal().subtract(this.creditedOn(original)).setScale(2, RoundingMode.HALF_UP);
+        // On an open bill a credit reduces what is owed, so it cannot exceed the balance; on a
+        // paid bill it records a refund owed, up to what was billed and not yet credited.
+        boolean open = InvoiceStatus.of(original.getStatus()).isOpen();
+        BigDecimal creditable = (open ? original.getBalance() : original.getTotal().subtract(this.creditedOn(original))).setScale(2, RoundingMode.HALF_UP);
         if (amount.setScale(2, RoundingMode.HALF_UP).compareTo(creditable) > 0) {
             throw new IllegalArgumentException("At most " + creditable.toPlainString() + " can still be credited against " + original.getNumber() + ".");
         }
@@ -311,13 +323,16 @@ public class BillingService {
         BillingDocument doc = this.store(note.getTenantId(), note.getInvoiceId(), null, BillingDocumentKind.CREDIT_NOTE, note.getNumber(), note.getNumber() + ".pdf", "application/pdf", pdf, note.getTotal());
         note.setPdfObjectKey(doc.getObjectKey());
         note = this.invoices.save(note);
-        // Applied to the original as a verified payment of kind credit_note.
-        Payment applied = new Payment();
-        applied.setTenantId(original.getTenantId()); applied.setInvoiceId(original.getInvoiceId()); applied.setAmount(amount);
-        applied.setMethod(PaymentMethod.CREDIT_NOTE.value()); applied.setReference(note.getNumber()); applied.setStatus(PaymentStatus.VERIFIED.value());
-        applied.setVerifiedBy(TenantContext.getAppUserId()); applied.setVerifiedAt(now()); applied.setReceivedAt(now()); applied.setDateCreated(now());
-        this.payments.save(applied);
-        this.settle(original);
+        // Applied to the original as a verified payment of kind credit_note -- when there is a
+        // balance to apply it to. Against a paid bill the note stands on its own as a refund owed.
+        if (open) {
+            Payment applied = new Payment();
+            applied.setTenantId(original.getTenantId()); applied.setInvoiceId(original.getInvoiceId()); applied.setAmount(amount);
+            applied.setMethod(PaymentMethod.CREDIT_NOTE.value()); applied.setReference(note.getNumber()); applied.setStatus(PaymentStatus.VERIFIED.value());
+            applied.setVerifiedBy(TenantContext.getAppUserId()); applied.setVerifiedAt(now()); applied.setReceivedAt(now()); applied.setDateCreated(now());
+            this.payments.save(applied);
+            this.settle(original);
+        }
         return note;
     }
 
@@ -516,6 +531,49 @@ public class BillingService {
 
     public Optional<Invoice> byNumber(String number) { return this.invoices.findByNumber(number); }
     public List<InvoiceLine> linesOf(Long invoiceId) { return this.lines.findByInvoiceIdOrderBySortAsc(invoiceId); }
+    /**
+     * The bill in one glance, for a profile card or a dashboard row: this month's metered cost,
+     * what is owed and by when, slips waiting. One workspace, or every workspace for the platform.
+     */
+    public Map<String, Object> summary(Long tenantId) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        LocalDate first = LocalDate.now().withDayOfMonth(1), today = LocalDate.now();
+        BigDecimal monthToDate = BigDecimal.ZERO;
+        String currency = tenantId == null ? "USD" : this.accountFor(tenantId).getCurrency();
+        if (this.meter.isConfigured()) {
+            try {
+                Map<String, Object> usage = this.meter.usage(tenantId, first, today, tenantId == null ? "tenant" : "meter");
+                if (usage.get("rows") instanceof List) {
+                    for (Object o : (List<?>) usage.get("rows")) monthToDate = monthToDate.add(decimal(((Map<?, ?>) o).get("amount")));
+                }
+                Object card = usage.get("rateCard");
+                if (card instanceof Map) { out.put("rateCardName", ((Map<?, ?>) card).get("name")); out.put("rateCardVersion", ((Map<?, ?>) card).get("version")); }
+            } catch (RuntimeException ex) {
+                logger.warn("billing summary: the meter did not answer: {}", ex.toString());
+                out.put("meterDown", true);
+            }
+        }
+        out.put("currency", currency); out.put("monthToDate", monthToDate.setScale(2, RoundingMode.HALF_UP)); out.put("periodStart", first);
+        BigDecimal open = BigDecimal.ZERO, overdue = BigDecimal.ZERO;
+        int openCount = 0, overdueCount = 0, pendingSlips = 0;
+        Invoice nextDue = null, latest = null;
+        for (Invoice inv : this.invoicesFor(tenantId)) {
+            if (!InvoiceKind.INVOICE.is(inv.getKind())) continue;
+            if (latest == null && !InvoiceStatus.DRAFT.is(inv.getStatus())) latest = inv;
+            InvoiceStatus status = InvoiceStatus.of(inv.getStatus());
+            if (!status.isOpen()) continue;
+            open = open.add(inv.getBalance()); openCount++;
+            if (status == InvoiceStatus.OVERDUE) { overdue = overdue.add(inv.getBalance()); overdueCount++; }
+            if (inv.getDueAt() != null && (nextDue == null || inv.getDueAt().before(nextDue.getDueAt()))) nextDue = inv;
+        }
+        for (Payment p : this.pendingPayments(tenantId)) pendingSlips++;
+        out.put("openBalance", open); out.put("openCount", openCount); out.put("overdueBalance", overdue); out.put("overdueCount", overdueCount);
+        out.put("pendingSlips", pendingSlips);
+        if (nextDue != null) { out.put("nextDueAt", nextDue.getDueAt()); out.put("nextDueNumber", nextDue.getNumber()); out.put("nextDueBalance", nextDue.getBalance()); }
+        if (latest != null) { out.put("latestNumber", latest.getNumber()); out.put("latestTotal", latest.getTotal()); out.put("latestStatus", latest.getStatus()); out.put("latestPeriodStart", latest.getPeriodStart()); }
+        return out;
+    }
+
     public List<Payment> paymentsOf(Long invoiceId) { return this.payments.findByInvoiceIdOrderByDateCreatedAsc(invoiceId); }
     public List<BillingDocument> documentsOf(Long invoiceId) { return this.documents.findByInvoiceIdOrderByIssuedAtAsc(invoiceId); }
 
@@ -549,7 +607,9 @@ public class BillingService {
             });
             if (InvoiceStatus.DRAFT.is(inv.getStatus())) { drafts = drafts.add(inv.getTotal()); m.merge("drafts", inv.getTotal(), BigDecimal::add); continue; }
             if (InvoiceStatus.VOID.is(inv.getStatus())) continue;
-            BigDecimal total = inv.getTotal(), paidAmount = inv.getTotal().subtract(inv.getBalance() == null ? BigDecimal.ZERO : inv.getBalance());
+            // Collected is money that arrived: verified payments, never a credit note applied
+            // (that is already inside the net invoiced figure through the note's negative total).
+            BigDecimal total = inv.getTotal(), paidAmount = InvoiceKind.CREDIT_NOTE.is(inv.getKind()) ? BigDecimal.ZERO : this.moneyPaidOn(inv);
             invoiced = invoiced.add(total); m.merge("invoiced", total, BigDecimal::add); t.put("invoiced", ((BigDecimal) t.get("invoiced")).add(total));
             collected = collected.add(paidAmount); m.merge("collected", paidAmount, BigDecimal::add); t.put("collected", ((BigDecimal) t.get("collected")).add(paidAmount));
             if (inv.getBalance() != null && inv.getBalance().signum() > 0) {

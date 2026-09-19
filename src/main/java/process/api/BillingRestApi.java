@@ -117,6 +117,15 @@ public class BillingRestApi {
         return this.ok("Billing account saved.", this.billing.saveAccount(scoped, changes));
     }
 
+    /** The bill in one glance: this month so far, what is owed and by when. Own workspace, or all for the platform. */
+    @RequestMapping(value = "/summary", method = RequestMethod.GET)
+    public ResponseEntity<?> summary(@RequestParam(required = false) Long tenantId) {
+        Long scoped = this.scope(tenantId);
+        if (scoped == null && !TenantContext.isPlatformAdmin()) return this.refused("No workspace to read.");
+        try { return this.ok("Billing summary.", this.billing.summary(scoped)); }
+        catch (RuntimeException ex) { return this.refused("summary", ex); }
+    }
+
     @RequestMapping(value = "/invoices", method = RequestMethod.GET)
     public ResponseEntity<?> invoices(@RequestParam(required = false) Long tenantId) {
         Long scoped = this.scope(tenantId);
