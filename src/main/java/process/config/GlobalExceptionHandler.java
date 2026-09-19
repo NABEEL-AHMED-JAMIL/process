@@ -1,5 +1,6 @@
 package process.config;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -9,10 +10,14 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import process.analytics.AnalyticsException;
 import process.model.dto.ResponseDto;
+
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import process.util.ProcessUtil;
 
 /**
@@ -68,6 +73,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new ResponseEntity<>(
             new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500),
             HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    /**
+     * A body that does not parse: name what was wrong in plain words -- "COUNT" is not one of the
+     * aggregations -- never the parser's class names and stream offsets.
+     */
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+        HttpHeaders headers, HttpStatus status, WebRequest request) {
+        String message = "The request could not be read.";
+        Throwable cause = ex.getMostSpecificCause();
+        if (cause instanceof InvalidFormatException) {
+            InvalidFormatException bad = (InvalidFormatException) cause;
+            String field = bad.getPath().isEmpty() ? "a value" : bad.getPath().get(bad.getPath().size() - 1).getFieldName();
+            String allowed = bad.getTargetType() != null && bad.getTargetType().isEnum()
+                ? " Allowed: " + Arrays.stream(bad.getTargetType().getEnumConstants()).map(String::valueOf).collect(Collectors.joining(", ")) + "."
+                : "";
+            message = "'" + bad.getValue() + "' is not valid for " + field + "." + allowed;
+        }
+        logger.warn("Unreadable request body: {}", cause == null ? ex.getMessage() : cause.getMessage());
+        return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, message), headers, status);
     }
 
     @Override

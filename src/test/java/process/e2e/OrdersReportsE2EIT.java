@@ -37,7 +37,13 @@ import process.model.enums.Status;
  */
 public class OrdersReportsE2EIT extends ReportBuildingSupport {
 
-    private static final String CONNECTION = "etl-bucket";
+    /**
+     * The alias the seeded reports are saved against: the deployed application's name for the
+     * MinIO bucket, which is not the bucket's own name. It was "etl-bucket" when the reports
+     * were first written and is "worker-store" on the current stack; a report saved under an
+     * alias nobody has is a board of tiles that cannot run.
+     */
+    private static final String CONNECTION = System.getProperty("analytics.seed.connection", "worker-store");
     private static final String DATASET = "analytics-samples/orders.csv";
 
     private static final boolean SEEDING = Boolean.getBoolean("analytics.seed.reports");

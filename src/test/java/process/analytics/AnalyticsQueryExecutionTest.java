@@ -651,7 +651,7 @@ public class AnalyticsQueryExecutionTest {
         when(repository.findByAlias("other-store")).thenReturn(Optional.of(theirs));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
-        AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits());
+        AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
         TenantContext.set(TENANT_ID, "TENANT_USER", 7L, "analyst");
 
         ResponseEntity<?> response = api.query(request("store", SALES_PATH,
@@ -675,7 +675,7 @@ public class AnalyticsQueryExecutionTest {
             .thenReturn(Optional.of(storageConnection(TENANT_ID)));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
-        AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits());
+        AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
         TenantContext.set(TENANT_ID, "TENANT_USER", 7L, "analyst");
 
         ResponseEntity<?> response = api.query(request("store", SALES_PATH,
@@ -696,7 +696,7 @@ public class AnalyticsQueryExecutionTest {
             .thenReturn(Optional.of(storageConnection(TENANT_ID)));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
-        AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits());
+        AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
         TenantContext.set(TENANT_ID, "TENANT_USER", 7L, "analyst");
 
         api.query(request("store", SALES_PATH, null, null, "SELECT * FROM dataset"));
@@ -712,7 +712,7 @@ public class AnalyticsQueryExecutionTest {
             .thenReturn(Optional.of(storageConnection(TENANT_ID)));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
-        AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits());
+        AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
         TenantContext.set(TENANT_ID, "TENANT_USER", 7L, "analyst");
 
         // A caller who sent an alias and no path has made a mistake. Silently ignoring the half

@@ -403,6 +403,7 @@
                                   the defaults and skip noisily on every run.
                                 -->
                                 <exclude>**/SampleDataGeneratorIT.java</exclude>
+                                <exclude>**/BenchmarkDataGeneratorIT.java</exclude>
                             </excludes>
                         </configuration>
                         <executions>

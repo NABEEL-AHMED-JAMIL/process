@@ -414,7 +414,7 @@ public class AnalyticsCancellationTest {
         // last row lands, and an error toast for it would be the application blaming them for its
         // own timing.
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(this.connections),
-            this.service, this.library, null, new AnalyticsLimits());
+            this.service, this.library, null, new AnalyticsLimits(), null);
         ResponseEntity<?> response = api.cancelQuery("never-existed");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -435,7 +435,7 @@ public class AnalyticsCancellationTest {
     @Test
     void theHistoryRowSaysCancelledWithTheDurationUpToTheStop() throws Exception {
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(this.connections),
-            this.service, this.library, null, new AnalyticsLimits());
+            this.service, this.library, null, new AnalyticsLimits(), null);
 
         Run run = new Run("api-1", () -> api.query(request("api-1")));
         run.awaitStart();

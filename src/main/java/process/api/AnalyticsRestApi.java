@@ -22,7 +22,9 @@ import process.analytics.DatasetRef;
 import process.analytics.AnalyticsExportService;
 import process.analytics.DatasetResolver;
 import process.analytics.RunningQueries;
+import process.analytics.canvas.DatasetOverviewService;
 import process.analytics.canvas.FilterClause;
+import process.analytics.canvas.dto.DatasetOverviewDto;
 import process.analytics.dto.DatasetPreviewDto;
 import process.analytics.dto.ColumnDistributionDto;
 import process.analytics.dto.DatasetProfileDto;
@@ -101,17 +103,47 @@ public class AnalyticsRestApi {
      * asks for a designed refusal a caller can read.
      */
     private final AnalyticsLimits analyticsLimits;
+    private final DatasetOverviewService datasetOverviewService;
 
     public AnalyticsRestApi(DatasetResolver datasetResolver,
         AnalyticsQueryService analyticsQueryService,
         AnalyticsQueryLibraryService analyticsQueryLibraryService,
         AnalyticsExportService analyticsExportService,
-        AnalyticsLimits analyticsLimits) {
+        AnalyticsLimits analyticsLimits,
+        DatasetOverviewService datasetOverviewService) {
         this.datasetResolver = datasetResolver;
         this.analyticsQueryService = analyticsQueryService;
         this.analyticsQueryLibraryService = analyticsQueryLibraryService;
         this.analyticsExportService = analyticsExportService;
         this.analyticsLimits = analyticsLimits;
+        this.datasetOverviewService = datasetOverviewService;
+    }
+
+    /**
+     * The dataset at a glance: its profile and the few charts worth drawing unasked, in one
+     * round trip. The most expensive read on this controller after profile itself -- one full
+     * scan plus a handful of aggregations -- recorded as one read.
+     */
+    @RequestMapping(value = "/overview", method = RequestMethod.GET)
+    public ResponseEntity<?> overview(
+        @RequestParam(value = "connection") String connection,
+        @RequestParam(value = "path") String path) {
+        long startedAt = System.currentTimeMillis();
+        try {
+            this.analyticsLimits.requireEnabled();
+            DatasetRef dataset = this.datasetResolver.resolve(connection, path);
+            DatasetOverviewDto overview = this.datasetOverviewService.overviewOf(dataset, connection, path);
+            recordRead(connection, path, "overview", AnalyticsQueryRun.STATUS_SUCCESS,
+                overview.getProfile() == null ? null : overview.getProfile().getTotalRows(), startedAt, null);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Dataset overview.", overview), HttpStatus.OK);
+        } catch (AnalyticsException ex) {
+            recordRead(connection, path, "overview", AnalyticsQueryRun.STATUS_REFUSED, null, startedAt, ex.getMessage());
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()), HttpStatus.OK);
+        } catch (Exception ex) {
+            recordRead(connection, path, "overview", AnalyticsQueryRun.STATUS_FAILED, null, startedAt, ex.getMessage());
+            this.logger.error("An error occurred while building a dataset overview.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**

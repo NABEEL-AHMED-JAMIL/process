@@ -53,7 +53,7 @@ public class AnalyticsReadAuditTest {
 
     private AnalyticsRestApi api() {
         return new AnalyticsRestApi(this.datasetResolver, this.analyticsQueryService,
-            this.library, null, new AnalyticsLimits());
+            this.library, null, new AnalyticsLimits(), null);
     }
 
     private DatasetRef datasetRef() {

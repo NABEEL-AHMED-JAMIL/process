@@ -84,7 +84,7 @@ public class AnalyticsRestApiTest {
         // null library service: these tests are about the controller's contract, and history
         // is written on a seam that tolerates its absence rather than failing the request.
         return new AnalyticsRestApi(this.datasetResolver, this.analyticsQueryService, null, null,
-            new AnalyticsLimits());
+            new AnalyticsLimits(), null);
     }
 
     /**
@@ -440,7 +440,7 @@ public class AnalyticsRestApiTest {
         AnalyticsLimits off = new AnalyticsLimits();
         ReflectionTestUtils.setField(off, "enabled", false);
         AnalyticsRestApi api = new AnalyticsRestApi(this.datasetResolver,
-            this.analyticsQueryService, null, null, off);
+            this.analyticsQueryService, null, null, off, null);
 
         for (ResponseEntity<?> response : Arrays.asList(
             api.schema("store", "sales.csv"),
