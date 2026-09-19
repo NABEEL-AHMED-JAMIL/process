@@ -174,9 +174,9 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     @Override
     public ObjectContentDto previewObject(String bucket, String key, Long rangeStart, Long rangeEnd) {
         this.requireSafeKey(key);
-        if (!ContentTypeUtil.isPreviewable(key)) {
-            throw new IllegalArgumentException("Preview is not supported for this file type; use download instead.");
-        }
+        // Any type. The viewer decides what to do with the bytes -- a table, a document, a
+        // hex glance at something binary -- and a range request keeps a glance cheap; refusing
+        // here by extension only ever meant "download it and look yourself".
         if (ContentTypeUtil.isPreviewableGzip(key)) {
             return this.previewGzip(bucket, key);
         }

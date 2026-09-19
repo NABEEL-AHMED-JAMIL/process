@@ -99,7 +99,10 @@ public class MinioObjectStorageServiceImpl implements ObjectStorageService {
             long totalSize = stat.size();
             GetObjectArgs.Builder argsBuilder = GetObjectArgs.builder().bucket(bucket).object(key);
             long contentLength = totalSize;
-            if (rangeStart != null) {
+            // A range on an empty object, or one starting past the end, is the whole (empty)
+            // object rather than a request the store refuses: a viewer glancing at the first
+            // bytes of a zero-byte file gets nothing back, not a 500.
+            if (rangeStart != null && rangeStart < totalSize) {
                 long end = rangeEnd != null ? Math.min(rangeEnd, totalSize - 1) : totalSize - 1;
                 contentLength = end - rangeStart + 1;
                 argsBuilder.offset(rangeStart).length(contentLength);

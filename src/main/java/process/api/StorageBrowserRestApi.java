@@ -14,6 +14,7 @@ import process.model.dto.BulkDeleteRequestDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ResponseDto;
 import process.model.service.StorageBrowserService;
+import process.model.service.impl.ObjectPreviewServiceImpl;
 import process.util.ProcessUtil;
 import process.util.StorageNotFound;
 import java.net.URLEncoder;
@@ -40,9 +41,53 @@ public class StorageBrowserRestApi {
     private Logger logger = LoggerFactory.getLogger(StorageBrowserRestApi.class);
 
     private final StorageBrowserService storageBrowserService;
+    private final ObjectPreviewServiceImpl preview;
 
-    public StorageBrowserRestApi(StorageBrowserService storageBrowserService) {
+    public StorageBrowserRestApi(StorageBrowserService storageBrowserService, ObjectPreviewServiceImpl preview) {
         this.storageBrowserService = storageBrowserService;
+        this.preview = preview;
+    }
+
+    /** A page of a tabular object -- CSV/TSV, a sheet of a workbook, parquet, JSON lines, a JSON array. */
+    @RequestMapping(value = "/previewTable", method = RequestMethod.GET)
+    public ResponseEntity<?> previewTable(@RequestParam String bucket, @RequestParam String key,
+        @RequestParam(required = false) String sheet, @RequestParam(required = false) Integer offset,
+        @RequestParam(required = false) Integer limit) {
+        try {
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Table read.", this.preview.table(bucket, key, sheet, offset, limit)), HttpStatus.OK);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, ex.getMessage()), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.warn("previewTable failed for {}/{}: {}", bucket, key, ex.toString());
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "This file could not be read as a table: " + ex.getMessage()), HttpStatus.OK);
+        }
+    }
+
+    /** A document (docx, rtf, odt, pptx, html, ...) rendered to PDF for the viewer. */
+    @RequestMapping(value = "/previewDocument", method = RequestMethod.GET)
+    public ResponseEntity<?> previewDocument(@RequestParam String bucket, @RequestParam String key) {
+        try {
+            byte[] pdf = this.preview.document(bucket, key);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(pdf.length).body(pdf);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, ex.getMessage()), HttpStatus.BAD_REQUEST);
+        } catch (Exception ex) {
+            logger.warn("previewDocument failed for {}/{}: {}", bucket, key, ex.toString());
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "This document could not be rendered."), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /** What an archive holds, without downloading it. */
+    @RequestMapping(value = "/previewArchive", method = RequestMethod.GET)
+    public ResponseEntity<?> previewArchive(@RequestParam String bucket, @RequestParam String key) {
+        try {
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Archive listed.", this.preview.archive(bucket, key)), HttpStatus.OK);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, ex.getMessage()), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.warn("previewArchive failed for {}/{}: {}", bucket, key, ex.toString());
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "This archive could not be read: " + ex.getMessage()), HttpStatus.OK);
+        }
     }
 
     @RequestMapping(value = "/buckets", method = RequestMethod.GET)
@@ -220,7 +265,7 @@ public class StorageBrowserRestApi {
             headers.add(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename*=UTF-8''" + encodedFileName);
             headers.add(HttpHeaders.ACCEPT_RANGES, "bytes");
             InputStreamResource body = new InputStreamResource(content.getContent());
-            if (rangeStart != null) {
+            if (rangeStart != null && content.getSize() > 0) {
                 long rangeEndInclusive = rangeStart + content.getSize() - 1;
                 headers.add(HttpHeaders.CONTENT_RANGE, "bytes " + rangeStart + "-" + rangeEndInclusive + "/" + content.getTotalSize());
                 return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)

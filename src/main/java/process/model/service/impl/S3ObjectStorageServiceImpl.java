@@ -111,7 +111,8 @@ public class S3ObjectStorageServiceImpl implements ObjectStorageService {
             long totalSize = head.contentLength() != null ? head.contentLength() : 0L;
             GetObjectRequest.Builder requestBuilder = GetObjectRequest.builder().bucket(bucket).key(key);
             long contentLength = totalSize;
-            if (rangeStart != null) {
+            // See MinioObjectStorageServiceImpl: a range on an empty object is the empty object.
+            if (rangeStart != null && rangeStart < totalSize) {
                 long end = rangeEnd != null ? Math.min(rangeEnd, totalSize - 1) : totalSize - 1;
                 contentLength = end - rangeStart + 1;
                 requestBuilder.range("bytes=" + rangeStart + "-" + end);

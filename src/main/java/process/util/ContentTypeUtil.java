@@ -160,7 +160,19 @@ public final class ContentTypeUtil {
     private static final Set<String> GZIP_PREVIEWABLE_INNER =
         new HashSet<>(Arrays.asList("json", "csv", "txt", "xml", "md", "log", "tsv", "ndjson"));
 
+    /**
+     * Whether the object browser offers "View" for this key. Since the viewer learned to show a
+     * table, a converted document, an archive's entries and a text glance at anything whose
+     * bytes are text, the answer is yes for every file: the viewer says "no inline preview" for
+     * the genuinely binary rest, with the bytes it fetched to decide that, instead of the
+     * listing deciding by name what a person may look at.
+     */
     public static boolean isPreviewable(String key) {
+        return key != null && !key.endsWith("/");
+    }
+
+    /** The kinds the viewer draws natively, kept for callers that need the narrow answer. */
+    public static boolean isNativelyPreviewable(String key) {
         return PREVIEWABLE_EXTENSIONS.contains(extensionOf(key)) || isPreviewableGzip(key);
     }
 
