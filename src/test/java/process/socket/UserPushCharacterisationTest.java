@@ -7,6 +7,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.messaging.Message;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -42,17 +43,19 @@ class UserPushCharacterisationTest {
 
     private final WebSocketPresenceService presence = mock(WebSocketPresenceService.class);
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
+    @SuppressWarnings("unchecked")
+    private final ClusterBroadcast bridge = new ClusterBroadcast(this.messaging, mock(RedisTemplate.class));
 
     @Test
     void goesToTheUsersReplyQueueWhenTheyAreOnline() {
         when(this.presence.isOnline("ops@medaxis.example")).thenReturn(true);
-        new NotificationService(this.presence, this.messaging).sendNotificationToSpecificUser("ops@medaxis.example", "{}");
+        new NotificationService(this.presence, this.bridge).sendNotificationToSpecificUser("ops@medaxis.example", "{}");
         verify(this.messaging).convertAndSendToUser("ops@medaxis.example", "/queue/reply", "{}");
     }
 
     @Test
     void isNotSentAtAllWhenTheyAreNot() {
-        new NotificationService(this.presence, this.messaging).sendNotificationToSpecificUser("ops@medaxis.example", "{}");
+        new NotificationService(this.presence, this.bridge).sendNotificationToSpecificUser("ops@medaxis.example", "{}");
         verify(this.messaging, never()).convertAndSendToUser(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 }

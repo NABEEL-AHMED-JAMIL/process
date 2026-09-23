@@ -3,12 +3,12 @@ package process.socket;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,11 +42,11 @@ public class JobEventPublisher {
     public static final String ALL_TENANTS = "all";
 
     private final Logger logger = LoggerFactory.getLogger(JobEventPublisher.class);
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ClusterBroadcast broadcast;
     private final Gson gson = new Gson();
 
-    public JobEventPublisher(SimpMessagingTemplate messagingTemplate) {
-        this.messagingTemplate = messagingTemplate;
+    public JobEventPublisher(ClusterBroadcast broadcast) {
+        this.broadcast = broadcast;
     }
 
     public void publishStatus(Long tenantId, Long jobId, Long jobQueueId,
@@ -150,9 +150,9 @@ public class JobEventPublisher {
         try {
             payload.put("tenantId", tenantId);
             String body = this.gson.toJson(payload);
-            this.messagingTemplate.convertAndSend(TENANT_JOB_TOPIC + tenantId, body);
-            // Same event on the platform-admin feed, which only a PLATFORM_ADMIN may join.
-            this.messagingTemplate.convertAndSend(TENANT_JOB_TOPIC + ALL_TENANTS, body);
+            // The tenant's feed, and the platform-admin feed only a PLATFORM_ADMIN may join: two
+            // audiences, but one message between instances (DEF-061).
+            this.broadcast.toTopics(Arrays.asList(TENANT_JOB_TOPIC + tenantId, TENANT_JOB_TOPIC + ALL_TENANTS), body);
         } catch (Exception ex) {
             // A push nobody receives must never fail the operation that triggered it.
             this.logger.warn("Could not publish job event for tenant {}: {}", tenantId, ex.getMessage());

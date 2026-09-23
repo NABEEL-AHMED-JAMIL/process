@@ -2,7 +2,6 @@ package process.socket;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,12 +13,12 @@ public class NotificationService {
     private final Logger logger = LoggerFactory.getLogger(NotificationService.class);
 
     private final WebSocketPresenceService presenceService;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ClusterBroadcast broadcast;
 
     public NotificationService(WebSocketPresenceService presenceService,
-        SimpMessagingTemplate messagingTemplate) {
+        ClusterBroadcast broadcast) {
         this.presenceService = presenceService;
-        this.messagingTemplate = messagingTemplate;
+        this.broadcast = broadcast;
     }
 
     public void sendNotificationToSpecificUser(String username, String message) {
@@ -31,7 +30,8 @@ public class NotificationService {
             this.logger.debug("Not sending, no active WebSocket session for user: {}", username);
             return;
         }
-        this.messagingTemplate.convertAndSendToUser(username, "/queue/reply", message);
+        // Presence is shared through Redis, so the session may be on another instance.
+        this.broadcast.toUser(username, "/queue/reply", message);
         this.logger.info("Sent WebSocket notification to user: {}", username);
     }
 

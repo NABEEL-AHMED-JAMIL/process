@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +19,7 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.NotificationRepository;
 import process.model.service.NotificationCenterService;
 import process.security.TenantContext;
+import process.socket.ClusterBroadcast;
 import process.util.PagingUtil;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -43,16 +43,16 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
     private final NotificationRepository notificationRepository;
     private final AppUserRepository appUserRepository;
     private final RedisTemplate<String, String> redisTemplate;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ClusterBroadcast broadcast;
 
     public NotificationCenterServiceImpl(NotificationRepository notificationRepository,
         AppUserRepository appUserRepository,
         RedisTemplate<String, String> redisTemplate,
-        SimpMessagingTemplate messagingTemplate) {
+        ClusterBroadcast broadcast) {
         this.notificationRepository = notificationRepository;
         this.appUserRepository = appUserRepository;
         this.redisTemplate = redisTemplate;
-        this.messagingTemplate = messagingTemplate;
+        this.broadcast = broadcast;
     }
 
     @Override
@@ -93,7 +93,7 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("notification", notificationJson);
                 payload.put("unreadCount", unreadCount);
-                this.messagingTemplate.convertAndSendToUser(recipient.get().getUsername(), "/queue/notifications", new Gson().toJson(payload));
+                this.broadcast.toUser(recipient.get().getUsername(), "/queue/notifications", new Gson().toJson(payload));
             }
         } catch (Exception ex) {
             this.logger.error("Failed to create notification ({}) for recipient {}.", type, recipientUserId, ex);

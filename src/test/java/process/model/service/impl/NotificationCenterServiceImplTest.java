@@ -9,7 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import process.socket.ClusterBroadcast;
 import process.model.dto.ResponseDto;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
@@ -65,14 +65,14 @@ public class NotificationCenterServiceImplTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
     @Mock
-    private SimpMessagingTemplate messagingTemplate;
+    private ClusterBroadcast broadcast;
 
     private NotificationCenterServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new NotificationCenterServiceImpl(this.notificationRepository,
-            this.appUserRepository, this.redisTemplate, this.messagingTemplate);
+            this.appUserRepository, this.redisTemplate, this.broadcast);
         lenient().when(this.redisTemplate.opsForValue()).thenReturn(this.valueOperations);
         TenantContext.set(TENANT_ID, "TENANT_USER", ME, "me@etl.test");
     }
@@ -298,8 +298,8 @@ public class NotificationCenterServiceImplTest {
 
     /** The websocket frame the bell renders its badge from. */
     private String pushedPayload() {
-        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
-        verify(this.messagingTemplate).convertAndSendToUser(eq("me@etl.test"),
+        ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+        verify(this.broadcast).toUser(eq("me@etl.test"),
             eq("/queue/notifications"), payload.capture());
         return String.valueOf(payload.getValue());
     }

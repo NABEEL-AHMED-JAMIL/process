@@ -7,6 +7,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.messaging.Message;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -43,6 +44,9 @@ class JobFeedCharacterisationTest {
 
 
     private final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
+    @SuppressWarnings("unchecked")
+    private final RedisTemplate<String, String> redis = mock(RedisTemplate.class);
+    private final ClusterBroadcast bridge = new ClusterBroadcast(this.messaging, this.redis);
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> sentTo(String destination) {
@@ -51,10 +55,13 @@ class JobFeedCharacterisationTest {
         return new Gson().fromJson((String) body.getValue(), Map.class);
     }
 
-    /** DEFECT, pinned as-is: one event, two sends -- the tenant topic and the all-tenants topic. */
+    /**
+     * One event reaches two audiences on this instance -- the tenant topic and the all-tenants topic
+     * -- but crosses to the other instances as ONE message (DEF-061, fixed with the bridge, MIG-44).
+     */
     @Test
     void aStatusGoesToTheTenantsTopicAndAgainToTheAllTenantsTopic() {
-        new JobEventPublisher(this.messaging).publishStatus(TENANT_A, 41L, 7001L, "Running", "Started.");
+        new JobEventPublisher(this.bridge).publishStatus(TENANT_A, 41L, 7001L, "Running", "Started.");
 
         verify(this.messaging, times(2)).convertAndSend(anyString(), org.mockito.ArgumentMatchers.any(Object.class));
         Map<String, Object> event = sentTo("/topic/jobs." + TENANT_A);
@@ -62,12 +69,13 @@ class JobFeedCharacterisationTest {
         assertThat(event).containsEntry("type", "job.status").containsEntry("jobRunningStatus", "Running")
             .containsEntry("message", "Started.");
         assertThat(((Number) event.get("tenantId")).longValue()).isEqualTo(TENANT_A);
+        verify(this.redis, times(1)).convertAndSend(org.mockito.ArgumentMatchers.eq(ClusterBroadcast.CHANNEL), anyString());
     }
 
     /** The console parses this as an instant; an offset-less time once disabled the stall check. */
     @Test
     void timesOnTheWireAreInstantsWithAnOffset() {
-        new JobEventPublisher(this.messaging).publishChanged(TENANT_A, 41L, "job.updated");
+        new JobEventPublisher(this.bridge).publishChanged(TENANT_A, 41L, "job.updated");
         String at = (String) sentTo("/topic/jobs." + TENANT_A).get("at");
         assertThat(at).endsWith("Z");
         assertThat(Instant.parse(at)).isNotNull();
@@ -75,7 +83,7 @@ class JobFeedCharacterisationTest {
 
     @Test
     void aLogLineCarriesItsRun() {
-        new JobEventPublisher(this.messaging).publishLog(TENANT_A, 41L, 7001L, "Read 12 files.");
+        new JobEventPublisher(this.bridge).publishLog(TENANT_A, 41L, 7001L, "Read 12 files.");
         Map<String, Object> event = sentTo("/topic/jobs." + TENANT_A);
         assertThat(event).containsEntry("type", "job.log").containsEntry("message", "Read 12 files.");
         assertThat(((Number) event.get("jobQueueId")).longValue()).isEqualTo(7001L);
@@ -83,7 +91,7 @@ class JobFeedCharacterisationTest {
 
     @Test
     void anEventWithNoTenantIsNotSentAnywhere() {
-        JobEventPublisher publisher = new JobEventPublisher(this.messaging);
+        JobEventPublisher publisher = new JobEventPublisher(this.bridge);
         publisher.publishStatus(null, 41L, 7001L, "Running", "x");
         publisher.publishChanged(null, 41L, "job.updated");
         publisher.publishLog(null, 41L, 7001L, "x");
