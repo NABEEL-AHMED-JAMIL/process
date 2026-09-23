@@ -250,7 +250,6 @@ class StorageGuardCharacterisationTest {
         Map<String, String> delegation = new LinkedHashMap<>();
         delegation.put("getObjectMetadataCached", "this.getObjectMetadata(");
         delegation.put("uploadObject/multipart", "this.uploadMultipart(");
-        delegation.put("uploadForWorkflow/multipart", "this.uploadMultipart(");
         List<String> unguarded = new ArrayList<>();
         Matcher method = Pattern.compile("\n    public [^\n(]* (\\w+)\\(([^)]*)\\)[^{]*\\{").matcher(source);
         while (method.find()) {

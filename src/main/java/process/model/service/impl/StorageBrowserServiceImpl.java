@@ -340,33 +340,11 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     @Override
     @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
     public void uploadObject(String bucket, String prefix, MultipartFile file) {
-        this.uploadMultipart(bucket, prefix, file, false);
+        this.uploadMultipart(bucket, prefix, file);
     }
 
-    /**
-     * Trusted: an upload an application workflow makes on the caller's behalf.
-     *
-     * The guarded methods above refuse a platform bucket to anyone but a platform admin, which is
-     * right for a request that names its own bucket and key -- and wrong for a workflow, whose
-     * whole job is to put a file somewhere the user could never name for themselves: a PDF
-     * highlighter task's own folder, a Kafka profile's truststore. The caller has already decided
-     * the row belongs to whoever is asking and builds the key from that row, so there is nothing
-     * left here to check that it has not checked better. That also means a caller must never pass
-     * a bucket or key straight through from a request, and none of these may be exposed on
-     * StorageBrowserRestApi.
-     */
-    @Override
-    // Evicts on the same terms as uploadObject above: a workflow upload lands a real object a
-    // user can then open the chat panel on, so it must not be readable as its previous version.
-    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
-    public void uploadForWorkflow(String bucket, String prefix, MultipartFile file) {
-        this.uploadMultipart(bucket, prefix, file, true);
-    }
-
-    /**
-     * The shared body of the two multipart uploads; trusted says which resolver authorises it.
-     */
-    private void uploadMultipart(String bucket, String prefix, MultipartFile file, boolean trusted) {
+    /** The multipart upload's body. (Its trusted twin had no callers and was removed: DEF-122.) */
+    private void uploadMultipart(String bucket, String prefix, MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Uploaded file is empty.");
         }
@@ -380,9 +358,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         // The prefix was checked on its own, but a name Paths.get leaves a separator in -- a
         // literal "a\b.txt" on a Linux JVM -- composes a key every read path would then refuse.
         this.requireSafeKey(key);
-        ObjectStorageService service = trusted
-            ? this.resolveService(bucket, true)
-            : this.resolveServiceForCaller(bucket, key);
+        ObjectStorageService service = this.resolveServiceForCaller(bucket, key);
         String extension = ContentTypeUtil.extensionOf(safeFileName);
         if (!AudioTranscodeUtil.isAudioExtension(extension)) {
             try {
@@ -421,7 +397,18 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         this.resolveServiceForCaller(bucket, key).uploadObject(bucket, key, inputStream, size, contentType);
     }
 
-    /** Trusted, on the same terms as uploadForWorkflow above. */
+    /**
+     * Trusted: an upload an application workflow makes on the caller's behalf.
+     *
+     * The guarded methods above refuse a platform bucket to anyone but a platform admin, which is
+     * right for a request that names its own bucket and key -- and wrong for a workflow, whose
+     * whole job is to put a file somewhere the user could never name for themselves: a PDF
+     * highlighter task's own folder, a Kafka profile's truststore. The caller has already decided
+     * the row belongs to whoever is asking and builds the key from that row, so there is nothing
+     * left here to check that it has not checked better. That also means a caller must never pass
+     * a bucket or key straight through from a request, and none of these may be exposed on
+     * StorageBrowserRestApi.
+     */
     @Override
     // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
     @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)

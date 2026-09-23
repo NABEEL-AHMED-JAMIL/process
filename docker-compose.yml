@@ -158,6 +158,20 @@ services:
       start_period: 20s
 
   # Spring Boot Application
+  # Azure Blob Storage for the storage adapter contract suite (MIG-160): Microsoft's own emulator,
+  # holding nothing but test containers. The account is Azurite's published development account
+  # (devstoreaccount1 and its documented key), not a credential. Opt-in, like LocalStack:
+  #
+  #   docker compose --profile storage-test up -d azurite
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: azurite
+    profiles: ["storage-test"]
+    restart: unless-stopped
+    command: ["azurite-blob", "--blobHost", "0.0.0.0", "--loose", "--skipApiVersionCheck"]
+    ports:
+      - "127.0.0.1:10000:10000"
+
   process_app:
     build:
       context: .
