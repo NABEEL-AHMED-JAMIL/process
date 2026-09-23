@@ -466,4 +466,101 @@ class BillingServiceTest {
         }
         return out;
     }
+
+    // ---- MIG-78: the rounding sequence and the tax gate, pinned before Billing is carved ----------
+
+    /** The meter's answer for a month, with only these rows. */
+    private void meterAnswers(Map<String, Object>... rows) {
+        when(this.meter.usage(eq(TENANT), any(), any(), eq("meter"))).thenReturn(map(
+            "rateCard", map("version", 1, "name", "Standard"), "rows", Arrays.asList(rows)));
+    }
+
+    private static Map<String, Object> row(String meter, String quantity, String amount) {
+        return map("meter", meter, "label", meter, "unit", "op", "per", 1, "unitPrice", "0.001", "quantity", quantity, "amount", amount);
+    }
+
+    /**
+     * The meter quantises each line to 5 places (half-even, on its side); the console sums the lines
+     * at full precision and rounds ONCE, to 2 places HALF_UP, at the subtotal. Three lines of a third
+     * of a cent are a cent; rounding each first would make them nothing.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theSubtotalIsSummedAtFullPrecisionAndRoundedOnceHalfUp() {
+        this.meterAnswers(row("storage.ops.read", "3", "0.00333"), row("storage.ops.write", "3", "0.00333"), row("storage.ops.delete", "3", "0.00334"));
+        assertThat(this.service.draft(TENANT, YearMonth.of(2026, 9)).getSubtotal()).isEqualByComparingTo("0.01");
+
+        // Half-UP at the subtotal: 0.005 is a cent (half-even would make it nothing).
+        this.meterAnswers(row("storage.ops.read", "5", "0.005"));
+        assertThat(this.service.draft(TENANT, YearMonth.of(2026, 9)).getSubtotal()).isEqualByComparingTo("0.01");
+    }
+
+    /**
+     * Tax is computed on the ROUNDED subtotal, to 2 places HALF_UP, and the total is subtotal plus tax
+     * with no further rounding. 0.125 rounds to 0.13, half of which is 0.065 and rounds to 0.07; tax on
+     * the unrounded 0.125 would have been 0.06.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void taxIsTakenOnTheRoundedSubtotalAndTheTotalIsTheirSum() {
+        this.account.setTaxId("GB123456789");
+        this.account.setTaxRatePercent(new BigDecimal("50"));
+        this.meterAnswers(row("storage.ops.read", "125", "0.125"));
+
+        Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
+
+        assertThat(draft.getSubtotal()).isEqualByComparingTo("0.13");
+        assertThat(draft.getTax()).isEqualByComparingTo("0.07");
+        assertThat(draft.getTotal()).isEqualByComparingTo("0.20");
+        assertThat(draft.getTotal().scale()).isEqualTo(2);
+    }
+
+    /** Tax needs BOTH a non-blank tax number AND a rate above zero; either alone is no tax. */
+    @Test
+    void theTaxGateWantsANumberAndAPositiveRate() {
+        this.account.setTaxId("   ");
+        this.account.setTaxRatePercent(new BigDecimal("20"));
+        assertThat(BillingService.taxApplies(this.account)).as("a blank number").isFalse();
+        this.account.setTaxId("GB123456789");
+        this.account.setTaxRatePercent(BigDecimal.ZERO);
+        assertThat(BillingService.taxApplies(this.account)).as("a zero rate").isFalse();
+        this.account.setTaxRatePercent(new BigDecimal("-5"));
+        assertThat(BillingService.taxApplies(this.account)).as("a negative rate").isFalse();
+        this.account.setTaxRatePercent(null);
+        assertThat(BillingService.taxApplies(this.account)).as("no rate").isFalse();
+        this.account.setTaxRatePercent(new BigDecimal("0.01"));
+        assertThat(BillingService.taxApplies(this.account)).isTrue();
+    }
+
+    /** With no tax, an invoice says so in a row of its own; a credit note carries no such row. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void anInvoiceWithoutTaxSaysTaxNotAppliedAndACreditNoteDoesNot() {
+        this.meterAnswers(row("storage.ops.read", "3000", "0.012"));
+        Invoice invoice = this.service.draft(TENANT, YearMonth.of(2026, 9));
+
+        BillingPdf.Doc doc = this.service.invoiceDoc(invoice, this.service.linesOf(invoice.getInvoiceId()), this.account);
+        assertThat(doc.totals).extracting(t -> t[0] + " / " + t[1]).contains("Tax / not applied");
+
+        invoice.setKind(InvoiceKind.CREDIT_NOTE.value());
+        BillingPdf.Doc credit = this.service.invoiceDoc(invoice, this.service.linesOf(invoice.getInvoiceId()), this.account);
+        assertThat(credit.totals).extracting(t -> t[0]).doesNotContain("Tax");
+    }
+
+    /**
+     * A row is dropped only when its amount AND its quantity are both zero: free usage the customer
+     * had (bytes read at 0.0 a GB) stays on the invoice at 0.00, because they see it.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void freeUsageStaysOnTheInvoiceAndOnlyAnEmptyRowIsDropped() {
+        this.meterAnswers(row("storage.bytes.read", "40", "0"), row("storage.ops.read", "0", "0"), row("pipeline.runs", "1", "0.002"));
+
+        Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
+
+        assertThat(this.service.linesOf(draft.getInvoiceId())).extracting(InvoiceLine::getMeter)
+            .containsExactly("storage.bytes.read", "pipeline.runs");
+        assertThat(this.service.linesOf(draft.getInvoiceId()).get(0).getAmount()).isEqualByComparingTo("0");
+    }
+
 }
