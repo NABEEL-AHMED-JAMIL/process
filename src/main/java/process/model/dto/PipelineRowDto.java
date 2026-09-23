@@ -16,6 +16,8 @@ public class PipelineRowDto implements Audited {
     private Long sourceTaskTypeId;
     private String topicName;
     private String kafkaTopic;
+    /** The Kafka profile the topic lives on, so a link to it can open the right one. */
+    private Long kafkaConnectionProfileId;
     private String status;
     private LocalDateTime dateCreated;
     private Long createdBy;
@@ -52,6 +54,8 @@ public class PipelineRowDto implements Audited {
     public void setTopicName(String topicName) { this.topicName = topicName; }
     public String getKafkaTopic() { return kafkaTopic; }
     public void setKafkaTopic(String kafkaTopic) { this.kafkaTopic = kafkaTopic; }
+    public Long getKafkaConnectionProfileId() { return kafkaConnectionProfileId; }
+    public void setKafkaConnectionProfileId(Long kafkaConnectionProfileId) { this.kafkaConnectionProfileId = kafkaConnectionProfileId; }
     public String getStatus() { return status; }
     public LocalDateTime getDateCreated() { return dateCreated; }
     public long getFieldCount() { return fieldCount; }

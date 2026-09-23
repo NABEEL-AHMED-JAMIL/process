@@ -433,4 +433,29 @@ public class PipelineServiceImplTenantIsolationTest {
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
     }
+
+    /**
+     * The row's topic link opened Kafka & Topics on the default profile: it carried the topic's
+     * id, which that screen does not read, instead of the profile the topic lives on. Topics are
+     * scoped per profile, so the linked topic was often not even on the screen it opened.
+     */
+    @Test
+    void aRowSaysWhichKafkaProfileItsTopicLivesOn() {
+        this.actAsTenant(TENANT_A);
+        PipelineRowProjection row = this.tenantARow();
+        when(row.getSourceTaskTypeId()).thenReturn(77L);
+        when(this.pipelineRepository.pageRows(eq(TENANT_A), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
+            .thenReturn(new PageImpl<>(Collections.singletonList(row), PageRequest.of(0, 50), 1));
+        this.summaryOf(TENANT_A);
+        SourceTaskType topic = new SourceTaskType();
+        topic.setSourceTaskTypeId(77L);
+        topic.setServiceName("Claims intake");
+        topic.setQueueTopicPartition("topic=claims-intake&partitions=[*]");
+        topic.setKafkaConnectionProfileId(12L);
+        when(this.sourceTaskTypeRepository.findAllById(any())).thenReturn(Collections.singletonList(topic));
+
+        List<PipelineRowDto> rows = rowsOf(this.service.listForms(1L, 50L, null, "", "", null, false));
+
+        assertThat(rows.get(0).getKafkaConnectionProfileId()).isEqualTo(12L);
+    }
 }

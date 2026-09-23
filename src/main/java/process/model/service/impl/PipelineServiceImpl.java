@@ -168,6 +168,7 @@ public class PipelineServiceImpl {
                 if (t == null) continue;
                 row.setTopicName(t.getServiceName());
                 row.setKafkaTopic(KafkaTopicPartitionUtil.parse(t.getQueueTopicPartition()).map(KafkaTopicPartitionUtil.Parsed::getTopic).orElse(null));
+                row.setKafkaConnectionProfileId(t.getKafkaConnectionProfileId());
             }
         }
         return new ResponseDto(SUCCESS, String.format("%d pipeline(s).", found.getTotalElements()),
