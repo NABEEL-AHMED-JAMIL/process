@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -644,10 +645,10 @@ public class AnalyticsQueryExecutionTest {
         // "other-store" by joining to it -- and the refusal has to be the same one they would have
         // met asking for it directly, or the join becomes an oracle for what other workspaces own.
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        process.storage.StorageRows.add(repository, storageConnection(TENANT_ID));
+        StorageRows.add(repository, storageConnection(TENANT_ID));
         StorageConnection theirs = storageConnection(OTHER_TENANT_ID);
         theirs.setAlias("other-store");
-        process.storage.StorageRows.add(repository, theirs);
+        StorageRows.add(repository, theirs);
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
@@ -670,7 +671,7 @@ public class AnalyticsQueryExecutionTest {
         // The control for the refusal above. A resolver that refused every second dataset would
         // satisfy that test while making a join impossible.
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        process.storage.StorageRows.add(repository, storageConnection(TENANT_ID));
+        StorageRows.add(repository, storageConnection(TENANT_ID));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
@@ -690,7 +691,7 @@ public class AnalyticsQueryExecutionTest {
     @Test
     void aQueryOverOneDatasetIsNotGivenASecondOne() throws Exception {
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        process.storage.StorageRows.add(repository, storageConnection(TENANT_ID));
+        StorageRows.add(repository, storageConnection(TENANT_ID));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
@@ -705,7 +706,7 @@ public class AnalyticsQueryExecutionTest {
     @Test
     void halfASecondDatasetIsAnErrorRatherThanAOneDatasetAnswer() {
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        process.storage.StorageRows.add(repository, storageConnection(TENANT_ID));
+        StorageRows.add(repository, storageConnection(TENANT_ID));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);

@@ -36,6 +36,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import process.storage.TrustedStorageOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,7 +64,7 @@ class BillingServiceTest {
 
     @Mock private MeterClient meter;
     @Mock private TenantRepository tenants;
-    @Mock private process.storage.TrustedStorageOperations storage;
+    @Mock private TrustedStorageOperations storage;
     @Mock private UserNameResolver names;
 
     /** In-memory repositories: the rules under test are arithmetic and state, not SQL. */
@@ -267,13 +272,13 @@ class BillingServiceTest {
         assertThat(paid.getBalance()).isEqualByComparingTo("0");
         assertThat(this.service.paymentsOf(issued.getInvoiceId())).hasSize(1);       // no credit_note payment row
         // Analytics: invoiced is net of the credit, collected is the money that arrived.
-        Map<String, Object> a = this.service.analytics(java.time.LocalDate.of(2026, 9, 1), java.time.LocalDate.of(2026, 9, 30));
+        Map<String, Object> a = this.service.analytics(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
         assertThat((BigDecimal) a.get("invoiced")).isEqualByComparingTo("36.58");
         assertThat((BigDecimal) a.get("collected")).isEqualByComparingTo("46.58");
         // And a credit applied to an open bill is not "collected" either.
         Invoice second = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 8)).getInvoiceId());
         this.service.creditNote(second.getInvoiceId(), new BigDecimal("6.58"), "goodwill");
-        Map<String, Object> b = this.service.analytics(java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 9, 30));
+        Map<String, Object> b = this.service.analytics(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 30));
         assertThat((BigDecimal) b.get("invoiced")).isEqualByComparingTo("76.58");    // 36.58 + 46.58 - 6.58
         assertThat((BigDecimal) b.get("collected")).isEqualByComparingTo("46.58");
         assertThat((BigDecimal) b.get("open")).isEqualByComparingTo("40.00");
@@ -324,7 +329,7 @@ class BillingServiceTest {
     void overdueIsIssuedPastDueWithABalance() throws Exception {
         Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
         assertThat(this.service.markOverdue()).isEqualTo(0);
-        issued.setDueAt(new java.sql.Timestamp(System.currentTimeMillis() - 86_400_000));
+        issued.setDueAt(new Timestamp(System.currentTimeMillis() - 86_400_000));
         assertThat(this.service.markOverdue()).isEqualTo(1);
         assertThat(this.service.find(issued.getInvoiceId()).getStatus()).isEqualTo(InvoiceStatus.OVERDUE.value());
     }
@@ -334,7 +339,7 @@ class BillingServiceTest {
         Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
         Payment p = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("10"), "bank", "TRF-9", null, null);
         this.service.verifyPayment(p.getPaymentId(), true, null);
-        BillingDocument statement = this.service.statement(TENANT, java.time.LocalDate.now().minusDays(1), java.time.LocalDate.now().plusDays(1));
+        BillingDocument statement = this.service.statement(TENANT, LocalDate.now().minusDays(1), LocalDate.now().plusDays(1));
         assertThat(statement.getKind()).isEqualTo("statement");
         assertThat(statement.getAmount()).isEqualByComparingTo("36.58");      // the balance open
         assertThat(statement.getFileName()).endsWith(".pdf");
@@ -373,8 +378,8 @@ class BillingServiceTest {
      * DRAFT to rebuild. Once the month was issued there was no draft, so it made a second one --
      * and a third on the next click. Dev held nine live invoices for one tenant's September.
      */
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.EnumSource(value = InvoiceStatus.class,
+    @ParameterizedTest
+    @EnumSource(value = InvoiceStatus.class,
         names = { "ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE" })
     void aMonthThatHasLeftDraftIsNotDraftedASecondTime(InvoiceStatus settled) throws Exception {
         YearMonth september = YearMonth.of(2026, 9);

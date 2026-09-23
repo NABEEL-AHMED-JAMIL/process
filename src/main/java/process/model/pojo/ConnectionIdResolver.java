@@ -1,4 +1,4 @@
-package process.analytics;
+package process.model.pojo;
 
 /** The id of the connection an alias means for a workspace: its own, else the platform's; null for none. */
 @FunctionalInterface

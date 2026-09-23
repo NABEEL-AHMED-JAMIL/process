@@ -1,4 +1,4 @@
-package process.analytics;
+package process.model.pojo;
 
 import javax.persistence.PrePersist;
 import javax.persistence.PreUpdate;
@@ -13,7 +13,7 @@ import javax.persistence.PreUpdate;
  * A plain JPA listener, like AuditListener; its resolver is installed at startup by
  * JdbcConnectionIdResolver.
  */
-public class AnalyticsConnectionStamp {
+public class StorageConnectionStamp {
 
     private static volatile ConnectionIdResolver installed;
 
@@ -24,10 +24,11 @@ public class AnalyticsConnectionStamp {
      * waiting for that same factory -- process never finished starting. The resolver is installed at
      * startup by JdbcConnectionIdResolver instead. (EntityListenersTest guards every listener.)
      */
-    public AnalyticsConnectionStamp() {
+    public StorageConnectionStamp() {
     }
 
-    static void use(ConnectionIdResolver resolver) {
+    /** Installed at startup by JdbcConnectionIdResolver (and by tests). */
+    public static void use(ConnectionIdResolver resolver) {
         installed = resolver;
     }
 

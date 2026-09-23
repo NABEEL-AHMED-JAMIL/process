@@ -38,6 +38,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -124,7 +125,7 @@ public class AnalyticsCancellationTest {
 
         Connection duck = session();
         when(this.sessions.open(any(StorageConnection.class))).thenReturn(duck);
-        process.storage.StorageRows.add(this.connections, storageConnection());
+        StorageRows.add(this.connections, storageConnection());
 
         TenantContext.set(TENANT_ID, "TENANT_USER", USER_ID, "analyst");
     }

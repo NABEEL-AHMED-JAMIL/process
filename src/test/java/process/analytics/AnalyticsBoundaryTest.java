@@ -73,7 +73,11 @@ public class AnalyticsBoundaryTest {
         "process.model.repository.StorageConnectionRepository",
         "process.model.repository.BenchmarkResultRepository",
         "process.config.KafkaConnectionResolver",
-        "process.config.KafkaTemplateProvider"));
+        "process.config.KafkaTemplateProvider",
+        // Which storage connection an alias means (MIG-53): Storage's own rule, the one the object
+        // browser resolves by. Analytics reading the repository and choosing for itself is how the
+        // two would drift apart -- and a looser choice here is a cross-workspace read.
+        "process.storage.StorageConnectionLookup"));
 
     /** The only packages outside api/ and engine/ that may reach INTO analytics. */
     private static final Set<String> MAY_REACH_IN = new LinkedHashSet<String>(Arrays.asList(

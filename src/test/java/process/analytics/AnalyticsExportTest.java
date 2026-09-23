@@ -59,6 +59,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -162,7 +163,7 @@ public class AnalyticsExportTest {
         this.bucket = Files.createTempDirectory("analytics-bucket");
         this.engine = DriverManager.getConnection("jdbc:duckdb:");
         this.resolver = new DatasetResolver(this.storageConnectionRepository);
-        process.storage.StorageRows.add(this.storageConnectionRepository, storageConnection(TENANT_ID));
+        StorageRows.add(this.storageConnectionRepository, storageConnection(TENANT_ID));
 
         this.sales = new DatasetRef(storageConnection(TENANT_ID), BUCKET, PATH,
             DatasetRef.Format.CSV);
@@ -788,8 +789,8 @@ public class AnalyticsExportTest {
     @Test
     void aConnectionTheCallerDoesNotOwnIsRefusedBeforeAnythingIsWritten() throws Exception {
         // The alias exists, but only in another workspace (MIG-53: aliases are per workspace).
-        process.storage.StorageRows.clear(this.storageConnectionRepository);
-        process.storage.StorageRows.add(this.storageConnectionRepository, storageConnection(OTHER_TENANT_ID));
+        StorageRows.clear(this.storageConnectionRepository);
+        StorageRows.add(this.storageConnectionRepository, storageConnection(OTHER_TENANT_ID));
 
         ResponseDto response = this.exports.writeBack(request());
 

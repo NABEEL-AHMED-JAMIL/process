@@ -30,6 +30,7 @@ import static org.mockito.Mockito.when;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import process.notifications.TestNotifications;
+import java.util.Map;
 import static org.mockito.ArgumentMatchers.eq;
 
 /**
@@ -164,7 +165,7 @@ public class TenantRequestServiceImplTest {
         // Through NotificationPort now: the temporary password is added to the body at render time
         // (MailExtras), never carried in the contract event that crosses the port.
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<java.util.Map<String, Object>> body = ArgumentCaptor.forClass(java.util.Map.class);
+        ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
         verify(this.emailMessagesFactory).sendTemplate(eq(MailRequested.Template.TENANT_WELCOME), eq("jane@example.com"), any(),
             anyString(), body.capture(), any(), any(), any());
         assertThat(body.getValue().get("temporary_password")).isNotNull();

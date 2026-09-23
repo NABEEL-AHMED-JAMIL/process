@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -110,7 +111,7 @@ class MediaPortBoundaryTest {
         List<String> offenders = new ArrayList<>();
         try (Stream<Path> files = Files.walk(Paths.get("src", "main"))) {
             for (Path file : files.filter(Files::isRegularFile).collect(Collectors.toList())) {
-                if (new String(Files.readAllBytes(file), java.nio.charset.StandardCharsets.ISO_8859_1).contains("jodconverter")) {
+                if (new String(Files.readAllBytes(file), StandardCharsets.ISO_8859_1).contains("jodconverter")) {
                     offenders.add(file.toString());
                 }
             }

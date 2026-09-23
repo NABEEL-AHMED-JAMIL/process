@@ -41,6 +41,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.Arrays;
 import process.model.service.StorageBrowserService;
+import process.storage.TrustedStorageOperations;
 
 /**
  * The certificate workflow end to end, with real crypto and a bucket in memory.
@@ -68,8 +69,8 @@ public class KafkaCertificateWorkflowTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        process.storage.TrustedStorageOperations storage =
-            mock(process.storage.TrustedStorageOperations.class);
+        TrustedStorageOperations storage =
+            mock(TrustedStorageOperations.class);
         doAnswer(this::rememberObject).when(storage)
             .uploadForWorkflow(any(), anyString(), anyString(), any(), anyLong(), anyString());
         when(storage.readForWorkflow(any(), anyString(), anyString())).thenAnswer(call -> {

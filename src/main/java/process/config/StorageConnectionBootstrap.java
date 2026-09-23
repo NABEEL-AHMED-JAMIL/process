@@ -19,6 +19,7 @@ import process.util.EncryptionUtil;
 import java.sql.Timestamp;
 import java.util.Optional;
 import java.util.Set;
+import process.storage.StorageConnectionLookup;
 
 /**
  * One-time, idempotent migration of bucket configuration out of environment variables and
@@ -210,7 +211,7 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
             alias = alias.trim();
             // Names are per workspace (MIG-53): the entry is skipped only when its own workspace
             // already has the name, or the platform reserves it.
-            if (new process.storage.StorageConnectionLookup(this.storageConnectionRepository)
+            if (new StorageConnectionLookup(this.storageConnectionRepository)
                     .aliasUnavailable(child.getTenantId(), alias, null)) {
                 final String taken = alias;
                 this.storageConnectionRepository.findAllByAlias(alias).stream().findFirst()

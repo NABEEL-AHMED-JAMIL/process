@@ -32,6 +32,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import static org.mockito.Mockito.when;
 import process.notifications.TestNotifications;
+import process.storage.TrustedStorageOperations;
 
 /**
  * The two edges where a check used to fall open instead of closed.
@@ -60,7 +61,7 @@ public class AppUserServiceImplFailClosedTest {
     @Mock
     private UserNameResolver userNameResolver;
     @Mock
-    private process.storage.TrustedStorageOperations storageBrowserService;
+    private TrustedStorageOperations storageBrowserService;
     @Mock
     private TestNotifications.NoticeSink notificationCenterService;
     @Mock

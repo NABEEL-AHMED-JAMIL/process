@@ -43,6 +43,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
+import process.storage.StorageRows;
 
 /**
  * The infrastructure the analytics integration suites need, and the single decision about what
@@ -492,7 +493,7 @@ final class AnalyticsIntegrationEnvironment {
     static DatasetResolver resolverOver(StorageConnection... connections) {
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
         for (StorageConnection connection : connections) {
-            process.storage.StorageRows.add(repository, connection);
+            StorageRows.add(repository, connection);
         }
         return new DatasetResolver(repository);
     }

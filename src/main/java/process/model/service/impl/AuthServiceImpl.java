@@ -23,6 +23,7 @@ import process.security.LoginAttemptGuard;
 import process.util.JwtUtil;
 import java.sql.Timestamp;
 import java.util.Optional;
+import java.util.UUID;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
@@ -54,7 +55,7 @@ public class AuthServiceImpl implements AuthService {
         PasswordEncoder passwordEncoder, JwtUtil jwtUtil, PageAccessService pageAccessService,
         LoginAttemptGuard loginAttempts) {
         this.loginAttempts = loginAttempts;
-        this.nobodysHash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
+        this.nobodysHash = passwordEncoder.encode(UUID.randomUUID().toString());
         this.appUserRepository = appUserRepository;
         this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;

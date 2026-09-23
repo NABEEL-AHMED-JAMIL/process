@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import process.storage.StorageConnectionLookup;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
@@ -153,8 +154,8 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
      * Kafka certificate is written through. TenantOwnership refuses a tenant-less caller, which
      * is the same answer StorageBrowserServiceImpl.belongsToCaller already gives the bucket list.
      */
-    private process.storage.StorageConnectionLookup lookup() {
-        return new process.storage.StorageConnectionLookup(this.storageConnectionRepository);
+    private StorageConnectionLookup lookup() {
+        return new StorageConnectionLookup(this.storageConnectionRepository);
     }
 
     private boolean isOwnedByCaller(StorageConnection connection) {

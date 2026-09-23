@@ -27,6 +27,7 @@ import org.assertj.core.api.Assertions;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.dao.DataIntegrityViolationException;
+import process.storage.StorageRows;
 
 /**
  * The two buckets the platform keeps for itself have to exist for the application to work.
@@ -114,7 +115,7 @@ public class DefaultBucketBootstrapTest {
     void leavesAnExistingConnectionAlone() {
         StorageConnection existing = new StorageConnection();
         existing.setAlias("etl-avatar");
-        process.storage.StorageRows.add(this.storageConnectionRepository, existing);
+        StorageRows.add(this.storageConnectionRepository, existing);
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
@@ -124,7 +125,7 @@ public class DefaultBucketBootstrapTest {
     @Test
     void createsNothingTwiceWhenBothAlreadyExist() {
         StorageConnection existing = new StorageConnection();
-        process.storage.StorageRows.add(this.storageConnectionRepository, existing);
+        StorageRows.add(this.storageConnectionRepository, existing);
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 

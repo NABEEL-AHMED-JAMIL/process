@@ -16,6 +16,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -89,7 +91,7 @@ class OneTimeSecretsRedisTest {
         String ref = this.secrets.keep("Tmp-9f2c!");
         ExecutorService pool = Executors.newFixedThreadPool(8);
         Callable<Optional<String>> redeem = () -> this.secrets.redeem(ref);
-        java.util.List<Future<Optional<String>>> results = new java.util.ArrayList<>();
+        List<Future<Optional<String>>> results = new ArrayList<>();
         for (int i = 0; i < 8; i++) results.add(pool.submit(redeem));
         int got = 0;
         for (Future<Optional<String>> result : results) if (result.get().isPresent()) got++;

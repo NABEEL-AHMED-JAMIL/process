@@ -63,8 +63,8 @@ import java.sql.Timestamp;
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@EntityListeners({AuditListener.class, process.analytics.AnalyticsConnectionStamp.class})
-public class BenchmarkResult implements Audited , process.analytics.ConnectionAliased{
+@EntityListeners({AuditListener.class, StorageConnectionStamp.class})
+public class BenchmarkResult implements Audited , ConnectionAliased{
 
     /**
      * A file open as the Studio performs one: the schema read, the row count and the first page.

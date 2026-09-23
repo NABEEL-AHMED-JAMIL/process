@@ -24,6 +24,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
+import process.storage.TrustedAccess;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -160,7 +161,7 @@ public class RedisConfigTest {
     void everyUploadEvictsBothFileChatCaches() throws Exception {
         this.assertEvictsBothFileChatCaches("uploadObject", String.class, String.class, MultipartFile.class);
         this.assertEvictsBothFileChatCaches("uploadObject", String.class, String.class, InputStream.class, long.class, String.class);
-        this.assertEvictsBothFileChatCaches("uploadForWorkflow", process.storage.TrustedAccess.class, String.class, String.class, InputStream.class, long.class, String.class);
+        this.assertEvictsBothFileChatCaches("uploadForWorkflow", TrustedAccess.class, String.class, String.class, InputStream.class, long.class, String.class);
     }
 
     @Test

@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -181,7 +182,7 @@ public class StorageConnectionKafkaDependencyTest {
         StorageConnection connection = this.savedConnection();
         StorageConnectionDto dto = this.dtoFor(connection);
         dto.setStatus(Status.Inactive);
-        process.storage.StorageRows.add(this.storageConnectionRepository, connection);
+        StorageRows.add(this.storageConnectionRepository, connection);
         when(this.storageConnectionRepository.findById(55L)).thenReturn(Optional.of(connection));
         this.profilesVisibleToTheTenant(this.profileUsing("prod-events", "kafka-certs"));
 
@@ -199,7 +200,7 @@ public class StorageConnectionKafkaDependencyTest {
         // profiles depend on leaves every one of them resolving exactly as before.
         dto.setEndpoint("http://minio-2:9000");
         dto.setStatus(Status.Active);
-        process.storage.StorageRows.add(this.storageConnectionRepository, connection);
+        StorageRows.add(this.storageConnectionRepository, connection);
         when(this.storageConnectionRepository.findById(55L)).thenReturn(Optional.of(connection));
 
         ResponseDto response = this.service.updateConnection(dto);

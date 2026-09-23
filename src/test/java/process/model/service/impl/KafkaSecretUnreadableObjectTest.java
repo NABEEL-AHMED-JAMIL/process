@@ -12,6 +12,7 @@ import process.util.KafkaSecretPath;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.Collections;
+import process.storage.TrustedStorageOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,7 +40,7 @@ public class KafkaSecretUnreadableObjectTest {
     private static final Long OWNER = 1248L;
     private static final Long TENANT = 5L;
 
-    private final process.storage.TrustedStorageOperations storageBrowserService = mock(process.storage.TrustedStorageOperations.class);
+    private final TrustedStorageOperations storageBrowserService = mock(TrustedStorageOperations.class);
     private final KafkaSecretService service =
         new KafkaSecretServiceImpl(this.storageBrowserService, mock(AppUserRepository.class), null, "etl-config");
 

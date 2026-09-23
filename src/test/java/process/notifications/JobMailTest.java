@@ -10,6 +10,7 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 
 import java.util.Optional;
+import org.mockito.Mockito;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -68,7 +69,7 @@ class JobMailTest {
         ArgumentCaptor<MailRequested> mail = ArgumentCaptor.forClass(MailRequested.class);
         this.jobMail.send(run(), JobStatus.Skip);
         this.jobMail.send(run(), JobStatus.Completed);
-        verify(this.port, org.mockito.Mockito.times(2)).mailRequested(any(), mail.capture(), any());
+        verify(this.port, Mockito.times(2)).mailRequested(any(), mail.capture(), any());
         assertThat(mail.getAllValues()).extracting(MailRequested::getTemplate)
             .containsExactly(MailRequested.Template.SKIP_JOB, MailRequested.Template.COMPLETE_JOB);
     }

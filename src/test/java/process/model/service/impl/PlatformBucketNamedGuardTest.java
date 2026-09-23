@@ -13,6 +13,10 @@ import process.security.TenantContext;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import org.mockito.Mockito;
+import process.storage.ObjectChangeLog;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -60,7 +64,7 @@ public class PlatformBucketNamedGuardTest {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
             this.legacyS3,
-            AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
+            AVATAR_BUCKET, CONFIG_BUCKET, Mockito.mock(ObjectChangeLog.class));
     }
 
     @AfterEach
@@ -145,7 +149,7 @@ public class PlatformBucketNamedGuardTest {
     void aWorkflowStillReachesIt() {
         this.givenTenantOwnedLookupFor(PLATFORM_BUCKET);
 
-        this.service.readForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), PLATFORM_BUCKET, "kafka-secrets/9/u/2026-08-31/truststore-a1b2c3d4.p12");
+        this.service.readForWorkflow(TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), PLATFORM_BUCKET, "kafka-secrets/9/u/2026-08-31/truststore-a1b2c3d4.p12");
 
         verify(this.legacyS3).getObjectContent(
             PLATFORM_BUCKET, "kafka-secrets/9/u/2026-08-31/truststore-a1b2c3d4.p12", null, null);

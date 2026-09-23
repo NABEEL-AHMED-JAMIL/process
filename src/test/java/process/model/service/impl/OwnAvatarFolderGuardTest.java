@@ -12,6 +12,9 @@ import process.model.service.ObjectStorageService;
 import process.security.TenantContext;
 
 import java.util.Optional;
+import org.mockito.Mockito;
+import process.storage.ObjectChangeLog;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,7 +62,7 @@ public class OwnAvatarFolderGuardTest {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
             this.minio,
-            AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
+            AVATAR_BUCKET, CONFIG_BUCKET, Mockito.mock(ObjectChangeLog.class));
         StorageConnection platform = new StorageConnection();
         platform.setStorageConnectionId(700L);
         platform.setTenantId(null);
@@ -68,8 +71,8 @@ public class OwnAvatarFolderGuardTest {
         platform.setBucketName(AVATAR_BUCKET);
         platform.setProvider(StorageProvider.MINIO);
         platform.setStatus(Status.Active);
-        process.storage.StorageRows.add(this.storageConnectionRepository, platform);
-        process.storage.StorageRows.add(this.storageConnectionRepository, platform);
+        StorageRows.add(this.storageConnectionRepository, platform);
+        StorageRows.add(this.storageConnectionRepository, platform);
         when(this.storageClientFactory.serviceFor(any())).thenReturn(this.minio);
         TenantContext.set(TENANT_A, "TENANT_USER", USER_A, "tenant-user@example.com");
     }

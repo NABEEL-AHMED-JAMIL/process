@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.mock.http.client.MockClientHttpRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -30,7 +31,7 @@ class MeterClientTest {
         server.expect(requestTo("http://meter:8200/v1/events")).andExpect(method(HttpMethod.POST))
             .andExpect(header("X-Service-Key", "k"))
             .andExpect(request -> {
-                JsonObject body = JsonParser.parseString(((org.springframework.mock.http.client.MockClientHttpRequest) request).getBodyAsString()).getAsJsonObject();
+                JsonObject body = JsonParser.parseString(((MockClientHttpRequest) request).getBodyAsString()).getAsJsonObject();
                 JsonArray events = body.getAsJsonArray("events");
                 assertThat(events).hasSize(2);
                 JsonObject first = events.get(0).getAsJsonObject();

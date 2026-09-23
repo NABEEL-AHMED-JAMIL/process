@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * The billing documents as PDF: an invoice (or credit note), a receipt, a statement.
@@ -150,7 +151,7 @@ public final class BillingPdf {
     }
 
     private static String[] wrap(String text, int width) {
-        java.util.List<String> lines = new java.util.ArrayList<>();
+        List<String> lines = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         for (String word : text.split("\\s+")) {
             if (current.length() + word.length() + 1 > width) { lines.add(current.toString()); current.setLength(0); }

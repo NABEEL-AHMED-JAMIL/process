@@ -9,6 +9,7 @@ import process.security.TenantOwnership;
 
 import java.util.Optional;
 import java.util.regex.Pattern;
+import process.storage.StorageConnectionLookup;
 
 /**
  * Turns "connection 12, bucket etl-bucket, path orders/2026/*.csv" into something readable.
@@ -84,7 +85,7 @@ public class DatasetResolver {
         // Active, not merely not-Deleted, for the same reason: the picker only offers Active
         // connections (collectBuckets :104), so anything looser lets a deliberately deactivated
         // connection keep serving data through an API where nobody can see it is still live.
-        Optional<StorageConnection> found = new process.storage.StorageConnectionLookup(this.storageConnectionRepository)
+        Optional<StorageConnection> found = new StorageConnectionLookup(this.storageConnectionRepository)
             .forCaller(connectionAlias.trim())
             .filter(c -> Status.Active.equals(c.getStatus()))
             .filter(c -> TenantOwnership.isOwnedByCaller(c.getTenantId()));
