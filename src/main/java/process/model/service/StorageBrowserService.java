@@ -39,16 +39,8 @@ public interface StorageBrowserService {
 
     void renameFolder(String bucket, String folderKey, String newFolderName);
 
-    /**
-     * The two below are for application workflows, and they are trusted: they skip the check
-     * that keeps a caller out of a platform bucket, because the workflow has already established
-     * that the row the key comes from is the caller's -- a PDF highlighter task it owns, a Kafka
-     * connection profile's truststore -- and builds the key itself from that row. Everything
-     * above scopes a bucket and key the caller named; these must never be handed one. (A third,
-     * a multipart upload, had no callers and was removed: DEF-122.)
-     */
-    void uploadForWorkflow(String bucket, String key, InputStream inputStream, long size, String contentType);
+    // The trusted workflow operations are not here: they live in process.storage behind a principal
+    // (MIG-52, MIG-65), and nothing handed this interface can reach them.
 
-    ObjectContentDto readForWorkflow(String bucket, String key);
 
 }

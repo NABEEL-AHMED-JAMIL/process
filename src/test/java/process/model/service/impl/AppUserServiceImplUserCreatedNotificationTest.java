@@ -67,7 +67,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @Mock
     private UserNameResolver userNameResolver;
     @Mock
-    private StorageBrowserService storageBrowserService;
+    private process.storage.TrustedStorageOperations storageBrowserService;
     @Mock
     private TestNotifications.NoticeSink notificationCenterService;
     @Mock

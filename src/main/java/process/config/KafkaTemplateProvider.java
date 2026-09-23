@@ -19,7 +19,9 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import process.model.dto.ObjectContentDto;
 import process.model.pojo.KafkaConnectionProfile;
-import process.model.service.StorageBrowserService;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
+import process.storage.TrustedStorageOperations;
 import process.util.EncryptionUtil;
 import process.util.KafkaCertificateUtil;
 import java.io.IOException;
@@ -65,7 +67,7 @@ public class KafkaTemplateProvider {
     private final EncryptionUtil encryptionUtil;
     private final KafkaTemplate<String, String> fallbackTemplate;
     private final KafkaProperties kafkaProperties;
-    private final StorageBrowserService storageBrowserService;
+    private final TrustedStorageOperations storageBrowserService;
 
     /**
      * Where downloaded truststores and keystores are cached. Left blank this falls back to the
@@ -98,7 +100,7 @@ public class KafkaTemplateProvider {
 
     public KafkaTemplateProvider(EncryptionUtil encryptionUtil,
         KafkaTemplate<String, String> fallbackTemplate, KafkaProperties kafkaProperties,
-        StorageBrowserService storageBrowserService) {
+        TrustedStorageOperations storageBrowserService) {
         this.encryptionUtil = encryptionUtil;
         this.fallbackTemplate = fallbackTemplate;
         this.kafkaProperties = kafkaProperties;
@@ -254,7 +256,9 @@ public class KafkaTemplateProvider {
      * bucket.
      */
     private ObjectContentDto downloadProfileSecret(String bucket, String objectKey) {
-        return this.storageBrowserService.readForWorkflow(bucket, objectKey);
+        return this.storageBrowserService.readForWorkflow(
+            TrustedAccess.of(TrustedCaller.KAFKA_TEMPLATE_PROVIDER, "a Kafka profile's key material, from the profile row"),
+            bucket, objectKey);
     }
 
     /**

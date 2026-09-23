@@ -96,9 +96,9 @@ public class KafkaSecretE2EIT extends E2ESupport {
     void standInForTheObjectStore() {
         this.objects.clear();
         doAnswer(this::rememberObject).when(this.storageBrowserService)
-            .uploadForWorkflow(anyString(), anyString(), any(InputStream.class), anyLong(), anyString());
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString())).thenAnswer(call -> {
-            byte[] stored = this.objects.get(call.getArgument(1));
+            .uploadForWorkflow(any(), anyString(), anyString(), any(InputStream.class), anyLong(), anyString());
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString())).thenAnswer(call -> {
+            byte[] stored = this.objects.get(call.getArgument(2));
             return stored == null ? null : new ObjectContentDto(
                 new ByteArrayInputStream(stored), "application/octet-stream", stored.length, "file");
         });
@@ -379,14 +379,14 @@ public class KafkaSecretE2EIT extends E2ESupport {
     }
 
     private Object rememberObject(InvocationOnMock call) throws Exception {
-        InputStream in = call.getArgument(2);
+        InputStream in = call.getArgument(3);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] chunk = new byte[8192];
         int read;
         while ((read = in.read(chunk)) != -1) {
             out.write(chunk, 0, read);
         }
-        this.objects.put(call.getArgument(1), out.toByteArray());
+        this.objects.put(call.getArgument(2), out.toByteArray());
         return null;
     }
 

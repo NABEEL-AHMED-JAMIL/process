@@ -68,12 +68,12 @@ public class KafkaCertificateWorkflowTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        StorageBrowserService storage =
-            mock(StorageBrowserService.class);
+        process.storage.TrustedStorageOperations storage =
+            mock(process.storage.TrustedStorageOperations.class);
         doAnswer(this::rememberObject).when(storage)
-            .uploadForWorkflow(anyString(), anyString(), any(), anyLong(), anyString());
-        when(storage.readForWorkflow(anyString(), anyString())).thenAnswer(call -> {
-            byte[] stored = this.objects.get(call.getArgument(1));
+            .uploadForWorkflow(any(), anyString(), anyString(), any(), anyLong(), anyString());
+        when(storage.readForWorkflow(any(), anyString(), anyString())).thenAnswer(call -> {
+            byte[] stored = this.objects.get(call.getArgument(2));
             return stored == null ? null : new ObjectContentDto(
                 new ByteArrayInputStream(stored), "application/octet-stream", stored.length, "file");
         });
@@ -93,14 +93,14 @@ public class KafkaCertificateWorkflowTest {
     }
 
     private Object rememberObject(InvocationOnMock call) throws Exception {
-        InputStream in = call.getArgument(2);
+        InputStream in = call.getArgument(3);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] chunk = new byte[8192];
         int read;
         while ((read = in.read(chunk)) != -1) {
             out.write(chunk, 0, read);
         }
-        this.objects.put(call.getArgument(1), out.toByteArray());
+        this.objects.put(call.getArgument(2), out.toByteArray());
         return null;
     }
 

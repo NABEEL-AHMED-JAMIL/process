@@ -14,6 +14,7 @@ import process.model.dto.AppUserDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AppUserService;
 import process.util.ProcessUtil;
+import process.util.StorageNotFound;
 import java.util.Map;
 
 /**
@@ -124,6 +125,12 @@ public class AppUserRestApi {
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=300")
                 .body(new InputStreamResource(content.getContent()));
         } catch (Exception ex) {
+            // The row names a picture whose object is gone: that is "no picture", as for someone who
+            // never set one -- not a server fault logged on every page that shows this user.
+            if (StorageNotFound.isNotFound(ex)) {
+                logger.debug("avatar: user {}'s picture is no longer in storage", appUserId);
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
             logger.error("An error occurred while avatar.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }

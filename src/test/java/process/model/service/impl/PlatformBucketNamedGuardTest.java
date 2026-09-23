@@ -145,7 +145,7 @@ public class PlatformBucketNamedGuardTest {
     void aWorkflowStillReachesIt() {
         this.givenTenantOwnedLookupFor(PLATFORM_BUCKET);
 
-        this.service.readForWorkflow(PLATFORM_BUCKET, "kafka-secrets/9/u/2026-08-31/truststore-a1b2c3d4.p12");
+        this.service.readForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), PLATFORM_BUCKET, "kafka-secrets/9/u/2026-08-31/truststore-a1b2c3d4.p12");
 
         verify(this.legacyS3).getObjectContent(
             PLATFORM_BUCKET, "kafka-secrets/9/u/2026-08-31/truststore-a1b2c3d4.p12", null, null);

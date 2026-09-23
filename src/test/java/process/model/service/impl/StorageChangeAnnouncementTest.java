@@ -91,7 +91,8 @@ class StorageChangeAnnouncementTest {
     @Test
     void aMultipartUploadAndAWorkflowUploadAreAnnouncedToo() {
         this.service.uploadObject(BUCKET, "q3/", new MockMultipartFile("file", "b.csv", "text/csv", new byte[] {1}));
-        this.service.uploadForWorkflow(BUCKET, "kafka/truststore.p12", bytes(), 3, "application/octet-stream");
+        this.service.uploadForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test"),
+            BUCKET, "kafka/truststore.p12", bytes(), 3, "application/octet-stream");
 
         InOrder order = inOrder(this.changes, this.store);
         order.verify(this.changes).object(BUCKET, "q3/b.csv", ObjectChanged.Reason.UPLOAD);
@@ -152,7 +153,7 @@ class StorageChangeAnnouncementTest {
         List<Method> writes = Arrays.asList(
             StorageBrowserServiceImpl.class.getMethod("uploadObject", String.class, String.class, org.springframework.web.multipart.MultipartFile.class),
             StorageBrowserServiceImpl.class.getMethod("uploadObject", String.class, String.class, InputStream.class, long.class, String.class),
-            StorageBrowserServiceImpl.class.getMethod("uploadForWorkflow", String.class, String.class, InputStream.class, long.class, String.class),
+            StorageBrowserServiceImpl.class.getMethod("uploadForWorkflow", process.storage.TrustedAccess.class, String.class, String.class, InputStream.class, long.class, String.class),
             StorageBrowserServiceImpl.class.getMethod("deleteObject", String.class, String.class),
             StorageBrowserServiceImpl.class.getMethod("deleteObjects", String.class, List.class),
             StorageBrowserServiceImpl.class.getMethod("deleteFolder", String.class, String.class),

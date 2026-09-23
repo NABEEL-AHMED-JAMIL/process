@@ -160,7 +160,7 @@ public class RedisConfigTest {
     void everyUploadEvictsBothFileChatCaches() throws Exception {
         this.assertEvictsBothFileChatCaches("uploadObject", String.class, String.class, MultipartFile.class);
         this.assertEvictsBothFileChatCaches("uploadObject", String.class, String.class, InputStream.class, long.class, String.class);
-        this.assertEvictsBothFileChatCaches("uploadForWorkflow", String.class, String.class, InputStream.class, long.class, String.class);
+        this.assertEvictsBothFileChatCaches("uploadForWorkflow", process.storage.TrustedAccess.class, String.class, String.class, InputStream.class, long.class, String.class);
     }
 
     @Test

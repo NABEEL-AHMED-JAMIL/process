@@ -19,7 +19,9 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AppUserService;
 import process.model.service.PageAccessService;
-import process.model.service.StorageBrowserService;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
+import process.storage.TrustedStorageOperations;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
 import process.notifications.MailExtras;
@@ -79,13 +81,13 @@ public class AppUserServiceImpl implements AppUserService {
     @Value("${app.console.url:http://localhost:4400}")
     private String consoleUrl;
 
-    private final StorageBrowserService storageBrowserService;
+    private final TrustedStorageOperations storageBrowserService;
 
     private final PageAccessService pageAccessService;
 
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, NotificationPort notifications,
-        UserNameResolver userNameResolver, StorageBrowserService storageBrowserService,
+        UserNameResolver userNameResolver, TrustedStorageOperations storageBrowserService,
         PageAccessService pageAccessService) {
         this.pageAccessService = pageAccessService;
         this.storageBrowserService = storageBrowserService;
@@ -132,7 +134,9 @@ public class AppUserServiceImpl implements AppUserService {
         if (isNull(user.getAvatarKey()) || isNull(user.getAvatarBucket())) {
             return null;
         }
-        return this.storageBrowserService.readForWorkflow(user.getAvatarBucket(), user.getAvatarKey());
+        return this.storageBrowserService.readForWorkflow(
+            TrustedAccess.of(TrustedCaller.IDENTITY_AVATAR, "the picture on the user's own row"),
+            user.getAvatarBucket(), user.getAvatarKey());
     }
 
     @Override

@@ -14,7 +14,9 @@ import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import process.config.StoragePropertyDefaults;
 import process.model.service.KafkaSecretService;
-import process.model.service.StorageBrowserService;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
+import process.storage.TrustedStorageOperations;
 import process.security.TenantContext;
 import process.util.EncryptionUtil;
 import process.util.KafkaCertificateUtil;
@@ -55,13 +57,19 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
     @Value("${kafka.secret.max-file-size-kb:512}")
     private int maxFileSizeKb;
 
-    private final StorageBrowserService storageBrowserService;
+    /** The trusted principals this class presents (MIG-65): paths it builds for the caller's own profile. */
+    private static final TrustedAccess STORE_CERTIFICATE =
+        TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "store Kafka key material under a path built for the caller's profile");
+    private static final TrustedAccess READ_CERTIFICATE =
+        TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "read Kafka key material the caller's profile references");
+
+    private final TrustedStorageOperations storageBrowserService;
     private final AppUserRepository appUserRepository;
     private final EncryptionUtil encryptionUtil;
     /** The platform's config bucket, read through the same expression its guard and its seeding use. */
     private final String secretBucket;
 
-    public KafkaSecretServiceImpl(StorageBrowserService storageBrowserService,
+    public KafkaSecretServiceImpl(TrustedStorageOperations storageBrowserService,
         AppUserRepository appUserRepository, EncryptionUtil encryptionUtil,
         @Value(StoragePropertyDefaults.CONFIG_BUCKET) String secretBucket) {
         this.storageBrowserService = storageBrowserService;
@@ -104,7 +112,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         }
 
         KafkaSecretPath path = KafkaSecretPath.newUpload(callerId, file.getOriginalFilename(), LocalDate.now());
-        this.storageBrowserService.uploadForWorkflow(this.secretBucket, path.key(),
+        this.storageBrowserService.uploadForWorkflow(STORE_CERTIFICATE, this.secretBucket, path.key(),
             new ByteArrayInputStream(bytes), bytes.length, "application/octet-stream");
 
         this.fill(summary, kind, path, (long) bytes.length);
@@ -141,7 +149,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         // removed together when the CA is rotated.
         KafkaSecretPath source = KafkaSecretPath.parse(caObjectKeys.get(0));
         KafkaSecretPath target = source.sibling(generatedStoreName("truststore"));
-        this.storageBrowserService.uploadForWorkflow(this.secretBucket, target.key(),
+        this.storageBrowserService.uploadForWorkflow(STORE_CERTIFICATE, this.secretBucket, target.key(),
             new ByteArrayInputStream(store), store.length, "application/x-pkcs12");
 
         KafkaSecretDto dto = new KafkaSecretDto();
@@ -186,7 +194,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         String storePassword = this.encryptionUtil.encrypt(password);
         KafkaSecretPath target = KafkaSecretPath.parse(certificateObjectKey)
             .sibling(generatedStoreName("keystore"));
-        this.storageBrowserService.uploadForWorkflow(this.secretBucket, target.key(),
+        this.storageBrowserService.uploadForWorkflow(STORE_CERTIFICATE, this.secretBucket, target.key(),
             new ByteArrayInputStream(store), store.length, "application/x-pkcs12");
 
         KafkaSecretDto dto = new KafkaSecretDto();
@@ -283,7 +291,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
     private byte[] read(String objectKey) throws Exception {
         ObjectContentDto content;
         try {
-            content = this.storageBrowserService.readForWorkflow(this.secretBucket, objectKey);
+            content = this.storageBrowserService.readForWorkflow(READ_CERTIFICATE, this.secretBucket, objectKey);
         } catch (RuntimeException unreadable) {
             // Logged rather than reported: a bucket that is unreachable and a file that is gone
             // look the same from here, and only one of them is the caller's to do anything about.

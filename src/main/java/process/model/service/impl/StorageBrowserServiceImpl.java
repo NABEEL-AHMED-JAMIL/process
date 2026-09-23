@@ -21,6 +21,9 @@ import process.model.pojo.StorageConnection;
 import process.model.repository.StorageConnectionRepository;
 import process.model.service.ObjectStorageService;
 import process.storage.ObjectChangeLog;
+import process.storage.TrustedAccess;
+import process.storage.TrustedStorageAudit;
+import process.storage.TrustedStorageOperations;
 import org.barco.platform.storage.ObjectChanged;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
@@ -54,7 +57,7 @@ import java.util.zip.ZipException;
  * @author Nabeel Ahmed
  * */
 @Service
-public class StorageBrowserServiceImpl implements StorageBrowserService {
+public class StorageBrowserServiceImpl implements StorageBrowserService, TrustedStorageOperations {
 
     private static final Logger logger = LoggerFactory.getLogger(StorageBrowserServiceImpl.class);
     private static final String BUCKET_LIST = "BUCKET_LIST";
@@ -180,18 +183,18 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
 
     @Override
     public List<BucketSummaryDto> listBuckets() {
-        return this.collectBuckets(false);
+        return this.collectBuckets(Resolution.GUARDED);
     }
 
     /**
-     * The buckets configured on this platform, narrowed to the caller unless trusted.
+     * The buckets configured on this platform, narrowed to the caller unless the resolution is TRUSTED.
      *
-     * trusted is for the workflow paths below, which have no caller to narrow to: a scheduler or
+     * TRUSTED is for the workflow paths below, which have no caller to narrow to: a scheduler or
      * startup thread carries no TenantContext, so every tenant test it could apply would refuse.
      */
-    private List<BucketSummaryDto> collectBuckets(boolean trusted) {
+    private List<BucketSummaryDto> collectBuckets(Resolution how) {
         // A platform admin sees every bucket, and so does a trusted workflow.
-        boolean unrestricted = trusted || TenantContext.isPlatformAdmin();
+        boolean unrestricted = how == Resolution.TRUSTED || TenantContext.isPlatformAdmin();
         Long callerTenantId = TenantContext.getTenantId();
         List<BucketSummaryDto> buckets = new ArrayList<>();
 
@@ -426,18 +429,22 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     @Override
     // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
     @CacheEvict(value = "fileChatMetadata", allEntries = true)
-    public void uploadForWorkflow(String bucket, String key, InputStream inputStream, long size, String contentType) {
+    public void uploadForWorkflow(TrustedAccess access, String bucket, String key, InputStream inputStream, long size, String contentType) {
+        requireAccess(access);
         this.requireSafeKey(key);
-        ObjectStorageService service = this.resolveService(bucket, true);
+        TrustedStorageAudit.record("upload", access, bucket, key);
+        ObjectStorageService service = this.resolveService(bucket, Resolution.TRUSTED);
         this.announce("uploaded", () -> this.changes.object(bucket, key, ObjectChanged.Reason.UPLOAD));
         service.uploadObject(bucket, key, inputStream, size, contentType);
     }
 
     /** Trusted, on the same terms as uploadForWorkflow above: the caller owns the row this key came from. */
     @Override
-    public ObjectContentDto readForWorkflow(String bucket, String key) {
+    public ObjectContentDto readForWorkflow(TrustedAccess access, String bucket, String key) {
+        requireAccess(access);
         this.requireSafeKey(key);
-        return this.resolveService(bucket, true).getObjectContent(bucket, key, null, null);
+        TrustedStorageAudit.record("read", access, bucket, key);
+        return this.resolveService(bucket, Resolution.TRUSTED).getObjectContent(bucket, key, null, null);
     }
 
     // The one write path here that is deliberately NOT evicting. It writes a zero-byte marker
@@ -569,6 +576,19 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         }
     }
 
+    /**
+     * How a bucket is resolved. Two named paths, not a boolean (DEF-058): GUARDED narrows to the caller
+     * and applies the tenant test; TRUSTED is reachable only through TrustedStorageOperations, with a
+     * named, audited principal.
+     */
+    private enum Resolution { GUARDED, TRUSTED }
+
+    private static void requireAccess(TrustedAccess access) {
+        if (access == null) {
+            throw new IllegalStateException("A trusted storage call presents its principal.");
+        }
+    }
+
     private void requireFolderKey(String folderKey) {
         if (folderKey == null || folderKey.trim().isEmpty() || !folderKey.endsWith("/")) {
             throw new IllegalArgumentException("A folder key must end with '/'.");
@@ -626,7 +646,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             && !TenantContext.isPlatformAdmin() && !this.isOwnProfileObject(bucket, key)) {
             throw unknownBucket(bucket);
         }
-        return this.resolveService(bucket, false);
+        return this.resolveService(bucket, Resolution.GUARDED);
     }
 
     /**
@@ -718,13 +738,13 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     /**
      * Resolves a bucket to the client that serves it.
      *
-     * trusted is the workflow paths' resolution: it skips the tenant test below and reads the
+     * TRUSTED is the workflow paths' resolution: it skips the tenant test below and reads the
      * legacy bucket list unnarrowed, because the threads that use it -- the topic provisioner at
      * startup, a scheduled dispatch -- carry no TenantContext, so every test would find nobody to
      * match and refuse a bucket the workflow wrote itself. Never reachable from a request that
      * named its own bucket; see uploadForWorkflow.
      */
-    private ObjectStorageService resolveService(String bucket, boolean trusted) {
+    private ObjectStorageService resolveService(String bucket, Resolution how) {
         if (bucket == null) {
             // deleteObjects reads its bucket from a request body rather than a required query
             // parameter, so an absent one arrives here as null and came back as a 500 from the
@@ -734,7 +754,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         Optional<StorageConnection> connection = this.storageConnectionRepository.findByAliasAndStatus(bucket, Status.Active);
         if (connection.isPresent()) {
             StorageConnection storageConnection = connection.get();
-            if (!trusted && !TenantContext.isPlatformAdmin()
+            if (how == Resolution.GUARDED && !TenantContext.isPlatformAdmin()
                 && storageConnection.getTenantId() != null
                 && !Objects.equals(storageConnection.getTenantId(), TenantContext.getTenantId())) {
                 throw unknownBucket(bucket);
@@ -752,7 +772,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             return realBucket.equals(bucket) ? service : new BucketRewritingStorageService(service, realBucket);
         }
 
-        BucketSummaryDto bucketSummary = this.collectBuckets(trusted).stream()
+        BucketSummaryDto bucketSummary = this.collectBuckets(how).stream()
             .filter(b -> bucket.equals(b.getBucket()))
             .findFirst()
             .orElseThrow(() -> unknownBucket(bucket));

@@ -25,6 +25,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -62,7 +63,7 @@ public class AppUserServiceImplRoleScopeTest {
     @Mock
     private UserNameResolver userNameResolver;
     @Mock
-    private StorageBrowserService storageBrowserService;
+    private process.storage.TrustedStorageOperations storageBrowserService;
     @Mock
     private TestNotifications.NoticeSink notificationCenterService;
     @Mock
@@ -392,7 +393,7 @@ public class AppUserServiceImplRoleScopeTest {
 
         this.service.readAvatar(55L);
 
-        verify(this.storageBrowserService).readForWorkflow("etl-avatar", "55/profile/avatar.png");
+        verify(this.storageBrowserService).readForWorkflow(org.mockito.ArgumentMatchers.argThat(access -> access.getCaller() == process.storage.TrustedCaller.IDENTITY_AVATAR), eq("etl-avatar"), eq("55/profile/avatar.png"));
     }
 
     @Test
@@ -413,7 +414,7 @@ public class AppUserServiceImplRoleScopeTest {
 
         this.service.readAvatar(55L);
 
-        verify(this.storageBrowserService).readForWorkflow("etl-avatar", "55/profile/avatar.png");
+        verify(this.storageBrowserService).readForWorkflow(org.mockito.ArgumentMatchers.argThat(access -> access.getCaller() == process.storage.TrustedCaller.IDENTITY_AVATAR), eq("etl-avatar"), eq("55/profile/avatar.png"));
     }
 
     /** No picture, a deleted row and an unknown id are all the same quiet nothing. */

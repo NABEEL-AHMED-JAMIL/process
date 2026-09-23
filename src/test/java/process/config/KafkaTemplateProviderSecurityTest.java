@@ -56,7 +56,7 @@ public class KafkaTemplateProviderSecurityTest {
     @Mock
     private EncryptionUtil encryptionUtil;
     @Mock
-    private StorageBrowserService storageBrowserService;
+    private process.storage.TrustedStorageOperations storageBrowserService;
 
     private KafkaTemplateProvider provider;
 
@@ -257,7 +257,7 @@ public class KafkaTemplateProviderSecurityTest {
     @Test
     void aDownloadedStoreIsReadableOnlyByTheAccountThatFetchedIt(@TempDir Path cacheDir) throws Exception {
         ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> new ObjectContentDto(
                 new ByteArrayInputStream("store-bytes".getBytes(StandardCharsets.UTF_8)), "application/octet-stream", 11L, "truststore.jks"));
         KafkaConnectionProfile profile = this.profile("SSL");
@@ -292,14 +292,14 @@ public class KafkaTemplateProviderSecurityTest {
         assertThatThrownBy(() -> this.provider.commonClientProps(profile))
             .isInstanceOf(IllegalStateException.class);
         // Nothing was downloaded into it either.
-        verify(this.storageBrowserService, never()).readForWorkflow(anyString(), anyString());
+        verify(this.storageBrowserService, never()).readForWorkflow(any(), anyString(), anyString());
     }
 
     @Test
     void aCacheRootTheProcessCreatesForItselfIsPrivate(@TempDir Path cacheDir) throws Exception {
         Path root = cacheDir.resolve("kafka-secrets-cache");
         ReflectionTestUtils.setField(this.provider, "secretCacheDir", root.toString());
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> new ObjectContentDto(
                 new ByteArrayInputStream("store-bytes".getBytes(StandardCharsets.UTF_8)),
                 "application/octet-stream", 11L, "truststore.jks"));
@@ -316,11 +316,11 @@ public class KafkaTemplateProviderSecurityTest {
     void twoUnsavedProfilesNeverShareADownloadedStore(@TempDir Path cacheDir) {
         ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
         List<String> requestedBuckets = new ArrayList<>();
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> {
-                requestedBuckets.add(call.getArgument(0));
+                requestedBuckets.add(call.getArgument(1));
                 return new ObjectContentDto(
-                    new ByteArrayInputStream(("bytes-for-" + call.getArgument(0)).getBytes(StandardCharsets.UTF_8)),
+                    new ByteArrayInputStream(("bytes-for-" + call.getArgument(1)).getBytes(StandardCharsets.UTF_8)),
                     "application/octet-stream", 1L, "truststore.jks");
             });
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 7L, "admin");
@@ -352,7 +352,7 @@ public class KafkaTemplateProviderSecurityTest {
         ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
         List<Long> seenTenantIds = new ArrayList<>();
         List<String> seenRoles = new ArrayList<>();
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> {
                 seenTenantIds.add(TenantContext.getTenantId());
                 seenRoles.add(TenantContext.getUserRole());
@@ -380,7 +380,7 @@ public class KafkaTemplateProviderSecurityTest {
     void aRequestThreadsOwnContextIsNeverReplacedByTheProfilesTenant(@TempDir Path cacheDir) {
         ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
         List<Long> seenTenantIds = new ArrayList<>();
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> {
                 seenTenantIds.add(TenantContext.getTenantId());
                 return new ObjectContentDto(
@@ -408,7 +408,7 @@ public class KafkaTemplateProviderSecurityTest {
     @Test
     void aGeneratedPkcs12StoreIsDeclaredAsPkcs12(@TempDir Path cacheDir) {
         ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> new ObjectContentDto(
                 new ByteArrayInputStream("store-bytes".getBytes(StandardCharsets.UTF_8)),
                 "application/octet-stream", 11L, "truststore.p12"));
@@ -425,7 +425,7 @@ public class KafkaTemplateProviderSecurityTest {
     @Test
     void anUploadedJksStoreIsStillDeclaredAsJks(@TempDir Path cacheDir) {
         ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> new ObjectContentDto(
                 new ByteArrayInputStream("store-bytes".getBytes(StandardCharsets.UTF_8)),
                 "application/octet-stream", 11L, "truststore.jks"));
@@ -454,7 +454,7 @@ public class KafkaTemplateProviderSecurityTest {
         Files.createDirectory(root);
         Files.setPosixFilePermissions(root, PosixFilePermissions.fromString("rwxr-xr-x"));
         ReflectionTestUtils.setField(this.provider, "secretCacheDir", root.toString());
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> new ObjectContentDto(
                 new ByteArrayInputStream("store-bytes".getBytes(StandardCharsets.UTF_8)),
                 "application/octet-stream", 11L, "truststore.p12"));

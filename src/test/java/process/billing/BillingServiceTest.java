@@ -59,7 +59,7 @@ class BillingServiceTest {
 
     @Mock private MeterClient meter;
     @Mock private TenantRepository tenants;
-    @Mock private StorageBrowserService storage;
+    @Mock private process.storage.TrustedStorageOperations storage;
     @Mock private UserNameResolver names;
 
     /** In-memory repositories: the rules under test are arithmetic and state, not SQL. */

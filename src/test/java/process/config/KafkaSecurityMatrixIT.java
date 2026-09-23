@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import org.apache.kafka.common.KafkaException;
@@ -134,9 +135,9 @@ public class KafkaSecurityMatrixIT {
      * the on-disk caching -- is the code that runs in production.
      */
     private KafkaTemplateProvider provider(Path cacheDir) throws Exception {
-        StorageBrowserService storage = mock(StorageBrowserService.class);
-        when(storage.readForWorkflow(anyString(), anyString())).thenAnswer(call -> {
-            byte[] bytes = Files.readAllBytes(SECRETS.resolve((String) call.getArgument(1)));
+        process.storage.TrustedStorageOperations storage = mock(process.storage.TrustedStorageOperations.class);
+        when(storage.readForWorkflow(any(), anyString(), anyString())).thenAnswer(call -> {
+            byte[] bytes = Files.readAllBytes(SECRETS.resolve((String) call.getArgument(2)));
             return new ObjectContentDto(new ByteArrayInputStream(bytes),
                 "application/octet-stream", bytes.length, "store");
         });

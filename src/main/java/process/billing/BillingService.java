@@ -25,7 +25,9 @@ import process.model.repository.InvoiceLineRepository;
 import process.model.repository.InvoiceRepository;
 import process.model.repository.PaymentRepository;
 import process.model.repository.TenantRepository;
-import process.model.service.StorageBrowserService;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
+import process.storage.TrustedStorageOperations;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
 
@@ -77,12 +79,12 @@ public class BillingService {
     private final PaymentRepository payments;
     private final BillingDocumentRepository documents;
     private final TenantRepository tenants;
-    private final StorageBrowserService storage;
+    private final TrustedStorageOperations storage;
     private final UserNameResolver names;
     private final String bucket;
 
     public BillingService(MeterClient meter, BillingAccountRepository accounts, InvoiceRepository invoices, InvoiceLineRepository lines,
-        PaymentRepository payments, BillingDocumentRepository documents, TenantRepository tenants, StorageBrowserService storage,
+        PaymentRepository payments, BillingDocumentRepository documents, TenantRepository tenants, TrustedStorageOperations storage,
         UserNameResolver names, @Value(StoragePropertyDefaults.CONFIG_BUCKET) String bucket) {
         this.meter = meter; this.accounts = accounts; this.invoices = invoices; this.lines = lines; this.payments = payments;
         this.documents = documents; this.tenants = tenants; this.storage = storage; this.names = names; this.bucket = bucket;
@@ -471,7 +473,7 @@ public class BillingService {
     private BillingDocument store(Long tenantId, Long invoiceId, Long paymentId, BillingDocumentKind kind, String number, String fileName,
         String contentType, byte[] bytes, BigDecimal amount) {
         String key = String.format("billing/%d/%s/%s/%s", tenantId, YearMonth.now().getYear(), kind.value(), System.currentTimeMillis() + "-" + fileName);
-        this.storage.uploadForWorkflow(this.bucket, key, new ByteArrayInputStream(bytes), bytes.length, contentType);
+        this.storage.uploadForWorkflow(TrustedAccess.of(TrustedCaller.BILLING_DOCUMENTS, "store a " + kind.value()), this.bucket, key, new ByteArrayInputStream(bytes), bytes.length, contentType);
         BillingDocument doc = new BillingDocument();
         doc.setTenantId(tenantId); doc.setInvoiceId(invoiceId); doc.setPaymentId(paymentId); doc.setKind(kind.value()); doc.setNumber(number);
         doc.setFileName(fileName); doc.setContentType(contentType); doc.setSizeBytes((long) bytes.length); doc.setObjectKey(key);
@@ -484,7 +486,7 @@ public class BillingService {
     }
 
     public ObjectContentDto bytesOf(BillingDocument doc) {
-        return this.storage.readForWorkflow(this.bucket, doc.getObjectKey());
+        return this.storage.readForWorkflow(TrustedAccess.of(TrustedCaller.BILLING_DOCUMENTS, "read document " + doc.getBillingDocumentId()), this.bucket, doc.getObjectKey());
     }
 
     /** Payment slips awaiting the platform's verification, for one workspace or all. */

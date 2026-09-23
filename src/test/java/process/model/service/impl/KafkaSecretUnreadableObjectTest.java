@@ -39,7 +39,7 @@ public class KafkaSecretUnreadableObjectTest {
     private static final Long OWNER = 1248L;
     private static final Long TENANT = 5L;
 
-    private final StorageBrowserService storageBrowserService = mock(StorageBrowserService.class);
+    private final process.storage.TrustedStorageOperations storageBrowserService = mock(process.storage.TrustedStorageOperations.class);
     private final KafkaSecretService service =
         new KafkaSecretServiceImpl(this.storageBrowserService, mock(AppUserRepository.class), null, "etl-config");
 
@@ -60,13 +60,13 @@ public class KafkaSecretUnreadableObjectTest {
         assertThat(response.getMessage()).contains("could not be read from storage");
         // And no half-built store was left behind by the attempt.
         verify(this.storageBrowserService, never())
-            .uploadForWorkflow(anyString(), anyString(), any(InputStream.class), anyLong(), anyString());
+            .uploadForWorkflow(any(), anyString(), anyString(), any(InputStream.class), anyLong(), anyString());
     }
 
     /** What MinIO, S3 and Azure all do for a key that is not there: raise, with a provider message. */
     @Test
     void aCertificateThatIsGoneIsReportedRatherThanThrown() throws Exception {
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenThrow(new RuntimeException("Could not fetch object content etl-bucket/" + this.ownersKey));
         this.signedInAsTheOwner();
 
@@ -77,7 +77,7 @@ public class KafkaSecretUnreadableObjectTest {
     /** And a storage layer that answers with nothing at all, which used to be a NullPointerException. */
     @Test
     void anEmptyAnswerFromStorageIsReportedTheSameWay() throws Exception {
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString())).thenReturn(null);
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString())).thenReturn(null);
         this.signedInAsTheOwner();
 
         this.assertRefusedWithSomethingToActOn(

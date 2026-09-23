@@ -265,7 +265,7 @@ public class StorageBrowserServiceImplTenantIsolationTest {
 
         // DocumentConverterServiceImpl has already checked the task row belongs to this caller,
         // and builds the key from it -- which is why this one is allowed where a browse is not.
-        this.service.readForWorkflow(PLATFORM_BUCKET, "document-converter/41/input.docx");
+        this.service.readForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), PLATFORM_BUCKET, "document-converter/41/input.docx");
 
         verify(this.objectStorageService)
             .getObjectContent(PLATFORM_BUCKET, "document-converter/41/input.docx", null, null);
@@ -311,7 +311,7 @@ public class StorageBrowserServiceImplTenantIsolationTest {
         this.givenLegacyBucketLookup();
         assertThat(TenantContext.getTenantId()).isNull();
 
-        this.service.readForWorkflow(LEGACY_BUCKET, "kafka-secrets/2024/truststore.p12");
+        this.service.readForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), LEGACY_BUCKET, "kafka-secrets/2024/truststore.p12");
 
         verify(this.objectStorageService)
             .getObjectContent(LEGACY_BUCKET, "kafka-secrets/2024/truststore.p12", null, null);

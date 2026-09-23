@@ -22,6 +22,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
@@ -46,7 +47,7 @@ public class KafkaTemplateProviderSecretCacheTest {
     @Mock
     private EncryptionUtil encryptionUtil;
     @Mock
-    private StorageBrowserService storageBrowserService;
+    private process.storage.TrustedStorageOperations storageBrowserService;
 
     private KafkaTemplateProvider provider;
     private final List<String> downloaded = new ArrayList<>();
@@ -58,10 +59,10 @@ public class KafkaTemplateProviderSecretCacheTest {
 
     /** Every object answers with its own key as its content, so a served file names where it came from. */
     private void eachObjectAnswersWithItsOwnKey() {
-        when(this.storageBrowserService.readForWorkflow(anyString(), anyString()))
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
             .thenAnswer(call -> {
-                String key = call.getArgument(1);
-                this.downloaded.add(call.getArgument(0) + "/" + key);
+                String key = call.getArgument(2);
+                this.downloaded.add(call.getArgument(1) + "/" + key);
                 return new ObjectContentDto(
                     new ByteArrayInputStream(("bytes-of-" + key).getBytes(StandardCharsets.UTF_8)),
                     "application/octet-stream", 1L, "truststore.p12");
