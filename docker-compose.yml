@@ -186,6 +186,8 @@ services:
       # MIG-22: notifications go out through the outbox to notifications-service. "in-process"
       # (the default) delivers them here instead, as before the split.
       NOTIFICATIONS_TRANSPORT: ${NOTIFICATIONS_TRANSPORT:-outbox}
+      # Shared with notifications-service, which redeems secretRefs with it. Set in .env.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-admin}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092

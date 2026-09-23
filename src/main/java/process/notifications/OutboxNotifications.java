@@ -17,6 +17,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import process.model.pojo.AppUser;
+import process.identity.OneTimeSecrets;
 import process.model.repository.AppUserRepository;
 import process.outbox.OutboxWriter;
 
@@ -28,14 +29,10 @@ import java.util.Optional;
  * after it commits. Selected by notifications.transport=outbox; InProcessNotifications stays the
  * port otherwise.
  *
- * Three things still go through the in-process side, each for a stated reason:
- * <ul>
- *   <li>a mail carrying attachment bytes or a temporary password -- neither may ride on a topic,
- *       and until they travel as attachmentRef and secretRef they are sent from here;</li>
- *   <li>the old console's /user/queue/reply push, which ClusterBroadcast already carries to
- *       whichever instance holds the session;</li>
- *   <li>the two synchronous questions, which are not events.</li>
- * </ul>
+ * Attachment bytes are staged and sent as an attachmentRef, and a temporary password is kept by
+ * Identity and sent as a secretRef (part 4): neither rides on a topic. Two things still go through
+ * the in-process side: the old console's /user/queue/reply push, which ClusterBroadcast carries to
+ * whichever instance holds the session, and the two synchronous questions, which are not events.
  *
  * @author Nabeel Ahmed
  */
@@ -45,18 +42,24 @@ import java.util.Optional;
 public class OutboxNotifications implements NotificationPort {
 
     static final String PRODUCER = "process";
-    static final String QUEUED = "Mail queued.";
+    /** What mailRequested answers once the mail is in the outbox: accepted, not yet sent. */
+    public static final String QUEUED = "Mail queued.";
 
     private final Logger logger = LoggerFactory.getLogger(OutboxNotifications.class);
     private final ObjectMapper json = new ObjectMapper();
     private final OutboxWriter outbox;
     private final InProcessNotifications inProcess;
     private final AppUserRepository users;
+    private final OneTimeSecrets secrets;
+    private final MailAttachmentStaging staging;
 
-    public OutboxNotifications(OutboxWriter outbox, InProcessNotifications inProcess, AppUserRepository users) {
+    public OutboxNotifications(OutboxWriter outbox, InProcessNotifications inProcess, AppUserRepository users,
+        OneTimeSecrets secrets, MailAttachmentStaging staging) {
         this.outbox = outbox;
         this.inProcess = inProcess;
         this.users = users;
+        this.secrets = secrets;
+        this.staging = staging;
     }
 
     @Override
@@ -117,14 +120,36 @@ public class OutboxNotifications implements NotificationPort {
 
     @Override
     public String mailRequested(Long tenantId, MailRequested mail, MailExtras extras) {
-        if (extras != null && (extras.getAttachment() != null || extras.getSecret() != null)) {
-            return this.inProcess.mailRequested(tenantId, mail, extras);
-        }
+        MailExtras carried = extras == null ? MailExtras.NONE : extras;
         try {
+            mail.validated();
+            if (carried.getAttachment() != null) {
+                // Staged, and sent by reference: 20 MiB does not belong on a topic.
+                MailRequested.AttachmentRef described = mail.getAttachmentRef();
+                mail.setAttachmentRef(this.staging.stage(carried.getAttachment(),
+                    described == null ? null : described.getFilename(), described == null ? null : described.getContentType()));
+            }
+            if (carried.getSecret() != null) {
+                // Kept by Identity for one redemption; only the reference travels.
+                mail.setSecretRef(this.secrets.keep(carried.getSecret()));
+            }
+            if (mail.getFailureNotice() != null) {
+                // The sender hears about a failure later; resolve who they are now, as for any notice.
+                Optional<AppUser> sender = this.users.findById(mail.getFailureNotice().getAppUserId());
+                if (sender.isPresent()) {
+                    mail.getFailureNotice().setRecipientUsername(sender.get().getUsername()).setRecipientTenantId(scopeOf(sender.get()));
+                } else {
+                    mail.setFailureNotice(null);
+                }
+            }
             this.write(NotificationTopics.MAIL_REQUESTED, mail.validated().partitionKey(), tenantId, mail);
             return QUEUED;
         } catch (ContractViolation violation) {
             this.logger.warn("Refused a {} mail: {}", mail.getTemplate(), violation.getMessage());
+            return "Error while Sending Mail";
+        } catch (RuntimeException unstaged) {
+            // The attachment bucket or the secret store could not take it: nothing was queued.
+            this.logger.error("Could not queue a {} mail: {}", mail.getTemplate(), unstaged.getMessage());
             return "Error while Sending Mail";
         }
     }

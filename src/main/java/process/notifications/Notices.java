@@ -15,4 +15,13 @@ public final class Notices {
         return new NotificationCreated().setAppUserId(recipientUserId).setType(type.name())
             .setSeverity(severity.name()).setTitle(title).setBody(body).setLink(link);
     }
+
+    /**
+     * A notice for whoever is acting, or null when nobody is (a system job, start-up seeding). A mail's
+     * failureNotice is optional; one addressed to nobody would get the whole mail refused.
+     */
+    public static NotificationCreated forActor(Long actorUserId, NotificationType type, NotificationSeverity severity,
+        String title, String body, String link) {
+        return actorUserId == null ? null : notice(actorUserId, type, severity, title, body, link);
+    }
 }

@@ -37,7 +37,9 @@ class OutboxNotificationsTest {
     private final OutboxWriter outbox = mock(OutboxWriter.class);
     private final InProcessNotifications inProcess = mock(InProcessNotifications.class);
     private final AppUserRepository users = mock(AppUserRepository.class);
-    private final OutboxNotifications port = new OutboxNotifications(this.outbox, this.inProcess, this.users);
+    private final process.identity.OneTimeSecrets secrets = mock(process.identity.OneTimeSecrets.class);
+    private final MailAttachmentStaging staging = mock(MailAttachmentStaging.class);
+    private final OutboxNotifications port = new OutboxNotifications(this.outbox, this.inProcess, this.users, this.secrets, this.staging);
 
     @org.junit.jupiter.api.BeforeEach
     void recipients() {
@@ -115,16 +117,51 @@ class OutboxNotificationsTest {
         verify(this.inProcess, never()).mailRequested(any(), any(), any());
     }
 
-    /** Bytes and a password cannot ride on a topic; until they go by reference (secretRef, attachmentRef) they stay here. */
+    /** Part 4: a password never rides on a topic; it goes by a one-time reference Notifications redeems. */
     @Test
-    void aMailCarryingBytesOrASecretIsStillSentFromHere() {
+    void aWelcomeMailsPasswordTravelsAsAOneTimeReference() throws Exception {
+        when(this.secrets.keep("Tmp-9f2c!")).thenReturn("ref-7c1d");
         MailRequested welcome = StandardMails.userWelcome("new.user@medaxis.example", "New User", "Acme",
             "new.user@medaxis.example", "tenant user", "Ada King", "http://localhost:4400/login");
-        MailExtras password = MailExtras.secret("Tmp-9f2c!");
-        when(this.inProcess.mailRequested(TENANT, welcome, password)).thenReturn("Mail sent successfully.");
 
-        assertThat(this.port.mailRequested(TENANT, welcome, password)).isEqualTo("Mail sent successfully.");
-        verify(this.outbox, never()).write(anyString(), anyString(), anyString(), anyString());
+        assertThat(this.port.mailRequested(TENANT, welcome, MailExtras.secret("Tmp-9f2c!"))).isEqualTo(OutboxNotifications.QUEUED);
+
+        ArgumentCaptor<String> event = ArgumentCaptor.forClass(String.class);
+        verify(this.outbox).write(eq(NotificationTopics.MAIL_REQUESTED), eq("new.user@medaxis.example"), anyString(), event.capture());
+        assertThat(event.getValue()).doesNotContain("Tmp-9f2c!");
+        assertThat(this.json.readTree(event.getValue()).at("/payload/secretRef").asText()).isEqualTo("ref-7c1d");
+        verify(this.inProcess, never()).mailRequested(any(), any(), any());
+    }
+
+    /** Part 4: twenty megabytes do not belong on a topic; the file is staged and sent by reference. */
+    @Test
+    void aSharedFileIsStagedAndSentByReference() throws Exception {
+        byte[] zip = {1, 2, 3};
+        when(this.staging.stage(zip, "q3.zip", "application/zip")).thenReturn(new MailRequested.AttachmentRef()
+            .setBucket("etl-mail-attachments").setKey("2026/09/23/abc/q3.zip").setFilename("q3.zip")
+            .setContentType("application/zip").setSizeBytes(3L));
+        MailRequested share = StandardMails.fileShare("colleague@medaxis.example", "Ada King", "q3", "Folder",
+            true, "3 B (1 file)", "fyi", "q3.zip", "application/zip", zip.length);
+
+        assertThat(this.port.mailRequested(TENANT, share, MailExtras.attachment(zip))).isEqualTo(OutboxNotifications.QUEUED);
+
+        JsonNode payload = this.written(NotificationTopics.MAIL_REQUESTED, "colleague@medaxis.example").get("payload");
+        assertThat(payload.at("/attachmentRef/key").asText()).isEqualTo("2026/09/23/abc/q3.zip");
+        assertThat(payload.at("/attachmentRef/bucket").asText()).isEqualTo("etl-mail-attachments");
+    }
+
+    /** The sender hears about a failure later, so Core resolves who they are now (contract 1.3.0 rules). */
+    @Test
+    void theFailureNoticeGoesToTheSenderAsCoreResolvedThem() throws Exception {
+        MailRequested mail = new MailRequested().setTemplate(MailRequested.Template.COMPLETE_JOB).setRecipient("owner@medaxis.example")
+            .setSubject("Source Job Completed").setFailureNotice(new NotificationCreated().setAppUserId(10L)
+                .setType("FILE_SHARE_FAILED").setSeverity("ERROR").setTitle("Not sent"));
+
+        this.port.mailRequested(TENANT, mail, MailExtras.NONE);
+
+        JsonNode notice = this.written(NotificationTopics.MAIL_REQUESTED, "owner@medaxis.example").at("/payload/failureNotice");
+        assertThat(notice.get("recipientUsername").asText()).isEqualTo("ops@medaxis.example");
+        assertThat(notice.get("recipientTenantId").asLong()).isEqualTo(TENANT);
     }
 
     @Test

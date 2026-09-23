@@ -9,6 +9,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.notifications.MailExtras;
+import process.model.enums.NotificationSeverity;
+import process.model.enums.NotificationType;
+import process.notifications.OutboxNotifications;
+import process.notifications.Notices;
 import process.notifications.NotificationPort;
 import process.notifications.StandardMails;
 import process.model.dto.ResponseDto;
@@ -192,7 +196,12 @@ public class TenantRequestServiceImpl {
 
         String mailResult = this.notifications.mailRequested(tenant.getTenantId(),
             StandardMails.tenantWelcome(request.getContactEmail(), request.getContactName(), tenant.getTenantName(),
-                admin.getUsername(), this.consoleUrl + "/login"),
+                admin.getUsername(), this.consoleUrl + "/login")
+                // Delivery is asynchronous now: if it fails, the platform admin who approved hears it.
+                .setFailureNotice(Notices.forActor(TenantContext.getAppUserId(), NotificationType.USER_ADDED,
+                    NotificationSeverity.WARNING, "Welcome email not sent", String.format(
+                        "The welcome email for workspace \"%s\" could not be sent. Reset the password for %s and pass it on another way.",
+                        tenant.getTenantName(), admin.getUsername()), "/administration/tenant-requests")),
             MailExtras.secret(temporaryPassword));
 
         if (mailResult != null && mailResult.startsWith("Error")) {
@@ -204,6 +213,11 @@ public class TenantRequestServiceImpl {
             return new ResponseDto(SUCCESS, String.format(
                 "Tenant \"%s\" created, but the welcome email could not be sent. "
                 + "Reset the password for %s and pass it on another way.",
+                tenant.getTenantName(), admin.getUsername()));
+        }
+        if (OutboxNotifications.QUEUED.equals(mailResult)) {
+            return new ResponseDto(SUCCESS, String.format(
+                "Tenant \"%s\" created. The welcome email to %s is on its way; you'll get a notice if it can't be delivered.",
                 tenant.getTenantName(), admin.getUsername()));
         }
         return new ResponseDto(SUCCESS, String.format(

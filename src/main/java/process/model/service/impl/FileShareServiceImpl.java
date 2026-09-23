@@ -6,6 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import process.notifications.MailExtras;
+import process.model.enums.NotificationSeverity;
+import process.model.enums.NotificationType;
+import process.notifications.OutboxNotifications;
+import process.notifications.Notices;
 import process.notifications.NotificationPort;
 import process.notifications.StandardMails;
 import process.model.dto.BrowseObjectsResponseDto;
@@ -231,6 +235,12 @@ public class FileShareServiceImpl implements FileShareService {
         if (emailFactoryResult != null && emailFactoryResult.startsWith("Error")) {
             return new ResponseDto(ERROR, emailFactoryResult);
         }
+        if (OutboxNotifications.QUEUED.equals(emailFactoryResult)) {
+            // Handed to Notifications, which sends it and files a notice if it cannot.
+            return new ResponseDto(SUCCESS, this.notifications.deliversMailToRealInboxes()
+                ? "Email queued. You'll get a notice if it can't be delivered."
+                : "Email queued for the local mail sandbox -- it is stored, not delivered.");
+        }
         // Still SUCCESS: the message really was built and really was accepted. But a local
         // emulator stores it and never delivers, and "Email sent." then points someone at an
         // inbox that will never have it. This exact ambiguity cost a debugging session.
@@ -258,7 +268,11 @@ public class FileShareServiceImpl implements FileShareService {
         String sizeLabel, String message, byte[] bytes, String filename, String contentType) {
         return this.notifications.mailRequested(TenantContext.getTenantId(),
             StandardMails.fileShare(recipient, senderName, itemName, itemType, zipped, sizeLabel, message,
-                filename, contentType, bytes.length),
+                filename, contentType, bytes.length)
+                // Delivery is asynchronous now: if it fails, the sender hears it as a notice.
+                .setFailureNotice(Notices.forActor(TenantContext.getAppUserId(), NotificationType.FILE_SHARE_FAILED,
+                    NotificationSeverity.ERROR, "File not sent",
+                    String.format("\"%s\" could not be emailed to %s.", itemName, recipient), "/admin/storage")),
             MailExtras.attachment(bytes));
     }
 }

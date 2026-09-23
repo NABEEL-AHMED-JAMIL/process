@@ -23,6 +23,7 @@ import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
 import process.notifications.MailExtras;
+import process.notifications.OutboxNotifications;
 import process.notifications.NotificationPort;
 import process.notifications.StandardMails;
 import process.util.TemporaryPassword;
@@ -226,7 +227,12 @@ public class AppUserServiceImpl implements AppUserService {
         String createdBy = this.actorName();
         String mailResult = this.notifications.mailRequested(user.getTenantId(),
             StandardMails.userWelcome(user.getUsername(), user.getFullName(), organisation, user.getUsername(),
-                roleLabel(user.getUserRole()), createdBy, this.consoleUrl + "/login"),
+                roleLabel(user.getUserRole()), createdBy, this.consoleUrl + "/login")
+                // Delivery is asynchronous now: if it fails, whoever created the account hears it.
+                .setFailureNotice(Notices.forActor(TenantContext.getAppUserId(), NotificationType.USER_ADDED,
+                    NotificationSeverity.WARNING, "Welcome email not sent", generated
+                        ? String.format("The welcome email to %s could not be sent -- reset their password and pass it on another way.", user.getUsername())
+                        : String.format("The welcome email to %s could not be sent.", user.getUsername()), "/users")),
             generated ? MailExtras.secret(temporaryPassword) : MailExtras.NONE);
         boolean mailFailed = mailResult != null && mailResult.startsWith("Error");
         this.notifyUserCreated(user, organisation, createdBy, generated, mailFailed);
@@ -241,6 +247,11 @@ public class AppUserServiceImpl implements AppUserService {
                 : String.format("User \"%s\" created, but the welcome email could not be sent.",
                     user.getUsername()),
                 this.mapToDto(user));
+        }
+        if (OutboxNotifications.QUEUED.equals(mailResult)) {
+            return new ResponseDto(SUCCESS, String.format(
+                "User \"%s\" created. The welcome email is on its way; you'll get a notice if it can't be delivered.",
+                user.getUsername()), this.mapToDto(user));
         }
         return new ResponseDto(SUCCESS, String.format(
             "User \"%s\" created and emailed how to sign in.", user.getUsername()), this.mapToDto(user));

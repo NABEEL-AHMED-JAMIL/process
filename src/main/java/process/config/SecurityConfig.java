@@ -36,6 +36,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .antMatchers("/auth.json/**").permitAll()
                 .antMatchers("/ws/**").permitAll()
+                // Service to service (MIG-22): InternalSecretRestApi checks INTERNAL_SERVICE_TOKEN itself,
+                // and the gateway refuses /api/v1/internal from outside.
+                .antMatchers(HttpMethod.POST, "/internal/**").permitAll()
                 // "/addLogs/**" does not cover "/addLogsBatch/..." -- an Ant pattern does not
                 // match across the segment boundary -- so every batched log line was rejected
                 // with a 401 and silently lost. The batch endpoint is listed in its own right.
