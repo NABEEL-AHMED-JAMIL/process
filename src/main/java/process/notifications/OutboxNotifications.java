@@ -9,6 +9,7 @@ import org.barco.notifications.contract.JobStatusChanged;
 import org.barco.notifications.contract.MailRequested;
 import org.barco.notifications.contract.NotificationCreated;
 import org.barco.notifications.contract.NotificationTopics;
+import org.barco.notifications.contract.Recipients;
 import org.barco.platform.event.PlatformEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +65,7 @@ public class OutboxNotifications implements NotificationPort {
             Optional<AppUser> recipient = this.users.findById(event.getRecipientUserId());
             if (recipient.isPresent()) {
                 // Core resolves the recipient; the service cannot read app_user (contract 1.2.0).
-                event.setRecipientUsername(recipient.get().getUsername()).setRecipientTenantId(recipient.get().getTenantId());
+                event.setRecipientUsername(recipient.get().getUsername()).setRecipientTenantId(scopeOf(recipient.get()));
             } else {
                 // Gone since the job was assigned. The feed push still goes; only the notice does not.
                 event.setRecipientUserId(null).setRecipientUsername(null);
@@ -106,7 +107,7 @@ public class OutboxNotifications implements NotificationPort {
             this.logger.info("Not sending a {} notice to app user {}, who does not exist.", notice.getType(), notice.getAppUserId());
             return;
         }
-        notice.setRecipientUsername(recipient.get().getUsername()).setRecipientTenantId(recipient.get().getTenantId());
+        notice.setRecipientUsername(recipient.get().getUsername()).setRecipientTenantId(scopeOf(recipient.get()));
         try {
             this.write(NotificationTopics.NOTIFICATION_CREATED, String.valueOf(notice.validatedForDelivery().getAppUserId()), tenantId, notice);
         } catch (ContractViolation violation) {
@@ -126,6 +127,11 @@ public class OutboxNotifications implements NotificationPort {
             this.logger.warn("Refused a {} mail: {}", mail.getTemplate(), violation.getMessage());
             return "Error while Sending Mail";
         }
+    }
+
+    /** The recipient's home tenant, or the platform scope for a platform admin -- written, never left out (1.3.0). */
+    private static long scopeOf(AppUser recipient) {
+        return recipient.getTenantId() != null ? recipient.getTenantId() : Recipients.PLATFORM_SCOPE;
     }
 
     private void write(String topic, String key, Long tenantId, Object payload) {

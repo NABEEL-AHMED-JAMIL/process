@@ -183,6 +183,9 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
       NOTIFICATIONS_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notifications_db
+      # MIG-22: notifications go out through the outbox to notifications-service. "in-process"
+      # (the default) delivers them here instead, as before the split.
+      NOTIFICATIONS_TRANSPORT: ${NOTIFICATIONS_TRANSPORT:-outbox}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-admin}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092

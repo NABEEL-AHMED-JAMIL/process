@@ -172,7 +172,8 @@ class OutboxNotificationsTest {
 
         JsonNode payload = this.written(NotificationTopics.NOTIFICATION_CREATED, "1000").get("payload");
         assertThat(payload.get("recipientUsername").asText()).isEqualTo("admin@platform.local");
-        assertThat(payload.has("recipientTenantId")).isFalse();
+        // Contract 1.3.0: the platform scope is written, never left out.
+        assertThat(payload.get("recipientTenantId").asLong()).isEqualTo(org.barco.notifications.contract.Recipients.PLATFORM_SCOPE);
     }
 
     @Test
