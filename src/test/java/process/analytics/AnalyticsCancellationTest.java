@@ -18,7 +18,7 @@ import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.AnalyticsQueryRun;
 import process.model.pojo.StorageConnection;
-import process.model.repository.StorageConnectionRepository;
+import process.storage.remote.FakeStorage;
 import process.model.service.AnalyticsQueryLibraryService;
 import process.security.TenantContext;
 import process.util.EncryptionUtil;
@@ -38,7 +38,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -98,7 +97,7 @@ public class AnalyticsCancellationTest {
 
     @Mock private DuckDbSessionFactory sessions;
     @Mock private AnalyticsQueryLibraryService library;
-    @Mock private StorageConnectionRepository connections;
+    private final FakeStorage connections = new FakeStorage();
 
     private Connection engineConnection;
     private DatasetRef sales;
@@ -125,7 +124,7 @@ public class AnalyticsCancellationTest {
 
         Connection duck = session();
         when(this.sessions.open(any(StorageConnection.class))).thenReturn(duck);
-        StorageRows.add(this.connections, storageConnection());
+        this.connections.add(storageConnection());
 
         TenantContext.set(TENANT_ID, "TENANT_USER", USER_ID, "analyst");
     }

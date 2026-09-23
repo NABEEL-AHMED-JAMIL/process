@@ -38,7 +38,7 @@ import static process.analytics.integration.AnalyticsIntegrationEnvironment.TENA
  *   <li>The connection carries a REGION, which a MinIO connection here does not, so the
  *       {@code REGION} clause of the CREATE SECRET is executed for the first time.</li>
  *   <li>The storage adapter underneath is the AWS SDK's rather than MinIO's client, so the
- *       fixtures travel out through {@code S3ObjectStorageServiceImpl}.</li>
+ *       fixtures travel out through {@code FixtureStore}, over S3 as the adapter did.</li>
  *   <li>It is a genuinely different server. MinIO and LocalStack disagree about plenty at the
  *       edges of the S3 protocol, and an httpfs read that works against one is not evidence
  *       about the other.</li>

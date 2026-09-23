@@ -17,7 +17,7 @@ import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.KafkaSecretService;
-import process.model.repository.StorageConnectionRepository;
+import process.storage.remote.RemoteStorageDirectory;
 import process.security.TenantContext;
 import process.util.EncryptionUtil;
 import process.util.UserNameResolver;
@@ -75,7 +75,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
     @Mock
     private KafkaSecretService kafkaSecretService;
     @Mock
-    private StorageConnectionRepository storageConnectionRepository;
+    private RemoteStorageDirectory storageDirectory;
 
     private KafkaConnectionProfileServiceImpl service;
 
@@ -84,7 +84,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         this.service = new KafkaConnectionProfileServiceImpl(this.profileRepository,
             this.sourceTaskTypeRepository, this.routeRepository, this.encryptionUtil,
             this.kafkaTemplateProvider, this.kafkaConnectionResolver, this.userNameResolver,
-            this.kafkaSecretService, this.storageConnectionRepository);
+            this.kafkaSecretService, this.storageDirectory);
 
         // An empty property map makes AdminClient.create fail on its own configuration, so a test that
         // reaches the probe stops there instead of opening a socket.

@@ -1,11 +1,10 @@
 package process.api;
 
-import io.minio.errors.ErrorResponseException;
-import io.minio.messages.ErrorResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import process.model.service.AppUserService;
+import java.io.FileNotFoundException;
 import java.net.ConnectException;
 
 import static org.mockito.Mockito.mock;
@@ -25,9 +24,9 @@ class AvatarNotFoundTest {
 
     @Test
     void aPictureWhoseObjectIsGoneIsA404() throws Exception {
-        ErrorResponse noSuchKey = new ErrorResponse("NoSuchKey", "gone", "etl-avatar", "1000/profile/avatar.jpg", "req", "host", "id");
-        when(this.users.readAvatar(1000L)).thenThrow(new RuntimeException("Could not fetch S3 object content etl-avatar/1000/profile/avatar.jpg",
-            new ErrorResponseException(noSuchKey, null, null)));
+        // storage-service's 404, as StorageServiceClient carries it (MIG-70).
+        when(this.users.readAvatar(1000L)).thenThrow(new IllegalStateException("No object at etl-avatar/1000/profile/avatar.jpg.",
+            new FileNotFoundException("No object at etl-avatar/1000/profile/avatar.jpg.")));
         MockMvc mvc = MockMvcBuilders.standaloneSetup(new AppUserRestApi(this.users)).build();
 
         mvc.perform(get("/appUser.json/avatar").param("appUserId", "1000")).andExpect(status().isNotFound());

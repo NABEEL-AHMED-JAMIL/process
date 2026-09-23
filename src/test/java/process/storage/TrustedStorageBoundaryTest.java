@@ -59,7 +59,7 @@ class TrustedStorageBoundaryTest {
         List<String> reaching = new ArrayList<>();
         for (Path file : sources()) {
             String relative = MAIN.relativize(file).toString().replace('\\', '/');
-            if (relative.startsWith("storage/") || relative.equals("model/service/impl/StorageBrowserServiceImpl.java")) {
+            if (relative.startsWith("storage/")) {
                 continue;
             }
             String text = source(file);
@@ -83,9 +83,10 @@ class TrustedStorageBoundaryTest {
     /** DEF-058: trust is a principal presented per call, not a boolean anywhere in Storage. */
     @Test
     void noBooleanDecidesTrustInsideStorage() throws IOException {
-        String impl = source(MAIN.resolve("model/service/impl/StorageBrowserServiceImpl.java"));
-
-        assertThat(impl).doesNotContain("boolean trusted").doesNotContain("resolveService(bucket, true)");
+        // Since MIG-70 the trusted path is storage-service's; process's side only carries the principal.
+        for (String side : new String[] {"storage/remote/HttpTrustedStorage.java", "storage/remote/StorageServiceClient.java"}) {
+            assertThat(source(MAIN.resolve(side))).as(side).doesNotContain("boolean trusted");
+        }
     }
 
     /** Each caller names itself: the principal is not a string any caller could type. */

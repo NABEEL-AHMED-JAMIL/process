@@ -14,7 +14,7 @@ import process.model.enums.Status;
 import process.model.pojo.KafkaConnectionProfile;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.SourceTaskTypeRepository;
-import process.model.repository.StorageConnectionRepository;
+import process.storage.remote.RemoteStorageDirectory;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.KafkaSecretService;
 import process.security.TenantContext;
@@ -65,7 +65,7 @@ public class KafkaProfileDeleteGuardTest {
     @Mock
     private KafkaSecretService kafkaSecretService;
     @Mock
-    private StorageConnectionRepository storageConnectionRepository;
+    private RemoteStorageDirectory storageDirectory;
 
     private KafkaConnectionProfileServiceImpl service;
 
@@ -74,7 +74,7 @@ public class KafkaProfileDeleteGuardTest {
         this.service = new KafkaConnectionProfileServiceImpl(this.profileRepository,
             this.sourceTaskTypeRepository, this.routeRepository, this.encryptionUtil,
             this.kafkaTemplateProvider, this.kafkaConnectionResolver, this.userNameResolver,
-            this.kafkaSecretService, this.storageConnectionRepository);
+            this.kafkaSecretService, this.storageDirectory);
     }
 
     @AfterEach

@@ -3,21 +3,27 @@ package process.e2e;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.web.servlet.MvcResult;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.AppUser;
 import process.model.pojo.StorageConnection;
-import process.model.repository.StorageConnectionRepository;
+import process.storage.remote.RemoteStorageDirectory;
+import process.storage.remote.StorageServiceClient;
 import process.util.EncryptionUtil;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,9 +38,39 @@ import java.util.Arrays;
  *
  * @author Nabeel Ahmed
  */
+@Import(ReportBuildingSupport.LocalConnectionFirst.class)
 public abstract class ReportBuildingSupport extends E2ESupport {
 
-    @Autowired protected StorageConnectionRepository storageConnectionRepository;
+    /**
+     * Storage's directory with this suite's local connection in front (MIG-70). The row used to be
+     * written into process's table inside the transaction that rolls back; storage_db is not in that
+     * transaction, so the suite's connection lives here instead and never reaches Storage. Every other
+     * alias -- the seeded reports' real one included -- is vended by storage-service as in production.
+     */
+    @TestConfiguration
+    static class LocalConnectionFirst {
+        @Bean
+        @Primary
+        LocalFirstDirectory localFirstDirectory(StorageServiceClient storage, EncryptionUtil encryption) {
+            return new LocalFirstDirectory(storage, encryption);
+        }
+    }
+
+    static final class LocalFirstDirectory extends RemoteStorageDirectory {
+        private final Map<String, StorageConnection> local = new ConcurrentHashMap<>();
+
+        LocalFirstDirectory(StorageServiceClient storage, EncryptionUtil encryption) {
+            super(storage, encryption);
+        }
+
+        @Override
+        public Optional<StorageConnection> vendForCaller(String alias) {
+            StorageConnection mine = this.local.get(alias);
+            return mine != null ? Optional.of(mine) : super.vendForCaller(alias);
+        }
+    }
+
+    @Autowired protected LocalFirstDirectory storageDirectory;
     @Autowired protected EncryptionUtil encryptionUtil;
 
     protected final ObjectMapper json = new ObjectMapper();
@@ -46,9 +82,9 @@ public abstract class ReportBuildingSupport extends E2ESupport {
      *
      * Every storage_connection row in this database has endpoint host.docker.internal:9000. That
      * resolves inside a container and not on the host, so a test JVM here cannot read one of them.
-     * These tests create their own row pointing at localhost, inside the transaction that rolls
-     * back -- same bucket, same object, same resolver, engine and governor; only the hostname
-     * differs. Seeded reports keep the real alias, which is what the deployed application needs.
+     * These tests use their own connection pointing at localhost (LocalFirstDirectory, never
+     * written to Storage) -- same bucket, same object, same resolver, engine and governor; only the
+     * hostname differs. Seeded reports keep the real alias, which is what the deployed application needs.
      */
     protected static final String LOCAL_CONNECTION = "reports-e2e-minio";
 
@@ -73,8 +109,7 @@ public abstract class ReportBuildingSupport extends E2ESupport {
         local.setSecretKeyEnc(this.encryptionUtil.encrypt("minioadmin123"));
         local.setStatus(Status.Active);
         local.setTenantId(null);
-        local.setDateCreated(new Timestamp(System.currentTimeMillis()));
-        this.storageConnectionRepository.save(local);
+        this.storageDirectory.local.put(LOCAL_CONNECTION, local);
     }
 
     // ---- the vocabulary a catalogue is written in --------------------------------------------

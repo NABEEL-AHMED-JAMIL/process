@@ -2,7 +2,6 @@ package process.engine.cron;
 
 import java.util.stream.Collectors;
 import process.storage.remote.RemoteStorageDirectory;
-import org.springframework.beans.factory.annotation.Autowired;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,17 +10,13 @@ import org.springframework.stereotype.Component;
 import process.billing.MeterClient;
 import process.billing.Meter;
 import process.billing.UsageEvent;
-import process.config.StorageClientFactory;
-import process.model.dto.ObjectSummaryDto;
 import process.model.enums.Status;
 import process.model.enums.TenantStatus;
 import process.model.pojo.StorageConnection;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.SourceTaskTypeRepository;
-import process.model.repository.StorageConnectionRepository;
 import process.model.repository.TenantRepository;
-import process.model.service.ObjectStorageService;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,24 +37,18 @@ import java.util.List;
 public class UsageMeasurerCron {
 
     private static final Logger logger = LoggerFactory.getLogger(UsageMeasurerCron.class);
-    /** Objects listed per bucket before the measurement gives up on that bucket for the night. */
-    static final int MAX_OBJECTS_PER_BUCKET = 500_000;
 
     private final MeterClient meter;
     private final TenantRepository tenants;
-    private final StorageConnectionRepository connections;
-
-    /** storage-service, once it owns the connections (storage.remote); absent, the table and the adapters answer. */
-    @Autowired(required = false)
-    private RemoteStorageDirectory remote;
-    private final StorageClientFactory storageClientFactory;
+    /** Storage's directory and its measurement (MIG-193): the buckets are listed inside storage-service. */
+    private final RemoteStorageDirectory storage;
     private final AppUserRepository users;
     private final SourceTaskTypeRepository topics;
 
-    public UsageMeasurerCron(MeterClient meter, TenantRepository tenants, StorageConnectionRepository connections,
-        StorageClientFactory storageClientFactory, AppUserRepository users, SourceTaskTypeRepository topics) {
-        this.meter = meter; this.tenants = tenants; this.connections = connections;
-        this.storageClientFactory = storageClientFactory; this.users = users; this.topics = topics;
+    public UsageMeasurerCron(MeterClient meter, TenantRepository tenants, RemoteStorageDirectory storage,
+        AppUserRepository users, SourceTaskTypeRepository topics) {
+        this.meter = meter; this.tenants = tenants; this.storage = storage;
+        this.users = users; this.topics = topics;
     }
 
     /** A nightly measurement stands for the whole day: GB-hours and topic-hours are the count times this. */
@@ -95,9 +84,8 @@ public class UsageMeasurerCron {
         int events = 0;
         Instant at = day.atTime(2, 0).toInstant(ZoneOffset.UTC);
         // Storage kept: every object store connection the workspace owns, listed whole.
-        List<StorageConnection> active = this.remote != null
-            ? this.remote.workspace(tenantId).stream().filter(c -> c.getStatus() == Status.Active).collect(Collectors.toList())
-            : this.connections.findByTenantIdAndStatus(tenantId, Status.Active);
+        List<StorageConnection> active = this.storage.workspace(tenantId).stream()
+            .filter(c -> c.getStatus() == Status.Active).collect(Collectors.toList());
         for (StorageConnection connection : active) {
             if (connection.getProvider() == null || !connection.getProvider().isObjectStore() || connection.getBucketName() == null) {
                 continue;
@@ -128,28 +116,11 @@ public class UsageMeasurerCron {
         return events;
     }
 
-    /** Total bytes in a connection's bucket, or -1 when it could not be listed. */
+    /**
+     * Total bytes in a connection's bucket, measured inside Storage (MIG-193): the partial sum past the
+     * object cap, and -1 when it was not or could not be measured -- which skips it, never bills zero.
+     */
     long bytesIn(StorageConnection connection) {
-        if (this.remote != null) {
-            // Measured inside Storage (MIG-193): NOT_MEASURED and SKIPPED arrive as -1, never as zero.
-            return this.remote.bytesIn(connection);
-        }
-        try {
-            ObjectStorageService service = this.storageClientFactory.serviceFor(connection);
-            List<ObjectSummaryDto> objects = service.listAllObjects(connection.getBucketName(), "", MAX_OBJECTS_PER_BUCKET);
-            long total = 0;
-            for (ObjectSummaryDto o : objects) {
-                if (o.getSize() != null) {
-                    total += o.getSize();
-                }
-            }
-            if (objects.size() >= MAX_OBJECTS_PER_BUCKET) {
-                logger.warn("meter: bucket {} has more than {} objects; the night's measurement stopped there", connection.getAlias(), MAX_OBJECTS_PER_BUCKET);
-            }
-            return total;
-        } catch (RuntimeException ex) {
-            logger.warn("meter: could not measure bucket {}: {}", connection.getAlias(), ex.getMessage());
-            return -1;
-        }
+        return this.storage.bytesIn(connection);
     }
 }

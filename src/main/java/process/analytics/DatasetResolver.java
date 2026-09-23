@@ -1,17 +1,12 @@
 package process.analytics;
 
 import process.storage.remote.RemoteStorageDirectory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.StorageConnection;
-import process.model.repository.StorageConnectionRepository;
-import process.security.TenantOwnership;
 
 import java.util.Optional;
 import java.util.regex.Pattern;
-import process.storage.StorageConnectionLookup;
 
 /**
  * Turns "connection 12, bucket etl-bucket, path orders/2026/*.csv" into something readable.
@@ -42,14 +37,11 @@ public class DatasetResolver {
     /** Same idea, without the glob characters: a bucket is always one exact name. */
     private static final Pattern SAFE_BUCKET = Pattern.compile("[A-Za-z0-9._-]+");
 
-    private final StorageConnectionRepository storageConnectionRepository;
+    /** Storage vends the connection (MIG-185), applying Active and isOwnedByCaller itself. */
+    private final RemoteStorageDirectory storage;
 
-    /** storage-service, once it owns the connections (storage.remote); absent, the table below answers. */
-    @Autowired(required = false)
-    private RemoteStorageDirectory remote;
-
-    public DatasetResolver(StorageConnectionRepository storageConnectionRepository) {
-        this.storageConnectionRepository = storageConnectionRepository;
+    public DatasetResolver(RemoteStorageDirectory storage) {
+        this.storage = storage;
     }
 
     /**
@@ -91,14 +83,7 @@ public class DatasetResolver {
         // Active, not merely not-Deleted, for the same reason: the picker only offers Active
         // connections (collectBuckets :104), so anything looser lets a deliberately deactivated
         // connection keep serving data through an API where nobody can see it is still live.
-        // Remote: Storage vends the connection and applies the same two rules itself (Active, and
-        // isOwnedByCaller), answering absent and forbidden alike.
-        Optional<StorageConnection> found = this.remote != null
-            ? this.remote.vendForCaller(connectionAlias.trim())
-            : new StorageConnectionLookup(this.storageConnectionRepository)
-                .forCaller(connectionAlias.trim())
-                .filter(c -> Status.Active.equals(c.getStatus()))
-                .filter(c -> TenantOwnership.isOwnedByCaller(c.getTenantId()));
+        Optional<StorageConnection> found = this.storage.vendForCaller(connectionAlias.trim());
         if (!found.isPresent()) {
             // Same wording for absent and for forbidden. A different message for each would let a
             // caller walk the alias space and learn which connections other workspaces own.

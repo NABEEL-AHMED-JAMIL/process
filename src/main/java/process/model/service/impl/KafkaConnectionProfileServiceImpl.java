@@ -1,7 +1,6 @@
 package process.model.service.impl;
 
 import process.storage.remote.RemoteStorageDirectory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.apache.kafka.clients.admin.AdminClient;
 import process.util.UserNameResolver;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
@@ -24,7 +23,6 @@ import process.model.pojo.KafkaConnectionProfile;
 import process.model.pojo.StorageConnection;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.SourceTaskTypeRepository;
-import process.model.repository.StorageConnectionRepository;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.KafkaConnectionProfileService;
 import process.model.service.KafkaSecretService;
@@ -72,11 +70,8 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
 
     private final UserNameResolver userNameResolver;
     private final KafkaSecretService kafkaSecretService;
-    private final StorageConnectionRepository storageConnectionRepository;
-
-    /** storage-service, once it owns the connections (storage.remote); absent, the table answers. */
-    @Autowired(required = false)
-    private RemoteStorageDirectory remote;
+    /** Storage's directory: whether a name is a connection the caller may use (MIG-68). */
+    private final RemoteStorageDirectory storage;
 
 
     public KafkaConnectionProfileServiceImpl(KafkaConnectionProfileRepository profileRepository,
@@ -85,10 +80,10 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         EncryptionUtil encryptionUtil, KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
         UserNameResolver userNameResolver, KafkaSecretService kafkaSecretService,
-        StorageConnectionRepository storageConnectionRepository) {
+        RemoteStorageDirectory storage) {
         this.userNameResolver = userNameResolver;
         this.kafkaSecretService = kafkaSecretService;
-        this.storageConnectionRepository = storageConnectionRepository;
+        this.storage = storage;
         this.profileRepository = profileRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.routeRepository = routeRepository;
@@ -545,15 +540,13 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         // Aliases are per workspace (MIG-53): a workspace names only its own, and a platform
         // connection is refused with the same words as an absent one. A platform admin may name the
         // platform's, or any workspace's -- the dispatch then reads it within the profile's tenant.
-        List<StorageConnection> named = this.remote != null ? this.remote.byAlias(bucket) : null;
+        List<StorageConnection> named = this.storage.byAlias(bucket);
         if (TenantContext.isPlatformAdmin()) {
-            boolean none = named != null ? named.isEmpty() : this.storageConnectionRepository.findAllByAlias(bucket).isEmpty();
-            return none ? new ResponseDto(ERROR, String.format("No storage connection is called '%s'.", bucket)) : null;
+            return named.isEmpty() ? new ResponseDto(ERROR, String.format("No storage connection is called '%s'.", bucket)) : null;
         }
         Long callerTenantId = TenantContext.getTenantId();
         Optional<StorageConnection> connection = callerTenantId == null ? Optional.empty()
-            : named != null ? named.stream().filter(c -> callerTenantId.equals(c.getTenantId())).findFirst()
-            : this.storageConnectionRepository.findByTenantIdAndAlias(callerTenantId, bucket);
+            : named.stream().filter(c -> callerTenantId.equals(c.getTenantId())).findFirst();
         if (!connection.isPresent()) {
             return new ResponseDto(ERROR, String.format("No storage connection is called '%s'.", bucket));
         }

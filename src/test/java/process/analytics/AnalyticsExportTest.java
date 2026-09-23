@@ -30,7 +30,7 @@ import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.StorageConnection;
-import process.model.repository.StorageConnectionRepository;
+import process.storage.remote.FakeStorage;
 import process.security.TenantContext;
 import process.util.EncryptionUtil;
 import process.util.ProcessUtil;
@@ -59,7 +59,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -130,7 +129,7 @@ public class AnalyticsExportTest {
     /** Twelve rows where the view the probe counted had five. See the mid-write test. */
     private static final String GROWN_STAND_IN = "range(1, 13) AS grown(id)";
 
-    @Mock private StorageConnectionRepository storageConnectionRepository;
+    private final FakeStorage storageConnectionRepository = new FakeStorage();
     @Mock private DuckDbSessionFactory sessions;
     @Mock private KafkaTemplateProvider kafkaTemplateProvider;
     @Mock private KafkaConnectionResolver kafkaConnectionResolver;
@@ -163,7 +162,7 @@ public class AnalyticsExportTest {
         this.bucket = Files.createTempDirectory("analytics-bucket");
         this.engine = DriverManager.getConnection("jdbc:duckdb:");
         this.resolver = new DatasetResolver(this.storageConnectionRepository);
-        StorageRows.add(this.storageConnectionRepository, storageConnection(TENANT_ID));
+        this.storageConnectionRepository.add(storageConnection(TENANT_ID));
 
         this.sales = new DatasetRef(storageConnection(TENANT_ID), BUCKET, PATH,
             DatasetRef.Format.CSV);
@@ -789,8 +788,8 @@ public class AnalyticsExportTest {
     @Test
     void aConnectionTheCallerDoesNotOwnIsRefusedBeforeAnythingIsWritten() throws Exception {
         // The alias exists, but only in another workspace (MIG-53: aliases are per workspace).
-        StorageRows.clear(this.storageConnectionRepository);
-        StorageRows.add(this.storageConnectionRepository, storageConnection(OTHER_TENANT_ID));
+        this.storageConnectionRepository.clear();
+        this.storageConnectionRepository.add(storageConnection(OTHER_TENANT_ID));
 
         ResponseDto response = this.exports.writeBack(request());
 

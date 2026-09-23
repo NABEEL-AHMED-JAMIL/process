@@ -17,7 +17,7 @@ import process.model.enums.KafkaSecretKind;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
-import process.model.service.impl.StorageBrowserServiceImpl;
+import process.storage.TrustedStorageOperations;
 import process.util.SelfSignedCertificate;
 
 import javax.crypto.KeyGenerator;
@@ -87,7 +87,7 @@ public class KafkaSecretE2EIT extends E2ESupport {
         registry.add("lookup.encryption.key", () -> E2E_ENCRYPTION_KEY);
     }
 
-    @MockBean private StorageBrowserServiceImpl storageBrowserService;
+    @MockBean private TrustedStorageOperations storageBrowserService;
 
     /** The bucket. Enough to be the storage layer for a workflow that only puts and gets. */
     private final Map<String, byte[]> objects = new LinkedHashMap<>();

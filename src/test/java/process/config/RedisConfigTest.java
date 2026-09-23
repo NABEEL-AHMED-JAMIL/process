@@ -15,7 +15,7 @@ import org.springframework.cache.support.NoOpCache;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.web.multipart.MultipartFile;
-import process.model.service.impl.StorageBrowserServiceImpl;
+import process.storage.remote.HttpStorageBrowser;
 
 import java.io.InputStream;
 import java.lang.reflect.Method;
@@ -24,7 +24,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
-import process.storage.TrustedAccess;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,7 +47,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *     plaintext stayed in Redis for the rest of a seven-day TTL and a replaced file could still be
  *     answered from its previous version.
  *
- * The write-path assertions live in this class rather than beside StorageBrowserServiceImpl
+ * The write-path assertions live in this class rather than beside HttpStorageBrowser (the storage
+ * calls process makes since MIG-70; the writes themselves are storage-service's)
  * because they are really assertions about the cache contract this file configures: the TTLs that
  * make a missed eviction expensive are seven days and thirty seconds, and they are set right here.
  *
@@ -161,7 +161,8 @@ public class RedisConfigTest {
     void everyUploadEvictsBothFileChatCaches() throws Exception {
         this.assertEvictsBothFileChatCaches("uploadObject", String.class, String.class, MultipartFile.class);
         this.assertEvictsBothFileChatCaches("uploadObject", String.class, String.class, InputStream.class, long.class, String.class);
-        this.assertEvictsBothFileChatCaches("uploadForWorkflow", TrustedAccess.class, String.class, String.class, InputStream.class, long.class, String.class);
+        // The trusted uploads (avatars, Kafka stores, billing documents) are made in storage-service since
+        // MIG-70; none is a file chat reads, and Media's text cache follows them by ObjectChanged.
     }
 
     @Test
@@ -210,7 +211,7 @@ public class RedisConfigTest {
 
     /** findMergedAnnotation so that writing cacheNames = instead of value = still resolves. */
     private CacheEvict evictOn(String methodName, Class<?>... parameterTypes) throws Exception {
-        Method method = StorageBrowserServiceImpl.class.getMethod(methodName, parameterTypes);
+        Method method = HttpStorageBrowser.class.getMethod(methodName, parameterTypes);
         CacheEvict evict = AnnotatedElementUtils.findMergedAnnotation(method, CacheEvict.class);
         assertNotNull(evict, methodName + " changes what is in storage and must carry @CacheEvict");
         return evict;

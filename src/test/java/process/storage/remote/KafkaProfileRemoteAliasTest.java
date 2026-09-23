@@ -10,7 +10,6 @@ import process.model.dto.ResponseDto;
 import process.model.pojo.StorageConnection;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.SourceTaskTypeRepository;
-import process.model.repository.StorageConnectionRepository;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.KafkaSecretService;
 import process.model.service.impl.KafkaConnectionProfileServiceImpl;
@@ -23,7 +22,6 @@ import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -36,7 +34,6 @@ class KafkaProfileRemoteAliasTest {
     private static final long ACME = 2901L;
     private static final long GLOBEX = 2902L;
 
-    private final StorageConnectionRepository table = mock(StorageConnectionRepository.class);
     private final RemoteStorageDirectory remote = mock(RemoteStorageDirectory.class);
     private final KafkaSecretService secrets = mock(KafkaSecretService.class);
     private KafkaConnectionProfileServiceImpl service;
@@ -46,8 +43,7 @@ class KafkaProfileRemoteAliasTest {
         this.service = new KafkaConnectionProfileServiceImpl(mock(KafkaConnectionProfileRepository.class),
             mock(SourceTaskTypeRepository.class), mock(TenantTaskTypeKafkaRouteRepository.class), mock(EncryptionUtil.class),
             mock(KafkaTemplateProvider.class), mock(KafkaConnectionResolver.class), mock(UserNameResolver.class),
-            this.secrets, this.table);
-        ReflectionTestUtils.setField(this.service, "remote", this.remote);
+            this.secrets, this.remote);
         when(this.secrets.secretBucket()).thenReturn("etl-config");
     }
 
@@ -74,7 +70,6 @@ class KafkaProfileRemoteAliasTest {
         when(this.remote.byAlias("certs")).thenReturn(Arrays.asList(owned(GLOBEX), owned(ACME)));
 
         assertThat(this.refusal()).isNull();
-        verifyNoInteractions(this.table);
     }
 
     @Test
@@ -83,7 +78,6 @@ class KafkaProfileRemoteAliasTest {
         when(this.remote.byAlias("certs")).thenReturn(Arrays.asList(owned(GLOBEX), owned(null)));
 
         assertThat(this.refusal().getMessage()).isEqualTo("No storage connection is called 'certs'.");
-        verifyNoInteractions(this.table);
     }
 
     @Test
@@ -94,6 +88,5 @@ class KafkaProfileRemoteAliasTest {
 
         when(this.remote.byAlias("certs")).thenReturn(Collections.emptyList());
         assertThat(this.refusal().getMessage()).isEqualTo("No storage connection is called 'certs'.");
-        verifyNoInteractions(this.table);
     }
 }

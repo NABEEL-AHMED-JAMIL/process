@@ -8,11 +8,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.StorageConnection;
-import process.model.repository.StorageConnectionRepository;
+import process.storage.remote.FakeStorage;
 import process.security.TenantContext;
 
 import java.util.Optional;
-import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,10 +32,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 public class DatasetResolverTest {
 
+    // Which connection a caller may read -- another workspace's, the platform's, a retired or deleted
+    // one, one that does not exist, all in the same words -- is Storage's to decide since MIG-70, when
+    // it vends the connection (storage-service's ConnectionDirectoryTest). What remains here is the
+    // resolver's own: the path, the bucket from the record, the provider and the format.
+
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;
 
-    @Mock private StorageConnectionRepository storageConnectionRepository;
+    private final FakeStorage storageConnectionRepository = new FakeStorage();
 
     @AfterEach
     void clearContext() {
@@ -59,7 +63,7 @@ public class DatasetResolverTest {
     }
 
     private void exists(StorageConnection connection) {
-        StorageRows.add(this.storageConnectionRepository, connection);
+        this.storageConnectionRepository.add(connection);
     }
 
     // ---- the happy path, so a refusal below is a refusal and not a broken fixture -------------
@@ -94,81 +98,11 @@ public class DatasetResolverTest {
 
     // ---- tenancy ------------------------------------------------------------------------------
 
-    @Test
-    void refusesAConnectionBelongingToAnotherWorkspace() {
-        TenantContext.set(TENANT_B, "TENANT_USER", 2L, "user@other.test");
-        exists(connection(TENANT_A, StorageProvider.MINIO));
 
-        assertThatThrownBy(() -> resolver().resolve("store", "etl-demo/sales.csv"))
-            .isInstanceOf(AnalyticsException.class)
-            // Deliberately the SAME wording as a connection that does not exist: telling the two
-            // apart would let a caller walk the id space and learn what other tenants own.
-            .hasMessage("Storage connection not found.");
-    }
 
-    @Test
-    void refusesAConnectionThatDoesNotExistWithTheSameWords() {
-        TenantContext.set(TENANT_A, "TENANT_USER", 1L, "user@acme.test");
 
-        assertThatThrownBy(() -> resolver().resolve("store", "etl-demo/sales.csv"))
-            .isInstanceOf(AnalyticsException.class)
-            .hasMessage("Storage connection not found.");
-    }
 
-    @Test
-    void refusesASoftDeletedConnection() {
-        TenantContext.set(TENANT_A, "TENANT_USER", 1L, "user@acme.test");
-        StorageConnection deleted = connection(TENANT_A, StorageProvider.MINIO);
-        deleted.setStatus(Status.Delete);
-        exists(deleted);
 
-        assertThatThrownBy(() -> resolver().resolve("store", "etl-demo/sales.csv"))
-            .isInstanceOf(AnalyticsException.class)
-            .hasMessage("Storage connection not found.");
-    }
-
-    @Test
-    void refusesAPlatformOwnedConnectionToATenantUser() {
-        // A storage_connection with no tenant is platform-owned, and the object browser refuses it
-        // to everyone but a platform admin (StorageBrowserServiceImpl.isPlatformBucket :464,
-        // collectBuckets :105-107). This resolver reached for TenantOwnership.isVisibleToCaller,
-        // which PUBLISHES a null-tenant row to every tenant -- correct for the shared catalogues
-        // it was written for, and a cross-tenant read here. The two screens share these connection
-        // rows, so the analytics reader must never be the more permissive of the pair.
-        TenantContext.set(TENANT_A, "TENANT_USER", 1L, "user@acme.test");
-        exists(connection(null, StorageProvider.MINIO));
-
-        assertThatThrownBy(() -> resolver().resolve("store", "etl-demo/sales.csv"))
-            .isInstanceOf(AnalyticsException.class)
-            .hasMessage("Storage connection not found.");
-    }
-
-    @Test
-    void readsAPlatformOwnedConnectionForAPlatformAdmin() throws Exception {
-        // The other half of the rule, and the control that keeps the test above honest: refusing
-        // a platform row to everybody would pass that assertion while breaking the admin.
-        TenantContext.set(null, "PLATFORM_ADMIN", 9L, "admin@platform.test");
-        exists(connection(null, StorageProvider.MINIO));
-
-        DatasetRef dataset = resolver().resolve("store", "etl-demo/sales.csv");
-
-        assertThat(dataset.getBucket()).isEqualTo("etl-bucket");
-    }
-
-    @Test
-    void refusesADeactivatedConnection() {
-        // Not merely not-Deleted: the picker offers Active connections only (collectBuckets :104),
-        // so a looser filter here keeps a deactivated connection serving data through an API where
-        // nobody can see that it is still live.
-        TenantContext.set(TENANT_A, "TENANT_USER", 1L, "user@acme.test");
-        StorageConnection inactive = connection(TENANT_A, StorageProvider.MINIO);
-        inactive.setStatus(Status.Inactive);
-        exists(inactive);
-
-        assertThatThrownBy(() -> resolver().resolve("store", "etl-demo/sales.csv"))
-            .isInstanceOf(AnalyticsException.class)
-            .hasMessage("Storage connection not found.");
-    }
 
     // ---- the path itself ----------------------------------------------------------------------
 

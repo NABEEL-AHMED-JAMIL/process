@@ -10,8 +10,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
-import process.storage.JdbcConnectionIdResolver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -65,26 +63,14 @@ class EtlJobChangelogPostgresTest {
                 assertThat(sql.queryForObject("SELECT count(*) FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
                     Integer.class, parts[0], parts[1])).as(column).isEqualTo(1);
             }
-            sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (1, 'Active', 't1', 'One'), (2, 'Active', 't2', 'Two')");
-            String insert = "INSERT INTO storage_connection (storage_connection_id, tenant_id, alias, connection_name, "
-                + "is_default, provider, status) VALUES (?, ?, ?, 'c', false, 'MINIO', 'Active')";
-            sql.update(insert, 9001L, 1L, "exports");
-            sql.update(insert, 9002L, 2L, "exports");
-            assertThatThrownBy(() -> sql.update(insert, 9003L, 1L, "exports"))
-                .as("one workspace, the same name twice").isInstanceOf(DataIntegrityViolationException.class);
-            sql.update(insert, 9004L, null, "etl-shared");
-            assertThatThrownBy(() -> sql.update(insert, 9005L, null, "etl-shared"))
-                .as("two platform rows, one name").isInstanceOf(DataIntegrityViolationException.class);
-
-            // The stamp's resolver, on real rows (MIG-53 part b): own workspace first, then the platform's.
-            JdbcConnectionIdResolver ids = new JdbcConnectionIdResolver(sql);
-            assertThat(ids.resolve(1L, "exports")).isEqualTo(9001L);
-            assertThat(ids.resolve(2L, "exports")).isEqualTo(9002L);
-            assertThat(ids.resolve(1L, "etl-shared")).as("the platform's, for a workspace without its own").isEqualTo(9004L);
-            assertThat(ids.resolve(null, "exports")).as("no workspace, and two use the name: ambiguous, so none").isNull();
-            assertThat(ids.resolve(3L, "exports")).as("never another workspace's").isNull();
-            sql.update(insert, 9006L, 1L, "one-only");
-            assertThat(ids.resolve(null, "one-only")).as("no workspace: the one workspace using the name").isEqualTo(9006L);
+            // MIG-70 (V57): storage_connection is storage-service's now. The copy here is kept for its
+            // retention period, read-only: every write is refused, and says where the table went.
+            assertThat(sql.queryForObject("SELECT to_regclass('public.storage_connection') IS NOT NULL", Boolean.class)).isTrue();
+            assertThatThrownBy(() -> sql.update("INSERT INTO storage_connection (storage_connection_id, tenant_id, alias, "
+                + "connection_name, is_default, provider, status) VALUES (9001, NULL, 'x', 'c', false, 'MINIO', 'Active')"))
+                .as("insert").hasMessageContaining("storage-service");
+            assertThatThrownBy(() -> sql.update("UPDATE storage_connection SET alias = 'y'")).as("update").hasMessageContaining("storage-service");
+            assertThatThrownBy(() -> sql.update("DELETE FROM storage_connection")).as("delete").hasMessageContaining("storage-service");
         } finally {
             pool.close();
             try (Connection admin = DriverManager.getConnection(server, user, password); Statement sql = admin.createStatement()) {

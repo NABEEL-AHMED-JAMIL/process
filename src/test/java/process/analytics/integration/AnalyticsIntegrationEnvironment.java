@@ -7,12 +7,10 @@ import process.analytics.AnalyticsLimits;
 import process.analytics.AnalyticsQueryService;
 import process.analytics.DatasetResolver;
 import process.analytics.DuckDbSessionFactory;
-import process.config.StorageClientFactory;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.StorageConnection;
-import process.model.repository.StorageConnectionRepository;
-import process.model.service.ObjectStorageService;
+import process.storage.remote.FakeStorage;
 import process.util.EncryptionUtil;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -43,7 +41,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
-import process.storage.StorageRows;
 
 /**
  * The infrastructure the analytics integration suites need, and the single decision about what
@@ -301,7 +298,7 @@ final class AnalyticsIntegrationEnvironment {
         requireMinio();
         if (benchmarkDataPresent == null) {
             try {
-                ObjectStorageService storage = storageFor(minioConnection());
+                FixtureStore storage = storageFor(minioConnection());
                 storage.getObjectMetadata(MINIO_BUCKET, BENCHMARK_CSV);
                 storage.getObjectMetadata(MINIO_BUCKET, BENCHMARK_PARQUET);
                 benchmarkDataPresent = Boolean.TRUE;
@@ -491,16 +488,16 @@ final class AnalyticsIntegrationEnvironment {
      * about the stub.
      */
     static DatasetResolver resolverOver(StorageConnection... connections) {
-        StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
+        FakeStorage repository = new FakeStorage();
         for (StorageConnection connection : connections) {
-            StorageRows.add(repository, connection);
+            repository.add(connection);
         }
         return new DatasetResolver(repository);
     }
 
-    /** The production adapter for this connection's provider -- MinIO's or the AWS SDK's. */
-    static ObjectStorageService storageFor(StorageConnection connection) {
-        return new StorageClientFactory(ENCRYPTION, null).buildUncached(connection);
+    /** MinIO or LocalStack over S3, for fixtures (the storage adapters left process with MIG-70). */
+    static FixtureStore storageFor(StorageConnection connection) {
+        return FixtureStore.of(connection, ENCRYPTION);
     }
 
     static Connection postgres() throws Exception {
@@ -597,7 +594,7 @@ final class AnalyticsIntegrationEnvironment {
     /**
      * Creates this suite's LocalStack bucket, tolerating the case where it is already there.
      *
-     * Not routed through ObjectStorageService because that interface has no bucket lifecycle --
+     * Not routed through FixtureStore because the application never had a bucket lifecycle --
      * deliberately, since the application only ever reads buckets somebody else created.
      */
     private static void createBucketIfAbsent(String bucket) {

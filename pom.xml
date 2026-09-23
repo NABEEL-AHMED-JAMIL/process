@@ -17,12 +17,6 @@
     <description>This is bulk engine to run the kafka source job.</description>
 
     <properties>
-        <!-- Reactor 2020.0 rather than Boot 2.3's Dysprosium: the Azure SDK (azure-core 1.47 over
-             reactor-netty 1.0) needs Reactor 3.4, and with Boot's 3.3.8 every Azure storage
-             connection failed to build its client (NoClassDefFoundError reactor.util.context.
-             ContextView), so browsing an Azure bucket answered 500. The other Reactor user here is
-             Lettuce (Redis), which runs on 3.4. See AzureClientBuildsTest. -->
-        <reactor-bom.version>2020.0.40</reactor-bom.version>
         <!--
           Bytecode level, not the JDK you build or run on: any JDK from 17 up compiles and runs
           this. It has to stay at 1.8 while the parent is Spring Boot 2.3.2, whose bundled ASM
@@ -34,7 +28,6 @@
           Moving to 17 means moving the parent to Spring Boot 2.7 first.
         -->
         <java.version>1.8</java.version>
-        <commons-net.version>3.6</commons-net.version>
         <swagger.version>2.9.2</swagger.version>
         <tomcat.version>9.0.83</tomcat.version>
     </properties>
@@ -216,24 +209,7 @@
             <version>2.8.6</version>
         </dependency>
 
-        <!-- Object storage: bucket browser (MinIO / S3 / Azure Blob) -->
-        <!-- FTP/FTPS client for the FTP/FTPS StorageConnection providers (commons-net
-             version was already declared as a property but the dependency itself was never added). -->
-        <dependency>
-            <groupId>commons-net</groupId>
-            <artifactId>commons-net</artifactId>
-            <version>${commons-net.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.minio</groupId>
-            <artifactId>minio</artifactId>
-            <version>8.5.17</version>
-        </dependency>
-
-        <!-- minio's own POM transitively pulls okhttp 3.14.9, which fails minio's own
-             minimum-okhttp-version runtime check; pin a compatible version directly so it
-             wins Maven's dependency resolution over the older transitive one. -->
+        <!-- OkHttp for process's own HTTP clients: Media (HttpMedia) and Storage (StorageServiceClient). -->
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
@@ -247,6 +223,7 @@
             <artifactId>commons-lang3</artifactId>
         </dependency>
 
+        <!-- S3 for the platform's own staging of mail attachments (MailAttachmentStaging), not storage. -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
@@ -265,21 +242,7 @@
             <version>1.1.3</version>
         </dependency>
 
-        <dependency>
-            <groupId>com.azure</groupId>
-            <artifactId>azure-storage-blob</artifactId>
-            <version>12.25.3</version>
-        </dependency>
 
-        <!-- Test (JUnit 5 + Mockito + AssertJ, versions managed by parent) -->
-        <!-- A real FTP server, embedded, for the storage adapter contract suite (MIG-160): the FTP
-             adapter is the one routinely forgotten, and its divergences only show against a server. -->
-        <dependency>
-            <groupId>org.apache.ftpserver</groupId>
-            <artifactId>ftpserver-core</artifactId>
-            <version>1.2.0</version>
-            <scope>test</scope>
-        </dependency>
         <!-- platform-commons directly, at 1.3.0: ObjectChanged, Storage's announcement to Media (ADR-013).
              It overrides the 1.1.0 the notifications contract brings. -->
         <dependency>

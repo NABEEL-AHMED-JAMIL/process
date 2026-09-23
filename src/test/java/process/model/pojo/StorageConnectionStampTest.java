@@ -5,14 +5,15 @@ import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.AnalyticsQuery;
 import process.model.pojo.AnalyticsQueryRun;
-import process.model.repository.StorageConnectionRepository;
-import process.storage.StorageRows;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import process.storage.StorageConnectionLookup;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 /**
  * Analytics rows carry the storage connection's id beside its alias (MIG-53 part b). An alias is only
@@ -23,14 +24,31 @@ import static org.mockito.Mockito.mock;
  */
 class StorageConnectionStampTest {
 
-    private final StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
+    /** storage_db, as far as this test needs it. */
+    private final List<StorageConnection> rows = new ArrayList<>();
     private final StorageConnectionStamp stamp = new StorageConnectionStamp();
 
-    /** Installed as production installs it; the rule is the lookup's (JdbcConnectionIdResolver is tested on Postgres). */
+    /**
+     * Installed as production installs it, with Storage's forRow rule (tested in storage-service's
+     * ConnectionDirectoryTest) written out here: the row's workspace's own, else the platform's; for a
+     * platform row, the platform's, else the one workspace's using the name.
+     */
     @BeforeEach
     void install() {
-        StorageConnectionStamp.use((tenantId, alias) -> new StorageConnectionLookup(this.repository)
-            .forRow(tenantId, alias).map(StorageConnection::getStorageConnectionId).orElse(null));
+        StorageConnectionStamp.use((tenantId, alias) -> {
+            Optional<StorageConnection> own = tenantId == null ? Optional.empty()
+                : this.rows.stream().filter(r -> tenantId.equals(r.getTenantId()) && alias.equals(r.getAlias())).findFirst();
+            Optional<StorageConnection> platform = this.rows.stream().filter(r -> r.getTenantId() == null && alias.equals(r.getAlias())).findFirst();
+            if (tenantId != null) {
+                return own.map(Optional::of).orElse(platform).map(StorageConnection::getStorageConnectionId).orElse(null);
+            }
+            if (platform.isPresent()) {
+                return platform.get().getStorageConnectionId();
+            }
+            List<StorageConnection> workspaces = this.rows.stream().filter(r -> r.getTenantId() != null && alias.equals(r.getAlias()))
+                .collect(Collectors.toList());
+            return workspaces.size() == 1 ? workspaces.get(0).getStorageConnectionId() : null;
+        });
     }
 
     @AfterEach
@@ -45,7 +63,8 @@ class StorageConnectionStampTest {
         connection.setAlias(alias);
         connection.setProvider(StorageProvider.MINIO);
         connection.setStatus(Status.Active);
-        return StorageRows.add(this.repository, connection);
+        this.rows.add(connection);
+        return connection;
     }
 
     @Test

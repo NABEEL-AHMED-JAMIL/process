@@ -27,12 +27,15 @@ export E2E_DATASOURCE_PASSWORD="${E2E_DATASOURCE_PASSWORD:-$(docker exec "${CONT
 # refusal the tests cannot tell apart from the ones they are asserting about.
 export E2E_LOOKUP_ENCRYPTION_KEY="${E2E_LOOKUP_ENCRYPTION_KEY:-$(docker exec "${CONTAINER}" printenv LOOKUP_ENCRYPTION_KEY)}"
 
+# The service token process uses with storage-service (MIG-70): the suite's storage calls go there too.
+export E2E_INTERNAL_SERVICE_TOKEN="${E2E_INTERNAL_SERVICE_TOKEN:-$(docker exec "${CONTAINER}" printenv INTERNAL_SERVICE_TOKEN)}"
+
 # Checked after the fact, because the captures above cannot fail loudly on their own: the exit
 # status of `export X=$(...)` is export's own, so a printenv that found nothing -- a variable the
 # image does not define, a container that stopped between the check above and here -- leaves an
 # empty value behind and sails straight past `set -e`. Empty is exactly the state the note above
 # says is not worth debugging, so it is refused here rather than diagnosed later.
-for required in E2E_DATASOURCE_USERNAME E2E_DATASOURCE_PASSWORD E2E_LOOKUP_ENCRYPTION_KEY; do
+for required in E2E_DATASOURCE_USERNAME E2E_DATASOURCE_PASSWORD E2E_LOOKUP_ENCRYPTION_KEY E2E_INTERNAL_SERVICE_TOKEN; do
   if [[ -z "${!required}" ]]; then
     echo "ERROR: ${required} came back empty from container '${CONTAINER}'." >&2
     echo "       Set it yourself, or start a stack that defines it." >&2

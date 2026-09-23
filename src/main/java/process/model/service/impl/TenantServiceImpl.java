@@ -1,7 +1,6 @@
 package process.model.service.impl;
 
 import process.storage.remote.RemoteStorageDirectory;
-import org.springframework.beans.factory.annotation.Autowired;
 import process.util.TenantCode;
 import org.slf4j.Logger;
 import process.util.UserNameResolver;
@@ -16,7 +15,6 @@ import process.model.enums.TenantStatus;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.KafkaConnectionProfileRepository;
-import process.model.repository.StorageConnectionRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.repository.SourceTaskTypeRepository;
@@ -41,11 +39,8 @@ public class TenantServiceImpl implements TenantService {
     private final TenantRepository tenantRepository;
     private final AppUserRepository appUserRepository;
     private final KafkaConnectionProfileRepository kafkaConnectionProfileRepository;
-    private final StorageConnectionRepository storageConnectionRepository;
-
-    /** storage-service, once it owns the connections (storage.remote); absent, the table answers. */
-    @Autowired(required = false)
-    private RemoteStorageDirectory remote;
+    /** Storage's directory: a workspace's connections live in storage-service (MIG-68). */
+    private final RemoteStorageDirectory storage;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final SourceTaskRepository sourceTaskRepository;
     private final SourceJobRepository sourceJobRepository;
@@ -55,7 +50,7 @@ public class TenantServiceImpl implements TenantService {
 
     public TenantServiceImpl(TenantRepository tenantRepository, AppUserRepository appUserRepository,
         KafkaConnectionProfileRepository kafkaConnectionProfileRepository,
-        StorageConnectionRepository storageConnectionRepository,
+        RemoteStorageDirectory storage,
         SourceTaskTypeRepository sourceTaskTypeRepository, SourceTaskRepository sourceTaskRepository,
         SourceJobRepository sourceJobRepository,
         UserNameResolver userNameResolver) {
@@ -63,7 +58,7 @@ public class TenantServiceImpl implements TenantService {
         this.tenantRepository = tenantRepository;
         this.appUserRepository = appUserRepository;
         this.kafkaConnectionProfileRepository = kafkaConnectionProfileRepository;
-        this.storageConnectionRepository = storageConnectionRepository;
+        this.storage = storage;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.sourceJobRepository = sourceJobRepository;
@@ -82,8 +77,7 @@ public class TenantServiceImpl implements TenantService {
         Long tenantId = tenant.getTenantId();
         dto.setUserCount(this.appUserRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
         dto.setKafkaProfileCount(this.kafkaConnectionProfileRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
-        dto.setBucketCount(this.remote != null ? this.remote.workspace(tenantId).size()
-            : this.storageConnectionRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
+        dto.setBucketCount((long) this.storage.workspace(tenantId).size());
         dto.setSourceTaskTypeCount(this.sourceTaskTypeRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
         dto.setSourceTaskCount(this.sourceTaskRepository.countByTenantIdAndTaskStatusNot(tenantId, Status.Delete));
         dto.setPipelineCount(this.sourceTaskRepository.countDistinctPipelinesByTenantId(tenantId, Status.Delete));

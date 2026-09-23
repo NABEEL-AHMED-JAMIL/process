@@ -198,10 +198,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
       # Shared with notifications-service, which redeems secretRefs with it. Set in .env.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
-      # MIG-68: storage-service owns storage. Every storage call process makes goes there -- the
+      # storage-service owns storage (MIG-68/70): every storage call process makes goes there -- the
       # guarded ones as the signed-in user, the four trusted callers and the directory with the
-      # service token above. process's own storage_connection table is no longer read or written.
-      STORAGE_REMOTE: "true"
+      # service token above. process has no storage code or table access of its own.
       STORAGE_SERVICE_URL: http://storage:9120
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-admin}
@@ -209,13 +208,10 @@ services:
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       EFS_FILE_DIRE: ${EFS_FILE_DIRE:-/tmp/efs}
-      # The platform's one AWS identity: SES for outbound mail and S3 for the platform buckets
-      # (etl-avatar for profile pictures, etl-config for Kafka key material). LocalStack here, so a
-      # notification can be sent and read back and a picture uploaded and fetched, without an
-      # account -- mail is stored, not delivered. On a real environment clear AWS_ENDPOINT and
-      # either supply a scoped key pair or leave both blank and let the instance role sign
-      # (STORAGE_ALLOW_INSTANCE_ROLE=true for the bucket half). Tenants' own buckets are never
-      # configured here: each is a storage connection added from Settings > Storage.
+      # process's AWS identity: SES for outbound mail and S3 for staging mail attachments for
+      # Notifications. The platform buckets (etl-avatar, etl-config) are storage-service's since MIG-70,
+      # reached through it like every other bucket. LocalStack here, so mail is stored, not delivered.
+      # On a real environment clear AWS_ENDPOINT and supply a scoped key pair.
       AWS_ENDPOINT: ${AWS_ENDPOINT:-http://host.docker.internal:4566}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-test}

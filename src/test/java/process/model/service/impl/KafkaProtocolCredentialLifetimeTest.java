@@ -8,7 +8,7 @@ import process.model.dto.KafkaConnectionProfileDto;
 import process.model.pojo.KafkaConnectionProfile;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.SourceTaskTypeRepository;
-import process.model.repository.StorageConnectionRepository;
+import process.storage.remote.RemoteStorageDirectory;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.KafkaSecretService;
 import process.util.EncryptionUtil;
@@ -54,7 +54,7 @@ public class KafkaProtocolCredentialLifetimeTest {
         mock(KafkaConnectionResolver.class),
         mock(UserNameResolver.class),
         mock(KafkaSecretService.class),
-        mock(StorageConnectionRepository.class));
+        mock(RemoteStorageDirectory.class));
 
     KafkaProtocolCredentialLifetimeTest() {
         when(this.encryptionUtil.encrypt(anyString())).thenAnswer(call -> "enc-" + call.getArgument(0));

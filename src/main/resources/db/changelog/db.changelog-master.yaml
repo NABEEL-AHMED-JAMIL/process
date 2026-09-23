@@ -38,3 +38,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V56.0-analytics-rows-carry-storage-connection-id.yaml
   - include:
       file: db/changelog/yaml/V56.1-stamp-platform-admin-analytics-rows.yaml
+  - include:
+      file: db/changelog/yaml/V57.0-storage-connection-read-only.yaml
