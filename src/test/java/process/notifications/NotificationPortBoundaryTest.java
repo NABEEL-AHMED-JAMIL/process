@@ -15,41 +15,58 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * NotificationPort is the only way into Notifications (MIG-20).
+ * Notifications is its own service (MIG-22). Process raises contract events through
+ * NotificationPort, whose one implementation writes them to the outbox, and delivers nothing
+ * itself: no STOMP broker, no mailer or templates, no notification store.
  *
- * Everything that pushes to a socket, raises a notice or sends a mail goes through the port, so
- * that when Notifications leaves this process only the port's implementation changes. This holds
- * the edge by reading the source: a class outside the Notifications side that imports the socket or
- * mailer packages, or names the notification centre, fails the build with its file name. (A source
- * scan rather than ArchUnit: no new dependency, and the rule is one line of grep.)
+ * MIG-20 held the line at the port inside process; this holds it at the process boundary, so an
+ * in-process delivery path cannot quietly come back. (A source scan, not ArchUnit: no new
+ * dependency, and each rule is one line of grep.)
  */
 class NotificationPortBoundaryTest {
 
     private static final Path MAIN = Paths.get("src", "main", "java", "process");
+    private static final Path RESOURCES = Paths.get("src", "main", "resources");
 
-    /** The Notifications side: what moves out together when the service is split. */
-    private static final List<String> NOTIFICATIONS_SIDE = Arrays.asList(
-        "notifications/", "socket/", "emailer/",
-        // The STOMP endpoint and its SUBSCRIBE/CONNECT gate.
-        "config/WebSocketConfig.java", "security/StompAuthChannelInterceptor.java",
-        // The notification centre and the REST API the bell reads.
-        "model/service/NotificationCenterService.java", "model/service/impl/NotificationCenterServiceImpl.java",
-        "api/NotificationRestApi.java");
+    /** What only a delivering Notifications needs. */
+    private static final List<String> DELIVERY_ONLY = Arrays.asList(
+        "org.springframework.messaging.simp", "EnableWebSocketMessageBroker",
+        "org.apache.velocity", "software.amazon.awssdk.services.ses", "javax.mail", "MimeMessageHelper");
 
     @Test
-    void nothingOutsideNotificationsReachesTheSocketOrMailerDirectly() throws IOException {
+    void processDeliversNothingItself() throws IOException {
         List<String> offenders = new ArrayList<>();
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).collect(Collectors.toList())) {
-                String relative = MAIN.relativize(file).toString().replace('\\', '/');
-                if (NOTIFICATIONS_SIDE.stream().anyMatch(relative::startsWith)) continue;
                 String source = new String(Files.readAllBytes(file));
-                if (source.contains("import process.socket.") || source.contains("import process.emailer.")
-                    || source.contains("NotificationCenterService")) {
-                    offenders.add(relative);
+                for (String marker : DELIVERY_ONLY) {
+                    if (source.contains(marker)) offenders.add(MAIN.relativize(file) + " uses " + marker);
                 }
             }
         }
-        assertThat(offenders).as("classes reaching past NotificationPort").isEmpty();
+        assertThat(offenders).as("delivery code left in process").isEmpty();
+    }
+
+    @Test
+    void theNotificationsPackagesAndResourcesAreGone() {
+        for (String gone : new String[] {"socket", "emailer", "notifications/store"}) {
+            assertThat(MAIN.resolve(gone)).as(gone).doesNotExist();
+        }
+        assertThat(RESOURCES.resolve("templates")).as("mail templates").doesNotExist();
+        assertThat(RESOURCES.resolve("db/notifications")).as("notifications_db changelog").doesNotExist();
+    }
+
+    /** One way out: the outbox. There is no in-process transport to fall back to. */
+    @Test
+    void theOutboxIsThePortsOnlyImplementation() throws IOException {
+        List<String> implementations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).collect(Collectors.toList())) {
+                if (new String(Files.readAllBytes(file)).contains("implements NotificationPort")) {
+                    implementations.add(file.getFileName().toString());
+                }
+            }
+        }
+        assertThat(implementations).containsExactly("OutboxNotifications.java");
     }
 }

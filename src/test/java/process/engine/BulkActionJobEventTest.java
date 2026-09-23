@@ -7,10 +7,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.enums.JobStatus;
 import process.model.pojo.SourceJob;
-import process.model.service.NotificationCenterService;
 import process.model.service.impl.TransactionServiceImpl;
-import process.socket.JobEventPublisher;
-import process.socket.NotificationService;
 
 import java.util.Optional;
 
@@ -45,15 +42,15 @@ public class BulkActionJobEventTest {
     private static final long JOB_ID = 1196L;
 
     @Mock private TransactionServiceImpl transactionService;
-    @Mock private NotificationService notificationService;
-    @Mock private NotificationCenterService notificationCenterService;
-    @Mock private JobEventPublisher jobEventPublisher;
+    @Mock private TestNotifications.LegacySink notificationService;
+    @Mock private TestNotifications.NoticeSink notificationCenterService;
+    @Mock private TestNotifications.FeedSink jobEventPublisher;
 
     private BulkAction bulkAction;
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.inProcess(this.jobEventPublisher,
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.jobEventPublisher,
             this.notificationService, this.notificationCenterService, null));
     }
 

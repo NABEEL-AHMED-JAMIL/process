@@ -13,13 +13,11 @@ import process.model.dto.SourceJobDto;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.repository.*;
-import process.model.service.NotificationCenterService;
 import process.model.dto.UserActivityDto;
 import java.sql.Timestamp;
 import java.util.Collections;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
-import process.socket.JobEventPublisher;
 import process.util.OpenSearchAuditLogClient;
 
 import javax.persistence.EntityManager;
@@ -52,14 +50,14 @@ public class SourceJobServiceImplTenantIsolationTest {
     @Mock private SchedulerRepository schedulerRepository;
     @Mock private SourceTaskRepository sourceTaskRepository;
     @Mock private JobAuditLogRepository jobAuditLogRepository;
-    @Mock private JobEventPublisher jobEventPublisher;
+    @Mock private TestNotifications.FeedSink jobEventPublisher;
     @Mock private JobQueueRepository jobQueueRepository;
     @Mock private LookupDataRepository lookupDataRepository;
     @Mock private AppUserRepository appUserRepository;
     @Mock private ProducerBulkEngine producerBulkEngine;
     @Mock private TenantFilterHelper tenantFilterHelper;
     @Mock private OpenSearchAuditLogClient openSearchAuditLogClient;
-    @Mock private NotificationCenterService notificationCenterService;
+    @Mock private TestNotifications.NoticeSink notificationCenterService;
     @Mock private EntityManager entityManager;
     @Mock private UserNameResolver userNameResolver;
 
@@ -71,7 +69,7 @@ public class SourceJobServiceImplTenantIsolationTest {
             this.sourceTaskRepository, this.jobAuditLogRepository,
             this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
-            TestNotifications.inProcess(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
+            TestNotifications.recording(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
         // entityManager is injected, not constructor-supplied.
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);

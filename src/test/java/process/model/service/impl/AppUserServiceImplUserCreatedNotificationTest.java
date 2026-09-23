@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import org.barco.notifications.contract.MailRequested;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,7 +9,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import process.emailer.EmailMessagesFactory;
 import process.model.dto.AppUserDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.NotificationSeverity;
@@ -19,7 +19,6 @@ import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
-import process.model.service.NotificationCenterService;
 import process.model.service.PageAccessService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
@@ -40,7 +39,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import process.notifications.TestNotifications;
-import process.emailer.TemplateType;
 
 /**
  * Who hears about a new account, in the bell rather than by email.
@@ -65,13 +63,13 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
-    private EmailMessagesFactory emailMessagesFactory;
+    private TestNotifications.MailSink emailMessagesFactory;
     @Mock
     private UserNameResolver userNameResolver;
     @Mock
     private StorageBrowserService storageBrowserService;
     @Mock
-    private NotificationCenterService notificationCenterService;
+    private TestNotifications.NoticeSink notificationCenterService;
     @Mock
     private PageAccessService pageAccessService;
 
@@ -80,7 +78,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @BeforeEach
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, TestNotifications.inProcess(null, null, this.notificationCenterService, this.emailMessagesFactory),
+            this.passwordEncoder, TestNotifications.recording(null, null, this.notificationCenterService, this.emailMessagesFactory),
             this.userNameResolver, this.storageBrowserService, this.pageAccessService);
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
         // The id the database would hand back -- without it the new user has nobody to notify.
@@ -136,7 +134,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @Test
     void theNewUserGetsAWelcomeAndTheActorGetsARecord() throws Exception {
         this.actAsTenantAdmin();
-        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         ResponseDto response = this.service.addUser(this.newTenantUser());
@@ -161,7 +159,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @Test
     void aFailedWelcomeEmailTurnsTheActorsCopyIntoAWarning() throws Exception {
         this.actAsTenantAdmin();
-        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Error: smtp down");
 
         ResponseDto response = this.service.addUser(this.newTenantUser());
@@ -193,7 +191,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
         AppUser plainUser = this.userIn(TENANT_A, 79L, UserRole.TENANT_USER, "Plain User");
         when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete))
             .thenReturn(Arrays.asList(otherAdmin, dormantAdmin, plainUser));
-        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         this.service.addUser(this.newTenantUser());
@@ -217,7 +215,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
         AppUser peer = this.userIn(null, 2L, UserRole.PLATFORM_ADMIN, "Pia Platform");
         AppUser tenantAdmin = this.userIn(TENANT_A, 77L, UserRole.TENANT_ADMIN, "Other Admin");
         when(this.appUserRepository.findAll()).thenReturn(Arrays.asList(actor, peer, tenantAdmin));
-        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         AppUserDto dto = this.newTenantUser();

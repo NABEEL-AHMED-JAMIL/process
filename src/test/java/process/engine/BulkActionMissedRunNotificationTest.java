@@ -8,10 +8,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.enums.JobStatus;
 import process.model.pojo.Scheduler;
 import process.model.projection.SourceJobProjection;
-import process.model.service.NotificationCenterService;
 import process.model.service.impl.TransactionServiceImpl;
-import process.socket.JobEventPublisher;
-import process.socket.NotificationService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,15 +45,15 @@ class BulkActionMissedRunNotificationTest {
     private static final long JOB_ID = 1196L;
 
     @Mock private TransactionServiceImpl transactionService;
-    @Mock private NotificationService notificationService;
-    @Mock private NotificationCenterService notificationCenterService;
-    @Mock private JobEventPublisher jobEventPublisher;
+    @Mock private TestNotifications.LegacySink notificationService;
+    @Mock private TestNotifications.NoticeSink notificationCenterService;
+    @Mock private TestNotifications.FeedSink jobEventPublisher;
 
     private BulkAction bulkAction;
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.inProcess(this.jobEventPublisher,
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.jobEventPublisher,
             this.notificationService, this.notificationCenterService, null));
         SourceJobProjection job = mock(SourceJobProjection.class);
         lenient().when(job.getJobId()).thenReturn(JOB_ID);

@@ -10,10 +10,9 @@ import org.barco.notifications.contract.NotificationCreated;
  * The one door from the rest of process into Notifications (MIG-20).
  *
  * Every live push, notification-centre row and mail goes through here, in the shape of the
- * notifications-contract events (MIG-191) -- so when Notifications leaves this process, what changes
- * is the implementation behind this interface (an outbox and the platform bus instead of
- * {@link InProcessNotifications}), not the thirty-odd places that call it. A test holds the edge:
- * nothing outside the Notifications packages may reach the socket or mailer classes directly.
+ * notifications-contract events (MIG-191). Since MIG-22 Notifications is its own service and the one
+ * implementation is {@link OutboxNotifications}; the thirty-odd callers did not change when it left.
+ * NotificationPortBoundaryTest holds the edge: process delivers nothing itself.
  *
  * <b>Core decides, Notifications delivers.</b> Callers compute {@code isNewTransition}, resolve the
  * recipient and choose whether a mail is wanted; the implementation never re-derives any of it.

@@ -20,7 +20,6 @@ import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
-import process.model.service.NotificationCenterService;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
@@ -62,7 +61,7 @@ public class SourceJobBulkDefectTest {
     @Mock private TransactionServiceImpl transactionService;
     @Mock private SourceJobRepository sourceJobRepository;
     @Mock private SchedulerRepository schedulerRepository;
-    @Mock private NotificationCenterService notificationCenterService;
+    @Mock private TestNotifications.NoticeSink notificationCenterService;
 
     private SourceJobBulkServiceImpl service;
 
@@ -71,7 +70,7 @@ public class SourceJobBulkDefectTest {
         // The real BulkExcel: it is a thread-local holder around POI with no collaborators, and
         // the export assertions are about what it writes into the sheet.
         this.service = new SourceJobBulkServiceImpl(this.transactionService, this.sourceJobRepository,
-            this.schedulerRepository, new BulkExcel(), TestNotifications.inProcess(null, null, this.notificationCenterService, null));
+            this.schedulerRepository, new BulkExcel(), TestNotifications.recording(null, null, this.notificationCenterService, null));
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 1L, "admin-a@example.com");
     }
 

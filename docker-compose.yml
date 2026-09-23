@@ -182,10 +182,6 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
-      NOTIFICATIONS_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notifications_db
-      # MIG-22: notifications go out through the outbox to notifications-service. "in-process"
-      # (the default) delivers them here instead, as before the split.
-      NOTIFICATIONS_TRANSPORT: ${NOTIFICATIONS_TRANSPORT:-outbox}
       # Shared with notifications-service, which redeems secretRefs with it. Set in .env.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
@@ -205,7 +201,6 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-test}
       AWS_SECRET_KEY: ${AWS_SECRET_KEY:-test}
-      MAIL_FROM: ${MAIL_FROM:-no-reply@etl-console.local}
       # Base64-encoded 256-bit AES key for encrypted lookup values (openssl rand -base64 32).
       # Rotating this makes any already-encrypted lookup values undecryptable -- override via
       # a real LOOKUP_ENCRYPTION_KEY env var rather than editing this fallback once real
@@ -243,12 +238,6 @@ services:
       # "llava:latest", if that's what was pulled) actually exists. Set to whatever `ollama list`
       # on the host shows; this default assumes 7b since that is what this project pulled.
       OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-llava:7b}
-      # WebSocket (STOMP/SockJS) Origin allowlist -- application-{prod,stage}.properties already
-      # read this env var, but the "dev" profile active here has no properties file wiring it up,
-      # so it's supplied directly. Includes the LAN IP so phones/other laptops on the same
-      # network can open the live-job-updates socket via http://<lan-ip>/... (port 80, docker) and
-      # http://<lan-ip>:8084/... (webpack dev server) -- update if the host's LAN IP changes.
-      WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost,http://localhost:8080,http://localhost:4400,http://10.0.0.248,http://10.0.0.248:8084}
     depends_on:
       postgres:
         condition: service_healthy

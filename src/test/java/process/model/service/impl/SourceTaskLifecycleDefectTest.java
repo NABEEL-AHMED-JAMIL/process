@@ -19,7 +19,6 @@ import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.TenantRepository;
-import process.model.service.NotificationCenterService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.PagingUtil;
@@ -67,7 +66,7 @@ public class SourceTaskLifecycleDefectTest {
     @Mock private SourceTaskTypeRepository sourceTaskTypeRepository;
     @Mock private TenantFilterHelper tenantFilterHelper;
     @Mock private TenantRepository tenantRepository;
-    @Mock private NotificationCenterService notificationCenterService;
+    @Mock private TestNotifications.NoticeSink notificationCenterService;
     @Mock private UserNameResolver userNameResolver;
     @Mock private EntityManager entityManager;
 
@@ -78,7 +77,7 @@ public class SourceTaskLifecycleDefectTest {
         this.service = new SourceTaskServiceImpl(this.bulkExcel, this.queryService,
             this.sourceJobRepository, this.sourceTaskRepository, this.sourceTaskTypeRepository,
             this.tenantFilterHelper, new TaskPayloadLocationUtil(), this.tenantRepository,
-            TestNotifications.inProcess(null, null, this.notificationCenterService, null), this.userNameResolver);
+            TestNotifications.recording(null, null, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceTaskServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);
         em.set(this.service, this.entityManager);

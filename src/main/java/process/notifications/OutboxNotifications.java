@@ -13,8 +13,7 @@ import org.barco.notifications.contract.Recipients;
 import org.barco.platform.event.PlatformEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import process.model.pojo.AppUser;
 import process.identity.OneTimeSecrets;
@@ -24,21 +23,18 @@ import process.outbox.OutboxWriter;
 import java.util.Optional;
 
 /**
- * NotificationPort for a Notifications that runs as its own service (MIG-22): every call becomes
- * one contract event in platform_outbox, written in the caller's transaction and relayed to Kafka
- * after it commits. Selected by notifications.transport=outbox; InProcessNotifications stays the
- * port otherwise.
+ * NotificationPort, as process speaks to Notifications -- its own service since MIG-22. Every call
+ * becomes one contract event in platform_outbox, written in the caller's transaction and relayed to
+ * Kafka after it commits. Core resolves what the service cannot (the recipient's username and home
+ * tenant); attachment bytes are staged and a temporary password is kept by Identity, and both travel
+ * by reference.
  *
- * Attachment bytes are staged and sent as an attachmentRef, and a temporary password is kept by
- * Identity and sent as a secretRef (part 4): neither rides on a topic. Two things still go through
- * the in-process side: the old console's /user/queue/reply push, which ClusterBroadcast carries to
- * whichever instance holds the session, and the two synchronous questions, which are not events.
+ * The one non-event left is the old console's /user/queue/reply push (LegacyConsolePush), deleted
+ * with that console.
  *
  * @author Nabeel Ahmed
  */
-@Primary
 @Component
-@ConditionalOnProperty(name = "notifications.transport", havingValue = "outbox")
 public class OutboxNotifications implements NotificationPort {
 
     static final String PRODUCER = "process";
@@ -48,18 +44,24 @@ public class OutboxNotifications implements NotificationPort {
     private final Logger logger = LoggerFactory.getLogger(OutboxNotifications.class);
     private final ObjectMapper json = new ObjectMapper();
     private final OutboxWriter outbox;
-    private final InProcessNotifications inProcess;
     private final AppUserRepository users;
     private final OneTimeSecrets secrets;
     private final MailAttachmentStaging staging;
+    private final LegacyConsolePush legacyConsole;
+    private final UnreadBadges badges;
+    /** Mail goes to an emulator (LocalStack) when an endpoint is set: stored, not delivered. */
+    private final boolean realInboxes;
 
-    public OutboxNotifications(OutboxWriter outbox, InProcessNotifications inProcess, AppUserRepository users,
-        OneTimeSecrets secrets, MailAttachmentStaging staging) {
+    public OutboxNotifications(OutboxWriter outbox, AppUserRepository users, OneTimeSecrets secrets,
+        MailAttachmentStaging staging, LegacyConsolePush legacyConsole, UnreadBadges badges,
+        @Value("${aws.endpoint:}") String awsEndpoint) {
         this.outbox = outbox;
-        this.inProcess = inProcess;
         this.users = users;
         this.secrets = secrets;
         this.staging = staging;
+        this.legacyConsole = legacyConsole;
+        this.badges = badges;
+        this.realInboxes = awsEndpoint == null || awsEndpoint.trim().isEmpty();
     }
 
     @Override
@@ -170,17 +172,17 @@ public class OutboxNotifications implements NotificationPort {
 
     @Override
     public boolean deliversMailToRealInboxes() {
-        return this.inProcess.deliversMailToRealInboxes();
+        return this.realInboxes;
     }
 
     @Override
     public void forgetRecipient(Long appUserId) {
-        this.inProcess.forgetRecipient(appUserId);
+        this.badges.forget(appUserId);
     }
 
     @Override
     @Deprecated
     public void legacyOwnerPush(String username, String jobDetailJson) {
-        this.inProcess.legacyOwnerPush(username, jobDetailJson);
+        this.legacyConsole.toOwner(username, jobDetailJson);
     }
 }

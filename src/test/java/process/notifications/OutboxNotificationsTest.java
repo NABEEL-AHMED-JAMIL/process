@@ -35,11 +35,13 @@ class OutboxNotificationsTest {
     private static final long TENANT = 2905L;
 
     private final OutboxWriter outbox = mock(OutboxWriter.class);
-    private final InProcessNotifications inProcess = mock(InProcessNotifications.class);
     private final AppUserRepository users = mock(AppUserRepository.class);
     private final process.identity.OneTimeSecrets secrets = mock(process.identity.OneTimeSecrets.class);
     private final MailAttachmentStaging staging = mock(MailAttachmentStaging.class);
-    private final OutboxNotifications port = new OutboxNotifications(this.outbox, this.inProcess, this.users, this.secrets, this.staging);
+    private final LegacyConsolePush legacyConsole = mock(LegacyConsolePush.class);
+    private final UnreadBadges badges = mock(UnreadBadges.class);
+    private final OutboxNotifications port = new OutboxNotifications(this.outbox, this.users, this.secrets, this.staging,
+        this.legacyConsole, this.badges, "http://host.docker.internal:4566");
 
     @org.junit.jupiter.api.BeforeEach
     void recipients() {
@@ -114,7 +116,6 @@ class OutboxNotificationsTest {
 
         assertThat(this.written(NotificationTopics.MAIL_REQUESTED, "owner@medaxis.example").at("/payload/subject").asText())
             .isEqualTo("Source Job Failed");
-        verify(this.inProcess, never()).mailRequested(any(), any(), any());
     }
 
     /** Part 4: a password never rides on a topic; it goes by a one-time reference Notifications redeems. */
@@ -130,7 +131,6 @@ class OutboxNotificationsTest {
         verify(this.outbox).write(eq(NotificationTopics.MAIL_REQUESTED), eq("new.user@medaxis.example"), anyString(), event.capture());
         assertThat(event.getValue()).doesNotContain("Tmp-9f2c!");
         assertThat(this.json.readTree(event.getValue()).at("/payload/secretRef").asText()).isEqualTo("ref-7c1d");
-        verify(this.inProcess, never()).mailRequested(any(), any(), any());
     }
 
     /** Part 4: twenty megabytes do not belong on a topic; the file is staged and sent by reference. */
@@ -178,15 +178,22 @@ class OutboxNotificationsTest {
         verify(this.outbox, never()).write(anyString(), anyString(), anyString(), anyString());
     }
 
+    /** Part 5: nothing is left in-process. The old console's push rides the bridge; the badge is dropped in Redis. */
     @Test
-    void theOldConsolesPushAndTheSynchronousQueriesStayWithTheInProcessSide() {
+    void theOldConsolesPushAndTheBadgeNeedNoDeliveryCodeHere() {
         this.port.legacyOwnerPush("ops@medaxis.example", "{}");
         this.port.forgetRecipient(10L);
-        this.port.deliversMailToRealInboxes();
 
-        verify(this.inProcess).legacyOwnerPush("ops@medaxis.example", "{}");
-        verify(this.inProcess).forgetRecipient(10L);
-        verify(this.inProcess).deliversMailToRealInboxes();
+        verify(this.legacyConsole).toOwner("ops@medaxis.example", "{}");
+        verify(this.badges).forget(10L);
+    }
+
+    /** With an emulator endpoint set, mail is stored, not delivered -- the file-share reply says so. */
+    @Test
+    void anEmulatorEndpointMeansNoRealInboxes() {
+        assertThat(this.port.deliversMailToRealInboxes()).isFalse();
+        assertThat(new OutboxNotifications(this.outbox, this.users, this.secrets, this.staging, this.legacyConsole,
+            this.badges, "").deliversMailToRealInboxes()).isTrue();
     }
 
     // ---- contract 1.2.0: Core resolves the recipient, because the service cannot read app_user ----

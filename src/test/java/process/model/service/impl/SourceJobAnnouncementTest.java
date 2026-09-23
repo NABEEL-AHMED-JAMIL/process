@@ -16,10 +16,8 @@ import process.model.pojo.AppUser;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.repository.*;
-import process.model.service.NotificationCenterService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
-import process.socket.JobEventPublisher;
 import process.util.OpenSearchAuditLogClient;
 import process.util.UserNameResolver;
 
@@ -35,7 +33,7 @@ import process.notifications.TestNotifications;
  * That creating, editing, pausing or deleting a job is announced to the other people looking at
  * it.
  *
- * JobEventPublisher.publishChanged was written for exactly this and had no caller anywhere in the
+ * TestNotifications.FeedSink.publishChanged was written for exactly this and had no caller anywhere in the
  * backend -- the publisher was injected into this service and never touched. The jobs table
  * already branches on job.updated, job.toggled and job.deleted, so those branches were simply
  * unreachable: an edit made in one tab, or by a colleague, stayed invisible in another until
@@ -59,14 +57,14 @@ public class SourceJobAnnouncementTest {
     @Mock private SchedulerRepository schedulerRepository;
     @Mock private SourceTaskRepository sourceTaskRepository;
     @Mock private JobAuditLogRepository jobAuditLogRepository;
-    @Mock private JobEventPublisher jobEventPublisher;
+    @Mock private TestNotifications.FeedSink jobEventPublisher;
     @Mock private JobQueueRepository jobQueueRepository;
     @Mock private LookupDataRepository lookupDataRepository;
     @Mock private AppUserRepository appUserRepository;
     @Mock private ProducerBulkEngine producerBulkEngine;
     @Mock private TenantFilterHelper tenantFilterHelper;
     @Mock private OpenSearchAuditLogClient openSearchAuditLogClient;
-    @Mock private NotificationCenterService notificationCenterService;
+    @Mock private TestNotifications.NoticeSink notificationCenterService;
     @Mock private EntityManager entityManager;
     @Mock private UserNameResolver userNameResolver;
 
@@ -78,7 +76,7 @@ public class SourceJobAnnouncementTest {
             this.sourceTaskRepository, this.jobAuditLogRepository,
             this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
-            TestNotifications.inProcess(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
+            TestNotifications.recording(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);
         em.set(this.service, this.entityManager);

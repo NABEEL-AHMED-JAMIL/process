@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import org.barco.notifications.contract.MailRequested;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -8,7 +9,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
-import process.emailer.EmailMessagesFactory;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.AppUser;
@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import process.notifications.TestNotifications;
-import process.emailer.TemplateType;
 import static org.mockito.ArgumentMatchers.eq;
 
 /**
@@ -50,7 +49,7 @@ public class TenantRequestServiceImplTest {
     @Mock private TenantRepository tenantRepository;
     @Mock private AppUserRepository appUserRepository;
     @Mock private PasswordEncoder passwordEncoder;
-    @Mock private EmailMessagesFactory emailMessagesFactory;
+    @Mock private TestNotifications.MailSink emailMessagesFactory;
 
     private TenantRequestServiceImpl service;
 
@@ -58,7 +57,7 @@ public class TenantRequestServiceImplTest {
     void setUp() {
         this.service = new TenantRequestServiceImpl(this.tenantRequestRepository,
             this.tenantRepository, this.appUserRepository, this.passwordEncoder,
-            TestNotifications.inProcess(null, null, null, this.emailMessagesFactory));
+            TestNotifications.recording(null, null, null, this.emailMessagesFactory));
         ReflectionTestUtils.setField(this.service, "consoleUrl", "http://localhost:4400");
     }
 
@@ -156,7 +155,7 @@ public class TenantRequestServiceImplTest {
         when(this.appUserRepository.findByUsernameAndStatusNot("jane@example.com", Status.Delete))
             .thenReturn(Optional.empty());
         when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
-        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         ResponseDto response = this.service.approve(9L, null);
@@ -166,7 +165,7 @@ public class TenantRequestServiceImplTest {
         // (MailExtras), never carried in the contract event that crosses the port.
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.Map<String, Object>> body = ArgumentCaptor.forClass(java.util.Map.class);
-        verify(this.emailMessagesFactory).sendTemplate(eq(TemplateType.TENANT_WELCOME), eq("jane@example.com"), any(),
+        verify(this.emailMessagesFactory).sendTemplate(eq(MailRequested.Template.TENANT_WELCOME), eq("jane@example.com"), any(),
             anyString(), body.capture(), any(), any(), any());
         assertThat(body.getValue().get("temporary_password")).isNotNull();
         ArgumentCaptor<Tenant> tenant = ArgumentCaptor.forClass(Tenant.class);
@@ -236,7 +235,7 @@ public class TenantRequestServiceImplTest {
         when(this.appUserRepository.findByUsernameAndStatusNot("jane@example.com", Status.Delete))
             .thenReturn(Optional.empty());
         lenient().when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
-        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
             .thenReturn("Error: SMTP timed out");
 
         ResponseDto response = this.service.approve(9L, null);
@@ -258,7 +257,7 @@ public class TenantRequestServiceImplTest {
         when(this.appUserRepository.findByUsernameAndStatusNot("jane@example.com", Status.Delete))
             .thenReturn(Optional.empty());
         lenient().when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
-        lenient().when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
+        lenient().when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         this.service.approve(9L, "Acme EU!!");

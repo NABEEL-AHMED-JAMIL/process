@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import process.emailer.EmailMessagesFactory;
 import process.model.dto.AppUserDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
@@ -14,7 +13,6 @@ import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
-import process.model.service.NotificationCenterService;
 import process.model.service.PageAccessService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
@@ -58,13 +56,13 @@ public class AppUserServiceImplFailClosedTest {
     @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
-    private EmailMessagesFactory emailMessagesFactory;
+    private TestNotifications.MailSink emailMessagesFactory;
     @Mock
     private UserNameResolver userNameResolver;
     @Mock
     private StorageBrowserService storageBrowserService;
     @Mock
-    private NotificationCenterService notificationCenterService;
+    private TestNotifications.NoticeSink notificationCenterService;
     @Mock
     private PageAccessService pageAccessService;
 
@@ -73,7 +71,7 @@ public class AppUserServiceImplFailClosedTest {
     @BeforeEach
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, TestNotifications.inProcess(null, null, this.notificationCenterService, this.emailMessagesFactory),
+            this.passwordEncoder, TestNotifications.recording(null, null, this.notificationCenterService, this.emailMessagesFactory),
             this.userNameResolver, this.storageBrowserService, this.pageAccessService);
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }

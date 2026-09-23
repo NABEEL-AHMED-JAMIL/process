@@ -57,16 +57,6 @@
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-websocket</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
@@ -227,19 +217,6 @@
             <version>3.15</version>
         </dependency>
 
-        <!-- Velocity -->
-        <dependency>
-            <groupId>org.apache.velocity</groupId>
-            <artifactId>velocity</artifactId>
-            <version>1.7</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.velocity</groupId>
-            <artifactId>velocity-tools</artifactId>
-            <version>2.0</version>
-        </dependency>
-
         <!-- Utils -->
         <dependency>
             <groupId>commons-io</groupId>
@@ -277,6 +254,13 @@
             <version>4.12.0</version>
         </dependency>
 
+        <!-- Declared, not borrowed: JobDetailValidation uses StringUtils, and the commons-lang it
+             used to import only ever arrived through Velocity, which left with the mailer (MIG-22). -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
@@ -285,12 +269,6 @@
 
         <!-- Same SDK and version as s3 above. Outbound mail goes through SES rather than SMTP:
              see process.emailer.SesMailSender for why, and for how it points at LocalStack. -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>ses</artifactId>
-            <version>2.25.60</version>
-        </dependency>
-
         <!-- Analytics Studio's query engine. Embedded, so there is no server to operate: it runs
              in this JVM and reads object storage over the S3 protocol through its httpfs
              extension, which means a 1 GB scan never streams through Spring. It is deliberately

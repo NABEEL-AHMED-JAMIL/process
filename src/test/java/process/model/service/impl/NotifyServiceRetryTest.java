@@ -12,7 +12,6 @@ import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
-import process.socket.JobEventPublisher;
 
 import java.util.Optional;
 
@@ -52,14 +51,14 @@ public class NotifyServiceRetryTest {
     @Mock private BulkAction bulkAction;
     @Mock private JobMail jobMail;
     @Mock private TransactionServiceImpl transactionService;
-    @Mock private JobEventPublisher jobEventPublisher;
+    @Mock private TestNotifications.FeedSink jobEventPublisher;
 
     private NotifyServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail,
-            this.transactionService, TestNotifications.inProcess(this.jobEventPublisher, null, null, null));
+            this.transactionService, TestNotifications.recording(this.jobEventPublisher, null, null, null));
     }
 
     /** A job mid-run that wants failure mail, so a suppressed one is visible as suppressed. */

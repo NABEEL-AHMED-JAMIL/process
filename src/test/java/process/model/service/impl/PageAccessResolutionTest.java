@@ -15,7 +15,6 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
 import process.model.repository.TenantRepository;
 import process.model.repository.UserPageAccessRepository;
-import process.model.service.NotificationCenterService;
 import process.security.PageAccessCache;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
@@ -53,7 +52,7 @@ public class PageAccessResolutionTest {
 
     @Mock private PageAccessProfileRepository profileRepository;
     @Mock private AppUserRepository appUserRepository;
-    @Mock private NotificationCenterService notificationCenterService;
+    @Mock private TestNotifications.NoticeSink notificationCenterService;
     @Mock private UserNameResolver userNameResolver;
     @Mock private TenantRepository tenantRepository;
     @Mock private UserPageAccessRepository exceptionRepository;
@@ -63,7 +62,7 @@ public class PageAccessResolutionTest {
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            TestNotifications.inProcess(null, null, this.notificationCenterService, null), this.userNameResolver, new PageAccessCache(), this.tenantRepository,
+            TestNotifications.recording(null, null, this.notificationCenterService, null), this.userNameResolver, new PageAccessCache(), this.tenantRepository,
             this.exceptionRepository);
         lenient().when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(any(), any()))
             .thenReturn(Optional.empty());
