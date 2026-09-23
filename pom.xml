@@ -17,7 +17,17 @@
     <description>This is bulk engine to run the kafka source job.</description>
 
     <properties>
-        <java.version>17</java.version>
+        <!--
+          Bytecode level, not the JDK you build or run on: any JDK from 17 up compiles and runs
+          this. It has to stay at 1.8 while the parent is Spring Boot 2.3.2, whose bundled ASM
+          reads class files up to Java 14. At 17 the build compiled cleanly and then failed at
+          spring-boot-maven-plugin:repackage with "Unsupported class file major version 61",
+          so no deployable jar could be made; and Spring's component scan at startup reads
+          the same class files, so the application would not have started either. Nothing in
+          the source needs a newer level: a clean build at 1.8 packages without change.
+          Moving to 17 means moving the parent to Spring Boot 2.7 first.
+        -->
+        <java.version>1.8</java.version>
         <commons-net.version>3.6</commons-net.version>
         <swagger.version>2.9.2</swagger.version>
         <jodconverter.version>4.4.7</jodconverter.version>
