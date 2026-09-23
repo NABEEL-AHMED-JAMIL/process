@@ -122,6 +122,39 @@ services:
     volumes:
       - redisinsight_data:/data
 
+  # AWS for local development: S3 for the platform's two buckets (etl-avatar, etl-config -- billing
+  # documents live under billing/ in the latter) and SES for all outbound mail. It used to be a
+  # container started by hand, declared nowhere, so it vanished and nothing said how to bring it
+  # back. Declared here, with localstack/init-platform.sh recreating the buckets and the verified
+  # sender on every start. process reaches it through host.docker.internal:4566 (AWS_ENDPOINT).
+  #
+  # The image needs an auth token: LocalStack 2026.x quits at start without one ("License
+  # activation failed"), ACTIVATE_PRO=0 included. Supply it from the environment or a .env file
+  # beside this compose file -- never written here -- and start it with its profile:
+  #
+  #   LOCALSTACK_AUTH_TOKEN=... docker compose --profile aws up -d localstack
+  #
+  # The profile keeps a plain `docker compose up` from starting a container that can only
+  # crash-loop while no token is set.
+  localstack:
+    image: localstack/localstack-pro:latest
+    container_name: localstack-aws
+    profiles: ["aws"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:-}
+      SERVICES: s3,ses
+    volumes:
+      - ./localstack/init-platform.sh:/etc/localstack/init/ready.d/init-platform.sh:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/init/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
   # Spring Boot Application
   process_app:
     build:
