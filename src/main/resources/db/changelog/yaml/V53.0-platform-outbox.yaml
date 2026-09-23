@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 53.0-platform-outbox
+      author: nabeel.amd93
+      description: "platform_outbox: events written with the state change, published after commit (MIG-22)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V53.0-platform-outbox/V53__platform_outbox.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP TABLE IF EXISTS public.platform_outbox;

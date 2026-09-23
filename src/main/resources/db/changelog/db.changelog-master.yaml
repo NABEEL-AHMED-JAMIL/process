@@ -26,3 +26,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V51.0-one-invoice-per-month-unique-receipts.yaml
   - include:
       file: db/changelog/yaml/V52.0-notification-moves-to-notifications-db.yaml
+  - include:
+      file: db/changelog/yaml/V53.0-platform-outbox.yaml
