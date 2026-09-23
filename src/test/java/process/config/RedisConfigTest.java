@@ -191,13 +191,19 @@ public class RedisConfigTest {
             "a write that threw changed nothing and must not clear a week of extractions on its way out");
     }
 
+    /**
+     * Since ADR-013 a write evicts Storage's own cache, fileChatMetadata, and ANNOUNCES the change for
+     * Media's, fileChatExtract, which Storage cannot reach once it is a service. The old file's full
+     * text is still gone after the write -- Media drops it on the announcement, pinned by
+     * StorageChangeAnnouncementTest here and ExtractionInvalidationTest in media-service.
+     */
     private void assertEvictsBothFileChatCaches(String methodName, Class<?>... parameterTypes) throws Exception {
         CacheEvict evict = this.evictOn(methodName, parameterTypes);
         List<String> caches = Arrays.asList(evict.cacheNames());
-        assertTrue(caches.contains("fileChatExtract"),
-            methodName + " must evict fileChatExtract or the old file's full text outlives it: " + caches);
         assertTrue(caches.contains("fileChatMetadata"),
             methodName + " must evict fileChatMetadata or the stale etag answers for 30s more: " + caches);
+        assertTrue(!caches.contains("fileChatExtract"),
+            methodName + " must not reach Media's fileChatExtract; it announces the change instead (ADR-013): " + caches);
         assertTrue(evict.allEntries(), methodName + " has no precise key to evict; it must clear");
     }
 

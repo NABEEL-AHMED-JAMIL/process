@@ -280,6 +280,13 @@
             <version>1.2.0</version>
             <scope>test</scope>
         </dependency>
+        <!-- platform-commons directly, at 1.3.0: ObjectChanged, Storage's announcement to Media (ADR-013).
+             It overrides the 1.1.0 the notifications contract brings. -->
+        <dependency>
+            <groupId>org.barco</groupId>
+            <artifactId>platform-commons</artifactId>
+            <version>1.3.0</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

@@ -45,7 +45,7 @@ public class PlatformBucketAccessTest {
         mock(StorageConnectionRepository.class),
         mock(StorageClientFactory.class),
         mock(ObjectStorageService.class),
-        AVATAR_BUCKET, CONFIG_BUCKET);
+        AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
 
     /** The guard reads the caller from the thread, so a case is set up by becoming that caller. */
     private boolean ownProfile(Long callerId, String bucket, String key) {

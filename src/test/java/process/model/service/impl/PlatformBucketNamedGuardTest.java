@@ -60,7 +60,7 @@ public class PlatformBucketNamedGuardTest {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
             this.legacyS3,
-            AVATAR_BUCKET, CONFIG_BUCKET);
+            AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
     }
 
     @AfterEach

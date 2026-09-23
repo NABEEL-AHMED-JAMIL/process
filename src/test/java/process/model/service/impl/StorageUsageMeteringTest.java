@@ -54,7 +54,7 @@ class StorageUsageMeteringTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new StorageBrowserServiceImpl(this.lookups, this.connections, this.factory, this.store, "etl-avatar", "etl-config");
+        this.service = new StorageBrowserServiceImpl(this.lookups, this.connections, this.factory, this.store, "etl-avatar", "etl-config", org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
         ReflectionTestUtils.setField(this.service, "meter", this.meter);
         StorageConnection connection = new StorageConnection();
         connection.setStorageConnectionId(1089L); connection.setTenantId(TENANT); connection.setAlias(BUCKET);

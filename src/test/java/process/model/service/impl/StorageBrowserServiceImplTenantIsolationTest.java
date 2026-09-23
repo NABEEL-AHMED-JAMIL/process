@@ -75,7 +75,7 @@ public class StorageBrowserServiceImplTenantIsolationTest {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
             this.objectStorageService,
-            AVATAR_BUCKET, CONFIG_BUCKET);
+            AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
 
         // The guard resolves by alias alone. Matching only Active rows let a retired or
         // soft-deleted platform connection fall through to the legacy lookup path, where a tenant

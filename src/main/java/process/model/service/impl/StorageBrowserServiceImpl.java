@@ -20,6 +20,8 @@ import process.model.enums.Status;
 import process.model.pojo.StorageConnection;
 import process.model.repository.StorageConnectionRepository;
 import process.model.service.ObjectStorageService;
+import process.storage.ObjectChangeLog;
+import org.barco.platform.storage.ObjectChanged;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.billing.MeterClient;
@@ -146,13 +148,22 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         return sizes;
     }
 
+    /**
+     * Where every write that can leave derived data stale announces itself -- before the write
+     * (ADR-013). Media's extracted-text cache is dropped on these announcements; it is not Storage's
+     * to evict, and the @CacheEvicts below now name only Storage's own metadata cache.
+     */
+    private final ObjectChangeLog changes;
+
     public StorageBrowserServiceImpl(
         LookupDataCacheService lookupDataCacheService,
         StorageConnectionRepository storageConnectionRepository,
         StorageClientFactory storageClientFactory,
         @Qualifier("s3ObjectStorageService") ObjectStorageService s3ObjectStorageService,
         @Value(StoragePropertyDefaults.AVATAR_BUCKET) String avatarBucket,
-        @Value(StoragePropertyDefaults.CONFIG_BUCKET) String configBucket) {
+        @Value(StoragePropertyDefaults.CONFIG_BUCKET) String configBucket,
+        ObjectChangeLog changes) {
+        this.changes = changes;
         this.lookupDataCacheService = lookupDataCacheService;
         this.storageConnectionRepository = storageConnectionRepository;
         this.storageClientFactory = storageClientFactory;
@@ -338,7 +349,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
      * nothing in storage, and must not throw away a week of extractions on its way out.
      */
     @Override
-    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
+    @CacheEvict(value = "fileChatMetadata", allEntries = true)
     public void uploadObject(String bucket, String prefix, MultipartFile file) {
         this.uploadMultipart(bucket, prefix, file);
     }
@@ -359,6 +370,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         // literal "a\b.txt" on a Linux JVM -- composes a key every read path would then refuse.
         this.requireSafeKey(key);
         ObjectStorageService service = this.resolveServiceForCaller(bucket, key);
+        this.announce("uploaded", () -> this.changes.object(bucket, key, ObjectChanged.Reason.UPLOAD));
         String extension = ContentTypeUtil.extensionOf(safeFileName);
         if (!AudioTranscodeUtil.isAudioExtension(extension)) {
             try {
@@ -390,11 +402,13 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
 
     @Override
     // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
-    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
+    @CacheEvict(value = "fileChatMetadata", allEntries = true)
     public void uploadObject(String bucket, String key, InputStream inputStream, long size, String contentType) {
         this.meteredWrite(bucket, size);
         this.requireSafeKey(key);
-        this.resolveServiceForCaller(bucket, key).uploadObject(bucket, key, inputStream, size, contentType);
+        ObjectStorageService service = this.resolveServiceForCaller(bucket, key);
+        this.announce("uploaded", () -> this.changes.object(bucket, key, ObjectChanged.Reason.UPLOAD));
+        service.uploadObject(bucket, key, inputStream, size, contentType);
     }
 
     /**
@@ -411,10 +425,12 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
      */
     @Override
     // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
-    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
+    @CacheEvict(value = "fileChatMetadata", allEntries = true)
     public void uploadForWorkflow(String bucket, String key, InputStream inputStream, long size, String contentType) {
         this.requireSafeKey(key);
-        this.resolveService(bucket, true).uploadObject(bucket, key, inputStream, size, contentType);
+        ObjectStorageService service = this.resolveService(bucket, true);
+        this.announce("uploaded", () -> this.changes.object(bucket, key, ObjectChanged.Reason.UPLOAD));
+        service.uploadObject(bucket, key, inputStream, size, contentType);
     }
 
     /** Trusted, on the same terms as uploadForWorkflow above: the caller owns the row this key came from. */
@@ -449,18 +465,19 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     // The case that motivated all of this: without the eviction, the deleted file's full
     // extracted plaintext stayed in Redis under fileChatExtract::<bucket>:<key>:<etag> -- an etag
     // this method never sees -- for the remaining seven days. See uploadObject above.
-    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
+    @CacheEvict(value = "fileChatMetadata", allEntries = true)
     public void deleteObject(String bucket, String key) {
         this.requireSafeKey(key);
         ObjectStorageService service = this.resolveServiceForCaller(bucket, key);
         long size = this.sizeOf(service, bucket, key);
+        this.announce("deleted", () -> this.changes.object(bucket, key, ObjectChanged.Reason.DELETE));
         service.deleteObject(bucket, key);
         this.meteredDelete(bucket, key, size);
     }
 
     @Override
     // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above.
-    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
+    @CacheEvict(value = "fileChatMetadata", allEntries = true)
     public void deleteObjects(String bucket, List<String> keys) {
         if (keys == null || keys.isEmpty()) {
             throw new IllegalArgumentException("No keys given to delete.");
@@ -473,6 +490,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         for (String key : keys) {
             sizes.put(key, this.sizeOf(service, bucket, key));
         }
+        this.announce("deleted", () -> keys.forEach(key -> this.changes.object(bucket, key, ObjectChanged.Reason.DELETE)));
         service.deleteObjects(bucket, keys);
         for (String key : keys) {
             this.meteredDelete(bucket, key, sizes.getOrDefault(key, 0L));
@@ -483,12 +501,13 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     // Evicts for the reason spelled out on uploadObject(String, String, MultipartFile) above, and
     // this one could not be keyed even in principle: the set of object keys under the folder is
     // never enumerated here, so there is no per-key eviction to issue.
-    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
+    @CacheEvict(value = "fileChatMetadata", allEntries = true)
     public void deleteFolder(String bucket, String folderKey) {
         this.requireFolderKey(folderKey);
         this.requireSafeKey(folderKey);
         ObjectStorageService service = this.resolveServiceForCaller(bucket, folderKey);
         Map<String, Long> sizes = this.sizesUnder(service, bucket, folderKey);
+        this.announce("deleted", () -> this.changes.prefix(bucket, folderKey, ObjectChanged.Reason.DELETE_FOLDER));
         service.deleteFolder(bucket, folderKey);
         for (Map.Entry<String, Long> gone : sizes.entrySet()) {
             this.meteredDelete(bucket, gone.getKey(), gone.getValue());
@@ -499,7 +518,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     // A rename is a move: every key under the old prefix stops resolving and the same bytes
     // appear under a new one, so both caches are wrong about both prefixes afterwards. Same
     // unenumerated-key problem as deleteFolder. See uploadObject above.
-    @CacheEvict(value = {"fileChatExtract", "fileChatMetadata"}, allEntries = true)
+    @CacheEvict(value = "fileChatMetadata", allEntries = true)
     public void renameFolder(String bucket, String folderKey, String newFolderName) {
         this.requireFolderKey(folderKey);
         this.requireSafeKey(folderKey);
@@ -523,10 +542,30 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         ObjectStorageService service = this.resolveServiceForCaller(bucket, folderKey);
         // A rename is a copy and a delete of every object under the prefix: written once, deleted once.
         Map<String, Long> sizes = this.sizesUnder(service, bucket, folderKey);
+        // Both prefixes: the old one's objects are gone from there, and a copy can keep its etag, so
+        // text cached for an earlier object at the new path must not be served for the one moving in.
+        this.announce("renamed", () -> {
+            this.changes.prefix(bucket, folderKey, ObjectChanged.Reason.RENAME);
+            this.changes.prefix(bucket, newPrefix, ObjectChanged.Reason.RENAME);
+        });
         service.renameFolder(bucket, folderKey, newPrefix);
         for (Map.Entry<String, Long> moved : sizes.entrySet()) {
             this.meteredWrite(bucket, moved.getValue());
             this.meteredDelete(bucket, moved.getKey(), moved.getValue());
+        }
+    }
+
+    /**
+     * Records the announcement, or refuses the write. Recording comes first so that a write never
+     * happens without its announcement: if the outbox cannot take it, nothing is written and the
+     * caller hears why (ADR-013). A write that fails after this costs Media one cache miss.
+     */
+    private void announce(String verb, Runnable record) {
+        try {
+            record.run();
+        } catch (RuntimeException unrecorded) {
+            throw new IllegalStateException("The object was not " + verb
+                + ": its change could not be recorded, so nothing was changed. Try again.", unrecorded);
         }
     }
 

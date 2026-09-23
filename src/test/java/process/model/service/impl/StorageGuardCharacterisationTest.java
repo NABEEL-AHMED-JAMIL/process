@@ -79,7 +79,7 @@ class StorageGuardCharacterisationTest {
     @BeforeEach
     void setUp() {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService, this.storageConnectionRepository,
-            this.storageClientFactory, this.objectStorageService, AVATAR_BUCKET, CONFIG_BUCKET);
+            this.storageClientFactory, this.objectStorageService, AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
         this.stub(PLATFORM_BUCKET, null, StorageProvider.MINIO);
         this.stub(TENANT_A_BUCKET, TENANT_A, StorageProvider.MINIO);
         this.stub(TENANT_B_BUCKET, TENANT_B, StorageProvider.MINIO);

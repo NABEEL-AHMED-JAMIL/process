@@ -59,7 +59,7 @@ public class OwnAvatarFolderGuardTest {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
             this.minio,
-            AVATAR_BUCKET, CONFIG_BUCKET);
+            AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
         StorageConnection platform = new StorageConnection();
         platform.setStorageConnectionId(700L);
         platform.setTenantId(null);
