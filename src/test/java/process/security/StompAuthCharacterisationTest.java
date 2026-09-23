@@ -90,7 +90,7 @@ class StompAuthCharacterisationTest {
     }
 
     @Test
-    void aDestinationThatIsNotATenantJobFeedIsNotTheInterceptorsBusiness() {
+    void theOldConsolesUserQueueNeedsNoTokenOnTheFrame() {
         assertThat(allowed("/user/queue/notifications", null)).isTrue();
     }
 
