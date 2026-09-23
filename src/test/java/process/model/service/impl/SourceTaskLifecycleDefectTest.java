@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import java.math.BigInteger;
+import process.notifications.TestNotifications;
 
 /**
  * Three things a task's own endpoints got wrong about the request they were given.
@@ -77,7 +78,7 @@ public class SourceTaskLifecycleDefectTest {
         this.service = new SourceTaskServiceImpl(this.bulkExcel, this.queryService,
             this.sourceJobRepository, this.sourceTaskRepository, this.sourceTaskTypeRepository,
             this.tenantFilterHelper, new TaskPayloadLocationUtil(), this.tenantRepository,
-            this.notificationCenterService, this.userNameResolver);
+            TestNotifications.inProcess(null, null, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceTaskServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);
         em.set(this.service, this.entityManager);

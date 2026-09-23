@@ -29,6 +29,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import process.notifications.TestNotifications;
 
 /**
  * That a failed run is offered another attempt, and that it is offered exactly the number it was
@@ -57,8 +58,8 @@ public class BulkActionRetryTest {
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, this.notificationService,
-            this.notificationCenterService, this.jobEventPublisher);
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.inProcess(this.jobEventPublisher,
+            this.notificationService, this.notificationCenterService, null));
     }
 
     private SourceJob job(int maxAttempts, int backoffSeconds) {

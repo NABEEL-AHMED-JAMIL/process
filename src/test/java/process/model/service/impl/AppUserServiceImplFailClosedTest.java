@@ -33,6 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import static org.mockito.Mockito.when;
+import process.notifications.TestNotifications;
 
 /**
  * The two edges where a check used to fall open instead of closed.
@@ -72,8 +73,8 @@ public class AppUserServiceImplFailClosedTest {
     @BeforeEach
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.emailMessagesFactory, this.userNameResolver,
-            this.storageBrowserService, this.notificationCenterService, this.pageAccessService);
+            this.passwordEncoder, TestNotifications.inProcess(null, null, this.notificationCenterService, this.emailMessagesFactory),
+            this.userNameResolver, this.storageBrowserService, this.pageAccessService);
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }
 

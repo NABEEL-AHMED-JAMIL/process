@@ -23,7 +23,6 @@ import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.repository.TenantRepository;
-import process.model.service.NotificationCenterService;
 import process.model.service.SourceTaskService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -44,6 +43,8 @@ import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.ERROR;
 import java.util.function.Consumer;
+import process.notifications.Notices;
+import process.notifications.NotificationPort;
 
 /**
  * @author Nabeel Ahmed
@@ -61,7 +62,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private final TenantFilterHelper tenantFilterHelper;
     private final TaskPayloadLocationUtil taskPayloadLocationUtil;
     private final TenantRepository tenantRepository;
-    private final NotificationCenterService notificationCenterService;
+    private final NotificationPort notifications;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -77,7 +78,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         TenantFilterHelper tenantFilterHelper,
         TaskPayloadLocationUtil taskPayloadLocationUtil,
         TenantRepository tenantRepository,
-        NotificationCenterService notificationCenterService,
+        NotificationPort notifications,
         UserNameResolver userNameResolver) {
         this.userNameResolver = userNameResolver;
         this.bulkExcel = bulkExcel;
@@ -88,7 +89,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         this.tenantFilterHelper = tenantFilterHelper;
         this.taskPayloadLocationUtil = taskPayloadLocationUtil;
         this.tenantRepository = tenantRepository;
-        this.notificationCenterService = notificationCenterService;
+        this.notifications = notifications;
     }
 
     private ResponseDto resolveTenantIdForCreate(Long requestedTenantId, Consumer<Long> onResolved) {
@@ -718,9 +719,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                 }).collect(Collectors.toList()));
             this.sourceTaskRepository.save(sourceTask);
         });
-        this.notificationCenterService.create(TenantContext.getTenantId(), TenantContext.getAppUserId(),
-            NotificationType.BATCH_DONE, NotificationSeverity.INFO, "Batch upload finished",
-            String.format("Total %d tasks saved successfully.", sourceTaskValidations.size()), "/taskList");
+        this.notifications.notificationCreated(TenantContext.getTenantId(), Notices.notice(TenantContext.getAppUserId(), NotificationType.BATCH_DONE, NotificationSeverity.INFO, "Batch upload finished", String.format("Total %d tasks saved successfully.", sourceTaskValidations.size()), "/taskList"));
         return new ResponseDto(SUCCESS, String.format("Total %d task save successfully", sourceTaskValidations.size()));
         }
     }

@@ -16,7 +16,9 @@ import process.util.exception.ExceptionUtil;
 import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
 import java.util.Properties;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import static process.util.ProcessUtil.isNull;
 import java.util.LinkedHashMap;
@@ -224,6 +226,28 @@ public class EmailMessagesFactory {
             logger.error("An exception occurred while sending the user welcome email.");
             return "Error while Sending Mail";
         }
+    }
+
+    /**
+     * Any of the six templates, from a body map already built by the caller -- the path
+     * NotificationPort uses (MIG-20). The typed send* methods above predate the port and build their
+     * own maps; this one takes the map the contract event carries, so the producer decides what the
+     * mail says and Notifications only renders and sends it.
+     */
+    public String sendTemplate(TemplateType template, String recipient, List<String> cc, String subject,
+        Map<String, Object> bodyMap, byte[] attachmentBytes, String attachmentFilename, String attachmentContentType) {
+        EmailMessageDto emailMessageDto = new EmailMessageDto();
+        emailMessageDto.setRecipients(recipient);
+        if (cc != null && !cc.isEmpty()) {
+            emailMessageDto.setRecipientsMulti(new ArrayList<>(cc));
+        }
+        emailMessageDto.setSubject(subject);
+        emailMessageDto.setEmailTemplateName(template);
+        emailMessageDto.setBodyMap(bodyMap);
+        emailMessageDto.setAttachmentBytes(attachmentBytes);
+        emailMessageDto.setAttachmentFilename(attachmentFilename);
+        emailMessageDto.setAttachmentContentType(attachmentContentType);
+        return this.sendSimpleMail(emailMessageDto);
     }
 
     private String sendSimpleMail(EmailMessageDto emailContent) {

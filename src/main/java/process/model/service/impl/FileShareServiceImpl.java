@@ -5,7 +5,9 @@ import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.MailExtras;
+import process.notifications.NotificationPort;
+import process.notifications.StandardMails;
 import process.model.dto.BrowseObjectsResponseDto;
 import process.model.dto.BucketSummaryDto;
 import process.model.dto.FileShareRequestDto;
@@ -43,11 +45,11 @@ public class FileShareServiceImpl implements FileShareService {
     private static final int MAX_SHARE_FILES = 500;
 
     private final StorageBrowserService storageBrowserService;
-    private final EmailMessagesFactory emailMessagesFactory;
+    private final NotificationPort notifications;
 
-    public FileShareServiceImpl(StorageBrowserService storageBrowserService, EmailMessagesFactory emailMessagesFactory) {
+    public FileShareServiceImpl(StorageBrowserService storageBrowserService, NotificationPort notifications) {
         this.storageBrowserService = storageBrowserService;
-        this.emailMessagesFactory = emailMessagesFactory;
+        this.notifications = notifications;
     }
 
     @Override
@@ -110,9 +112,7 @@ public class FileShareServiceImpl implements FileShareService {
         byte[] zipBytes = this.buildZip(dto.getBucket(), files);
         String itemName = String.format("%d selected items", keys.size());
         String sizeLabel = String.format("%s (%d file%s)", formatSize(zipBytes.length), files.size(), files.size() == 1 ? "" : "s");
-        String result = this.emailMessagesFactory.sendFileShareEmail(
-            dto.getRecipientEmail().trim(), senderName, itemName, "Selection", true,
-            sizeLabel, dto.getMessage(), zipBytes, "selected-files.zip", "application/zip");
+        String result = this.shareMail(dto.getRecipientEmail().trim(), senderName, itemName, "Selection", true, sizeLabel, dto.getMessage(), zipBytes, "selected-files.zip", "application/zip");
         return this.toResponseDto(result);
     }
 
@@ -133,9 +133,7 @@ public class FileShareServiceImpl implements FileShareService {
                 formatSize((long) bytes.length), formatSize(MAX_SHARE_BYTES)));
         }
         try {
-            String result = this.emailMessagesFactory.sendFileShareEmail(
-                recipientEmail.trim(), TenantContext.getUsername(), itemName, "File", false,
-                formatSize((long) bytes.length), message, bytes, filename, contentType);
+            String result = this.shareMail(recipientEmail.trim(), TenantContext.getUsername(), itemName, "File", false, formatSize((long) bytes.length), message, bytes, filename, contentType);
             return this.toResponseDto(result);
         } catch (Exception ex) {
             logger.error("File Share: emailGeneratedFile failed for {}", filename, ex);
@@ -157,9 +155,7 @@ public class FileShareServiceImpl implements FileShareService {
         try (InputStream in = content.getContent()) {
             bytes = IOUtils.toByteArray(in);
         }
-        String result = this.emailMessagesFactory.sendFileShareEmail(
-            recipientEmail.trim(), senderName, metadata.getName(), "File", false,
-            formatSize(bytes.length), message, bytes, metadata.getName(), content.getContentType());
+        String result = this.shareMail(recipientEmail.trim(), senderName, metadata.getName(), "File", false, formatSize(bytes.length), message, bytes, metadata.getName(), content.getContentType());
         return this.toResponseDto(result);
     }
 
@@ -173,9 +169,7 @@ public class FileShareServiceImpl implements FileShareService {
         String trimmedKey = folderKey.substring(0, folderKey.length() - 1);
         String folderName = trimmedKey.contains("/") ? trimmedKey.substring(trimmedKey.lastIndexOf('/') + 1) : trimmedKey;
         String sizeLabel = String.format("%s (%d file%s)", formatSize(zipBytes.length), files.size(), files.size() == 1 ? "" : "s");
-        String result = this.emailMessagesFactory.sendFileShareEmail(
-            recipientEmail.trim(), senderName, folderName, "Folder", true,
-            sizeLabel, message, zipBytes, folderName + ".zip", "application/zip");
+        String result = this.shareMail(recipientEmail.trim(), senderName, folderName, "Folder", true, sizeLabel, message, zipBytes, folderName + ".zip", "application/zip");
         return this.toResponseDto(result);
     }
 
@@ -240,7 +234,7 @@ public class FileShareServiceImpl implements FileShareService {
         // Still SUCCESS: the message really was built and really was accepted. But a local
         // emulator stores it and never delivers, and "Email sent." then points someone at an
         // inbox that will never have it. This exact ambiguity cost a debugging session.
-        if (!this.emailMessagesFactory.deliversToRealInboxes()) {
+        if (!this.notifications.deliversMailToRealInboxes()) {
             return new ResponseDto(SUCCESS, "Accepted by the local mail sandbox — it is stored, "
                 + "not delivered. Clear aws.endpoint so mail goes to real SES to actually send.");
         }
@@ -258,4 +252,13 @@ public class FileShareServiceImpl implements FileShareService {
         return unitIndex == 0 ? String.format("%.0f %s", size, units[unitIndex]) : String.format("%.1f %s", size, units[unitIndex]);
     }
 
+
+    /** A file share through the port: Core builds the mail, Notifications renders and sends it. */
+    private String shareMail(String recipient, String senderName, String itemName, String itemType, boolean zipped,
+        String sizeLabel, String message, byte[] bytes, String filename, String contentType) {
+        return this.notifications.mailRequested(TenantContext.getTenantId(),
+            StandardMails.fileShare(recipient, senderName, itemName, itemType, zipped, sizeLabel, message,
+                filename, contentType, bytes.length),
+            MailExtras.attachment(bytes));
+    }
 }

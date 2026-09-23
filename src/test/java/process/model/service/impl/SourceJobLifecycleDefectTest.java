@@ -43,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
+import process.notifications.TestNotifications;
 
 /**
  * What a job's create and update paths do with the fields the caller actually sent.
@@ -85,10 +86,10 @@ public class SourceJobLifecycleDefectTest {
     @BeforeEach
     void setUp() throws Exception {
         this.service = new SourceJobServiceImpl(this.sourceJobRepository, this.schedulerRepository,
-            this.sourceTaskRepository, this.jobAuditLogRepository, this.jobEventPublisher,
+            this.sourceTaskRepository, this.jobAuditLogRepository,
             this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
-            this.notificationCenterService, this.userNameResolver);
+            TestNotifications.inProcess(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);
         em.set(this.service, this.entityManager);

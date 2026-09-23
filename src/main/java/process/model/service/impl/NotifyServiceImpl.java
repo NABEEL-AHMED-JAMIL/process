@@ -9,7 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.JobMail;
+import process.notifications.NotificationPort;
+import org.barco.notifications.contract.JobLogAppended;
 import process.engine.BulkAction;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
@@ -21,7 +23,6 @@ import process.model.service.NotifyService;
 import java.util.List;
 import java.util.Optional;
 import static process.util.ProcessUtil.ERROR;
-import process.socket.JobEventPublisher;
 
 /**
  * @author Nabeel Ahmed
@@ -38,19 +39,19 @@ public class NotifyServiceImpl implements NotifyService {
     private Logger logger = LoggerFactory.getLogger(NotifyServiceImpl.class);
 
     private final BulkAction bulkAction;
-    private final EmailMessagesFactory emailMessagesFactory;
+    private final JobMail jobMail;
     private final TransactionServiceImpl transactionService;
-    private final JobEventPublisher jobEventPublisher;
+    private final NotificationPort notifications;
 
     public NotifyServiceImpl(
         BulkAction bulkAction,
-        EmailMessagesFactory emailMessagesFactory,
+        JobMail jobMail,
         TransactionServiceImpl transactionService,
-        JobEventPublisher jobEventPublisher) {
+        NotificationPort notifications) {
         this.bulkAction = bulkAction;
-        this.emailMessagesFactory = emailMessagesFactory;
+        this.jobMail = jobMail;
         this.transactionService = transactionService;
-        this.jobEventPublisher = jobEventPublisher;
+        this.notifications = notifications;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -98,7 +99,7 @@ public class NotifyServiceImpl implements NotifyService {
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), newStatus);
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
-        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), currentStatus != newStatus);
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), jobQueue.getJobQueueId(), currentStatus != newStatus);
         if (newStatus == JobStatus.Failed || newStatus == JobStatus.Completed) {
             logger.info("Setting end date for job {}", jobQueue.getJobId());
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), jobQueue.getEndTime());
@@ -114,14 +115,14 @@ public class NotifyServiceImpl implements NotifyService {
                 logger.info("Job {} marked as Failed", jobQueue.getJobId());
                 if (job.get().isFailJob()) {
                     logger.info("Sending failure notification email for job {}", jobQueue.getJobId());
-                    this.emailMessagesFactory.sendSourceJobEmail(jobQueue, newStatus);
+                    this.jobMail.send(jobQueue, newStatus);
                 }
                 break;
             case Completed:
                 logger.info("Job {} marked as Completed", jobQueue.getJobId());
                 if (job.get().isCompleteJob()) {
                     logger.info("Sending completion notification email for job {}", jobQueue.getJobId());
-                    this.emailMessagesFactory.sendSourceJobEmail(jobQueue, newStatus);
+                    this.jobMail.send(jobQueue, newStatus);
                 }
                 break;
             default:
@@ -147,8 +148,8 @@ public class NotifyServiceImpl implements NotifyService {
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
         // The same pipeline callback that writes the line announces it, so an open run-logs
         // screen appends it instead of polling every five seconds for one that may not come.
-        this.jobEventPublisher.publishLog(job.get().getTenantId(), jobQueue.getJobId(),
-            jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
+        this.notifications.jobLogAppended(job.get().getTenantId(), new JobLogAppended().setJobId(jobQueue.getJobId())
+            .setJobQueueId(jobQueue.getJobQueueId()).setLineSeq(lineSeq(0)).setMessage(jobQueue.getJobStatusMessage()));
         logger.info("Successfully added logs for job {} queue {}", jobQueue.getJobId(), jobQueue.getJobQueueId());
         return new ResponseDto(String.format("Logs added for job %s queue %s", jobQueue.getJobId(), jobQueue.getJobQueueId()), jobQueue);
     }
@@ -170,8 +171,9 @@ public class NotifyServiceImpl implements NotifyService {
             return new ResponseDto(ERROR, String.format("Queue with id %s does not belong to job %s", jobQueueId, jobId));
         }
         this.bulkAction.saveJobAuditLogs(jobQueueId, messages);
-        for (String message : messages) {
-            this.jobEventPublisher.publishLog(job.get().getTenantId(), jobId, jobQueueId, message);
+        for (int i = 0; i < messages.size(); i++) {
+            this.notifications.jobLogAppended(job.get().getTenantId(), new JobLogAppended().setJobId(jobId)
+                .setJobQueueId(jobQueueId).setLineSeq(lineSeq(i)).setMessage(messages.get(i)));
         }
         return new ResponseDto(
             String.format("%s log line(s) added for job %s queue %s", messages.size(), jobId, jobQueueId),
@@ -216,4 +218,14 @@ public class NotifyServiceImpl implements NotifyService {
         }
     }
 
+
+    /**
+     * A log line's position in its run, which the contract dedupes a redelivered line on. Audit lines
+     * are keyed by random UUIDs in OpenSearch, so there is no stored sequence to use: this is the
+     * receipt time in microseconds plus the line's index in its batch -- unique within the run and
+     * increasing with time.
+     */
+    private static long lineSeq(int indexInBatch) {
+        return System.currentTimeMillis() * 1000L + indexInBatch;
+    }
 }

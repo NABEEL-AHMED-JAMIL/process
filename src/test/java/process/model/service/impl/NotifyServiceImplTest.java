@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.JobMail;
 import process.engine.BulkAction;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static process.util.ProcessUtil.ERROR;
+import process.notifications.TestNotifications;
 
 /**
  * The worker callback is how nearly every run reports its outcome, and it had no test at all --
@@ -46,7 +47,7 @@ public class NotifyServiceImplTest {
     private static final long QUEUE_OF_ANOTHER_JOB = 91423L;
 
     @Mock private BulkAction bulkAction;
-    @Mock private EmailMessagesFactory emailMessagesFactory;
+    @Mock private JobMail jobMail;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobEventPublisher jobEventPublisher;
 
@@ -54,8 +55,8 @@ public class NotifyServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new NotifyServiceImpl(this.bulkAction, this.emailMessagesFactory,
-            this.transactionService, this.jobEventPublisher);
+        this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail,
+            this.transactionService, TestNotifications.inProcess(this.jobEventPublisher, null, null, null));
     }
 
     /** A job mid-run, so both Failed and Completed are valid next states. */
@@ -98,7 +99,7 @@ public class NotifyServiceImplTest {
 
         this.service.changeState(callback(JobStatus.Failed));
 
-        verify(this.emailMessagesFactory).sendSourceJobEmail(any(SourceJobQueueDto.class), eq(JobStatus.Failed));
+        verify(this.jobMail).send(any(SourceJobQueueDto.class), eq(JobStatus.Failed));
     }
 
     @Test
@@ -108,7 +109,7 @@ public class NotifyServiceImplTest {
 
         this.service.changeState(callback(JobStatus.Failed));
 
-        verify(this.emailMessagesFactory, never()).sendSourceJobEmail(any(SourceJobQueueDto.class), any(JobStatus.class));
+        verify(this.jobMail, never()).send(any(SourceJobQueueDto.class), any(JobStatus.class));
     }
 
     @Test
@@ -117,7 +118,7 @@ public class NotifyServiceImplTest {
 
         this.service.changeState(callback(JobStatus.Completed));
 
-        verify(this.emailMessagesFactory).sendSourceJobEmail(any(SourceJobQueueDto.class), eq(JobStatus.Completed));
+        verify(this.jobMail).send(any(SourceJobQueueDto.class), eq(JobStatus.Completed));
     }
 
     @Test
@@ -126,7 +127,7 @@ public class NotifyServiceImplTest {
 
         this.service.changeState(callback(JobStatus.Completed));
 
-        verify(this.emailMessagesFactory, never()).sendSourceJobEmail(any(SourceJobQueueDto.class), any(JobStatus.class));
+        verify(this.jobMail, never()).send(any(SourceJobQueueDto.class), any(JobStatus.class));
     }
 
     @Test
@@ -134,10 +135,10 @@ public class NotifyServiceImplTest {
         givenJob(runningJob(true, true));
 
         this.service.changeState(callback(JobStatus.Failed));
-        verify(this.emailMessagesFactory).sendSourceJobEmail(any(SourceJobQueueDto.class), eq(JobStatus.Failed));
+        verify(this.jobMail).send(any(SourceJobQueueDto.class), eq(JobStatus.Failed));
 
         this.service.changeState(callback(JobStatus.Completed));
-        verify(this.emailMessagesFactory).sendSourceJobEmail(any(SourceJobQueueDto.class), eq(JobStatus.Completed));
+        verify(this.jobMail).send(any(SourceJobQueueDto.class), eq(JobStatus.Completed));
     }
 
     @Test
@@ -147,7 +148,7 @@ public class NotifyServiceImplTest {
         this.service.changeState(callback(JobStatus.Failed));
         this.service.changeState(callback(JobStatus.Completed));
 
-        verify(this.emailMessagesFactory, never()).sendSourceJobEmail(any(SourceJobQueueDto.class), any(JobStatus.class));
+        verify(this.jobMail, never()).send(any(SourceJobQueueDto.class), any(JobStatus.class));
     }
 
     @Test
@@ -156,7 +157,7 @@ public class NotifyServiceImplTest {
 
         this.service.changeState(callback(JobStatus.Running));
 
-        verify(this.emailMessagesFactory, never()).sendSourceJobEmail(any(SourceJobQueueDto.class), any(JobStatus.class));
+        verify(this.jobMail, never()).send(any(SourceJobQueueDto.class), any(JobStatus.class));
     }
 
     @Test
@@ -176,7 +177,7 @@ public class NotifyServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(ERROR);
         verify(this.bulkAction, never()).changeJobStatus(anyLong(), any(JobStatus.class));
         verify(this.bulkAction, never()).saveJobAuditLogs(anyLong(), anyString());
-        verify(this.emailMessagesFactory, never()).sendSourceJobEmail(any(SourceJobQueueDto.class), any(JobStatus.class));
+        verify(this.jobMail, never()).send(any(SourceJobQueueDto.class), any(JobStatus.class));
     }
 
     @Test

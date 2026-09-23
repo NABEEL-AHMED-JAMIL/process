@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import java.util.Arrays;
+import process.notifications.TestNotifications;
 
 /**
  * Jobs are the core tenant-scoped record, and nothing tested that one tenant cannot reach
@@ -67,10 +68,10 @@ public class SourceJobServiceImplTenantIsolationTest {
     @BeforeEach
     void setUp() throws Exception {
         this.service = new SourceJobServiceImpl(this.sourceJobRepository, this.schedulerRepository,
-            this.sourceTaskRepository, this.jobAuditLogRepository, this.jobEventPublisher,
+            this.sourceTaskRepository, this.jobAuditLogRepository,
             this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
-            this.notificationCenterService, this.userNameResolver);
+            TestNotifications.inProcess(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
         // entityManager is injected, not constructor-supplied.
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);

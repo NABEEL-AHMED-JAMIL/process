@@ -16,7 +16,6 @@ import process.model.pojo.SourceTask;
 import process.model.pojo.Scheduler;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
-import process.model.service.NotificationCenterService;
 import process.model.service.SourceJobBulkService;
 import process.security.TenantContext;
 import process.util.ProcessTimeUtil;
@@ -30,6 +29,8 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
+import process.notifications.Notices;
+import process.notifications.NotificationPort;
 
 /**
  * @author Nabeel Ahmed
@@ -45,18 +46,18 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
     private final TransactionServiceImpl transactionService;
     private final SourceJobRepository sourceJobRepository;
     private final SchedulerRepository schedulerRepository;
-    private final NotificationCenterService notificationCenterService;
+    private final NotificationPort notifications;
 
     public SourceJobBulkServiceImpl(TransactionServiceImpl transactionService,
         SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         BulkExcel bulkExcel,
-        NotificationCenterService notificationCenterService) {
+        NotificationPort notifications) {
         this.transactionService = transactionService;
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.bulkExcel = bulkExcel;
-        this.notificationCenterService = notificationCenterService;
+        this.notifications = notifications;
     }
 
     private String[] getHEADER_FILED_BATCH_FILE() {
@@ -308,9 +309,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             scheduler.setJobId(sourceJob.getJobId());
             this.transactionService.saveOrUpdateScheduler(scheduler);
         }
-        this.notificationCenterService.create(TenantContext.getTenantId(), TenantContext.getAppUserId(),
-            NotificationType.BATCH_DONE, NotificationSeverity.INFO, "Batch upload finished",
-            String.format("Total %d jobs saved successfully.", jobDetailValidations.size()), "/jobList");
+        this.notifications.notificationCreated(TenantContext.getTenantId(), Notices.notice(TenantContext.getAppUserId(), NotificationType.BATCH_DONE, NotificationSeverity.INFO, "Batch upload finished", String.format("Total %d jobs saved successfully.", jobDetailValidations.size()), "/jobList"));
         return new ResponseDto(SUCCESS, String.format("Total %d jobs saved successfully.", jobDetailValidations.size()));
         }
     }

@@ -34,6 +34,7 @@ import org.assertj.core.api.Assertions;
 import org.mockito.Mockito;
 import process.model.pojo.UserPageAccess;
 import process.model.service.PageAccessService;
+import process.notifications.TestNotifications;
 
 /**
  * Who may open what: the one rule, from the top.
@@ -62,7 +63,7 @@ public class PageAccessResolutionTest {
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            this.notificationCenterService, this.userNameResolver, new PageAccessCache(), this.tenantRepository,
+            TestNotifications.inProcess(null, null, this.notificationCenterService, null), this.userNameResolver, new PageAccessCache(), this.tenantRepository,
             this.exceptionRepository);
         lenient().when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(any(), any()))
             .thenReturn(Optional.empty());

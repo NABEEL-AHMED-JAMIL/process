@@ -18,12 +18,13 @@ import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AppUserService;
-import process.model.service.NotificationCenterService;
 import process.model.service.PageAccessService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.MailExtras;
+import process.notifications.NotificationPort;
+import process.notifications.StandardMails;
 import process.util.TemporaryPassword;
 import process.util.PhoneNumberValidator;
 import process.util.UserNameResolver;
@@ -39,6 +40,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
+import process.notifications.Notices;
 
 /**
  * @author Nabeel Ahmed
@@ -54,7 +56,7 @@ public class AppUserServiceImpl implements AppUserService {
     private final AppUserRepository appUserRepository;
     private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
-    private final EmailMessagesFactory emailMessagesFactory;
+    private final NotificationPort notifications;
     private final UserNameResolver userNameResolver;
 
     /**
@@ -78,17 +80,15 @@ public class AppUserServiceImpl implements AppUserService {
 
     private final StorageBrowserService storageBrowserService;
 
-    private final NotificationCenterService notificationCenterService;
     private final PageAccessService pageAccessService;
 
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
-        PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory,
+        PasswordEncoder passwordEncoder, NotificationPort notifications,
         UserNameResolver userNameResolver, StorageBrowserService storageBrowserService,
-        NotificationCenterService notificationCenterService, PageAccessService pageAccessService) {
+        PageAccessService pageAccessService) {
         this.pageAccessService = pageAccessService;
-        this.notificationCenterService = notificationCenterService;
         this.storageBrowserService = storageBrowserService;
-        this.emailMessagesFactory = emailMessagesFactory;
+        this.notifications = notifications;
         this.userNameResolver = userNameResolver;
         this.appUserRepository = appUserRepository;
         this.tenantRepository = tenantRepository;
@@ -224,9 +224,10 @@ public class AppUserServiceImpl implements AppUserService {
 
         String organisation = this.organisationFor(targetTenantId);
         String createdBy = this.actorName();
-        String mailResult = this.emailMessagesFactory.sendUserWelcomeEmail(user.getUsername(),
-            user.getFullName(), organisation, user.getUsername(), generated ? temporaryPassword : null,
-            roleLabel(user.getUserRole()), createdBy, this.consoleUrl + "/login");
+        String mailResult = this.notifications.mailRequested(user.getTenantId(),
+            StandardMails.userWelcome(user.getUsername(), user.getFullName(), organisation, user.getUsername(),
+                roleLabel(user.getUserRole()), createdBy, this.consoleUrl + "/login"),
+            generated ? MailExtras.secret(temporaryPassword) : MailExtras.NONE);
         boolean mailFailed = mailResult != null && mailResult.startsWith("Error");
         this.notifyUserCreated(user, organisation, createdBy, generated, mailFailed);
         if (mailFailed) {
@@ -288,12 +289,8 @@ public class AppUserServiceImpl implements AppUserService {
         String role = roleLabel(user.getUserRole()).toLowerCase();
         String who = String.format("%s (%s)", user.getFullName(), user.getUsername());
 
-        this.notificationCenterService.create(user.getTenantId(), user.getAppUserId(),
-            NotificationType.USER_ADDED, NotificationSeverity.SUCCESS,
-            "Welcome to " + organisation,
-            String.format("%s set up your account as %s. Your profile is where to keep your name, "
-                + "phone number and password up to date.", createdBy, role),
-            "/profile");
+        this.notifications.notificationCreated(user.getTenantId(), Notices.notice(user.getAppUserId(), NotificationType.USER_ADDED, NotificationSeverity.SUCCESS, "Welcome to " + organisation, String.format("%s set up your account as %s. Your profile is where to keep your name, "
+                + "phone number and password up to date.", createdBy, role), "/profile"));
 
         String summary = String.format("You created %s as %s in %s.", who, role, organisation);
         if (mailFailed) {
@@ -301,20 +298,14 @@ public class AppUserServiceImpl implements AppUserService {
                 ? " The welcome email could not be sent -- reset their password and pass it on another way."
                 : " The welcome email could not be sent.";
         }
-        this.notificationCenterService.create(TenantContext.getTenantId(), actorId,
-            NotificationType.USER_ADDED, mailFailed ? NotificationSeverity.WARNING : NotificationSeverity.INFO,
-            mailFailed ? "User created, welcome email not sent" : "User created",
-            summary, "/users");
+        this.notifications.notificationCreated(TenantContext.getTenantId(), Notices.notice(actorId, NotificationType.USER_ADDED, mailFailed ? NotificationSeverity.WARNING : NotificationSeverity.INFO, mailFailed ? "User created, welcome email not sent" : "User created", summary, "/users"));
 
         boolean platformWide = isNull(user.getTenantId());
         for (AppUser peer : this.peerAdminsOf(user)) {
             if (peer.getAppUserId().equals(actorId) || peer.getAppUserId().equals(user.getAppUserId())) {
                 continue;
             }
-            this.notificationCenterService.create(peer.getTenantId(), peer.getAppUserId(),
-                NotificationType.USER_ADDED, NotificationSeverity.INFO,
-                platformWide ? "New platform admin" : "New user in your workspace",
-                String.format("%s added %s as %s.", createdBy, who, role), "/users");
+            this.notifications.notificationCreated(peer.getTenantId(), Notices.notice(peer.getAppUserId(), NotificationType.USER_ADDED, NotificationSeverity.INFO, platformWide ? "New platform admin" : "New user in your workspace", String.format("%s added %s as %s.", createdBy, who, role), "/users"));
         }
     }
 
@@ -460,7 +451,7 @@ public class AppUserServiceImpl implements AppUserService {
          * rather than showing a stale one.
          */
         if (appUserDto.getStatus() != Status.Active) {
-            this.notificationCenterService.clearUnreadCount(user.getAppUserId());
+            this.notifications.forgetRecipient(user.getAppUserId());
         }
         return new ResponseDto(SUCCESS, String.format("User \"%s\" is now %s.", user.getUsername(), user.getStatus()));
     }

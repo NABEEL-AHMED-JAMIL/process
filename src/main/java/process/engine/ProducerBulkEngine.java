@@ -8,7 +8,7 @@ import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.JobMail;
 import process.engine.dto.JobPayloadDTO;
 import process.security.RunCallbackTokens;
 import process.ai.AiStepService;
@@ -43,13 +43,13 @@ public class ProducerBulkEngine {
     private final AiStepService aiStepService;
     private final BulkAction bulkAction;
     private final TransactionServiceImpl transactionService;
-    private final EmailMessagesFactory emailMessagesFactory;
+    private final JobMail jobMail;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
 
     public ProducerBulkEngine(BulkAction bulkAction,
         TransactionServiceImpl transactionService,
-        EmailMessagesFactory emailMessagesFactory,
+        JobMail jobMail,
         KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
         RunCallbackTokens runCallbackTokens, AiStepService aiStepService) {
@@ -57,7 +57,7 @@ public class ProducerBulkEngine {
         this.aiStepService = aiStepService;
         this.bulkAction = bulkAction;
         this.transactionService = transactionService;
-        this.emailMessagesFactory = emailMessagesFactory;
+        this.jobMail = jobMail;
         this.kafkaTemplateProvider = kafkaTemplateProvider;
         this.kafkaConnectionResolver = kafkaConnectionResolver;
     }
@@ -92,7 +92,7 @@ public class ProducerBulkEngine {
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), false);
         Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(jobQueue.getJobId());
         if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
-            this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
+            this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
         }
     }
 
@@ -187,7 +187,7 @@ public class ProducerBulkEngine {
                                 this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
                                 Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(scheduler.getJobId());
                                 if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
-                                    this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
+                                    this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
                                 }
                                 jobStatusMoved = false;
                             } else {
@@ -488,10 +488,11 @@ public class ProducerBulkEngine {
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), statusMessage);
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
-        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
+        // The run is named so the Failed notice is sent once for this run and attempt.
+        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), jobQueue.getJobQueueId(), true);
         Optional<SourceJob> sourceJobForFailMail = this.transactionService.findByJobId(jobQueue.getJobId());
         if (sourceJobForFailMail.isPresent() && sourceJobForFailMail.get().isFailJob()) {
-            this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Failed);
+            this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Failed);
         }
     }
 

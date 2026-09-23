@@ -3,7 +3,7 @@ package process.model.service.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.JobMail;
 import process.engine.BulkAction;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
@@ -60,18 +60,18 @@ public class MessageQServiceImpl implements MessageQService {
     private final QueryService queryService;
     private final JobQueueRepository jobQueueRepository;
     private final SourceJobRepository sourceJobRepository;
-    private final EmailMessagesFactory emailMessagesFactory;
+    private final JobMail jobMail;
 
     public MessageQServiceImpl(BulkAction bulkAction,
         QueryService queryService,
         JobQueueRepository jobQueueRepository,
         SourceJobRepository sourceJobRepository,
-        EmailMessagesFactory emailMessagesFactory) {
+        JobMail jobMail) {
         this.bulkAction = bulkAction;
         this.queryService = queryService;
         this.jobQueueRepository = jobQueueRepository;
         this.sourceJobRepository = sourceJobRepository;
-        this.emailMessagesFactory = emailMessagesFactory;
+        this.jobMail = jobMail;
     }
 
     @Override
@@ -185,7 +185,7 @@ public class MessageQServiceImpl implements MessageQService {
             // Failed mail (ProducerBulkEngine.changeStatusForLastJob and changeJobStatus below)
             // read isFailJob().
             if (sourceJob.isPresent() && sourceJob.get().isFailJob()) {
-                this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueue.get()),JobStatus.Failed);
+                this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue.get()),JobStatus.Failed);
             }
             return new ResponseDto(SUCCESS, "JobQueue successfully updated.", jobQId);
         }
@@ -267,7 +267,7 @@ public class MessageQServiceImpl implements MessageQService {
                 (sourceJob.get().isCompleteJob() && status.equals(JobStatus.Completed)) ||
                 (sourceJob.get().isFailJob() && status.equals(JobStatus.Failed)));
             if (shouldSend) {
-                this.emailMessagesFactory.sendSourceJobEmail(SourceJobQueueDto.forEmailNotification(jobQueueForMail.get()), status);
+                this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueueForMail.get()), status);
             }
         }
         return new ResponseDto(SUCCESS, "QueueMessage successfully updated.");

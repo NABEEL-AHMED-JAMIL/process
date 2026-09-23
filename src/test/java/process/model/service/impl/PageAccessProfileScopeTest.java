@@ -42,6 +42,7 @@ import org.mockito.ArgumentMatchers;
 import process.model.dto.AccessPersonDto;
 import process.model.pojo.Tenant;
 import process.model.pojo.UserPageAccess;
+import process.notifications.TestNotifications;
 
 /**
  * The profiles themselves: who may touch them, and what a save has to refuse.
@@ -67,7 +68,7 @@ public class PageAccessProfileScopeTest {
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            this.notificationCenterService, this.userNameResolver, new PageAccessCache(), this.tenantRepository,
+            TestNotifications.inProcess(null, null, this.notificationCenterService, null), this.userNameResolver, new PageAccessCache(), this.tenantRepository,
             this.exceptionRepository);
         lenient().when(this.profileRepository.save(any())).thenAnswer(inv -> {
             PageAccessProfile p = inv.getArgument(0);

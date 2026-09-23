@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.JobMail;
 import process.engine.BulkAction;
 import process.model.dto.ResponseDto;
 import process.model.enums.JobStatus;
@@ -54,14 +54,14 @@ public class MessageQFailInFlightRunTest {
     @Mock private QueryService queryService;
     @Mock private JobQueueRepository jobQueueRepository;
     @Mock private SourceJobRepository sourceJobRepository;
-    @Mock private EmailMessagesFactory emailMessagesFactory;
+    @Mock private JobMail jobMail;
 
     private MessageQServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new MessageQServiceImpl(this.bulkAction, this.queryService,
-            this.jobQueueRepository, this.sourceJobRepository, this.emailMessagesFactory);
+            this.jobQueueRepository, this.sourceJobRepository, this.jobMail);
         TenantContext.set(TENANT_A, "TENANT_USER", 1L, "a@example.com");
     }
 

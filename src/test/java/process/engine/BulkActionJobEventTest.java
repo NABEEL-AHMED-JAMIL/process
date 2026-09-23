@@ -17,6 +17,7 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
+import process.notifications.TestNotifications;
 
 /**
  * That a status change reaches the job list over the socket.
@@ -52,8 +53,8 @@ public class BulkActionJobEventTest {
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, this.notificationService,
-            this.notificationCenterService, this.jobEventPublisher);
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.inProcess(this.jobEventPublisher,
+            this.notificationService, this.notificationCenterService, null));
     }
 
     private SourceJob job(JobStatus held) {

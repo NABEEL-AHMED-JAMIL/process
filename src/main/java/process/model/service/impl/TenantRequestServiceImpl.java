@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.MailExtras;
+import process.notifications.NotificationPort;
+import process.notifications.StandardMails;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.enums.TenantStatus;
@@ -62,7 +64,7 @@ public class TenantRequestServiceImpl {
     private final TenantRepository tenantRepository;
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
-    private final EmailMessagesFactory emailMessagesFactory;
+    private final NotificationPort notifications;
     private final SecureRandom random = new SecureRandom();
 
     @Value("${app.console.url:http://localhost:4400}")
@@ -70,12 +72,12 @@ public class TenantRequestServiceImpl {
 
     public TenantRequestServiceImpl(TenantRequestRepository tenantRequestRepository,
         TenantRepository tenantRepository, AppUserRepository appUserRepository,
-        PasswordEncoder passwordEncoder, EmailMessagesFactory emailMessagesFactory) {
+        PasswordEncoder passwordEncoder, NotificationPort notifications) {
         this.tenantRequestRepository = tenantRequestRepository;
         this.tenantRepository = tenantRepository;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
-        this.emailMessagesFactory = emailMessagesFactory;
+        this.notifications = notifications;
     }
 
     /**
@@ -188,9 +190,10 @@ public class TenantRequestServiceImpl {
         request.setCreatedUserId(admin.getAppUserId());
         this.tenantRequestRepository.save(request);
 
-        String mailResult = this.emailMessagesFactory.sendTenantWelcomeEmail(
-            request.getContactEmail(), request.getContactName(), tenant.getTenantName(),
-            admin.getUsername(), temporaryPassword, this.consoleUrl + "/login");
+        String mailResult = this.notifications.mailRequested(tenant.getTenantId(),
+            StandardMails.tenantWelcome(request.getContactEmail(), request.getContactName(), tenant.getTenantName(),
+                admin.getUsername(), this.consoleUrl + "/login"),
+            MailExtras.secret(temporaryPassword));
 
         if (mailResult != null && mailResult.startsWith("Error")) {
             // The tenant and the account exist either way, so say plainly that the credential did

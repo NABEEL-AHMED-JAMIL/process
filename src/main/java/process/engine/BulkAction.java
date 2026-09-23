@@ -11,16 +11,13 @@ import process.model.pojo.SourceJob;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
 import process.model.projection.SourceJobProjection;
-import process.model.service.NotificationCenterService;
 import process.model.service.impl.TransactionServiceImpl;
-import process.model.enums.NotificationSeverity;
-import process.model.enums.NotificationType;
-import process.socket.NotificationService;
-import process.socket.JobEventPublisher;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.time.LocalDateTime;
 import java.util.*;
+import org.barco.notifications.contract.JobStatusChanged;
+import process.notifications.NotificationPort;
 
 /**
  * @author Nabeel Ahmed
@@ -32,16 +29,12 @@ public class BulkAction {
     public Logger logger = LogManager.getLogger(BulkAction.class);
 
     private final TransactionServiceImpl transactionService;
-    private final NotificationService notificationService;
-    private final NotificationCenterService notificationCenterService;
-    private final JobEventPublisher jobEventPublisher;
+    /** Every push, notice and mail leaves through here (MIG-20). */
+    private final NotificationPort notifications;
 
-    public BulkAction(TransactionServiceImpl transactionService, NotificationService notificationService,
-        NotificationCenterService notificationCenterService, JobEventPublisher jobEventPublisher) {
+    public BulkAction(TransactionServiceImpl transactionService, NotificationPort notifications) {
         this.transactionService = transactionService;
-        this.notificationService = notificationService;
-        this.notificationCenterService = notificationCenterService;
-        this.jobEventPublisher = jobEventPublisher;
+        this.notifications = notifications;
     }
 
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
@@ -71,8 +64,8 @@ public class BulkAction {
         // durable, and a rollback then leaves every open jobs table showing a transition the
         // database does not have.
         if (jobStatus != null) {
-            this.jobEventPublisher.publishStatusAfterCommit(sourceJob.get().getTenantId(),
-                jobId, null, jobStatus.name(), null);
+            this.notifications.jobStatusChanged(sourceJob.get().getTenantId(),
+                new JobStatusChanged().setJobId(jobId).setJobRunningStatus(jobStatus.name()));
         }
     }
 
@@ -385,35 +378,49 @@ public class BulkAction {
     }
 
     public void sendJobStatusNotification(Long jobId, boolean isNewTransition) {
-        List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
-        if (!sourceJob.isEmpty()) {
-            SourceJobProjection jobEvent = sourceJob.get(0);
-            String assignedUsername = jobEvent.getAssignedUsername();
-
-            if (assignedUsername != null) {
-                this.notificationService.sendNotificationToSpecificUser(assignedUsername, this.getSourceJobDetail(jobEvent));
-            }
-            if (isNewTransition) {
-                this.notifyJobOutcome(jobEvent);
-            }
-        }
+        this.sendJobStatusNotification(jobId, null, isNewTransition);
     }
 
-    private void notifyJobOutcome(SourceJobProjection jobEvent) {
-        JobStatus runningStatus = jobEvent.getJobRunningStatus();
-        if (runningStatus != JobStatus.Completed && runningStatus != JobStatus.Failed) {
+    /**
+     * The owner's side of a status change. The tenant's live feed was already told by
+     * changeJobStatus; this adds the old console's per-user push and, for a NEW Completed or
+     * Failed, the owner's notice.
+     *
+     * {@code isNewTransition} is decided here in Core and only carried: skip and missed pass false
+     * because the job's running status still holds the previous run's outcome. Nothing is published
+     * to the feed for a non-outcome -- a skip fires while a run is in flight, and pushing that
+     * in-flight status would move the console's lastJobRun and hide a stalled run.
+     *
+     * {@code jobQueueId} is the run the outcome belongs to: it and the run's attempt are the key the
+     * notice is sent once on, so a replayed Failed callback raises one notice, not two.
+     */
+    public void sendJobStatusNotification(Long jobId, Long jobQueueId, boolean isNewTransition) {
+        List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
+        if (sourceJob.isEmpty()) {
             return;
         }
-        String jobName = jobEvent.getJobName() != null ? jobEvent.getJobName() : ("Job " + jobEvent.getJobId());
-        if (runningStatus == JobStatus.Completed) {
-            this.notificationCenterService.create(jobEvent.getTenantId(), jobEvent.getAssignedUserId(),
-                NotificationType.JOB_COMPLETED, NotificationSeverity.SUCCESS,
-                "Job completed", jobName + " finished successfully.", "/jobList");
-        } else {
-            this.notificationCenterService.create(jobEvent.getTenantId(), jobEvent.getAssignedUserId(),
-                NotificationType.JOB_FAILED, NotificationSeverity.ERROR,
-                "Job failed", jobName + " failed.", "/jobList");
+        SourceJobProjection jobEvent = sourceJob.get(0);
+        if (jobEvent.getAssignedUsername() != null) {
+            this.notifications.legacyOwnerPush(jobEvent.getAssignedUsername(), this.getSourceJobDetail(jobEvent));
         }
+        JobStatus runningStatus = jobEvent.getJobRunningStatus();
+        boolean outcome = runningStatus == JobStatus.Completed || runningStatus == JobStatus.Failed;
+        if (!isNewTransition || !outcome) {
+            return;
+        }
+        this.notifications.jobStatusChanged(jobEvent.getTenantId(), new JobStatusChanged()
+            .setJobId(jobEvent.getJobId())
+            .setJobQueueId(jobQueueId)
+            .setAttempt(jobQueueId == null ? null : this.attemptOf(jobQueueId))
+            .setJobRunningStatus(runningStatus.name())
+            .setNewTransition(true)
+            .setJobName(jobEvent.getJobName())
+            .setRecipientUserId(jobEvent.getAssignedUserId())
+            .setRecipientUsername(jobEvent.getAssignedUsername()));
+    }
+
+    private Integer attemptOf(Long jobQueueId) {
+        return this.transactionService.findJobQueueByJobQueueId(jobQueueId).map(JobQueue::getAttempt).orElse(1);
     }
 
     private String getSourceJobDetail(SourceJobProjection sourceJobProjection) {

@@ -32,6 +32,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import process.notifications.TestNotifications;
 
 /**
  * What a tenant admin may do to the people in its own workspace.
@@ -74,8 +75,8 @@ public class AppUserServiceImplRoleScopeTest {
     @BeforeEach
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.emailMessagesFactory, this.userNameResolver,
-            this.storageBrowserService, this.notificationCenterService, this.pageAccessService);
+            this.passwordEncoder, TestNotifications.inProcess(null, null, this.notificationCenterService, this.emailMessagesFactory),
+            this.userNameResolver, this.storageBrowserService, this.pageAccessService);
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }
 

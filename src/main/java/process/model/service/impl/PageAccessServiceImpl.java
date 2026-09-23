@@ -19,7 +19,6 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
 import process.model.repository.TenantRepository;
 import process.model.repository.UserPageAccessRepository;
-import process.model.service.NotificationCenterService;
 import process.model.service.PageAccessService;
 import process.security.PageAccessCache;
 import process.security.TenantContext;
@@ -41,6 +40,8 @@ import java.util.stream.Collectors;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.isNull;
+import process.notifications.Notices;
+import process.notifications.NotificationPort;
 
 /**
  * @author Nabeel Ahmed
@@ -54,19 +55,19 @@ public class PageAccessServiceImpl implements PageAccessService {
 
     private final PageAccessProfileRepository profileRepository;
     private final AppUserRepository appUserRepository;
-    private final NotificationCenterService notificationCenterService;
+    private final NotificationPort notifications;
     private final UserNameResolver userNameResolver;
     private final PageAccessCache cache;
     private final TenantRepository tenantRepository;
     private final UserPageAccessRepository exceptionRepository;
 
     public PageAccessServiceImpl(PageAccessProfileRepository profileRepository,
-        AppUserRepository appUserRepository, NotificationCenterService notificationCenterService,
+        AppUserRepository appUserRepository, NotificationPort notifications,
         UserNameResolver userNameResolver, PageAccessCache cache, TenantRepository tenantRepository,
         UserPageAccessRepository exceptionRepository) {
         this.profileRepository = profileRepository;
         this.appUserRepository = appUserRepository;
-        this.notificationCenterService = notificationCenterService;
+        this.notifications = notifications;
         this.userNameResolver = userNameResolver;
         this.cache = cache;
         this.tenantRepository = tenantRepository;
@@ -315,12 +316,8 @@ public class PageAccessServiceImpl implements PageAccessService {
             if (holder.getUserRole() != UserRole.TENANT_USER) {
                 continue;
             }
-            this.notificationCenterService.create(holder.getTenantId(), holder.getAppUserId(),
-                NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO,
-                "Your page access changed",
-                String.format("Your \"%s\" profile now opens: %s.", profile.getProfileName(),
-                    pages.isEmpty() ? "no pages beyond the dashboard" : pages),
-                "/dashboard");
+            this.notifications.notificationCreated(holder.getTenantId(), Notices.notice(holder.getAppUserId(), NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO, "Your page access changed", String.format("Your \"%s\" profile now opens: %s.", profile.getProfileName(),
+                    pages.isEmpty() ? "no pages beyond the dashboard" : pages), "/dashboard"));
         }
     }
 
@@ -507,11 +504,7 @@ public class PageAccessServiceImpl implements PageAccessService {
         }
         this.exceptionRepository.flush();
         this.cache.forget(person.getAppUserId());
-        this.notificationCenterService.create(person.getTenantId(), person.getAppUserId(),
-            NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO,
-            "Your page access changed",
-            String.format("%s is now %s for you.", page.get().getLabel(), allowed ? "open" : "withheld"),
-            "/dashboard");
+        this.notifications.notificationCreated(person.getTenantId(), Notices.notice(person.getAppUserId(), NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO, "Your page access changed", String.format("%s is now %s for you.", page.get().getLabel(), allowed ? "open" : "withheld"), "/dashboard"));
         return new ResponseDto(SUCCESS, String.format("%s is now %s for %s%s.", page.get().getLabel(),
             allowed ? "open" : "withheld", person.getFullName(), profileSays == allowed ? " (as their profile says)" : " (an exception to their profile)"),
             this.personRow(person));
@@ -543,13 +536,9 @@ public class PageAccessServiceImpl implements PageAccessService {
             return;
         }
         String profileName = this.profileNameFor(user.getPageAccessProfileId());
-        this.notificationCenterService.create(user.getTenantId(), user.getAppUserId(),
-            NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO,
-            "Your page access changed",
-            profileName == null
+        this.notifications.notificationCreated(user.getTenantId(), Notices.notice(user.getAppUserId(), NotificationType.PAGE_ACCESS_CHANGED, NotificationSeverity.INFO, "Your page access changed", profileName == null
                 ? "You are on your workspace's default access profile now. Your menu shows what it opens."
-                : String.format("You are on the \"%s\" access profile now. Your menu shows what it opens.", profileName),
-            "/dashboard");
+                : String.format("You are on the \"%s\" access profile now. Your menu shows what it opens.", profileName), "/dashboard"));
     }
 
     @Override
@@ -651,12 +640,8 @@ public class PageAccessServiceImpl implements PageAccessService {
         }
         String who = String.format("%s (%s)", me.get().getFullName(), me.get().getUsername());
         for (AppUser admin : admins) {
-            this.notificationCenterService.create(tenantId, admin.getAppUserId(),
-                NotificationType.PAGE_ACCESS_REQUESTED, NotificationSeverity.INFO,
-                "Page access requested",
-                String.format("%s asked to open %s. Change their access profile under Users, or the profile itself under Access profiles.",
-                    who, page.get().getLabel()),
-                "/users");
+            this.notifications.notificationCreated(tenantId, Notices.notice(admin.getAppUserId(), NotificationType.PAGE_ACCESS_REQUESTED, NotificationSeverity.INFO, "Page access requested", String.format("%s asked to open %s. Change their access profile under Users, or the profile itself under Access profiles.",
+                    who, page.get().getLabel()), "/users"));
         }
         return new ResponseDto(SUCCESS, String.format("Asked %s to open %s for you.",
             admins.size() == 1 ? admins.get(0).getFullName() : "your workspace admins", page.get().getLabel()));

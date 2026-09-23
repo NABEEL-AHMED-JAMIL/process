@@ -29,6 +29,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
+import process.notifications.TestNotifications;
+import process.emailer.TemplateType;
+import static org.mockito.ArgumentMatchers.eq;
 
 /**
  * TenantRequestServiceImpl had no test coverage at all before this file -- not even a happy-path
@@ -54,7 +57,8 @@ public class TenantRequestServiceImplTest {
     @BeforeEach
     void setUp() {
         this.service = new TenantRequestServiceImpl(this.tenantRequestRepository,
-            this.tenantRepository, this.appUserRepository, this.passwordEncoder, this.emailMessagesFactory);
+            this.tenantRepository, this.appUserRepository, this.passwordEncoder,
+            TestNotifications.inProcess(null, null, null, this.emailMessagesFactory));
         ReflectionTestUtils.setField(this.service, "consoleUrl", "http://localhost:4400");
     }
 
@@ -152,13 +156,19 @@ public class TenantRequestServiceImplTest {
         when(this.appUserRepository.findByUsernameAndStatusNot("jane@example.com", Status.Delete))
             .thenReturn(Optional.empty());
         when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
-        when(this.emailMessagesFactory.sendTenantWelcomeEmail(
-            anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         ResponseDto response = this.service.approve(9L, null);
 
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
+        // Through NotificationPort now: the temporary password is added to the body at render time
+        // (MailExtras), never carried in the contract event that crosses the port.
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Map<String, Object>> body = ArgumentCaptor.forClass(java.util.Map.class);
+        verify(this.emailMessagesFactory).sendTemplate(eq(TemplateType.TENANT_WELCOME), eq("jane@example.com"), any(),
+            anyString(), body.capture(), any(), any(), any());
+        assertThat(body.getValue().get("temporary_password")).isNotNull();
         ArgumentCaptor<Tenant> tenant = ArgumentCaptor.forClass(Tenant.class);
         verify(this.tenantRepository).save(tenant.capture());
         assertThat(tenant.getValue().getTenantCode()).isEqualTo("acme-corp");
@@ -226,8 +236,7 @@ public class TenantRequestServiceImplTest {
         when(this.appUserRepository.findByUsernameAndStatusNot("jane@example.com", Status.Delete))
             .thenReturn(Optional.empty());
         lenient().when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
-        when(this.emailMessagesFactory.sendTenantWelcomeEmail(
-            anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
             .thenReturn("Error: SMTP timed out");
 
         ResponseDto response = this.service.approve(9L, null);
@@ -249,8 +258,7 @@ public class TenantRequestServiceImplTest {
         when(this.appUserRepository.findByUsernameAndStatusNot("jane@example.com", Status.Delete))
             .thenReturn(Optional.empty());
         lenient().when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
-        lenient().when(this.emailMessagesFactory.sendTenantWelcomeEmail(
-            anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+        lenient().when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         this.service.approve(9L, "Acme EU!!");

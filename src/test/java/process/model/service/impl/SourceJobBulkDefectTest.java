@@ -37,6 +37,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 import java.time.LocalDate;
 import java.util.Optional;
+import process.notifications.TestNotifications;
 
 /**
  * The two bulk paths, on the inputs they were never written for.
@@ -70,7 +71,7 @@ public class SourceJobBulkDefectTest {
         // The real BulkExcel: it is a thread-local holder around POI with no collaborators, and
         // the export assertions are about what it writes into the sheet.
         this.service = new SourceJobBulkServiceImpl(this.transactionService, this.sourceJobRepository,
-            this.schedulerRepository, new BulkExcel(), this.notificationCenterService);
+            this.schedulerRepository, new BulkExcel(), TestNotifications.inProcess(null, null, this.notificationCenterService, null));
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 1L, "admin-a@example.com");
     }
 

@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.JobMail;
 import process.engine.BulkAction;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
@@ -24,6 +24,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import process.notifications.TestNotifications;
 
 /**
  * That a failed run reported by the live worker is offered another attempt.
@@ -49,7 +50,7 @@ public class NotifyServiceRetryTest {
     private static final long QUEUE_ID = 5705L;
 
     @Mock private BulkAction bulkAction;
-    @Mock private EmailMessagesFactory emailMessagesFactory;
+    @Mock private JobMail jobMail;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobEventPublisher jobEventPublisher;
 
@@ -57,8 +58,8 @@ public class NotifyServiceRetryTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new NotifyServiceImpl(this.bulkAction, this.emailMessagesFactory,
-            this.transactionService, this.jobEventPublisher);
+        this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail,
+            this.transactionService, TestNotifications.inProcess(this.jobEventPublisher, null, null, null));
     }
 
     /** A job mid-run that wants failure mail, so a suppressed one is visible as suppressed. */
@@ -95,8 +96,8 @@ public class NotifyServiceRetryTest {
 
         verify(this.bulkAction, never()).changeJobStatus(eq(JOB_ID), eq(JobStatus.Failed));
         verify(this.bulkAction, never()).changeJobQueueEndDate(anyLong(), any());
-        verify(this.emailMessagesFactory, never())
-            .sendSourceJobEmail(any(SourceJobQueueDto.class), any(JobStatus.class));
+        verify(this.jobMail, never())
+            .send(any(SourceJobQueueDto.class), any(JobStatus.class));
     }
 
     @Test
@@ -107,8 +108,8 @@ public class NotifyServiceRetryTest {
         this.service.changeState(this.workerReports(JobStatus.Failed));
 
         verify(this.bulkAction).changeJobStatus(eq(JOB_ID), eq(JobStatus.Failed));
-        verify(this.emailMessagesFactory)
-            .sendSourceJobEmail(any(SourceJobQueueDto.class), eq(JobStatus.Failed));
+        verify(this.jobMail)
+            .send(any(SourceJobQueueDto.class), eq(JobStatus.Failed));
     }
 
     @Test
@@ -168,8 +169,8 @@ public class NotifyServiceRetryTest {
 
         this.service.changeState(this.workerReports(JobStatus.Running));
 
-        verify(this.bulkAction).sendJobStatusNotification(JOB_ID, false);
-        verify(this.bulkAction, never()).sendJobStatusNotification(JOB_ID, true);
+        verify(this.bulkAction).sendJobStatusNotification(JOB_ID, QUEUE_ID, false);
+        verify(this.bulkAction, never()).sendJobStatusNotification(JOB_ID, QUEUE_ID, true);
     }
 
     @Test
@@ -178,6 +179,6 @@ public class NotifyServiceRetryTest {
 
         this.service.changeState(this.workerReports(JobStatus.Completed));
 
-        verify(this.bulkAction).sendJobStatusNotification(JOB_ID, true);
+        verify(this.bulkAction).sendJobStatusNotification(JOB_ID, QUEUE_ID, true);
     }
 }

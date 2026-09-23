@@ -8,7 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
-import process.emailer.EmailMessagesFactory;
+import process.notifications.JobMail;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
@@ -53,7 +53,7 @@ public class ProducerBulkEngineDispatchGuardTest {
 
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
-    @Mock private EmailMessagesFactory emailMessagesFactory;
+    @Mock private JobMail jobMail;
     @Mock private KafkaTemplateProvider kafkaTemplateProvider;
     @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
@@ -64,7 +64,7 @@ public class ProducerBulkEngineDispatchGuardTest {
     @BeforeEach
     void setUp() {
         this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService,
-            this.emailMessagesFactory, this.kafkaTemplateProvider, this.kafkaConnectionResolver,
+            this.jobMail, this.kafkaTemplateProvider, this.kafkaConnectionResolver,
             this.runCallbackTokens, this.aiStepService);
         // No AI steps on these pipelines: the document goes through as stored.
         Mockito.lenient().when(this.aiStepService.apply(ArgumentMatchers.any(), ArgumentMatchers.any(),
@@ -177,7 +177,7 @@ public class ProducerBulkEngineDispatchGuardTest {
         assertThat(message.getValue()).contains(String.valueOf(JOB_ID));
         verify(this.bulkAction).saveJobAuditLogs(eq(JOB_QUEUE_ID), anyString());
         verify(this.bulkAction).changeJobQueueEndDate(eq(JOB_QUEUE_ID), any());
-        verify(this.bulkAction).sendJobStatusNotification(JOB_ID);
+        verify(this.bulkAction).sendJobStatusNotification(JOB_ID, JOB_QUEUE_ID, true);
     }
 
     @Test

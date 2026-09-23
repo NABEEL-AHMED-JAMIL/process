@@ -39,6 +39,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import process.notifications.TestNotifications;
+import process.emailer.TemplateType;
 
 /**
  * Who hears about a new account, in the bell rather than by email.
@@ -78,8 +80,8 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @BeforeEach
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.emailMessagesFactory, this.userNameResolver,
-            this.storageBrowserService, this.notificationCenterService, this.pageAccessService);
+            this.passwordEncoder, TestNotifications.inProcess(null, null, this.notificationCenterService, this.emailMessagesFactory),
+            this.userNameResolver, this.storageBrowserService, this.pageAccessService);
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
         // The id the database would hand back -- without it the new user has nobody to notify.
         lenient().when(this.appUserRepository.save(any())).thenAnswer(invocation -> {
@@ -134,7 +136,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @Test
     void theNewUserGetsAWelcomeAndTheActorGetsARecord() throws Exception {
         this.actAsTenantAdmin();
-        when(this.emailMessagesFactory.sendUserWelcomeEmail(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         ResponseDto response = this.service.addUser(this.newTenantUser());
@@ -159,7 +161,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @Test
     void aFailedWelcomeEmailTurnsTheActorsCopyIntoAWarning() throws Exception {
         this.actAsTenantAdmin();
-        when(this.emailMessagesFactory.sendUserWelcomeEmail(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Error: smtp down");
 
         ResponseDto response = this.service.addUser(this.newTenantUser());
@@ -191,7 +193,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
         AppUser plainUser = this.userIn(TENANT_A, 79L, UserRole.TENANT_USER, "Plain User");
         when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete))
             .thenReturn(Arrays.asList(otherAdmin, dormantAdmin, plainUser));
-        when(this.emailMessagesFactory.sendUserWelcomeEmail(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         this.service.addUser(this.newTenantUser());
@@ -215,7 +217,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
         AppUser peer = this.userIn(null, 2L, UserRole.PLATFORM_ADMIN, "Pia Platform");
         AppUser tenantAdmin = this.userIn(TENANT_A, 77L, UserRole.TENANT_ADMIN, "Other Admin");
         when(this.appUserRepository.findAll()).thenReturn(Arrays.asList(actor, peer, tenantAdmin));
-        when(this.emailMessagesFactory.sendUserWelcomeEmail(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(this.emailMessagesFactory.sendTemplate(eq(TemplateType.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Sent");
 
         AppUserDto dto = this.newTenantUser();

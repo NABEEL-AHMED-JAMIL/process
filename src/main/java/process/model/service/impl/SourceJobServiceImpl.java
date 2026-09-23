@@ -18,7 +18,6 @@ import process.model.enums.UserRole;
 import process.model.pojo.*;
 import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
-import process.model.service.NotificationCenterService;
 import process.model.service.SourceJobService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -32,8 +31,10 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
-import process.socket.JobEventPublisher;
 import java.sql.Timestamp;
+import org.barco.notifications.contract.JobLifecycleChanged;
+import process.notifications.Notices;
+import process.notifications.NotificationPort;
 
 /**
  * @author Nabeel Ahmed
@@ -47,14 +48,13 @@ public class SourceJobServiceImpl implements SourceJobService {
     private final SchedulerRepository schedulerRepository;
     private final SourceTaskRepository sourceTaskRepository;
     private final JobAuditLogRepository jobAuditLogRepository;
-    private final JobEventPublisher jobEventPublisher;
-    private final JobQueueRepository jobQueueRepository;
+        private final JobQueueRepository jobQueueRepository;
     private final LookupDataRepository lookupDataRepository;
     private final AppUserRepository appUserRepository;
     private final ProducerBulkEngine producerBulkEngine;
     private final TenantFilterHelper tenantFilterHelper;
     private final OpenSearchAuditLogClient openSearchAuditLogClient;
-    private final NotificationCenterService notificationCenterService;
+    private final NotificationPort notifications;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -66,28 +66,26 @@ public class SourceJobServiceImpl implements SourceJobService {
         SchedulerRepository schedulerRepository,
         SourceTaskRepository sourceTaskRepository,
         JobAuditLogRepository jobAuditLogRepository,
-        JobEventPublisher jobEventPublisher,
         JobQueueRepository jobQueueRepository,
         LookupDataRepository lookupDataRepository,
         AppUserRepository appUserRepository,
         ProducerBulkEngine producerBulkEngine,
         TenantFilterHelper tenantFilterHelper,
         OpenSearchAuditLogClient openSearchAuditLogClient,
-        NotificationCenterService notificationCenterService,
+        NotificationPort notifications,
         UserNameResolver userNameResolver) {
         this.userNameResolver = userNameResolver;
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.jobAuditLogRepository = jobAuditLogRepository;
-        this.jobEventPublisher = jobEventPublisher;
         this.jobQueueRepository = jobQueueRepository;
         this.lookupDataRepository = lookupDataRepository;
         this.appUserRepository = appUserRepository;
         this.producerBulkEngine = producerBulkEngine;
         this.tenantFilterHelper = tenantFilterHelper;
         this.openSearchAuditLogClient = openSearchAuditLogClient;
-        this.notificationCenterService = notificationCenterService;
+        this.notifications = notifications;
     }
 
     private void notifyTaskAssigned(SourceJob sourceJob, Long previousAssignedUserId) {
@@ -96,10 +94,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             || newAssignedUserId.equals(TenantContext.getAppUserId())) {
             return;
         }
-        this.notificationCenterService.create(sourceJob.getTenantId(), newAssignedUserId,
-            NotificationType.TASK_ASSIGNED, NotificationSeverity.INFO,
-            "Task assigned to you", sourceJob.getJobName() + " was assigned to you by " + TenantContext.getUsername() + ".",
-            "/jobList");
+        this.notifications.notificationCreated(sourceJob.getTenantId(), Notices.notice(newAssignedUserId, NotificationType.TASK_ASSIGNED, NotificationSeverity.INFO, "Task assigned to you", sourceJob.getJobName() + " was assigned to you by " + TenantContext.getUsername() + ".", "/jobList"));
     }
 
     private boolean isOwnedByCaller(SourceJob sourceJob) {
@@ -207,7 +202,7 @@ public class SourceJobServiceImpl implements SourceJobService {
                     this.schedulerRepository.save(scheduler);
                 });
         }
-        this.jobEventPublisher.publishChangedAfterCommit(sourceJob.getTenantId(), sourceJob.getJobId(), "job.updated");
+        this.notifications.jobLifecycleChanged(sourceJob.getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.getJobId()).setChange(JobLifecycleChanged.Change.updated));
         return new ResponseDto(SUCCESS, String.format("Job save with jobId %d.", sourceJob.getJobId()));
     }
 
@@ -397,8 +392,7 @@ public class SourceJobServiceImpl implements SourceJobService {
                         this.schedulerRepository.save(target);
                     });
             }
-            this.jobEventPublisher.publishChangedAfterCommit(sourceJob.get().getTenantId(),
-                sourceJob.get().getJobId(), "job.updated");
+            this.notifications.jobLifecycleChanged(sourceJob.get().getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.get().getJobId()).setChange(JobLifecycleChanged.Change.updated));
             return new ResponseDto(SUCCESS, String.format("Job save with jobId %d.", sourceJobDto.getJobId()));
         }
         return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
@@ -430,8 +424,7 @@ public class SourceJobServiceImpl implements SourceJobService {
                 logger.error("An error occurred while updating related job queue/audit logs during deleteSourceJob :- {}.", ex);
             }
 
-            this.jobEventPublisher.publishChangedAfterCommit(sourceJob.get().getTenantId(),
-                sourceJob.get().getJobId(), "job.deleted");
+            this.notifications.jobLifecycleChanged(sourceJob.get().getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.get().getJobId()).setChange(JobLifecycleChanged.Change.deleted));
             return new ResponseDto(SUCCESS, String.format("SourceJob successfully updated with ID %d.", sourceJobDto.getJobId()));
         }
         return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
@@ -479,8 +472,7 @@ public class SourceJobServiceImpl implements SourceJobService {
                     this.schedulerRepository.save(scheduler);
                 });
         }
-        this.jobEventPublisher.publishChangedAfterCommit(sourceJob.get().getTenantId(),
-            sourceJob.get().getJobId(), "job.toggled");
+        this.notifications.jobLifecycleChanged(sourceJob.get().getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.get().getJobId()).setChange(JobLifecycleChanged.Change.toggled));
         return new ResponseDto(SUCCESS, String.format("Job %s.", newStatus == Status.Active ? "activated" : "deactivated"), newStatus.name());
     }
 

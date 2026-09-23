@@ -27,6 +27,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import process.notifications.TestNotifications;
 
 /**
  * A run the scheduler records as Missed after downtime.
@@ -55,8 +56,8 @@ class BulkActionMissedRunNotificationTest {
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, this.notificationService,
-            this.notificationCenterService, this.jobEventPublisher);
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.inProcess(this.jobEventPublisher,
+            this.notificationService, this.notificationCenterService, null));
         SourceJobProjection job = mock(SourceJobProjection.class);
         lenient().when(job.getJobId()).thenReturn(JOB_ID);
         lenient().when(job.getTenantId()).thenReturn(2905L);

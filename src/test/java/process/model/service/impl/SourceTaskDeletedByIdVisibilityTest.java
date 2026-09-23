@@ -30,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import process.notifications.TestNotifications;
 
 /**
  * Delete on a source task is a soft delete, and findById does not look at task_status. Every
@@ -68,7 +69,7 @@ public class SourceTaskDeletedByIdVisibilityTest {
         this.service = new SourceTaskServiceImpl(this.bulkExcel, this.queryService,
             this.sourceJobRepository, this.sourceTaskRepository, this.sourceTaskTypeRepository,
             this.tenantFilterHelper, new TaskPayloadLocationUtil(), this.tenantRepository,
-            this.notificationCenterService, this.userNameResolver);
+            TestNotifications.inProcess(null, null, this.notificationCenterService, null), this.userNameResolver);
         // entityManager is injected, not constructor-supplied.
         Field em = SourceTaskServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);
