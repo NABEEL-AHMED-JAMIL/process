@@ -54,7 +54,7 @@ public class AppUserServiceImpl implements AppUserService {
     private final Logger logger = LoggerFactory.getLogger(AppUserServiceImpl.class);
 
     private static final String NOT_FOUND_MESSAGE = "User not found.";
-    private static final String PEER_ADMIN_MESSAGE = "Only a Platform Admin can manage another Tenant Admin.";
+    private static final String PEER_ADMIN_MESSAGE = "Only a platform administrator can manage another tenant administrator.";
 
     private final AppUserRepository appUserRepository;
     private final TenantRepository tenantRepository;
@@ -170,13 +170,13 @@ public class AppUserServiceImpl implements AppUserService {
         }
         boolean isPlatformAdminActor = TenantContext.isPlatformAdmin();
         if (!isPlatformAdminActor && appUserDto.getUserRole() == UserRole.PLATFORM_ADMIN) {
-            return new ResponseDto(ERROR, "Only a Platform Admin can create another Platform Admin.");
+            return new ResponseDto(ERROR, "Only a platform administrator can create another platform administrator.");
         }
         // A tenant admin staffs its own workspace with tenant users. A second administrator is a
         // second set of keys to everything the workspace holds, so who gets one is the platform's
         // decision rather than something an admin can grant itself a colleague.
         if (!isPlatformAdminActor && appUserDto.getUserRole() != UserRole.TENANT_USER) {
-            return new ResponseDto(ERROR, "Only a Platform Admin can create another Tenant Admin.");
+            return new ResponseDto(ERROR, "Only a platform administrator can create another tenant administrator.");
         }
         Long targetTenantId;
         if (appUserDto.getUserRole() == UserRole.PLATFORM_ADMIN) {
@@ -304,10 +304,10 @@ public class AppUserServiceImpl implements AppUserService {
         String role = roleLabel(user.getUserRole()).toLowerCase();
         String who = String.format("%s (%s)", user.getFullName(), user.getUsername());
 
-        this.notifications.notificationCreated(user.getTenantId(), Notices.notice(user.getAppUserId(), NotificationType.USER_ADDED, NotificationSeverity.SUCCESS, "Welcome to " + organisation, String.format("%s set up your account as %s. Your profile is where to keep your name, "
+        this.notifications.notificationCreated(user.getTenantId(), Notices.notice(user.getAppUserId(), NotificationType.USER_ADDED, NotificationSeverity.SUCCESS, "Welcome to " + organisation, String.format("%s set up your account as a %s. Your profile is where to keep your name, "
                 + "phone number and password up to date.", createdBy, role), "/profile"));
 
-        String summary = String.format("You created %s as %s in %s.", who, role, organisation);
+        String summary = String.format("You created %s as a %s in %s.", who, role, organisation);
         if (mailFailed) {
             summary += generated
                 ? " The welcome email could not be sent -- reset their password and pass it on another way."
@@ -320,7 +320,7 @@ public class AppUserServiceImpl implements AppUserService {
             if (peer.getAppUserId().equals(actorId) || peer.getAppUserId().equals(user.getAppUserId())) {
                 continue;
             }
-            this.notifications.notificationCreated(peer.getTenantId(), Notices.notice(peer.getAppUserId(), NotificationType.USER_ADDED, NotificationSeverity.INFO, platformWide ? "New platform admin" : "New user in your workspace", String.format("%s added %s as %s.", createdBy, who, role), "/users"));
+            this.notifications.notificationCreated(peer.getTenantId(), Notices.notice(peer.getAppUserId(), NotificationType.USER_ADDED, NotificationSeverity.INFO, platformWide ? "New platform administrator" : "New user in your workspace", String.format("%s added %s as a %s.", createdBy, who, role), "/users"));
         }
     }
 
@@ -348,9 +348,9 @@ public class AppUserServiceImpl implements AppUserService {
     /** The role as the recipient would say it, not as the enum spells it. */
     private static String roleLabel(UserRole role) {
         if (role == UserRole.PLATFORM_ADMIN) {
-            return "Platform admin";
+            return "Platform administrator";
         } else if (role == UserRole.TENANT_ADMIN) {
-            return "Tenant admin";
+            return "Tenant administrator";
         }
         return "Tenant user";
     }
@@ -386,7 +386,7 @@ public class AppUserServiceImpl implements AppUserService {
                 return new ResponseDto(ERROR, "You cannot change your own role.");
             }
             if (!isPlatformAdminActor && appUserDto.getUserRole() == UserRole.PLATFORM_ADMIN) {
-                return new ResponseDto(ERROR, "Only a Platform Admin can grant the Platform Admin role.");
+                return new ResponseDto(ERROR, "Only a platform administrator can grant the platform administrator role.");
             }
             // Same rule as addUser: a tenant admin may not hand out its own level. Resubmitting
             // the role the row already carries is not granting anything, and the console sends
@@ -394,7 +394,7 @@ public class AppUserServiceImpl implements AppUserService {
             // longer correct its own name here.
             if (!isPlatformAdminActor && appUserDto.getUserRole() != UserRole.TENANT_USER
                 && appUserDto.getUserRole() != user.getUserRole()) {
-                return new ResponseDto(ERROR, "Only a Platform Admin can grant the Tenant Admin role.");
+                return new ResponseDto(ERROR, "Only a platform administrator can grant the tenant administrator role.");
             }
         }
 
@@ -408,7 +408,7 @@ public class AppUserServiceImpl implements AppUserService {
         }
 
         if (effectiveRole != UserRole.PLATFORM_ADMIN && isNull(effectiveTenantId)) {
-            return new ResponseDto(ERROR, "A tenant is required for this role -- assign one before removing Platform Admin.");
+            return new ResponseDto(ERROR, "A tenant is required for this role -- assign one before removing the platform administrator role.");
         }
         if (!isNull(effectiveTenantId) && !effectiveTenantId.equals(user.getTenantId())
             && !this.tenantRepository.findById(effectiveTenantId).isPresent()) {

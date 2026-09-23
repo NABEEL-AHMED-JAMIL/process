@@ -113,7 +113,7 @@ public class TenantSeedService {
         admin.setTenantId(null);
         admin.setUsername(PLATFORM_ADMIN_USERNAME);
         admin.setPassword(this.passwordEncoder.encode(this.platformAdminBootstrapPassword));
-        admin.setFullName("Platform Admin");
+        admin.setFullName("Platform administrator");
         admin.setUserRole(UserRole.PLATFORM_ADMIN);
         admin.setStatus(Status.Active);
         admin.setMustChangePassword(true);

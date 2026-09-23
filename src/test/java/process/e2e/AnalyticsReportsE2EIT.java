@@ -225,7 +225,7 @@ public class AnalyticsReportsE2EIT extends ReportBuildingSupport {
         JsonNode answer = this.json.readTree(result.getResponse().getContentAsString());
 
         assertThat(answer.path("status").asText())
-            .as("a tenant admin reached a platform dashboard: %s", answer.path("message").asText())
+            .as("a tenant administrator reached a platform dashboard: %s", answer.path("message").asText())
             .isNotEqualTo("SUCCESS");
     }
 

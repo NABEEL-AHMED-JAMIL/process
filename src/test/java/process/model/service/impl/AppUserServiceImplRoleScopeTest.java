@@ -53,7 +53,7 @@ public class AppUserServiceImplRoleScopeTest {
     private static final long TENANT_A = 1001L;
     private static final long TENANT_B = 2002L;
     private static final long ACTING_ADMIN_ID = 9000L;
-    private static final String PEER_ADMIN_MESSAGE = "Only a Platform Admin can manage another Tenant Admin.";
+    private static final String PEER_ADMIN_MESSAGE = "Only a platform administrator can manage another tenant administrator.";
 
     @Mock
     private AppUserRepository appUserRepository;

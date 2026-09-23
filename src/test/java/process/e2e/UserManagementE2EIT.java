@@ -196,7 +196,7 @@ public class UserManagementE2EIT extends E2ESupport {
         Optional<AppUser> created = this.appUserRepository.findByUsernameAndStatusNot(username, Status.Delete);
         if (created.isPresent()) {
             assertThat(created.get().getTenantId())
-                .as("a tenant admin must not be able to create an account inside another company")
+                .as("a tenant administrator must not be able to create an account inside another company")
                 .isEqualTo(companyA.getTenantId());
         }
     }
@@ -235,7 +235,7 @@ public class UserManagementE2EIT extends E2ESupport {
         String hashBefore = platformAdmin.getPassword();
 
         this.assertRefused(this.putAs(adminA, UPDATE_USER,
-            this.updateUserBody(platformAdmin.getAppUserId(), "Renamed By A Tenant Admin", null)));
+            this.updateUserBody(platformAdmin.getAppUserId(), "Renamed By A tenant administrator", null)));
         this.assertRefused(this.resetPasswordRequest(adminA, platformAdmin.getAppUserId()));
         this.assertRefused(this.putAs(adminA, CHANGE_USER_STATUS,
             this.statusBody(platformAdmin.getAppUserId(), Status.Inactive)));

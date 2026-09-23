@@ -69,7 +69,7 @@ import org.hamcrest.Matchers;
  * What that stubbed bucket costs, and where the missing half is asserted instead: a question about
  * whether the storage guard REFUSES something cannot be answered here, because the refusal would
  * come from the unstubbed mock rather than from the guard, and the test would keep passing with
- * the guard deleted. So "can a tenant admin download a kafka-secrets file it can otherwise use?"
+ * the guard deleted. So "can a tenant administrator download a kafka-secrets file it can otherwise use?"
  * lives in BucketAccessE2EIT, against real storage. This suite asserts what a caller may DO with
  * such a file; that one asserts what it may READ.
  *

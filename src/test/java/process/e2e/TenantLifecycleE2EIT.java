@@ -53,7 +53,7 @@ public class TenantLifecycleE2EIT extends E2ESupport {
         // A platform admin belongs to no tenant, so the per-tenant filter is off for it and the
         // listing reaches every company, not merely the ones it happens to have created.
         assertNotNull(this.tenantFromListing(platformAdmin, existing.getTenantId()),
-            "a platform admin must see a tenant it did not create");
+            "a platform administrator must see a tenant it did not create");
     }
 
     @Test
@@ -220,7 +220,7 @@ public class TenantLifecycleE2EIT extends E2ESupport {
             .andExpect(status().isForbidden());
 
         JsonNode listed = this.tenantFromListing(platformAdmin, own.getTenantId());
-        assertNotNull(listed, "a tenant admin must not be able to delete its own company");
+        assertNotNull(listed, "a tenant administrator must not be able to delete its own company");
         assertEquals(TenantStatus.Active.name(), listed.get("status").asText());
     }
 
@@ -333,7 +333,7 @@ public class TenantLifecycleE2EIT extends E2ESupport {
         // Belonging nowhere is exactly what lets a platform admin reach everywhere: the per-tenant
         // filter keys off this being absent. A platform admin that acquired a tenant id would
         // quietly start seeing one company's data only.
-        assertFalse(profile.hasNonNull("tenantId"), "a platform admin must not carry a tenant id");
+        assertFalse(profile.hasNonNull("tenantId"), "a platform administrator must not carry a tenant id");
     }
 
     // ---- helpers -------------------------------------------------------------------------------

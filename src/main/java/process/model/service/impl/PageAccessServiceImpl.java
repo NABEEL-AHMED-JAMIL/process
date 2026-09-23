@@ -189,7 +189,7 @@ public class PageAccessServiceImpl implements PageAccessService {
             return own;
         }
         if (isNull(requested)) {
-            refused[0] = new ResponseDto(ERROR, "Say which workspace: a platform admin has none of its own.");
+            refused[0] = new ResponseDto(ERROR, "Say which workspace: a platform administrator has none of its own.");
             return null;
         }
         if (!this.tenantRepository.findById(requested).isPresent()) {

@@ -98,7 +98,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return null;
         }
         if (ProcessUtil.isNull(requestedTenantId)) {
-            return new ResponseDto(ERROR, "Tenant is required when creating a source task as Platform Admin.");
+            return new ResponseDto(ERROR, "Tenant is required when creating a source task as a platform administrator.");
         }
         if (!this.tenantRepository.existsById(requestedTenantId)) {
             return new ResponseDto(ERROR, "Selected tenant not found.");

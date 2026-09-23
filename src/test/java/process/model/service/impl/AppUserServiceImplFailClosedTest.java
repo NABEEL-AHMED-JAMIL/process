@@ -131,7 +131,7 @@ public class AppUserServiceImplFailClosedTest {
 
         AppUserDto dto = new AppUserDto();
         dto.setAppUserId(7L);
-        dto.setFullName("Platform Admin");
+        dto.setFullName("Platform administrator");
         dto.setUserRole(UserRole.TENANT_USER);
 
         ResponseDto response = this.service.updateUser(dto);

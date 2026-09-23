@@ -92,7 +92,8 @@ public abstract class E2ESupport {
         // Never signed in with; the suite authenticates by minting a token for this row. Hashed
         // anyway so the column holds what the application would have put there.
         user.setPassword(this.passwordEncoder.encode(UUID.randomUUID().toString()));
-        user.setFullName("E2E " + role.name());
+        // Shown on the users page, so the role in words: "E2E tenant administrator", not "E2E TENANT_ADMIN".
+        user.setFullName("E2E " + role.name().toLowerCase().replace('_', ' ').replace("admin", "administrator"));
         user.setUserRole(role);
         user.setStatus(Status.Active);
         user.setMustChangePassword(false);

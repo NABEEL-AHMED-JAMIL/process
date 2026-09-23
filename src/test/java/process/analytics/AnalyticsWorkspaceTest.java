@@ -72,7 +72,7 @@ import static org.mockito.Mockito.when;
  * negative half of each pair while making dashboards useless, and that is exactly how the
  * resolver fix of 2026-09-08 was pinned. The platform-admin pair at the end is the sharpest of
  * them: that caller is refused a cross-workspace widget and allowed a same-workspace one, so the
- * rule being tested is "the two must match" and not "platform admins may not build dashboards".
+ * rule being tested is "the two must match" and not "platform administrators may not build dashboards".
  *
  * @author Nabeel Ahmed
  */
@@ -660,7 +660,7 @@ public class AnalyticsWorkspaceTest {
 
     /**
      * The control for the pair above, and the test that makes the rule "the two must match"
-     * rather than "a platform admin may not build a dashboard".
+     * rather than "a platform administrator may not build a dashboard".
      *
      * It also pins where the widget's own tenant comes from: the DASHBOARD, not the caller. A
      * platform admin's null tenant copied onto the widget would leave a row on a workspace's

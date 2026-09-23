@@ -54,16 +54,16 @@ public class MethodSecurityConfigRoleHierarchyTest {
     @Test
     void aPlatformAdminReachesBothLowerRoles() {
         assertTrue(this.satisfies(PLATFORM_ADMIN, TENANT_ADMIN),
-            "hasRole('TENANT_ADMIN') must admit a platform admin");
+            "hasRole('TENANT_ADMIN') must admit a platform administrator");
         // Two steps down, so this also proves the hierarchy is transitive and not one step only.
         assertTrue(this.satisfies(PLATFORM_ADMIN, TENANT_USER),
-            "hasRole('TENANT_USER') must admit a platform admin");
+            "hasRole('TENANT_USER') must admit a platform administrator");
     }
 
     @Test
     void aTenantAdminReachesATenantUser() {
         assertTrue(this.satisfies(TENANT_ADMIN, TENANT_USER),
-            "hasRole('TENANT_USER') must admit a tenant admin");
+            "hasRole('TENANT_USER') must admit a tenant administrator");
     }
 
     @Test
@@ -73,7 +73,7 @@ public class MethodSecurityConfigRoleHierarchyTest {
         assertFalse(this.satisfies(TENANT_USER, PLATFORM_ADMIN),
             "a tenant user must not satisfy hasRole('PLATFORM_ADMIN')");
         assertFalse(this.satisfies(TENANT_ADMIN, PLATFORM_ADMIN),
-            "a tenant admin must not satisfy hasRole('PLATFORM_ADMIN')");
+            "a tenant administrator must not satisfy hasRole('PLATFORM_ADMIN')");
     }
 
     @Test

@@ -69,7 +69,7 @@ public class AuthServiceImplMustChangePasswordTest {
         user.setAppUserId(1L);
         user.setUsername(USERNAME);
         user.setPassword("encoded");
-        user.setFullName("Platform Admin");
+        user.setFullName("Platform administrator");
         user.setUserRole(UserRole.PLATFORM_ADMIN);
         user.setStatus(Status.Active);
         user.setTenantId(null);

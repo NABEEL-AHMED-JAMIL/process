@@ -426,7 +426,7 @@ public class PipelineServiceImplTenantIsolationTest {
         submitted.setSourceTaskTypeId(TOPIC_ID);
         submitted.setPipelineKey(55L);
         submitted.setPipelineId(PIPELINE);
-        submitted.setPipelineName("Renamed by platform admin");
+        submitted.setPipelineName("Renamed by platform administrator");
         submitted.setFields(Collections.singletonList(field("bucket", "Bucket")));
 
         ResponseDto response = this.service.saveForm(submitted);

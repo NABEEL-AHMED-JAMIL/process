@@ -196,12 +196,12 @@ public class SettingServiceImpl implements SettingService {
             return null;
         }
         if (isPlatformOnly(lookupData)) {
-            return "Only a platform admin can change this entry -- it is engine configuration.";
+            return "Only a platform administrator can change this entry -- it is engine configuration.";
         }
         boolean owned = isTenantOwned(lookupData.getParent());
         boolean extendable = isTenantExtendable(lookupData.getParent());
         if (!owned && !extendable) {
-            return "Only a platform admin can change this entry -- it is platform reference data.";
+            return "Only a platform administrator can change this entry -- it is platform reference data.";
         }
         if (extendable && lookupData.getTenantId() == null) {
             // The platform's own providers. Visible to everyone, removable by nobody but a
@@ -564,7 +564,7 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, "Topic id missing.");
         }
         if (TenantContext.isPlatformAdmin()) {
-            return new ResponseDto(SUCCESS, "Platform Admin has no tenant routing override.", null);
+            return new ResponseDto(SUCCESS, "A platform administrator has no tenant routing override.", null);
         }
         return this.tenantTaskTypeKafkaRouteRepository
             .findByTenantIdAndSourceTaskTypeId(TenantContext.getTenantId(), sourceTaskTypeId)
@@ -579,7 +579,7 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, "Topic id and Kafka connection profile id are both required.");
         }
         if (TenantContext.isPlatformAdmin()) {
-            return new ResponseDto(ERROR, "Platform Admin publishes unscoped -- tenant routing overrides don't apply.");
+            return new ResponseDto(ERROR, "A platform administrator publishes unscoped -- tenant routing overrides don't apply.");
         }
         Long tenantId = TenantContext.getTenantId();
         String kafkaProfileError = this.validateKafkaProfileOwnership(kafkaConnectionProfileId);
@@ -607,7 +607,7 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, "Topic id missing.");
         }
         if (TenantContext.isPlatformAdmin()) {
-            return new ResponseDto(ERROR, "Platform Admin has no tenant routing override to remove.");
+            return new ResponseDto(ERROR, "A platform administrator has no tenant routing override to remove.");
         }
         this.tenantTaskTypeKafkaRouteRepository.deleteByTenantIdAndSourceTaskTypeId(TenantContext.getTenantId(), sourceTaskTypeId);
         return new ResponseDto(SUCCESS, "Kafka routing override removed -- back to the type's own default.");
@@ -636,7 +636,7 @@ public class SettingServiceImpl implements SettingService {
             && (isTenantOwned(parentLookupData.get()) || isTenantExtendable(parentLookupData.get()));
 
         if (!isTenantOwnedChild && !TenantContext.isPlatformAdmin()) {
-            return new ResponseDto(ERROR, "Only a platform admin can add this kind of lookup entry -- it is platform reference data other tenants depend on.");
+            return new ResponseDto(ERROR, "Only a platform administrator can add this kind of lookup entry -- it is platform reference data other tenants depend on.");
         }
         /*
          * Checked here rather than left to the unique index on lookup_type.
@@ -741,7 +741,7 @@ public class SettingServiceImpl implements SettingService {
         // this endpoint still serves it by id protects nothing.
         if (parentLookup.isPresent() && !TenantContext.isPlatformAdmin()
             && isPlatformOnly(parentLookup.get())) {
-            return new ResponseDto(ERROR, "Only a platform admin can view this lookup.");
+            return new ResponseDto(ERROR, "Only a platform administrator can view this lookup.");
         }
         if (parentLookup.isPresent()) {
             LookupDataDto lookupDataDto = new LookupDataDto();
@@ -858,7 +858,7 @@ public class SettingServiceImpl implements SettingService {
         }
         Long tenantId = sourceTaskTypeDto.getTenantId();
         if (isNull(tenantId)) {
-            return "Topic workspace missing -- a platform admin must say which workspace "
+            return "Topic workspace missing -- a platform administrator must say which workspace "
                 + "this task type belongs to.";
         }
         if (!this.tenantRepository.findById(tenantId).isPresent()) {

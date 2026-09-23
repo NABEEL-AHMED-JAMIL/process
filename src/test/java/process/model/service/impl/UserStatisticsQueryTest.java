@@ -34,12 +34,12 @@ public class UserStatisticsQueryTest {
     }
 
     @Test
-    @DisplayName("a platform admin sees every tenant")
+    @DisplayName("a platform administrator sees every tenant")
     void unscopedForPlatformAdmin() {
         TenantContext.set(1000L, "PLATFORM_ADMIN", 1L, "admin@platform.local");
         String sql = queryService.userStatistics(null, null);
         assertFalse(sql.contains("tenant_id ="),
-            "a platform admin must not be filtered to one tenant: " + sql);
+            "a platform administrator must not be filtered to one tenant: " + sql);
     }
 
     @Test
@@ -82,7 +82,7 @@ public class UserStatisticsQueryTest {
     }
 
     @Test
-    @DisplayName("a platform admin sees every tenant's runs")
+    @DisplayName("a platform administrator sees every tenant's runs")
     void reportUnscopedForPlatformAdmin() {
         TenantContext.set(1000L, "PLATFORM_ADMIN", 1L, "admin@platform.local");
         String sql = queryService.runReportRows(null, null);
@@ -91,7 +91,7 @@ public class UserStatisticsQueryTest {
         // NAME onto every row -- which a platform admin needs precisely because their report is
         // unscoped and would otherwise merge every workspace with nothing to say it had.
         assertFalse(sql.contains("and sj.tenant_id ="),
-            "a platform admin's report must not be tenant-filtered: " + sql);
+            "a platform administrator's report must not be tenant-filtered: " + sql);
     }
 
     @Test

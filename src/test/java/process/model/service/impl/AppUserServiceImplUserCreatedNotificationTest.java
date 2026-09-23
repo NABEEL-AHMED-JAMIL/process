@@ -147,13 +147,13 @@ public class AppUserServiceImplUserCreatedNotificationTest {
             eq(NotificationType.USER_ADDED), eq(NotificationSeverity.SUCCESS),
             title.capture(), message.capture(), eq("/profile"));
         assertThat(title.getValue()).isEqualTo("Welcome to Acme");
-        assertThat(message.getValue()).startsWith("Ada Admin set up your account as tenant user.");
+        assertThat(message.getValue()).startsWith("Ada Admin set up your account as a tenant user.");
 
         verify(this.notificationCenterService).create(eq(TENANT_A), eq(ACTING_ADMIN_ID),
             eq(NotificationType.USER_ADDED), eq(NotificationSeverity.INFO),
             eq("User created"), message.capture(), eq("/users"));
         assertThat(message.getValue())
-            .isEqualTo("You created New Person (new.person@example.com) as tenant user in Acme.");
+            .isEqualTo("You created New Person (new.person@example.com) as a tenant user in Acme.");
     }
 
     /** The one message an administrator must not miss rides on their own copy, as a warning. */
@@ -200,7 +200,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
         verify(this.notificationCenterService).create(eq(TENANT_A), eq(77L),
             eq(NotificationType.USER_ADDED), eq(NotificationSeverity.INFO),
             eq("New user in your workspace"),
-            eq("Pat Platform added New Person (new.person@example.com) as tenant user."), eq("/users"));
+            eq("Pat Platform added New Person (new.person@example.com) as a tenant user."), eq("/users"));
         verify(this.notificationCenterService, never()).create(any(), eq(78L), any(), any(), any(), any(), any());
         verify(this.notificationCenterService, never()).create(any(), eq(79L), any(), any(), any(), any(), any());
         // Welcome, actor, one peer.
@@ -229,7 +229,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
             eq("Welcome to ETL Console"), any(), eq("/profile"));
         verify(this.notificationCenterService).create(eq(null), eq(2L),
             eq(NotificationType.USER_ADDED), eq(NotificationSeverity.INFO),
-            eq("New platform admin"), any(), eq("/users"));
+            eq("New platform administrator"), any(), eq("/users"));
         verify(this.notificationCenterService, never()).create(any(), eq(77L), any(), any(), any(), any(), any());
         verify(this.notificationCenterService, times(3)).create(any(), any(), any(), any(), any(), any(), any());
     }
