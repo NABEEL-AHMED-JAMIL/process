@@ -29,9 +29,6 @@ public class AiAgentRestApi {
         this.aiAgentService = aiAgentService;
     }
 
-
-
-
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchAllAgents", method = RequestMethod.GET)
     public ResponseEntity<?> fetchAllAgents() {

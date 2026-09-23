@@ -19,6 +19,7 @@ import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AuthService;
+import process.security.LoginAttemptGuard;
 import process.util.JwtUtil;
 import java.sql.Timestamp;
 import java.util.Optional;
@@ -40,8 +41,20 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtil jwtUtil;
     private final PageAccessService pageAccessService;
 
+    /**
+     * The hash of a password nobody knows, matched against when the name is unknown so that
+     * path costs what a real one costs: a lookup that answered in a millisecond where a real
+     * account took a hundred told a caller which names exist.
+     */
+    private final String nobodysHash;
+
+    private final LoginAttemptGuard loginAttempts;
+
     public AuthServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
-        PasswordEncoder passwordEncoder, JwtUtil jwtUtil, PageAccessService pageAccessService) {
+        PasswordEncoder passwordEncoder, JwtUtil jwtUtil, PageAccessService pageAccessService,
+        LoginAttemptGuard loginAttempts) {
+        this.loginAttempts = loginAttempts;
+        this.nobodysHash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
         this.appUserRepository = appUserRepository;
         this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
@@ -54,11 +67,33 @@ public class AuthServiceImpl implements AuthService {
         if (isNull(loginRequestDto) || isNull(loginRequestDto.getUsername()) || isNull(loginRequestDto.getPassword())) {
             return new ResponseDto(ERROR, "Username and password are required.");
         }
-        Optional<AppUser> userOpt = this.appUserRepository.findByUsernameAndStatusNot(
-            loginRequestDto.getUsername().trim(), Status.Delete);
-
+        String username = loginRequestDto.getUsername().trim();
         String invalidCredentialsMessage = "Invalid username or password.";
-        if (!userOpt.isPresent()) {
+
+        // Too many wrong passwords against one name and the name rests, whoever is typing.
+        long wait = this.loginAttempts.secondsUntilAllowed(username);
+        if (wait > 0) {
+            return new ResponseDto(ERROR, String.format("Too many sign-in attempts. Try again in %d minute%s.",
+                (wait + 59) / 60, (wait + 59) / 60 == 1 ? "" : "s"));
+        }
+
+        // The name is an e-mail address, and e-mail addresses are not case-sensitive: the
+        // person who typed a capital in theirs is the same person.
+        Optional<AppUser> userOpt = this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(username, Status.Delete);
+
+        // The password is checked BEFORE anything is said about the account, and checked even
+        // when there is no account -- against a hash that matches nothing -- so a wrong name
+        // and a wrong password cost the same time and get the same sentence. The state of an
+        // account (inactive, suspended) is told only to somebody who knows its password.
+        boolean matches;
+        if (userOpt.isPresent()) {
+            matches = this.passwordEncoder.matches(loginRequestDto.getPassword(), userOpt.get().getPassword());
+        } else {
+            this.passwordEncoder.matches(loginRequestDto.getPassword(), this.nobodysHash);
+            matches = false;
+        }
+        if (!matches) {
+            this.loginAttempts.failed(username);
             return new ResponseDto(ERROR, invalidCredentialsMessage);
         }
         AppUser user = userOpt.get();
@@ -66,9 +101,7 @@ public class AuthServiceImpl implements AuthService {
         if (suspendedReason != null) {
             return new ResponseDto(ERROR, suspendedReason);
         }
-        if (!this.passwordEncoder.matches(loginRequestDto.getPassword(), user.getPassword())) {
-            return new ResponseDto(ERROR, invalidCredentialsMessage);
-        }
+        this.loginAttempts.succeeded(username);
         user.setLastLoginAt(new Timestamp(System.currentTimeMillis()));
         this.appUserRepository.save(user);
         return new ResponseDto(SUCCESS, "Login successful.", this.buildAuthResponse(user));

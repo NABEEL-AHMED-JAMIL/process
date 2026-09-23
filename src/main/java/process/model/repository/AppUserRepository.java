@@ -16,6 +16,9 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     public Optional<AppUser> findByUsernameAndStatusNot(String username, Status status);
 
+    /** Sign-in: the name is an e-mail address and is matched regardless of case. */
+    public Optional<AppUser> findFirstByUsernameIgnoreCaseAndStatusNot(String username, Status status);
+
     public List<AppUser> findByTenantIdAndStatusNotOrderByAppUserIdDesc(Long tenantId, Status status);
 
     public Optional<AppUser> findFirstByTenantIdAndUserRoleAndStatusOrderByAppUserIdAsc(Long tenantId, UserRole userRole, Status status);

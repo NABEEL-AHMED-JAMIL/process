@@ -482,9 +482,16 @@ public class SettingServiceImpl implements SettingService {
             sourceTaskType.get().setServiceName(sourceTaskTypeDto.getServiceName());
             sourceTaskType.get().setDescription(sourceTaskTypeDto.getDescription());
             sourceTaskType.get().setQueueTopicPartition(sourceTaskTypeDto.getQueueTopicPartition());
-            sourceTaskType.get().setKafkaConnectionProfileId(sourceTaskTypeDto.getKafkaConnectionProfileId());
+            // A body that says nothing about the Kafka profile keeps the one there is; it used
+            // to clear the binding, so an edit that touched only the name silently unrouted the topic.
+            if (!isNull(sourceTaskTypeDto.getKafkaConnectionProfileId())) {
+                sourceTaskType.get().setKafkaConnectionProfileId(sourceTaskTypeDto.getKafkaConnectionProfileId());
+            }
 
-            if (!isNull(sourceTaskTypeDto.getStatus())) {
+            // The jobs follow the topic's status only when that status CHANGES. The cascade used
+            // to run on every save that carried a status -- the dialog always does -- so editing
+            // a description re-activated every job somebody had deliberately switched off.
+            if (!isNull(sourceTaskTypeDto.getStatus()) && sourceTaskTypeDto.getStatus() != sourceTaskType.get().getStatus()) {
                 this.sourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId(sourceTaskTypeDto.getSourceTaskTypeId(), sourceTaskTypeDto.getStatus().name());
                 sourceTaskType.get().setStatus(sourceTaskTypeDto.getStatus());
             }

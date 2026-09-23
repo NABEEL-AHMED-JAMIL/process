@@ -18,6 +18,8 @@ public class JwtUtil {
     private static final String CLAIM_TENANT_ID = "tenantId";
     private static final String CLAIM_USER_ROLE = "userRole";
     private static final String CLAIM_APP_USER_ID = "appUserId";
+    /** True while the account still owes a password change: the filter refuses everything else. */
+    private static final String CLAIM_PASSWORD_DEBT = "pwd";
     private static final String CLAIM_TYPE = "type";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
@@ -46,6 +48,7 @@ public class JwtUtil {
             .claim(CLAIM_APP_USER_ID, user.getAppUserId())
             .claim(CLAIM_TENANT_ID, user.getTenantId())
             .claim(CLAIM_USER_ROLE, user.getUserRole().name())
+            .claim(CLAIM_PASSWORD_DEBT, user.isMustChangePassword() ? Boolean.TRUE : null)
             .claim(CLAIM_TYPE, type)
             .setIssuedAt(now)
             .setExpiration(new Date(now.getTime() + expiryMillis))
@@ -63,6 +66,11 @@ public class JwtUtil {
 
     public boolean isRefreshToken(Claims claims) {
         return TYPE_REFRESH.equals(claims.get(CLAIM_TYPE, String.class));
+    }
+
+    /** Whether the token was issued to an account that had not yet replaced its temporary password. */
+    public boolean owesPasswordChange(Claims claims) {
+        return Boolean.TRUE.equals(claims.get(CLAIM_PASSWORD_DEBT, Boolean.class));
     }
 
     public Long tenantIdOf(Claims claims) {

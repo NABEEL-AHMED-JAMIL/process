@@ -16,6 +16,7 @@ import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.PageAccessService;
+import process.security.LoginAttemptGuard;
 import process.util.JwtUtil;
 import process.util.ProcessUtil;
 
@@ -57,8 +58,9 @@ public class AuthServiceImplMustChangePasswordTest {
 
     @BeforeEach
     void setUp() {
+        when(this.passwordEncoder.encode(any(String.class))).thenReturn("nobodys-hash");
         this.service = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.jwtUtil, this.pageAccessService);
+            this.passwordEncoder, this.jwtUtil, this.pageAccessService, new LoginAttemptGuard());
     }
 
     /** No tenant, like the seeded platform admin, so the tenant lookup never comes into it. */
@@ -76,7 +78,7 @@ public class AuthServiceImplMustChangePasswordTest {
     }
 
     private ResponseDto login(AppUser user) throws Exception {
-        when(this.appUserRepository.findByUsernameAndStatusNot(USERNAME, Status.Delete))
+        when(this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(USERNAME, Status.Delete))
             .thenReturn(Optional.of(user));
         when(this.passwordEncoder.matches(PASSWORD, user.getPassword())).thenReturn(true);
         when(this.jwtUtil.generateAccessToken(any(AppUser.class))).thenReturn("access");

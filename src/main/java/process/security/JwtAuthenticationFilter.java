@@ -37,6 +37,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String token = header.substring(7);
                 Claims claims = this.jwtUtil.parseClaims(token);
                 if (!this.jwtUtil.isRefreshToken(claims)) {
+                    // The gate the browser draws is now also drawn here. A one-time password
+                    // used to open a full API session: the console kept the person on the
+                    // profile page, and nothing kept a script anywhere.
+                    if (this.jwtUtil.owesPasswordChange(claims) && !allowedWhileOwingPassword(request.getRequestURI())) {
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.setContentType("application/json");
+                        response.setCharacterEncoding("UTF-8");
+                        response.getWriter().write("{\"status\":\"ERROR\",\"message\":\"Change your temporary password before using anything else.\"}");
+                        return;
+                    }
                     Long tenantId = this.jwtUtil.tenantIdOf(claims);
                     String userRole = this.jwtUtil.userRoleOf(claims);
                     Long appUserId = this.jwtUtil.appUserIdOf(claims);
@@ -56,6 +66,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    /**
+     * What a person who still owes a password change may reach: the change itself, their own
+     * profile (the screen the change is on), and the session endpoints. Nothing that reads or
+     * writes the workspace.
+     */
+    static boolean allowedWhileOwingPassword(String uri) {
+        if (uri == null) return false;
+        return uri.contains("/auth.json/")
+            || uri.endsWith("/appUser.json/changeOwnPassword")
+            || uri.endsWith("/appUser.json/me")
+            || uri.contains("/appUser.json/avatar");
     }
 
 }

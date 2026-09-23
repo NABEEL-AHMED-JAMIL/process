@@ -25,6 +25,7 @@ import java.sql.Timestamp;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
 public class AiAgent implements Audited {
+
     @Transient
     private String createdByName;
 

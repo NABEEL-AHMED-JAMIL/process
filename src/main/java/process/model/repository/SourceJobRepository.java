@@ -54,7 +54,10 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
 
     @Transactional
     @Modifying
-    @Query(value = "update source_job set job_status = UPPER(?2)\n" +
+    // ?2, not UPPER(?2): the column holds the enum's own spelling ("Active"), and the readers
+    // compare it as written. UPPER() wrote "ACTIVE", which every list, tile and lookup then
+    // failed to match, so editing a topic made all of its jobs vanish from the console.
+    @Query(value = "update source_job set job_status = ?2\n" +
         "where task_detail_id in (select task_detail_id from source_task where source_task_type_id = ?1)",
         nativeQuery = true)
     public int statusChangeSourceJobLinkWithSourceTaskTypeId(Long sourceTaskTypeId, String status);
