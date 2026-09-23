@@ -46,8 +46,8 @@ import java.sql.Timestamp;
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@EntityListeners(AuditListener.class)
-public class AnalyticsQuery implements Audited {
+@EntityListeners({AuditListener.class, process.analytics.AnalyticsConnectionStamp.class})
+public class AnalyticsQuery implements Audited , process.analytics.ConnectionAliased{
 
     @Transient
     private String createdByName;
@@ -83,6 +83,13 @@ public class AnalyticsQuery implements Audited {
     // browser shows, and what DatasetResolver looks a connection up by.
     @Column(name = "connection_alias", nullable = false)
     private String connectionAlias;
+
+    /** The connection the alias named when this row was written (MIG-53 part b). */
+    @Column(name = "storage_connection_id")
+    private Long storageConnectionId;
+
+    @Column(name = "second_storage_connection_id")
+    private Long secondStorageConnectionId;
 
     // Keeps its glob when the query reads a folder as one table -- for those, the pattern IS the
     // location, and expanding it at save time would freeze a folder still being written to.
@@ -199,4 +206,12 @@ public class AnalyticsQuery implements Audited {
     public void setUpdatedByName(String updatedByName) {
         this.updatedByName = updatedByName;
     }
+
+    public Long getStorageConnectionId() { return storageConnectionId; }
+    @Override
+    public void setStorageConnectionId(Long storageConnectionId) { this.storageConnectionId = storageConnectionId; }
+
+    public Long getSecondStorageConnectionId() { return secondStorageConnectionId; }
+    @Override
+    public void setSecondStorageConnectionId(Long secondStorageConnectionId) { this.secondStorageConnectionId = secondStorageConnectionId; }
 }

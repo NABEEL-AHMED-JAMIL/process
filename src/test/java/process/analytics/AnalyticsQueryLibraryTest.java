@@ -812,6 +812,12 @@ public class AnalyticsQueryLibraryTest {
             if (root.isDirectory()) {
                 StringBuilder all = new StringBuilder();
                 collectSql(root, all);
+                // The YAML changesets too (V51 on): the master includes them, and a column added
+                // there (MIG-53's storage_connection_id, V56) is as real as one added in SQL.
+                File yaml = new File(prefix + "src/main/resources/db/changelog/yaml");
+                if (yaml.isDirectory()) {
+                    collectSql(yaml, all);
+                }
                 return all.toString();
             }
         }
@@ -833,7 +839,7 @@ public class AnalyticsQueryLibraryTest {
                 if (!"archive".equals(child.getName())) {
                     collectSql(child, into);
                 }
-            } else if (child.getName().endsWith(".sql")) {
+            } else if (child.getName().endsWith(".sql") || child.getName().endsWith(".yaml")) {
                 into.append(new String(Files.readAllBytes(child.toPath()), StandardCharsets.UTF_8))
                     .append('\n');
             }

@@ -49,8 +49,8 @@ import java.sql.Timestamp;
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@EntityListeners(AuditListener.class)
-public class AnalyticsQueryRun implements Audited {
+@EntityListeners({AuditListener.class, process.analytics.AnalyticsConnectionStamp.class})
+public class AnalyticsQueryRun implements Audited , process.analytics.ConnectionAliased{
 
     /**
      * The vocabulary a run_status column may hold, and there are SEVEN of them where 05 named six.
@@ -170,6 +170,13 @@ public class AnalyticsQueryRun implements Audited {
 
     @Column(name = "connection_alias", nullable = false)
     private String connectionAlias;
+
+    /** The connection the alias named when this row was written (MIG-53 part b). */
+    @Column(name = "storage_connection_id")
+    private Long storageConnectionId;
+
+    @Column(name = "second_storage_connection_id")
+    private Long secondStorageConnectionId;
 
     @Column(name = "dataset_path", columnDefinition = "TEXT", nullable = false)
     private String datasetPath;
@@ -305,4 +312,12 @@ public class AnalyticsQueryRun implements Audited {
     public void setUpdatedByName(String updatedByName) {
         this.updatedByName = updatedByName;
     }
+
+    public Long getStorageConnectionId() { return storageConnectionId; }
+    @Override
+    public void setStorageConnectionId(Long storageConnectionId) { this.storageConnectionId = storageConnectionId; }
+
+    public Long getSecondStorageConnectionId() { return secondStorageConnectionId; }
+    @Override
+    public void setSecondStorageConnectionId(Long secondStorageConnectionId) { this.secondStorageConnectionId = secondStorageConnectionId; }
 }

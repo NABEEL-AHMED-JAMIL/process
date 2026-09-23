@@ -63,8 +63,8 @@ import java.sql.Timestamp;
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@EntityListeners(AuditListener.class)
-public class BenchmarkResult implements Audited {
+@EntityListeners({AuditListener.class, process.analytics.AnalyticsConnectionStamp.class})
+public class BenchmarkResult implements Audited , process.analytics.ConnectionAliased{
 
     /**
      * A file open as the Studio performs one: the schema read, the row count and the first page.
@@ -155,6 +155,10 @@ public class BenchmarkResult implements Audited {
 
     @Column(name = "connection_alias", nullable = false)
     private String connectionAlias;
+
+    /** The connection the alias named when this row was written (MIG-53 part b). */
+    @Column(name = "storage_connection_id")
+    private Long storageConnectionId;
 
     @Column(name = "dataset_path", columnDefinition = "TEXT", nullable = false)
     private String datasetPath;
@@ -378,4 +382,8 @@ public class BenchmarkResult implements Audited {
     public void setUpdatedByName(String updatedByName) {
         this.updatedByName = updatedByName;
     }
+
+    public Long getStorageConnectionId() { return storageConnectionId; }
+    @Override
+    public void setStorageConnectionId(Long storageConnectionId) { this.storageConnectionId = storageConnectionId; }
 }

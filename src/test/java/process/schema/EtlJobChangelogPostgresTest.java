@@ -55,6 +55,14 @@ class EtlJobChangelogPostgresTest {
             // MIG-53 (V55): an alias is unique within a workspace, and a platform name (no tenant)
             // is unique among platform rows -- NULLs must not be distinct here, or two platform rows
             // could claim one name, the hole bucket_credential has.
+            // MIG-53 part b (V56): every analytics alias carries the connection's id beside it.
+            for (String column : new String[] {"analytics_analysis.storage_connection_id", "analytics_benchmark_result.storage_connection_id",
+                "analytics_dataset.storage_connection_id", "analytics_query.storage_connection_id", "analytics_query.second_storage_connection_id",
+                "analytics_query_run.storage_connection_id", "analytics_query_run.second_storage_connection_id"}) {
+                String[] parts = column.split("\\.");
+                assertThat(sql.queryForObject("SELECT count(*) FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
+                    Integer.class, parts[0], parts[1])).as(column).isEqualTo(1);
+            }
             sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (1, 'Active', 't1', 'One'), (2, 'Active', 't2', 'Two')");
             String insert = "INSERT INTO storage_connection (storage_connection_id, tenant_id, alias, connection_name, "
                 + "is_default, provider, status) VALUES (?, ?, ?, 'c', false, 'MINIO', 'Active')";
@@ -65,6 +73,16 @@ class EtlJobChangelogPostgresTest {
             sql.update(insert, 9004L, null, "etl-shared");
             assertThatThrownBy(() -> sql.update(insert, 9005L, null, "etl-shared"))
                 .as("two platform rows, one name").isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+            // The stamp's resolver, on real rows (MIG-53 part b): own workspace first, then the platform's.
+            process.analytics.JdbcConnectionIdResolver ids = new process.analytics.JdbcConnectionIdResolver(sql);
+            assertThat(ids.resolve(1L, "exports")).isEqualTo(9001L);
+            assertThat(ids.resolve(2L, "exports")).isEqualTo(9002L);
+            assertThat(ids.resolve(1L, "etl-shared")).as("the platform's, for a workspace without its own").isEqualTo(9004L);
+            assertThat(ids.resolve(null, "exports")).as("no workspace, and two use the name: ambiguous, so none").isNull();
+            assertThat(ids.resolve(3L, "exports")).as("never another workspace's").isNull();
+            sql.update(insert, 9006L, 1L, "one-only");
+            assertThat(ids.resolve(null, "one-only")).as("no workspace: the one workspace using the name").isEqualTo(9006L);
         } finally {
             pool.close();
             try (Connection admin = DriverManager.getConnection(server, user, password); Statement sql = admin.createStatement()) {

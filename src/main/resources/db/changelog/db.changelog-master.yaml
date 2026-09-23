@@ -34,3 +34,7 @@ databaseChangeLog:
       file: db/changelog/yaml/V55.0-storage-connection-alias-per-tenant.yaml
   - include:
       file: db/changelog/yaml/V55.1-drop-recreated-platform-wide-alias-constraint.yaml
+  - include:
+      file: db/changelog/yaml/V56.0-analytics-rows-carry-storage-connection-id.yaml
+  - include:
+      file: db/changelog/yaml/V56.1-stamp-platform-admin-analytics-rows.yaml

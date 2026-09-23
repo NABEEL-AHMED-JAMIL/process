@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: 56.1-stamp-platform-admin-analytics-rows
+      author: nabeel.amd93
+      description: "Stamp analytics rows with no workspace: the platform's connection, else the one workspace's (MIG-53 part b)"
+      # V56 stamped a no-workspace row only with a platform connection. A platform admin's run names a
+      # workspace's connection when exactly one workspace uses the name -- the admin's own resolution --
+      # so those are stamped too; an ambiguous name stays NULL.
+      changes:
+        - sql:
+            sql: >
+              UPDATE analytics_analysis r SET storage_connection_id = (SELECT min(sc.storage_connection_id) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL)
+              WHERE r.tenant_id IS NULL AND r.storage_connection_id IS NULL AND (SELECT count(*) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL) = 1;
+              UPDATE analytics_benchmark_result r SET storage_connection_id = (SELECT min(sc.storage_connection_id) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL)
+              WHERE r.tenant_id IS NULL AND r.storage_connection_id IS NULL AND (SELECT count(*) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL) = 1;
+              UPDATE analytics_dataset r SET storage_connection_id = (SELECT min(sc.storage_connection_id) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL)
+              WHERE r.tenant_id IS NULL AND r.storage_connection_id IS NULL AND (SELECT count(*) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL) = 1;
+              UPDATE analytics_query r SET storage_connection_id = (SELECT min(sc.storage_connection_id) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL)
+              WHERE r.tenant_id IS NULL AND r.storage_connection_id IS NULL AND (SELECT count(*) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL) = 1;
+              UPDATE analytics_query r SET second_storage_connection_id = (SELECT min(sc.storage_connection_id) FROM storage_connection sc WHERE sc.alias = r.second_connection_alias AND sc.tenant_id IS NOT NULL)
+              WHERE r.tenant_id IS NULL AND r.second_storage_connection_id IS NULL AND r.second_connection_alias IS NOT NULL AND (SELECT count(*) FROM storage_connection sc WHERE sc.alias = r.second_connection_alias AND sc.tenant_id IS NOT NULL) = 1;
+              UPDATE analytics_query_run r SET storage_connection_id = (SELECT min(sc.storage_connection_id) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL)
+              WHERE r.tenant_id IS NULL AND r.storage_connection_id IS NULL AND (SELECT count(*) FROM storage_connection sc WHERE sc.alias = r.connection_alias AND sc.tenant_id IS NOT NULL) = 1;
+              UPDATE analytics_query_run r SET second_storage_connection_id = (SELECT min(sc.storage_connection_id) FROM storage_connection sc WHERE sc.alias = r.second_connection_alias AND sc.tenant_id IS NOT NULL)
+              WHERE r.tenant_id IS NULL AND r.second_storage_connection_id IS NULL AND r.second_connection_alias IS NOT NULL AND (SELECT count(*) FROM storage_connection sc WHERE sc.alias = r.second_connection_alias AND sc.tenant_id IS NOT NULL) = 1;

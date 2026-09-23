@@ -43,6 +43,28 @@ public class StorageConnectionLookup {
     }
 
     /**
+     * The connection a stored row means by this name: the row's workspace's own, else the platform's;
+     * for a row with no workspace (a platform admin's), the platform's, else the one workspace's that
+     * uses the name. Ambiguous or absent is empty -- never an exception: this names what a row was
+     * written against, and must not fail the write.
+     */
+    public Optional<StorageConnection> forRow(Long tenantId, String alias) {
+        if (tenantId != null) {
+            return this.ownOrPlatform(tenantId, alias);
+        }
+        Optional<StorageConnection> platform = this.platform(alias);
+        if (platform.isPresent()) {
+            return platform;
+        }
+        List<StorageConnection> workspaces = this.workspacesUsing(alias);
+        return workspaces.size() == 1 ? Optional.of(workspaces.get(0)) : Optional.empty();
+    }
+
+    private List<StorageConnection> workspacesUsing(String alias) {
+        return this.connections.findAllByAlias(alias).stream().filter(c -> c.getTenantId() != null).collect(Collectors.toList());
+    }
+
+    /**
      * What the signed-in caller means by this name. A workspace user: their own, else the platform's
      * (the platform-bucket guard decides whether they may have it). A platform admin, who has no
      * workspace: the platform's, else the one workspace's that uses the name -- and when several do,
@@ -57,8 +79,7 @@ public class StorageConnectionLookup {
         if (platform.isPresent()) {
             return platform;
         }
-        List<StorageConnection> workspaces = this.connections.findAllByAlias(alias).stream()
-            .filter(c -> c.getTenantId() != null).collect(Collectors.toList());
+        List<StorageConnection> workspaces = this.workspacesUsing(alias);
         if (workspaces.size() > 1) {
             throw new IllegalArgumentException("'" + alias + "' names a connection in more than one workspace; "
                 + "open it from that workspace instead.");
