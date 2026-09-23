@@ -536,15 +536,17 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         // Any other bucket is a storage connection, and a tenant may only name one of its own --
         // otherwise a profile could borrow another tenant's alias and have the trusted read fetch
         // whatever sits at that key.
-        Optional<StorageConnection> connection = this.storageConnectionRepository.findByAlias(bucket);
-        if (!connection.isPresent()) {
-            return new ResponseDto(ERROR, String.format("No storage connection is called '%s'.", bucket));
-        }
+        // Aliases are per workspace (MIG-53): a workspace names only its own, and a platform
+        // connection is refused with the same words as an absent one. A platform admin may name the
+        // platform's, or any workspace's -- the dispatch then reads it within the profile's tenant.
         if (TenantContext.isPlatformAdmin()) {
-            return null;
+            return this.storageConnectionRepository.findAllByAlias(bucket).isEmpty()
+                ? new ResponseDto(ERROR, String.format("No storage connection is called '%s'.", bucket)) : null;
         }
-        Long ownerTenantId = connection.get().getTenantId();
-        if (ownerTenantId == null || !ownerTenantId.equals(TenantContext.getTenantId())) {
+        Long callerTenantId = TenantContext.getTenantId();
+        Optional<StorageConnection> connection = callerTenantId == null ? Optional.empty()
+            : this.storageConnectionRepository.findByTenantIdAndAlias(callerTenantId, bucket);
+        if (!connection.isPresent()) {
             return new ResponseDto(ERROR, String.format("No storage connection is called '%s'.", bucket));
         }
         return null;

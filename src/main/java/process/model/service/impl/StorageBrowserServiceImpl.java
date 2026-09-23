@@ -21,6 +21,7 @@ import process.model.pojo.StorageConnection;
 import process.model.repository.StorageConnectionRepository;
 import process.model.service.ObjectStorageService;
 import process.storage.ObjectChangeLog;
+import process.storage.StorageConnectionLookup;
 import process.storage.TrustedAccess;
 import process.storage.TrustedStorageAudit;
 import process.storage.TrustedStorageOperations;
@@ -158,6 +159,9 @@ public class StorageBrowserServiceImpl implements StorageBrowserService, Trusted
      */
     private final ObjectChangeLog changes;
 
+    /** Which connection an alias means: always said whose (MIG-53). */
+    private final StorageConnectionLookup lookup;
+
     public StorageBrowserServiceImpl(
         LookupDataCacheService lookupDataCacheService,
         StorageConnectionRepository storageConnectionRepository,
@@ -167,6 +171,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService, Trusted
         @Value(StoragePropertyDefaults.CONFIG_BUCKET) String configBucket,
         ObjectChangeLog changes) {
         this.changes = changes;
+        this.lookup = new StorageConnectionLookup(storageConnectionRepository);
         this.lookupDataCacheService = lookupDataCacheService;
         this.storageConnectionRepository = storageConnectionRepository;
         this.storageClientFactory = storageClientFactory;
@@ -433,7 +438,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService, Trusted
         requireAccess(access);
         this.requireSafeKey(key);
         TrustedStorageAudit.record("upload", access, bucket, key);
-        ObjectStorageService service = this.resolveService(bucket, Resolution.TRUSTED);
+        ObjectStorageService service = this.resolveService(bucket, Resolution.TRUSTED, access.getTenantId());
         this.announce("uploaded", () -> this.changes.object(bucket, key, ObjectChanged.Reason.UPLOAD));
         service.uploadObject(bucket, key, inputStream, size, contentType);
     }
@@ -444,7 +449,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService, Trusted
         requireAccess(access);
         this.requireSafeKey(key);
         TrustedStorageAudit.record("read", access, bucket, key);
-        return this.resolveService(bucket, Resolution.TRUSTED).getObjectContent(bucket, key, null, null);
+        return this.resolveService(bucket, Resolution.TRUSTED, access.getTenantId()).getObjectContent(bucket, key, null, null);
     }
 
     // The one write path here that is deliberately NOT evicting. It writes a zero-byte marker
@@ -646,7 +651,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService, Trusted
             && !TenantContext.isPlatformAdmin() && !this.isOwnProfileObject(bucket, key)) {
             throw unknownBucket(bucket);
         }
-        return this.resolveService(bucket, Resolution.GUARDED);
+        return this.resolveService(bucket, Resolution.GUARDED, null);
     }
 
     /**
@@ -672,8 +677,10 @@ public class StorageBrowserServiceImpl implements StorageBrowserService, Trusted
         if (this.isPlatformBucketName(bucket)) {
             return true;
         }
-        Optional<StorageConnection> connection = this.storageConnectionRepository.findByAlias(bucket);
-        return connection.isPresent() && connection.get().getTenantId() == null;
+        // The platform's own row by this name, of any status. Workspace names can no longer
+        // collide with a platform name (StorageConnectionLookup.aliasUnavailable), so a workspace's
+        // own "x" is never mistaken for a platform bucket.
+        return this.lookup.platform(bucket).isPresent();
     }
 
     /**
@@ -744,21 +751,22 @@ public class StorageBrowserServiceImpl implements StorageBrowserService, Trusted
      * match and refuse a bucket the workflow wrote itself. Never reachable from a request that
      * named its own bucket; see uploadForWorkflow.
      */
-    private ObjectStorageService resolveService(String bucket, Resolution how) {
+    private ObjectStorageService resolveService(String bucket, Resolution how, Long trustedTenantId) {
         if (bucket == null) {
             // deleteObjects reads its bucket from a request body rather than a required query
             // parameter, so an absent one arrives here as null and came back as a 500 from the
             // alias comparison below instead of the refusal every other unusable bucket gets.
             throw unknownBucket(bucket);
         }
-        Optional<StorageConnection> connection = this.storageConnectionRepository.findByAliasAndStatus(bucket, Status.Active);
+        // Whose name: the caller's (their own, else the platform's) on the guarded path; the row's
+        // tenant, else the platform's, on the trusted one. A workspace lookup never returns another
+        // workspace's connection, which is what the old tenant test here used to catch after the fact.
+        Optional<StorageConnection> connection = (how == Resolution.TRUSTED
+            ? this.lookup.ownOrPlatform(trustedTenantId, bucket)
+            : this.lookup.forCaller(bucket))
+            .filter(c -> c.getStatus() == Status.Active);
         if (connection.isPresent()) {
             StorageConnection storageConnection = connection.get();
-            if (how == Resolution.GUARDED && !TenantContext.isPlatformAdmin()
-                && storageConnection.getTenantId() != null
-                && !Objects.equals(storageConnection.getTenantId(), TenantContext.getTenantId())) {
-                throw unknownBucket(bucket);
-            }
             ObjectStorageService service = this.storageClientFactory.serviceFor(storageConnection);
             // FTP has no bucket concept, so there is nothing to rewrite; for the object stores
             // the alias may differ from the real bucket/container name.

@@ -80,7 +80,6 @@ public class DefaultBucketBootstrapTest {
 
     @Test
     void createsBothPlatformBucketsOnAFreshDatabase() {
-        when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.empty());
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
@@ -104,7 +103,6 @@ public class DefaultBucketBootstrapTest {
     /** The MinIO-era Kafka bucket is gone: nothing seeds it, whatever its old name was. */
     @Test
     void doesNotSeedTheOldKafkaSecretBucket() {
-        when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.empty());
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
@@ -116,8 +114,7 @@ public class DefaultBucketBootstrapTest {
     void leavesAnExistingConnectionAlone() {
         StorageConnection existing = new StorageConnection();
         existing.setAlias("etl-avatar");
-        when(this.storageConnectionRepository.findByAlias("etl-avatar")).thenReturn(Optional.of(existing));
-        when(this.storageConnectionRepository.findByAlias("etl-config")).thenReturn(Optional.empty());
+        process.storage.StorageRows.add(this.storageConnectionRepository, existing);
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
@@ -127,7 +124,7 @@ public class DefaultBucketBootstrapTest {
     @Test
     void createsNothingTwiceWhenBothAlreadyExist() {
         StorageConnection existing = new StorageConnection();
-        when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.of(existing));
+        process.storage.StorageRows.add(this.storageConnectionRepository, existing);
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
@@ -142,7 +139,6 @@ public class DefaultBucketBootstrapTest {
     void refusesToInventAConnectionWithoutKeysOrAnInstanceRole() {
         ReflectionTestUtils.setField(this.bootstrap, "awsAccessKey", "");
         ReflectionTestUtils.setField(this.bootstrap, "awsSecretKey", "");
-        when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.empty());
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
@@ -159,7 +155,6 @@ public class DefaultBucketBootstrapTest {
         ReflectionTestUtils.setField(this.bootstrap, "awsSecretKey", "");
         ReflectionTestUtils.setField(this.bootstrap, "awsEndpoint", "");
         ReflectionTestUtils.setField(this.bootstrap, "allowInstanceRole", true);
-        when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.empty());
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
@@ -176,7 +171,6 @@ public class DefaultBucketBootstrapTest {
     void honoursConfiguredBucketNames() {
         ReflectionTestUtils.setField(this.bootstrap, "avatarBucket", "company-faces");
         ReflectionTestUtils.setField(this.bootstrap, "configBucket", "company-config");
-        when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.empty());
 
         this.bootstrap.run(mock(ApplicationArguments.class));
 
@@ -216,7 +210,6 @@ public class DefaultBucketBootstrapTest {
             this.lookupDataRepository, this.storageConnectionRepository, this.encryptionUtil,
             transactionManager);
         this.configureAws(bootstrap);
-        when(this.storageConnectionRepository.findByAlias(anyString())).thenReturn(Optional.empty());
 
         Assertions.assertThatCode(() -> bootstrap.run(mock(ApplicationArguments.class)))
             .as("a bootstrap failure must never stop the application from starting")

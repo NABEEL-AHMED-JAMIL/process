@@ -15,9 +15,14 @@ public interface StorageConnectionRepository extends JpaRepository<StorageConnec
 
     public List<StorageConnection> findByStatusNotOrderByStorageConnectionIdDesc(Status status);
 
-    public Optional<StorageConnection> findByAliasAndStatus(String alias, Status status);
+    // No lookup by alias alone (MIG-53): an alias is unique within a workspace, so every lookup says
+    // whose alias it means. StorageConnectionLookup is where the rules for choosing live.
 
-    public Optional<StorageConnection> findByAlias(String alias);
+    public Optional<StorageConnection> findByTenantIdAndAlias(Long tenantId, String alias);
+
+    public Optional<StorageConnection> findByTenantIdIsNullAndAlias(String alias);
+
+    public List<StorageConnection> findAllByAlias(String alias);
 
     public List<StorageConnection> findByTenantIdAndStatus(Long tenantId, Status status);
 

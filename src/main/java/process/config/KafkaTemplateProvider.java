@@ -230,7 +230,7 @@ public class KafkaTemplateProvider {
                 localFile.getParent().toFile().deleteOnExit();
                 localFile.toFile().deleteOnExit();
             }
-            ObjectContentDto content = this.downloadProfileSecret(bucket, objectKey);
+            ObjectContentDto content = this.downloadProfileSecret(profile.getTenantId(), bucket, objectKey);
             this.writePrivateFile(content.getContent(), localFile);
             this.logger.info("Cached {} for Kafka profile {} from bucket {}/{} -> {}", kind, profileId, bucket, objectKey, localFile);
             return localFile.toString();
@@ -255,9 +255,12 @@ public class KafkaTemplateProvider {
      * this and it was the wrong shape -- it fabricated a principal, and still lost to the platform
      * bucket.
      */
-    private ObjectContentDto downloadProfileSecret(String bucket, String objectKey) {
+    private ObjectContentDto downloadProfileSecret(Long profileTenantId, String bucket, String objectKey) {
         return this.storageBrowserService.readForWorkflow(
-            TrustedAccess.of(TrustedCaller.KAFKA_TEMPLATE_PROVIDER, "a Kafka profile's key material, from the profile row"),
+            TrustedAccess.of(TrustedCaller.KAFKA_TEMPLATE_PROVIDER, "a Kafka profile's key material, from the profile row")
+                // Within the profile's workspace: its own alias for the secret's bucket is what the
+                // row names (aliases are per workspace, MIG-53).
+                .forTenant(profileTenantId),
             bucket, objectKey);
     }
 

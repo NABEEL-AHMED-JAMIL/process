@@ -157,7 +157,7 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
     }
 
     private void ensurePlatformBucket(String alias, String connectionName, String description) {
-        if (this.storageConnectionRepository.findByAlias(alias).isPresent()) {
+        if (this.storageConnectionRepository.findByTenantIdIsNullAndAlias(alias).isPresent()) {
             return;
         }
         boolean hasKeys = !this.isBlank(this.awsAccessKey) && !this.isBlank(this.awsSecretKey);
@@ -208,9 +208,13 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
                 continue;
             }
             alias = alias.trim();
-            Optional<StorageConnection> existing = this.storageConnectionRepository.findByAlias(alias);
-            if (existing.isPresent()) {
-                this.warnIfAnotherTenantHoldsTheAlias(existing.get(), child, alias);
+            // Names are per workspace (MIG-53): the entry is skipped only when its own workspace
+            // already has the name, or the platform reserves it.
+            if (new process.storage.StorageConnectionLookup(this.storageConnectionRepository)
+                    .aliasUnavailable(child.getTenantId(), alias, null)) {
+                final String taken = alias;
+                this.storageConnectionRepository.findAllByAlias(alias).stream().findFirst()
+                    .ifPresent(holder -> this.warnIfAnotherTenantHoldsTheAlias(holder, child, taken));
                 continue;
             }
             StorageProvider provider = this.parseProvider(child.getDescription());
@@ -236,7 +240,7 @@ public class StorageConnectionBootstrap implements ApplicationRunner {
     /**
      * Says so when one tenant's bucket name has already been taken by another tenant's connection.
      *
-     * An alias is unique platform-wide, but BUCKET_LIST let every tenant name a bucket for itself,
+     * An alias is unique within a workspace, and a platform name is reserved everywhere; BUCKET_LIST let every tenant name a bucket for itself,
      * so two of them could each hold an entry reading "reports". Only the first becomes a
      * connection and the second tenant quietly loses the bucket from its browser -- and which one
      * wins depends on the order the children come back in. Nothing else reports that, and the

@@ -94,8 +94,8 @@ class StorageGuardCharacterisationTest {
 
     private void stub(String alias, Long tenantId, StorageProvider provider) {
         StorageConnection row = connection(alias, tenantId, provider, Status.Active);
-        lenient().when(this.storageConnectionRepository.findByAlias(alias)).thenReturn(Optional.of(row));
-        lenient().when(this.storageConnectionRepository.findByAliasAndStatus(alias, Status.Active)).thenReturn(Optional.of(row));
+        process.storage.StorageRows.add(this.storageConnectionRepository, row);
+        process.storage.StorageRows.add(this.storageConnectionRepository, row);
     }
 
     private static StorageConnection connection(String alias, Long tenantId, StorageProvider provider, Status status) {
@@ -178,9 +178,7 @@ class StorageGuardCharacterisationTest {
     @Test
     void aPlatformBucketWhoseRowIsRetiredIsStillAPlatformBucket() {
         String archive = "etl-archive";
-        lenient().when(this.storageConnectionRepository.findByAlias(archive))
-            .thenReturn(Optional.of(connection(archive, null, StorageProvider.MINIO, Status.Delete)));
-        lenient().when(this.storageConnectionRepository.findByAliasAndStatus(archive, Status.Active)).thenReturn(Optional.empty());
+        process.storage.StorageRows.add(this.storageConnectionRepository, connection(archive, null, StorageProvider.MINIO, Status.Delete));
         LookupDataDto own = new LookupDataDto();
         own.setLookupType("BUCKET_LIST_" + archive);
         own.setLookupValue(archive);

@@ -644,11 +644,10 @@ public class AnalyticsQueryExecutionTest {
         // "other-store" by joining to it -- and the refusal has to be the same one they would have
         // met asking for it directly, or the join becomes an oracle for what other workspaces own.
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        when(repository.findByAlias("store"))
-            .thenReturn(Optional.of(storageConnection(TENANT_ID)));
+        process.storage.StorageRows.add(repository, storageConnection(TENANT_ID));
         StorageConnection theirs = storageConnection(OTHER_TENANT_ID);
         theirs.setAlias("other-store");
-        when(repository.findByAlias("other-store")).thenReturn(Optional.of(theirs));
+        process.storage.StorageRows.add(repository, theirs);
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
@@ -671,8 +670,7 @@ public class AnalyticsQueryExecutionTest {
         // The control for the refusal above. A resolver that refused every second dataset would
         // satisfy that test while making a join impossible.
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        when(repository.findByAlias(anyString()))
-            .thenReturn(Optional.of(storageConnection(TENANT_ID)));
+        process.storage.StorageRows.add(repository, storageConnection(TENANT_ID));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
@@ -692,8 +690,7 @@ public class AnalyticsQueryExecutionTest {
     @Test
     void aQueryOverOneDatasetIsNotGivenASecondOne() throws Exception {
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        when(repository.findByAlias(anyString()))
-            .thenReturn(Optional.of(storageConnection(TENANT_ID)));
+        process.storage.StorageRows.add(repository, storageConnection(TENANT_ID));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);
@@ -708,8 +705,7 @@ public class AnalyticsQueryExecutionTest {
     @Test
     void halfASecondDatasetIsAnErrorRatherThanAOneDatasetAnswer() {
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        when(repository.findByAlias(anyString()))
-            .thenReturn(Optional.of(storageConnection(TENANT_ID)));
+        process.storage.StorageRows.add(repository, storageConnection(TENANT_ID));
 
         AnalyticsQueryService queryService = mock(AnalyticsQueryService.class);
         AnalyticsRestApi api = new AnalyticsRestApi(new DatasetResolver(repository), queryService, null, null, new AnalyticsLimits(), null);

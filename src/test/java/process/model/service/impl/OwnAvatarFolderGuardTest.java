@@ -68,9 +68,8 @@ public class OwnAvatarFolderGuardTest {
         platform.setBucketName(AVATAR_BUCKET);
         platform.setProvider(StorageProvider.MINIO);
         platform.setStatus(Status.Active);
-        when(this.storageConnectionRepository.findByAlias(AVATAR_BUCKET)).thenReturn(Optional.of(platform));
-        when(this.storageConnectionRepository.findByAliasAndStatus(AVATAR_BUCKET, Status.Active))
-            .thenReturn(Optional.of(platform));
+        process.storage.StorageRows.add(this.storageConnectionRepository, platform);
+        process.storage.StorageRows.add(this.storageConnectionRepository, platform);
         when(this.storageClientFactory.serviceFor(any())).thenReturn(this.minio);
         TenantContext.set(TENANT_A, "TENANT_USER", USER_A, "tenant-user@example.com");
     }

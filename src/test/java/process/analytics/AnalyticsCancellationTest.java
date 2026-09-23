@@ -124,8 +124,7 @@ public class AnalyticsCancellationTest {
 
         Connection duck = session();
         when(this.sessions.open(any(StorageConnection.class))).thenReturn(duck);
-        when(this.connections.findByAlias(anyString()))
-            .thenReturn(Optional.of(storageConnection()));
+        process.storage.StorageRows.add(this.connections, storageConnection());
 
         TenantContext.set(TENANT_ID, "TENANT_USER", USER_ID, "analyst");
     }

@@ -64,8 +64,8 @@ class StorageChangeAnnouncementTest {
         connection.setBucketName(BUCKET);
         connection.setProvider(StorageProvider.MINIO);
         connection.setStatus(Status.Active);
-        lenient().when(this.connections.findByAlias(BUCKET)).thenReturn(Optional.of(connection));
-        lenient().when(this.connections.findByAliasAndStatus(BUCKET, Status.Active)).thenReturn(Optional.of(connection));
+        process.storage.StorageRows.add(this.connections, connection);
+        process.storage.StorageRows.add(this.connections, connection);
         lenient().when(this.factory.serviceFor(any())).thenReturn(this.store);
         TenantContext.set(1001L, "TENANT_ADMIN", 61L, "ops@medaxis.example");
     }
@@ -91,7 +91,7 @@ class StorageChangeAnnouncementTest {
     @Test
     void aMultipartUploadAndAWorkflowUploadAreAnnouncedToo() {
         this.service.uploadObject(BUCKET, "q3/", new MockMultipartFile("file", "b.csv", "text/csv", new byte[] {1}));
-        this.service.uploadForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test"),
+        this.service.uploadForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test").forTenant(1001L),
             BUCKET, "kafka/truststore.p12", bytes(), 3, "application/octet-stream");
 
         InOrder order = inOrder(this.changes, this.store);

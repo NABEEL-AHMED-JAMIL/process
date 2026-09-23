@@ -12,6 +12,7 @@ import java.sql.Statement;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -50,6 +51,20 @@ class EtlJobChangelogPostgresTest {
             // And document_converter_task lives in media_db (MIG-41, V54).
             assertThat(sql.queryForObject("SELECT to_regclass('public.document_converter_task') IS NULL", Boolean.class)).isTrue();
             assertThat(sql.queryForObject("SELECT to_regclass('public.app_user') IS NOT NULL", Boolean.class)).isTrue();
+
+            // MIG-53 (V55): an alias is unique within a workspace, and a platform name (no tenant)
+            // is unique among platform rows -- NULLs must not be distinct here, or two platform rows
+            // could claim one name, the hole bucket_credential has.
+            sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (1, 'Active', 't1', 'One'), (2, 'Active', 't2', 'Two')");
+            String insert = "INSERT INTO storage_connection (storage_connection_id, tenant_id, alias, connection_name, "
+                + "is_default, provider, status) VALUES (?, ?, ?, 'c', false, 'MINIO', 'Active')";
+            sql.update(insert, 9001L, 1L, "exports");
+            sql.update(insert, 9002L, 2L, "exports");
+            assertThatThrownBy(() -> sql.update(insert, 9003L, 1L, "exports"))
+                .as("one workspace, the same name twice").isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+            sql.update(insert, 9004L, null, "etl-shared");
+            assertThatThrownBy(() -> sql.update(insert, 9005L, null, "etl-shared"))
+                .as("two platform rows, one name").isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         } finally {
             pool.close();
             try (Connection admin = DriverManager.getConnection(server, user, password); Statement sql = admin.createStatement()) {

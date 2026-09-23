@@ -153,6 +153,10 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
      * Kafka certificate is written through. TenantOwnership refuses a tenant-less caller, which
      * is the same answer StorageBrowserServiceImpl.belongsToCaller already gives the bucket list.
      */
+    private process.storage.StorageConnectionLookup lookup() {
+        return new process.storage.StorageConnectionLookup(this.storageConnectionRepository);
+    }
+
     private boolean isOwnedByCaller(StorageConnection connection) {
         return connection != null && TenantOwnership.isOwnedByCaller(connection.getTenantId());
     }
@@ -189,7 +193,9 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
             return validationError;
         }
         String alias = dto.getAlias().trim();
-        if (this.storageConnectionRepository.findByAlias(alias).isPresent()) {
+        // Unique within the workspace the row will belong to; a platform name is never available
+        // (MIG-53). The row's tenant is the caller's, set just below.
+        if (this.lookup().aliasUnavailable(TenantContext.getTenantId(), alias, null)) {
             return new ResponseDto(ERROR, ALIAS_UNAVAILABLE);
         }
         StorageConnection connection = new StorageConnection();
@@ -231,7 +237,7 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         }
         String alias = dto.getAlias().trim();
         // Clone does not go through validate, so the reserved names have to be refused here too.
-        if (this.storageConnectionRepository.findByAlias(alias).isPresent()
+        if (this.lookup().aliasUnavailable(TenantContext.getTenantId(), alias, null)
             || (!TenantContext.isPlatformAdmin() && this.isReservedAlias(alias))) {
             return new ResponseDto(ERROR, ALIAS_UNAVAILABLE);
         }
@@ -284,13 +290,13 @@ public class StorageConnectionServiceImpl implements StorageConnectionService {
         if (validationError != null) {
             return validationError;
         }
-        // Alias first, before the tenant filter goes on: uniqueness is enforced platform-wide by
-        // the unique index, so a check that can only see this tenant's rows would wave through a
-        // name already taken elsewhere and the collision would surface as a failed flush instead.
+        // Alias first, before the tenant filter goes on: a platform name is reserved everywhere,
+        // and the filter would hide the rows that decide it. Judged against the ROW's workspace, so a
+        // platform admin editing a workspace's connection is held to that workspace's names (MIG-53).
         String alias = dto.getAlias().trim();
-        Optional<StorageConnection> aliasOwner = this.storageConnectionRepository.findByAlias(alias);
-        if (aliasOwner.isPresent()
-            && !Objects.equals(aliasOwner.get().getStorageConnectionId(), dto.getStorageConnectionId())) {
+        Long rowTenantId = this.storageConnectionRepository.findById(dto.getStorageConnectionId())
+            .map(StorageConnection::getTenantId).orElse(TenantContext.getTenantId());
+        if (this.lookup().aliasUnavailable(rowTenantId, alias, dto.getStorageConnectionId())) {
             return new ResponseDto(ERROR, ALIAS_UNAVAILABLE);
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);

@@ -56,8 +56,8 @@ class TrustedStorageAccessTest {
         platform.setBucketName(PLATFORM_BUCKET);
         platform.setProvider(StorageProvider.MINIO);
         platform.setStatus(Status.Active);
-        lenient().when(connections.findByAlias(PLATFORM_BUCKET)).thenReturn(Optional.of(platform));
-        lenient().when(connections.findByAliasAndStatus(PLATFORM_BUCKET, Status.Active)).thenReturn(Optional.of(platform));
+        process.storage.StorageRows.add(connections, platform);
+        process.storage.StorageRows.add(connections, platform);
         lenient().when(factory.serviceFor(any())).thenReturn(this.store);
         this.audit = new ListAppender<>();
         this.audit.start();

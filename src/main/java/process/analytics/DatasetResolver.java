@@ -84,8 +84,8 @@ public class DatasetResolver {
         // Active, not merely not-Deleted, for the same reason: the picker only offers Active
         // connections (collectBuckets :104), so anything looser lets a deliberately deactivated
         // connection keep serving data through an API where nobody can see it is still live.
-        Optional<StorageConnection> found = this.storageConnectionRepository
-            .findByAlias(connectionAlias.trim())
+        Optional<StorageConnection> found = new process.storage.StorageConnectionLookup(this.storageConnectionRepository)
+            .forCaller(connectionAlias.trim())
             .filter(c -> Status.Active.equals(c.getStatus()))
             .filter(c -> TenantOwnership.isOwnedByCaller(c.getTenantId()));
         if (!found.isPresent()) {

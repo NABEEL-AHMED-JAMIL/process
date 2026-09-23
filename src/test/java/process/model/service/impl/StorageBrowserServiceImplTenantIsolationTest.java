@@ -81,15 +81,11 @@ public class StorageBrowserServiceImplTenantIsolationTest {
         // soft-deleted platform connection fall through to the legacy lookup path, where a tenant
         // could name the same bucket -- so both stubs are set and the guard reads findByAlias.
         for (String bucket : new String[] { AVATAR_BUCKET, PLATFORM_BUCKET }) {
-            lenient().when(this.storageConnectionRepository.findByAlias(bucket))
-                .thenReturn(Optional.of(this.connection(bucket, null)));
-            lenient().when(this.storageConnectionRepository.findByAliasAndStatus(bucket, Status.Active))
-                .thenReturn(Optional.of(this.connection(bucket, null)));
+            process.storage.StorageRows.add(this.storageConnectionRepository, this.connection(bucket, null));
+            process.storage.StorageRows.add(this.storageConnectionRepository, this.connection(bucket, null));
         }
-        lenient().when(this.storageConnectionRepository.findByAlias(TENANT_BUCKET))
-            .thenReturn(Optional.of(this.connection(TENANT_BUCKET, TENANT_A)));
-        lenient().when(this.storageConnectionRepository.findByAliasAndStatus(TENANT_BUCKET, Status.Active))
-            .thenReturn(Optional.of(this.connection(TENANT_BUCKET, TENANT_A)));
+        process.storage.StorageRows.add(this.storageConnectionRepository, this.connection(TENANT_BUCKET, TENANT_A));
+        process.storage.StorageRows.add(this.storageConnectionRepository, this.connection(TENANT_BUCKET, TENANT_A));
         lenient().when(this.storageClientFactory.serviceFor(any())).thenReturn(this.objectStorageService);
     }
 

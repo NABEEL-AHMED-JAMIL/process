@@ -26,10 +26,11 @@ import java.sql.Timestamp;
  * FTP, which has no bucket concept at all, something to be addressed by.
  */
 @Entity
+// No unique constraint on alias here: an alias is unique per workspace (MIG-53), enforced by the
+// Liquibase index uq_storage_connection_tenant_alias on (coalesce(tenant_id, 0), alias). Declaring the
+// old platform-wide one let dev's ddl-auto=update re-create it on every start.
 @Table(name = "storage_connection", indexes = {
     @Index(name = "idx_storage_connection_tenant_id", columnList = "tenant_id")
-}, uniqueConstraints = {
-    @UniqueConstraint(name = "uq_storage_connection_alias", columnNames = { "alias" })
 })
 /**
  * @author Nabeel Ahmed

@@ -491,14 +491,9 @@ final class AnalyticsIntegrationEnvironment {
      */
     static DatasetResolver resolverOver(StorageConnection... connections) {
         StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-        final Map<String, StorageConnection> byAlias = new HashMap<String, StorageConnection>();
         for (StorageConnection connection : connections) {
-            byAlias.put(connection.getAlias(), connection);
+            process.storage.StorageRows.add(repository, connection);
         }
-        when(repository.findByAlias(anyString())).thenAnswer(invocation -> {
-            String alias = invocation.getArgument(0, String.class);
-            return Optional.ofNullable(byAlias.get(alias == null ? null : alias.trim()));
-        });
         return new DatasetResolver(repository);
     }
 

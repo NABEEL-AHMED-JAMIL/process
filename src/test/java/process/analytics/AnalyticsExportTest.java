@@ -162,8 +162,7 @@ public class AnalyticsExportTest {
         this.bucket = Files.createTempDirectory("analytics-bucket");
         this.engine = DriverManager.getConnection("jdbc:duckdb:");
         this.resolver = new DatasetResolver(this.storageConnectionRepository);
-        when(this.storageConnectionRepository.findByAlias(anyString()))
-            .thenReturn(Optional.of(storageConnection(TENANT_ID)));
+        process.storage.StorageRows.add(this.storageConnectionRepository, storageConnection(TENANT_ID));
 
         this.sales = new DatasetRef(storageConnection(TENANT_ID), BUCKET, PATH,
             DatasetRef.Format.CSV);
@@ -788,8 +787,9 @@ public class AnalyticsExportTest {
 
     @Test
     void aConnectionTheCallerDoesNotOwnIsRefusedBeforeAnythingIsWritten() throws Exception {
-        when(this.storageConnectionRepository.findByAlias(anyString()))
-            .thenReturn(Optional.of(storageConnection(OTHER_TENANT_ID)));
+        // The alias exists, but only in another workspace (MIG-53: aliases are per workspace).
+        process.storage.StorageRows.clear(this.storageConnectionRepository);
+        process.storage.StorageRows.add(this.storageConnectionRepository, storageConnection(OTHER_TENANT_ID));
 
         ResponseDto response = this.exports.writeBack(request());
 

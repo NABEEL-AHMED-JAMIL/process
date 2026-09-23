@@ -165,7 +165,6 @@ public class StorageConnectionKafkaDependencyTest {
         StorageConnection connection = this.savedConnection();
         StorageConnectionDto dto = this.dtoFor(connection);
         dto.setAlias("kafka-certs-v2");
-        when(this.storageConnectionRepository.findByAlias("kafka-certs-v2")).thenReturn(Optional.empty());
         when(this.storageConnectionRepository.findById(55L)).thenReturn(Optional.of(connection));
         this.profilesVisibleToTheTenant(this.profileUsing("prod-events", "kafka-certs"));
 
@@ -182,7 +181,7 @@ public class StorageConnectionKafkaDependencyTest {
         StorageConnection connection = this.savedConnection();
         StorageConnectionDto dto = this.dtoFor(connection);
         dto.setStatus(Status.Inactive);
-        when(this.storageConnectionRepository.findByAlias("kafka-certs")).thenReturn(Optional.of(connection));
+        process.storage.StorageRows.add(this.storageConnectionRepository, connection);
         when(this.storageConnectionRepository.findById(55L)).thenReturn(Optional.of(connection));
         this.profilesVisibleToTheTenant(this.profileUsing("prod-events", "kafka-certs"));
 
@@ -200,7 +199,7 @@ public class StorageConnectionKafkaDependencyTest {
         // profiles depend on leaves every one of them resolving exactly as before.
         dto.setEndpoint("http://minio-2:9000");
         dto.setStatus(Status.Active);
-        when(this.storageConnectionRepository.findByAlias("kafka-certs")).thenReturn(Optional.of(connection));
+        process.storage.StorageRows.add(this.storageConnectionRepository, connection);
         when(this.storageConnectionRepository.findById(55L)).thenReturn(Optional.of(connection));
 
         ResponseDto response = this.service.updateConnection(dto);

@@ -79,8 +79,7 @@ public class StorageConnectionTenantlessCallerTest {
         this.platformConnection.setStatus(Status.Active);
         when(this.storageConnectionRepository.findById(CONNECTION_ID))
             .thenReturn(Optional.of(this.platformConnection));
-        when(this.storageConnectionRepository.findByAlias(PLATFORM_ALIAS))
-            .thenReturn(Optional.of(this.platformConnection));
+        process.storage.StorageRows.add(this.storageConnectionRepository, this.platformConnection);
         when(this.storageConnectionRepository.findByStatusNotOrderByStorageConnectionIdDesc(Status.Delete))
             .thenReturn(Collections.singletonList(this.platformConnection));
     }

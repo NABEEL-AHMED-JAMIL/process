@@ -10,10 +10,12 @@ public final class TrustedAccess {
 
     private final TrustedCaller caller;
     private final String reason;
+    private final Long tenantId;
 
-    private TrustedAccess(TrustedCaller caller, String reason) {
+    private TrustedAccess(TrustedCaller caller, String reason, Long tenantId) {
         this.caller = caller;
         this.reason = reason;
+        this.tenantId = tenantId;
     }
 
     public static TrustedAccess of(TrustedCaller caller, String reason) {
@@ -23,7 +25,19 @@ public final class TrustedAccess {
         if (reason == null || reason.trim().isEmpty()) {
             throw new IllegalStateException("A trusted storage call says why.");
         }
-        return new TrustedAccess(caller, reason.trim());
+        return new TrustedAccess(caller, reason.trim(), null);
+    }
+
+    /**
+     * The workspace the row this call came from belongs to, so that workspace's own alias resolves
+     * (MIG-53: aliases are unique per workspace). Without one, only the platform's connections do.
+     */
+    public TrustedAccess forTenant(Long rowTenantId) {
+        return new TrustedAccess(this.caller, this.reason, rowTenantId);
+    }
+
+    public Long getTenantId() {
+        return this.tenantId;
     }
 
     public TrustedCaller getCaller() {

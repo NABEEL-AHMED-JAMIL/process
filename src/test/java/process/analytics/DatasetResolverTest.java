@@ -58,8 +58,7 @@ public class DatasetResolverTest {
     }
 
     private void exists(StorageConnection connection) {
-        lenient().when(this.storageConnectionRepository.findByAlias(any()))
-            .thenReturn(Optional.of(connection));
+        process.storage.StorageRows.add(this.storageConnectionRepository, connection);
     }
 
     // ---- the happy path, so a refusal below is a refusal and not a broken fixture -------------
@@ -109,7 +108,6 @@ public class DatasetResolverTest {
     @Test
     void refusesAConnectionThatDoesNotExistWithTheSameWords() {
         TenantContext.set(TENANT_A, "TENANT_USER", 1L, "user@acme.test");
-        when(this.storageConnectionRepository.findByAlias(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> resolver().resolve("store", "etl-demo/sales.csv"))
             .isInstanceOf(AnalyticsException.class)

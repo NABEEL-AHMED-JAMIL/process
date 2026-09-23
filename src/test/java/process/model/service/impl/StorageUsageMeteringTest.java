@@ -59,8 +59,8 @@ class StorageUsageMeteringTest {
         StorageConnection connection = new StorageConnection();
         connection.setStorageConnectionId(1089L); connection.setTenantId(TENANT); connection.setAlias(BUCKET);
         connection.setBucketName(BUCKET); connection.setProvider(StorageProvider.S3); connection.setStatus(Status.Active);
-        lenient().when(this.connections.findByAlias(BUCKET)).thenReturn(Optional.of(connection));
-        lenient().when(this.connections.findByAliasAndStatus(BUCKET, Status.Active)).thenReturn(Optional.of(connection));
+        process.storage.StorageRows.add(this.connections, connection);
+        process.storage.StorageRows.add(this.connections, connection);
         lenient().when(this.factory.serviceFor(any())).thenReturn(this.store);
         TenantContext.set(TENANT, "TENANT_ADMIN", 4385L, "emily@medaxis");
     }
@@ -135,8 +135,8 @@ class StorageUsageMeteringTest {
         StorageConnection platform = new StorageConnection();
         platform.setStorageConnectionId(1L); platform.setAlias("etl-bucket"); platform.setBucketName("etl-bucket");
         platform.setProvider(StorageProvider.S3); platform.setStatus(Status.Active);
-        lenient().when(this.connections.findByAlias("etl-bucket")).thenReturn(Optional.of(platform));
-        lenient().when(this.connections.findByAliasAndStatus("etl-bucket", Status.Active)).thenReturn(Optional.of(platform));
+        process.storage.StorageRows.add(this.connections, platform);
+        process.storage.StorageRows.add(this.connections, platform);
 
         this.service.deleteObject("etl-bucket", "claims/x.txt");
 
