@@ -120,11 +120,25 @@ public class BillingService {
 
     // ---- drafting and issuing --------------------------------------------------------------
 
-    /** The month's draft, built (or rebuilt) from the meter. An issued invoice for the month is left alone. */
+    /**
+     * The month's draft, built (or rebuilt) from the meter. An issued invoice for the month is left alone.
+     *
+     * That second sentence was a promise the code did not keep. It looked only for a DRAFT to
+     * rebuild, so once the month was issued -- or paid, or overdue -- there was no draft to find
+     * and it made a fresh one. Each click on "Draft" did it again; dev reached nine live invoices
+     * for one workspace's September. A month that has left draft is now refused by name, and
+     * voiding it is the way to bill it again. ux_invoice_one_per_tenant_month (V51) holds the
+     * same line in the database, for whatever reaches it without passing through here.
+     */
     @Transactional
     public Invoice draft(Long tenantId, YearMonth period) {
         if (tenantId == null || !this.tenants.existsById(tenantId)) throw new IllegalArgumentException("No such workspace.");
         LocalDate start = period.atDay(1), end = period.atEndOfMonth();
+        Optional<Invoice> settled = this.settledInvoiceFor(tenantId, period);
+        if (settled.isPresent()) {
+            throw new IllegalStateException(String.format("%s is already %s for %s; void it before drafting the month again.",
+                settled.get().getNumber(), settled.get().getStatus().replace('_', ' '), period));
+        }
         Optional<Invoice> existingDraft = this.invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatus(tenantId, start, InvoiceKind.INVOICE.value(), InvoiceStatus.DRAFT.value());
         Invoice invoice = existingDraft.orElseGet(() -> {
             Invoice i = new Invoice();
@@ -719,9 +733,26 @@ public class BillingService {
         return invoice;
     }
 
+    /**
+     * The month's invoice once it has left draft -- issued, partly paid, paid or overdue. A voided
+     * one does not count: voiding is how a month is legitimately billed again.
+     */
+    public Optional<Invoice> settledInvoiceFor(Long tenantId, YearMonth period) {
+        return this.invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatusNotIn(tenantId, period.atDay(1),
+            InvoiceKind.INVOICE.value(), Arrays.asList(InvoiceStatus.DRAFT.value(), InvoiceStatus.VOID.value()));
+    }
+
     private String nextNumber(String prefix, YearMonth period) {
         String base = BillingNumber.base(prefix, period);
-        if (BillingDocumentKind.RECEIPT.numberPrefix().equals(prefix)) return BillingNumber.format(base, this.payments.findAll().size() + 1);
+        if (BillingDocumentKind.RECEIPT.numberPrefix().equals(prefix)) {
+            // Receipts only, and this month's only. This was every payment row counted plus one --
+            // submitted and rejected slips included -- so two slips submitted before either was
+            // verified both came out as the same number, with no concurrency involved at all.
+            long n = this.payments.countByReceiptNumberStartingWith(base + "-") + 1;
+            String candidate;
+            do { candidate = BillingNumber.format(base, (int) n++); } while (this.payments.existsByReceiptNumber(candidate));
+            return candidate;
+        }
         long n = this.invoices.countByNumberPrefix(base + "-") + 1;
         String candidate;
         do { candidate = BillingNumber.format(base, (int) n++); } while (this.invoices.findByNumber(candidate).isPresent());

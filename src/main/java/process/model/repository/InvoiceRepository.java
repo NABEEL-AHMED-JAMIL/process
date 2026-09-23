@@ -16,6 +16,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findByTenantIdOrderByPeriodStartDescInvoiceIdDesc(Long tenantId);
     List<Invoice> findAllByOrderByPeriodStartDescInvoiceIdDesc();
     Optional<Invoice> findFirstByTenantIdAndPeriodStartAndKindAndStatus(Long tenantId, LocalDate periodStart, String kind, String status);
+    /** The month's invoice once it has left draft -- issued, paid, overdue -- ignoring any that were voided. */
+    Optional<Invoice> findFirstByTenantIdAndPeriodStartAndKindAndStatusNotIn(Long tenantId, LocalDate periodStart, String kind, List<String> statuses);
     List<Invoice> findByStatusIn(List<String> statuses);
     List<Invoice> findByPeriodStartBetweenOrderByTenantIdAscPeriodStartAsc(LocalDate from, LocalDate to);
     @Query("select count(i) from Invoice i where i.number like concat(:prefix, '%')")

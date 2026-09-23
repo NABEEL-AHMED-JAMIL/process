@@ -27,7 +27,7 @@
 --
 -- It is captured exactly as it stands, naive timestamps included. Declaring timestamptz here
 -- would have made a fresh database differ from the one every developer already has, which is
--- the precise failure this file exists to end. The conversion is V51, and it moves every
+-- the precise failure this file exists to end. The conversion is its own later changeset, and it moves every
 -- environment together.
 --
 -- The precondition on the changeset means this runs on an empty database and is marked as

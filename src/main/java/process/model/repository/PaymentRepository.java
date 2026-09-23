@@ -14,4 +14,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByInvoiceIdOrderByDateCreatedAsc(Long invoiceId);
     List<Payment> findByTenantIdOrderByDateCreatedDesc(Long tenantId);
     List<Payment> findByStatusOrderByDateCreatedAsc(String status);
+    /** Receipts already numbered under one month's prefix, e.g. RCP-2026-09-. */
+    long countByReceiptNumberStartingWith(String prefix);
+    boolean existsByReceiptNumber(String receiptNumber);
 }

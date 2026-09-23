@@ -22,3 +22,5 @@ databaseChangeLog:
   # Anything after V50 is an ordinary changeset again. Add it below.
   - include:
       file: db/changelog/yaml/V50.0-schema-baseline.yaml
+  - include:
+      file: db/changelog/yaml/V51.0-one-invoice-per-month-unique-receipts.yaml

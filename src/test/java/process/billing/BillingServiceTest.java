@@ -88,6 +88,10 @@ class BillingServiceTest {
         lenient().when(invoices.countByNumberPrefix(anyString())).thenAnswer(inv -> this.invoiceRows.values().stream().filter(i -> i.getNumber().startsWith(inv.getArgument(0))).count());
         lenient().when(invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatus(anyLong(), any(), anyString(), anyString())).thenAnswer(inv ->
             this.invoiceRows.values().stream().filter(i -> i.getTenantId().equals(inv.getArgument(0)) && i.getPeriodStart().equals(inv.getArgument(1)) && i.getKind().equals(inv.getArgument(2)) && i.getStatus().equals(inv.getArgument(3))).findFirst());
+        lenient().when(invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatusNotIn(anyLong(), any(), anyString(), any())).thenAnswer(inv -> {
+            List<String> excluded = inv.getArgument(3);
+            return this.invoiceRows.values().stream().filter(i -> i.getTenantId().equals(inv.getArgument(0)) && i.getPeriodStart().equals(inv.getArgument(1))
+                && i.getKind().equals(inv.getArgument(2)) && !excluded.contains(i.getStatus())).findFirst(); });
         lenient().when(invoices.findByStatusIn(any())).thenAnswer(inv -> { List<String> s = inv.getArgument(0); List<Invoice> out = new ArrayList<>(); for (Invoice i : this.invoiceRows.values()) if (s.contains(i.getStatus())) out.add(i); return out; });
         lenient().when(invoices.findByTenantIdOrderByPeriodStartDescInvoiceIdDesc(anyLong())).thenAnswer(inv -> new ArrayList<>(this.invoiceRows.values()));
         lenient().when(invoices.findByPeriodStartBetweenOrderByTenantIdAscPeriodStartAsc(any(), any())).thenAnswer(inv -> new ArrayList<>(this.invoiceRows.values()));
@@ -103,6 +107,10 @@ class BillingServiceTest {
         lenient().when(payments.findById(anyLong())).thenAnswer(inv -> Optional.ofNullable(this.paymentRows.get(inv.<Long>getArgument(0))));
         lenient().when(payments.findByInvoiceIdOrderByDateCreatedAsc(anyLong())).thenAnswer(inv -> { List<Payment> out = new ArrayList<>(); for (Payment p : this.paymentRows.values()) if (p.getInvoiceId().equals(inv.getArgument(0))) out.add(p); return out; });
         lenient().when(payments.findAll()).thenAnswer(inv -> new ArrayList<>(this.paymentRows.values()));
+        lenient().when(payments.countByReceiptNumberStartingWith(anyString())).thenAnswer(inv ->
+            this.paymentRows.values().stream().filter(p -> p.getReceiptNumber() != null && p.getReceiptNumber().startsWith(inv.getArgument(0))).count());
+        lenient().when(payments.existsByReceiptNumber(anyString())).thenAnswer(inv ->
+            this.paymentRows.values().stream().anyMatch(p -> inv.getArgument(0).equals(p.getReceiptNumber())));
         lenient().when(payments.findByStatusOrderByDateCreatedAsc(anyString())).thenAnswer(inv -> { List<Payment> out = new ArrayList<>(); for (Payment p : this.paymentRows.values()) if (p.getStatus().equals(inv.getArgument(0))) out.add(p); return out; });
 
         BillingDocumentRepository documents = mock(BillingDocumentRepository.class);
@@ -356,5 +364,101 @@ class BillingServiceTest {
         Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 8)).getInvoiceId());
         assertThat(issued.getTotal()).isEqualByComparingTo("0");
         assertThat(issued.getStatus()).isEqualTo(InvoiceStatus.PAID.value());
+    }
+
+    // ---- one invoice per month (DEF-002) -------------------------------------------------------
+
+    /**
+     * draft() promised "an issued invoice for the month is left alone" and looked only for a
+     * DRAFT to rebuild. Once the month was issued there was no draft, so it made a second one --
+     * and a third on the next click. Dev held nine live invoices for one tenant's September.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = InvoiceStatus.class,
+        names = { "ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE" })
+    void aMonthThatHasLeftDraftIsNotDraftedASecondTime(InvoiceStatus settled) throws Exception {
+        YearMonth september = YearMonth.of(2026, 9);
+        Invoice issued = this.service.issue(this.service.draft(TENANT, september).getInvoiceId());
+        issued.setStatus(settled.value());
+
+        assertThatThrownBy(() -> this.service.draft(TENANT, september))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining(issued.getNumber())
+            .hasMessageContaining("void it");
+        assertThat(this.liveInvoicesFor(september)).containsExactly(issued.getNumber());
+    }
+
+    /** Voiding is how a month is legitimately re-billed, so a voided month drafts again, under a new number. */
+    @Test
+    void aVoidedMonthIsDraftedAgainUnderANewNumber() throws Exception {
+        YearMonth september = YearMonth.of(2026, 9);
+        Invoice issued = this.service.issue(this.service.draft(TENANT, september).getInvoiceId());
+        this.service.voidInvoice(issued.getInvoiceId(), "wrong rate card");
+
+        Invoice redrafted = this.service.draft(TENANT, september);
+
+        assertThat(redrafted.getInvoiceId()).isNotEqualTo(issued.getInvoiceId());
+        assertThat(redrafted.getNumber()).isNotEqualTo(issued.getNumber());
+        assertThat(redrafted.getStatus()).isEqualTo(InvoiceStatus.DRAFT.value());
+        assertThat(this.liveInvoicesFor(september)).containsExactly(redrafted.getNumber());
+    }
+
+    /** Another month is another invoice: the guard is per month, not per workspace. */
+    @Test
+    void anIssuedMonthDoesNotStopTheNextOneBeingDrafted() throws Exception {
+        this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 8)).getInvoiceId());
+
+        Invoice september = this.service.draft(TENANT, YearMonth.of(2026, 9));
+
+        assertThat(september.getStatus()).isEqualTo(InvoiceStatus.DRAFT.value());
+        assertThat(this.liveInvoicesFor(YearMonth.of(2026, 9))).containsExactly(september.getNumber());
+    }
+
+    // ---- one number per receipt (DEF-001) ------------------------------------------------------
+
+    /**
+     * The receipt number was every payment row counted, plus one -- submitted and rejected ones
+     * included. Two slips submitted before either was verified left the count at two for both
+     * verifications, so both receipts came out the same. No concurrency was needed; dev carried
+     * two such pairs from ordinary use, on documents a customer files for tax.
+     */
+    @Test
+    void twoSlipsVerifiedOneAfterTheOtherGetDifferentReceiptNumbers() throws Exception {
+        Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
+        TenantContext.set(TENANT, "TENANT_ADMIN", 4385L, "emily@medaxis");
+        Payment first = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("10"), "bank", "TRF-1", null, null);
+        Payment second = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("10"), "bank", "TRF-2", null, null);
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+
+        String a = this.service.verifyPayment(first.getPaymentId(), true, null).getReceiptNumber();
+        String b = this.service.verifyPayment(second.getPaymentId(), true, null).getReceiptNumber();
+
+        assertThat(a).isNotEqualTo(b);
+    }
+
+    /** A slip that was rejected never had a receipt, so it takes no place in the sequence. */
+    @Test
+    void theFirstReceiptOfAMonthIsNumberOneWhateverElseWasSubmitted() throws Exception {
+        Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
+        TenantContext.set(TENANT, "TENANT_ADMIN", 4385L, "emily@medaxis");
+        Payment rejected = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("5"), "bank", "TRF-X", null, null);
+        Payment accepted = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("5"), "bank", "TRF-Y", null, null);
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        this.service.verifyPayment(rejected.getPaymentId(), false, "unreadable slip");
+
+        String receipt = this.service.verifyPayment(accepted.getPaymentId(), true, null).getReceiptNumber();
+
+        assertThat(receipt).startsWith("RCP-").endsWith("-0001");
+    }
+
+    private List<String> liveInvoicesFor(YearMonth period) {
+        List<String> out = new ArrayList<>();
+        for (Invoice i : this.invoiceRows.values()) {
+            if (InvoiceKind.INVOICE.is(i.getKind()) && i.getPeriodStart().equals(period.atDay(1))
+                && !InvoiceStatus.VOID.is(i.getStatus())) {
+                out.add(i.getNumber());
+            }
+        }
+        return out;
     }
 }

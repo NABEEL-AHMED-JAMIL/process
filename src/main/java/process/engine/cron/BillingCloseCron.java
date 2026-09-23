@@ -32,8 +32,15 @@ public class BillingCloseCron {
             return;
         }
         YearMonth last = YearMonth.now().minusMonths(1);
-        int drafted = 0;
+        int drafted = 0, alreadyInvoiced = 0;
         for (Map.Entry<Long, String> tenant : this.billing.tenantNames().entrySet()) {
+            // A month somebody already issued by hand is finished, not failed. draft() refuses it
+            // now rather than making a second invoice, so ask first instead of logging a warning
+            // for every such workspace every month.
+            if (this.billing.settledInvoiceFor(tenant.getKey(), last).isPresent()) {
+                alreadyInvoiced++;
+                continue;
+            }
             try {
                 this.billing.draft(tenant.getKey(), last);
                 drafted++;
@@ -41,7 +48,7 @@ public class BillingCloseCron {
                 logger.warn("billing: draft for {} ({}) failed: {}", tenant.getValue(), tenant.getKey(), ex.toString());
             }
         }
-        logger.info("billing: {} draft(s) for {}", drafted, last);
+        logger.info("billing: {} draft(s) for {}, {} already invoiced", drafted, last, alreadyInvoiced);
     }
 
     @Scheduled(cron = "${billing.dunning.cron:0 0 6 * * *}")
