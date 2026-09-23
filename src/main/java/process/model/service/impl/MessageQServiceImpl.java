@@ -54,8 +54,7 @@ public class MessageQServiceImpl implements MessageQService {
      * Terminal statuses stay refused -- re-failing a Completed or Skipped run would rewrite
      * history that something already recorded correctly.
      */
-    private static final List<JobStatus> IN_FLIGHT_STATUSES =
-        Arrays.asList(JobStatus.Queue, JobStatus.Start, JobStatus.Running);
+    private static final java.util.Set<JobStatus> IN_FLIGHT_STATUSES = JobStatus.IN_FLIGHT;
 
     private final BulkAction bulkAction;
     private final QueryService queryService;

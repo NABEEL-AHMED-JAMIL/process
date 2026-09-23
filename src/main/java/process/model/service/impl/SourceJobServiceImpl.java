@@ -494,9 +494,12 @@ public class SourceJobServiceImpl implements SourceJobService {
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
         if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");
-        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus()) && (sourceJob.get().getJobRunningStatus().equals(JobStatus.Queue) ||
-            sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
-            return new ResponseDto(ERROR, "SourceJob can't be run if its in ('Queue', 'Running') state.");
+        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus())
+            && sourceJob.get().getJobRunningStatus().isInFlight()) {
+            // Start included: a run just dispatched sits there until its worker reports, and a
+            // second one would write into the same output folder.
+            return new ResponseDto(ERROR,
+                "A job can't be run while its last run is still in flight ('Queue', 'Start', 'Running').");
         }
         this.producerBulkEngine.addManualJobInQueue(sourceJob.get());
         sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
@@ -513,9 +516,10 @@ public class SourceJobServiceImpl implements SourceJobService {
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
         if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");
-        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus()) && (sourceJob.get().getJobRunningStatus().equals(JobStatus.Queue) ||
-            sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
-            return new ResponseDto(ERROR, "SourceJob can't be run if its in ('Queue', 'Running') state.");
+        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus())
+            && sourceJob.get().getJobRunningStatus().isInFlight()) {
+            return new ResponseDto(ERROR,
+                "A job's next run can't be skipped while its last run is still in flight ('Queue', 'Start', 'Running').");
         } else if (!sourceJob.get().getExecution().equals(Execution.Auto)) {
             return new ResponseDto(ERROR, "SourceJob skip only work with 'auto' source job.");
         }
