@@ -198,6 +198,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
       # Shared with notifications-service, which redeems secretRefs with it. Set in .env.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      # MIG-68: storage-service owns storage. Every storage call process makes goes there -- the
+      # guarded ones as the signed-in user, the four trusted callers and the directory with the
+      # service token above. process's own storage_connection table is no longer read or written.
+      STORAGE_REMOTE: "true"
+      STORAGE_SERVICE_URL: http://storage:9120
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-admin}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
