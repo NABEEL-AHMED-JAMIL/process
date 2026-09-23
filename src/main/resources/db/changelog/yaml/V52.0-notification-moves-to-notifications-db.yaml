@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 52.0-notification-moves-to-notifications-db
+      author: nabeel.amd93
+      description: "notification lives in notifications_db now (MIG-21); drop the empty one V50 builds here"
+      # A fresh etl_job gets an empty notification table from the V50 baseline, which nothing reads
+      # or writes any more. An existing one has had it renamed to notification_moved_mig21 by
+      # scripts/notifications/move-to-notifications-db.sh. Only an EMPTY table is dropped: one with
+      # rows means the move script has not been run, and those rows are not this changeset's to lose.
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: notification
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM public.notification
+      changes:
+        - dropTable:
+            tableName: notification

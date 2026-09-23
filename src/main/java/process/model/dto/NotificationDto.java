@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
-import process.model.pojo.Notification;
+import process.notifications.store.Notification;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 

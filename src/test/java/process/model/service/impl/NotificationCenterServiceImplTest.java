@@ -14,9 +14,9 @@ import process.model.dto.ResponseDto;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.pojo.AppUser;
-import process.model.pojo.Notification;
 import process.model.repository.AppUserRepository;
-import process.model.repository.NotificationRepository;
+import process.notifications.store.Notification;
+import process.notifications.store.NotificationStore;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
 
@@ -57,7 +57,7 @@ public class NotificationCenterServiceImplTest {
     private static final String MY_UNREAD_KEY = "notif:unread:" + ME;
 
     @Mock
-    private NotificationRepository notificationRepository;
+    private NotificationStore store;
     @Mock
     private AppUserRepository appUserRepository;
     @Mock
@@ -71,7 +71,7 @@ public class NotificationCenterServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new NotificationCenterServiceImpl(this.notificationRepository,
+        this.service = new NotificationCenterServiceImpl(this.store,
             this.appUserRepository, this.redisTemplate, this.broadcast);
         lenient().when(this.redisTemplate.opsForValue()).thenReturn(this.valueOperations);
         TenantContext.set(TENANT_ID, "TENANT_USER", ME, "me@etl.test");
@@ -97,8 +97,8 @@ public class NotificationCenterServiceImplTest {
 
     @Test
     void markReadReportsAnIdThatDoesNotExistAsNotFound() throws Exception {
-        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(0);
-        when(this.notificationRepository.findById(NOTIFICATION_ID)).thenReturn(Optional.empty());
+        when(this.store.markRead(eq(TENANT_ID), eq(NOTIFICATION_ID), eq(ME), any())).thenReturn(0);
+        when(this.store.find(TENANT_ID, NOTIFICATION_ID)).thenReturn(Optional.empty());
 
         ResponseDto response = this.service.markRead(NOTIFICATION_ID);
 
@@ -110,8 +110,8 @@ public class NotificationCenterServiceImplTest {
 
     @Test
     void markReadReportsAnotherUsersNotificationAsNotFoundRatherThanForbidden() throws Exception {
-        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(0);
-        when(this.notificationRepository.findById(NOTIFICATION_ID))
+        when(this.store.markRead(eq(TENANT_ID), eq(NOTIFICATION_ID), eq(ME), any())).thenReturn(0);
+        when(this.store.find(TENANT_ID, NOTIFICATION_ID))
             .thenReturn(Optional.of(notificationFor(SOMEONE_ELSE, false)));
 
         ResponseDto response = this.service.markRead(NOTIFICATION_ID);
@@ -125,8 +125,8 @@ public class NotificationCenterServiceImplTest {
 
     @Test
     void markReadTreatsMyOwnAlreadyReadNotificationAsANoOpNotAFailure() throws Exception {
-        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(0);
-        when(this.notificationRepository.findById(NOTIFICATION_ID))
+        when(this.store.markRead(eq(TENANT_ID), eq(NOTIFICATION_ID), eq(ME), any())).thenReturn(0);
+        when(this.store.find(TENANT_ID, NOTIFICATION_ID))
             .thenReturn(Optional.of(notificationFor(ME, true)));
 
         ResponseDto response = this.service.markRead(NOTIFICATION_ID);
@@ -139,7 +139,7 @@ public class NotificationCenterServiceImplTest {
 
     @Test
     void markReadReportsSuccessAndDropsTheBadgeWhenARowIsActuallyMarked() throws Exception {
-        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(1);
+        when(this.store.markRead(eq(TENANT_ID), eq(NOTIFICATION_ID), eq(ME), any())).thenReturn(1);
         when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(true);
         when(this.valueOperations.decrement(MY_UNREAD_KEY)).thenReturn(47L);
 
@@ -151,13 +151,13 @@ public class NotificationCenterServiceImplTest {
         // 47 is a legitimate count, so it must be left alone rather than clamped.
         verify(this.valueOperations, never()).set(MY_UNREAD_KEY, "0");
         // The warm path stays a single DECR: no database count per mark-as-read.
-        verify(this.notificationRepository, never()).countByRecipientUserIdAndReadFalse(anyLong());
-        verify(this.notificationRepository, never()).findById(anyLong());
+        verify(this.store, never()).unreadCount(anyLong(), anyLong());
+        verify(this.store, never()).find(anyLong(), anyLong());
     }
 
     @Test
     void markReadClampsABadgeThatDecrementedBelowZero() throws Exception {
-        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(1);
+        when(this.store.markRead(eq(TENANT_ID), eq(NOTIFICATION_ID), eq(ME), any())).thenReturn(1);
         when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(true);
         when(this.valueOperations.decrement(MY_UNREAD_KEY)).thenReturn(-1L);
 
@@ -173,9 +173,9 @@ public class NotificationCenterServiceImplTest {
         // then wrote "0" over that -- so the first mark-as-read after anything removed the key
         // pinned the badge at zero over a mailbox still holding 48 unread rows, and unreadCount()
         // served that zero straight back out of the cache.
-        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(1);
+        when(this.store.markRead(eq(TENANT_ID), eq(NOTIFICATION_ID), eq(ME), any())).thenReturn(1);
         when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(false);
-        when(this.notificationRepository.countByRecipientUserIdAndReadFalse(ME)).thenReturn(48L);
+        when(this.store.unreadCount(TENANT_ID, ME)).thenReturn(48L);
         when(this.valueOperations.setIfAbsent(MY_UNREAD_KEY, "48")).thenReturn(true);
 
         ResponseDto response = this.service.markRead(NOTIFICATION_ID);
@@ -194,9 +194,9 @@ public class NotificationCenterServiceImplTest {
         // A create() racing this mark on a cold key. The winner's count was taken before this
         // transaction committed, so it still counts this row as unread: the loser of setIfAbsent
         // must decrement that value rather than replace it with its own.
-        when(this.notificationRepository.markRead(eq(NOTIFICATION_ID), any(), eq(ME))).thenReturn(1);
+        when(this.store.markRead(eq(TENANT_ID), eq(NOTIFICATION_ID), eq(ME), any())).thenReturn(1);
         when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(false);
-        when(this.notificationRepository.countByRecipientUserIdAndReadFalse(ME)).thenReturn(48L);
+        when(this.store.unreadCount(TENANT_ID, ME)).thenReturn(48L);
         when(this.valueOperations.setIfAbsent(MY_UNREAD_KEY, "48")).thenReturn(false);
         when(this.valueOperations.decrement(MY_UNREAD_KEY)).thenReturn(48L);
 
@@ -213,7 +213,7 @@ public class NotificationCenterServiceImplTest {
 
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).isEqualTo("notificationId missing.");
-        verify(this.notificationRepository, never()).markRead(any(), any(), any());
+        verify(this.store, never()).markRead(anyLong(), anyLong(), anyLong(), any());
     }
 
     @Test
@@ -238,7 +238,7 @@ public class NotificationCenterServiceImplTest {
         // missing key at 1, so a reactivated user with 48 older unread rows would have been told
         // they had 1.
         when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(false);
-        when(this.notificationRepository.countByRecipientUserIdAndReadFalse(ME)).thenReturn(49L);
+        when(this.store.unreadCount(TENANT_ID, ME)).thenReturn(49L);
         when(this.valueOperations.setIfAbsent(MY_UNREAD_KEY, "49")).thenReturn(true);
         when(this.appUserRepository.findById(ME)).thenReturn(Optional.of(recipient()));
 
@@ -259,7 +259,7 @@ public class NotificationCenterServiceImplTest {
             NotificationSeverity.SUCCESS, "Job finished", "Pipeline ok", "/job/1");
 
         // The common path must stay a single INCR -- no database count per notification.
-        verify(this.notificationRepository, never()).countByRecipientUserIdAndReadFalse(anyLong());
+        verify(this.store, never()).unreadCount(anyLong(), anyLong());
         assertThat(pushedPayload()).contains("\"unreadCount\":49");
     }
 
@@ -268,7 +268,7 @@ public class NotificationCenterServiceImplTest {
         // Two notifications racing on a cold key: the loser of setIfAbsent must increment the
         // winner's value, not replace it, or one of the two drops off the badge.
         when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(false);
-        when(this.notificationRepository.countByRecipientUserIdAndReadFalse(ME)).thenReturn(49L);
+        when(this.store.unreadCount(TENANT_ID, ME)).thenReturn(49L);
         when(this.valueOperations.setIfAbsent(MY_UNREAD_KEY, "49")).thenReturn(false);
         when(this.valueOperations.increment(MY_UNREAD_KEY)).thenReturn(50L);
         when(this.appUserRepository.findById(ME)).thenReturn(Optional.of(recipient()));
@@ -285,14 +285,73 @@ public class NotificationCenterServiceImplTest {
         this.service.create(TENANT_ID, null, NotificationType.JOB_COMPLETED,
             NotificationSeverity.SUCCESS, "Job finished", "Pipeline ok", "/job/1");
 
-        verify(this.notificationRepository, never()).saveAndFlush(any());
+        verify(this.store, never()).insert(any());
         verify(this.redisTemplate, never()).hasKey(any(String.class));
+    }
+
+    // ---- MIG-21: a notification belongs to its recipient's tenant, and is read in the reader's ----
+
+    private AppUser userIn(Long tenantId, String role) {
+        AppUser user = recipient();
+        user.setTenantId(tenantId);
+        user.setUserRole(process.model.enums.UserRole.valueOf(role));
+        return user;
+    }
+
+    private Notification stored() {
+        ArgumentCaptor<Notification> row = ArgumentCaptor.forClass(Notification.class);
+        verify(this.store).insert(row.capture());
+        return row.getValue();
+    }
+
+    /** A platform admin acting on a tenant user has no tenant; the notice must still reach that user's bell. */
+    @Test
+    void aNoticeIsFiledUnderTheRecipientsTenantNotTheActors() {
+        when(this.appUserRepository.findById(ME)).thenReturn(Optional.of(userIn(2901L, "TENANT_USER")));
+        when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(true);
+
+        this.service.create(null, ME, NotificationType.TASK_ASSIGNED, NotificationSeverity.INFO, "Assigned", null, "/tasks");
+
+        assertThat(stored().getTenantId()).isEqualTo(2901L);
+    }
+
+    @Test
+    void aPlatformAdminsNoticeIsFiledUnderThePlatformScope() {
+        when(this.appUserRepository.findById(ME)).thenReturn(Optional.of(userIn(null, "PLATFORM_ADMIN")));
+        when(this.redisTemplate.hasKey(MY_UNREAD_KEY)).thenReturn(true);
+
+        this.service.create(2901L, ME, NotificationType.USER_ADDED, NotificationSeverity.INFO, "User added", null, "/users");
+
+        assertThat(stored().getTenantId()).isEqualTo(NotificationStore.PLATFORM_SCOPE);
+    }
+
+    /** Nobody can ever read it: 28 such rows had piled up in dev. */
+    @Test
+    void aNoticeForSomeoneWhoNoLongerExistsIsNotStored() {
+        when(this.appUserRepository.findById(ME)).thenReturn(Optional.empty());
+
+        this.service.create(TENANT_ID, ME, NotificationType.JOB_FAILED, NotificationSeverity.ERROR, "Job failed", null, "/jobList");
+
+        verify(this.store, never()).insert(any());
+    }
+
+    @Test
+    void theBellIsReadInTheReadersOwnScope() throws Exception {
+        when(this.store.inbox(eq(TENANT_ID), eq(ME), eq(false), any())).thenReturn(org.springframework.data.domain.Page.empty());
+        this.service.list(false, 0L, 10L);
+        verify(this.store).inbox(eq(TENANT_ID), eq(ME), eq(false), any());
+
+        TenantContext.set(null, "PLATFORM_ADMIN", ME, "me@etl.test");
+        when(this.store.unreadCount(NotificationStore.PLATFORM_SCOPE, ME)).thenReturn(3L);
+        assertThat(this.service.unreadCount().getData()).isEqualTo(3L);
     }
 
     private AppUser recipient() {
         AppUser user = new AppUser();
         user.setAppUserId(ME);
         user.setUsername("me@etl.test");
+        user.setTenantId(TENANT_ID);
+        user.setUserRole(process.model.enums.UserRole.TENANT_USER);
         return user;
     }
 

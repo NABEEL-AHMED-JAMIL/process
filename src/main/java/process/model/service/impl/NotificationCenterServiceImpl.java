@@ -7,17 +7,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.NotificationDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.pojo.AppUser;
-import process.model.pojo.Notification;
 import process.model.repository.AppUserRepository;
-import process.model.repository.NotificationRepository;
 import process.model.service.NotificationCenterService;
+import process.notifications.store.Notification;
+import process.notifications.store.NotificationStore;
 import process.security.TenantContext;
 import process.socket.ClusterBroadcast;
 import process.util.PagingUtil;
@@ -40,23 +38,30 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
 
     private static final String UNREAD_COUNT_KEY_PREFIX = "notif:unread:";
 
-    private final NotificationRepository notificationRepository;
+    private final NotificationStore store;
     private final AppUserRepository appUserRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final ClusterBroadcast broadcast;
 
-    public NotificationCenterServiceImpl(NotificationRepository notificationRepository,
+    public NotificationCenterServiceImpl(NotificationStore store,
         AppUserRepository appUserRepository,
         RedisTemplate<String, String> redisTemplate,
         ClusterBroadcast broadcast) {
-        this.notificationRepository = notificationRepository;
+        this.store = store;
         this.appUserRepository = appUserRepository;
         this.redisTemplate = redisTemplate;
         this.broadcast = broadcast;
     }
 
+    /**
+     * Files a notification for one user and pushes it to their bell.
+     *
+     * The row is filed under the RECIPIENT's tenant, whatever tenantId the caller passes: that is the
+     * scope the recipient's bell reads in (MIG-21). The caller's tenant is the actor's, and a
+     * platform admin acting on a tenant user has none -- filed under it, the notice would sit in the
+     * platform scope where that user's bell never looks.
+     */
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void create(Long tenantId, Long recipientUserId, NotificationType type, NotificationSeverity severity,
         String title, String message, String linkUrl) {
         if (recipientUserId == null) {
@@ -64,8 +69,18 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
             return;
         }
         try {
+            Optional<AppUser> recipient = this.appUserRepository.findById(recipientUserId);
+            if (!recipient.isPresent()) {
+                // Nobody could ever read it; dev had piled up 28 such rows for deleted users.
+                this.logger.info("Not filing a {} notification for app user {}, who does not exist.", type, recipientUserId);
+                return;
+            }
+            long scope = NotificationStore.scopeOf(recipient.get().getTenantId());
+            if (tenantId != null && tenantId != scope) {
+                this.logger.debug("A {} notice raised in tenant {} is filed under its recipient's scope {}.", type, tenantId, scope);
+            }
             Notification notification = new Notification();
-            notification.setTenantId(tenantId);
+            notification.setTenantId(scope);
             notification.setRecipientUserId(recipientUserId);
             notification.setType(type);
             notification.setSeverity(severity);
@@ -74,27 +89,24 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
             notification.setLinkUrl(linkUrl);
             notification.setRead(false);
             notification.setDateCreated(LocalDateTime.now());
-            this.notificationRepository.saveAndFlush(notification);
+            this.store.insert(notification);
 
-            Long unreadCount = this.incrementUnread(recipientUserId);
+            Long unreadCount = this.incrementUnread(scope, recipientUserId);
 
-            Optional<AppUser> recipient = this.appUserRepository.findById(recipientUserId);
-            if (recipient.isPresent()) {
-                Map<String, Object> notificationJson = new HashMap<>();
-                notificationJson.put("notificationId", notification.getNotificationId());
-                notificationJson.put("type", notification.getType().name());
-                notificationJson.put("severity", notification.getSeverity().name());
-                notificationJson.put("title", notification.getTitle());
-                notificationJson.put("message", notification.getMessage());
-                notificationJson.put("linkUrl", notification.getLinkUrl());
-                notificationJson.put("read", notification.isRead());
-                notificationJson.put("dateCreated", notification.getDateCreated().toString());
+            Map<String, Object> notificationJson = new HashMap<>();
+            notificationJson.put("notificationId", notification.getNotificationId());
+            notificationJson.put("type", notification.getType().name());
+            notificationJson.put("severity", notification.getSeverity().name());
+            notificationJson.put("title", notification.getTitle());
+            notificationJson.put("message", notification.getMessage());
+            notificationJson.put("linkUrl", notification.getLinkUrl());
+            notificationJson.put("read", notification.isRead());
+            notificationJson.put("dateCreated", notification.getDateCreated().toString());
 
-                Map<String, Object> payload = new HashMap<>();
-                payload.put("notification", notificationJson);
-                payload.put("unreadCount", unreadCount);
-                this.broadcast.toUser(recipient.get().getUsername(), "/queue/notifications", new Gson().toJson(payload));
-            }
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("notification", notificationJson);
+            payload.put("unreadCount", unreadCount);
+            this.broadcast.toUser(recipient.get().getUsername(), "/queue/notifications", new Gson().toJson(payload));
         } catch (Exception ex) {
             this.logger.error("Failed to create notification ({}) for recipient {}.", type, recipientUserId, ex);
         }
@@ -104,9 +116,7 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
     public ResponseDto list(Boolean unreadOnly, Long page, Long limit) throws Exception {
         Long recipientUserId = TenantContext.getAppUserId();
         Pageable paging = PagingUtil.ApplyPaging("dateCreated", "desc", page, limit);
-        Page<Notification> result = Boolean.TRUE.equals(unreadOnly)
-            ? this.notificationRepository.findByRecipientUserIdAndReadOrderByDateCreatedDesc(recipientUserId, false, paging)
-            : this.notificationRepository.findByRecipientUserIdOrderByDateCreatedDesc(recipientUserId, paging);
+        Page<Notification> result = this.store.inbox(readerScope(), recipientUserId, Boolean.TRUE.equals(unreadOnly), paging);
         List<NotificationDto> notifications = result.getContent().stream()
             .map(NotificationDto::from)
             .collect(Collectors.toList());
@@ -122,26 +132,26 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
         if (cached != null) {
             unreadCount = Long.parseLong(cached);
         } else {
-            unreadCount = this.notificationRepository.countByRecipientUserIdAndReadFalse(recipientUserId);
+            unreadCount = this.store.unreadCount(readerScope(), recipientUserId);
             this.redisTemplate.opsForValue().set(this.unreadKey(recipientUserId), String.valueOf(unreadCount));
         }
         return new ResponseDto(SUCCESS, "Unread count fetched.", unreadCount);
     }
 
     @Override
-    @Transactional
     public ResponseDto markRead(Long notificationId) throws Exception {
         if (notificationId == null) {
             return new ResponseDto(ERROR, "notificationId missing.");
         }
         Long recipientUserId = TenantContext.getAppUserId();
-        int updated = this.notificationRepository.markRead(notificationId, LocalDateTime.now(), recipientUserId);
+        long scope = readerScope();
+        int updated = this.store.markRead(scope, notificationId, recipientUserId, LocalDateTime.now());
         if (updated < 1) {
             // The update is scoped by recipient AND by read = false, so "no rows touched" covers two
             // very different outcomes -- and this used to answer SUCCESS to both. A typo'd id, or one
             // belonging to another user, came back looking exactly like a real mark-as-read, so a
             // caller had no way to tell that nothing had happened. Read the row back to separate them.
-            Optional<Notification> existing = this.notificationRepository.findById(notificationId);
+            Optional<Notification> existing = this.store.find(scope, notificationId);
             if (existing.isPresent() && existing.get().getRecipientUserId().equals(recipientUserId)) {
                 // Own row, already read. The caller asked for the state the row is already in, so this
                 // is a no-op and not a business failure -- a second tab replaying a click, or open()
@@ -152,15 +162,14 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
             // "not yours" would confirm the id exists to a caller who is not allowed to see the row.
             return new ResponseDto(ERROR, String.format("Notification not found with %d.", notificationId));
         }
-        this.decrementUnread(recipientUserId);
+        this.decrementUnread(scope, recipientUserId);
         return new ResponseDto(SUCCESS, "Marked as read.");
     }
 
     @Override
-    @Transactional
     public ResponseDto markAllRead() throws Exception {
         Long recipientUserId = TenantContext.getAppUserId();
-        this.notificationRepository.markAllRead(recipientUserId, LocalDateTime.now());
+        this.store.markAllRead(readerScope(), recipientUserId, LocalDateTime.now());
         this.redisTemplate.opsForValue().set(this.unreadKey(recipientUserId), "0");
         return new ResponseDto(SUCCESS, "All notifications marked as read.");
     }
@@ -196,13 +205,13 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
      * reactivate them, send them one notification" would have announced 1 unread over 49 rows and
      * cached that wrong number. Recounting on a miss keeps the badge honest whatever removed the key.
      */
-    private Long incrementUnread(Long recipientUserId) {
+    private Long incrementUnread(long scope, Long recipientUserId) {
         String key = this.unreadKey(recipientUserId);
         if (Boolean.TRUE.equals(this.redisTemplate.hasKey(key))) {
             return this.redisTemplate.opsForValue().increment(key);
         }
         // The caller has already flushed the new notification, so this count includes it.
-        long unreadCount = this.notificationRepository.countByRecipientUserIdAndReadFalse(recipientUserId);
+        long unreadCount = this.store.unreadCount(scope, recipientUserId);
         // setIfAbsent rather than set: a concurrent create() may have seeded and incremented the key
         // since the miss above, and overwriting would drop its notification off the badge.
         if (Boolean.TRUE.equals(this.redisTemplate.opsForValue().setIfAbsent(key, String.valueOf(unreadCount)))) {
@@ -227,10 +236,10 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
      * The row has already been updated inside this transaction, so the recount excludes it and must
      * not then be decremented again.
      */
-    private void decrementUnread(Long recipientUserId) {
+    private void decrementUnread(long scope, Long recipientUserId) {
         String key = this.unreadKey(recipientUserId);
         if (!Boolean.TRUE.equals(this.redisTemplate.hasKey(key))) {
-            long unreadCount = this.notificationRepository.countByRecipientUserIdAndReadFalse(recipientUserId);
+            long unreadCount = this.store.unreadCount(scope, recipientUserId);
             // setIfAbsent rather than set, for the same reason as incrementUnread: a concurrent
             // create() may have seeded the key since the miss above, and overwriting would drop its
             // notification off the badge. Losing that race falls through to the decrement below,
@@ -246,6 +255,11 @@ public class NotificationCenterServiceImpl implements NotificationCenterService 
         if (remaining != null && remaining < 0L) {
             this.redisTemplate.opsForValue().set(key, "0");
         }
+    }
+
+    /** The reader's own scope: the tenant on their token, or the platform's for a platform admin. */
+    private static long readerScope() {
+        return NotificationStore.scopeOf(TenantContext.getTenantId());
     }
 
     private String unreadKey(Long recipientUserId) {

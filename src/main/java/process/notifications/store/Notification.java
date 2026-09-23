@@ -1,67 +1,44 @@
-package process.model.pojo;
+package process.notifications.store;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.EnumType;
-import javax.persistence.Enumerated;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.Index;
-import javax.persistence.Table;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "notification", indexes = {
-    @Index(name = "idx_notification_recipient", columnList = "recipient_user_id"),
-    @Index(name = "idx_notification_recipient_read", columnList = "recipient_user_id, is_read")
-})
 /**
+ * One row of notifications_db.notification (MIG-21). A plain row, not a JPA entity: the table lives in
+ * Notifications' own database, read and written only through NotificationStore.
+ *
+ * tenantId is never null in the table. It is the RECIPIENT's tenant -- NotificationStore.PLATFORM_SCOPE
+ * for a platform admin, who has none.
+ *
  * @author Nabeel Ahmed
- * */
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Notification {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "notification_id")
     private Long notificationId;
 
-    @Column(name = "tenant_id")
     private Long tenantId;
 
-    @Column(name = "recipient_user_id", nullable = false)
     private Long recipientUserId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
     private NotificationType type;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "severity", nullable = false)
     private NotificationSeverity severity;
 
-    @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "message", length = 2000)
     private String message;
 
-    @Column(name = "link_url")
     private String linkUrl;
 
-    @Column(name = "is_read", nullable = false)
     private boolean read;
 
-    @Column(name = "read_at")
     private LocalDateTime readAt;
 
-    @Column(name = "date_created", nullable = false)
     private LocalDateTime dateCreated;
 
     public Long getNotificationId() {
