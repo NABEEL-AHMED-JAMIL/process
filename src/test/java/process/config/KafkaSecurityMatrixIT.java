@@ -37,6 +37,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import org.apache.kafka.common.KafkaException;
 import org.junit.jupiter.params.provider.CsvSource;
+import process.storage.TrustedStorageOperations;
 
 /**
  * Every security configuration the console can produce, against a real broker.
@@ -135,7 +136,7 @@ public class KafkaSecurityMatrixIT {
      * the on-disk caching -- is the code that runs in production.
      */
     private KafkaTemplateProvider provider(Path cacheDir) throws Exception {
-        process.storage.TrustedStorageOperations storage = mock(process.storage.TrustedStorageOperations.class);
+        TrustedStorageOperations storage = mock(TrustedStorageOperations.class);
         when(storage.readForWorkflow(any(), anyString(), anyString())).thenAnswer(call -> {
             byte[] bytes = Files.readAllBytes(SECRETS.resolve((String) call.getArgument(2)));
             return new ObjectContentDto(new ByteArrayInputStream(bytes),

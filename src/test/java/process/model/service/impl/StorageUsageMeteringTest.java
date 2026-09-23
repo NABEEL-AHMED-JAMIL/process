@@ -24,6 +24,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.io.ByteArrayInputStream;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import process.storage.ObjectChangeLog;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,13 +59,13 @@ class StorageUsageMeteringTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new StorageBrowserServiceImpl(this.lookups, this.connections, this.factory, this.store, "etl-avatar", "etl-config", org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
+        this.service = new StorageBrowserServiceImpl(this.lookups, this.connections, this.factory, this.store, "etl-avatar", "etl-config", Mockito.mock(ObjectChangeLog.class));
         ReflectionTestUtils.setField(this.service, "meter", this.meter);
         StorageConnection connection = new StorageConnection();
         connection.setStorageConnectionId(1089L); connection.setTenantId(TENANT); connection.setAlias(BUCKET);
         connection.setBucketName(BUCKET); connection.setProvider(StorageProvider.S3); connection.setStatus(Status.Active);
-        process.storage.StorageRows.add(this.connections, connection);
-        process.storage.StorageRows.add(this.connections, connection);
+        StorageRows.add(this.connections, connection);
+        StorageRows.add(this.connections, connection);
         lenient().when(this.factory.serviceFor(any())).thenReturn(this.store);
         TenantContext.set(TENANT, "TENANT_ADMIN", 4385L, "emily@medaxis");
     }
@@ -70,7 +75,7 @@ class StorageUsageMeteringTest {
 
     private List<UsageEvent> reported() {
         ArgumentCaptor<UsageEvent> captor = ArgumentCaptor.forClass(UsageEvent.class);
-        verify(this.meter, org.mockito.Mockito.atLeast(0)).report(captor.capture());
+        verify(this.meter, Mockito.atLeast(0)).report(captor.capture());
         return captor.getAllValues();
     }
 
@@ -123,7 +128,7 @@ class StorageUsageMeteringTest {
 
     @Test
     void anUploadAndADownloadAreWritesAndReadsWithTheirBytes() {
-        this.service.uploadObject(BUCKET, "in/x.csv", new java.io.ByteArrayInputStream(new byte[10]), 512L * 1024 * 1024, "text/csv");
+        this.service.uploadObject(BUCKET, "in/x.csv", new ByteArrayInputStream(new byte[10]), 512L * 1024 * 1024, "text/csv");
         List<UsageEvent> events = this.reported();
         assertThat(events).extracting(e -> e.meter).containsExactly("storage.ops.write", "storage.bytes.written");
         assertThat(events.get(1).quantity).isEqualTo(512.0 * 1024 * 1024);
@@ -135,8 +140,8 @@ class StorageUsageMeteringTest {
         StorageConnection platform = new StorageConnection();
         platform.setStorageConnectionId(1L); platform.setAlias("etl-bucket"); platform.setBucketName("etl-bucket");
         platform.setProvider(StorageProvider.S3); platform.setStatus(Status.Active);
-        process.storage.StorageRows.add(this.connections, platform);
-        process.storage.StorageRows.add(this.connections, platform);
+        StorageRows.add(this.connections, platform);
+        StorageRows.add(this.connections, platform);
 
         this.service.deleteObject("etl-bucket", "claims/x.txt");
 
@@ -151,8 +156,8 @@ class StorageUsageMeteringTest {
      */
     @Test
     void aSizeLookupThatFailsNeverBlocksTheFolderDelete() {
-        org.mockito.Mockito.when(this.store.listAllObjects(org.mockito.ArgumentMatchers.eq(BUCKET),
-                org.mockito.ArgumentMatchers.eq("q3/"), org.mockito.ArgumentMatchers.anyInt()))
+        Mockito.when(this.store.listAllObjects(ArgumentMatchers.eq(BUCKET),
+                ArgumentMatchers.eq("q3/"), ArgumentMatchers.anyInt()))
             .thenThrow(new RuntimeException("listing timed out"));
 
         this.service.deleteFolder(BUCKET, "q3/");

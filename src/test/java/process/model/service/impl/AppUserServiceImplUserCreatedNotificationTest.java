@@ -39,6 +39,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import process.notifications.TestNotifications;
+import process.storage.TrustedStorageOperations;
 
 /**
  * Who hears about a new account, in the bell rather than by email.
@@ -67,7 +68,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     @Mock
     private UserNameResolver userNameResolver;
     @Mock
-    private process.storage.TrustedStorageOperations storageBrowserService;
+    private TrustedStorageOperations storageBrowserService;
     @Mock
     private TestNotifications.NoticeSink notificationCenterService;
     @Mock

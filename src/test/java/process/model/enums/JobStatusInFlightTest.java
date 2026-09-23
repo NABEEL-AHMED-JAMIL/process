@@ -13,6 +13,7 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.assertj.core.api.Assertions;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,7 +49,7 @@ class JobStatusInFlightTest {
 
     @Test
     void theSetCannotBeChangedAtRuntime() {
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> JobStatus.IN_FLIGHT.add(JobStatus.Failed))
+        Assertions.assertThatThrownBy(() -> JobStatus.IN_FLIGHT.add(JobStatus.Failed))
             .isInstanceOf(UnsupportedOperationException.class);
     }
 

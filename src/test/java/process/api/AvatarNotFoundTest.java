@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import process.model.service.AppUserService;
+import java.net.ConnectException;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -34,7 +35,7 @@ class AvatarNotFoundTest {
 
     @Test
     void aStoreThatIsDownIsStillA500() throws Exception {
-        when(this.users.readAvatar(1000L)).thenThrow(new RuntimeException("Could not fetch", new java.net.ConnectException("refused")));
+        when(this.users.readAvatar(1000L)).thenThrow(new RuntimeException("Could not fetch", new ConnectException("refused")));
         MockMvc mvc = MockMvcBuilders.standaloneSetup(new AppUserRestApi(this.users)).build();
 
         mvc.perform(get("/appUser.json/avatar").param("appUserId", "1000")).andExpect(status().isInternalServerError());

@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import process.storage.TrustedStorageOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -47,7 +48,7 @@ public class KafkaTemplateProviderSecretCacheTest {
     @Mock
     private EncryptionUtil encryptionUtil;
     @Mock
-    private process.storage.TrustedStorageOperations storageBrowserService;
+    private TrustedStorageOperations storageBrowserService;
 
     private KafkaTemplateProvider provider;
     private final List<String> downloaded = new ArrayList<>();

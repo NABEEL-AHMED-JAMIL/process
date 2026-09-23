@@ -10,6 +10,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
+import process.storage.JdbcConnectionIdResolver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,13 +71,13 @@ class EtlJobChangelogPostgresTest {
             sql.update(insert, 9001L, 1L, "exports");
             sql.update(insert, 9002L, 2L, "exports");
             assertThatThrownBy(() -> sql.update(insert, 9003L, 1L, "exports"))
-                .as("one workspace, the same name twice").isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                .as("one workspace, the same name twice").isInstanceOf(DataIntegrityViolationException.class);
             sql.update(insert, 9004L, null, "etl-shared");
             assertThatThrownBy(() -> sql.update(insert, 9005L, null, "etl-shared"))
-                .as("two platform rows, one name").isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                .as("two platform rows, one name").isInstanceOf(DataIntegrityViolationException.class);
 
             // The stamp's resolver, on real rows (MIG-53 part b): own workspace first, then the platform's.
-            process.analytics.JdbcConnectionIdResolver ids = new process.analytics.JdbcConnectionIdResolver(sql);
+            JdbcConnectionIdResolver ids = new JdbcConnectionIdResolver(sql);
             assertThat(ids.resolve(1L, "exports")).isEqualTo(9001L);
             assertThat(ids.resolve(2L, "exports")).isEqualTo(9002L);
             assertThat(ids.resolve(1L, "etl-shared")).as("the platform's, for a workspace without its own").isEqualTo(9004L);

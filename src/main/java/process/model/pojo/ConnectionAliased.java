@@ -1,8 +1,8 @@
-package process.analytics;
+package process.model.pojo;
 
 /**
  * An analytics row that names a storage connection by alias, and carries that connection's id beside
- * it (MIG-53 part b). Stamped by AnalyticsConnectionStamp on every write.
+ * it (MIG-53 part b). Stamped by StorageConnectionStamp on every write.
  */
 public interface ConnectionAliased {
 

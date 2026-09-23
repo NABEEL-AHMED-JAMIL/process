@@ -22,6 +22,10 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.web.multipart.MultipartFile;
+import process.storage.StorageRows;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -64,8 +68,8 @@ class StorageChangeAnnouncementTest {
         connection.setBucketName(BUCKET);
         connection.setProvider(StorageProvider.MINIO);
         connection.setStatus(Status.Active);
-        process.storage.StorageRows.add(this.connections, connection);
-        process.storage.StorageRows.add(this.connections, connection);
+        StorageRows.add(this.connections, connection);
+        StorageRows.add(this.connections, connection);
         lenient().when(this.factory.serviceFor(any())).thenReturn(this.store);
         TenantContext.set(1001L, "TENANT_ADMIN", 61L, "ops@medaxis.example");
     }
@@ -91,7 +95,7 @@ class StorageChangeAnnouncementTest {
     @Test
     void aMultipartUploadAndAWorkflowUploadAreAnnouncedToo() {
         this.service.uploadObject(BUCKET, "q3/", new MockMultipartFile("file", "b.csv", "text/csv", new byte[] {1}));
-        this.service.uploadForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test").forTenant(1001L),
+        this.service.uploadForWorkflow(TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "test").forTenant(1001L),
             BUCKET, "kafka/truststore.p12", bytes(), 3, "application/octet-stream");
 
         InOrder order = inOrder(this.changes, this.store);
@@ -151,9 +155,9 @@ class StorageChangeAnnouncementTest {
     @Test
     void theWritesNoLongerEvictMediasCacheButStillEvictStoragesOwn() throws Exception {
         List<Method> writes = Arrays.asList(
-            StorageBrowserServiceImpl.class.getMethod("uploadObject", String.class, String.class, org.springframework.web.multipart.MultipartFile.class),
+            StorageBrowserServiceImpl.class.getMethod("uploadObject", String.class, String.class, MultipartFile.class),
             StorageBrowserServiceImpl.class.getMethod("uploadObject", String.class, String.class, InputStream.class, long.class, String.class),
-            StorageBrowserServiceImpl.class.getMethod("uploadForWorkflow", process.storage.TrustedAccess.class, String.class, String.class, InputStream.class, long.class, String.class),
+            StorageBrowserServiceImpl.class.getMethod("uploadForWorkflow", TrustedAccess.class, String.class, String.class, InputStream.class, long.class, String.class),
             StorageBrowserServiceImpl.class.getMethod("deleteObject", String.class, String.class),
             StorageBrowserServiceImpl.class.getMethod("deleteObjects", String.class, List.class),
             StorageBrowserServiceImpl.class.getMethod("deleteFolder", String.class, String.class),

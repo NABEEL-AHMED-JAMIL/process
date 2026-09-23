@@ -32,6 +32,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import process.notifications.TestNotifications;
+import org.mockito.ArgumentMatchers;
+import process.storage.TrustedCaller;
+import process.storage.TrustedStorageOperations;
 
 /**
  * What a tenant admin may do to the people in its own workspace.
@@ -63,7 +66,7 @@ public class AppUserServiceImplRoleScopeTest {
     @Mock
     private UserNameResolver userNameResolver;
     @Mock
-    private process.storage.TrustedStorageOperations storageBrowserService;
+    private TrustedStorageOperations storageBrowserService;
     @Mock
     private TestNotifications.NoticeSink notificationCenterService;
     @Mock
@@ -393,7 +396,7 @@ public class AppUserServiceImplRoleScopeTest {
 
         this.service.readAvatar(55L);
 
-        verify(this.storageBrowserService).readForWorkflow(org.mockito.ArgumentMatchers.argThat(access -> access.getCaller() == process.storage.TrustedCaller.IDENTITY_AVATAR), eq("etl-avatar"), eq("55/profile/avatar.png"));
+        verify(this.storageBrowserService).readForWorkflow(ArgumentMatchers.argThat(access -> access.getCaller() == TrustedCaller.IDENTITY_AVATAR), eq("etl-avatar"), eq("55/profile/avatar.png"));
     }
 
     @Test
@@ -414,7 +417,7 @@ public class AppUserServiceImplRoleScopeTest {
 
         this.service.readAvatar(55L);
 
-        verify(this.storageBrowserService).readForWorkflow(org.mockito.ArgumentMatchers.argThat(access -> access.getCaller() == process.storage.TrustedCaller.IDENTITY_AVATAR), eq("etl-avatar"), eq("55/profile/avatar.png"));
+        verify(this.storageBrowserService).readForWorkflow(ArgumentMatchers.argThat(access -> access.getCaller() == TrustedCaller.IDENTITY_AVATAR), eq("etl-avatar"), eq("55/profile/avatar.png"));
     }
 
     /** No picture, a deleted row and an unknown id are all the same quiet nothing. */

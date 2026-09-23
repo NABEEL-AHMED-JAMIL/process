@@ -19,6 +19,7 @@ import process.util.UserNameResolver;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -79,7 +80,7 @@ public class StorageConnectionTenantlessCallerTest {
         this.platformConnection.setStatus(Status.Active);
         when(this.storageConnectionRepository.findById(CONNECTION_ID))
             .thenReturn(Optional.of(this.platformConnection));
-        process.storage.StorageRows.add(this.storageConnectionRepository, this.platformConnection);
+        StorageRows.add(this.storageConnectionRepository, this.platformConnection);
         when(this.storageConnectionRepository.findByStatusNotOrderByStorageConnectionIdDesc(Status.Delete))
             .thenReturn(Collections.singletonList(this.platformConnection));
     }

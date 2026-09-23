@@ -12,6 +12,7 @@ import process.model.repository.StorageConnectionRepository;
 import process.security.TenantContext;
 
 import java.util.Optional;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,7 +59,7 @@ public class DatasetResolverTest {
     }
 
     private void exists(StorageConnection connection) {
-        process.storage.StorageRows.add(this.storageConnectionRepository, connection);
+        StorageRows.add(this.storageConnectionRepository, connection);
     }
 
     // ---- the happy path, so a refusal below is a refusal and not a broken fixture -------------

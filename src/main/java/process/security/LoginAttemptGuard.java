@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongSupplier;
 
 /**
  * Slows a password guesser down: after {@value #MAX_FAILURES} wrong passwords against one name
@@ -32,13 +33,13 @@ public class LoginAttemptGuard {
     }
 
     private final Map<String, Attempts> byName = new ConcurrentHashMap<>();
-    private final java.util.function.LongSupplier clock;
+    private final LongSupplier clock;
 
     public LoginAttemptGuard() {
         this(() -> System.currentTimeMillis() / 1000);
     }
 
-    LoginAttemptGuard(java.util.function.LongSupplier clock) {
+    LoginAttemptGuard(LongSupplier clock) {
         this.clock = clock;
     }
 

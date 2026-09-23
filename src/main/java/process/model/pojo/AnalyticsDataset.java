@@ -44,8 +44,8 @@ import java.sql.Timestamp;
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@EntityListeners({AuditListener.class, process.analytics.AnalyticsConnectionStamp.class})
-public class AnalyticsDataset implements Audited , process.analytics.ConnectionAliased{
+@EntityListeners({AuditListener.class, StorageConnectionStamp.class})
+public class AnalyticsDataset implements Audited , ConnectionAliased{
 
     @Transient
     private String createdByName;

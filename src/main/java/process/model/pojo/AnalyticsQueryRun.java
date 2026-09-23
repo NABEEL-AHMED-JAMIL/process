@@ -49,8 +49,8 @@ import java.sql.Timestamp;
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@EntityListeners({AuditListener.class, process.analytics.AnalyticsConnectionStamp.class})
-public class AnalyticsQueryRun implements Audited , process.analytics.ConnectionAliased{
+@EntityListeners({AuditListener.class, StorageConnectionStamp.class})
+public class AnalyticsQueryRun implements Audited , ConnectionAliased{
 
     /**
      * The vocabulary a run_status column may hold, and there are SEVEN of them where 05 named six.

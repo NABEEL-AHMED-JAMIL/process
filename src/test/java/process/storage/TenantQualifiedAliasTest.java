@@ -18,6 +18,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import javax.persistence.Table;
+import javax.persistence.UniqueConstraint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -191,8 +193,8 @@ class TenantQualifiedAliasTest {
      */
     @Test
     void theEntityDeclaresNoPlatformWideAliasConstraint() {
-        javax.persistence.Table table = StorageConnection.class.getAnnotation(javax.persistence.Table.class);
-        for (javax.persistence.UniqueConstraint unique : table.uniqueConstraints()) {
+        Table table = StorageConnection.class.getAnnotation(Table.class);
+        for (UniqueConstraint unique : table.uniqueConstraints()) {
             assertThat(unique.columnNames()).as(unique.name()).isNotEqualTo(new String[] {"alias"});
         }
     }

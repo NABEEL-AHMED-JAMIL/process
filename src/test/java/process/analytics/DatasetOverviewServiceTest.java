@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -119,8 +121,8 @@ class DatasetOverviewServiceTest {
         AnalysisService analyses = mock(AnalysisService.class);
         DatasetRef dataset = dataset();
         when(queries.profileOf(dataset)).thenReturn(orders());
-        java.util.Set<String> threads = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
-        java.util.Set<Long> tenants = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+        Set<String> threads = Collections.synchronizedSet(new HashSet<>());
+        Set<Long> tenants = Collections.synchronizedSet(new HashSet<>());
         when(analyses.analyze(any())).thenAnswer(inv -> {
             threads.add(Thread.currentThread().getName()); tenants.add(TenantContext.getTenantId());
             AnalysisResultDto ok = new AnalysisResultDto(); ok.setRows(new ArrayList<>()); return ok;

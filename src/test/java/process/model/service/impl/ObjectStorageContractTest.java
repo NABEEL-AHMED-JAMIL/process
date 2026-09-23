@@ -48,6 +48,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import io.minio.BucketExistsArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -122,10 +125,10 @@ class ObjectStorageContractTest {
             }
         }
         if (answers("localhost", 9000)) {
-            io.minio.MinioClient minio = io.minio.MinioClient.builder().endpoint("http://localhost:9000")
+            MinioClient minio = MinioClient.builder().endpoint("http://localhost:9000")
                 .credentials(minioAccessKey(), minioSecretKey()).build();
-            if (!minio.bucketExists(io.minio.BucketExistsArgs.builder().bucket(BUCKET).build())) {
-                minio.makeBucket(io.minio.MakeBucketArgs.builder().bucket(BUCKET).build());
+            if (!minio.bucketExists(BucketExistsArgs.builder().bucket(BUCKET).build())) {
+                minio.makeBucket(MakeBucketArgs.builder().bucket(BUCKET).build());
             }
         }
         if (answers("localhost", 10000)) {

@@ -21,6 +21,11 @@ import java.io.ByteArrayInputStream;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
+import org.mockito.Mockito;
+import process.storage.ObjectChangeLog;
+import process.storage.StorageRows;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -75,17 +80,17 @@ public class StorageBrowserServiceImplTenantIsolationTest {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService,
             this.storageConnectionRepository, this.storageClientFactory,
             this.objectStorageService,
-            AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
+            AVATAR_BUCKET, CONFIG_BUCKET, Mockito.mock(ObjectChangeLog.class));
 
         // The guard resolves by alias alone. Matching only Active rows let a retired or
         // soft-deleted platform connection fall through to the legacy lookup path, where a tenant
         // could name the same bucket -- so both stubs are set and the guard reads findByAlias.
         for (String bucket : new String[] { AVATAR_BUCKET, PLATFORM_BUCKET }) {
-            process.storage.StorageRows.add(this.storageConnectionRepository, this.connection(bucket, null));
-            process.storage.StorageRows.add(this.storageConnectionRepository, this.connection(bucket, null));
+            StorageRows.add(this.storageConnectionRepository, this.connection(bucket, null));
+            StorageRows.add(this.storageConnectionRepository, this.connection(bucket, null));
         }
-        process.storage.StorageRows.add(this.storageConnectionRepository, this.connection(TENANT_BUCKET, TENANT_A));
-        process.storage.StorageRows.add(this.storageConnectionRepository, this.connection(TENANT_BUCKET, TENANT_A));
+        StorageRows.add(this.storageConnectionRepository, this.connection(TENANT_BUCKET, TENANT_A));
+        StorageRows.add(this.storageConnectionRepository, this.connection(TENANT_BUCKET, TENANT_A));
         lenient().when(this.storageClientFactory.serviceFor(any())).thenReturn(this.objectStorageService);
     }
 
@@ -261,7 +266,7 @@ public class StorageBrowserServiceImplTenantIsolationTest {
 
         // DocumentConverterServiceImpl has already checked the task row belongs to this caller,
         // and builds the key from it -- which is why this one is allowed where a browse is not.
-        this.service.readForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), PLATFORM_BUCKET, "document-converter/41/input.docx");
+        this.service.readForWorkflow(TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), PLATFORM_BUCKET, "document-converter/41/input.docx");
 
         verify(this.objectStorageService)
             .getObjectContent(PLATFORM_BUCKET, "document-converter/41/input.docx", null, null);
@@ -307,7 +312,7 @@ public class StorageBrowserServiceImplTenantIsolationTest {
         this.givenLegacyBucketLookup();
         assertThat(TenantContext.getTenantId()).isNull();
 
-        this.service.readForWorkflow(process.storage.TrustedAccess.of(process.storage.TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), LEGACY_BUCKET, "kafka-secrets/2024/truststore.p12");
+        this.service.readForWorkflow(TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "test: a workflow reading a file it wrote"), LEGACY_BUCKET, "kafka-secrets/2024/truststore.p12");
 
         verify(this.objectStorageService)
             .getObjectContent(LEGACY_BUCKET, "kafka-secrets/2024/truststore.p12", null, null);

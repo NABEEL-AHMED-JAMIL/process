@@ -18,6 +18,7 @@ import process.util.ProcessUtil;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.Set;
 import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.SUCCESS;
 
@@ -54,7 +55,7 @@ public class MessageQServiceImpl implements MessageQService {
      * Terminal statuses stay refused -- re-failing a Completed or Skipped run would rewrite
      * history that something already recorded correctly.
      */
-    private static final java.util.Set<JobStatus> IN_FLIGHT_STATUSES = JobStatus.IN_FLIGHT;
+    private static final Set<JobStatus> IN_FLIGHT_STATUSES = JobStatus.IN_FLIGHT;
 
     private final BulkAction bulkAction;
     private final QueryService queryService;

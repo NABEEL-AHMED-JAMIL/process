@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import process.notifications.TestNotifications;
+import org.junit.jupiter.api.Test;
 
 /**
  * "Run now" and "Skip next" refuse a job whose last run is still in flight -- including one in
@@ -176,7 +177,7 @@ class SourceJobInFlightGuardTest {
 
     // ---- a job that has never run ---------------------------------------------------------------
 
-    @org.junit.jupiter.api.Test
+    @Test
     void aJobThatHasNeverRunCanBeRunNow() throws Exception {
         this.autoJobWhoseLastRunIs(null);
 

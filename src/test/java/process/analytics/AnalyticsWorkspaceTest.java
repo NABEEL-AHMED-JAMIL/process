@@ -907,7 +907,7 @@ public class AnalyticsWorkspaceTest {
             "src/main/resources/db/changelog/db.changelog-master.yaml");
         assertThat(master).contains("db/changelog/yaml/V50.0-schema-baseline.yaml");
 
-        String executed = changesetSql().toLowerCase(java.util.Locale.ROOT);
+        String executed = changesetSql().toLowerCase(Locale.ROOT);
         assertThat(executed).contains("analytics_dashboard");
         assertThat(executed).contains("analytics_dashboard_widget");
     }

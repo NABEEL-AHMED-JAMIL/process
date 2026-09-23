@@ -15,6 +15,11 @@ import process.model.repository.AppUserRepository;
 import process.outbox.OutboxWriter;
 
 import java.util.Optional;
+import com.fasterxml.jackson.core.type.TypeReference;
+import org.barco.notifications.contract.Recipients;
+import org.barco.platform.event.PlatformEvent;
+import org.junit.jupiter.api.BeforeEach;
+import process.identity.OneTimeSecrets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -36,14 +41,14 @@ class OutboxNotificationsTest {
 
     private final OutboxWriter outbox = mock(OutboxWriter.class);
     private final AppUserRepository users = mock(AppUserRepository.class);
-    private final process.identity.OneTimeSecrets secrets = mock(process.identity.OneTimeSecrets.class);
+    private final OneTimeSecrets secrets = mock(OneTimeSecrets.class);
     private final MailAttachmentStaging staging = mock(MailAttachmentStaging.class);
     private final LegacyConsolePush legacyConsole = mock(LegacyConsolePush.class);
     private final UnreadBadges badges = mock(UnreadBadges.class);
     private final OutboxNotifications port = new OutboxNotifications(this.outbox, this.users, this.secrets, this.staging,
         this.legacyConsole, this.badges, "http://host.docker.internal:4566");
 
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void recipients() {
         when(this.users.findById(10L)).thenReturn(Optional.of(user(10L, "ops@medaxis.example", TENANT)));
     }
@@ -86,8 +91,8 @@ class OutboxNotificationsTest {
         ArgumentCaptor<String> event = ArgumentCaptor.forClass(String.class);
         verify(this.outbox).write(anyString(), anyString(), anyString(), event.capture());
 
-        org.barco.platform.event.PlatformEvent<JobStatusChanged> read = this.json.readValue(event.getValue(),
-            new com.fasterxml.jackson.core.type.TypeReference<org.barco.platform.event.PlatformEvent<JobStatusChanged>>() { });
+        PlatformEvent<JobStatusChanged> read = this.json.readValue(event.getValue(),
+            new TypeReference<PlatformEvent<JobStatusChanged>>() { });
 
         assertThat(read.getTenantId()).isEqualTo(TENANT);
         assertThat(read.getPayload().isNewTransition()).isTrue();
@@ -217,7 +222,7 @@ class OutboxNotificationsTest {
         JsonNode payload = this.written(NotificationTopics.NOTIFICATION_CREATED, "1000").get("payload");
         assertThat(payload.get("recipientUsername").asText()).isEqualTo("admin@platform.local");
         // Contract 1.3.0: the platform scope is written, never left out.
-        assertThat(payload.get("recipientTenantId").asLong()).isEqualTo(org.barco.notifications.contract.Recipients.PLATFORM_SCOPE);
+        assertThat(payload.get("recipientTenantId").asLong()).isEqualTo(Recipients.PLATFORM_SCOPE);
     }
 
     @Test

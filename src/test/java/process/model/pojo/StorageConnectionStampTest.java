@@ -1,13 +1,15 @@
-package process.analytics;
+package process.model.pojo;
 
 import org.junit.jupiter.api.Test;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.AnalyticsQuery;
 import process.model.pojo.AnalyticsQueryRun;
-import process.model.pojo.StorageConnection;
 import process.model.repository.StorageConnectionRepository;
 import process.storage.StorageRows;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import process.storage.StorageConnectionLookup;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -19,21 +21,21 @@ import static org.mockito.Mockito.mock;
  * listener, so no write path can forget, with the same rule Storage resolves by: the row's own
  * workspace's connection, else the platform's.
  */
-class AnalyticsConnectionStampTest {
+class StorageConnectionStampTest {
 
     private final StorageConnectionRepository repository = mock(StorageConnectionRepository.class);
-    private final AnalyticsConnectionStamp stamp = new AnalyticsConnectionStamp();
+    private final StorageConnectionStamp stamp = new StorageConnectionStamp();
 
     /** Installed as production installs it; the rule is the lookup's (JdbcConnectionIdResolver is tested on Postgres). */
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void install() {
-        AnalyticsConnectionStamp.use((tenantId, alias) -> new process.storage.StorageConnectionLookup(this.repository)
+        StorageConnectionStamp.use((tenantId, alias) -> new StorageConnectionLookup(this.repository)
             .forRow(tenantId, alias).map(StorageConnection::getStorageConnectionId).orElse(null));
     }
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void uninstall() {
-        AnalyticsConnectionStamp.use(null);
+        StorageConnectionStamp.use(null);
     }
 
     private StorageConnection row(long id, Long tenant, String alias) {

@@ -1,13 +1,15 @@
-package process.analytics;
+package process.storage;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.model.pojo.ConnectionIdResolver;
+import process.model.pojo.StorageConnectionStamp;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.util.List;
 
 /**
- * ConnectionIdResolver over plain JDBC, for AnalyticsConnectionStamp. Plain JDBC and not the JPA
+ * ConnectionIdResolver over plain JDBC, for StorageConnectionStamp. Plain JDBC and not the JPA
  * repository because the stamp runs inside Hibernate's flush, where using the entity manager is unsafe.
  * The rule is StorageConnectionLookup.forRow's.
  */
@@ -22,7 +24,7 @@ public class JdbcConnectionIdResolver implements ConnectionIdResolver {
 
     @PostConstruct
     void install() {
-        AnalyticsConnectionStamp.use(this);
+        StorageConnectionStamp.use(this);
     }
 
     @Override

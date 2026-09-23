@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import process.storage.TrustedStorageOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,7 +57,7 @@ public class KafkaTemplateProviderSecurityTest {
     @Mock
     private EncryptionUtil encryptionUtil;
     @Mock
-    private process.storage.TrustedStorageOperations storageBrowserService;
+    private TrustedStorageOperations storageBrowserService;
 
     private KafkaTemplateProvider provider;
 

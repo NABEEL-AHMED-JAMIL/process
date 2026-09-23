@@ -28,6 +28,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.HashSet;
+import org.mockito.Mockito;
+import process.storage.ObjectChangeLog;
+import process.storage.StorageRows;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -79,7 +83,7 @@ class StorageGuardCharacterisationTest {
     @BeforeEach
     void setUp() {
         this.service = new StorageBrowserServiceImpl(this.lookupDataCacheService, this.storageConnectionRepository,
-            this.storageClientFactory, this.objectStorageService, AVATAR_BUCKET, CONFIG_BUCKET, org.mockito.Mockito.mock(process.storage.ObjectChangeLog.class));
+            this.storageClientFactory, this.objectStorageService, AVATAR_BUCKET, CONFIG_BUCKET, Mockito.mock(ObjectChangeLog.class));
         this.stub(PLATFORM_BUCKET, null, StorageProvider.MINIO);
         this.stub(TENANT_A_BUCKET, TENANT_A, StorageProvider.MINIO);
         this.stub(TENANT_B_BUCKET, TENANT_B, StorageProvider.MINIO);
@@ -94,8 +98,8 @@ class StorageGuardCharacterisationTest {
 
     private void stub(String alias, Long tenantId, StorageProvider provider) {
         StorageConnection row = connection(alias, tenantId, provider, Status.Active);
-        process.storage.StorageRows.add(this.storageConnectionRepository, row);
-        process.storage.StorageRows.add(this.storageConnectionRepository, row);
+        StorageRows.add(this.storageConnectionRepository, row);
+        StorageRows.add(this.storageConnectionRepository, row);
     }
 
     private static StorageConnection connection(String alias, Long tenantId, StorageProvider provider, Status status) {
@@ -178,7 +182,7 @@ class StorageGuardCharacterisationTest {
     @Test
     void aPlatformBucketWhoseRowIsRetiredIsStillAPlatformBucket() {
         String archive = "etl-archive";
-        process.storage.StorageRows.add(this.storageConnectionRepository, connection(archive, null, StorageProvider.MINIO, Status.Delete));
+        StorageRows.add(this.storageConnectionRepository, connection(archive, null, StorageProvider.MINIO, Status.Delete));
         LookupDataDto own = new LookupDataDto();
         own.setLookupType("BUCKET_LIST_" + archive);
         own.setLookupValue(archive);
@@ -213,7 +217,7 @@ class StorageGuardCharacterisationTest {
             answers.put(bucket, refused.getMessage().replace(bucket, "<bucket>"));
         }
 
-        assertThat(new java.util.HashSet<>(answers.values())).as(answers.toString()).hasSize(1);
+        assertThat(new HashSet<>(answers.values())).as(answers.toString()).hasSize(1);
         verifyNoInteractions(this.objectStorageService);
     }
 

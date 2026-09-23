@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import process.model.service.StorageBrowserService;
+import java.net.ConnectException;
+import org.springframework.http.MediaType;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -31,7 +33,7 @@ class ObjectMetadataNotFoundTest {
         when(this.storage.getObjectMetadata("b", "e2e/nope/missing.txt")).thenThrow(new RuntimeException(
             "Could not fetch MinIO object metadata etl-bucket/e2e/nope/missing.txt", new ErrorResponseException(noSuchKey, null, null)));
 
-        this.mvc.perform(get("/storage.json/objectMetadata").param("bucket", "b").param("key", "e2e/nope/missing.txt").accept(org.springframework.http.MediaType.APPLICATION_JSON))
+        this.mvc.perform(get("/storage.json/objectMetadata").param("bucket", "b").param("key", "e2e/nope/missing.txt").accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.status").value("ERROR"))
             .andExpect(jsonPath("$.message").value("No object at b/e2e/nope/missing.txt."));
@@ -41,7 +43,7 @@ class ObjectMetadataNotFoundTest {
     void aStoreThatIsDownIsStillA500() throws Exception {
         // The other half matters more: an outage reported as 404 would read as "your data is gone".
         when(this.storage.getObjectMetadata("b", "k")).thenThrow(new RuntimeException(
-            "Could not fetch MinIO object metadata etl-bucket/k", new java.net.ConnectException("Connection refused")));
+            "Could not fetch MinIO object metadata etl-bucket/k", new ConnectException("Connection refused")));
 
         this.mvc.perform(get("/storage.json/objectMetadata").param("bucket", "b").param("key", "k"))
             .andExpect(status().isInternalServerError());

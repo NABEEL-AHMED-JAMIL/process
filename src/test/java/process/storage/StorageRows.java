@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
 import java.util.stream.Collectors;
+import java.util.Optional;
+import java.util.function.Predicate;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -57,8 +59,8 @@ public final class StorageRows {
         return rows;
     }
 
-    private static java.util.Optional<StorageConnection> first(List<StorageConnection> rows,
-        java.util.function.Predicate<StorageConnection> match) {
+    private static Optional<StorageConnection> first(List<StorageConnection> rows,
+        Predicate<StorageConnection> match) {
         synchronized (rows) {
             return rows.stream().filter(match).findFirst();
         }
