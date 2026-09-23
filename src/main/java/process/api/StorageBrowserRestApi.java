@@ -92,6 +92,14 @@ public class StorageBrowserRestApi {
             logger.warn("objectMetadata rejected bucket={} key={}: {}", bucket, key, ex.getMessage());
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ex.getMessage()), HttpStatus.BAD_REQUEST);
         } catch (Exception ex) {
+            // A missing object is the caller's answer, as streamObject already says it. Without
+            // this a service reading metadata over HTTP (media's extraction) saw a 500 -- which is
+            // what an outage looks like -- and told the user Storage was down.
+            if (StorageNotFound.isNotFound(ex)) {
+                logger.debug("objectMetadata: no such object bucket={} key={}", bucket, key);
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                    String.format("No object at %s/%s.", bucket, key)), HttpStatus.NOT_FOUND);
+            }
             logger.error("An error occurred while fetching object metadata bucket={} key={}", bucket, key, ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
