@@ -130,7 +130,18 @@ services:
     container_name: process_app
     restart: always
     ports:
-      - "9098:9098"
+      # Callers reach process through the API gateway (../api-gateway), which owns host port 9098
+      # and reaches this container as process_app:9098 on this project's network. This mapping is
+      # for debugging process directly and is bound to loopback, so nothing else on the network
+      # can bypass the gateway.
+      - "127.0.0.1:9099:9098"
+    networks:
+      default:
+        # How the gateway addresses this container. Not "process_app": an underscore is not legal
+        # in a hostname, java.net.URI reads such an address as having no host at all, and the
+        # gateway's routes to it come out as "http:".
+        aliases:
+          - process
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
