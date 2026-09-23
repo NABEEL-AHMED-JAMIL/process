@@ -326,7 +326,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
      * answered from the previous version until the 30-second metadata entry aged out.
      *
      * allEntries rather than a precise key, deliberately. fileChatExtract is keyed
-     * bucket:key:etag (see FileChatExtractionServiceImpl.extractText) and a delete never
+     * bucket:key:etag (see ExtractionServiceImpl.extractText) and a delete never
      * learns the etag of the thing it just removed; a folder delete or rename moves an unbounded
      * set of keys it does not enumerate; and fileChatMetadata is keyed by the ASKING tenant and
      * user (see getObjectMetadataCached above), so the entry that has to go may well belong to

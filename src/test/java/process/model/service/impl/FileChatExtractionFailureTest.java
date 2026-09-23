@@ -12,7 +12,7 @@ import process.model.dto.ObjectMetadataDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.model.service.EmbeddingService;
-import process.model.service.FileChatExtractionService;
+import process.media.MediaPort;
 import process.model.service.StorageBrowserService;
 import process.util.OpenSearchRagClient;
 import process.util.ProcessUtil;
@@ -24,7 +24,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import process.model.service.FileShareService;
 
 /**
  * A real bug: extraction itself failing (a vision-model call erroring out, a transcription
@@ -46,12 +45,11 @@ public class FileChatExtractionFailureTest {
     private static final Long AGENT_ID = 3000L;
 
     @Mock private StorageBrowserService storageBrowserService;
-    @Mock private FileChatExtractionService fileChatExtractionService;
+    @Mock private MediaPort fileChatExtractionService;
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -59,7 +57,7 @@ public class FileChatExtractionFailureTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService, this.fileShareService);
+            this.openSearchRagClient, this.embeddingService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("Docs", BUCKET, "MINIO")));

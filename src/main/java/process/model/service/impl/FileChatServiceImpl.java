@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.media.UnreadableFileException;
 import org.slf4j.Logger;
 import java.util.Collections;
 import org.slf4j.LoggerFactory;
@@ -14,9 +15,8 @@ import process.model.dto.ObjectMetadataDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.model.service.EmbeddingService;
-import process.model.service.FileChatExtractionService;
+import process.media.MediaPort;
 import process.model.service.FileChatService;
-import process.model.service.FileShareService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.util.ContentTypeUtil;
@@ -247,24 +247,22 @@ public class FileChatServiceImpl implements FileChatService {
     }
 
     private final StorageBrowserService storageBrowserService;
-    private final FileChatExtractionService fileChatExtractionService;
+    /** Text, conversions and mailed exports come from Media & Documents, through its port (MIG-40). */
+    private final MediaPort media;
     private final AiAgentService aiAgentService;
     private final OpenSearchRagClient openSearchRagClient;
     private final EmbeddingService embeddingService;
-    private final FileShareService fileShareService;
 
     public FileChatServiceImpl(StorageBrowserService storageBrowserService,
-        FileChatExtractionService fileChatExtractionService,
+        MediaPort media,
         AiAgentService aiAgentService,
         OpenSearchRagClient openSearchRagClient,
-        EmbeddingService embeddingService,
-        FileShareService fileShareService) {
+        EmbeddingService embeddingService) {
         this.storageBrowserService = storageBrowserService;
-        this.fileChatExtractionService = fileChatExtractionService;
+        this.media = media;
         this.aiAgentService = aiAgentService;
         this.openSearchRagClient = openSearchRagClient;
         this.embeddingService = embeddingService;
-        this.fileShareService = fileShareService;
     }
 
     /**
@@ -298,7 +296,7 @@ public class FileChatServiceImpl implements FileChatService {
         }
         ObjectMetadataDto metadata = this.storageBrowserService.getObjectMetadata(bucket, key);
         if (!isNull(metadata) && !isNull(metadata.getEtag())) {
-            this.fileChatExtractionService.forgetExtraction(bucket, key, metadata.getEtag());
+            this.media.forgetExtraction(bucket, key, metadata.getEtag());
         }
         return new ResponseDto(SUCCESS, "Chat closed.");
     }
@@ -522,7 +520,7 @@ public class FileChatServiceImpl implements FileChatService {
         // The size ceiling, the address rule and the mail template all live in FileShareService,
         // which already emails stored objects. Reusing it is the point: a second copy of those
         // rules here would be a second thing to keep in step, and the copy is what drifts.
-        return this.fileShareService.emailGeneratedFile(dto.getRecipientEmail(), filename, filename,
+        return this.media.emailGeneratedFile(dto.getRecipientEmail(), filename, filename,
             EXPORT_CONTENT_TYPES.get(targetFormat), converted.bytes, dto.getMessage());
     }
 
@@ -563,7 +561,7 @@ public class FileChatServiceImpl implements FileChatService {
                 new ResponseDto(ERROR, "Unsupported export target format: " + dto.getTargetFormat()));
         }
         try {
-            byte[] converted = this.fileChatExtractionService.convertContent(
+            byte[] converted = this.media.convertContent(
                 dto.getContent().getBytes(StandardCharsets.UTF_8), sourceFormat, targetFormat);
             if (converted == null || converted.length == 0) {
                 return new Converted(null,
@@ -781,9 +779,9 @@ public class FileChatServiceImpl implements FileChatService {
                      * would be re-extracted once per agent for no difference in the result.
                      */
                     String extracted = VISION_CAPABLE_EXTENSIONS.contains(ContentTypeUtil.extensionOf(key))
-                        ? this.fileChatExtractionService.extractText(
+                        ? this.media.extractText(
                             bucket, key, etag, visionModel, visionInstructions)
-                        : this.fileChatExtractionService.extractText(bucket, key, etag);
+                        : this.media.extractText(bucket, key, etag);
                     // == null, not ProcessUtil.isNull: that one is true for "" as well, and an
                     // empty file is the case the next branch exists to name.
                     if (extracted == null) {
@@ -801,7 +799,7 @@ public class FileChatServiceImpl implements FileChatService {
                 } catch (UnsupportedFileTypeException ex) {
                     failure[0] = ex;
                     throw ex;
-                } catch (FileChatExtractionService.UnreadableFileException ex) {
+                } catch (UnreadableFileException ex) {
                     // This one already knows why, in words written for the panel: the PDF is
                     // password-protected, or it has no text layer AND the vision model did not
                     // answer. Flattening it into "Couldn't get any readable content out of this

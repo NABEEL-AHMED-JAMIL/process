@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.media.MediaPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,7 +53,7 @@ public class ReportExportServiceImpl {
      */
     private static final Pattern FORMULA_LEAD = Pattern.compile("^[=+\\-@\\t\\r]");
 
-    private final FileChatExtractionServiceImpl extractionService;
+    private final MediaPort extractionService;
     private final StorageBrowserService storageService;
     private final QueryService queryService;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -67,7 +68,7 @@ public class ReportExportServiceImpl {
     @Value("${report.submit.allow-internal:false}")
     private boolean allowInternalSubmit;
 
-    public ReportExportServiceImpl(FileChatExtractionServiceImpl extractionService,
+    public ReportExportServiceImpl(MediaPort extractionService,
                                    StorageBrowserService storageService,
                                    QueryService queryService) {
         this.extractionService = extractionService;

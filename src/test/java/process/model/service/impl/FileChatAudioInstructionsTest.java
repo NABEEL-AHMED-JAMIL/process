@@ -14,7 +14,7 @@ import process.model.dto.ObjectMetadataDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.model.service.EmbeddingService;
-import process.model.service.FileChatExtractionService;
+import process.media.MediaPort;
 import process.model.service.StorageBrowserService;
 import process.util.OpenSearchRagClient;
 import process.util.ProcessUtil;
@@ -25,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import org.mockito.ArgumentMatchers;
-import process.model.service.FileShareService;
 
 /**
  * The same leak fixed for images (FileChatImageInstructionsTest) generalizes to audio: a
@@ -46,12 +45,11 @@ public class FileChatAudioInstructionsTest {
     private static final Long AGENT_ID = 1023L;
 
     @Mock private StorageBrowserService storageBrowserService;
-    @Mock private FileChatExtractionService fileChatExtractionService;
+    @Mock private MediaPort fileChatExtractionService;
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -59,7 +57,7 @@ public class FileChatAudioInstructionsTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService, this.fileShareService);
+            this.openSearchRagClient, this.embeddingService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("ETL", BUCKET, "MINIO")));

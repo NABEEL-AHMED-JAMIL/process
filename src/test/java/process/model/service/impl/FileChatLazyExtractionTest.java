@@ -12,7 +12,7 @@ import process.model.dto.ObjectMetadataDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.model.service.EmbeddingService;
-import process.model.service.FileChatExtractionService;
+import process.media.MediaPort;
 import process.model.service.StorageBrowserService;
 import process.util.OpenSearchRagClient;
 import process.util.ProcessUtil;
@@ -28,12 +28,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import java.util.Map;
-import process.model.service.FileShareService;
 
 /**
  * A file already indexed in OpenSearch for this exact bucket/key/etag must never have its raw
  * text re-extracted at all -- not by sendMessage, not by prepareContext. Before this, both
- * called {@code FileChatExtractionService.extractText} unconditionally, before ever checking
+ * called {@code MediaPort.extractText} unconditionally, before ever checking
  * whether OpenSearch already had everything a question needed. For audio specifically that meant
  * a full re-transcription (tens of seconds, chunk by chunk) on every single visit to an
  * already-indexed file, even though nothing in the "already indexed" path ever reads the raw
@@ -50,12 +49,11 @@ public class FileChatLazyExtractionTest {
     private static final Long AGENT_ID = 2000L;
 
     @Mock private StorageBrowserService storageBrowserService;
-    @Mock private FileChatExtractionService fileChatExtractionService;
+    @Mock private MediaPort fileChatExtractionService;
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
-    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -63,7 +61,7 @@ public class FileChatLazyExtractionTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService, this.fileShareService);
+            this.openSearchRagClient, this.embeddingService);
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("Docs", BUCKET, "MINIO")));

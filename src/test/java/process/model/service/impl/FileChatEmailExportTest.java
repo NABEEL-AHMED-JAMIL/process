@@ -13,8 +13,7 @@ import process.model.dto.FileChatExportRequestDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.model.service.EmbeddingService;
-import process.model.service.FileChatExtractionService;
-import process.model.service.FileShareService;
+import process.media.MediaPort;
 import process.model.service.StorageBrowserService;
 import process.util.OpenSearchRagClient;
 
@@ -49,11 +48,10 @@ import static process.util.ProcessUtil.SUCCESS;
 public class FileChatEmailExportTest {
 
     @Mock private StorageBrowserService storageBrowserService;
-    @Mock private FileChatExtractionService fileChatExtractionService;
+    @Mock private MediaPort fileChatExtractionService;
     @Mock private AiAgentService aiAgentService;
     @Mock private OpenSearchRagClient openSearchRagClient;
     @Mock private EmbeddingService embeddingService;
-    @Mock private FileShareService fileShareService;
 
     private FileChatServiceImpl service;
 
@@ -63,7 +61,7 @@ public class FileChatEmailExportTest {
     void setUp() {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService, this.fileShareService);
+            this.openSearchRagClient, this.embeddingService);
     }
 
     private FileChatExportRequestDto request(String content, String source, String target, String recipient) {
@@ -81,7 +79,7 @@ public class FileChatEmailExportTest {
     }
 
     private void shareServiceAccepts() throws Exception {
-        when(this.fileShareService.emailGeneratedFile(anyString(), anyString(), anyString(),
+        when(this.fileChatExtractionService.emailGeneratedFile(anyString(), anyString(), anyString(),
             anyString(), any(byte[].class), any())).thenReturn(new ResponseDto(SUCCESS, "Email sent."));
     }
 
@@ -114,14 +112,14 @@ public class FileChatEmailExportTest {
     @DisplayName("23. the address rule is NOT restated here -- it is the share service's to enforce")
     void addressValidationIsDelegated() throws Exception {
         converterProduces(PDF_BYTES);
-        when(this.fileShareService.emailGeneratedFile(anyString(), anyString(), anyString(),
+        when(this.fileChatExtractionService.emailGeneratedFile(anyString(), anyString(), anyString(),
             anyString(), any(byte[].class), any()))
             .thenReturn(new ResponseDto(ERROR, "Enter a valid recipient email address."));
         ResponseDto response = this.service.emailExport(request("# Report", "md", "pdf", "not-an-address"));
         assertEquals(ERROR, response.getStatus());
         // The point: a malformed address that gets past the blank check reaches the one component
         // that owns the pattern, rather than a second regex here that could disagree with it.
-        verify(this.fileShareService).emailGeneratedFile(eq("not-an-address"), anyString(), anyString(),
+        verify(this.fileChatExtractionService).emailGeneratedFile(eq("not-an-address"), anyString(), anyString(),
             anyString(), any(byte[].class), any());
     }
 
@@ -129,7 +127,7 @@ public class FileChatEmailExportTest {
     @DisplayName("24. the size ceiling is the share service's too, not a copy")
     void sizeCeilingIsDelegated() throws Exception {
         converterProduces(new byte[4096]);
-        when(this.fileShareService.emailGeneratedFile(anyString(), anyString(), anyString(),
+        when(this.fileChatExtractionService.emailGeneratedFile(anyString(), anyString(), anyString(),
             anyString(), any(byte[].class), any()))
             .thenReturn(new ResponseDto(ERROR, "This export is 21.0 MB -- too large to email (limit is 20.0 MB)."));
         ResponseDto response = this.service.emailExport(request("# Report", "md", "pdf", "a@b.com"));
@@ -190,7 +188,7 @@ public class FileChatEmailExportTest {
     void emptyConversionIsRefused() throws Exception {
         converterProduces(new byte[0]);
         assertEquals(ERROR, this.service.emailExport(request("# R", "md", "pdf", "a@b.com")).getStatus());
-        verify(this.fileShareService, never()).emailGeneratedFile(anyString(), anyString(), anyString(),
+        verify(this.fileChatExtractionService, never()).emailGeneratedFile(anyString(), anyString(), anyString(),
             anyString(), any(byte[].class), any());
     }
 
@@ -224,7 +222,7 @@ public class FileChatEmailExportTest {
         converterProduces(PDF_BYTES);
         shareServiceAccepts();
         this.service.emailExport(request("# R", "md", "pdf", "a@b.com"));
-        verify(this.fileShareService).emailGeneratedFile(eq("a@b.com"), anyString(), anyString(),
+        verify(this.fileChatExtractionService).emailGeneratedFile(eq("a@b.com"), anyString(), anyString(),
             eq("application/pdf"), any(byte[].class), any());
     }
 
@@ -234,7 +232,7 @@ public class FileChatEmailExportTest {
         converterProduces(PDF_BYTES);
         shareServiceAccepts();
         this.service.emailExport(request("# R", "md", "docx", "a@b.com"));
-        verify(this.fileShareService).emailGeneratedFile(anyString(), anyString(), anyString(),
+        verify(this.fileChatExtractionService).emailGeneratedFile(anyString(), anyString(), anyString(),
             eq("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
             any(byte[].class), any());
     }
@@ -245,7 +243,7 @@ public class FileChatEmailExportTest {
         converterProduces(PDF_BYTES);
         shareServiceAccepts();
         this.service.emailExport(request("a,b\n1,2", "csv", "xlsx", "a@b.com"));
-        verify(this.fileShareService).emailGeneratedFile(anyString(), anyString(), anyString(),
+        verify(this.fileChatExtractionService).emailGeneratedFile(anyString(), anyString(), anyString(),
             eq("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
             any(byte[].class), any());
     }
@@ -256,7 +254,7 @@ public class FileChatEmailExportTest {
         converterProduces(PDF_BYTES);
         shareServiceAccepts();
         this.service.emailExport(request("# R", "md", "pdf", "a@b.com"));
-        verify(this.fileShareService).emailGeneratedFile(anyString(), eq("chat-export.pdf"),
+        verify(this.fileChatExtractionService).emailGeneratedFile(anyString(), eq("chat-export.pdf"),
             eq("chat-export.pdf"), anyString(), any(byte[].class), any());
     }
 
@@ -267,7 +265,7 @@ public class FileChatEmailExportTest {
         shareServiceAccepts();
         this.service.emailExport(request("# R", "md", "pdf", "a@b.com"));
         ArgumentCaptor<byte[]> sent = ArgumentCaptor.forClass(byte[].class);
-        verify(this.fileShareService).emailGeneratedFile(anyString(), anyString(), anyString(),
+        verify(this.fileChatExtractionService).emailGeneratedFile(anyString(), anyString(), anyString(),
             anyString(), sent.capture(), any());
         assertEquals(PDF_BYTES.length, sent.getValue().length);
     }
@@ -280,7 +278,7 @@ public class FileChatEmailExportTest {
         FileChatExportRequestDto dto = request("# R", "md", "pdf", "a@b.com");
         dto.setMessage("Here is the summary we discussed.");
         this.service.emailExport(dto);
-        verify(this.fileShareService).emailGeneratedFile(anyString(), anyString(), anyString(),
+        verify(this.fileChatExtractionService).emailGeneratedFile(anyString(), anyString(), anyString(),
             anyString(), any(byte[].class), eq("Here is the summary we discussed."));
     }
 
@@ -291,7 +289,7 @@ public class FileChatEmailExportTest {
         ResponseDto response = this.service.exportFile(request("# R", "md", "pdf", null));
         assertEquals(SUCCESS, response.getStatus());
         assertNotNull(response.getData());
-        verify(this.fileShareService, never()).emailGeneratedFile(anyString(), anyString(), anyString(),
+        verify(this.fileChatExtractionService, never()).emailGeneratedFile(anyString(), anyString(), anyString(),
             anyString(), any(byte[].class), any());
     }
 }
