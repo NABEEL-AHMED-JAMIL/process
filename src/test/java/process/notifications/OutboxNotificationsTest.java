@@ -10,7 +10,11 @@ import org.barco.notifications.contract.NotificationCreated;
 import org.barco.notifications.contract.NotificationTopics;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import process.model.pojo.AppUser;
+import process.model.repository.AppUserRepository;
 import process.outbox.OutboxWriter;
+
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -32,7 +36,21 @@ class OutboxNotificationsTest {
 
     private final OutboxWriter outbox = mock(OutboxWriter.class);
     private final InProcessNotifications inProcess = mock(InProcessNotifications.class);
-    private final OutboxNotifications port = new OutboxNotifications(this.outbox, this.inProcess);
+    private final AppUserRepository users = mock(AppUserRepository.class);
+    private final OutboxNotifications port = new OutboxNotifications(this.outbox, this.inProcess, this.users);
+
+    @org.junit.jupiter.api.BeforeEach
+    void recipients() {
+        when(this.users.findById(10L)).thenReturn(Optional.of(user(10L, "ops@medaxis.example", TENANT)));
+    }
+
+    private static AppUser user(long id, String username, Long tenantId) {
+        AppUser user = new AppUser();
+        user.setAppUserId(id);
+        user.setUsername(username);
+        user.setTenantId(tenantId);
+        return user;
+    }
     private final ObjectMapper json = new ObjectMapper();
 
     private JsonNode written(String topic, String key) throws Exception {
@@ -132,5 +150,57 @@ class OutboxNotificationsTest {
         verify(this.inProcess).legacyOwnerPush("ops@medaxis.example", "{}");
         verify(this.inProcess).forgetRecipient(10L);
         verify(this.inProcess).deliversMailToRealInboxes();
+    }
+
+    // ---- contract 1.2.0: Core resolves the recipient, because the service cannot read app_user ----
+
+    @Test
+    void aNoticeIsSentWithItsRecipientsUsernameAndHomeTenant() throws Exception {
+        this.port.notificationCreated(null, new NotificationCreated().setAppUserId(10L).setType("TASK_ASSIGNED")
+            .setSeverity("INFO").setTitle("Assigned"));
+
+        JsonNode payload = this.written(NotificationTopics.NOTIFICATION_CREATED, "10").get("payload");
+        assertThat(payload.get("recipientUsername").asText()).isEqualTo("ops@medaxis.example");
+        assertThat(payload.get("recipientTenantId").asLong()).isEqualTo(TENANT);
+    }
+
+    @Test
+    void aPlatformAdminsNoticeHasNoHomeTenant() throws Exception {
+        when(this.users.findById(1000L)).thenReturn(Optional.of(user(1000L, "admin@platform.local", null)));
+        this.port.notificationCreated(TENANT, new NotificationCreated().setAppUserId(1000L).setType("USER_ADDED")
+            .setSeverity("INFO").setTitle("User added"));
+
+        JsonNode payload = this.written(NotificationTopics.NOTIFICATION_CREATED, "1000").get("payload");
+        assertThat(payload.get("recipientUsername").asText()).isEqualTo("admin@platform.local");
+        assertThat(payload.has("recipientTenantId")).isFalse();
+    }
+
+    @Test
+    void aNoticeForSomeoneWhoNoLongerExistsIsNotAnEvent() {
+        this.port.notificationCreated(TENANT, new NotificationCreated().setAppUserId(77L).setType("TASK_ASSIGNED")
+            .setSeverity("INFO").setTitle("Assigned"));
+        verify(this.outbox, never()).write(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void anOutcomeCarriesItsRecipientsHomeTenant() throws Exception {
+        this.port.jobStatusChanged(TENANT, new JobStatusChanged().setJobId(41L).setJobQueueId(7001L).setAttempt(1)
+            .setJobRunningStatus("Completed").setNewTransition(true).setRecipientUserId(10L));
+
+        JsonNode payload = this.written(NotificationTopics.JOB_STATUS, "7001").get("payload");
+        assertThat(payload.get("recipientUsername").asText()).isEqualTo("ops@medaxis.example");
+        assertThat(payload.get("recipientTenantId").asLong()).isEqualTo(TENANT);
+    }
+
+    /** The live feed must not lose a status because the job's owner was deleted since. */
+    @Test
+    void aStatusWhoseRecipientIsGoneStillGoesOutWithoutOne() throws Exception {
+        this.port.jobStatusChanged(TENANT, new JobStatusChanged().setJobId(41L).setJobQueueId(7001L).setAttempt(1)
+            .setJobRunningStatus("Failed").setNewTransition(true).setRecipientUserId(77L).setRecipientUsername("gone@medaxis.example"));
+
+        JsonNode payload = this.written(NotificationTopics.JOB_STATUS, "7001").get("payload");
+        assertThat(payload.get("jobRunningStatus").asText()).isEqualTo("Failed");
+        assertThat(payload.has("recipientUserId")).isFalse();
+        assertThat(payload.has("recipientUsername")).isFalse();
     }
 }

@@ -15,7 +15,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
+import process.model.pojo.AppUser;
+import process.model.repository.AppUserRepository;
 import process.outbox.OutboxWriter;
+
+import java.util.Optional;
 
 /**
  * NotificationPort for a Notifications that runs as its own service (MIG-22): every call becomes
@@ -46,16 +50,28 @@ public class OutboxNotifications implements NotificationPort {
     private final ObjectMapper json = new ObjectMapper();
     private final OutboxWriter outbox;
     private final InProcessNotifications inProcess;
+    private final AppUserRepository users;
 
-    public OutboxNotifications(OutboxWriter outbox, InProcessNotifications inProcess) {
+    public OutboxNotifications(OutboxWriter outbox, InProcessNotifications inProcess, AppUserRepository users) {
         this.outbox = outbox;
         this.inProcess = inProcess;
+        this.users = users;
     }
 
     @Override
     public void jobStatusChanged(Long tenantId, JobStatusChanged event) {
+        if (event.getRecipientUserId() != null) {
+            Optional<AppUser> recipient = this.users.findById(event.getRecipientUserId());
+            if (recipient.isPresent()) {
+                // Core resolves the recipient; the service cannot read app_user (contract 1.2.0).
+                event.setRecipientUsername(recipient.get().getUsername()).setRecipientTenantId(recipient.get().getTenantId());
+            } else {
+                // Gone since the job was assigned. The feed push still goes; only the notice does not.
+                event.setRecipientUserId(null).setRecipientUsername(null);
+            }
+        }
         try {
-            this.write(NotificationTopics.JOB_STATUS, event.validated().partitionKey(), tenantId, event);
+            this.write(NotificationTopics.JOB_STATUS, event.validatedForDelivery().partitionKey(), tenantId, event);
         } catch (ContractViolation violation) {
             this.logger.warn("Dropped a job status event for job {}: {}", event.getJobId(), violation.getMessage());
         }
@@ -85,8 +101,14 @@ public class OutboxNotifications implements NotificationPort {
             this.logger.debug("A {} notice had no recipient; nothing sent.", notice.getType());
             return;
         }
+        Optional<AppUser> recipient = this.users.findById(notice.getAppUserId());
+        if (!recipient.isPresent()) {
+            this.logger.info("Not sending a {} notice to app user {}, who does not exist.", notice.getType(), notice.getAppUserId());
+            return;
+        }
+        notice.setRecipientUsername(recipient.get().getUsername()).setRecipientTenantId(recipient.get().getTenantId());
         try {
-            this.write(NotificationTopics.NOTIFICATION_CREATED, String.valueOf(notice.validated().getAppUserId()), tenantId, notice);
+            this.write(NotificationTopics.NOTIFICATION_CREATED, String.valueOf(notice.validatedForDelivery().getAppUserId()), tenantId, notice);
         } catch (ContractViolation violation) {
             this.logger.warn("Dropped a {} notice for user {}: {}", notice.getType(), notice.getAppUserId(), violation.getMessage());
         }
