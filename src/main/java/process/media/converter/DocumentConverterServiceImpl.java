@@ -12,23 +12,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import process.model.dto.DocumentConverterTaskDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.media.converter.DocumentConverterTask;
-import process.media.converter.DocumentConverterTaskRepository;
 import process.media.converter.DocumentConverterService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
-import process.security.TenantFilterHelper;
 import process.security.TenantOwnership;
 import process.util.ContentTypeUtil;
 import process.media.converter.DocumentConverterFormatRegistry;
 import process.media.converter.MarkdownDocumentFormat;
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -63,25 +58,31 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
     @Value("${document.converter.max-file-size-mb:50}")
     private int maxFileSizeMb;
 
-    private final DocumentConverterTaskRepository documentConverterTaskRepository;
+    private final ConverterTaskStore store;
     private final StorageBrowserService storageBrowserService;
-    private final TenantFilterHelper tenantFilterHelper;
     private final DocumentConverter documentConverter;
     private final DocumentFormatRegistry documentFormatRegistry;
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    public DocumentConverterServiceImpl(DocumentConverterTaskRepository documentConverterTaskRepository,
+    public DocumentConverterServiceImpl(ConverterTaskStore store,
         StorageBrowserService storageBrowserService,
-        TenantFilterHelper tenantFilterHelper,
         DocumentConverter documentConverter,
         DocumentFormatRegistry documentFormatRegistry) {
-        this.documentConverterTaskRepository = documentConverterTaskRepository;
+        this.store = store;
         this.storageBrowserService = storageBrowserService;
-        this.tenantFilterHelper = tenantFilterHelper;
         this.documentConverter = documentConverter;
         this.documentFormatRegistry = documentFormatRegistry;
+    }
+
+    /**
+     * What the caller may see, as the Hibernate tenant filter decided it: their own tenant, or every
+     * tenant for a platform admin (null). A caller with neither sees nothing.
+     */
+    private static Long visibleTenant() {
+        if (TenantContext.isPlatformAdmin()) {
+            return null;
+        }
+        Long tenantId = TenantContext.getTenantId();
+        return tenantId != null ? tenantId : -1L;
     }
 
     private boolean isOwnedByCaller(DocumentConverterTask documentConverterTask) {
@@ -95,22 +96,17 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public ResponseDto fetchAllTasks() throws Exception {
-        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        List<DocumentConverterTask> tasks = this.documentConverterTaskRepository
-            .findByStatusNotOrderByDocumentConverterTaskIdDesc(Status.Delete);
+        List<DocumentConverterTask> tasks = this.store.listLive(visibleTenant());
         return new ResponseDto(SUCCESS, "Data fetched successfully.", tasks);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public ResponseDto fetchTaskById(Long documentConverterTaskId) throws Exception {
         if (isNull(documentConverterTaskId)) {
             return new ResponseDto(ERROR, "DocumentConverterTask documentConverterTaskId missing.");
         }
-        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        Optional<DocumentConverterTask> task = this.documentConverterTaskRepository.findById(documentConverterTaskId);
+        Optional<DocumentConverterTask> task = this.store.find(visibleTenant(), documentConverterTaskId);
         if (task.isPresent() && this.isOwnedByCaller(task.get())) {
             return new ResponseDto(SUCCESS, "Data fetched successfully.", task.get());
         }
@@ -243,7 +239,7 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
             task.setInputStorageKey("pending");
             task.setOutputStorageKey("pending");
             task.setStatus(Status.Active);
-            this.documentConverterTaskRepository.save(task);
+            this.store.insert(task);
             if (this.meter != null && task.getTenantId() != null) {
                 this.meter.report(UsageEvent.of(task.getTenantId(), Meter.CONVERT_DOCUMENTS, 1, "convert#" + UUID.randomUUID())
                     .subject("file", safeFileName).actor(TenantContext.getAppUserId()).source("console").note(inputExtension + "->" + normalizedOutputFormat));
@@ -262,7 +258,7 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
                 // the row as saved still reads "pending" for both keys: it would list as a finished
                 // conversion whose output cannot be downloaded, and nothing ever goes back to
                 // finish it. Removing it leaves the caller exactly where the rollback used to.
-                this.documentConverterTaskRepository.delete(task);
+                this.store.delete(task.getDocumentConverterTaskId());
                 logger.error("Upload of converted document {} failed, its placeholder row {} removed: {}",
                     outputFileName, task.getDocumentConverterTaskId(), uploadException.getMessage());
                 throw uploadException;
@@ -270,7 +266,7 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
 
             task.setInputStorageKey(inputKey);
             task.setOutputStorageKey(outputKey);
-            this.documentConverterTaskRepository.save(task);
+            this.store.update(task);
 
             response.setDocumentConverterTaskId(task.getDocumentConverterTaskId());
             response.setBucketName(task.getBucketName());
@@ -305,13 +301,11 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
     }
 
     @Override
-    @Transactional
     public ResponseDto deleteTask(Long documentConverterTaskId) throws Exception {
         if (isNull(documentConverterTaskId)) {
             return new ResponseDto(ERROR, "DocumentConverterTask documentConverterTaskId missing.");
         }
-        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        Optional<DocumentConverterTask> task = this.documentConverterTaskRepository.findById(documentConverterTaskId);
+        Optional<DocumentConverterTask> task = this.store.find(visibleTenant(), documentConverterTaskId);
         if (task.isPresent() && !this.isOwnedByCaller(task.get())) {
             return new ResponseDto(ERROR, String.format("DocumentConverterTask not found with %s.", documentConverterTaskId));
         }
@@ -324,7 +318,7 @@ public class DocumentConverterServiceImpl implements DocumentConverterService {
         }
         DocumentConverterTask documentConverterTask = task.get();
         documentConverterTask.setStatus(Status.Delete);
-        this.documentConverterTaskRepository.save(documentConverterTask);
+        this.store.update(documentConverterTask);
         return this.retainedObjectsResponse(documentConverterTask);
     }
 

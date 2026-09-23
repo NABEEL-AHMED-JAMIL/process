@@ -3,102 +3,59 @@ package process.media.converter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import org.hibernate.annotations.Filter;
-import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.GenericGenerator;
-import org.hibernate.annotations.Parameter;
-import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
-import javax.persistence.*;
 import java.sql.Timestamp;
 
-@Entity
-@Table(name = "document_converter_task", indexes = {
-    @Index(name = "idx_document_converter_task_tenant_id", columnList = "tenant_id")
-})
 /**
+ * One row of media_db.document_converter_task (MIG-41). A plain row, not a JPA entity: the table
+ * lives in Media & Documents' own database, read and written only through ConverterTaskStore.
+ *
+ * tenantId is null for a platform admin's conversion; the store writes that as the platform scope.
+ *
  * @author Nabeel Ahmed
- * */
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
-@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DocumentConverterTask {
 
-    @GenericGenerator(
-        name = "documentConverterTaskSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "document_converter_task_id_Seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
-    @Id
-    @Column(name = "document_converter_task_id", unique = true, nullable = false)
-    @GeneratedValue(generator = "documentConverterTaskSequenceGenerator")
     private Long documentConverterTaskId;
 
-    @Column(name = "tenant_id")
     private Long tenantId;
 
 
-    @Column(name = "task_name", nullable = false)
     private String taskName;
 
-    @Column(name = "input_file_name", nullable = false)
     private String inputFileName;
 
-    @Column(name = "input_format", nullable = false)
     private String inputFormat;
 
-    @Column(name = "input_content_type")
     private String inputContentType;
 
-    @Column(name = "input_file_size")
     private Long inputFileSize;
 
-    @Column(name = "output_format", nullable = false)
     private String outputFormat;
 
-    @Column(name = "output_file_name")
     private String outputFileName;
 
-    @Column(name = "output_content_type")
     private String outputContentType;
 
-    @Column(name = "output_file_size")
     private Long outputFileSize;
 
-    @Column(name = "bucket_name", nullable = false)
     private String bucketName;
 
-    @Column(name = "target_folder")
     private String targetFolder;
 
-    @Column(name = "input_storage_key", nullable = false)
     private String inputStorageKey;
 
-    @Column(name = "output_storage_key", nullable = false)
     private String outputStorageKey;
 
-    @Column(name = "status", nullable = false)
-    @Enumerated(EnumType.STRING)
     private Status status;
 
-    @Column(name = "date_created", nullable = false)
     private Timestamp dateCreated;
 
     public DocumentConverterTask() {
     }
 
-    @PrePersist
-    protected void onCreate() {
-        this.dateCreated = new Timestamp(System.currentTimeMillis());
-        if (this.status == null) {
-            this.status = Status.Active;
-        }
-    }
 
     public Long getDocumentConverterTaskId() {
         return documentConverterTaskId;

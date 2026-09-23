@@ -19,10 +19,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import process.media.converter.DocumentConverterTask;
-import process.media.converter.DocumentConverterTaskRepository;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
-import process.security.TenantFilterHelper;
 
 import java.io.File;
 import java.io.InputStream;
@@ -34,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -64,9 +63,8 @@ public class DocumentConverterTransactionBoundaryTest {
     private static final String DOCX_CONTENT_TYPE =
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-    @Mock private DocumentConverterTaskRepository documentConverterTaskRepository;
+    @Mock private ConverterTaskStore store;
     @Mock private StorageBrowserService storageBrowserService;
-    @Mock private TenantFilterHelper tenantFilterHelper;
     @Mock private DocumentConverter documentConverter;
     @Mock private DocumentFormatRegistry documentFormatRegistry;
 
@@ -74,8 +72,8 @@ public class DocumentConverterTransactionBoundaryTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new DocumentConverterServiceImpl(this.documentConverterTaskRepository,
-            this.storageBrowserService, this.tenantFilterHelper, this.documentConverter, this.documentFormatRegistry);
+        this.service = new DocumentConverterServiceImpl(this.store,
+            this.storageBrowserService, this.documentConverter, this.documentFormatRegistry);
         // @Value is not applied when the service is built by hand, and a limit of zero would refuse
         // every upload before any of this is reached.
         ReflectionTestUtils.setField(this.service, "maxFileSizeMb", 50);
@@ -100,23 +98,24 @@ public class DocumentConverterTransactionBoundaryTest {
             .isNull();
     }
 
+    /**
+     * CHANGED by MIG-41, deliberately. These three kept a JPA transaction while their rows were in
+     * etl_job. The rows are in media_db now, each method is one statement on that database's own
+     * autocommit pool, and a JPA transaction would pin an etl_job connection around no statement at
+     * all -- exactly the waste the convert() decision above removed.
+     */
     @Test
-    void theShortDatabaseOnlyMethodsKeepTheirTransactions() throws Exception {
-        // The point is not "no transactions in this service" -- it is that the boundary sits around
-        // the work that only talks to the database, which is where it can be held cheaply.
-        assertThat(DocumentConverterServiceImpl.class
-            .getMethod("fetchAllTasks").getAnnotation(Transactional.class)).isNotNull();
-        assertThat(DocumentConverterServiceImpl.class
-            .getMethod("fetchTaskById", Long.class).getAnnotation(Transactional.class)).isNotNull();
-        assertThat(DocumentConverterServiceImpl.class
-            .getMethod("deleteTask", Long.class).getAnnotation(Transactional.class)).isNotNull();
+    void noMethodHoldsAnEtlJobTransactionForWorkThatIsNotThere() throws Exception {
+        for (java.lang.reflect.Method method : DocumentConverterServiceImpl.class.getDeclaredMethods()) {
+            assertThat(method.getAnnotation(Transactional.class)).as(method.getName()).isNull();
+        }
     }
 
     @Test
     void aFailedUploadRemovesThePlaceholderRowNothingElseWouldRollBackNow() throws Exception {
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 9000L, "user@tenant.example");
         this.stubASuccessfulConversion();
-        when(this.documentConverterTaskRepository.save(any(DocumentConverterTask.class)))
+        when(this.store.insert(any(DocumentConverterTask.class)))
             .thenAnswer(invocation -> {
                 DocumentConverterTask saving = invocation.getArgument(0);
                 saving.setDocumentConverterTaskId(TASK_ID);
@@ -136,7 +135,7 @@ public class DocumentConverterTransactionBoundaryTest {
         // Both storage keys still read "pending" on that row. Left behind, it lists as a finished
         // conversion whose output cannot be downloaded and that nothing ever goes back to finish --
         // the method-wide transaction used to roll it away, and now this has to remove it.
-        verify(this.documentConverterTaskRepository).delete(any(DocumentConverterTask.class));
+        verify(this.store).delete(anyLong());
     }
 
     /**

@@ -182,6 +182,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
+      MEDIA_DATASOURCE_URL: jdbc:postgresql://postgres:5432/media_db
       # Shared with notifications-service, which redeems secretRefs with it. Set in .env.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}

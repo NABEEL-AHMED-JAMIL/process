@@ -28,3 +28,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V52.0-notification-moves-to-notifications-db.yaml
   - include:
       file: db/changelog/yaml/V53.0-platform-outbox.yaml
+  - include:
+      file: db/changelog/yaml/V54.0-document-converter-task-moves-to-media-db.yaml

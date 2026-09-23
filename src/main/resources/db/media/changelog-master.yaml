@@ -1,0 +1,19 @@
+databaseChangeLog:
+  # media_db -- Media & Documents' own database (MIG-41). Separate from db/changelog, which
+  # builds etl_job: nothing here may reference a table outside this database.
+  - changeSet:
+      id: media-1.0-document_converter_task
+      author: nabeel.amd93
+      description: "document_converter_task, tenant_id NOT NULL and a plain bigint, sequence from 1000"
+      # The move script builds the table from the same SQL before copying the rows in, so the
+      # sequence is set before anything can write. On that database this marks itself run.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: document_converter_task
+      changes:
+        - sqlFile:
+            path: db/media/sql/V1.0-document_converter_task.sql
+            splitStatements: true
+            stripComments: true

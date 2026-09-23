@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 54.0-document-converter-task-moves-to-media-db
+      author: nabeel.amd93
+      description: "document_converter_task lives in media_db now (MIG-41); drop the empty one V50 builds here"
+      # As V52 did for notification: a fresh etl_job gets an empty document_converter_task from the
+      # V50 baseline, which nothing reads or writes any more; an existing one has had it renamed by
+      # scripts/media/move-to-media-db.sh. Only an EMPTY table is dropped.
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: document_converter_task
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM public.document_converter_task
+      changes:
+        - dropTable:
+            tableName: document_converter_task
+            cascadeConstraints: true

@@ -13,15 +13,15 @@ import process.model.dto.DocumentConverterTaskDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.media.converter.DocumentConverterTask;
-import process.media.converter.DocumentConverterTaskRepository;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
-import process.security.TenantFilterHelper;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -54,9 +54,8 @@ public class DocumentConverterDeleteRetentionTest {
     private static final String INPUT_KEY = "document-converter/1042/input/quarterly.docx";
     private static final String OUTPUT_KEY = "document-converter/1042/output/quarterly.pdf";
 
-    @Mock private DocumentConverterTaskRepository documentConverterTaskRepository;
+    @Mock private ConverterTaskStore store;
     @Mock private StorageBrowserService storageBrowserService;
-    @Mock private TenantFilterHelper tenantFilterHelper;
     @Mock private DocumentConverter documentConverter;
     @Mock private DocumentFormatRegistry documentFormatRegistry;
 
@@ -64,8 +63,8 @@ public class DocumentConverterDeleteRetentionTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new DocumentConverterServiceImpl(this.documentConverterTaskRepository,
-            this.storageBrowserService, this.tenantFilterHelper, this.documentConverter, this.documentFormatRegistry);
+        this.service = new DocumentConverterServiceImpl(this.store,
+            this.storageBrowserService, this.documentConverter, this.documentFormatRegistry);
     }
 
     @AfterEach
@@ -97,7 +96,7 @@ public class DocumentConverterDeleteRetentionTest {
     @Test
     void theStoredObjectsAreNeverRemovedByADelete() throws Exception {
         this.actAsTenant(TENANT_A);
-        when(this.documentConverterTaskRepository.findById(TASK_ID))
+        when(this.store.find(any(), eq(TASK_ID)))
             .thenReturn(Optional.of(this.task(TENANT_A, INPUT_KEY, OUTPUT_KEY)));
 
         ResponseDto response = this.service.deleteTask(TASK_ID);
@@ -112,13 +111,13 @@ public class DocumentConverterDeleteRetentionTest {
     @Test
     void theRowIsSoftDeletedSoTheObjectsStillHaveSomethingPointingAtThem() throws Exception {
         this.actAsTenant(TENANT_A);
-        when(this.documentConverterTaskRepository.findById(TASK_ID))
+        when(this.store.find(any(), eq(TASK_ID)))
             .thenReturn(Optional.of(this.task(TENANT_A, INPUT_KEY, OUTPUT_KEY)));
 
         this.service.deleteTask(TASK_ID);
 
         ArgumentCaptor<DocumentConverterTask> saved = ArgumentCaptor.forClass(DocumentConverterTask.class);
-        verify(this.documentConverterTaskRepository).save(saved.capture());
+        verify(this.store).update(saved.capture());
         assertThat(saved.getValue().getStatus()).isEqualTo(Status.Delete);
         // The keys are what makes the delete reversible -- clearing them would strand the bytes for
         // good even though the row survives.
@@ -129,7 +128,7 @@ public class DocumentConverterDeleteRetentionTest {
     @Test
     void theResponseSaysWhichBucketAndFolderStillHoldTheFiles() throws Exception {
         this.actAsTenant(TENANT_A);
-        when(this.documentConverterTaskRepository.findById(TASK_ID))
+        when(this.store.find(any(), eq(TASK_ID)))
             .thenReturn(Optional.of(this.task(TENANT_A, INPUT_KEY, OUTPUT_KEY)));
 
         ResponseDto response = this.service.deleteTask(TASK_ID);
@@ -143,7 +142,7 @@ public class DocumentConverterDeleteRetentionTest {
     @Test
     void theResponseCarriesTheKeysSoAClientCanOfferToCleanThemUp() throws Exception {
         this.actAsTenant(TENANT_A);
-        when(this.documentConverterTaskRepository.findById(TASK_ID))
+        when(this.store.find(any(), eq(TASK_ID)))
             .thenReturn(Optional.of(this.task(TENANT_A, INPUT_KEY, OUTPUT_KEY)));
 
         ResponseDto response = this.service.deleteTask(TASK_ID);
@@ -161,7 +160,7 @@ public class DocumentConverterDeleteRetentionTest {
         this.actAsTenant(TENANT_A);
         // convert() writes "pending" for both keys before it uploads. Those two share no folder, so
         // there is no prefix to point at -- saying "under ''" would send the user nowhere.
-        when(this.documentConverterTaskRepository.findById(TASK_ID))
+        when(this.store.find(any(), eq(TASK_ID)))
             .thenReturn(Optional.of(this.task(TENANT_A, "pending", "pending")));
 
         ResponseDto response = this.service.deleteTask(TASK_ID);
@@ -174,7 +173,7 @@ public class DocumentConverterDeleteRetentionTest {
     @Test
     void anotherTenantsTaskIsNeitherDeletedNorDescribed() throws Exception {
         this.actAsTenant(TENANT_A);
-        when(this.documentConverterTaskRepository.findById(TASK_ID))
+        when(this.store.find(any(), eq(TASK_ID)))
             .thenReturn(Optional.of(this.task(TENANT_B, INPUT_KEY, OUTPUT_KEY)));
 
         ResponseDto response = this.service.deleteTask(TASK_ID);
@@ -183,20 +182,20 @@ public class DocumentConverterDeleteRetentionTest {
         // The refusal must not become a disclosure: the bucket and keys belong to the other tenant.
         assertThat(response.getMessage()).doesNotContain(BUCKET);
         assertThat(response.getData()).isNull();
-        verify(this.documentConverterTaskRepository, never()).save(any(DocumentConverterTask.class));
+        verify(this.store, never()).update(any(DocumentConverterTask.class));
         verifyNoInteractions(this.storageBrowserService);
     }
 
     @Test
     void aTaskThatIsNotThereIsStillAnErrorAndPromisesNothingAboutFiles() throws Exception {
         this.actAsTenant(TENANT_A);
-        when(this.documentConverterTaskRepository.findById(TASK_ID)).thenReturn(Optional.empty());
+        when(this.store.find(any(), eq(TASK_ID))).thenReturn(Optional.empty());
 
         ResponseDto response = this.service.deleteTask(TASK_ID);
 
         assertThat(response.getStatus()).isEqualTo(ERROR);
         assertThat(response.getMessage()).isEqualTo("DocumentConverterTask not found with " + TASK_ID + ".");
-        verify(this.documentConverterTaskRepository, never()).save(any(DocumentConverterTask.class));
+        verify(this.store, never()).update(any(DocumentConverterTask.class));
         verifyNoInteractions(this.storageBrowserService);
     }
 

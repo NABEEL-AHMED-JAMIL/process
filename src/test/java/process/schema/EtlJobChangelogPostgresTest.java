@@ -47,6 +47,8 @@ class EtlJobChangelogPostgresTest {
             JdbcTemplate sql = new JdbcTemplate(pool);
             // It lives in notifications_db now; an empty leftover here would invite someone to write to it.
             assertThat(sql.queryForObject("SELECT to_regclass('public.notification') IS NULL", Boolean.class)).isTrue();
+            // And document_converter_task lives in media_db (MIG-41, V54).
+            assertThat(sql.queryForObject("SELECT to_regclass('public.document_converter_task') IS NULL", Boolean.class)).isTrue();
             assertThat(sql.queryForObject("SELECT to_regclass('public.app_user') IS NOT NULL", Boolean.class)).isTrue();
         } finally {
             pool.close();
