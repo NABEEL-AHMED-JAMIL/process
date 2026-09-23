@@ -7,6 +7,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -22,6 +23,7 @@ import java.util.Base64;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -34,7 +36,8 @@ import static org.mockito.Mockito.when;
  * it today, pinned before the service is carved out. The console is not being rewritten, so each
  * case is a frozen contract the extracted service must also pass -- on the simple broker now and
  * on the broker relay that replaces it. A case marked DEFECT records current, wrong behaviour so
- * that its fix shows up as a deliberate change to this file rather than as drift.
+ * that its fix shows up as a deliberate change to this file rather than as drift -- as the CONNECT
+ * refusal below did on 2026-09-23.
  */
 class StompAuthCharacterisationTest {
 
@@ -150,16 +153,41 @@ class StompAuthCharacterisationTest {
             .isEqualTo("ops@medaxis.example");
     }
 
-    @Test
-    void aRefreshTokenConnectsWithNoPrincipal() {
-        assertThat(connected(refresh(UserRole.TENANT_USER, TENANT_A)).getUser()).isNull();
+    /*
+     * CONNECT is refused without a valid access token (decided 2026-09-23; was a recorded DEFECT).
+     * An anonymous session could reach nothing -- SUBSCRIBE to a job feed needs a token, and no
+     * user queue can address a session with no Principal -- so allowing it only held a socket open
+     * for nobody. Both consoles send the Bearer on every CONNECT. The refusal is an exception, which
+     * Spring's STOMP handler turns into an ERROR frame and a closed session; returning null would
+     * leave the client waiting for a CONNECTED that never comes.
+     */
+
+    private void refused(String authorization) {
+        assertThatThrownBy(() -> new StompAuthChannelInterceptor(this.jwtUtil)
+            .preSend(frame(StompCommand.CONNECT, null, authorization), null))
+            .isInstanceOf(MessageDeliveryException.class)
+            // One message for every reason, as the HTTP side does: which check failed is logged, not told.
+            .hasMessageContaining("Unauthorized");
     }
 
-    /** DEFECT, pinned as-is: an unauthenticated CONNECT is accepted, not refused. */
     @Test
-    void aConnectWithNoTokenIsAcceptedAsAnAnonymousSession() {
-        Message<?> out = new StompAuthChannelInterceptor(this.jwtUtil).preSend(frame(StompCommand.CONNECT, null, null), null);
-        assertThat(out).isNotNull();
-        assertThat(StompHeaderAccessor.wrap(out).getUser()).isNull();
+    void aConnectWithNoTokenIsRefused() {
+        refused(null);
+    }
+
+    @Test
+    void aConnectWithARefreshTokenIsRefused() {
+        refused(refresh(UserRole.TENANT_USER, TENANT_A));
+    }
+
+    @Test
+    void aConnectWithATamperedTokenIsRefused() {
+        String token = access(UserRole.TENANT_USER, TENANT_A);
+        refused(token.substring(0, token.length() - 3) + "abc");
+    }
+
+    @Test
+    void aConnectWithSomethingOtherThanABearerIsRefused() {
+        refused("Basic b3BzOnNlY3JldA==");
     }
 }
