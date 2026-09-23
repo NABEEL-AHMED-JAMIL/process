@@ -1,7 +1,5 @@
 package process.e2e;
 
-import org.jodconverter.core.document.DocumentFormatRegistry;
-import org.jodconverter.core.office.OfficeManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,8 +69,6 @@ public class AjwaKafkaProvisioningDriver {
     private static final String BROKER_HOST = "host.docker.internal";
     private static final String TENANT_NAME = "Ajwa LLC";
 
-    @MockBean private OfficeManager officeManager;
-    @MockBean private DocumentFormatRegistry documentFormatRegistry;
 
     @Autowired private KafkaConnectionProfileService profileService;
     @Autowired private KafkaSecretService secretService;

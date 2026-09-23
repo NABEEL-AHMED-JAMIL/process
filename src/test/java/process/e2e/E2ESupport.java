@@ -1,7 +1,5 @@
 package process.e2e;
 
-import org.jodconverter.core.document.DocumentFormatRegistry;
-import org.jodconverter.core.office.OfficeManager;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -58,8 +56,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @Transactional
 public abstract class E2ESupport {
 
-    @MockBean protected OfficeManager officeManager;
-    @MockBean protected DocumentFormatRegistry documentFormatRegistry;
 
     @Autowired protected MockMvc mvc;
     @Autowired protected JwtUtil jwtUtil;

@@ -10,6 +10,7 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -96,13 +97,18 @@ public class ApplicationPropertiesDeclarationTest {
         }
     }
 
+    /**
+     * The converter and transcription ceilings used to be pinned here. They left with the code that
+     * reads them (MIG-48) and are declared in media-service's application.yml, side by side as they
+     * were here. A copy left behind would be a setting that looks live and changes nothing; what
+     * process declares instead is where Media is.
+     */
     @Test
-    void theTranscriptionCeilingIsDeclaredBesideTheConvertersOne() throws IOException {
+    void theMediaCeilingsLeftWithMediaAndProcessSaysWhereMediaIs() throws IOException {
         Properties properties = this.load("application.properties");
-        assertTrue(properties.containsKey("audio.extract.max-file-size-mb"),
-            "audio.extract.max-file-size-mb belongs next to document.converter.max-file-size-mb");
-        assertTrue(properties.containsKey("document.converter.max-file-size-mb"),
-            "document.converter.max-file-size-mb should still be declared here");
+        assertFalse(properties.containsKey("audio.extract.max-file-size-mb"), "declared by media-service now");
+        assertFalse(properties.containsKey("document.converter.max-file-size-mb"), "declared by media-service now");
+        assertTrue(properties.containsKey("media.url"), "HttpMedia reads media.url");
     }
 
     /**

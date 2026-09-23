@@ -14,6 +14,13 @@ import process.model.dto.ResponseDto;
  */
 public interface MediaPort {
 
+    /**
+     * The most text extraction hands back for one file: media-service's ceiling, pinned on its side
+     * by ExtractionCapTest. FileChat sizes its per-provider prompt budgets under it, so extraction is
+     * the backstop against a pathological file and never what silently decides what the model reads.
+     */
+    int EXTRACTION_CEILING_CHARS = 500_000;
+
     /** A file's text, from the extraction cache when it has it. Null when there is none to read. */
     String extractText(String bucket, String key, String etag) throws UnreadableFileException, Exception;
 
