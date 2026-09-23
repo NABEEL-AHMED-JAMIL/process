@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: 50.0-schema-baseline
+      author: nabeel.amd93
+      description: "The whole public schema, so that an empty database can become this one"
+      # Runs on a database that has no tenant table -- that is, an empty one -- and is marked
+      # as already applied on any database that has been running, which is every existing
+      # environment. Nothing already there is touched.
+      preConditions:
+        - onFail: MARK_RAN
+        - onFailMessage: >-
+            tenant already exists, so this database predates the baseline and already carries
+            the schema it describes; marking the baseline as applied and continuing.
+        - not:
+            - tableExists:
+                tableName: tenant
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V50.0-schema-baseline/V50__schema_baseline.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      # A baseline has no rollback. Undoing it means dropping every table in the schema, which
+      # is not a migration step -- it is dropping the database, and that should be deliberate
+      # and manual rather than one `liquibase rollback` away.
+      rollback:
+        - empty

@@ -129,8 +129,8 @@ public class AnalyticsDatasetTest {
             }
         }
         assertThat(missing)
-            .as("mapped but not in V31__analytics_dataset.sql -- add a new changeset, never edit "
-                + "the applied one")
+            .as("mapped by the entity but declared in no changeset the master runs -- a column "
+                + "no database gets")
             .isEmpty();
     }
 
@@ -142,17 +142,47 @@ public class AnalyticsDatasetTest {
         return names;
     }
 
+    /**
+     * Every changeset the master actually runs, concatenated -- not the one file that first
+     * created this table.
+     *
+     * It read V31 alone until the V50 baseline replaced V1-V49 with a single declaration of the
+     * schema, at which point a check pinned to V31 was reading a file no database receives. The
+     * same weakness was already found once on the library side, where a guard pinned to V32
+     * called V35's new columns unmigrated while they were migrated correctly.
+     *
+     * archive/ is skipped deliberately: it holds the superseded changesets, and SQL found only
+     * there is SQL no database gets.
+     */
     private String changesetSql() throws Exception {
         // Surefire runs from the module root; the second path is for a run from the parent.
         for (String prefix : new String[] { "", "process/" }) {
-            File file = new File(prefix + "src/main/resources/db/changelog/changelog-sets/"
-                + "V31.0-analytics-dataset/V31__analytics_dataset.sql");
-            if (file.isFile()) {
-                return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            File root = new File(prefix + "src/main/resources/db/changelog/changelog-sets");
+            if (root.isDirectory()) {
+                StringBuilder all = new StringBuilder();
+                collectSql(root, all);
+                return all.toString();
             }
         }
-        throw new IllegalStateException("Could not find V31__analytics_dataset.sql from "
+        throw new IllegalStateException("Could not find the changelog-sets directory from "
             + System.getProperty("user.dir"));
+    }
+
+    private static void collectSql(File directory, StringBuilder into) throws Exception {
+        File[] children = directory.listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            if (child.isDirectory()) {
+                if (!"archive".equals(child.getName())) {
+                    collectSql(child, into);
+                }
+            } else if (child.getName().endsWith(".sql")) {
+                into.append(new String(Files.readAllBytes(child.toPath()), StandardCharsets.UTF_8))
+                    .append('\n');
+            }
+        }
     }
 
 }

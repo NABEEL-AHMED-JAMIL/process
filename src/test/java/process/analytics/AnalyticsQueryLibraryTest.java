@@ -826,7 +826,13 @@ public class AnalyticsQueryLibraryTest {
         }
         for (File child : children) {
             if (child.isDirectory()) {
-                collectSql(child, into);
+                // archive/ holds V1-V49, superseded by the V50 baseline. They record how this
+                // schema was arrived at and the master no longer includes them, so a column
+                // found only there is a column no database gets -- which is the failure this
+                // guard exists to catch, not one to pass.
+                if (!"archive".equals(child.getName())) {
+                    collectSql(child, into);
+                }
             } else if (child.getName().endsWith(".sql")) {
                 into.append(new String(Files.readAllBytes(child.toPath()), StandardCharsets.UTF_8))
                     .append('\n');

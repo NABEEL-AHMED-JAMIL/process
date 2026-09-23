@@ -839,13 +839,13 @@ public class AnalyticsBenchmarkTest {
             }
         }
         assertThat(missing)
-            .as("mapped but not in V33__analytics_benchmark.sql -- add a new changeset, never "
-                + "edit the applied one")
+            .as("mapped by the entity but declared in no changeset the master runs -- a column "
+                + "no database gets")
             .isEmpty();
 
         assertThat(masterChangelog())
             .as("a changeset nothing includes is a table that never gets created")
-            .contains("V33.0-analytics-benchmark.yaml");
+            .contains("V50.0-schema-baseline.yaml");
     }
 
     /** The author is stamped by the listener, so no save path has to remember to do it. */
@@ -863,9 +863,43 @@ public class AnalyticsBenchmarkTest {
         assertThat(result.getUpdatedBy()).isNull();
     }
 
+    /**
+     * Every changeset the master actually runs, concatenated -- not the one file that first
+     * created this table.
+     *
+     * It read V33 alone until the V50 baseline replaced V1-V49 with a single declaration of the
+     * schema, at which point a check pinned to V33 was reading a file no database receives.
+     * archive/ is skipped deliberately: SQL found only there is SQL no database gets.
+     */
     private static String changesetSql() throws Exception {
-        return fileFrom("src/main/resources/db/changelog/changelog-sets/"
-            + "V33.0-analytics-benchmark/V33__analytics_benchmark.sql");
+        // Surefire runs from the module root; the second path is for a run from the parent.
+        for (String prefix : new String[] { "", "process/" }) {
+            File root = new File(prefix + "src/main/resources/db/changelog/changelog-sets");
+            if (root.isDirectory()) {
+                StringBuilder all = new StringBuilder();
+                collectSql(root, all);
+                return all.toString();
+            }
+        }
+        throw new IllegalStateException("Could not find the changelog-sets directory from "
+            + System.getProperty("user.dir"));
+    }
+
+    private static void collectSql(File directory, StringBuilder into) throws Exception {
+        File[] children = directory.listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            if (child.isDirectory()) {
+                if (!"archive".equals(child.getName())) {
+                    collectSql(child, into);
+                }
+            } else if (child.getName().endsWith(".sql")) {
+                into.append(new String(Files.readAllBytes(child.toPath()), StandardCharsets.UTF_8))
+                    .append('\n');
+            }
+        }
     }
 
     private static String masterChangelog() throws Exception {

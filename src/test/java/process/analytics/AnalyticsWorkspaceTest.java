@@ -845,7 +845,7 @@ public class AnalyticsWorkspaceTest {
      */
     @Test
     void theWidgetsReferencesAreKeyedOnTheTenantAsWellAsTheId() throws Exception {
-        String sql = changesetSql().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+        String sql = normalisedSql();
 
         assertThat(sql).contains(
             "foreign key (analytics_analysis_id, tenant_id) references analytics_analysis "
@@ -865,24 +865,51 @@ public class AnalyticsWorkspaceTest {
     /** A widget shows one thing. The service says so, and so does the table. */
     @Test
     void theChangesetRefusesAWidgetWithTwoSourcesOrNone() throws Exception {
-        String sql = changesetSql().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
-        assertThat(sql).contains("ck_analytics_dashboard_widget_one_source check (");
-        assertThat(sql).contains(
-            "(analytics_analysis_id is not null and analytics_query_id is null) "
-                + "or (analytics_analysis_id is null and analytics_query_id is not null)");
+        assertThat(normalisedSql()).contains("ck_analytics_dashboard_widget_one_source check (");
+
+        // Compared without brackets, because the rule is what matters and the brackets are the
+        // renderer's. Postgres reprints this expression fully parenthesised; the hand-written
+        // changeset did not. "and" binds tighter than "or" either way, so dropping them leaves
+        // exactly one reading: one source set, or the other, never both and never neither.
+        String rule = normalisedSql().replace("(", " ").replace(")", " ").replaceAll("\\s+", " ");
+        assertThat(rule).contains(
+            "analytics_analysis_id is not null and analytics_query_id is null "
+                + "or analytics_analysis_id is null and analytics_query_id is not null");
+    }
+
+    /**
+     * The executed SQL, with the differences that are the renderer's rather than the schema's
+     * taken out: lower-cased, "public." dropped, and a space before every bracket.
+     *
+     * The assertions below were written against hand-written DDL. The V50 baseline is printed by
+     * pg_dump, which schema-qualifies every name and puts no space before a bracket -- the same
+     * constraints, spelled differently. Normalising here keeps the assertions about the schema
+     * instead of about whoever last printed it.
+     */
+    private static String normalisedSql() throws Exception {
+        return changesetSql().toLowerCase(Locale.ROOT)
+            .replace("public.", "")
+            .replace("(", " (")
+            .replaceAll("\\s+", " ");
     }
 
     /**
      * A changeset nobody includes is a table nobody has.
      *
      * V31 shipped a table that no code read for a whole phase; this is the cheaper failure one
-     * step earlier -- a table no database even gets.
+     * step earlier -- a table no database even gets. It checked for V34's own include until the
+     * V50 baseline took over declaring the schema, so it now checks the two things that together
+     * mean the same: the master runs the baseline, and the baseline declares these tables.
      */
     @Test
-    void theChangesetIsIncludedInTheMasterChangelog() throws Exception {
+    void theseTablesAreDeclaredByAChangesetTheMasterRuns() throws Exception {
         String master = fileFromModuleRoot(
             "src/main/resources/db/changelog/db.changelog-master.yaml");
-        assertThat(master).contains("db/changelog/yaml/V34.0-analytics-workspace.yaml");
+        assertThat(master).contains("db/changelog/yaml/V50.0-schema-baseline.yaml");
+
+        String executed = changesetSql().toLowerCase(java.util.Locale.ROOT);
+        assertThat(executed).contains("analytics_dashboard");
+        assertThat(executed).contains("analytics_dashboard_widget");
     }
 
     // ---------------------------------------------------------------------------- the endpoint
@@ -1017,9 +1044,43 @@ public class AnalyticsWorkspaceTest {
         return query;
     }
 
+    /**
+     * Every changeset the master actually runs, concatenated -- not the one file that first
+     * created these tables.
+     *
+     * It read V34 alone until the V50 baseline replaced V1-V49 with a single declaration of the
+     * schema, at which point a check pinned to V34 was reading a file no database receives.
+     * archive/ is skipped deliberately: SQL found only there is SQL no database gets.
+     */
     private static String changesetSql() throws Exception {
-        return fileFromModuleRoot("src/main/resources/db/changelog/changelog-sets/"
-            + "V34.0-analytics-workspace/V34__analytics_workspace.sql");
+        // Surefire runs from the module root; the second path is for a run from the parent.
+        for (String prefix : new String[] { "", "process/" }) {
+            File root = new File(prefix + "src/main/resources/db/changelog/changelog-sets");
+            if (root.isDirectory()) {
+                StringBuilder all = new StringBuilder();
+                collectSql(root, all);
+                return all.toString();
+            }
+        }
+        throw new IllegalStateException("Could not find the changelog-sets directory from "
+            + System.getProperty("user.dir"));
+    }
+
+    private static void collectSql(File directory, StringBuilder into) throws Exception {
+        File[] children = directory.listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            if (child.isDirectory()) {
+                if (!"archive".equals(child.getName())) {
+                    collectSql(child, into);
+                }
+            } else if (child.getName().endsWith(".sql")) {
+                into.append(new String(Files.readAllBytes(child.toPath()), StandardCharsets.UTF_8))
+                    .append('\n');
+            }
+        }
     }
 
     private static String fileFromModuleRoot(String relativePath) throws Exception {

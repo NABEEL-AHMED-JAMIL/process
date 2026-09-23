@@ -1,108 +1,24 @@
 databaseChangeLog:
-  # V1-V3 create the baseline tables (shedlock/lookup_data/source_task_type, idempotent
-  # "IF NOT EXISTS") and seed their baseline rows -- required for a genuinely fresh database.
-  # V4-V7 are historical column/default fixups against schema states already superseded by
-  # the current JPA entity mappings (which Hibernate's ddl-auto=update applies directly when
-  # creating tables fresh), so including them here would just fail the same way V8 originally
-  # did (ALTER against tables/columns Hibernate hasn't created yet at Liquibase-run time) for
-  # no benefit -- they stay excluded.
+  # One baseline, then everything after it.
+  #
+  # Until V50 this file listed V1 through V49, and it could not build an empty database. Sixteen
+  # tables -- tenant, app_user, the job spine, the Kafka routing pair, the pipeline form builder,
+  # storage_connection, notification, ai_agent, document_converter_task -- and twenty-three of
+  # the thirty-four sequences were never created by any changeset. They existed because dev runs
+  # ddl-auto=update and Hibernate made them. Stage and prod run validate, which makes nothing.
+  #
+  # The old header here recorded the symptom without naming it: V4-V7 were excluded because
+  # they "would just fail the same way V8 originally did (ALTER against tables/columns Hibernate
+  # hasn't created yet at Liquibase-run time)". That was the whole schema's condition, not four
+  # changesets'. A run against an empty database reached V12 -- foreign keys on tenant and
+  # app_user -- and stopped there.
+  #
+  # V50 is the public schema as it actually stands, captured from the only complete instance of
+  # it. From here the schema is declared rather than inferred, and a new database and an old one
+  # end up the same shape. V1-V49 are kept under changelog-sets/archive and yaml/archive: they
+  # are the record of how this schema was arrived at, and several carry the reasoning behind a
+  # column that would otherwise look arbitrary. They are no longer executed.
+  #
+  # Anything after V50 is an ordinary changeset again. Add it below.
   - include:
-      file: db/changelog/yaml/V1.0-init.yaml
-  - include:
-      file: db/changelog/yaml/V2.0-init.yaml
-  - include:
-      file: db/changelog/yaml/V3.0-init.yaml
-  - exclude:
-      file: db/changelog/yaml/V4.0-update-task-type-status.yaml
-  - exclude:
-      file: db/changelog/yaml/V5.0-update-lob-columns.yaml
-  - exclude:
-      file: db/changelog/yaml/V6.0-fix-lob-to-text.yaml
-  - exclude:
-      file: db/changelog/yaml/V7.0-add-status.yaml
-  - include:
-      file: db/changelog/yaml/V8.0-lookup-encryption.yaml
-  - include:
-      file: db/changelog/yaml/V9.0-ai-provider-bucket-list.yaml
-  - include:
-      file: db/changelog/yaml/V10.0-fix-task-types-pipelines.yaml
-  - include:
-      file: db/changelog/yaml/V11.0-kafka-dynamic-config.yaml
-  - include:
-      file: db/changelog/yaml/V12.0-tenant-user-fk-constraints.yaml
-  - include:
-      file: db/changelog/yaml/V13.0-job-fk-constraints.yaml
-  - include:
-      file: db/changelog/yaml/V14.0-remaining-fk-constraints.yaml
-  - include:
-      file: db/changelog/yaml/V15.0-scheduler-recurrence-rules.yaml
-  - include:
-      file: db/changelog/yaml/V16.0-fix-source-job-status-casing.yaml
-  - include:
-      file: db/changelog/yaml/V17.0-table-descriptions.yaml
-  - include:
-      file: db/changelog/yaml/V18.0-foreign-key-indexes.yaml
-  - include:
-      file: db/changelog/yaml/V18.0-user-avatar.yaml
-  - include:
-      file: db/changelog/yaml/V19.0-task-form-builder.yaml
-  - include:
-      file: db/changelog/yaml/V20.0-user-position.yaml
-  - include:
-      file: db/changelog/yaml/V21.0-tenant-request.yaml
-  - include:
-      file: db/changelog/yaml/V22.0-audit-columns.yaml
-  - include:
-      file: db/changelog/yaml/V23.0-avatar-key-layout.yaml
-  - include:
-      file: db/changelog/yaml/V24.0-user-phone.yaml
-  - include:
-      file: db/changelog/yaml/V25.0-drop-avatar-backup.yaml
-  - include:
-      file: db/changelog/yaml/V26.0-drop-dynamic-forms.yaml
-  - include:
-      file: db/changelog/yaml/V27.0-drop-query-engine.yaml
-  - include:
-      file: db/changelog/yaml/V28.0-drop-pipeline-ids-lookup.yaml
-  - include:
-      file: db/changelog/yaml/V29.0-drop-pdf-highlighter.yaml
-  - include:
-      file: db/changelog/yaml/V30.0-drop-email-receiver.yaml
-  - include:
-      file: db/changelog/yaml/V31.0-analytics-dataset.yaml
-  - include:
-      file: db/changelog/yaml/V32.0-analytics-query.yaml
-  - include:
-      file: db/changelog/yaml/V33.0-analytics-benchmark.yaml
-  - include:
-      file: db/changelog/yaml/V34.0-analytics-workspace.yaml
-  - include:
-      file: db/changelog/yaml/V35.0-analytics-query-second-dataset.yaml
-  - include:
-      file: db/changelog/yaml/V36.0-select-choice-key-label.yaml
-  - include:
-      file: db/changelog/yaml/V37.0-scheduler-one-per-job.yaml
-  - include:
-      file: db/changelog/yaml/V38.0-job-retry.yaml
-  - include:
-      file: db/changelog/yaml/V39.0-task-type-tenant-owner.yaml
-  - include:
-      file: db/changelog/yaml/V40.0-page-access-profiles.yaml
-  - include:
-      file: db/changelog/yaml/V41.0-user-page-access.yaml
-  - include:
-      file: db/changelog/yaml/V42.0-run-callback-token.yaml
-  - include:
-      file: db/changelog/yaml/V43.0-pipelines-under-topics.yaml
-  - include:
-      file: db/changelog/yaml/V44.0-ai-prompts.yaml
-  - include:
-      file: db/changelog/yaml/V45.0-ai-steps.yaml
-  - include:
-      file: db/changelog/yaml/V46.0-drop-ai-provider-lookup.yaml
-  - include:
-      file: db/changelog/yaml/V47.0-ai-step-run-in.yaml
-  - include:
-      file: db/changelog/yaml/V48.0-billing.yaml
-  - include:
-      file: db/changelog/yaml/V49.0-rate-cards.yaml
+      file: db/changelog/yaml/V50.0-schema-baseline.yaml
