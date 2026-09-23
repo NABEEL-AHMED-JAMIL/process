@@ -203,7 +203,19 @@ public class BillingRestApi {
         row.put("invoiceId", d.getInvoiceId()); row.put("paymentId", d.getPaymentId()); row.put("tenantId", d.getTenantId());
         row.put("createdByName", people == null ? null : people.get(d.getCreatedBy()));
         if (tenantNames != null) row.put("tenantName", tenantNames.get(d.getTenantId()));
-        if (d.getInvoiceId() != null) { try { row.put("invoiceNumber", this.billing.find(d.getInvoiceId()).getNumber()); } catch (RuntimeException ignored) { /* a document of a deleted invoice */ } }
+        // The currency the amount is in: its invoice's, or -- for a statement, which belongs to no
+        // invoice -- the workspace's billing currency. Without it the console showed every amount
+        // in dollars.
+        String currency = null;
+        if (d.getInvoiceId() != null) {
+            try {
+                Invoice invoice = this.billing.find(d.getInvoiceId());
+                row.put("invoiceNumber", invoice.getNumber());
+                currency = invoice.getCurrency();
+            } catch (RuntimeException ignored) { /* a document of a deleted invoice */ }
+        }
+        if (currency == null && d.getTenantId() != null) currency = this.billing.accountFor(d.getTenantId()).getCurrency();
+        row.put("currency", currency);
         return row;
     }
 
