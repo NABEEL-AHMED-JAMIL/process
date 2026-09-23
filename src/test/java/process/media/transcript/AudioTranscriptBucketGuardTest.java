@@ -115,4 +115,27 @@ public class AudioTranscriptBucketGuardTest {
         assertThat(response.getMessage()).contains("transcription limit");
     }
 
+
+    /**
+     * MIG-49: the ceiling is 500 MB, checked inside the try-with-resources, so a refused object's
+     * stream -- an open connection to the storage backend -- is closed rather than left dangling.
+     */
+    @Test
+    void aRefusalOneByteOverFiveHundredMegabytesClosesTheStream() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
+        java.io.InputStream stream = new java.io.ByteArrayInputStream(new byte[0]) {
+            @Override
+            public void close() {
+                closed.set(true);
+            }
+        };
+        when(this.storageBrowserService.downloadObject(BUCKET, KEY, null, null))
+            .thenReturn(new ObjectContentDto(stream, "audio/mpeg", 500L * 1024L * 1024L + 1, "interview.mp3"));
+
+        ResponseDto response = this.service.extractFromBucket(this.request(BUCKET, KEY));
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        assertThat(response.getMessage()).contains("over the 500 MB transcription limit");
+        assertThat(closed.get()).as("the refused stream was closed").isTrue();
+    }
 }
