@@ -1,5 +1,8 @@
 package process.engine.cron;
 
+import java.util.stream.Collectors;
+import process.storage.remote.RemoteStorageDirectory;
+import org.springframework.beans.factory.annotation.Autowired;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +48,10 @@ public class UsageMeasurerCron {
     private final MeterClient meter;
     private final TenantRepository tenants;
     private final StorageConnectionRepository connections;
+
+    /** storage-service, once it owns the connections (storage.remote); absent, the table and the adapters answer. */
+    @Autowired(required = false)
+    private RemoteStorageDirectory remote;
     private final StorageClientFactory storageClientFactory;
     private final AppUserRepository users;
     private final SourceTaskTypeRepository topics;
@@ -88,7 +95,10 @@ public class UsageMeasurerCron {
         int events = 0;
         Instant at = day.atTime(2, 0).toInstant(ZoneOffset.UTC);
         // Storage kept: every object store connection the workspace owns, listed whole.
-        for (StorageConnection connection : this.connections.findByTenantIdAndStatus(tenantId, Status.Active)) {
+        List<StorageConnection> active = this.remote != null
+            ? this.remote.workspace(tenantId).stream().filter(c -> c.getStatus() == Status.Active).collect(Collectors.toList())
+            : this.connections.findByTenantIdAndStatus(tenantId, Status.Active);
+        for (StorageConnection connection : active) {
             if (connection.getProvider() == null || !connection.getProvider().isObjectStore() || connection.getBucketName() == null) {
                 continue;
             }
@@ -120,6 +130,10 @@ public class UsageMeasurerCron {
 
     /** Total bytes in a connection's bucket, or -1 when it could not be listed. */
     long bytesIn(StorageConnection connection) {
+        if (this.remote != null) {
+            // Measured inside Storage (MIG-193): NOT_MEASURED and SKIPPED arrive as -1, never as zero.
+            return this.remote.bytesIn(connection);
+        }
         try {
             ObjectStorageService service = this.storageClientFactory.serviceFor(connection);
             List<ObjectSummaryDto> objects = service.listAllObjects(connection.getBucketName(), "", MAX_OBJECTS_PER_BUCKET);

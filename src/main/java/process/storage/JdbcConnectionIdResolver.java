@@ -1,5 +1,6 @@
 package process.storage;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import process.model.pojo.ConnectionIdResolver;
 import process.model.pojo.StorageConnectionStamp;
@@ -13,7 +14,9 @@ import java.util.List;
  * repository because the stamp runs inside Hibernate's flush, where using the entity manager is unsafe.
  * The rule is StorageConnectionLookup.forRow's.
  */
+// Off once Storage owns the table: RemoteStorageDirectory resolves through storage-service instead.
 @Component
+@ConditionalOnProperty(name = "storage.remote", havingValue = "false", matchIfMissing = true)
 public class JdbcConnectionIdResolver implements ConnectionIdResolver {
 
     private final JdbcTemplate jdbc;

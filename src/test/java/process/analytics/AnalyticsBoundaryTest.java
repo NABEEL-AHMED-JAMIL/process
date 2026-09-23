@@ -77,7 +77,10 @@ public class AnalyticsBoundaryTest {
         // Which storage connection an alias means (MIG-53): Storage's own rule, the one the object
         // browser resolves by. Analytics reading the repository and choosing for itself is how the
         // two would drift apart -- and a looser choice here is a cross-workspace read.
-        "process.storage.StorageConnectionLookup"));
+        "process.storage.StorageConnectionLookup",
+        // The same question asked of storage-service once it owns the connections (MIG-68): DuckDB's
+        // connection vended by Storage, which applies the Active and isOwnedByCaller rules itself.
+        "process.storage.remote.RemoteStorageDirectory"));
 
     /** The only packages outside api/ and engine/ that may reach INTO analytics. */
     private static final Set<String> MAY_REACH_IN = new LinkedHashSet<String>(Arrays.asList(

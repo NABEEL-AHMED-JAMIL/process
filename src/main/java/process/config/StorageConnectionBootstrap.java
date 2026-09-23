@@ -1,5 +1,6 @@
 package process.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +41,9 @@ import process.storage.StorageConnectionLookup;
  *
  * @author Nabeel Ahmed
  */
+// Off once Storage owns the table: storage-service seeds the platform buckets itself (PlatformBuckets).
 @Component
+@ConditionalOnProperty(name = "storage.remote", havingValue = "false", matchIfMissing = true)
 public class StorageConnectionBootstrap implements ApplicationRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(StorageConnectionBootstrap.class);

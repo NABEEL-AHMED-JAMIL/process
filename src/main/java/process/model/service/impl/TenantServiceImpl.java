@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import process.storage.remote.RemoteStorageDirectory;
+import org.springframework.beans.factory.annotation.Autowired;
 import process.util.TenantCode;
 import org.slf4j.Logger;
 import process.util.UserNameResolver;
@@ -40,6 +42,10 @@ public class TenantServiceImpl implements TenantService {
     private final AppUserRepository appUserRepository;
     private final KafkaConnectionProfileRepository kafkaConnectionProfileRepository;
     private final StorageConnectionRepository storageConnectionRepository;
+
+    /** storage-service, once it owns the connections (storage.remote); absent, the table answers. */
+    @Autowired(required = false)
+    private RemoteStorageDirectory remote;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final SourceTaskRepository sourceTaskRepository;
     private final SourceJobRepository sourceJobRepository;
@@ -76,7 +82,8 @@ public class TenantServiceImpl implements TenantService {
         Long tenantId = tenant.getTenantId();
         dto.setUserCount(this.appUserRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
         dto.setKafkaProfileCount(this.kafkaConnectionProfileRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
-        dto.setBucketCount(this.storageConnectionRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
+        dto.setBucketCount(this.remote != null ? this.remote.workspace(tenantId).size()
+            : this.storageConnectionRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
         dto.setSourceTaskTypeCount(this.sourceTaskTypeRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete));
         dto.setSourceTaskCount(this.sourceTaskRepository.countByTenantIdAndTaskStatusNot(tenantId, Status.Delete));
         dto.setPipelineCount(this.sourceTaskRepository.countDistinctPipelinesByTenantId(tenantId, Status.Delete));
