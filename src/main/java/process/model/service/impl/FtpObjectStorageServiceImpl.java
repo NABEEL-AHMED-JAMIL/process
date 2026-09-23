@@ -268,7 +268,12 @@ public class FtpObjectStorageServiceImpl implements ObjectStorageService {
      */
     @SuppressWarnings("unchecked")
     private List<ObjectSummaryDto> listDirectoryCached(String path) {
-        String cacheKey = this.connection.getAlias() + ":" + path;
+        // By connection, not alias: an alias is unique only within its tenant, and this cache is
+        // shared by every FTP connection. An unsaved connection (Test Connection) has no id yet.
+        String owner = this.connection.getStorageConnectionId() != null
+            ? String.valueOf(this.connection.getStorageConnectionId())
+            : "unsaved-" + this.connection.getTenantId() + "-" + this.connection.getAlias() + "@" + this.connection.getHost();
+        String cacheKey = owner + ":" + path;
         if (this.listingCache != null) {
             try {
                 Cache.ValueWrapper cached = this.listingCache.get(cacheKey);
