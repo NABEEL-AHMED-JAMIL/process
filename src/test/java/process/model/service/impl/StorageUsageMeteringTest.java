@@ -143,4 +143,20 @@ class StorageUsageMeteringTest {
         verify(this.store).deleteObject("etl-bucket", "claims/x.txt");
         verify(this.meter, never()).report(any());
     }
+
+    /**
+     * The sizes a folder delete reports are looked up first, and that lookup failing must never fail
+     * the delete (MIG-122): sizesUnder swallows the listing's failure on purpose. The folder still goes;
+     * only the metering is poorer for it.
+     */
+    @Test
+    void aSizeLookupThatFailsNeverBlocksTheFolderDelete() {
+        org.mockito.Mockito.when(this.store.listAllObjects(org.mockito.ArgumentMatchers.eq(BUCKET),
+                org.mockito.ArgumentMatchers.eq("q3/"), org.mockito.ArgumentMatchers.anyInt()))
+            .thenThrow(new RuntimeException("listing timed out"));
+
+        this.service.deleteFolder(BUCKET, "q3/");
+
+        verify(this.store).deleteFolder(BUCKET, "q3/");
+    }
 }

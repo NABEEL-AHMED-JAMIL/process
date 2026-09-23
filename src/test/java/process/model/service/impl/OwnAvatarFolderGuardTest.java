@@ -93,7 +93,7 @@ public class OwnAvatarFolderGuardTest {
         // recorded on the row, which is a bucket the platform admin manages losing a file.
         assertThatThrownBy(() -> this.service.deleteFolder(AVATAR_BUCKET, OWN_FOLDER))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Unknown bucket: " + AVATAR_BUCKET + ".");
+            .hasMessage("Unknown bucket: " + AVATAR_BUCKET + ". Add a storage connection for it first.");
         verifyNoInteractions(this.minio);
     }
 
@@ -101,7 +101,7 @@ public class OwnAvatarFolderGuardTest {
     void norToRenameIt() {
         assertThatThrownBy(() -> this.service.renameFolder(AVATAR_BUCKET, OWN_FOLDER, "mine"))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Unknown bucket: " + AVATAR_BUCKET + ".");
+            .hasMessage("Unknown bucket: " + AVATAR_BUCKET + ". Add a storage connection for it first.");
         verifyNoInteractions(this.minio);
     }
 
@@ -109,7 +109,7 @@ public class OwnAvatarFolderGuardTest {
     void norToBuildFoldersOfTheirOwnInsideIt() {
         assertThatThrownBy(() -> this.service.createFolder(AVATAR_BUCKET, OWN_FOLDER, "keep"))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Unknown bucket: " + AVATAR_BUCKET + ".");
+            .hasMessage("Unknown bucket: " + AVATAR_BUCKET + ". Add a storage connection for it first.");
         verifyNoInteractions(this.minio);
     }
 

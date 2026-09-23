@@ -598,7 +598,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
     private ObjectStorageService resolveServiceForCaller(String bucket, String key) {
         if (this.isPlatformBucket(bucket)
             && !TenantContext.isPlatformAdmin() && !this.isOwnProfileObject(bucket, key)) {
-            throw new IllegalArgumentException("Unknown bucket: " + bucket + ".");
+            throw unknownBucket(bucket);
         }
         return this.resolveService(bucket, false);
     }
@@ -628,6 +628,17 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         }
         Optional<StorageConnection> connection = this.storageConnectionRepository.findByAlias(bucket);
         return connection.isPresent() && connection.get().getTenantId() == null;
+    }
+
+    /**
+     * The one answer for every bucket a caller may not have: one that does not exist, a platform
+     * bucket, another tenant's. Worded alike on purpose -- when "not yours" read "Unknown bucket: x."
+     * and "not there" read "Unknown bucket: x. Add a storage connection for it first.", the difference
+     * told a tenant which of the platform's buckets exist and which names another tenant holds
+     * (MIG-51). From the caller's side the advice is true either way: they have no connection for it.
+     */
+    private static IllegalArgumentException unknownBucket(String bucket) {
+        return new IllegalArgumentException("Unknown bucket: " + bucket + ". Add a storage connection for it first.");
     }
 
     private boolean isPlatformBucketName(String bucket) {
@@ -692,7 +703,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             // deleteObjects reads its bucket from a request body rather than a required query
             // parameter, so an absent one arrives here as null and came back as a 500 from the
             // alias comparison below instead of the refusal every other unusable bucket gets.
-            throw new IllegalArgumentException("Unknown bucket: " + bucket + ".");
+            throw unknownBucket(bucket);
         }
         Optional<StorageConnection> connection = this.storageConnectionRepository.findByAliasAndStatus(bucket, Status.Active);
         if (connection.isPresent()) {
@@ -700,7 +711,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
             if (!trusted && !TenantContext.isPlatformAdmin()
                 && storageConnection.getTenantId() != null
                 && !Objects.equals(storageConnection.getTenantId(), TenantContext.getTenantId())) {
-                throw new IllegalArgumentException("Unknown bucket: " + bucket + ".");
+                throw unknownBucket(bucket);
             }
             ObjectStorageService service = this.storageClientFactory.serviceFor(storageConnection);
             // FTP has no bucket concept, so there is nothing to rewrite; for the object stores
@@ -718,8 +729,7 @@ public class StorageBrowserServiceImpl implements StorageBrowserService {
         BucketSummaryDto bucketSummary = this.collectBuckets(trusted).stream()
             .filter(b -> bucket.equals(b.getBucket()))
             .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Unknown bucket: " + bucket + ". Add a storage connection for it first."));
+            .orElseThrow(() -> unknownBucket(bucket));
         String provider = bucketSummary.getProvider();
         ObjectStorageService service = provider != null
             ? this.objectStorageServicesByProvider.get(provider.trim().toUpperCase())

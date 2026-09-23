@@ -679,6 +679,8 @@ public class AnalyticsExportTest {
         refused.put("exports//deep", "an empty step");
         refused.put("exports/'; DROP TABLE x; --", "a quote that would end the SQL literal");
         refused.put("exports/%2e%2e/x", "a percent-encoded climb");
+        // MAX_KEY_LENGTH = 400: every character allowed, just too many of them (MIG-158).
+        refused.put("exports/" + new String(new char[400]).replace('\0', 'a'), "a key past the 400-character ceiling");
 
         for (Map.Entry<String, String> folder : refused.entrySet()) {
             this.executed.clear();
