@@ -372,7 +372,11 @@ public class BulkAction {
         String template = "Job %s missed its scheduled run at " + missedAt + " -- the system was catching up after downtime.";
         JobQueue jobQueue = this.createJobQueue(jobId, missedAt, JobStatus.Missed, template, true);
         this.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(template, jobId));
-        this.sendJobStatusNotification(jobId);
+        // The live push, but not an outcome announcement: a missed slot leaves the job's running
+        // status holding the PREVIOUS run's outcome, so the one-argument form re-announced it --
+        // one "Job completed" per missed slot, each dated to a moment nothing ran. The same fix
+        // the skip path has (ProducerBulkEngine.skipManualJobInQueue).
+        this.sendJobStatusNotification(jobId, false);
         logger.warn("Job {} missed its scheduled run at {}.", jobId, missedAt);
     }
 
