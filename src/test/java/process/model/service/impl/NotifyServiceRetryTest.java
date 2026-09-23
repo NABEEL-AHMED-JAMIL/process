@@ -154,4 +154,30 @@ public class NotifyServiceRetryTest {
         // deactivated will not succeed on a second attempt either.
         verify(this.bulkAction, never()).scheduleRetry(anyLong(), anyLong(), anyString());
     }
+
+    // ---- what a callback tells Notifications (MIG-191) -------------------------------------------
+
+    /**
+     * A worker reporting Running on a run already Running is a heartbeat: the browser still gets
+     * its live push, but it is not a new transition, so no notification-centre row or outcome
+     * notice may come of it. Core decides this flag; the Notifications contract only carries it.
+     */
+    @Test
+    void aRunningHeartbeatPushesLiveStateButIsNotANewTransition() {
+        this.givenRunningJob();
+
+        this.service.changeState(this.workerReports(JobStatus.Running));
+
+        verify(this.bulkAction).sendJobStatusNotification(JOB_ID, false);
+        verify(this.bulkAction, never()).sendJobStatusNotification(JOB_ID, true);
+    }
+
+    @Test
+    void aRunThatFinishesIsANewTransition() {
+        this.givenRunningJob();
+
+        this.service.changeState(this.workerReports(JobStatus.Completed));
+
+        verify(this.bulkAction).sendJobStatusNotification(JOB_ID, true);
+    }
 }
