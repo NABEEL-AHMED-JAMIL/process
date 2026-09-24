@@ -7,6 +7,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import process.callback.CallbackKeys;
+import process.callback.CallbackReceipts;
+import process.callback.ReplayedResponse;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
@@ -24,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -92,7 +97,7 @@ public class NotifyResetApiTest {
     void aStateChangeWithoutAGoodTokenNeverReachesTheService() {
         tokenIsRefused(RunCallbackTokens.Refusal.MISMATCH);
 
-        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, null, callback());
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, null, null, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verifyNoInteractions(this.notifyService);
@@ -105,25 +110,25 @@ public class NotifyResetApiTest {
         List<String> messages = Arrays.asList("line one", "line two");
         Map<String, List<String>> body = Collections.singletonMap("messages", messages);
 
-        ResponseEntity<?> single = this.api.addLogs(JOB_ID, QUEUE_ID, "stale", callback());
-        ResponseEntity<?> batch = this.api.addLogsBatch(JOB_ID, QUEUE_ID, "stale", body);
+        ResponseEntity<?> single = this.api.addLogs(JOB_ID, QUEUE_ID, "stale", null, callback());
+        ResponseEntity<?> batch = this.api.addLogsBatch(JOB_ID, QUEUE_ID, "stale", null, body);
 
         assertThat(single.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(batch.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        verify(this.notifyService, never()).addLogs(any(SourceJobQueueDto.class));
-        verify(this.notifyService, never()).addLogsBatch(anyLong(), anyLong(), anyList());
+        verify(this.notifyService, never()).addLogs(any(SourceJobQueueDto.class), any());
+        verify(this.notifyService, never()).addLogsBatch(anyLong(), anyLong(), anyList(), any());
     }
 
     @Test
     void aTerminalStateChangeSpendsTheToken() {
         tokenIsGood();
-        when(this.notifyService.changeState(any(SourceJobQueueDto.class)))
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
             .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
 
-        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, callback());
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(this.notifyService).changeState(any(SourceJobQueueDto.class));
+        verify(this.notifyService).changeState(any(SourceJobQueueDto.class), isNull());
         verify(this.runCallbackTokens).retire(QUEUE_ID);
     }
 
@@ -131,10 +136,10 @@ public class NotifyResetApiTest {
     @Test
     void aRunningStateChangeKeepsTheToken() {
         tokenIsGood();
-        when(this.notifyService.changeState(any(SourceJobQueueDto.class)))
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
             .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
 
-        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Running, TOKEN, callback());
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Running, TOKEN, null, callback());
 
         verify(this.runCallbackTokens, never()).retire(anyLong());
     }
@@ -143,10 +148,10 @@ public class NotifyResetApiTest {
     @Test
     void aRefusedTerminalChangeKeepsTheToken() {
         tokenIsGood();
-        when(this.notifyService.changeState(any(SourceJobQueueDto.class)))
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
             .thenReturn(new ResponseDto(ProcessUtil.ERROR, "already finished"));
 
-        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, callback());
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, null, callback());
 
         verify(this.runCallbackTokens, never()).retire(anyLong());
     }
@@ -156,10 +161,104 @@ public class NotifyResetApiTest {
         tokenIsGood();
         SourceJobQueueDto noMessage = new SourceJobQueueDto();
 
-        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, noMessage);
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, null, noMessage);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         verifyNoInteractions(this.notifyService);
+        verify(this.runCallbackTokens, never()).retire(anyLong());
+    }
+
+    // ---- MIG-18: idempotency keys ---------------------------------------------------------------------------
+
+    private static ReplayedResponse firstAnswer(String message) {
+        return new ReplayedResponse(new CallbackReceipts.Receipt("changeState:Completed", null, message), null);
+    }
+
+    @Test
+    void theWorkersKeyIsHandedToTheService() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), eq("done-7f3a9c2e")))
+            .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
+        when(this.notifyService.addLogs(any(SourceJobQueueDto.class), eq("line-0000042")))
+            .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
+        when(this.notifyService.addLogsBatch(eq(JOB_ID), eq(QUEUE_ID), anyList(), eq("batch-0000007")))
+            .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
+
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, "done-7f3a9c2e", callback());
+        this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, "line-0000042", callback());
+        this.api.addLogsBatch(JOB_ID, QUEUE_ID, TOKEN, "batch-0000007",
+            Collections.singletonMap("messages", Arrays.asList("a", "b")));
+
+        verify(this.notifyService).changeState(any(SourceJobQueueDto.class), eq("done-7f3a9c2e"));
+        verify(this.notifyService).addLogs(any(SourceJobQueueDto.class), eq("line-0000042"));
+        verify(this.notifyService).addLogsBatch(eq(JOB_ID), eq(QUEUE_ID), anyList(), eq("batch-0000007"));
+    }
+
+    /** A key that could not be written to a log line safely is refused -- after the token, like every 400. */
+    @Test
+    void anUnacceptableKeyIsABadRequestAndReachesNothing() {
+        tokenIsGood();
+
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN,
+            "two\nlines", callback());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        verifyNoInteractions(this.notifyService);
+    }
+
+    /**
+     * The worker lost the answer to its Completed and sends it again. The run is over, so the callback
+     * itself would be refused -- but the token is the run's own, and the answer was recorded, so the
+     * worker is told what it was told the first time rather than that it is unauthorised.
+     */
+    @Test
+    void aFinishedRunsLastCallbackSentAgainGetsItsFirstAnswer() {
+        tokenIsRefused(RunCallbackTokens.Refusal.RUN_OVER);
+        when(this.notifyService.replay(QUEUE_ID, JobStatus.Completed, CallbackKeys.changeState(JobStatus.Completed), null))
+            .thenReturn(Optional.of(firstAnswer("Job 1196 status changed to Completed")));
+
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, callback());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(((ResponseDto) response.getBody()).getMessage()).isEqualTo("Job 1196 status changed to Completed");
+        verify(this.notifyService, never()).changeState(any(SourceJobQueueDto.class), any());
+        verify(this.runCallbackTokens, never()).retire(anyLong());
+    }
+
+    @Test
+    void aFinishedRunWithNothingRecordedIsStillThe401() {
+        tokenIsRefused(RunCallbackTokens.Refusal.RUN_OVER);
+        when(this.notifyService.replay(eq(QUEUE_ID), any(), anyString(), any())).thenReturn(Optional.empty());
+
+        ResponseEntity<?> response = this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, "line-0000099", callback());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(this.notifyService, never()).addLogs(any(SourceJobQueueDto.class), any());
+    }
+
+    /** Only a refusal that proves the token is the run's own may be answered from a receipt. */
+    @Test
+    void noOtherRefusalLooksForAReceipt() {
+        for (RunCallbackTokens.Refusal why : RunCallbackTokens.Refusal.values()) {
+            if (why == RunCallbackTokens.Refusal.RUN_OVER) {
+                continue;
+            }
+            when(this.runCallbackTokens.verify(JOB_ID, QUEUE_ID, "x")).thenReturn(Optional.of(why));
+            ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, "x", "done-7f3a9c2e", callback());
+            assertThat(response.getStatusCode()).as(why.name()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+        verify(this.notifyService, never()).replay(any(), any(), any(), any());
+    }
+
+    /** A redelivered Completed answered from its receipt spends nothing a second time. */
+    @Test
+    void aReplayedTerminalChangeDoesNotSpendTheTokenAgain() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
+            .thenReturn(firstAnswer("Job 1196 status changed to Completed"));
+
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, callback());
+
         verify(this.runCallbackTokens, never()).retire(anyLong());
     }
 }

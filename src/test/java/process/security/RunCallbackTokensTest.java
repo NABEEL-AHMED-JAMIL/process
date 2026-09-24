@@ -177,4 +177,35 @@ public class RunCallbackTokensTest {
         this.run.setCallbackTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
         assertThat(this.tokens.verifyForReport(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.EXPIRED);
     }
+
+    // ---- MIG-18 and MIG-63: a refusal that names the run's state implies the run's own token ------------------
+
+    /**
+     * RUN_OVER and EXPIRED are only ever said to a caller holding the run's own token; anyone else is
+     * told MISMATCH (or NOT_ISSUED) whatever state the run is in. That is what lets the controller answer
+     * a finished run's redelivered callback from its receipt, and lets the stall sweep act on a
+     * refused-but-genuine report, without either being reachable by a caller who merely knows an id.
+     */
+    @Test
+    void aRunIsOnlyReportedOverOrExpiredToItsOwnToken() {
+        String token = this.tokens.issue(this.run);
+        String someoneElses = new RunCallbackTokens(this.jobQueueRepository, 24, LEGACY).issue(new JobQueue());
+        this.run.setJobStatus(JobStatus.Completed);
+
+        assertThat(this.tokens.verify(JOB, RUN, someoneElses)).contains(RunCallbackTokens.Refusal.MISMATCH);
+        assertThat(this.tokens.verify(JOB, RUN, null)).contains(RunCallbackTokens.Refusal.MISMATCH);
+        assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.RUN_OVER);
+
+        this.run.setJobStatus(JobStatus.Running);
+        this.run.setCallbackTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
+        assertThat(this.tokens.verify(JOB, RUN, someoneElses)).contains(RunCallbackTokens.Refusal.MISMATCH);
+        assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.EXPIRED);
+    }
+
+    @Test
+    void aFinishedRunWithoutATokenIsOverOnlyToTheLegacySecret() {
+        this.run.setJobStatus(JobStatus.Failed);
+        assertThat(this.tokens.verify(JOB, RUN, "not-it")).contains(RunCallbackTokens.Refusal.NOT_ISSUED);
+        assertThat(this.tokens.verify(JOB, RUN, LEGACY)).contains(RunCallbackTokens.Refusal.RUN_OVER);
+    }
 }

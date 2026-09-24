@@ -257,9 +257,10 @@ class RetireExtendsTokenExpiryTest {
         for (Method method : NotifyResetApi.class.getDeclaredMethods()) {
             for (Annotation[] parameter : method.getParameterAnnotations()) {
                 for (Annotation annotation : parameter) {
-                    if (annotation instanceof RequestHeader) {
+                    // Idempotency-Key (MIG-18) and X-Correlation-Id (MIG-95) sit beside it; the token is
+                    // the one header that authenticates, and each callback reads it exactly once.
+                    if (annotation instanceof RequestHeader && "X-Worker-Token".equals(((RequestHeader) annotation).value())) {
                         declared++;
-                        assertThat(((RequestHeader) annotation).value()).as(method.getName()).isEqualTo("X-Worker-Token");
                         assertThat(((RequestHeader) annotation).required()).as(method.getName()).isFalse();
                     }
                 }
@@ -274,7 +275,7 @@ class RetireExtendsTokenExpiryTest {
         SourceJobQueueDto body = new SourceJobQueueDto();
         body.setJobStatusMessage("working");
 
-        ResponseEntity<?> response = api.changeState(JOB, RUN, JobStatus.Running, null, body);
+        ResponseEntity<?> response = api.changeState(JOB, RUN, JobStatus.Running, null, null, body);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verifyNoInteractions(notifyService);
@@ -295,7 +296,7 @@ class RetireExtendsTokenExpiryTest {
         String token = this.tokens.issue(this.run);
         this.run.setJobStatus(JobStatus.Running);
         NotifyService notifyService = mock(NotifyService.class);
-        when(notifyService.changeState(any(SourceJobQueueDto.class))).thenAnswer(invocation -> {
+        when(notifyService.changeState(any(SourceJobQueueDto.class), any())).thenAnswer(invocation -> {
             this.run.setJobStatus(JobStatus.Queue);
             // The service's own answer to a retried Failed: a message and the DTO, and no status.
             Object echoed = invocation.getArgument(0);
@@ -306,7 +307,7 @@ class RetireExtendsTokenExpiryTest {
         LocalDateTime before = LocalDateTime.now();
 
         ResponseEntity<?> response = new NotifyResetApi(notifyService, this.tokens)
-            .changeState(JOB, RUN, JobStatus.Failed, token, body);
+            .changeState(JOB, RUN, JobStatus.Failed, token, null, body);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(this.run.getJobStatus()).isEqualTo(JobStatus.Queue);

@@ -127,22 +127,28 @@ public class RunCallbackTokens {
         if (jobId == null || !jobId.equals(run.getJobId())) {
             return Optional.of(Refusal.WRONG_JOB);
         }
-        if (refuseWhenOver && run.getJobStatus() != null && OVER.contains(run.getJobStatus())) {
-            return Optional.of(Refusal.RUN_OVER);
-        }
+        // The token first, then what the run's state says about it. RUN_OVER and EXPIRED are thereby
+        // only ever the verdict on the run's OWN token: a caller who merely knows the ids is told
+        // MISMATCH or NOT_ISSUED whatever the run is doing. The caller still sees one uniform 401; the
+        // order matters to what the server may do on the strength of a refusal -- answer a finished
+        // run's redelivered callback from its receipt (MIG-18), or take a genuine but expired report
+        // as evidence the worker is done (MIG-63).
         String token = presented == null ? "" : presented.trim();
         if (run.getCallbackTokenHash() == null) {
             // Dispatched before tokens existed: the shared secret is the only proof it can carry.
-            if (!this.legacyToken.isEmpty() && constantTimeEquals(this.legacyToken, token)) {
-                return Optional.empty();
+            if (this.legacyToken.isEmpty() || !constantTimeEquals(this.legacyToken, token)) {
+                return Optional.of(Refusal.NOT_ISSUED);
             }
-            return Optional.of(Refusal.NOT_ISSUED);
+        } else {
+            if (token.isEmpty() || !constantTimeEquals(run.getCallbackTokenHash(), sha256(token))) {
+                return Optional.of(Refusal.MISMATCH);
+            }
+            if (run.getCallbackTokenExpiresAt() != null && LocalDateTime.now().isAfter(run.getCallbackTokenExpiresAt())) {
+                return Optional.of(Refusal.EXPIRED);
+            }
         }
-        if (run.getCallbackTokenExpiresAt() != null && LocalDateTime.now().isAfter(run.getCallbackTokenExpiresAt())) {
-            return Optional.of(Refusal.EXPIRED);
-        }
-        if (token.isEmpty() || !constantTimeEquals(run.getCallbackTokenHash(), sha256(token))) {
-            return Optional.of(Refusal.MISMATCH);
+        if (refuseWhenOver && run.getJobStatus() != null && OVER.contains(run.getJobStatus())) {
+            return Optional.of(Refusal.RUN_OVER);
         }
         return Optional.empty();
     }
