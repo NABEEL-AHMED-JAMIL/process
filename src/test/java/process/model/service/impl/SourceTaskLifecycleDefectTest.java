@@ -289,4 +289,31 @@ public class SourceTaskLifecycleDefectTest {
         assertThat((List<?>) response.getData()).isEmpty();
     }
 
+
+    // ---- the platform's databases are not a pipeline's (owner's rule, 2026-09-24) ----------
+
+    @Test
+    void aTaskThatWouldLoadIntoTheConfigurationDatabaseIsNotCreated() throws Exception {
+        SourceTaskDto dto = creationDto();
+        dto.setTaskPayload("<pipeline><target_table>demo_orders_import</target_table><db_name>etl_job</db_name></pipeline>");
+
+        ResponseDto answer = this.service.addSourceTask(dto);
+
+        assertThat(answer.getStatus()).isEqualTo("ERROR");
+        assertThat(answer.getMessage()).contains("etl_job");
+        verify(this.sourceTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void anEditCannotPointAnExistingTaskAtTheConfigurationDatabase() throws Exception {
+        SourceTaskDto dto = creationDto();
+        dto.setTaskDetailId(TASK_ID);
+        dto.setTaskPayload("<pipeline><db_name>etl_job</db_name></pipeline>");
+
+        ResponseDto answer = this.service.updateSourceTask(dto);
+
+        assertThat(answer.getStatus()).isEqualTo("ERROR");
+        assertThat(answer.getMessage()).contains("etl_job");
+        verify(this.sourceTaskRepository, never()).save(any());
+    }
 }

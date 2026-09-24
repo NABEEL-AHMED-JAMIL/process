@@ -27,6 +27,7 @@ import process.model.service.SourceTaskService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.PagingUtil;
+import process.util.PlatformDatabases;
 import process.util.ProcessUtil;
 import process.util.EnumConverter;
 import process.util.TaskPayloadLocationUtil;
@@ -176,6 +177,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             // caller is told it was saved.
             return new ResponseDto(ERROR, "SourceTask cannot be created as Delete -- create it Active or Inactive.");
         }
+        Optional<String> platformDatabase = PlatformDatabases.refusal(sourceTaskDto.getTaskPayload());
+        if (platformDatabase.isPresent()) {
+            return new ResponseDto(ERROR, platformDatabase.get());
+        }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findSourceTaskTypeBySourceTaskTypeIdAndStatus(
             sourceTaskDto.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
         // Same wording either way, so a refusal does not confirm the id exists.
@@ -223,6 +228,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(ERROR, "SourceTask sourceTaskType missing.");
         } else if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType().getSourceTaskTypeId())) {
             return new ResponseDto(ERROR, "SourceTask sourceTaskTypeId missing.");
+        }
+        Optional<String> platformDatabase = PlatformDatabases.refusal(sourceTaskDto.getTaskPayload());
+        if (platformDatabase.isPresent()) {
+            return new ResponseDto(ERROR, platformDatabase.get());
         }
         Optional<SourceTaskType> sourceTaskType = this.sourceTaskTypeRepository.findSourceTaskTypeBySourceTaskTypeIdAndStatus(
             sourceTaskDto.getSourceTaskType().getSourceTaskTypeId(), Status.Active);
