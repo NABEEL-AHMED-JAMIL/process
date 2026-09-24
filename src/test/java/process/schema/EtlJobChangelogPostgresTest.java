@@ -214,4 +214,27 @@ class EtlJobChangelogPostgresTest {
             assertThat(secured.sql().queryForObject("SELECT count(*) FROM kafka_connection_profile", Integer.class)).isZero();
         }
     }
+
+    /**
+     * MIG-59: V25-V30 and V46 removed whole features on purpose. A database built from the changelog must
+     * carry nothing of them -- no table, no sequence, no lookup family -- and no object still named for
+     * task_form, the pipeline builder's old name (V43, finished by V70.4).
+     */
+    @Test
+    void theDroppedFeaturesLeaveNothingBehind() {
+        JdbcTemplate sql = db.sql();
+        for (String relation : new String[] {"avatar_backup_20260824", "dynamic_form", "dynamic_form_field", "dynamic_form_submission",
+            "dynamic_form_seq", "dynamic_form_field_seq", "dynamic_form_submission_seq", "query_definition", "query_schedule",
+            "query_execution", "database_connection_profile", "query_definition_seq", "query_schedule_seq", "query_execution_seq",
+            "database_connection_profile_seq", "pdf_highlighter_task", "pdf_highlighter_field", "pdf_highlighter_task_id_seq",
+            "pdf_highlighter_field_id_seq", "task_form", "task_form_field", "task_form_source_seq"}) {
+            assertThat(sql.queryForObject("SELECT to_regclass(?) IS NULL", Boolean.class, "public." + relation)).as(relation).isTrue();
+        }
+        assertThat(sql.queryForObject("SELECT count(*) FROM lookup_data WHERE lookup_type IN ('PIPELINE_IDS', 'EMAIL_RECEIVER', 'AI_PROVIDER')",
+            Integer.class)).isZero();
+        assertThat(sql.queryForList("SELECT conname FROM pg_constraint WHERE conname LIKE '%task_form%' "
+            + "UNION ALL SELECT relname FROM pg_class WHERE relname LIKE '%task_form%'", String.class)).isEmpty();
+        assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE conname = 'fk_pipeline_field_pipeline' "
+            + "AND confrelid = 'pipeline'::regclass", Integer.class)).isEqualTo(1);
+    }
 }

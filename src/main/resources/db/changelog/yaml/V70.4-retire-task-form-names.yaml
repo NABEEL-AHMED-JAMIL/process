@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: 70.4-retire-task-form-names
+      author: nabeel.amd93
+      description: "pipeline_field's foreign key stops being named for task_form, a table that no longer exists (MIG-59)"
+      # V43 renamed task_form to pipeline and task_form_field to pipeline_field, and with them
+      # ux_task_form_pipeline_tenant (now ux_pipeline_id_tenant) and task_form_source_seq (now pipeline_source_seq).
+      # One name was missed: the key from pipeline_field to pipeline is still task_form_field_task_form_id_fkey.
+      # It is the last task_form name in the schema, and a per-service split carries names along -- retired here
+      # so none survives into Core's own database.
+      #
+      # The V26-V30 removals this lineage belongs to, kept on the record (MIG-59; enforced by
+      # EtlJobChangelogPostgresTest.theDroppedFeaturesLeaveNothingBehind and RemovedFeatureEndpointsTest):
+      #   V25  avatar_backup_20260824              a one-off backup table, dropped
+      #   V26  dynamic_form, dynamic_form_field, dynamic_form_submission (+ sequences)   dynamic forms, dropped
+      #   V27  query_definition, query_schedule, query_execution, database_connection_profile (+ sequences)
+      #                                            the query engine and its database connections, dropped
+      #   V28  lookup family PIPELINE_IDS (1015)   pipelines are defined by Pipeline Forms since, not lookups
+      #   V29  pdf_highlighter_task, pdf_highlighter_field (+ sequences)   the PDF highlighter, dropped
+      #   V30  lookup family EMAIL_RECEIVER        the email receiver, dropped
+      #   V46  lookup family AI_PROVIDER           providers became a fixed set on a model connection
+      # Each was deliberate. A trace of one found later is residue to remove, not lost functionality to restore.
+      preConditions:
+        - onFail: MARK_RAN
+        - onFailMessage: task_form_field_task_form_id_fkey is not there; nothing to rename.
+        - sqlCheck:
+            expectedResult: 1
+            sql: SELECT count(*) FROM pg_constraint WHERE conname = 'task_form_field_task_form_id_fkey' AND conrelid = 'public.pipeline_field'::regclass
+      changes:
+        - sql:
+            sql: ALTER TABLE public.pipeline_field RENAME CONSTRAINT task_form_field_task_form_id_fkey TO fk_pipeline_field_pipeline
+      rollback:
+        - sql:
+            sql: ALTER TABLE public.pipeline_field RENAME CONSTRAINT fk_pipeline_field_pipeline TO task_form_field_task_form_id_fkey
