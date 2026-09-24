@@ -82,6 +82,12 @@ public final class ScratchEtlJob implements AutoCloseable {
         return this.pool;
     }
 
+    /** A connection of its own, outside the pool, for a test that needs a second session. */
+    public Connection connect() throws Exception {
+        return DriverManager.getConnection(this.pool.getJdbcUrl(), System.getenv("NOTIFICATIONS_TEST_DB_USER"),
+            System.getenv("NOTIFICATIONS_TEST_DB_PASSWORD"));
+    }
+
     @Override
     public void close() throws Exception {
         this.pool.close();

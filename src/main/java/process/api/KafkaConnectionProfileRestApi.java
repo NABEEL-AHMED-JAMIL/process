@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.KafkaConnectionProfileDto;
+import process.config.RaceRefusals;
 import process.model.dto.ResponseDto;
 import process.model.service.KafkaConnectionProfileService;
 import process.util.ProcessUtil;
@@ -73,8 +74,7 @@ public class KafkaConnectionProfileRestApi {
         try {
             return new ResponseEntity<>(this.kafkaConnectionProfileService.setAsDefault(kafkaConnectionProfileId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while setAsDefault ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+            return RaceRefusals.answer(ex, logger, "setAsDefault");
         }
     }
 
