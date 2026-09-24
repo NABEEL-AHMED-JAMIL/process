@@ -45,7 +45,7 @@ public class SourceTaskType implements Audited {
         name = "sourceTaskTypeSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "source_task_type_source_Seq"),
+            @Parameter(name = "sequence_name", value = "source_task_type_source_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }

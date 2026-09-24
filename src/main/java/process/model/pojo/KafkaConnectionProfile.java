@@ -45,7 +45,7 @@ public class KafkaConnectionProfile implements Audited {
         name = "kafkaConnectionProfileSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "kafka_connection_profile_Seq"),
+            @Parameter(name = "sequence_name", value = "kafka_connection_profile_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }

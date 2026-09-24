@@ -35,7 +35,7 @@ public class Tenant implements Audited {
         name = "tenantSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "tenant_Seq"),
+            @Parameter(name = "sequence_name", value = "tenant_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }

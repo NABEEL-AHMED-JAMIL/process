@@ -50,7 +50,7 @@ public class AppUser implements Audited {
         name = "appUserSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "app_user_Seq"),
+            @Parameter(name = "sequence_name", value = "app_user_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }
