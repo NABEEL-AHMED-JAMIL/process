@@ -430,7 +430,7 @@ public class SettingServiceImpl implements SettingService {
             return "Topic workspace missing -- a platform administrator must say which workspace "
                 + "this task type belongs to.";
         }
-        if (!this.identity.workspace(tenantId).isPresent()) {
+        if (!IdentityPort.live(this.identity, tenantId).isPresent()) {
             return String.format("Topic workspace %d is not a workspace.", tenantId);
         }
         return null;

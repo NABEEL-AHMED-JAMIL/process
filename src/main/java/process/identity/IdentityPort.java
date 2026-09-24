@@ -47,6 +47,18 @@ public interface IdentityPort {
     /** A workspace by its code, if one has it. */
     Optional<Workspace> workspaceByCode(String code);
 
+    /**
+     * A workspace a write may name (MIG-166): one that exists and Identity has not deleted. With no foreign key
+     * onto tenant, this is what stops a platform administrator filing rows under a workspace that is gone.
+     * Static, so a test's mock answers it through {@link #workspace} like everything else.
+     */
+    static Optional<Workspace> live(IdentityPort identity, Long tenantId) {
+        if (identity == null || tenantId == null) {
+            return Optional.empty();
+        }
+        return identity.workspace(tenantId).filter(workspace -> !workspace.isDeleted());
+    }
+
     /** Workspaces by id; ids that name none are absent. */
     List<Workspace> workspaces(Collection<Long> tenantIds);
 
@@ -140,6 +152,8 @@ public interface IdentityPort {
         public String getName() { return this.name; }
         public String getCode() { return this.code; }
         public String getStatus() { return this.status; }
+
+        public boolean isDeleted() { return "Delete".equals(this.status); }
     }
 
     /** The page gate's answer. */

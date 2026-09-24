@@ -179,7 +179,9 @@ class LookupDecompositionPostgresTest {
             rowsAsDevHasThem(sql);
             db.finish();
 
-            db.rollback(4);
+            // V141-V144 and every changeset after them (counted, so a later changeset does not move the target).
+            db.rollback(sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE orderexecuted > "
+                + "(SELECT orderexecuted FROM databasechangelog WHERE id = '140.0-lookup-data-test-residue')", Integer.class));
 
             assertThat(sql.queryForObject("SELECT to_regclass('task_reference') IS NULL AND to_regclass('pipeline_config') IS NULL",
                 Boolean.class)).isTrue();

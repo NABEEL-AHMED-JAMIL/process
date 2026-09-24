@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 160.0-user-directory
+      author: nabeel.amd93
+      description: "user_directory: Core's projection of Identity's people, for the names on audit stamps (MIG-153)"
+      # Filled from platform.identity.user.v1 (a compacted topic: a new database bootstraps by reading it from the
+      # beginning) and written back by UserNameResolver on a miss. Five columns and a timestamp, never more: no
+      # password, role, contact detail or picture -- a directory that grows those is Identity re-implemented.
+      # created_by / updated_by across Core stay plain bigints; nothing here is a foreign key, and nothing ever
+      # decides access from this table (names are for reading). updated_at is the instant the row's state was
+      # true at Identity, so an older event never overwrites a newer one and staleness is measurable.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE TABLE IF NOT EXISTS user_directory (
+                app_user_id BIGINT       PRIMARY KEY,
+                tenant_id   BIGINT,
+                username    VARCHAR(255) NOT NULL,
+                full_name   VARCHAR(255),
+                status      VARCHAR(32)  NOT NULL,
+                updated_at  TIMESTAMPTZ  NOT NULL
+              );
+        - sql:
+            splitStatements: false
+            sql: >
+              COMMENT ON TABLE user_directory IS 'Core''s read-only projection of Identity''s people (MIG-153): who an audit stamp names. Fed by platform.identity.user.v1; never a source of access decisions.';
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP TABLE IF EXISTS user_directory;

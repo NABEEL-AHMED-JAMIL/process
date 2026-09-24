@@ -31,7 +31,7 @@ final class ActingWorkspace {
         if (requested == null) {
             return "Say which workspace this is for: a platform administrator acts for one workspace at a time.";
         }
-        if (identity == null || !identity.workspace(requested).isPresent()) {
+        if (!IdentityPort.live(identity, requested).isPresent()) {
             return String.format("Workspace %d is not a workspace.", requested);
         }
         onResolved.accept(requested);
