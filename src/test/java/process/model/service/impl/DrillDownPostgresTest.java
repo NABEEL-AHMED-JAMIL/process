@@ -1,31 +1,24 @@
 package process.model.service.impl;
 
-import com.zaxxer.hikari.HikariDataSource;
-import liquibase.integration.spring.SpringLiquibase;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.jdbc.core.JdbcTemplate;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
+import process.schema.ScratchEtlJob;
 import process.security.TenantContext;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -40,36 +33,16 @@ import static org.mockito.Mockito.when;
  * alphabetical -- attempt at index 1). Both must render the same field values. Before the columns were
  * named, the second threw from Timestamp.valueOf("1").
  *
- * Opt-in, like EtlJobChangelogPostgresTest: runs when NOTIFICATIONS_TEST_DB_URL and its user and
- * password point at a Postgres server; builds a throwaway database and drops it after.
+ * Opt-in, like EtlJobChangelogPostgresTest: needs NOTIFICATIONS_TEST_DB_URL (see ScratchEtlJob).
  */
 class DrillDownPostgresTest {
 
-    private static String server;
-    private static String scratch;
-    private static HikariDataSource pool;
+    private static ScratchEtlJob db;
 
     @BeforeAll
     static void buildSchema() throws Exception {
-        server = System.getenv("NOTIFICATIONS_TEST_DB_URL");
-        assumeTrue(server != null, "NOTIFICATIONS_TEST_DB_URL is not set");
-        scratch = "drill_down_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
-        try (Connection admin = admin(); Statement statement = admin.createStatement()) {
-            statement.execute("CREATE DATABASE " + scratch);
-        }
-        pool = new HikariDataSource();
-        pool.setJdbcUrl(server.replaceAll("/[^/?]+(\\?.*)?$", "/" + scratch + "$1"));
-        pool.setUsername(System.getenv("NOTIFICATIONS_TEST_DB_USER"));
-        pool.setPassword(System.getenv("NOTIFICATIONS_TEST_DB_PASSWORD"));
-        pool.setMaximumPoolSize(1);
-        SpringLiquibase liquibase = new SpringLiquibase();
-        liquibase.setDataSource(pool);
-        liquibase.setChangeLog("classpath:db/changelog/db.changelog-master.yaml");
-        liquibase.setContexts("init");
-        liquibase.setResourceLoader(new DefaultResourceLoader(DrillDownPostgresTest.class.getClassLoader()));
-        liquibase.afterPropertiesSet();
-
-        JdbcTemplate sql = new JdbcTemplate(pool);
+        db = ScratchEtlJob.build("drill_down");
+        JdbcTemplate sql = db.sql();
         sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (2901, 'Active', 'CHS', 'CareBridge')");
         sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, tenant_id) "
             + "VALUES (1196, '2026-09-01 09:00', 'Auto', 'Nightly claims', 'Active', 1, 2901)");
@@ -90,13 +63,8 @@ class DrillDownPostgresTest {
 
     @AfterAll
     static void dropSchema() throws Exception {
-        if (pool != null) {
-            pool.close();
-        }
-        if (scratch != null) {
-            try (Connection admin = admin(); Statement statement = admin.createStatement()) {
-                statement.execute("DROP DATABASE IF EXISTS " + scratch);
-            }
+        if (db != null) {
+            db.close();
         }
     }
 
@@ -158,7 +126,7 @@ class DrillDownPostgresTest {
     }
 
     private List<Object[]> rows(String searchPath, String query) {
-        JdbcTemplate sql = new JdbcTemplate(pool);
+        JdbcTemplate sql = db.sql();
         sql.execute("SET search_path TO " + searchPath);
         try {
             List<Object[]> rows = new ArrayList<>();
@@ -185,10 +153,5 @@ class DrillDownPostgresTest {
         assertThat(run.getRunManual()).isFalse();
         assertThat(run.getSkipTime()).isNull();
         assertThat(run.getStartTime()).isEqualTo(LocalDateTime.of(2026, 9, 21, 14, 4, 1));
-    }
-
-    private static Connection admin() throws Exception {
-        return DriverManager.getConnection(server, System.getenv("NOTIFICATIONS_TEST_DB_USER"),
-            System.getenv("NOTIFICATIONS_TEST_DB_PASSWORD"));
     }
 }
