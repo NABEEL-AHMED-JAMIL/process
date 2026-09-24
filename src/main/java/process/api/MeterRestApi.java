@@ -53,13 +53,19 @@ public class MeterRestApi {
             this.logger.warn("meter verifyRun refused for run {}: {}", dto.jobQueueId, refused.get());
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "Unauthorized worker callback."), HttpStatus.UNAUTHORIZED);
         }
+        // The run row and its token are the proof (owner rule "keep the bill", 2026-09-24): the workspace is the one
+        // stamped on the run when it was made (V102), whatever has happened to its job since -- a job deleted mid-run
+        // still bills the usage its run reports. The job's own tenant only for a row older than that stamp.
         Optional<JobQueue> run = this.jobQueues.findById(dto.jobQueueId);
-        Optional<SourceJob> job = run.flatMap(r -> this.jobs.findById(r.getJobId()));
-        if (!job.isPresent() || job.get().getTenantId() == null) {
+        Long tenantId = run.map(JobQueue::getTenantId).orElse(null);
+        if (tenantId == null) {
+            tenantId = run.flatMap(r -> this.jobs.findById(r.getJobId())).map(SourceJob::getTenantId).orElse(null);
+        }
+        if (tenantId == null) {
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "This run belongs to no workspace."), HttpStatus.UNAUTHORIZED);
         }
         Map<String, Object> data = new HashMap<>();
-        data.put("tenantId", job.get().getTenantId());
+        data.put("tenantId", tenantId);
         data.put("jobId", dto.jobId);
         data.put("jobQueueId", dto.jobQueueId);
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Run verified.", data), HttpStatus.OK);

@@ -176,15 +176,24 @@ public class NotifyServiceImpl implements NotifyService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ResponseDto changeState(SourceJobQueueDto jobQueue) {
         logger.info("Received request to change job {} queue {} status to {}", jobQueue.getJobId(), jobQueue.getJobQueueId(), jobQueue.getJobStatus());
-        Optional<SourceJob> job = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
+        Optional<SourceJob> live = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
+        // Owner rule "keep the bill" (2026-09-24): a run whose job was deleted or switched off while it worked still
+        // reports -- the run row and its token are the proof, not the job's current status -- so its outcome lands
+        // and its usage is metered. Deletion only stops future work: such a run is not retried (below).
+        Optional<SourceJob> job = live.isPresent() ? live : this.transactionService.findByJobId(jobQueue.getJobId());
+        boolean jobLive = live.isPresent();
         if (!job.isPresent()) {
-            logger.warn("Job {} not found or not active", jobQueue.getJobId());
+            logger.warn("Job {} not found", jobQueue.getJobId());
             return new ResponseDto(ERROR, String.format("Job with id %s not found or not active", jobQueue.getJobId()), jobQueue);
         }
         if (!this.queueBelongsToJob(jobQueue.getJobId(), jobQueue.getJobQueueId())) {
             logger.warn("Queue {} does not belong to job {}", jobQueue.getJobQueueId(), jobQueue.getJobId());
             return new ResponseDto(ERROR, String.format("Queue with id %s does not belong to job %s",
                 jobQueue.getJobQueueId(), jobQueue.getJobId()), jobQueue);
+        }
+        if (!jobLive) {
+            logger.info("Run {} of job {} reports {} after its job was {}; recording it and its usage (keep the bill).",
+                jobQueue.getJobQueueId(), jobQueue.getJobId(), jobQueue.getJobStatus(), job.get().getJobStatus());
         }
         JobStatus currentStatus = job.get().getJobRunningStatus();
         JobStatus newStatus = jobQueue.getJobStatus();
@@ -215,7 +224,7 @@ public class NotifyServiceImpl implements NotifyService {
         //
         // scheduleRetry writes the worker's own explanation into the audit log, so returning early
         // loses nothing it reported.
-        if (newStatus == JobStatus.Failed
+        if (newStatus == JobStatus.Failed && jobLive
             && this.bulkAction.scheduleRetry(jobQueue.getJobQueueId(), jobQueue.getJobId(),
                 jobQueue.getJobStatusMessage())) {
             logger.info("Job {} run {} failed and has been queued for another attempt.",
@@ -262,7 +271,7 @@ public class NotifyServiceImpl implements NotifyService {
 
     public ResponseDto addLogs(SourceJobQueueDto jobQueue) {
         logger.info("Received request to add logs for job {} queue {}", jobQueue.getJobId(), jobQueue.getJobQueueId());
-        Optional<SourceJob> job = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
+        Optional<SourceJob> job = this.jobOfRun(jobQueue.getJobId());
         if (!job.isPresent()) {
             logger.warn("Job {} not found or not active", jobQueue.getJobId());
             return new ResponseDto(ERROR, String.format("Job with id %s not found or not active", jobQueue.getJobId()), jobQueue);
@@ -291,7 +300,7 @@ public class NotifyServiceImpl implements NotifyService {
      * screen appends lines and would otherwise have to learn a second message shape.
      */
     public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, List<String> messages) {
-        Optional<SourceJob> job = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
+        Optional<SourceJob> job = this.jobOfRun(jobId);
         if (!job.isPresent()) {
             return new ResponseDto(ERROR, String.format("Job with id %s not found or not active", jobId));
         }
@@ -306,6 +315,15 @@ public class NotifyServiceImpl implements NotifyService {
         return new ResponseDto(
             String.format("%s log line(s) added for job %s queue %s", messages.size(), jobId, jobQueueId),
             messages.size());
+    }
+
+    /**
+     * The job a callback's run belongs to: the Active job, or -- keep the bill -- the same job deleted or switched
+     * off while its run was working. queueBelongsToJob still decides that the run is that job's.
+     */
+    private Optional<SourceJob> jobOfRun(Long jobId) {
+        Optional<SourceJob> live = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
+        return live.isPresent() ? live : this.transactionService.findByJobId(jobId);
     }
 
     /**

@@ -14,6 +14,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -90,6 +91,29 @@ class MeterVerifyRunContractTest {
 
         assertThat(answer.getStatusCodeValue()).isEqualTo(401);
         assertThat(this.json.readTree(this.body(answer)).path("message").asText()).isEqualTo("This run belongs to no workspace.");
+    }
+
+    /**
+     * Owner rule "keep the bill" (2026-09-24): the run row and its token are the proof, not the job's current status.
+     * A run whose job was deleted after it started -- the job marked Delete, its runs' rows too -- still verifies, so
+     * the meter records the minutes the run reports; and the workspace named is the run's own (stamped on the row when
+     * it was made), which holds even when the job's row cannot be found.
+     */
+    @Test
+    void aRunWhoseJobWasDeletedMidRunStillVerifiesSoItsUsageIsBilled() throws Exception {
+        when(this.tokens.verifyForReport(2600L, 6000L, "tok")).thenReturn(Optional.empty());
+        JobQueue queued = new JobQueue();
+        queued.setJobQueueId(6000L);
+        queued.setJobId(2600L);
+        queued.setTenantId(2905L);
+        queued.setStatus(process.model.enums.Status.Delete);
+        when(this.runs.findById(6000L)).thenReturn(Optional.of(queued));
+        lenient().when(this.jobs.findById(2600L)).thenReturn(Optional.empty());
+
+        ResponseEntity<?> answer = this.api.verifyRun("tok", run(2600L, 6000L));
+
+        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(this.json.readTree(this.body(answer)).path("data").path("tenantId").asLong()).isEqualTo(2905L);
     }
 
     @Test
