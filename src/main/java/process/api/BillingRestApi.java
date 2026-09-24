@@ -439,10 +439,10 @@ public class BillingRestApi {
         return this.answer("Rate card read.", () -> version != null ? this.meter.rateCard(version) : this.meter.rateCardFor(scoped, on));
     }
 
-    /** Every version, newest first: the default cards and the ones a workspace has of its own. */
+    /** Every version, newest first: the default cards and the ones a workspace has of its own. Platform admin. */
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/rateCards", method = RequestMethod.GET)
     public ResponseEntity<?> rateCards() {
-        if (!TenantContext.isPlatformAdmin()) return this.refused("Only the platform reads the rate cards.");
         return this.answer("Rate cards read.", () -> {
             Map<String, Object> out = this.meter.rateCards();
             Map<Long, String> tenantNames = this.billing.tenantNames();
@@ -462,21 +462,39 @@ public class BillingRestApi {
      * A new version of the calculation. Nothing is edited in place: the version saved here prices
      * every bill drafted for a period from its effective date on, for the workspace it names or,
      * without one, for every workspace that has no card of its own. Bills already drafted keep
-     * the version they were priced with.
+     * the version they were priced with. Platform admin.
      */
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/rateCard", method = RequestMethod.PUT)
     public ResponseEntity<?> saveRateCard(@RequestBody Map<String, Object> card) {
-        if (!TenantContext.isPlatformAdmin()) return this.refused("Only the platform changes the calculation.");
         Object name = card.get("name");
         if (name == null || String.valueOf(name).trim().isEmpty()) return this.refused("Give the version a name -- what changed, or who it is for.");
         if (card.get("effective_from") == null) return this.refused("Say when the version takes effect.");
         return this.answer("Rate card version saved.", () -> this.meter.saveRateCard(card));
     }
 
-    /** Rolls the last two days again, for a Refresh that wants the latest events priced now. */
+    /**
+     * Rolls every workspace's last two days again. Platform admin: it was open to any tenant admin,
+     * whose Refresh then re-priced the whole platform (DEF-022). A workspace admin refreshes their own.
+     */
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @RequestMapping(value = "/refresh", method = RequestMethod.POST)
     public ResponseEntity<?> refresh() {
         return this.answer("Rolled up.", () -> this.meter.rollup(48));
+    }
+
+    /** A workspace admin's Refresh: their own workspace's today and yesterday, priced now. */
+    @RequestMapping(value = "/refreshWorkspace", method = RequestMethod.POST)
+    public ResponseEntity<?> refreshWorkspace(@RequestParam(required = false) Long tenantId) {
+        Long scoped = this.scope(tenantId);
+        if (scoped == null) return this.refused("No workspace to refresh.");
+        LocalDate today = LocalDate.now();
+        return this.answer("Rolled up.", () -> {
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("today", this.meter.rollup(scoped, today));
+            out.put("yesterday", this.meter.rollup(scoped, today.minusDays(1)));
+            return out;
+        });
     }
 
     @RequestMapping(value = "/health", method = RequestMethod.GET)

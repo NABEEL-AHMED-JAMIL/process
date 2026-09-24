@@ -41,11 +41,4 @@ public interface BillingNumbers {
         }
         return false;
     }
-
-    /** A number taken under the caller: see {@link #isNumberCollision}. */
-    class Taken extends IllegalStateException {
-        public Taken(Throwable cause) {
-            super(COLLISION, cause);
-        }
-    }
 }

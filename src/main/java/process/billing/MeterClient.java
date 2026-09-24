@@ -129,6 +129,14 @@ public class MeterClient {
         return this.asMap(response.getBody());
     }
 
+    /** One workspace's one day, rolled again: what a workspace admin's Refresh asks for. */
+    public Map<String, Object> rollup(Long tenantId, LocalDate day) {
+        String uri = UriComponentsBuilder.fromHttpUrl(this.url + "/v1/rollup").queryParam("tenantId", tenantId).queryParam("day", day).toUriString();
+        ResponseEntity<String> response = this.http.exchange(uri, HttpMethod.POST, new HttpEntity<>("", this.headers()), String.class);
+        return this.asMap(response.getBody());
+    }
+
+    /** Every workspace with events in the last hours, rolled again: the platform's refresh. */
     public Map<String, Object> rollup(int sinceHours) {
         ResponseEntity<String> response = this.http.exchange(this.url + "/v1/rollup?sinceHours=" + sinceHours, HttpMethod.POST,
             new HttpEntity<>("", this.headers()), String.class);
