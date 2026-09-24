@@ -46,7 +46,7 @@ public class InternalPageAccessRestApi {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
         }
         Object path = body == null ? null : body.get("path");
-        PageGate.Decision decision = this.gate.decide(TenantContext.getUserRole(), TenantContext.getAppUserId(),
+        PageGate.Decision decision = this.gate.decideFresh(TenantContext.getUserRole(), TenantContext.getAppUserId(),
             path == null ? null : path.toString());
         Map<String, Object> answer = new LinkedHashMap<>();
         answer.put("allowed", decision.isAllowed());

@@ -81,6 +81,22 @@ class InternalPageAccessRestApiTest {
         assertThat(ask("/documentConverter.json/convert")).containsEntry("allowed", true);
     }
 
+    /**
+     * MIG-99: the gateway keeps each answer for 15 seconds, the bound ADR-019 promises. If this
+     * endpoint answered from process's own 15-second cache as well, the two would stack and a
+     * revoked page could stay open for up to 30. So the check the gateway asks resolves fresh:
+     * a revocation is refused on the very next ask, and the gateway's TTL is the whole bound.
+     */
+    @Test
+    void aRevokedPageIsRefusedOnTheNextAskNotAfterProcesssOwnCache() {
+        tenantUser(PageKey.TOOLS_CONVERTER);
+        assertThat(ask("/documentConverter.json/convert")).containsEntry("allowed", true);
+
+        when(this.pages.effectivePages(any())).thenReturn(EnumSet.of(PageKey.JOBS));
+
+        assertThat(ask("/documentConverter.json/convert")).containsEntry("allowed", false);
+    }
+
     @Test
     void anUngatedPathPassesAndNoProfileIsRead() {
         TenantContext.set(1001L, "TENANT_USER", 44L, "olivia@a.example");

@@ -5,6 +5,7 @@ import process.model.enums.PageKey;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 /**
  * A person's resolved page set, remembered for a few seconds.
@@ -24,8 +25,19 @@ public class PageAccessCache {
 
     private final ConcurrentHashMap<Long, Entry> entries = new ConcurrentHashMap<>();
 
+    private final LongSupplier clock;
+
+    public PageAccessCache() {
+        this(System::currentTimeMillis);
+    }
+
+    /** A clock of the caller's, so the TTL bound can be asserted to the millisecond (MIG-99, T4). */
+    PageAccessCache(LongSupplier clock) {
+        this.clock = clock;
+    }
+
     public Set<PageKey> get(Long appUserId, Function<Long, Set<PageKey>> resolve) {
-        long now = System.currentTimeMillis();
+        long now = this.clock.getAsLong();
         Entry entry = this.entries.get(appUserId);
         if (entry != null && entry.expiresAt > now) {
             return entry.pages;

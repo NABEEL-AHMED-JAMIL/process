@@ -43,6 +43,19 @@ public class PageGate {
 
     /** The decision for this role and user on this servlet path (without the /api/v1 context). */
     public Decision decide(String userRole, Long appUserId, String servletPath) {
+        return this.decide(userRole, appUserId, servletPath, true);
+    }
+
+    /**
+     * The same decision read straight from the database, for the gateway (MIG-99). The gateway keeps
+     * each answer for the 15-second TTL itself; answering it from this instance's cache as well would
+     * stack two TTLs, and a revoked page could stay open for up to 30 seconds through the gateway.
+     */
+    public Decision decideFresh(String userRole, Long appUserId, String servletPath) {
+        return this.decide(userRole, appUserId, servletPath, false);
+    }
+
+    private Decision decide(String userRole, Long appUserId, String servletPath, boolean cached) {
         if (!UserRole.TENANT_USER.name().equals(userRole)) {
             return ALLOWED;
         }
@@ -50,7 +63,8 @@ public class PageGate {
         if (gating.isEmpty()) {
             return ALLOWED;
         }
-        Set<PageKey> held = appUserId == null ? EnumSet.noneOf(PageKey.class) : this.pagesFor(appUserId);
+        Set<PageKey> held = appUserId == null ? EnumSet.noneOf(PageKey.class)
+            : cached ? this.cache.get(appUserId, this::resolve) : this.resolve(appUserId);
         for (PageKey page : gating) {
             if (held.contains(page)) {
                 return ALLOWED;
@@ -60,8 +74,8 @@ public class PageGate {
             gating.iterator().next().getLabel()));
     }
 
-    private Set<PageKey> pagesFor(Long appUserId) {
-        return this.cache.get(appUserId, id -> this.appUserRepository.findById(id)
-            .map(this.pageAccessService::effectivePages).orElse(EnumSet.noneOf(PageKey.class)));
+    private Set<PageKey> resolve(Long appUserId) {
+        return this.appUserRepository.findById(appUserId)
+            .map(this.pageAccessService::effectivePages).orElse(EnumSet.noneOf(PageKey.class));
     }
 }
