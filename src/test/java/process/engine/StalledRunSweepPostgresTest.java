@@ -47,7 +47,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * And the lock, against a real shedlock table, configured exactly as ProcessConfig configures it and
  * with the durations read off ProcessCron's own @SchedulerLock: a second instance cannot run the
  * sweep while the first holds it (lockAtMostFor 5 minutes), nor straight after it finishes
- * (lockAtLeastFor 5 seconds).
+ * (lockAtLeastFor 30 seconds: since MIG-132 every replica fires on the same cron tick, and the lock
+ * covers the skew between their clocks -- ReconcileOncePerTickTest).
  *
  * Opt-in, like EtlJobChangelogPostgresTest: runs when NOTIFICATIONS_TEST_DB_URL and its user and
  * password point at a Postgres server; builds a throwaway database and drops it after.
@@ -197,7 +198,7 @@ class StalledRunSweepPostgresTest {
         Duration atMost = shedLockDuration(annotation.lockAtMostFor());
         Duration atLeast = shedLockDuration(annotation.lockAtLeastFor());
         assertThat(atMost).isEqualTo(Duration.ofMinutes(5));
-        assertThat(atLeast).isEqualTo(Duration.ofSeconds(5));
+        assertThat(atLeast).isEqualTo(Duration.ofSeconds(30));
         LockConfiguration config = new LockConfiguration(annotation.name(), atMost, atLeast);
 
         Optional<SimpleLock> first = instance().lock(config);

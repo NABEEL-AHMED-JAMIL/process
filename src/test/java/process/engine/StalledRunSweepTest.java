@@ -310,17 +310,19 @@ class StalledRunSweepTest {
 
     /**
      * A quarter-hour apart under its own lock: it exists to catch something already stuck for six hours,
-     * so noticing within fifteen minutes is ample and keeps a table scan off the minute cycle.
+     * so noticing within fifteen minutes is ample and keeps a table scan off the minute cycle. On the
+     * clock since MIG-132, so every replica fires at the same tick and the lock lets one sweep
+     * (ReconcileOncePerTickTest replays the scheduling).
      */
     @Test
     void theCronRunsEveryFifteenMinutesUnderItsOwnLock() throws Exception {
         Method cron = ProcessCron.class.getMethod("reconcileStalledRuns");
         Scheduled scheduled = cron.getAnnotation(Scheduled.class);
-        assertThat(scheduled.initialDelay()).isEqualTo(30_000L);
-        assertThat(scheduled.fixedDelay()).isEqualTo(900_000L);
+        assertThat(scheduled.cron()).isEqualTo("${process.reconcile.cron:0 */15 * * * *}");
+        assertThat(scheduled.fixedDelay()).isEqualTo(-1L);
         SchedulerLock lock = cron.getAnnotation(SchedulerLock.class);
         assertThat(lock.name()).isEqualTo("reconcileStalledRuns");
-        assertThat(lock.lockAtLeastFor()).isEqualTo("5S");
+        assertThat(lock.lockAtLeastFor()).isEqualTo("30S");
         assertThat(lock.lockAtMostFor()).isEqualTo("5M");
 
         ProducerBulkEngine delegate = mock(ProducerBulkEngine.class);
