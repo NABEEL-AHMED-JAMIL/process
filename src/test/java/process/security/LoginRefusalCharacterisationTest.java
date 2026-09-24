@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -91,7 +90,7 @@ class LoginRefusalCharacterisationTest {
     }
 
     private void accountIs(AppUser user) {
-        when(this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), eq(Status.Delete)))
+        when(this.appUserRepository.findLiveByUsernameIgnoringCase(anyString()))
             .thenReturn(Optional.ofNullable(user));
     }
 

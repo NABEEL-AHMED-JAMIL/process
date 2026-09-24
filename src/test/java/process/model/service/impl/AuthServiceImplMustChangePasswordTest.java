@@ -78,7 +78,7 @@ public class AuthServiceImplMustChangePasswordTest {
     }
 
     private ResponseDto login(AppUser user) throws Exception {
-        when(this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(USERNAME, Status.Delete))
+        when(this.appUserRepository.findLiveByUsernameIgnoringCase(USERNAME))
             .thenReturn(Optional.of(user));
         when(this.passwordEncoder.matches(PASSWORD, user.getPassword())).thenReturn(true);
         when(this.jwtUtil.generateAccessToken(any(AppUser.class))).thenReturn("access");

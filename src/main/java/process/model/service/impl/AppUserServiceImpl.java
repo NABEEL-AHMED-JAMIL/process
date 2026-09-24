@@ -193,7 +193,9 @@ public class AppUserServiceImpl implements AppUserService {
         if (!isNull(targetTenantId) && !this.tenantRepository.findById(targetTenantId).isPresent()) {
             return new ResponseDto(ERROR, String.format("Tenant not found with %d.", targetTenantId));
         }
-        if (this.appUserRepository.findByUsernameAndStatusNot(appUserDto.getUsername().trim(), Status.Delete).isPresent()) {
+        // Taken in any case, in any tenant, by any row: a name that differs only by case is the same
+        // sign-in, and letting it be created beside the first was an account takeover (MIG-17).
+        if (this.appUserRepository.isUsernameTaken(appUserDto.getUsername().trim())) {
             return new ResponseDto(ERROR, String.format("Username \"%s\" is already in use.", appUserDto.getUsername().trim()));
         }
         // Blank means the server picks one. That is the better path -- it is random, it is

@@ -79,8 +79,9 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // The name is an e-mail address, and e-mail addresses are not case-sensitive: the
-        // person who typed a capital in theirs is the same person.
-        Optional<AppUser> userOpt = this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(username, Status.Delete);
+        // person who typed a capital in theirs is the same person. One row at most -- a name is
+        // unique ignoring case across the platform (MIG-17) -- so login no longer picks one of two.
+        Optional<AppUser> userOpt = this.appUserRepository.findLiveByUsernameIgnoringCase(username);
 
         // The password is checked BEFORE anything is said about the account, and checked even
         // when there is no account -- against a hash that matches nothing -- so a wrong name

@@ -99,7 +99,7 @@ public class TenantSeedService {
      * Returns null when nothing was seeded, which is not an error -- it is the safe outcome.
      */
     private AppUser ensurePlatformAdmin() {
-        Optional<AppUser> existing = this.appUserRepository.findByUsernameAndStatusNot(PLATFORM_ADMIN_USERNAME, Status.Delete);
+        Optional<AppUser> existing = this.appUserRepository.findLiveByUsernameIgnoringCase(PLATFORM_ADMIN_USERNAME);
         if (existing.isPresent()) {
             return existing.get();
         }

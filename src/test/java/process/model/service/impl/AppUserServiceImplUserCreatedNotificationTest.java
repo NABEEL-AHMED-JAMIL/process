@@ -94,8 +94,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
         tenant.setTenantId(TENANT_A);
         tenant.setTenantName("Acme");
         lenient().when(this.tenantRepository.findById(TENANT_A)).thenReturn(Optional.of(tenant));
-        lenient().when(this.appUserRepository.findByUsernameAndStatusNot(anyString(), eq(Status.Delete)))
-            .thenReturn(Optional.empty());
+        lenient().when(this.appUserRepository.isUsernameTaken(anyString())).thenReturn(false);
         lenient().when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete))
             .thenReturn(Collections.emptyList());
         lenient().when(this.appUserRepository.findAll()).thenReturn(Collections.emptyList());

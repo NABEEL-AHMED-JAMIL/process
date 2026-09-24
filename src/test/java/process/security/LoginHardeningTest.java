@@ -21,7 +21,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -90,12 +89,12 @@ class LoginHardeningTest {
     }
 
     private void accountExists(AppUser user) {
-        when(this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), eq(Status.Delete)))
+        when(this.appUserRepository.findLiveByUsernameIgnoringCase(anyString()))
             .thenReturn(Optional.of(user));
     }
 
     private void noSuchAccount() {
-        when(this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), eq(Status.Delete)))
+        when(this.appUserRepository.findLiveByUsernameIgnoringCase(anyString()))
             .thenReturn(Optional.empty());
     }
 
@@ -127,8 +126,9 @@ class LoginHardeningTest {
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         // The case rule lives in the repository method, not in the service: pin that this is the
         // method asked. Swapping it for findByUsername would reintroduce the original defect
-        // while every other assertion here still passed.
-        verify(this.appUserRepository).findFirstByUsernameIgnoreCaseAndStatusNot("EMILY@Example.COM", Status.Delete);
+        // while every other assertion here still passed. The query itself is proved against
+        // Postgres in UsernameUniquenessPostgresTest (MIG-17).
+        verify(this.appUserRepository).findLiveByUsernameIgnoringCase("EMILY@Example.COM");
     }
 
     @Test
@@ -139,7 +139,7 @@ class LoginHardeningTest {
 
         this.signIn("  " + KNOWN_NAME + "  ", "right");
 
-        verify(this.appUserRepository).findFirstByUsernameIgnoreCaseAndStatusNot(KNOWN_NAME, Status.Delete);
+        verify(this.appUserRepository).findLiveByUsernameIgnoringCase(KNOWN_NAME);
     }
 
     // -- what an unknown name costs -------------------------------------------------------
@@ -220,7 +220,7 @@ class LoginHardeningTest {
 
         // The lock is checked before the lookup, so a locked name costs no query and no hash.
         verify(this.appUserRepository, times(LoginAttemptGuard.MAX_FAILURES))
-            .findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), eq(Status.Delete));
+            .findLiveByUsernameIgnoringCase(anyString());
     }
 
     @Test
@@ -301,6 +301,6 @@ class LoginHardeningTest {
         assertThat(noPassword.getMessage()).isEqualTo("Username and password are required.");
         assertThat(noName.getMessage()).isEqualTo("Username and password are required.");
         verify(this.appUserRepository, times(0))
-            .findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), any());
+            .findLiveByUsernameIgnoringCase(anyString());
     }
 }
