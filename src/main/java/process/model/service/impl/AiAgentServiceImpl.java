@@ -1,14 +1,12 @@
 package process.model.service.impl;
 
-import org.barco.platform.correlation.CorrelationId;
 import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.RequestUsageKey;
 import org.barco.platform.meter.UsageEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.context.request.RequestAttributes;
-import org.springframework.web.context.request.RequestContextHolder;
 import process.ai.AiEndpointPolicy;
 import process.ai.AiProviderGateway;
 import process.ai.PromptRunner;
@@ -25,7 +23,6 @@ import process.model.service.AiAgentService;
 import process.security.TenantContext;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
@@ -159,7 +156,7 @@ public class AiAgentServiceImpl implements AiAgentService {
             this.logger.warn("ad-hoc model call for workspace {} on {}: the provider reported no usage, so none is metered", tenantId, model);
             return;
         }
-        String key = adHocKey();
+        String key = RequestUsageKey.next("ai-adhoc");
         if (chat.tokensIn > 0) {
             this.meter.report(UsageEvent.of(tenantId, Meter.AI_TOKENS_IN, chat.tokensIn, key + "#in")
                 .subject("ad-hoc", model).actor(TenantContext.getAppUserId()).source("console").note(model));
@@ -168,22 +165,6 @@ public class AiAgentServiceImpl implements AiAgentService {
             this.meter.report(UsageEvent.of(tenantId, Meter.AI_TOKENS_OUT, chat.tokensOut, key + "#out")
                 .subject("ad-hoc", model).actor(TenantContext.getAppUserId()).source("console").note(model));
         }
-    }
-
-    private static final String AD_HOC_ORDINAL = AiAgentServiceImpl.class.getName() + ".adHocOrdinal";
-    private static final AtomicLong OUTSIDE_A_REQUEST = new AtomicLong();
-
-    /** "ai-adhoc#{correlation id}#{n}": the n-th ad-hoc call of this request. */
-    static String adHocKey() {
-        RequestAttributes request = RequestContextHolder.getRequestAttributes();
-        String correlation = CorrelationId.current();
-        if (request == null || correlation == null) {
-            return "ai-adhoc#at" + System.currentTimeMillis() + "#" + OUTSIDE_A_REQUEST.incrementAndGet();
-        }
-        Object seen = request.getAttribute(AD_HOC_ORDINAL, RequestAttributes.SCOPE_REQUEST);
-        int ordinal = seen instanceof Integer ? (Integer) seen + 1 : 1;
-        request.setAttribute(AD_HOC_ORDINAL, ordinal, RequestAttributes.SCOPE_REQUEST);
-        return "ai-adhoc#" + correlation + "#" + ordinal;
     }
 
     private ResponseDto validateAdHoc(AdHocPromptRequestDto dto) {

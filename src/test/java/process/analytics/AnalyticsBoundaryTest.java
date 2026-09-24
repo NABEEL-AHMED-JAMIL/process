@@ -86,7 +86,11 @@ public class AnalyticsBoundaryTest {
         // across its own front door is part of that door's vocabulary, the same way the enums and
         // DTOs excluded above are, and the alternative is 24 controllers each repeating the same
         // catch with nothing to catch the twenty-fifth.
-        "process.config.GlobalExceptionHandler"));
+        "process.config.GlobalExceptionHandler",
+        // The run history's metering (MIG-104): how many bytes a scan read is analytics's own answer --
+        // DatasetBytes sizes a dataset as DuckDB expands it -- and recordRun is where a run is billed.
+        // One type, one call, the same shape as AnalyticsDatasetServiceImpl -> DatasetResolver.
+        "process.model.service.impl.AnalyticsQueryLibraryServiceImpl"));
 
     private static List<File> javaFilesUnder(File root) {
         List<File> found = new ArrayList<File>();

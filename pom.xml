@@ -40,7 +40,7 @@
         <dependency>
             <groupId>org.barco</groupId>
             <artifactId>notifications-contract</artifactId>
-            <version>1.4.0</version>
+            <version>1.5.0</version>
         </dependency>
 
         <dependency>
@@ -243,13 +243,13 @@
         </dependency>
 
 
-        <!-- platform-commons directly, at 1.4.0: ObjectChanged, Storage's announcement to Media (ADR-013), and
+        <!-- platform-commons directly, at 1.5.0: ObjectChanged, Storage's announcement to Media (ADR-013), and
              the one meter vocabulary and reporter every service reports usage through (MIG-80).
              It overrides the 1.1.0 the notifications contract brings. -->
         <dependency>
             <groupId>org.barco</groupId>
             <artifactId>platform-commons</artifactId>
-            <version>1.4.0</version>
+            <version>1.5.0</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

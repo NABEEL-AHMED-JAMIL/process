@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import process.analytics.DatasetBytes;
 import process.model.dto.ResponseDto;
 import process.model.pojo.AnalyticsDashboardWidget;
 import process.model.pojo.AnalyticsQuery;
@@ -47,6 +48,10 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
     /** The meter, when the console has one; optional so hand-built instances in tests need none. */
     @Autowired(required = false)
     private MeterClient meter;
+
+    /** How many bytes a scan reads, for analytics.gb_scanned; optional as the meter is. */
+    @Autowired(required = false)
+    private DatasetBytes datasetBytes;
 
     private final Logger logger = LoggerFactory.getLogger(AnalyticsQueryLibraryServiceImpl.class);
 
@@ -318,6 +323,10 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
             record.setAnalyticsQueryId(this.linkedQueryId(run.getAnalyticsQueryId()));
             record.setConnectionAlias(run.getConnectionAlias().trim());
             record.setDatasetPath(run.getDatasetPath().trim());
+            // A join's second location. The controller has named it since the history was made to say
+            // "who read what" for two-file queries, and this copy dropped it, so the row still named one.
+            record.setSecondConnectionAlias(isBlank(run.getSecondConnectionAlias()) ? null : run.getSecondConnectionAlias().trim());
+            record.setSecondDatasetPath(isBlank(run.getSecondDatasetPath()) ? null : run.getSecondDatasetPath().trim());
             record.setQueryText(run.getQueryText());
             record.setRunStatus(run.getRunStatus().trim());
             record.setRowCount(run.getRowCount());
@@ -328,12 +337,54 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
             if (this.meter != null && saved.getTenantId() != null) {
                 this.meter.report(UsageEvent.of(saved.getTenantId(), Meter.ANALYTICS_QUERIES, 1, "analytics-run#" + saved.getAnalyticsQueryRunId())
                     .subject("dataset", saved.getDatasetPath()).actor(TenantContext.getAppUserId()).source("console").note(saved.getRunStatus()));
+                this.meterScan(saved);
             }
             return saved;
         } catch (Exception ex) {
             this.logger.error("An error occurred while recording an analytics query run.", ex);
             return null;
         }
+    }
+
+    /**
+     * The GB a successful scan read, billed as analytics.gb_scanned (MIG-104, the owner's decision): both
+     * datasets of a join, priced per GB by the card (unit GB, per 1), so bytes / 2^30. A schema read and a
+     * preview page sample the file rather than scan it and bill no scan; a size Storage cannot give bills
+     * nothing rather than a guess. Keyed by the run row, like analytics.queries.
+     */
+    private void meterScan(AnalyticsQueryRun saved) {
+        if (this.datasetBytes == null || !AnalyticsQueryRun.STATUS_SUCCESS.equals(saved.getRunStatus()) || !scans(saved.getQueryText())) {
+            return;
+        }
+        long bytes = 0;
+        int objects = 0;
+        boolean complete = true;
+        String[][] read = {{saved.getConnectionAlias(), saved.getDatasetPath()}, {saved.getSecondConnectionAlias(), saved.getSecondDatasetPath()}};
+        for (String[] dataset : read) {
+            if (isBlank(dataset[1])) {
+                continue;
+            }
+            Optional<DatasetBytes.Size> size = this.datasetBytes.of(dataset[0], dataset[1]);
+            if (!size.isPresent()) {
+                this.logger.warn("analytics run {}: the size of {} is unknown, so its scan is not billed", saved.getAnalyticsQueryRunId(), dataset[1]);
+                return;
+            }
+            bytes += size.get().bytes;
+            objects += size.get().objects;
+            complete &= size.get().complete;
+        }
+        if (bytes <= 0) {
+            return;
+        }
+        this.meter.report(UsageEvent.of(saved.getTenantId(), Meter.ANALYTICS_GB_SCANNED, UsageEvent.gb(bytes), "analytics-run#" + saved.getAnalyticsQueryRunId() + "#gb")
+            .subject("dataset", saved.getDatasetPath()).actor(TenantContext.getAppUserId()).source("console")
+            .note(objects + (objects == 1 ? " object" : " objects") + (complete ? "" : ", partial: past the listing cap")));
+    }
+
+    /** A statement, profile, distribution or overview scans the data; a schema read or a preview page samples it. */
+    static boolean scans(String queryText) {
+        String text = queryText == null ? "" : queryText.trim();
+        return !(text.startsWith("-- schema") || text.startsWith("-- preview"));
     }
 
     /**
