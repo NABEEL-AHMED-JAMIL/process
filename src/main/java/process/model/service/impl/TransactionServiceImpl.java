@@ -158,8 +158,9 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findById(jobQueueId);
     }
 
-    public List<Scheduler> findDueSchedulers(LocalDateTime now) {
-        return this.schedulerRepository.findDueSchedulers(now);
+    /** For the caller's transaction: see SchedulerRepository.claimNextDueScheduler. */
+    public Optional<Scheduler> claimNextDueScheduler(LocalDateTime now, List<Long> passed) {
+        return this.schedulerRepository.claimNextDueScheduler(now, passed);
     }
 
     public List<JobQueue> findAllJobForTodayWithLimit(Long limit, LocalDateTime eligibleAt) {
@@ -168,6 +169,31 @@ public class TransactionServiceImpl {
 
     public List<JobQueue> findStalledRuns(LocalDateTime startedBefore) {
         return this.jobQueueRepository.findStalledRuns(startedBefore);
+    }
+
+    /** For the caller's transaction: see JobQueueRepository.findRunsToPrepare. */
+    public List<Long> claimRunsToPrepare(LocalDateTime now, int limit, LocalDateTime leaseUntil) {
+        List<Long> ids = this.jobQueueRepository.findRunsToPrepare(now, limit);
+        if (!ids.isEmpty()) {
+            this.jobQueueRepository.leaseForPreparation(ids, leaseUntil);
+        }
+        return ids;
+    }
+
+    public int markPrepared(Long jobQueueId, String payload, LocalDateTime at, String correlationId) {
+        return this.jobQueueRepository.markPrepared(jobQueueId, payload, at, correlationId);
+    }
+
+    public String findOrchestrationSetting(String settingKey) {
+        return this.jobQueueRepository.findOrchestrationSetting(settingKey);
+    }
+
+    public List<JobQueue> findRunsWithRefusedCallbacks() {
+        return this.jobQueueRepository.findRunsWithRefusedCallbacks();
+    }
+
+    public int noteRefusedCallback(Long jobQueueId, LocalDateTime refusedAt, String reportedStatus) {
+        return this.jobQueueRepository.noteRefusedCallback(jobQueueId, refusedAt, reportedStatus);
     }
 
     public void saveJobQueue(JobQueue jobQueue) {

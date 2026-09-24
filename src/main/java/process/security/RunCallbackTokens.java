@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.barco.platform.correlation.CorrelationId;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
 import process.model.repository.JobQueueRepository;
@@ -90,6 +91,12 @@ public class RunCallbackTokens {
         jobQueue.setCallbackTokenHash(sha256(token));
         jobQueue.setCallbackTokenAttempt(Math.max(1, jobQueue.getAttempt()));
         jobQueue.setCallbackTokenExpiresAt(LocalDateTime.now().plusHours(this.budgetHours));
+        // In the same write as the hash (MIG-95): the dispatch's id if one is bound, otherwise a new
+        // one, and a retry keeps the id its first dispatch was given -- it is the same piece of work.
+        if (jobQueue.getCorrelationId() == null) {
+            String current = CorrelationId.current();
+            jobQueue.setCorrelationId(CorrelationId.isAcceptable(current) ? current : CorrelationId.generate());
+        }
         this.jobQueueRepository.save(jobQueue);
         return token;
     }
@@ -127,22 +134,28 @@ public class RunCallbackTokens {
         if (jobId == null || !jobId.equals(run.getJobId())) {
             return Optional.of(Refusal.WRONG_JOB);
         }
-        if (refuseWhenOver && run.getJobStatus() != null && OVER.contains(run.getJobStatus())) {
-            return Optional.of(Refusal.RUN_OVER);
-        }
+        // The token first, then what the run's state says about it. RUN_OVER and EXPIRED are thereby
+        // only ever the verdict on the run's OWN token: a caller who merely knows the ids is told
+        // MISMATCH or NOT_ISSUED whatever the run is doing. The caller still sees one uniform 401; the
+        // order matters to what the server may do on the strength of a refusal -- answer a finished
+        // run's redelivered callback from its receipt (MIG-18), or take a genuine but expired report
+        // as evidence the worker is done (MIG-63).
         String token = presented == null ? "" : presented.trim();
         if (run.getCallbackTokenHash() == null) {
             // Dispatched before tokens existed: the shared secret is the only proof it can carry.
-            if (!this.legacyToken.isEmpty() && constantTimeEquals(this.legacyToken, token)) {
-                return Optional.empty();
+            if (this.legacyToken.isEmpty() || !constantTimeEquals(this.legacyToken, token)) {
+                return Optional.of(Refusal.NOT_ISSUED);
             }
-            return Optional.of(Refusal.NOT_ISSUED);
+        } else {
+            if (token.isEmpty() || !constantTimeEquals(run.getCallbackTokenHash(), sha256(token))) {
+                return Optional.of(Refusal.MISMATCH);
+            }
+            if (run.getCallbackTokenExpiresAt() != null && LocalDateTime.now().isAfter(run.getCallbackTokenExpiresAt())) {
+                return Optional.of(Refusal.EXPIRED);
+            }
         }
-        if (run.getCallbackTokenExpiresAt() != null && LocalDateTime.now().isAfter(run.getCallbackTokenExpiresAt())) {
-            return Optional.of(Refusal.EXPIRED);
-        }
-        if (token.isEmpty() || !constantTimeEquals(run.getCallbackTokenHash(), sha256(token))) {
-            return Optional.of(Refusal.MISMATCH);
+        if (refuseWhenOver && run.getJobStatus() != null && OVER.contains(run.getJobStatus())) {
+            return Optional.of(Refusal.RUN_OVER);
         }
         return Optional.empty();
     }
@@ -170,6 +183,32 @@ public class RunCallbackTokens {
             this.jobQueueRepository.save(run);
             logger.debug("Retired the callback token for run {}; good for reports until {}.", jobQueueId, run.getCallbackTokenExpiresAt());
         });
+    }
+
+    /**
+     * The id a run's dispatch was logged under, and its tenant, for a callback that echoed no id of its
+     * own (MIG-95). Read only once the callback's token has been found to be the run's own, so a caller
+     * who merely knows a run id learns nothing from the answer's X-Correlation-Id.
+     */
+    @Transactional(readOnly = true)
+    public Optional<RunCorrelation> correlationOf(Long jobQueueId) {
+        if (jobQueueId == null) {
+            return Optional.empty();
+        }
+        return this.jobQueueRepository.findById(jobQueueId).map(run -> new RunCorrelation(run.getCorrelationId(),
+            run.getSourceJob() == null ? null : run.getSourceJob().getTenantId()));
+    }
+
+    /** What a callback is logged under: its dispatch's correlation id, and the run's tenant. */
+    public static final class RunCorrelation {
+
+        public final String correlationId;
+        public final Long tenantId;
+
+        public RunCorrelation(String correlationId, Long tenantId) {
+            this.correlationId = correlationId;
+            this.tenantId = tenantId;
+        }
     }
 
     static String sha256(String value) {

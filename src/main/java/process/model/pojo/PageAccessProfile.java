@@ -58,7 +58,7 @@ public class PageAccessProfile implements Audited {
         name = "pageAccessProfileSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "page_access_profile_Seq"),
+            @Parameter(name = "sequence_name", value = "page_access_profile_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }

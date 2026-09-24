@@ -44,11 +44,17 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
         + "LEFT JOIN FETCH st.sourceTaskType WHERE sj.jobStatus IN (?1, ?2)")
     public List<SourceJob> findAllActiveAndInactiveJobs(Status activeStatus, Status inactiveStatus, Sort sort);
 
+    /**
+     * The live job event, for every job-state change (MIG-151): one read of Core's own tables. The
+     * owner's username is source_job.assigned_username, which the database keeps with the assignee
+     * (V85) -- it used to be a join to app_user, a table that leaves Core with Identity, on a path that
+     * runs per event. The primary key serves job_id IN (...); the ACTIVE test is a filter on the few
+     * rows that finds. A job with no username still reads: the push goes out by user id.
+     */
     @Query(value = "select sj.job_id as jobId, sj.job_status as jobStatus, sj.job_running_status as jobRunningStatus," +
         "sj.last_job_run as lastJobRun, sc.next_run_at as nextRunAt, sj.execution as execution," +
-        "au.username as assignedUsername, sj.assigned_user_id as assignedUserId, sj.tenant_id as tenantId, sj.job_name as jobName\n" +
+        "sj.assigned_username as assignedUsername, sj.assigned_user_id as assignedUserId, sj.tenant_id as tenantId, sj.job_name as jobName\n" +
         "from source_job sj left join scheduler sc on sc.job_id = sj.job_id\n" +
-        "left join app_user au on au.app_user_id = sj.assigned_user_id\n" +
         "where sj.job_id in (?1) and UPPER(sj.job_status) = 'ACTIVE'", nativeQuery = true)
     public List<SourceJobProjection> fetchRunningJobEvent(List<Long> jobIds);
 

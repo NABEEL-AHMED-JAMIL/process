@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 80.0-worker-callback-receipts
+      author: nabeel.amd93
+      description: "worker_callback_receipt: one row per (run, idempotency key), so a redelivered worker callback is answered, not re-applied (MIG-33, MIG-18)"
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE TABLE worker_callback_receipt (
+                  job_queue_id     BIGINT        NOT NULL,
+                  idempotency_key  VARCHAR(128)  NOT NULL,
+                  request          VARCHAR(64)   NOT NULL,
+                  outcome_status   VARCHAR(32),
+                  outcome_message  TEXT,
+                  received_at      TIMESTAMP     NOT NULL,
+                  PRIMARY KEY (job_queue_id, idempotency_key)
+              );
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE INDEX idx_worker_callback_receipt_received_at ON worker_callback_receipt (received_at);
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP TABLE IF EXISTS public.worker_callback_receipt;

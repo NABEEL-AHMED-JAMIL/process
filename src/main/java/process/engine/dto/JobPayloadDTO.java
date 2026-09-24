@@ -23,6 +23,11 @@ public class JobPayloadDTO {
      */
     private String callbackToken;
     private Integer attempt;
+    /**
+     * The id this run's dispatch was logged under (MIG-95). A worker should echo it as X-Correlation-Id
+     * on its callbacks; one that does not is still logged under it, resolved from the run.
+     */
+    private String correlationId;
 
     public JobPayloadDTO() {
     }
@@ -73,6 +78,14 @@ public class JobPayloadDTO {
 
     public void setPriority(Integer priority) {
         this.priority = priority;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
     }
 
     @Override

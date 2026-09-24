@@ -19,6 +19,10 @@ import process.util.ProcessUtil;
 @PreAuthorize("hasRole('TENANT_USER')")
 public class DashboardRestApi {
 
+    // No try/catch per endpoint (MIG-103): each one caught everything and answered 500, so a
+    // malformed date looked exactly like a dead connection pool. GlobalExceptionHandler decides --
+    // a RequestRefused is a 200 carrying ERROR and its sentence, anything else the fixed 500.
+
     private Logger logger = LoggerFactory.getLogger(DashboardRestApi.class);
 
     private final DashboardService dashboardService;
@@ -30,74 +34,44 @@ public class DashboardRestApi {
     @RequestMapping(value = "/jobStatusStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> jobStatusStatistics(
         @RequestParam(name = "startDate", required = false) String startDate,
-        @RequestParam(name = "endDate", required = false) String endDate) {
-        try {
-            return new ResponseEntity<>(this.dashboardService.jobStatusStatistics(startDate, endDate), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while jobStatusStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        @RequestParam(name = "endDate", required = false) String endDate) throws Exception {
+        return new ResponseEntity<>(this.dashboardService.jobStatusStatistics(startDate, endDate), HttpStatus.OK);
     }
 
     /** Per-user totals for the people dashboard: what each user owns and how it has gone. */
     @RequestMapping(value = "/userStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> userStatistics(
         @RequestParam(name = "startDate", required = false) String startDate,
-        @RequestParam(name = "endDate", required = false) String endDate) {
-        try {
-            return new ResponseEntity<>(this.dashboardService.userStatistics(startDate, endDate), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while userStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        @RequestParam(name = "endDate", required = false) String endDate) throws Exception {
+        return new ResponseEntity<>(this.dashboardService.userStatistics(startDate, endDate), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/jobRunningStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> jobRunningStatistics(
         @RequestParam(name = "startDate", required = false) String startDate,
-        @RequestParam(name = "endDate", required = false) String endDate) {
-        try {
-            return new ResponseEntity<>(this.dashboardService.jobRunningStatistics(startDate, endDate), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while jobRunningStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        @RequestParam(name = "endDate", required = false) String endDate) throws Exception {
+        return new ResponseEntity<>(this.dashboardService.jobRunningStatistics(startDate, endDate), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/weeklyRunningJobStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyRunningJobStatistics(
         @RequestParam(name = "startDate") String startDate,
-        @RequestParam(name = "endDate") String endDate) {
-        try {
-            return new ResponseEntity<>(this.dashboardService.weeklyRunningJobStatistics(startDate, endDate), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while weeklyJobRunningStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        @RequestParam(name = "endDate") String endDate) throws Exception {
+        return new ResponseEntity<>(this.dashboardService.weeklyRunningJobStatistics(startDate, endDate), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/weeklyHrsRunningJobStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrsRunningJobStatistics(
         @RequestParam(name = "startDate") String startDate,
-        @RequestParam(name = "endDate") String endDate) {
-        try {
-            return new ResponseEntity<>(this.dashboardService.weeklyHrsRunningJobStatistics(startDate, endDate), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while weeklyHrsRunningJobStatistics ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        @RequestParam(name = "endDate") String endDate) throws Exception {
+        return new ResponseEntity<>(this.dashboardService.weeklyHrsRunningJobStatistics(startDate, endDate), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimension", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrRunningStatisticsDimension(
         @RequestParam(name = "targetDate") String targetDate,
-        @RequestParam(name = "targetHr") Long targetHr) {
-        try {
-            return new ResponseEntity<>(this.dashboardService.weeklyHrRunningStatisticsDimension(targetDate, targetHr), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while weeklyHrRunningStatisticsDimension ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        @RequestParam(name = "targetHr") Long targetHr) throws Exception {
+        return new ResponseEntity<>(this.dashboardService.weeklyHrRunningStatisticsDimension(targetDate, targetHr), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimensionDetail", method = RequestMethod.GET)
@@ -105,13 +79,8 @@ public class DashboardRestApi {
         @RequestParam(name = "targetDate", required = false) String targetDate,
         @RequestParam(name = "targetHr", required = false) Long targetHr,
         @RequestParam(name = "jobStatus", required = false) String jobStatus,
-        @RequestParam(name = "jobId", required = false) Long jobId) {
-        try {
-            return new ResponseEntity<>(this.dashboardService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while weeklyHrRunningStatisticsDimensionDetail ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        @RequestParam(name = "jobId", required = false) Long jobId) throws Exception {
+        return new ResponseEntity<>(this.dashboardService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId), HttpStatus.OK);
     }
 
 }

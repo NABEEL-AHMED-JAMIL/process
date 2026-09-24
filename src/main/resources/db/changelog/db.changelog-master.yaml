@@ -76,3 +76,21 @@ databaseChangeLog:
       file: db/changelog/yaml/V70.4-retire-task-form-names.yaml
   - include:
       file: db/changelog/yaml/V70.5-seed-reference-lookups.yaml
+  - include:
+      file: db/changelog/yaml/V80.0-worker-callback-receipts.yaml
+  - include:
+      file: db/changelog/yaml/V81.0-refused-callback-on-run.yaml
+  - include:
+      file: db/changelog/yaml/V82.0-job-queue-correlation-id.yaml
+  - include:
+      file: db/changelog/yaml/V83.0-one-in-flight-run-per-job.yaml
+  - include:
+      file: db/changelog/yaml/V84.0-scheduler-dispatch-eligible.yaml
+  - include:
+      file: db/changelog/yaml/V85.0-source-job-assigned-username.yaml
+  - include:
+      file: db/changelog/yaml/V86.0-pre-dispatch-phase.yaml
+  - include:
+      file: db/changelog/yaml/V87.0-dispatch-outbox.yaml
+  - include:
+      file: db/changelog/yaml/V88.0-orchestration-setting.yaml

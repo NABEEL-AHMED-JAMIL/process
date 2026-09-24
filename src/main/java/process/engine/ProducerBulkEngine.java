@@ -3,63 +3,104 @@ package process.engine;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
+import org.barco.platform.correlation.CorrelationId;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 import process.notifications.JobMail;
+import process.outbox.DispatchOutbox;
+import process.outbox.DispatchOutcomes;
 import process.engine.dto.JobPayloadDTO;
 import process.security.RunCallbackTokens;
-import process.ai.AiStepService;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.service.impl.TransactionServiceImpl;
-import process.util.KafkaTopicPartitionUtil;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.function.LongConsumer;
+import java.util.function.LongSupplier;
 import static java.util.Objects.isNull;
 
 /**
  * @author Nabeel Ahmed
  * */
 @Component
-public class ProducerBulkEngine {
-
-    /**
-     * How long one dispatch pass may take. The @SchedulerLock around it is ten minutes, and the
-     * work has to finish inside that or a second instance can claim the same rows. Seven leaves
-     * room for a slow broker without letting the pass outlive its lock.
-     */
-    private static final long DISPATCH_BUDGET_MS = 7 * 60 * 1000L;
+public class ProducerBulkEngine implements DispatchOutcomes {
 
     public Logger logger = LogManager.getLogger(ProducerBulkEngine.class);
 
     private final RunCallbackTokens runCallbackTokens;
-    private final AiStepService aiStepService;
     private final BulkAction bulkAction;
     private final TransactionServiceImpl transactionService;
     private final JobMail jobMail;
-    private final KafkaTemplateProvider kafkaTemplateProvider;
-    private final KafkaConnectionResolver kafkaConnectionResolver;
+    private final DispatchFailures failures;
+    /** Where a dispatched run's hand-off is written, to be published after commit (MIG-136). */
+    private final DispatchOutbox dispatchOutbox;
+    /** One local transaction per enqueued slot and per dispatched run; none for an engine built by hand in a test. */
+    private final TransactionOperations transactions;
+    /** The dispatch pass's clock and pause, so the budget arithmetic can be tested without waiting minutes. */
+    private LongSupplier clock = System::currentTimeMillis;
+    private LongConsumer pause = ProducerBulkEngine::sleep;
 
     public ProducerBulkEngine(BulkAction bulkAction,
         TransactionServiceImpl transactionService,
         JobMail jobMail,
-        KafkaTemplateProvider kafkaTemplateProvider,
-        KafkaConnectionResolver kafkaConnectionResolver,
-        RunCallbackTokens runCallbackTokens, AiStepService aiStepService) {
+        RunCallbackTokens runCallbackTokens,
+        DispatchOutbox dispatchOutbox) {
+        this(bulkAction, transactionService, jobMail, runCallbackTokens, dispatchOutbox,
+            TransactionOperations.withoutTransaction());
+    }
+
+    @Autowired
+    public ProducerBulkEngine(BulkAction bulkAction,
+        TransactionServiceImpl transactionService,
+        JobMail jobMail,
+        RunCallbackTokens runCallbackTokens,
+        DispatchOutbox dispatchOutbox,
+        PlatformTransactionManager transactionManager) {
+        this(bulkAction, transactionService, jobMail, runCallbackTokens, dispatchOutbox, rowTransactions(transactionManager));
+    }
+
+    ProducerBulkEngine(BulkAction bulkAction,
+        TransactionServiceImpl transactionService,
+        JobMail jobMail,
+        RunCallbackTokens runCallbackTokens,
+        DispatchOutbox dispatchOutbox,
+        TransactionOperations transactions) {
+        this.transactions = transactions;
         this.runCallbackTokens = runCallbackTokens;
-        this.aiStepService = aiStepService;
         this.bulkAction = bulkAction;
         this.transactionService = transactionService;
         this.jobMail = jobMail;
-        this.kafkaTemplateProvider = kafkaTemplateProvider;
-        this.kafkaConnectionResolver = kafkaConnectionResolver;
+        this.dispatchOutbox = dispatchOutbox;
+        this.failures = new DispatchFailures(bulkAction, transactionService, jobMail, transactions);
+    }
+
+    /** Bounded, so one row can never take longer than DispatchTiming allows for it. */
+    private static TransactionTemplate rowTransactions(PlatformTransactionManager transactionManager) {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setTimeout(DispatchTiming.ROW_TRANSACTION_TIMEOUT_SECONDS);
+        return template;
+    }
+
+    /** For the timing tests: a fake clock, and a pause that advances it instead of sleeping. */
+    void useClock(LongSupplier clock, LongConsumer pause) {
+        this.clock = clock;
+        this.pause = pause;
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     public void addManualJobInQueue(SourceJob sourceJob) {
@@ -122,17 +163,38 @@ public class ProducerBulkEngine {
     public void reconcileStalledRuns() {
         try {
             LocalDateTime cutoff = LocalDateTime.now().minusMinutes(STALLED_AFTER_MINUTES);
-            List<JobQueue> stalled = this.transactionService.findStalledRuns(cutoff);
-            if (stalled.isEmpty()) {
+            // Two ways a run is known to be over without its worker saying so: six hours of silence, or
+            // (MIG-63) a report from its own worker refused because the token had expired -- proof the
+            // worker is alive and can no longer be heard, so there is no reason to wait out the six
+            // hours with the job blocked. A run on both lists is closed once, for the refusal, which
+            // is the more specific reason.
+            Map<Long, JobQueue> toClose = new LinkedHashMap<>();
+            for (JobQueue jobQueue : this.transactionService.findStalledRuns(cutoff)) {
+                toClose.put(jobQueue.getJobQueueId(), jobQueue);
+            }
+            int silent = toClose.size();
+            for (JobQueue jobQueue : this.transactionService.findRunsWithRefusedCallbacks()) {
+                toClose.put(jobQueue.getJobQueueId(), jobQueue);
+            }
+            if (toClose.isEmpty()) {
                 return;
             }
-            logger.warn("reconcileStalledRuns --> {} run(s) have been in flight since before {}; "
-                + "closing them so their jobs can be scheduled again.", stalled.size(), cutoff);
-            for (JobQueue jobQueue : stalled) {
+            if (silent > 0) {
+                logger.warn("reconcileStalledRuns --> {} run(s) have been in flight since before {}; "
+                    + "closing them so their jobs can be scheduled again.", silent, cutoff);
+            }
+            for (JobQueue jobQueue : toClose.values()) {
                 try {
+                    boolean refused = jobQueue.getRefusedCallbackAt() != null;
+                    String reported = "log".equals(jobQueue.getRefusedCallbackStatus())
+                        || jobQueue.getRefusedCallbackStatus() == null ? "a log line" : jobQueue.getRefusedCallbackStatus();
                     jobQueue.setJobStatus(JobStatus.Interrupt);
                     jobQueue.setEndTime(LocalDateTime.now());
-                    jobQueue.setJobStatusMessage(String.format(
+                    jobQueue.setJobStatusMessage(refused
+                        ? String.format("Job %s's worker reported %s at %s, but its callback token had expired, "
+                            + "so the report was refused. Closed as interrupted -- check the output before "
+                            + "running it again.", jobQueue.getJobId(), reported, jobQueue.getRefusedCallbackAt())
+                        : String.format(
                         "Job %s stopped reporting and was closed after %d hours. Its worker may "
                         + "have finished the work -- check the output before running it again.",
                         jobQueue.getJobId(), STALLED_AFTER_MINUTES / 60));
@@ -141,7 +203,11 @@ public class ProducerBulkEngine {
                     // start_time, and "no update since null" reads as "we lost track of it" when
                     // what happened is "it was never picked up" -- two different incidents, told
                     // apart here or nowhere.
-                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getStartTime() != null
+                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), refused
+                        ? String.format("Run closed automatically: the worker's report (%s) at %s was refused "
+                            + "because its callback token had expired.",
+                            reported, jobQueue.getRefusedCallbackAt())
+                        : jobQueue.getStartTime() != null
                         ? String.format("Run closed automatically: no update from the worker since %s.",
                             jobQueue.getStartTime())
                         : String.format("Run closed automatically: queued at %s and never picked up.",
@@ -164,118 +230,158 @@ public class ProducerBulkEngine {
         }
     }
 
+    /**
+     * The enqueuer: claims due slots one at a time until none is left (MIG-152).
+     *
+     * Each slot is its own local transaction: claim the scheduler row (FOR UPDATE SKIP LOCKED), enqueue
+     * or skip, advance next_run_at -- together or not at all. Any number of replicas run this at once
+     * with no ShedLock and no coordinator, each on slots no other holds, and a replica that dies part-way
+     * leaves its slot exactly as it was for the next tick to enqueue once. (A claim that advanced the
+     * cursor in a statement of its own, before the work, would have lost the slot instead.)
+     *
+     * The run row, not the busy count, is the last word (P12): if another enqueuer or a Run now takes the
+     * job between the count and the insert, the index refuses this insert at commit and the whole slot
+     * rolls back -- cursor included -- so it is simply claimed again, finds the winner's run, and is
+     * recorded as the ordinary "skip, already in queue". A slot that fails for any other reason is left
+     * for the next tick rather than retried here, so one bad schedule cannot hold the loop.
+     */
     public void addJobInQueue() {
         try {
-            logger.info("addJobInQueue --> FETCH due schedulers STARTED ");
             LocalDateTime now = LocalDateTime.now();
-            List<Scheduler> dueSchedulers = this.transactionService.findDueSchedulers(now);
-            logger.info("addJobInQueue --> FETCHED due schedulers: size {} ", dueSchedulers.size());
-            if (!dueSchedulers.isEmpty()) {
-
-                dueSchedulers.stream()
-                    .forEach(scheduler -> {
-                        try {
-                            Thread.sleep(50);
-                            JobQueue jobQueue;
-                            // Whether this pass moved the job's own running status. The skip
-                            // branch does not, and the announcement below reads that status to
-                            // decide what to say -- see skipManualJobInQueue for the full story.
-                            boolean jobStatusMoved;
-                            if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
-
-                                jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
-                                this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
-                                Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(scheduler.getJobId());
-                                if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
-                                    this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
-                                }
-                                jobStatusMoved = false;
-                            } else {
-                                this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
-                                jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
-                                this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
-                                this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
-                                jobStatusMoved = true;
-                            }
-
-                            this.bulkAction.updateNextScheduler(scheduler);
-                            this.bulkAction.sendJobStatusNotification(scheduler.getJobId(), jobStatusMoved);
-                        } catch (Exception ex) {
-                            logger.error("Error in addJobInQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
-                        }
-                });
-                return;
+            // The slots this pass has given up on; -1 always, because NOT IN () is not SQL.
+            List<Long> passed = new ArrayList<>(Collections.singletonList(-1L));
+            Set<Long> raced = new HashSet<>();
+            int handled = 0;
+            while (true) {
+                Long[] slot = new Long[1];
+                try {
+                    Optional<Scheduler> claimed = this.transactions.execute(status -> {
+                        Optional<Scheduler> next = this.transactionService.claimNextDueScheduler(now, passed);
+                        next.ifPresent(scheduler -> {
+                            slot[0] = scheduler.getSchedulerId();
+                            this.enqueueSlot(scheduler);
+                        });
+                        return next;
+                    });
+                    if (claimed == null || !claimed.isPresent()) {
+                        break;
+                    }
+                    handled++;
+                } catch (RuntimeException ex) {
+                    if (slot[0] == null) {
+                        throw ex;
+                    }
+                    if (OneRunInFlight.isViolation(ex) && raced.add(slot[0])) {
+                        logger.info("addJobInQueue --> scheduler {} lost its job to another enqueuer; claiming it "
+                            + "again to record the slot as a skip.", slot[0]);
+                        continue;
+                    }
+                    passed.add(slot[0]);
+                    logger.error("Error in addJobInQueue for scheduler {}: {}.", slot[0], ExceptionUtil.getRootCauseMessage(ex));
+                }
+                Thread.sleep(50);
             }
-            logger.info("addJobInQueue --> NO scheduler is due at this timestamp");
+            if (handled == 0) {
+                logger.info("addJobInQueue --> NO scheduler is due at this timestamp");
+            } else {
+                logger.info("addJobInQueue --> {} due slot(s) enqueued or skipped.", handled);
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
         } catch (Exception ex) {
             logger.error("Error in addJobInQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 
-    /**
-     * How many queued rows one dispatch pass takes when QUEUE_FETCH_LIMIT cannot be read.
-     *
-     * The same order of magnitude as the value that ships, so a fallback pass behaves like a
-     * normal one rather than either stalling the queue or trying to drain it in a single tick.
-     */
-    private static final long DEFAULT_QUEUE_FETCH_LIMIT = 1000L;
+    /** One claimed slot: a run, or a skip when the job already has one in flight; then the cursor moves on. */
+    private void enqueueSlot(Scheduler scheduler) {
+        JobQueue jobQueue;
+        // Whether this pass moved the job's own running status. The skip branch does not, and the
+        // announcement below reads that status to decide what to say -- see skipManualJobInQueue.
+        boolean jobStatusMoved;
+        if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
+            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
+            Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(scheduler.getJobId());
+            if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
+                this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
+            }
+            jobStatusMoved = false;
+        } else {
+            // The run row BEFORE the job is marked Queue: should the index refuse it, nothing of this
+            // attempt -- the job's status included -- survives the rollback.
+            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+            this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
+            this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
+            jobStatusMoved = true;
+        }
+        this.bulkAction.updateNextScheduler(scheduler);
+        this.bulkAction.sendJobStatusNotification(scheduler.getJobId(), jobStatusMoved);
+    }
 
     /**
-     * The dispatch batch size, from the lookup, defensively.
+     * The dispatch batch size, from orchestration_setting, defensively (MIG-136).
      *
-     * This was `Long.valueOf(lookupData.getLookupValue())` with no null check and no parse guard,
-     * inside a method-wide catch. Anything that made it throw stopped job dispatch platform-wide
-     * and said so in exactly one server-log line: a value typed as "5,000", a trailing space, the
-     * lookup renamed, or -- the easy one -- the row's "Store encrypted" box ticked, which stores
-     * ciphertext that nothing here decrypts and then serves the value back masked. With dispatch
-     * dead, every job_queue row stayed in Queue, and because the dispatcher counts Queue rows when
-     * deciding whether a job is busy, every later slot for every job was recorded as "skip,
-     * already in queue". Nothing on screen connected any of that to a lookup value.
-     *
-     * A misconfigured dial should not be able to stop the platform: say so loudly, once per pass,
-     * and carry on at a sane rate.
+     * This was `Long.valueOf(lookupData.getLookupValue())` on a lookup_data row, with no null check and
+     * no parse guard, inside a method-wide catch: a value typed as "5,000", a trailing space, the row
+     * renamed, or its "Store encrypted" box ticked stopped job dispatch platform-wide, and every job's
+     * later slots became "skip, already in queue". The dial is Core's own now, in a table with no
+     * encryption column; the reading stays defensive -- missing, null, unparseable or less than 1
+     * dispatches DEFAULT_QUEUE_FETCH_LIMIT and says so, once per pass.
      */
     private long resolveQueueFetchLimit() {
-        LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT);
-        if (isNull(lookupData) || isNull(lookupData.getLookupValue())) {
-            logger.warn("Lookup {} is missing; dispatching {} rows this pass. Restore the setting.",
-                ProcessUtil.QUEUE_FETCH_LIMIT, DEFAULT_QUEUE_FETCH_LIMIT);
-            return DEFAULT_QUEUE_FETCH_LIMIT;
+        String value = this.transactionService.findOrchestrationSetting(ProcessUtil.QUEUE_FETCH_LIMIT);
+        if (isNull(value)) {
+            logger.warn("Setting {} is missing from orchestration_setting; dispatching {} rows this pass. Restore it.",
+                ProcessUtil.QUEUE_FETCH_LIMIT, DispatchTiming.DEFAULT_QUEUE_FETCH_LIMIT);
+            return DispatchTiming.DEFAULT_QUEUE_FETCH_LIMIT;
         }
-        Long limit = ProcessUtil.parseLongOrNull(lookupData.getLookupValue());
+        Long limit = ProcessUtil.parseLongOrNull(value);
         if (limit == null || limit < 1L) {
-            logger.warn("Lookup {} is not a positive whole number, so it cannot be used as a fetch "
-                + "limit; dispatching {} rows this pass. Fix the setting on /settings/lookup.",
-                ProcessUtil.QUEUE_FETCH_LIMIT, DEFAULT_QUEUE_FETCH_LIMIT);
-            return DEFAULT_QUEUE_FETCH_LIMIT;
+            logger.warn("Setting {} is not a positive whole number, so it cannot be used as a fetch limit; "
+                + "dispatching {} rows this pass. Fix it in orchestration_setting.",
+                ProcessUtil.QUEUE_FETCH_LIMIT, DispatchTiming.DEFAULT_QUEUE_FETCH_LIMIT);
+            return DispatchTiming.DEFAULT_QUEUE_FETCH_LIMIT;
         }
         return limit;
     }
 
+    /**
+     * The dispatcher: hands each prepared run to its worker queue.
+     *
+     * It takes only runs the pre-dispatch phase has finished with (MIG-134), so there is no model call
+     * and no broker call on this thread: a row is one local transaction -- the callback token's hash,
+     * the job_send latch and a dispatch_outbox row -- and DispatchRelay publishes after commit (MIG-136).
+     * The pass still stops starting rows at DispatchTiming.DISPATCH_BUDGET_MS, so that the last row it
+     * starts ends inside the lock this runs under; the rest are picked up on the next run, in id order,
+     * so nothing is skipped.
+     */
     public void startJobInCurrentTimeSlot() {
         try {
             logger.info("runJobInCurrentTimeSlot --> FETCH JobQueue of current day STARTED ");
             List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(this.resolveQueueFetchLimit(), LocalDateTime.now());
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
-                // The lock this runs under lasts ten minutes, and the loop sleeps 100ms per job:
-                // a full fetch of 5,000 takes 8m20s, which leaves less than two minutes of room.
-                // Anything that slows a batch down -- a slow broker, a slow database -- takes it
-                // past the lock, at which point another instance may pick up the same rows and
-                // dispatch them twice. Stop before the deadline instead and leave the rest: this
-                // runs again in a minute, and the queue is ordered, so nothing is skipped.
-                long deadline = System.currentTimeMillis() + DISPATCH_BUDGET_MS;
+                long deadline = this.clock.getAsLong() + DispatchTiming.DISPATCH_BUDGET_MS;
                 int dispatched = 0;
                 for (JobQueue jobQueue : jobQueues) {
-                    if (System.currentTimeMillis() > deadline) {
+                    if (this.clock.getAsLong() > deadline) {
                         logger.warn("runJobInCurrentTimeSlot --> stopping at {} of {} to stay inside "
                             + "the scheduler lock; the rest are picked up on the next run.",
                             dispatched, jobQueues.size());
                         break;
                     }
-                    Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
+                    // Everything logged about this run's dispatch carries its correlation id, which the
+                    // token write stamps on the row: a callback that echoes no id is logged under it too
+                    // (MIG-95). A retry keeps the id of its first dispatch.
+                    if (jobQueue.getCorrelationId() == null) {
+                        jobQueue.setCorrelationId(CorrelationId.generate());
+                    }
+                    CorrelationId.set(jobQueue.getCorrelationId());
                     try {
-                        Thread.sleep(100);
+                        this.pause.accept(DispatchTiming.PER_ROW_PAUSE_MS);
+                        Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
                         if (sourceJob.isPresent()) {
                             this.pushMessageToQueue(sourceJob.get(), jobQueue);
                         } else {
@@ -285,6 +391,8 @@ public class ProducerBulkEngine {
                         dispatched++;
                     } catch (Exception ex) {
                         logger.error("Error in runJobInCurrentTimeSlot: {}.", ExceptionUtil.getRootCauseMessage(ex));
+                    } finally {
+                        CorrelationId.clear();
                     }
                 }
                 return;
@@ -295,229 +403,169 @@ public class ProducerBulkEngine {
         }
     }
 
+    /**
+     * Dispatches one prepared run: the message, with the run's token in it, written to dispatch_outbox in
+     * the same local transaction as the token's hash and the job_send latch.
+     *
+     * The route is asked again (rows 1 to 4): the task may have been reconfigured since the run was
+     * prepared, and a run that can no longer go anywhere is closed, not left. Anything thrown -- the
+     * token or the outbox row could not be written -- rolls the three back together and is the one
+     * retryable failure here (row 6); nothing was published, because nothing is published before commit.
+     */
     private void pushMessageToQueue(SourceJob sourceJob, JobQueue jobQueue) throws Exception {
-        SourceTask sourceTask = sourceJob.getTaskDetail();
-        /*
-         * A run that cannot be dispatched has to be closed, not abandoned.
-         *
-         * The whole body below used to sit inside the task-type check with no else, and the task
-         * itself was dereferenced unguarded -- while SourceJobServiceImpl guards both of exactly
-         * these fields before reading them. So a queue row whose job had no task, or a task with
-         * no task type, fell off the end of this method having changed no status, written no audit
-         * line and sent no notification. It then stayed in Queue for ever, at the head of a capped
-         * fetch, and because getCountForInQueueJobByJobId counts Queue rows the job was treated as
-         * permanently busy: every later slot became "skip, already in queue". Nothing recovers it
-         * either -- reconcileStalledRuns only looks at Start and Running, and both Run now and
-         * Skip next refuse a job whose running status is Queue -- so only direct SQL got it back.
-         */
-        if (isNull(sourceTask)) {
-            this.changeStatusForLastJob(jobQueue, String.format(
-                "Job %s has no task attached, so there is nothing to dispatch.", jobQueue.getJobId()));
+        DispatchRoute route = DispatchRoute.of(sourceJob, jobQueue.getJobId());
+        if (route.refused()) {
+            this.changeStatusForLastJob(jobQueue, route.refusal);
             return;
         }
-        if (isNull(sourceTask.getSourceTaskType())) {
-            this.changeStatusForLastJob(jobQueue, String.format(
-                "Job %s has no task type configured, so there is no broker to dispatch it to.", jobQueue.getJobId()));
+        if (isNull(jobQueue.getDispatchPayload())) {
+            // Not prepared: not this pass's to send. The pick-up query never returns such a row; this
+            // is the belt to its braces, and leaves the run for the pre-dispatch phase.
+            logger.warn("Run {} reached the dispatcher unprepared; left for the pre-dispatch phase.", jobQueue.getJobQueueId());
             return;
         }
         try {
-            SourceTaskType sourceTaskType = sourceTask.getSourceTaskType();
-            if (sourceTaskType.getStatus().equals(Status.Active)) {
-                String queueTopicPartition = sourceTaskType.getQueueTopicPartition();
-                Optional<KafkaTopicPartitionUtil.Parsed> parsed = KafkaTopicPartitionUtil.parse(queueTopicPartition);
-                if (parsed.isPresent()) {
-                    String topic = parsed.get().getTopic();
-                    String partition = parsed.get().getPartition();
-
-                    String key = UUID.randomUUID().toString();
-                    // The pipeline's AI steps run here, before the send, and write their answers
-                    // into the task's document; the worker then sees ordinary tags. A step that
-                    // fails (and says the run must) closes the run without a send.
-                    AiStepService.Outcome steps = this.aiStepService.apply(sourceJob.getTenantId(),
-                        sourceTask.getPipelineId(), jobQueue.getJobQueueId(), sourceTask.getTaskPayload());
-                    for (String note : steps.notes) this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), note);
-                    if (steps.failed()) {
-                        this.changeStatusForLastJob(jobQueue, String.format("Job %s: %s", jobQueue.getJobId(), steps.failure));
-                        return;
-                    }
-                    String payload = this.getSourceJobDetail(sourceJob, jobQueue, steps.payload);
-                    try {
-
-                        KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
-                            this.kafkaConnectionResolver.resolve(sourceJob.getTenantId(), sourceTaskType.getSourceTaskTypeId()));
-                        if (partition.contains(ProcessUtil.START)) {
-                            template.send(topic, key, payload)
-                                .addCallback(
-                                    result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
-                                    ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
-                                );
-                        } else {
-                            template.send(topic, Integer.valueOf(partition), key, payload)
-                                .addCallback(
-                                    result -> this.handleSendSuccess(result, payload, sourceJob, jobQueue),
-                                    ex -> this.handleSendFailure(ex, payload, sourceJob, jobQueue)
-                                );
-                        }
-                    } catch (Exception ex) {
-                        logger.error("Unexpected exception while sending message=[{}]: {}", payload, ex.getMessage());
-                        handleSendFailure(ex, payload, sourceJob, jobQueue);
-                    }
-                    return;
-                }
-                logger.error("Regex does not match.");
-                // The configured value is an argument, not part of the format string: it is typed
-                // by an operator and a '%' in it would otherwise be read as a conversion.
-                this.changeStatusForLastJob(jobQueue, String.format(
-                    "Broker configuration is invalid for job %s: %s", jobQueue.getJobId(), queueTopicPartition));
-                return;
-            }
-            this.changeStatusForLastJob(jobQueue, String.format("Broker is not active for job %s.", jobQueue.getJobId()));
+            this.transactions.execute(status -> {
+                String payload = this.getSourceJobDetail(sourceJob, jobQueue, jobQueue.getDispatchPayload());
+                jobQueue.setJobSend(true);
+                this.transactionService.updateJobQueue(jobQueue);
+                this.dispatchOutbox.write(new DispatchOutbox.Record(jobQueue.getJobQueueId(), Math.max(1, jobQueue.getAttempt()),
+                    sourceJob.getTenantId(), route.taskType.getSourceTaskTypeId(), route.topic, route.partition,
+                    UUID.randomUUID().toString(), payload, this.headersFor(sourceJob, jobQueue)));
+                return null;
+            });
+            logger.info("Run {} of job {} written to the dispatch outbox for {}.", jobQueue.getJobQueueId(),
+                jobQueue.getJobId(), route.topic);
         } catch (Exception ex) {
-            // Retryable, and the only site in this method that is. Everything above fails because
-            // the job is configured wrong -- no task, no task type, an unparseable topic, a task
-            // type switched off -- and none of that changes by trying again. This catch is where
-            // building the producer or resolving the tenant's connection threw, which is the
-            // transient case: a broker that was briefly unreachable lands here.
-            //
-            // It also no longer claims the broker is inactive. That was the message whatever the
-            // exception was, so a connection timeout and a deliberately disabled task type were
-            // reported identically, and the one sentence a person gets was wrong for most of them.
+            jobQueue.setJobSend(false);
+            // Retryable: building the message or writing it down failed, which is the transient case.
             this.changeStatusForLastJob(jobQueue, String.format(
-                "Job %s could not be dispatched: %s", jobQueue.getJobId(), reasonFor(ex)), true);
+                "Job %s could not be dispatched: %s", jobQueue.getJobId(), DispatchFailures.reasonFor(ex)), true);
             logger.error("Error in pushMessageToQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
     }
 
-    private void handleSendSuccess(SendResult<String, String> result, String payload, SourceJob sourceJob, JobQueue jobQueue) {
-        long offset = result.getRecordMetadata().offset();
-        logger.info("Sent message=[{}] with offset=[{}]", payload, offset);
+    /**
+     * The record headers every dispatch carries (MIG-26): the tenant and the user the run belongs to,
+     * the names service-1/2/3's TaskHeaders already parse, and the correlation id (MIG-95). A job with
+     * no tenant or owner simply has no such header -- the workers' platform-branch fallback for
+     * genuinely tenant-less executions stays theirs.
+     */
+    private Map<String, String> headersFor(SourceJob sourceJob, JobQueue jobQueue) {
+        Map<String, String> headers = new LinkedHashMap<>();
+        if (sourceJob.getTenantId() != null) {
+            headers.put("x-tenant-id", String.valueOf(sourceJob.getTenantId()));
+        }
+        if (sourceJob.getAssignedUserId() != null) {
+            headers.put("x-user-id", String.valueOf(sourceJob.getAssignedUserId()));
+        }
+        if (jobQueue.getCorrelationId() != null) {
+            headers.put(CorrelationId.HEADER, jobQueue.getCorrelationId());
+        }
+        return headers;
+    }
+
+    /** DispatchRelay: the broker took the run's message. Only a run still waiting on this hand-off moves. */
+    @Override
+    public void published(long jobQueueId, int attempt, long offset) {
+        this.transactions.execute(status -> {
+            Optional<JobQueue> run = this.awaitingHandOff(jobQueueId, attempt);
+            if (run.isPresent()) {
+                Optional<SourceJob> sourceJob = this.transactionService.findByJobId(run.get().getJobId());
+                this.handleSendSuccess(offset, sourceJob.orElse(null), run.get());
+            }
+            return null;
+        });
+    }
+
+    /** DispatchRelay: the broker would not take it. The same transient failure the in-pass send reported. */
+    @Override
+    public void publishFailed(long jobQueueId, int attempt, Throwable cause) {
+        this.transactions.execute(status -> {
+            Optional<JobQueue> run = this.awaitingHandOff(jobQueueId, attempt);
+            if (run.isPresent()) {
+                Optional<SourceJob> sourceJob = this.transactionService.findByJobId(run.get().getJobId());
+                this.handleSendFailure(cause, null, sourceJob.orElse(null), run.get());
+            }
+            return null;
+        });
+    }
+
+    /**
+     * The run, if it is still the hand-off the relay is reporting on: queued, latched as sent, same
+     * attempt. A run an operator failed meanwhile, or one already moved on, is left as it is.
+     */
+    private Optional<JobQueue> awaitingHandOff(long jobQueueId, int attempt) {
+        Optional<JobQueue> run = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (run.isPresent() && run.get().getJobStatus() == JobStatus.Queue && run.get().isJobSend()
+            && Math.max(1, run.get().getAttempt()) == attempt) {
+            return run;
+        }
+        logger.warn("Hand-off of run {} attempt {} reported after the run moved on; left as it is.", jobQueueId, attempt);
+        return Optional.empty();
+    }
+
+    private void handleSendSuccess(long offset, SourceJob sourceJob, JobQueue jobQueue) {
+        logger.info("Run {} handed to the worker queue at offset [{}]", jobQueue.getJobQueueId(), offset);
 
         jobQueue.setJobSend(true);
         jobQueue.setJobStatus(JobStatus.Start);
         // The payload is NOT in here. jobStatusMessage is what the Recent runs list and the job
         // row put in front of a person, and a run's whole task XML -- four hundred characters of
-        // escaped markup -- pushed everything worth reading off the end of the line. It is already
-        // written to the application log a line above, which is where a payload belongs.
+        // escaped markup -- pushed everything worth reading off the end of the line.
         jobQueue.setJobStatusMessage("Handed to the worker queue at offset " + offset + ".");
         this.transactionService.updateJobQueue(jobQueue);
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Start);
 
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
-            "Job %s handed to the worker queue at offset %s.", sourceJob.getJobId(), offset));
+            "Job %s handed to the worker queue at offset %s.", jobQueue.getJobId(), offset));
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
     }
 
     private void handleSendFailure(Throwable ex, String payload, SourceJob sourceJob, JobQueue jobQueue) {
-        logger.error("Unable to send message=[{}] due to: {}", payload, ex.getMessage());
+        logger.error("Unable to hand run {} to the worker queue due to: {}", jobQueue.getJobQueueId(), ex.getMessage());
 
         jobQueue.setJobSend(false);
-        // Reason first and payload nowhere. This read "Job 2417 unable to send message=[{...four
-        // hundred characters of escaped task XML...}] due to: Failed to construct kafka producer",
-        // so the only part anyone needs -- why it failed -- sat past the end of a two-line clamp
-        // and was reachable solely by hovering for the title attribute. The payload is logged
-        // immediately above.
-        String reason = reasonFor(ex);
+        // Reason first and payload nowhere: the only part anyone needs -- why it failed -- used to sit
+        // past the end of a two-line clamp behind four hundred characters of escaped task XML.
+        String reason = DispatchFailures.reasonFor(ex);
         jobQueue.setJobStatusMessage("Could not hand this run to the worker queue: " + reason);
 
         this.changeStatusForLastJob(jobQueue, String.format(
-            "Job %s could not be handed to the worker queue: %s", sourceJob.getJobId(), reason), true);
+            "Job %s could not be handed to the worker queue: %s", jobQueue.getJobId(), reason), true);
     }
 
-    /**
-     * A failure as a sentence someone can act on, rather than as a stack trace's toString.
-     *
-     * The root cause carries the useful sentence: a Kafka send failure arrives wrapped, and the
-     * outer message is routinely less specific than the thing that actually went wrong. Taken as
-     * getMessage() rather than toString() because toString() prefixes the fully-qualified class
-     * name, and "org.apache.kafka.common.KafkaException: Failed to construct kafka producer" tells
-     * a person nothing the second half does not.
-     *
-     * Falls back to the class's simple name when the root cause carries no message at all, so the
-     * status line never reads "Could not hand this run to the worker queue: null".
-     */
-    private static String reasonFor(Throwable ex) {
-        Throwable root = ex;
-        while (root.getCause() != null && root.getCause() != root) {
-            root = root.getCause();
-        }
-        String message = root.getMessage();
-        return message == null || message.trim().isEmpty()
-            ? root.getClass().getSimpleName()
-            : message.trim();
-    }
-
-    /**
-     * Closes a run as Failed with the reason already written out.
-     *
-     * The reason arrives finished, and is written down as given. This used to take a template and
-     * run String.format over it with the job id, which worked for the callers that hand it a
-     * literal with one %s in it and was a trap for the two that do not. handleSendFailure builds
-     * its message first, because it has the payload and the broker's own error to put in it, and
-     * that payload is the task's XML -- so a single literal '%' anywhere in a task payload (a
-     * percentage in a report parameter is enough) made String.format throw
-     * UnknownFormatConversionException from the first line of the one method whose job is to
-     * record why a run failed. The throw escaped through the callback into Kafka's listener, so
-     * the status was never changed, no audit line was written and no notification was sent: the
-     * run stayed in Queue with no reason recorded, exactly when the reason was the thing needed.
-     * The invalid-broker caller had the same shape, concatenating an operator-typed
-     * topic:partition string into the template.
-     */
+    /** See DispatchFailures.close: every dispatch-side phase closes a run it will not send the same way. */
     private void changeStatusForLastJob(JobQueue jobQueue, String statusMessage) {
         this.changeStatusForLastJob(jobQueue, statusMessage, false);
     }
 
-    /**
-     * As above, but offering the run another attempt first when the failure is one that a retry
-     * could plausibly clear.
-     *
-     * Retryable is passed per call site rather than assumed, because the two failures that reach
-     * here are opposites. A broker that would not take the message is transient -- the same
-     * payload sent a minute later usually goes. A job that has been deleted or deactivated is not:
-     * the dispatcher will find it missing again on every attempt, and retrying only delays telling
-     * somebody by the length of the backoff while holding the job's one in-flight slot.
-     */
     private void changeStatusForLastJob(JobQueue jobQueue, String statusMessage, boolean retryable) {
-        // Ordered so the failure is only announced once the run has genuinely run out of attempts.
-        // Marking Failed first and retrying afterwards would put a Failed status, an audit line and
-        // -- for a job with fail mail on -- an email in front of somebody for a run that is about
-        // to be attempted again, which is the noise this feature exists to remove.
-        if (retryable && this.bulkAction.scheduleRetry(jobQueue, statusMessage)) {
-            return;
-        }
-        this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
-        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);
-        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), statusMessage);
-        this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
-        // The run is named so the Failed notice is sent once for this run and attempt.
-        this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), jobQueue.getJobQueueId(), true);
-        Optional<SourceJob> sourceJobForFailMail = this.transactionService.findByJobId(jobQueue.getJobId());
-        if (sourceJobForFailMail.isPresent() && sourceJobForFailMail.get().isFailJob()) {
-            this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Failed);
-        }
+        this.failures.close(jobQueue, statusMessage, retryable);
     }
 
     private String getSourceJobDetail(SourceJob sourceJob, JobQueue jobQueue, String taskPayload) {
         JobPayloadDTO dto = new JobPayloadDTO();
         dto.setJobQueueId(jobQueue.getJobQueueId());
         dto.setJobId(jobQueue.getJobId());
-        // The run's own proof for its callbacks, minted and saved here -- before the send below,
-        // so the server knows the token before any worker can echo it. See RunCallbackTokens.
+        // The run's own proof for its callbacks, minted and saved here -- in the same transaction as the
+        // outbox row that carries it, so the server knows the token before any worker can echo it.
         dto.setCallbackToken(this.runCallbackTokens.issue(jobQueue));
         dto.setAttempt(Math.max(1, jobQueue.getAttempt()));
+        dto.setCorrelationId(jobQueue.getCorrelationId());
         if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
             Long homePageLookupId = sourceJob.getTaskDetail().getHomePageId();
             if (homePageLookupId != null) {
                 dto.setHomePageId(this.transactionService.findLookupValueByLookupId(homePageLookupId));
             }
             // pipelineId is no longer a PIPELINE_IDS lookup row id -- Task Forms now define a
-            // pipeline directly by its own id string (the same one Source Task's Pipeline
-            // picker offers and Pipeline.pipelineId is keyed on), so it goes straight through
-            // rather than being resolved through the lookup table the way homePageId still is.
+            // pipeline directly by its own id string, so it goes straight through.
             String pipelineId = sourceJob.getTaskDetail().getPipelineId();
             if (!ProcessUtil.isNull(pipelineId)) {
                 dto.setPipelineId(pipelineId.trim());
             }
-            // The document with any AI step's answers in it, not the task's stored one.
+            // The document the pre-dispatch phase prepared, with any AI step's answers in it -- not
+            // the task's stored one.
             dto.setTaskPayload(taskPayload);
         }
         dto.setPriority(sourceJob.getPriority());

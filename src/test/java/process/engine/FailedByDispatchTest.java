@@ -6,14 +6,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import process.ai.AiStepService;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
-import process.model.pojo.LookupData;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.pojo.SourceTaskType;
@@ -68,18 +64,14 @@ class FailedByDispatchTest {
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobMail jobMail;
-    @Mock private KafkaTemplateProvider kafkaTemplateProvider;
-    @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private AiStepService aiStepService;
 
     private ProducerBulkEngine engine;
     private JobQueue run;
 
     @BeforeEach
     void setUp() {
-        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail,
-            this.kafkaTemplateProvider, this.kafkaConnectionResolver, this.runCallbackTokens, this.aiStepService);
+        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail, this.runCallbackTokens, null);
         this.run = new JobQueue();
         this.run.setJobQueueId(QUEUE_ID);
         this.run.setJobId(JOB_ID);
@@ -96,9 +88,7 @@ class FailedByDispatchTest {
     }
 
     private void dispatchPassFinds(Optional<SourceJob> activeJob) {
-        LookupData limit = new LookupData();
-        limit.setLookupValue("10");
-        when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT)).thenReturn(limit);
+        when(this.transactionService.findOrchestrationSetting(ProcessUtil.QUEUE_FETCH_LIMIT)).thenReturn("10");
         when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.singletonList(this.run));
         when(this.transactionService.findByJobIdAndJobStatus(JOB_ID, Status.Active)).thenReturn(activeJob);

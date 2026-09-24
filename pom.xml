@@ -220,6 +220,14 @@
             <artifactId>platform-commons</artifactId>
             <version>1.8.0</version>
         </dependency>
+        <!-- The platform's envelope contract suite (MIG-103): the same rows every service's build runs. -->
+        <dependency>
+            <groupId>org.barco</groupId>
+            <artifactId>platform-commons</artifactId>
+            <version>1.8.0</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

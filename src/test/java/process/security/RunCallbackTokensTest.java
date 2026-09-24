@@ -1,8 +1,10 @@
 package process.security;
 
+import org.barco.platform.correlation.CorrelationId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.enums.JobStatus;
@@ -16,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -176,5 +179,80 @@ public class RunCallbackTokensTest {
 
         this.run.setCallbackTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
         assertThat(this.tokens.verifyForReport(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.EXPIRED);
+    }
+
+    // ---- MIG-18 and MIG-63: a refusal that names the run's state implies the run's own token ------------------
+
+    /**
+     * RUN_OVER and EXPIRED are only ever said to a caller holding the run's own token; anyone else is
+     * told MISMATCH (or NOT_ISSUED) whatever state the run is in. That is what lets the controller answer
+     * a finished run's redelivered callback from its receipt, and lets the stall sweep act on a
+     * refused-but-genuine report, without either being reachable by a caller who merely knows an id.
+     */
+    @Test
+    void aRunIsOnlyReportedOverOrExpiredToItsOwnToken() {
+        String token = this.tokens.issue(this.run);
+        String someoneElses = new RunCallbackTokens(this.jobQueueRepository, 24, LEGACY).issue(new JobQueue());
+        this.run.setJobStatus(JobStatus.Completed);
+
+        assertThat(this.tokens.verify(JOB, RUN, someoneElses)).contains(RunCallbackTokens.Refusal.MISMATCH);
+        assertThat(this.tokens.verify(JOB, RUN, null)).contains(RunCallbackTokens.Refusal.MISMATCH);
+        assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.RUN_OVER);
+
+        this.run.setJobStatus(JobStatus.Running);
+        this.run.setCallbackTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
+        assertThat(this.tokens.verify(JOB, RUN, someoneElses)).contains(RunCallbackTokens.Refusal.MISMATCH);
+        assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.EXPIRED);
+    }
+
+    @Test
+    void aFinishedRunWithoutATokenIsOverOnlyToTheLegacySecret() {
+        this.run.setJobStatus(JobStatus.Failed);
+        assertThat(this.tokens.verify(JOB, RUN, "not-it")).contains(RunCallbackTokens.Refusal.NOT_ISSUED);
+        assertThat(this.tokens.verify(JOB, RUN, LEGACY)).contains(RunCallbackTokens.Refusal.RUN_OVER);
+    }
+
+    // ---- MIG-95: the correlation id rides the token's write -------------------------------------------------
+
+    /** Stamped in the very save that stores the hash: one write, so the two can never disagree. */
+    @Test
+    void theCorrelationIdIsWrittenInTheSameSaveAsTheHash() {
+        this.tokens.issue(this.run);
+
+        ArgumentCaptor<JobQueue> saved = ArgumentCaptor.forClass(JobQueue.class);
+        verify(this.jobQueueRepository, times(1)).save(saved.capture());
+        assertThat(saved.getValue().getCallbackTokenHash()).isNotNull();
+        assertThat(CorrelationId.isAcceptable(saved.getValue().getCorrelationId())).isTrue();
+    }
+
+    @Test
+    void theDispatchsBoundIdIsTheOneStamped() {
+        CorrelationId.set("corr-bound-at-dispatch");
+        try {
+            this.tokens.issue(this.run);
+        } finally {
+            CorrelationId.clear();
+        }
+        assertThat(this.run.getCorrelationId()).isEqualTo("corr-bound-at-dispatch");
+    }
+
+    /** A retry re-mints the token and keeps the id: it is the same piece of work. */
+    @Test
+    void aRetryKeepsTheIdOfItsFirstDispatch() {
+        this.tokens.issue(this.run);
+        String first = this.run.getCorrelationId();
+        this.run.setAttempt(2);
+
+        this.tokens.issue(this.run);
+
+        assertThat(this.run.getCorrelationId()).isEqualTo(first);
+    }
+
+    @Test
+    void theRunsIdIsReadBackForItsCallbacks() {
+        this.run.setCorrelationId("corr-dispatch-88123");
+
+        assertThat(this.tokens.correlationOf(RUN).map(found -> found.correlationId)).contains("corr-dispatch-88123");
+        assertThat(this.tokens.correlationOf(null)).isEmpty();
     }
 }

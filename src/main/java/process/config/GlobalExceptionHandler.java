@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import process.util.ProcessUtil;
+import process.util.RequestRefused;
 
 /**
  * @author Nabeel Ahmed
@@ -28,6 +29,13 @@ import process.util.ProcessUtil;
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /** A refusal the person can act on: 200 + ERROR + its own sentence, never a 500 (ADR-023, MIG-103). */
+    @ExceptionHandler(RequestRefused.class)
+    public ResponseEntity<ResponseDto> handleRefusal(RequestRefused refused) {
+        logger.info("Request refused: {}", refused.getMessage());
+        return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, refused.getMessage()), HttpStatus.OK);
+    }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ResponseDto> handleAccessDenied(AccessDeniedException ex) {

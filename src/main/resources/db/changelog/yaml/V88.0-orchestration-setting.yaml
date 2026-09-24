@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 88.0-orchestration-setting
+      author: nabeel.amd93
+      description: "orchestration_setting: Core's own dials, starting with QUEUE_FETCH_LIMIT, moved out of lookup_data (MIG-136)"
+      # QUEUE_FETCH_LIMIT was a lookup_data row: globally writable from /settings/lookup, with an
+      # is_encrypted box that stored ciphertext the dispatcher never decrypted. Core owns it now, in a
+      # table with no encryption column at all. The value moves across as it was when it is a positive
+      # whole number, and as the default of 1000 when it is not; the lookup row goes, so there is one
+      # dial and not two that disagree.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE TABLE orchestration_setting (
+                  setting_key    VARCHAR(64)   PRIMARY KEY,
+                  setting_value  VARCHAR(255)  NOT NULL,
+                  description    TEXT
+              );
+        - sql:
+            splitStatements: false
+            sql: >
+              INSERT INTO orchestration_setting (setting_key, setting_value, description)
+              SELECT 'QUEUE_FETCH_LIMIT',
+                     COALESCE((SELECT trim(l.lookup_value) FROM lookup_data l
+                               WHERE l.lookup_type = 'QUEUE_FETCH_LIMIT' AND l.parent_lookup_id IS NULL
+                                 AND trim(l.lookup_value) ~ '^[0-9]{1,9}$' AND trim(l.lookup_value)::int > 0
+                               ORDER BY l.lookup_id LIMIT 1), '1000'),
+                     'How many queued runs one dispatch pass takes. A positive whole number; anything else dispatches 1000 and warns once per pass.';
+        - sql:
+            splitStatements: false
+            sql: >
+              DELETE FROM lookup_data WHERE lookup_type = 'QUEUE_FETCH_LIMIT' AND parent_lookup_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM lookup_data c WHERE c.parent_lookup_id = lookup_data.lookup_id);
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP TABLE IF EXISTS public.orchestration_setting;

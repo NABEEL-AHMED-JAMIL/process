@@ -10,13 +10,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
-import org.springframework.util.concurrent.SettableListenableFuture;
 import process.ai.AiPort;
 import process.ai.AiStepService;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
@@ -31,8 +26,6 @@ import process.notifications.JobMail;
 import process.security.RunCallbackTokens;
 import process.security.TenantContext;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,11 +42,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * MIG-133, the AI half: the real AiStepService inside the real dispatch pass.
+ * MIG-133, the AI half: the real AiStepService inside the real dispatch phases -- since MIG-134/MIG-25
+ * the pre-dispatch phase, which answers AI steps off the dispatcher's thread, then the dispatcher.
  *
  * DispatchDecisionTreeTest pins the tree with the AI steps as a stand-in. This class runs the actual
  * AiStepService, with the AI service behind {@link AiPort} as it is since ADR-020, so what is pinned
- * is Core's half of the seam: onError=fail aborts the dispatch and nothing reaches Kafka;
+ * is Core's half of the seam: onError=fail aborts the dispatch and nothing is written for sending;
  * onError=continue empties the tag and dispatch proceeds; a step the AI service could not run --
  * refused, failed, or unreachable -- is a failed step (row 5, final), never a dispatch failure (row 6,
  * retried); and apply reads no TenantContext, because the scheduler thread has none.
@@ -78,10 +72,7 @@ class AiStepAtDispatchTest {
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobMail jobMail;
-    @Mock private KafkaTemplateProvider kafkaTemplateProvider;
-    @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private KafkaTemplate<String, String> template;
 
     @Mock private PipelineRepository pipelines;
     @Mock private AiPort ai;
@@ -105,9 +96,8 @@ class AiStepAtDispatchTest {
         return new AiStepService(this.pipelines, this.ai);
     }
 
-    private ProducerBulkEngine engine(AiStepService aiSteps) {
-        return new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail, this.kafkaTemplateProvider,
-            this.kafkaConnectionResolver, this.runCallbackTokens, aiSteps);
+    private DispatchPipeline engine(AiStepService aiSteps) {
+        return new DispatchPipeline(this.bulkAction, this.transactionService, this.jobMail, this.runCallbackTokens, aiSteps);
     }
 
     /** A pipeline F1 with one server-side AI step writing <summary>. */
@@ -160,19 +150,15 @@ class AiStepAtDispatchTest {
         return job;
     }
 
-    private void push(ProducerBulkEngine engine, SourceJob job) throws Exception {
-        Method method = ProducerBulkEngine.class.getDeclaredMethod("pushMessageToQueue", SourceJob.class, JobQueue.class);
-        method.setAccessible(true);
-        try {
-            method.invoke(engine, job, this.run);
-        } catch (InvocationTargetException wrapper) {
-            throw (Exception) wrapper.getCause();
-        }
+    private DispatchPipeline pushed;
+
+    private void push(DispatchPipeline pipeline, SourceJob job) throws Exception {
+        this.pushed = pipeline;
+        pipeline.push(job, this.run);
     }
 
-    private void brokerIsReached() {
-        when(this.kafkaTemplateProvider.getTemplate(any())).thenReturn(this.template);
-        when(this.template.send(eq("etl.jobs"), anyString(), anyString())).thenReturn(new SettableListenableFuture<SendResult<String, String>>());
+    private void nothingWasWrittenForSending() {
+        assertThat(this.pushed.written).isEmpty();
     }
 
     private void assertClosedAsFailed(String sentence, boolean retried) {
@@ -194,20 +180,19 @@ class AiStepAtDispatchTest {
         this.push(this.engine(this.steps()), this.dispatchableJob());
 
         this.assertClosedAsFailed("Job 1196: AI step <summary> failed: Daily token budget reached", false);
-        verifyNoInteractions(this.kafkaTemplateProvider, this.runCallbackTokens);
+        verifyNoInteractions(this.runCallbackTokens);
+        this.nothingWasWrittenForSending();
     }
 
     @Test
     void withOnErrorContinueTheTagIsEmptiedAndTheRunIsStillSent() throws Exception {
         this.pipelineWithStep("continue", MAPPED);
         this.theAiServiceAnswers(AiPort.StepResult.failed("Daily token budget reached"));
-        this.brokerIsReached();
 
         this.push(this.engine(this.steps()), this.dispatchableJob());
 
-        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(this.template).send(eq("etl.jobs"), anyString(), message.capture());
-        String sent = JsonParser.parseString(message.getValue()).getAsJsonObject().get("taskPayload").getAsString();
+        assertThat(this.pushed.lastWritten().topic).isEqualTo("etl.jobs");
+        String sent = JsonParser.parseString(this.pushed.lastWritten().payload).getAsJsonObject().get("taskPayload").getAsString();
         assertThat(sent).containsPattern("<summary(/>|></summary>)").contains("<claim_id>CLM-1</claim_id>");
         verify(this.bulkAction).saveJobAuditLogs(QUEUE_ID,
             "AI step <summary> failed and the pipeline continues with it empty: Daily token budget reached");
@@ -226,7 +211,7 @@ class AiStepAtDispatchTest {
         this.push(this.engine(this.steps()), this.dispatchableJob());
 
         this.assertClosedAsFailed("Job 1196: AI step <summary> failed: Read timed out", false);
-        verifyNoInteractions(this.kafkaTemplateProvider);
+        this.nothingWasWrittenForSending();
     }
 
     @Test
@@ -237,7 +222,7 @@ class AiStepAtDispatchTest {
         this.push(this.engine(this.steps()), this.dispatchableJob());
 
         this.assertClosedAsFailed("Job 1196: AI step <summary> failed: The AI service could not be reached, so the step did not run.", false);
-        verifyNoInteractions(this.kafkaTemplateProvider);
+        this.nothingWasWrittenForSending();
     }
 
     /**
@@ -253,7 +238,7 @@ class AiStepAtDispatchTest {
         this.push(this.engine(this.steps()), this.dispatchableJob());
 
         this.assertClosedAsFailed("Job 1196: AI step <summary> failed: The model connection's key could not be opened.", false);
-        verifyNoInteractions(this.kafkaTemplateProvider);
+        this.nothingWasWrittenForSending();
     }
 
     // ---- the Outcome contract ---------------------------------------------------------------------------------
@@ -293,8 +278,9 @@ class AiStepAtDispatchTest {
     /**
      * apply still THROWS, rather than returning a failed Outcome, on one input it does not anticipate:
      * a step whose variable map is not JSON. That is Core's half, read before the AI service is asked,
-     * and the throw lands in pushMessageToQueue's outer catch: the run is retried as "could not be
-     * dispatched" (row 6) instead of failing once as an AI-step failure (row 5).
+     * and the throw lands in the pre-dispatch phase's catch -- where pushMessageToQueue's outer catch
+     * used to be, with the same classification: the run is retried as "could not be dispatched" (row 6)
+     * instead of failing once as an AI-step failure (row 5).
      */
     @Test
     @Tag("pinned-unreviewed")
@@ -308,6 +294,6 @@ class AiStepAtDispatchTest {
         verify(this.bulkAction).scheduleRetry(eq(this.run), reason.capture());
         assertThat(reason.getValue()).startsWith("Job 1196 could not be dispatched: ");
         verify(this.ai, never()).runStep(any(), any(), any(), any(), any());
-        verifyNoInteractions(this.kafkaTemplateProvider);
+        this.nothingWasWrittenForSending();
     }
 }
