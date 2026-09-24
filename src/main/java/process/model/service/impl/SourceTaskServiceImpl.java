@@ -678,6 +678,11 @@ public class SourceTaskServiceImpl implements SourceTaskService {
 
     @Override
     public ResponseDto fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId) throws Exception {
+        // No type names no linked task. The parameter is optional at the door, and a null reached the query bound as
+        // bytea -- a 500 for every caller (MIG-259, the api-check suite).
+        if (isNull(sourceTaskTypeId)) {
+            return new ResponseDto(ERROR, "Source task type missing.");
+        }
         Long tenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
 
         List<SourceTaskProjection> sourceTasks = tenantId == null
