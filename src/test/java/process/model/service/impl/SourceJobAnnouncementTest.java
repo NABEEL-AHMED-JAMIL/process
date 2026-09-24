@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.identity.TestIdentity;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.SourceJobDto;
 import process.model.dto.SourceTaskDto;
@@ -74,7 +75,7 @@ public class SourceJobAnnouncementTest {
     void setUp() throws Exception {
         this.service = new SourceJobServiceImpl(this.sourceJobRepository, this.schedulerRepository,
             this.sourceTaskRepository, this.jobAuditLogRepository,
-            this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
+            this.jobQueueRepository, this.lookupDataRepository, TestIdentity.over(this.appUserRepository, null),
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
             TestNotifications.recording(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");

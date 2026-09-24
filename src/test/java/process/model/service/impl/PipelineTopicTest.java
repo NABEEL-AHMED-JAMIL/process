@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.identity.TestIdentity;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
@@ -51,7 +52,7 @@ public class PipelineTopicTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new PipelineServiceImpl(this.pipelineRepository, this.tenantRepository, this.userNameResolver, this.sourceTaskTypeRepository);
+        this.service = new PipelineServiceImpl(this.pipelineRepository, TestIdentity.over(null, this.tenantRepository), this.userNameResolver, this.sourceTaskTypeRepository);
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 10L, "a@example.com");
         lenient().when(this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(any(), any(), any()))
             .thenReturn(Collections.emptyList());

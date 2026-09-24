@@ -2,6 +2,7 @@ package process.model.service.impl;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import process.identity.TestIdentity;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
@@ -32,7 +33,7 @@ public class KafkaSecretAccessTest {
 
     private final AppUserRepository appUserRepository = mock(AppUserRepository.class);
     private final KafkaSecretService service =
-        new KafkaSecretServiceImpl(null, this.appUserRepository, null, "etl-config");
+        new KafkaSecretServiceImpl(null, TestIdentity.over(this.appUserRepository, null), null, "etl-config");
 
     private final String ownersKey = KafkaSecretPath.newUpload(OWNER, "ca.pem", DAY).key();
 

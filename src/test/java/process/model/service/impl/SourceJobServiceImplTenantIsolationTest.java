@@ -1,6 +1,10 @@
 package process.model.service.impl;
 
 import org.junit.jupiter.api.AfterEach;
+import process.identity.TestIdentity;
+import process.model.pojo.AppUser;
+import process.model.enums.UserRole;
+import org.springframework.test.util.ReflectionTestUtils;
 import process.util.UserNameResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +71,7 @@ public class SourceJobServiceImplTenantIsolationTest {
     void setUp() throws Exception {
         this.service = new SourceJobServiceImpl(this.sourceJobRepository, this.schedulerRepository,
             this.sourceTaskRepository, this.jobAuditLogRepository,
-            this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
+            this.jobQueueRepository, this.lookupDataRepository, TestIdentity.over(this.appUserRepository, null),
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
             TestNotifications.recording(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
         // entityManager is injected, not constructor-supplied.
@@ -98,6 +102,35 @@ public class SourceJobServiceImplTenantIsolationTest {
     }
 
     // ---- a tenant user must not reach another tenant's job -------------------------------
+
+    private String assigneeError(Long assignee, long jobTenant) {
+        return ReflectionTestUtils.invokeMethod(this.service, "validateAssignee", assignee, jobTenant);
+    }
+
+    private void person(long id, Long tenantId, UserRole role, Status status) {
+        AppUser user = new AppUser();
+        user.setAppUserId(id);
+        user.setTenantId(tenantId);
+        user.setUsername("p" + id + "@example.com");
+        user.setUserRole(role);
+        user.setStatus(status);
+        when(this.appUserRepository.findById(id)).thenReturn(Optional.of(user));
+    }
+
+    /** MIG-93: the assignee is read through IdentityPort; the rules it answers are the ones app_user gave. */
+    @Test
+    void anAssigneeIsCheckedThroughTheIdentityPort() {
+        this.person(70L, 1001L, UserRole.TENANT_USER, Status.Active);
+        this.person(71L, 1001L, UserRole.TENANT_USER, Status.Delete);
+        this.person(72L, 2002L, UserRole.TENANT_USER, Status.Active);
+        this.person(73L, null, UserRole.PLATFORM_ADMIN, Status.Active);
+
+        assertThat(this.assigneeError(70L, 1001L)).isNull();
+        assertThat(this.assigneeError(71L, 1001L)).as("a deleted person").isEqualTo("Assigned user not found with 71.");
+        assertThat(this.assigneeError(72L, 1001L)).isEqualTo("Assigned user must belong to the same tenant as this job.");
+        assertThat(this.assigneeError(73L, 1001L)).as("a platform admin may be assigned anywhere").isNull();
+        assertThat(this.assigneeError(74L, 1001L)).isEqualTo("Assigned user not found with 74.");
+    }
 
     @Test
     void deleteRefusesAJobBelongingToAnotherTenant() throws Exception {

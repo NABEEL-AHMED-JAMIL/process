@@ -1,6 +1,5 @@
 package process.security;
 
-import java.util.Objects;
 
 /**
  * The one place the tenant-ownership rule lives. Every service had grown its own private copy of
@@ -38,11 +37,9 @@ public final class TenantOwnership {
      * no for a caller with no tenant, so both fail closed.
      */
     public static boolean isOwnedByCaller(Long ownerTenantId) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        Long callerTenantId = TenantContext.getTenantId();
-        return callerTenantId != null && Objects.equals(ownerTenantId, callerTenantId);
+        // The request's TenantScope (MIG-93): AllTenants admits everything, the platform's own rows
+        // included; Scoped admits an equal, non-null tenant and nothing for a caller with none.
+        return TenantContext.scope().admits(ownerTenantId);
     }
 
     /**

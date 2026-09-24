@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import process.identity.TestIdentity;
 import process.ai.AiPort;
 import process.model.dto.AiPromptDto;
 import process.model.dto.ResponseDto;
@@ -48,7 +49,7 @@ public class PipelineAiStepTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        this.service = new PipelineServiceImpl(this.pipelineRepository, this.tenantRepository, this.userNameResolver, this.sourceTaskTypeRepository);
+        this.service = new PipelineServiceImpl(this.pipelineRepository, TestIdentity.over(null, this.tenantRepository), this.userNameResolver, this.sourceTaskTypeRepository);
         ReflectionTestUtils.setField(this.service, "ai", this.ai);
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 10L, "a@example.com");
         SourceTaskType topic = new SourceTaskType();

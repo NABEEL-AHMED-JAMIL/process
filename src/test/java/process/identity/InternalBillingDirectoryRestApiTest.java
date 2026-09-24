@@ -36,7 +36,7 @@ class InternalBillingDirectoryRestApiTest {
     private final AppUserRepository users = mock(AppUserRepository.class);
     private final SourceTaskTypeRepository taskTypes = mock(SourceTaskTypeRepository.class);
     private final UserNameResolver names = mock(UserNameResolver.class);
-    private final InternalBillingDirectoryRestApi api = new InternalBillingDirectoryRestApi(this.tenants, this.users, this.taskTypes, this.names, TOKEN);
+    private final InternalBillingDirectoryRestApi api = new InternalBillingDirectoryRestApi(TestIdentity.over(this.users, this.tenants), this.taskTypes, this.names, TOKEN);
 
     private static Tenant tenant(long id, String name, TenantStatus status) {
         Tenant t = new Tenant();
@@ -57,7 +57,7 @@ class InternalBillingDirectoryRestApiTest {
 
     @Test
     void anUnsetTokenAdmitsNobody() {
-        InternalBillingDirectoryRestApi unset = new InternalBillingDirectoryRestApi(this.tenants, this.users, this.taskTypes, this.names, " ");
+        InternalBillingDirectoryRestApi unset = new InternalBillingDirectoryRestApi(TestIdentity.over(this.users, this.tenants), this.taskTypes, this.names, " ");
         assertThat(unset.tenants("").getStatusCodeValue()).isEqualTo(401);
         assertThat(unset.tenants(" ").getStatusCodeValue()).isEqualTo(401);
     }

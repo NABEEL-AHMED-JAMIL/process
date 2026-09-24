@@ -48,10 +48,6 @@ public class TenantTaskTypeKafkaRoute {
     @Column(name = "tenant_id", nullable = false)
     private Long tenantId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
-    private Tenant tenant;
-
     @Column(name = "source_task_type_id", nullable = false)
     private Long sourceTaskTypeId;
 
@@ -90,10 +86,6 @@ public class TenantTaskTypeKafkaRoute {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
-    }
-
-    public Tenant getTenant() {
-        return tenant;
     }
 
     public Long getSourceTaskTypeId() {

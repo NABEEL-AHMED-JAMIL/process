@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.identity.TestIdentity;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskDto;
 import process.model.dto.SourceTaskTypeDto;
@@ -25,6 +26,7 @@ import process.util.excel.BulkExcel;
 import javax.persistence.EntityManager;
 import java.lang.reflect.Field;
 import java.util.Optional;
+import process.model.pojo.Tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -66,7 +68,7 @@ public class SourceTaskServiceImplTenantIsolationTest {
         // work than stubbing it and keeps the derived bucket/folder path exercised.
         this.service = new SourceTaskServiceImpl(this.bulkExcel, this.queryService,
             this.sourceJobRepository, this.sourceTaskRepository, this.sourceTaskTypeRepository,
-            this.tenantFilterHelper, new TaskPayloadLocationUtil(), this.tenantRepository,
+            this.tenantFilterHelper, new TaskPayloadLocationUtil(), TestIdentity.over(null, this.tenantRepository),
             TestNotifications.recording(null, null, this.notificationCenterService, null), this.userNameResolver);
         // entityManager is injected, not constructor-supplied.
         Field em = SourceTaskServiceImpl.class.getDeclaredField("entityManager");
@@ -176,7 +178,7 @@ public class SourceTaskServiceImplTenantIsolationTest {
         // The one role that legitimately crosses tenants.
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "root@example.com");
         this.typeResolvesTo(taskTypeOwnedBy(TENANT_B));
-        when(this.tenantRepository.existsById(TENANT_B)).thenReturn(true);
+        when(this.tenantRepository.findById(TENANT_B)).thenReturn(Optional.of(new Tenant()));
         SourceTaskDto sourceTaskDto = taskDtoLinkedToType();
         sourceTaskDto.setTenantId(TENANT_B);
 

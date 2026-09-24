@@ -30,10 +30,11 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
      * A tenant id of 0 means every workspace -- a platform admin's view.
      */
     @Query(value = TOPIC_OPTION_SELECT +
-        "and (:tenantId = 0 or tenant_id = :tenantId)\n" +
+        "and (:allTenants = true or tenant_id = :tenantId)\n" +
         "and (:q = '' or lower(service_name) like :q or lower(coalesce(queue_topic_partition, '')) like :q)\n" +
         "order by service_name asc", nativeQuery = true)
-    public List<TopicOptionProjection> searchTopicOptions(@Param("tenantId") long tenantId, @Param("q") String q,
+    public List<TopicOptionProjection> searchTopicOptions(@Param("allTenants") boolean allTenants, @Param("tenantId") long tenantId,
+        @Param("q") String q,
         Pageable limit);
 
     /** The picker rows for known ids -- how a box shows the label of a value it was handed. */

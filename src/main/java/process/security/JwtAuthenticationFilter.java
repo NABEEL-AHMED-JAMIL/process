@@ -1,86 +1,62 @@
 package process.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.barco.platform.security.CallerIdentity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
-import process.util.JwtUtil;
+import process.identity.IdentityPort;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Optional;
 
 /**
  * @author Nabeel Ahmed
  * */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+    private final IdentityPort identity;
 
-    private final JwtUtil jwtUtil;
-
-    private final TokenRevocations revocations;
-
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenRevocations revocations) {
-        this.jwtUtil = jwtUtil;
-        this.revocations = revocations;
+    /** Who a token belongs to is Identity's to say (MIG-93): this filter asks the port and sets the context. */
+    public JwtAuthenticationFilter(IdentityPort identity) {
+        this.identity = identity;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
         FilterChain filterChain) throws ServletException, IOException {
-        try {
-            String header = request.getHeader("Authorization");
-            if (header != null && header.startsWith("Bearer ")) {
-                String token = header.substring(7);
-                Claims claims = this.jwtUtil.parseClaims(token);
-                // A signed, unexpired token that has been signed out, or minted before its person's
-                // standing changed, authenticates nobody (MIG-14): the request goes on anonymous and
-                // Spring Security refuses it wherever a login is needed.
-                if (!this.jwtUtil.isRefreshToken(claims) && this.stillGood(claims, request)) {
-                    // The gate the browser draws is now also drawn here. A one-time password
-                    // used to open a full API session: the console kept the person on the
-                    // profile page, and nothing kept a script anywhere.
-                    if (this.jwtUtil.owesPasswordChange(claims) && !allowedWhileOwingPassword(request.getRequestURI())) {
-                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                        response.setContentType("application/json");
-                        response.setCharacterEncoding("UTF-8");
-                        response.getWriter().write("{\"status\":\"ERROR\",\"message\":\"Change your temporary password before using anything else.\"}");
-                        return;
-                    }
-                    Long tenantId = this.jwtUtil.tenantIdOf(claims);
-                    String userRole = this.jwtUtil.userRoleOf(claims);
-                    Long appUserId = this.jwtUtil.appUserIdOf(claims);
-                    String username = claims.getSubject();
-                    TenantContext.set(tenantId, userRole, appUserId, username);
-                    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                        username, null, Collections.singletonList(() -> "ROLE_" + userRole));
-                    SecurityContextHolder.getContext().setAuthentication(auth);
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            // A refresh token, a signed-out one, one minted before its person's standing changed, or one
+            // that cannot be read authenticates nobody (MIG-14): the request goes on anonymous and Spring
+            // Security refuses it wherever a login is needed.
+            Optional<CallerIdentity> authenticated = this.identity.authenticate(header.substring(7));
+            if (authenticated.isPresent()) {
+                CallerIdentity caller = authenticated.get();
+                // The gate the browser draws is now also drawn here. A one-time password
+                // used to open a full API session: the console kept the person on the
+                // profile page, and nothing kept a script anywhere.
+                if (caller.owesPasswordChange() && !allowedWhileOwingPassword(request.getRequestURI())) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    response.setCharacterEncoding("UTF-8");
+                    response.getWriter().write("{\"status\":\"ERROR\",\"message\":\"Change your temporary password before using anything else.\"}");
+                    return;
                 }
+                String userRole = caller.getUserRole();
+                TenantContext.set(caller.getTenantId(), userRole, caller.getAppUserId(), caller.getUsername());
+                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                    caller.getUsername(), null, Collections.singletonList(() -> "ROLE_" + userRole));
+                SecurityContextHolder.getContext().setAuthentication(auth);
             }
-        } catch (JwtException | IllegalArgumentException ex) {
-
-            this.logger.debug("Rejected token on {}: {}", request.getRequestURI(), ex.getMessage());
         }
         try {
             filterChain.doFilter(request, response);
         } finally {
             TenantContext.clear();
-        }
-    }
-
-    /** False when the token is revoked, and when nobody can say whether it is (Redis down): fail closed. */
-    private boolean stillGood(Claims claims, HttpServletRequest request) {
-        try {
-            return !this.revocations.isRevoked(claims);
-        } catch (TokenRevocations.Unavailable ex) {
-            this.logger.warn("Refused a token on {}: revocations cannot be checked", request.getRequestURI());
-            return false;
         }
     }
 

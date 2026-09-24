@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import process.identity.TestIdentity;
 import process.model.enums.PageKey;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
@@ -47,7 +48,7 @@ class PageGateCharacterisationTest {
     @BeforeEach
     void setUp() {
         this.cache = new PageAccessCache();
-        this.interceptor = new PageAccessInterceptor(this.appUserRepository, this.pageAccessService, this.cache);
+        this.interceptor = new PageAccessInterceptor(TestIdentity.gate(new PageGate(this.appUserRepository, this.pageAccessService, this.cache)));
         this.gate = new PageGate(this.appUserRepository, this.pageAccessService, this.cache);
         AppUser user = new AppUser();
         user.setAppUserId(USER);

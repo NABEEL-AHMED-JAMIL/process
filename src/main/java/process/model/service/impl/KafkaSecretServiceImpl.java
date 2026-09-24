@@ -10,8 +10,7 @@ import process.model.dto.ObjectContentDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.KafkaSecretKind;
 import process.model.enums.UserRole;
-import process.model.pojo.AppUser;
-import process.model.repository.AppUserRepository;
+import process.identity.IdentityPort;
 import process.config.StoragePropertyDefaults;
 import process.model.service.KafkaSecretService;
 import process.storage.TrustedAccess;
@@ -64,16 +63,16 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "read Kafka key material the caller's profile references");
 
     private final TrustedStorageOperations storageBrowserService;
-    private final AppUserRepository appUserRepository;
+    private final IdentityPort identity;
     private final EncryptionUtil encryptionUtil;
     /** The platform's config bucket, read through the same expression its guard and its seeding use. */
     private final String secretBucket;
 
     public KafkaSecretServiceImpl(TrustedStorageOperations storageBrowserService,
-        AppUserRepository appUserRepository, EncryptionUtil encryptionUtil,
+        IdentityPort identity, EncryptionUtil encryptionUtil,
         @Value(StoragePropertyDefaults.CONFIG_BUCKET) String secretBucket) {
         this.storageBrowserService = storageBrowserService;
-        this.appUserRepository = appUserRepository;
+        this.identity = identity;
         this.encryptionUtil = encryptionUtil;
         this.secretBucket = secretBucket;
     }
@@ -236,10 +235,10 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
         if (!"TENANT_ADMIN".equals(TenantContext.getUserRole()) || TenantContext.getTenantId() == null) {
             return false;
         }
-        Optional<AppUser> owner = this.appUserRepository.findById(path.getAppUserId());
+        Optional<IdentityPort.Person> owner = this.identity.person(path.getAppUserId());
         return owner.isPresent()
             && TenantContext.getTenantId().equals(owner.get().getTenantId())
-            && owner.get().getUserRole() == UserRole.TENANT_USER;
+            && UserRole.TENANT_USER.name().equals(owner.get().getUserRole());
     }
 
     /** Checks the bytes really are what the caller called them, and summarises what was found. */

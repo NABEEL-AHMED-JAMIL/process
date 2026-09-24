@@ -7,6 +7,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.identity.TestIdentity;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.ResponseDto;
 import process.model.dto.SchedulerDto;
@@ -77,7 +78,7 @@ class SourceJobInFlightGuardTest {
     void setUp() throws Exception {
         this.service = new SourceJobServiceImpl(this.sourceJobRepository, this.schedulerRepository,
             this.sourceTaskRepository, this.jobAuditLogRepository,
-            this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
+            this.jobQueueRepository, this.lookupDataRepository, TestIdentity.over(this.appUserRepository, null),
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
             TestNotifications.recording(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");

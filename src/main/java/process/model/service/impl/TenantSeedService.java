@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import process.identity.IdentityPort;
 import process.model.enums.Status;
 import process.model.enums.TenantStatus;
 import process.model.enums.UserRole;
@@ -27,7 +28,7 @@ public class TenantSeedService {
     private static final String PLATFORM_ADMIN_USERNAME = "admin@platform.local";
     // Public: PipelineServiceImpl also targets this tenant, for a platform admin's new form --
     // see the comment on that call site for why.
-    public static final String DEFAULT_TENANT_CODE = "default";
+    public static final String DEFAULT_TENANT_CODE = IdentityPort.DEFAULT_WORKSPACE_CODE;
 
     private final TenantRepository tenantRepository;
     private final AppUserRepository appUserRepository;

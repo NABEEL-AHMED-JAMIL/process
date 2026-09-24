@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.SearchTextDto;
 import process.model.enums.JobAuditMarker;
+import org.barco.platform.tenancy.TenantScope;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
 import process.util.SqlLogRedaction;
@@ -264,13 +265,17 @@ public class QueryService {
      * rather than everything.
      */
     private String tenantClause(String tableAlias) {
-        if (TenantContext.isPlatformAdmin()) {
+        // MIG-93: the request's TenantScope. AllTenants is the one grant that adds no predicate; a caller
+        // with no tenant is Scoped to NO_TENANT_MATCHES, and answered "and 1 = 0".
+        TenantScope scope = TenantContext.scope();
+        if (scope.isAllTenants()) {
             return "";
         }
-        if (ProcessUtil.isNull(TenantContext.getTenantId())) {
+        long tenantId = ((TenantScope.Scoped) scope).tenantId();
+        if (tenantId == TenantScope.NO_TENANT_MATCHES) {
             return " and 1 = 0 ";
         }
-        return String.format(" and %s.tenant_id = %d ", tableAlias, TenantContext.getTenantId());
+        return String.format(" and %s.tenant_id = %d ", tableAlias, tenantId);
     }
 
     /**

@@ -11,8 +11,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import process.model.pojo.AppUser;
-import process.model.repository.AppUserRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,10 +33,10 @@ import java.util.TreeSet;
 public class InternalUserDirectoryRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(InternalUserDirectoryRestApi.class);
-    private final AppUserRepository users;
+    private final IdentityPort users;
     private final byte[] token;
 
-    public InternalUserDirectoryRestApi(AppUserRepository users, @Value("${internal.service-token:}") String token) {
+    public InternalUserDirectoryRestApi(IdentityPort users, @Value("${internal.service-token:}") String token) {
         this.users = users;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
     }
@@ -61,14 +59,14 @@ public class InternalUserDirectoryRestApi {
             return new ResponseEntity<>(Collections.emptyList(), HttpStatus.OK);
         }
         List<Map<String, Object>> rows = new ArrayList<>();
-        // A directory for other services, answering for every tenant: the explicit cross-tenant read (MIG-13).
-        for (AppUser user : this.users.findAllByIdAcrossTenants(ids)) {
+        // A directory for other services, answering for every tenant (MIG-13), through the port (MIG-93).
+        for (IdentityPort.Person user : this.users.people(ids).values()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("appUserId", user.getAppUserId());
             row.put("tenantId", user.getTenantId());
             row.put("username", user.getUsername());
             row.put("fullName", user.getFullName());
-            row.put("status", user.getStatus() == null ? null : user.getStatus().name());
+            row.put("status", user.getStatus());
             rows.add(row);
         }
         return new ResponseEntity<>(rows, HttpStatus.OK);

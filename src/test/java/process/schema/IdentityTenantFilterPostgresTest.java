@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
+import process.identity.TestIdentity;
 import process.model.dto.AppUserDto;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
@@ -153,7 +154,7 @@ class IdentityTenantFilterPostgresTest {
             () -> users.findAllByIdAcrossTenants(Arrays.asList(PLATFORM_ADMIN, USER_B))))).as("names")
             .containsExactly(PLATFORM_ADMIN, USER_B);
         Map<Long, String> names = this.filteredAs(A, "TENANT_ADMIN", ADMIN_A,
-            () -> new UserNameResolver(users).namesFor(Arrays.asList(PLATFORM_ADMIN, USER_A)));
+            () -> new UserNameResolver(TestIdentity.over(users, null)).namesFor(Arrays.asList(PLATFORM_ADMIN, USER_A)));
         assertThat(names).as("a platform admin who created a row in A still has a name there")
             .containsEntry(PLATFORM_ADMIN, "Name 9000").containsEntry(USER_A, "Name 9002");
     }
@@ -168,7 +169,7 @@ class IdentityTenantFilterPostgresTest {
 
         AppUserServiceImpl service = new AppUserServiceImpl(users, db.repository(TenantRepository.class),
             mock(PasswordEncoder.class), TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class),
-                mock(TestNotifications.MailSink.class)), new UserNameResolver(users), mock(TrustedStorageOperations.class),
+                mock(TestNotifications.MailSink.class)), new UserNameResolver(TestIdentity.over(users, null)), mock(TrustedStorageOperations.class),
             mock(PageAccessService.class), this.filter, mock(TokenRevocations.class));
         ReflectionTestUtils.setField(service, "entityManager", db.entityManager());
         AppUserDto reset = new AppUserDto();

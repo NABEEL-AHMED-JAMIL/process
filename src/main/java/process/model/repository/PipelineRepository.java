@@ -31,9 +31,13 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
      * The filters a list page carries, each as a value that means "any" when absent (0, '',
      * false) rather than null -- Postgres cannot type a null parameter in a native query. A
      * search term arrives already lower-cased and wrapped in % so the query stays one line.
+     *
+     * The tenant is not one of them (MIG-93): tenantId 0 used to mean "every tenant", a sentinel one
+     * wrong zero away from widening a tenant's list. :allTenants is a platform admin's grant, said as
+     * a boolean; without it the query is scoped to :tenantId, which may be TenantScope.NO_TENANT_MATCHES.
      */
     String ROW_WHERE = "where cast(p.status as varchar) <> 'Delete'\n" +
-        "and (:tenantId = 0 or p.tenant_id = :tenantId)\n" +
+        "and (:allTenants = true or p.tenant_id = :tenantId)\n" +
         "and (:topicId = 0 or p.source_task_type_id = :topicId)\n" +
         "and (:untopped = false or p.source_task_type_id is null)\n" +
         "and (:status = '' or cast(p.status as varchar) = :status)\n" +
@@ -47,7 +51,8 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
         countQuery = "select count(*) from pipeline p left join source_task_type t on t.source_task_type_id = p.source_task_type_id\n" + ROW_WHERE,
         nativeQuery = true)
     Page<PipelineRowProjection> pageRows(
-        @Param("tenantId") long tenantId, @Param("topicId") long topicId, @Param("untopped") boolean untopped,
+        @Param("allTenants") boolean allTenants, @Param("tenantId") long tenantId, @Param("topicId") long topicId,
+        @Param("untopped") boolean untopped,
         @Param("status") String status, @Param("createdBy") long createdBy, @Param("q") String q,
         Pageable pageable);
 
@@ -60,9 +65,9 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
     @Query(value = "select count(*) as total, count(*) filter (where cast(p.status as varchar) = 'Active') as active,\n" +
         "count(distinct p.source_task_type_id) as topics, count(*) filter (where p.source_task_type_id is null) as untopped,\n" +
         "(select count(*) from pipeline_field f join pipeline q on q.pipeline_key = f.pipeline_key\n" +
-        "  where cast(q.status as varchar) <> 'Delete' and (:tenantId = 0 or q.tenant_id = :tenantId)) as fields\n" +
-        "from pipeline p where cast(p.status as varchar) <> 'Delete' and (:tenantId = 0 or p.tenant_id = :tenantId)", nativeQuery = true)
-    PipelineSummaryProjection summarise(@Param("tenantId") long tenantId);
+        "  where cast(q.status as varchar) <> 'Delete' and (:allTenants = true or q.tenant_id = :tenantId)) as fields\n" +
+        "from pipeline p where cast(p.status as varchar) <> 'Delete' and (:allTenants = true or p.tenant_id = :tenantId)", nativeQuery = true)
+    PipelineSummaryProjection summarise(@Param("allTenants") boolean allTenants, @Param("tenantId") long tenantId);
 
     /** Everything a platform admin sees -- every tenant's forms, in one list. */
     public List<Pipeline> findAllByStatusNot(Status status);

@@ -33,7 +33,7 @@ class InternalTenantDirectoryRestApiTest {
 
     private static final String TOKEN = "t0ken";
     private final TenantRepository tenants = mock(TenantRepository.class);
-    private final InternalTenantDirectoryRestApi api = new InternalTenantDirectoryRestApi(this.tenants, TOKEN);
+    private final InternalTenantDirectoryRestApi api = new InternalTenantDirectoryRestApi(TestIdentity.over(null, this.tenants), TOKEN);
 
     private static Tenant tenant(long id, String name, TenantStatus status) {
         Tenant t = new Tenant();

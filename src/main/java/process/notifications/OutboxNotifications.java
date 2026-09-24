@@ -15,9 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import process.model.pojo.AppUser;
 import process.identity.OneTimeSecrets;
-import process.model.repository.AppUserRepository;
+import process.identity.IdentityPort;
 import process.outbox.OutboxWriter;
 
 import java.util.Optional;
@@ -44,7 +43,7 @@ public class OutboxNotifications implements NotificationPort {
     private final Logger logger = LoggerFactory.getLogger(OutboxNotifications.class);
     private final ObjectMapper json = new ObjectMapper();
     private final OutboxWriter outbox;
-    private final AppUserRepository users;
+    private final IdentityPort users;
     private final OneTimeSecrets secrets;
     private final MailAttachmentStaging staging;
     private final LegacyConsolePush legacyConsole;
@@ -52,7 +51,7 @@ public class OutboxNotifications implements NotificationPort {
     /** Mail goes to an emulator (LocalStack) when an endpoint is set: stored, not delivered. */
     private final boolean realInboxes;
 
-    public OutboxNotifications(OutboxWriter outbox, AppUserRepository users, OneTimeSecrets secrets,
+    public OutboxNotifications(OutboxWriter outbox, IdentityPort users, OneTimeSecrets secrets,
         MailAttachmentStaging staging, LegacyConsolePush legacyConsole, UnreadBadges badges,
         @Value("${aws.endpoint:}") String awsEndpoint) {
         this.outbox = outbox;
@@ -67,7 +66,7 @@ public class OutboxNotifications implements NotificationPort {
     @Override
     public void jobStatusChanged(Long tenantId, JobStatusChanged event) {
         if (event.getRecipientUserId() != null) {
-            Optional<AppUser> recipient = this.users.findById(event.getRecipientUserId());
+            Optional<IdentityPort.Person> recipient = this.users.person(event.getRecipientUserId());
             if (recipient.isPresent()) {
                 // Core resolves the recipient; the service cannot read app_user (contract 1.2.0).
                 event.setRecipientUsername(recipient.get().getUsername()).setRecipientTenantId(scopeOf(recipient.get()));
@@ -107,7 +106,7 @@ public class OutboxNotifications implements NotificationPort {
             this.logger.debug("A {} notice had no recipient; nothing sent.", notice.getType());
             return;
         }
-        Optional<AppUser> recipient = this.users.findById(notice.getAppUserId());
+        Optional<IdentityPort.Person> recipient = this.users.person(notice.getAppUserId());
         if (!recipient.isPresent()) {
             this.logger.info("Not sending a {} notice to app user {}, who does not exist.", notice.getType(), notice.getAppUserId());
             return;
@@ -137,7 +136,7 @@ public class OutboxNotifications implements NotificationPort {
             }
             if (mail.getFailureNotice() != null) {
                 // The sender hears about a failure later; resolve who they are now, as for any notice.
-                Optional<AppUser> sender = this.users.findById(mail.getFailureNotice().getAppUserId());
+                Optional<IdentityPort.Person> sender = this.users.person(mail.getFailureNotice().getAppUserId());
                 if (sender.isPresent()) {
                     mail.getFailureNotice().setRecipientUsername(sender.get().getUsername()).setRecipientTenantId(scopeOf(sender.get()));
                 } else {
@@ -157,7 +156,7 @@ public class OutboxNotifications implements NotificationPort {
     }
 
     /** The recipient's home tenant, or the platform scope for a platform admin -- written, never left out (1.3.0). */
-    private static long scopeOf(AppUser recipient) {
+    private static long scopeOf(IdentityPort.Person recipient) {
         return recipient.getTenantId() != null ? recipient.getTenantId() : Recipients.PLATFORM_SCOPE;
     }
 

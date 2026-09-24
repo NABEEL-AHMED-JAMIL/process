@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.identity.TestIdentity;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskDto;
 import process.model.dto.SourceTaskTypeDto;
@@ -67,7 +68,7 @@ public class SourceTaskDeletedByIdVisibilityTest {
         // work than stubbing it and keeps the derived bucket/folder path exercised.
         this.service = new SourceTaskServiceImpl(this.bulkExcel, this.queryService,
             this.sourceJobRepository, this.sourceTaskRepository, this.sourceTaskTypeRepository,
-            this.tenantFilterHelper, new TaskPayloadLocationUtil(), this.tenantRepository,
+            this.tenantFilterHelper, new TaskPayloadLocationUtil(), TestIdentity.over(null, this.tenantRepository),
             TestNotifications.recording(null, null, this.notificationCenterService, null), this.userNameResolver);
         // entityManager is injected, not constructor-supplied.
         Field em = SourceTaskServiceImpl.class.getDeclaredField("entityManager");

@@ -7,6 +7,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
+import process.identity.TestIdentity;
 import process.model.dto.KafkaSecretDto;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ResponseDto;
@@ -87,7 +88,7 @@ public class KafkaCertificateWorkflowTest {
             Base64.getEncoder().encodeToString(generator.generateKey().getEncoded()));
 
         AppUserRepository users = mock(AppUserRepository.class);
-        this.service = new KafkaSecretServiceImpl(storage, users, this.encryptionUtil, "etl-config");
+        this.service = new KafkaSecretServiceImpl(storage, TestIdentity.over(users, null), this.encryptionUtil, "etl-config");
         ReflectionTestUtils.setField(this.service, "maxFileSizeKb", 512);
 
         TenantContext.set(TENANT, "TENANT_ADMIN", UPLOADER, "admin@tenant.example");

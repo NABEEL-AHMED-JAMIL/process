@@ -1,7 +1,12 @@
 package process.model.repository;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AssignableTypeFilter;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -62,6 +67,39 @@ class CrossTenantReadsAreNamedTest {
             "tenant_request rows belong to no tenant: a request is for a workspace that does not exist yet");
     }
 
+    /** Native queries in process's other repositories that read no tenant's rows, and why. */
+    private static final Map<String, String> NOT_TENANT_ROWS = new HashMap<>();
+
+    static {
+        String byParent = "keyed by a job, run or task id the caller has already been shown to own";
+        for (String name : new String[] {"JobAuditLogRepository.findAllByJobQueueIdV1", "JobAuditLogRepository.updateStatusByJobId",
+            "JobQueueRepository.countGroupByJobIds", "JobQueueRepository.getCountForInQueueJobByJobId",
+            "JobQueueRepository.getCountForJobByJobId", "JobQueueRepository.updateStatusByJobId", "SourceJobRepository.countLiveJobsForTask",
+            "SourceJobRepository.statusChangeSourceJobWithSourceTaskId", "SourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId"}) {
+            NOT_TENANT_ROWS.put(name, byParent);
+        }
+        String self = "keyed by the caller's own app_user_id (the profile screen's own activity)";
+        for (String name : new String[] {"JobQueueRepository.countRecentRunsForAssignee", "JobQueueRepository.findRecentRunsForAssignee",
+            "SourceJobRepository.countAssignedTo", "SourceJobRepository.outcomesForAssignee"}) {
+            NOT_TENANT_ROWS.put(name, self);
+        }
+        String engine = "the engine's own work across every tenant, run with no caller (scheduler, dispatch, sweeper)";
+        for (String name : new String[] {"JobQueueRepository.findAllJobForTodayWithLimit", "JobQueueRepository.findStalledRuns",
+            "SchedulerRepository.findDueSchedulers", "JobAuditLogRepository.upsertFromOpenSearch",
+            "JobAuditLogRepository.findExistingJobQueueIds", "SourceJobRepository.findNotificationRecipient"}) {
+            NOT_TENANT_ROWS.put(name, engine);
+        }
+        // FOLLOW-UP for Core: these four are a platform admin's all-tenant lists, chosen by an
+        // isPlatformAdmin() branch beside a ...ForTenant twin -- the pattern MIG-92 replaced with
+        // ...AcrossTenants and TenantScope in Identity. Renaming them is Core's change to make.
+        String platformBranch = "the platform-admin branch of an isPlatformAdmin() choice; the tenant twin is ...ForTenant";
+        for (String name : new String[] {"SourceTaskRepository.findAllSourceTask", "SourceTaskRepository.downloadListSourceTask",
+            "SourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeId", "SourceTaskTypeRepository.fetchAllSourceTaskType"}) {
+            NOT_TENANT_ROWS.put(name, platformBranch);
+        }
+        NOT_TENANT_ROWS.put("PipelineRepository.countUsingPrompt", "ai-service's internal question about one prompt id, service token only");
+    }
+
     private static final Pattern TENANT_COLUMN = Pattern.compile("\\btenant_id\\b");
 
     @Test
@@ -87,6 +125,36 @@ class CrossTenantReadsAreNamedTest {
         }
         assertThat(unnamed).as("native SQL the tenant filter cannot reach, named for nothing it crosses").isEmpty();
         assertThat(crossing).as("the cross-tenant reads, each reviewed above").containsExactlyElementsOf(new TreeSet<>(REVIEWED.keySet()));
+    }
+
+    /**
+     * MIG-93: the same rule over every repository in process, not only Identity's. A native query the
+     * tenant filter cannot reach either names tenant_id, is named for what it crosses, or is listed in
+     * {@link #NOT_TENANT_ROWS} with the reason it reads no tenant's rows.
+     */
+    @Test
+    void everyRepositoryInProcessFollowsTheSameRule() throws Exception {
+        ClassPathScanningCandidateComponentProvider scan = new ClassPathScanningCandidateComponentProvider(false) {
+            @Override
+            protected boolean isCandidateComponent(AnnotatedBeanDefinition definition) {
+                return definition.getMetadata().isInterface();
+            }
+        };
+        scan.addIncludeFilter(new AssignableTypeFilter(Repository.class));
+        List<String> unnamed = new ArrayList<>();
+        for (BeanDefinition bean : scan.findCandidateComponents("process")) {
+            Class<?> repository = Class.forName(bean.getBeanClassName());
+            for (Method method : repository.getDeclaredMethods()) {
+                String name = repository.getSimpleName() + "." + method.getName();
+                Query query = method.getAnnotation(Query.class);
+                if (query == null || !query.nativeQuery() || TENANT_COLUMN.matcher(query.value()).find()
+                    || method.getName().endsWith("AcrossTenants") || BY_ID.containsKey(name) || NOT_TENANT_ROWS.containsKey(name)) {
+                    continue;
+                }
+                unnamed.add(name);
+            }
+        }
+        assertThat(unnamed).as("native SQL the tenant filter cannot reach, named for nothing it crosses").isEmpty();
     }
 
     @Test

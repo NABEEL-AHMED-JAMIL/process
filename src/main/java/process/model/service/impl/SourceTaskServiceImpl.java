@@ -25,7 +25,7 @@ import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
-import process.model.repository.TenantRepository;
+import process.identity.IdentityPort;
 import process.model.service.SourceTaskService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -65,7 +65,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final TenantFilterHelper tenantFilterHelper;
     private final TaskPayloadLocationUtil taskPayloadLocationUtil;
-    private final TenantRepository tenantRepository;
+    private final IdentityPort identity;
     private final NotificationPort notifications;
 
     @PersistenceContext
@@ -94,7 +94,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         SourceTaskTypeRepository sourceTaskTypeRepository,
         TenantFilterHelper tenantFilterHelper,
         TaskPayloadLocationUtil taskPayloadLocationUtil,
-        TenantRepository tenantRepository,
+        IdentityPort identity,
         NotificationPort notifications,
         UserNameResolver userNameResolver) {
         this.userNameResolver = userNameResolver;
@@ -105,7 +105,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.tenantFilterHelper = tenantFilterHelper;
         this.taskPayloadLocationUtil = taskPayloadLocationUtil;
-        this.tenantRepository = tenantRepository;
+        this.identity = identity;
         this.notifications = notifications;
     }
 
@@ -155,7 +155,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         if (ProcessUtil.isNull(requestedTenantId)) {
             return new ResponseDto(ERROR, "Tenant is required when creating a source task as a platform administrator.");
         }
-        if (!this.tenantRepository.existsById(requestedTenantId)) {
+        if (!this.identity.workspace(requestedTenantId).isPresent()) {
             return new ResponseDto(ERROR, "Selected tenant not found.");
         }
         onResolved.accept(requestedTenantId);

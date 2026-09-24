@@ -1,8 +1,7 @@
 package process.util;
 
 import org.springframework.stereotype.Component;
-import process.model.pojo.AppUser;
-import process.model.repository.AppUserRepository;
+import process.identity.IdentityPort;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -32,10 +31,11 @@ import process.model.pojo.Audited;
 @Component
 public class UserNameResolver {
 
-    private final AppUserRepository appUserRepository;
+    private final IdentityPort identity;
 
-    public UserNameResolver(AppUserRepository appUserRepository) {
-        this.appUserRepository = appUserRepository;
+    /** Names come from Identity, through the port (MIG-93): nothing here reads app_user. */
+    public UserNameResolver(IdentityPort identity) {
+        this.identity = identity;
     }
 
     /**
@@ -51,10 +51,9 @@ public class UserNameResolver {
         }
         // Across tenants on purpose: the author of a tenant's row may be a platform admin, and the
         // tenant filter would otherwise blank their name (MIG-13).
-        List<AppUser> found = this.appUserRepository.findAllByIdAcrossTenants(wanted);
         Map<Long, String> names = new HashMap<>();
-        for (AppUser user : found) {
-            names.put(user.getAppUserId(), displayName(user));
+        for (IdentityPort.Person person : this.identity.people(wanted).values()) {
+            names.put(person.getAppUserId(), person.getDisplayName());
         }
         return names;
     }
@@ -133,12 +132,7 @@ public class UserNameResolver {
         if (userId == null) {
             return null;
         }
-        return this.appUserRepository.findById(userId).map(UserNameResolver::displayName).orElse(null);
+        return this.identity.person(userId).map(IdentityPort.Person::getDisplayName).orElse(null);
     }
 
-    /** Full name where there is one; the username is the fallback, since it is never blank. */
-    private static String displayName(AppUser user) {
-        String fullName = user.getFullName();
-        return (fullName == null || fullName.trim().isEmpty()) ? user.getUsername() : fullName.trim();
-    }
 }

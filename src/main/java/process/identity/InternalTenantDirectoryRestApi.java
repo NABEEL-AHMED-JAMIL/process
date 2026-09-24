@@ -11,8 +11,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import process.model.pojo.Tenant;
-import process.model.repository.TenantRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -40,10 +38,10 @@ public class InternalTenantDirectoryRestApi {
     static final int MAX_IDS = 500;
 
     private final Logger logger = LoggerFactory.getLogger(InternalTenantDirectoryRestApi.class);
-    private final TenantRepository tenants;
+    private final IdentityPort tenants;
     private final byte[] token;
 
-    public InternalTenantDirectoryRestApi(TenantRepository tenants, @Value("${internal.service-token:}") String token) {
+    public InternalTenantDirectoryRestApi(IdentityPort tenants, @Value("${internal.service-token:}") String token) {
         this.tenants = tenants;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
     }
@@ -70,11 +68,11 @@ public class InternalTenantDirectoryRestApi {
                 "Ask for at most " + MAX_IDS + " workspaces at a time."), HttpStatus.BAD_REQUEST);
         }
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Tenant tenant : this.tenants.findAllById(ids)) {
+        for (IdentityPort.Workspace tenant : this.tenants.workspaces(ids)) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("tenantId", tenant.getTenantId());
-            row.put("tenantName", tenant.getTenantName());
-            row.put("status", tenant.getStatus() == null ? null : tenant.getStatus().name());
+            row.put("tenantName", tenant.getName());
+            row.put("status", tenant.getStatus());
             rows.add(row);
         }
         return new ResponseEntity<>(rows, HttpStatus.OK);

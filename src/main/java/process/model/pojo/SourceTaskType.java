@@ -40,7 +40,6 @@ public class SourceTaskType implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-
     @GenericGenerator(
         name = "sourceTaskTypeSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
@@ -57,10 +56,6 @@ public class SourceTaskType implements Audited {
 
     @Column(name = "tenant_id")
     private Long tenantId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
-    private Tenant tenant;
 
     @Column(name = "service_name",
         nullable = false)
@@ -117,10 +112,6 @@ public class SourceTaskType implements Audited {
         this.tenantId = tenantId;
     }
 
-    public Tenant getTenant() {
-        return tenant;
-    }
-
     public String getServiceName() {
         return serviceName;
     }
@@ -169,7 +160,6 @@ public class SourceTaskType implements Audited {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 
     @Override
     public Long getCreatedBy() {

@@ -8,6 +8,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import process.identity.TestIdentity;
 import process.model.dto.PagingDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskDto;
@@ -76,7 +77,7 @@ public class SourceTaskLifecycleDefectTest {
     void setUp() throws Exception {
         this.service = new SourceTaskServiceImpl(this.bulkExcel, this.queryService,
             this.sourceJobRepository, this.sourceTaskRepository, this.sourceTaskTypeRepository,
-            this.tenantFilterHelper, new TaskPayloadLocationUtil(), this.tenantRepository,
+            this.tenantFilterHelper, new TaskPayloadLocationUtil(), TestIdentity.over(null, this.tenantRepository),
             TestNotifications.recording(null, null, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceTaskServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);

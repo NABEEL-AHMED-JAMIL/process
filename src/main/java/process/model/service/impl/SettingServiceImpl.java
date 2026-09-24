@@ -24,9 +24,10 @@ import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.repository.SourceTaskTypeRepository;
-import process.model.repository.TenantRepository;
+import process.identity.IdentityPort;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.SettingService;
+import org.barco.platform.tenancy.TenantScope;
 import process.security.TenantContext;
 import process.util.EncryptionUtil;
 import process.util.KafkaTopicPartitionUtil;
@@ -231,7 +232,7 @@ public class SettingServiceImpl implements SettingService {
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final KafkaConnectionProfileRepository kafkaConnectionProfileRepository;
     private final TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository;
-    private final TenantRepository tenantRepository;
+    private final IdentityPort identity;
     private final EncryptionUtil encryptionUtil;
 
     /**
@@ -256,14 +257,14 @@ public class SettingServiceImpl implements SettingService {
         SourceTaskTypeRepository sourceTaskTypeRepository,
         KafkaConnectionProfileRepository kafkaConnectionProfileRepository,
         TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository,
-        TenantRepository tenantRepository,
+        IdentityPort identity,
         EncryptionUtil encryptionUtil,
         KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
         LookupDataCacheService lookupDataCacheService,
         UserNameResolver userNameResolver) {
         this.userNameResolver = userNameResolver;
-        this.tenantRepository = tenantRepository;
+        this.identity = identity;
         this.lookupDataRepository = lookupDataRepository;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
@@ -366,7 +367,10 @@ public class SettingServiceImpl implements SettingService {
         } else {
             String term = isNull(q) || q.trim().isEmpty() ? "" : "%" + q.trim().toLowerCase() + "%";
             int cap = limit == null || limit < 1 ? 50 : Math.min(limit, 500);
-            topics = this.sourceTaskTypeRepository.searchTopicOptions(admin ? 0L : mine, term,
+            // MIG-93: "every tenant" is the platform admin's grant, not a tenant id of 0.
+            TenantScope scope = TenantContext.scope();
+            topics = this.sourceTaskTypeRepository.searchTopicOptions(scope.isAllTenants(),
+                scope.isAllTenants() ? TenantScope.NO_TENANT_MATCHES : ((TenantScope.Scoped) scope).tenantId(), term,
                 PageRequest.of(0, cap));
         }
         return new ResponseDto(SUCCESS, String.format("%d topic(s).", topics.size()), topics);
@@ -889,7 +893,7 @@ public class SettingServiceImpl implements SettingService {
             return "Topic workspace missing -- a platform administrator must say which workspace "
                 + "this task type belongs to.";
         }
-        if (!this.tenantRepository.findById(tenantId).isPresent()) {
+        if (!this.identity.workspace(tenantId).isPresent()) {
             return String.format("Topic workspace %d is not a workspace.", tenantId);
         }
         return null;

@@ -25,6 +25,12 @@
         <appender-ref ref="CONSOLE-ROLLING"/>
         <appender-ref ref="FILE-ROLLING"/>
     </logger>
+    <!-- MIG-93: every all-tenants grant (TenantScope), with its correlation id. The root is ERROR, so
+         without this the audit trail would be written nowhere. -->
+    <logger name="org.barco.platform.audit" level="info" additivity="false">
+        <appender-ref ref="CONSOLE-ROLLING"/>
+        <appender-ref ref="FILE-ROLLING"/>
+    </logger>
     <root level="error">
         <appender-ref ref="FILE-ROLLING"/>
     </root>

@@ -38,7 +38,6 @@ public class SourceTask implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-
     @GenericGenerator(
         name = "taskDetailSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
@@ -55,10 +54,6 @@ public class SourceTask implements Audited {
 
     @Column(name = "tenant_id")
     private Long tenantId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
-    private Tenant tenant;
 
     @Column(name = "task_name",
         nullable = false)
@@ -112,10 +107,6 @@ public class SourceTask implements Audited {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
-    }
-
-    public Tenant getTenant() {
-        return tenant;
     }
 
     public void setTaskDetailId(Long taskDetailId) {
@@ -215,7 +206,6 @@ public class SourceTask implements Audited {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 
     @Override
     public Long getCreatedBy() {

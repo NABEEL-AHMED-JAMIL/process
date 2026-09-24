@@ -31,7 +31,6 @@ public class LookupData implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-
     @GenericGenerator(
         name = "lookupDataSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
@@ -67,10 +66,6 @@ public class LookupData implements Audited {
 
     @Column(name = "tenant_id")
     private Long tenantId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
-    private Tenant tenant;
 
     @ManyToOne
     @JoinColumn(name = "parentLookupId")
@@ -142,10 +137,6 @@ public class LookupData implements Audited {
         this.tenantId = tenantId;
     }
 
-    public Tenant getTenant() {
-        return tenant;
-    }
-
     public LookupData getParent() {
         return parent;
     }
@@ -166,7 +157,6 @@ public class LookupData implements Audited {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 
     @Override
     public Long getCreatedBy() {

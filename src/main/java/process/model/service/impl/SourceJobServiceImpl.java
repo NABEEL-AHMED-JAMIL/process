@@ -18,6 +18,7 @@ import process.model.enums.UserRole;
 import process.model.pojo.*;
 import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
+import process.identity.IdentityPort;
 import process.model.service.SourceJobService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -50,7 +51,7 @@ public class SourceJobServiceImpl implements SourceJobService {
     private final JobAuditLogRepository jobAuditLogRepository;
         private final JobQueueRepository jobQueueRepository;
     private final LookupDataRepository lookupDataRepository;
-    private final AppUserRepository appUserRepository;
+    private final IdentityPort identity;
     private final ProducerBulkEngine producerBulkEngine;
     private final TenantFilterHelper tenantFilterHelper;
     private final OpenSearchAuditLogClient openSearchAuditLogClient;
@@ -68,7 +69,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         JobAuditLogRepository jobAuditLogRepository,
         JobQueueRepository jobQueueRepository,
         LookupDataRepository lookupDataRepository,
-        AppUserRepository appUserRepository,
+        IdentityPort identity,
         ProducerBulkEngine producerBulkEngine,
         TenantFilterHelper tenantFilterHelper,
         OpenSearchAuditLogClient openSearchAuditLogClient,
@@ -81,7 +82,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.jobAuditLogRepository = jobAuditLogRepository;
         this.jobQueueRepository = jobQueueRepository;
         this.lookupDataRepository = lookupDataRepository;
-        this.appUserRepository = appUserRepository;
+        this.identity = identity;
         this.producerBulkEngine = producerBulkEngine;
         this.tenantFilterHelper = tenantFilterHelper;
         this.openSearchAuditLogClient = openSearchAuditLogClient;
@@ -701,8 +702,8 @@ public class SourceJobServiceImpl implements SourceJobService {
             return Collections.emptyMap();
         }
         Map<Long, String> usernameByUserId = new HashMap<>();
-        this.appUserRepository.findAllById(userIds)
-            .forEach(appUser -> usernameByUserId.put(appUser.getAppUserId(), appUser.getUsername()));
+        this.identity.people(userIds).values()
+            .forEach(person -> usernameByUserId.put(person.getAppUserId(), person.getUsername()));
         return usernameByUserId;
     }
 
@@ -738,12 +739,12 @@ public class SourceJobServiceImpl implements SourceJobService {
     }
 
     private String validateAssignee(Long assignedUserId, Long tenantId) {
-        Optional<AppUser> assignee = this.appUserRepository.findById(assignedUserId);
-        if (!assignee.isPresent() || assignee.get().getStatus() == Status.Delete) {
+        Optional<IdentityPort.Person> assignee = this.identity.person(assignedUserId);
+        if (!assignee.isPresent() || assignee.get().isDeleted()) {
             return String.format("Assigned user not found with %d.", assignedUserId);
         }
 
-        if (assignee.get().getUserRole() == UserRole.PLATFORM_ADMIN) {
+        if (UserRole.PLATFORM_ADMIN.name().equals(assignee.get().getUserRole())) {
             return null;
         }
         if (!ProcessUtil.isNull(tenantId) && !tenantId.equals(assignee.get().getTenantId())) {
@@ -788,8 +789,8 @@ public class SourceJobServiceImpl implements SourceJobService {
             if (usernameByUserId != null) {
                 dto.setAssignedUsername(usernameByUserId.get(sourceJob.getAssignedUserId()));
             } else {
-                this.appUserRepository.findById(sourceJob.getAssignedUserId())
-                    .ifPresent(appUser -> dto.setAssignedUsername(appUser.getUsername()));
+                this.identity.person(sourceJob.getAssignedUserId())
+                    .ifPresent(person -> dto.setAssignedUsername(person.getUsername()));
             }
         }
         return dto;

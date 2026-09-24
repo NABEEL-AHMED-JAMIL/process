@@ -18,12 +18,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
 import process.model.dto.PipelineRowDto;
 import process.model.pojo.PipelineField;
-import process.model.pojo.Tenant;
 import process.model.repository.PipelineRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.pojo.SourceTaskType;
 import process.util.KafkaTopicPartitionUtil;
-import process.model.repository.TenantRepository;
+import process.identity.IdentityPort;
+import org.barco.platform.tenancy.TenantScope;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
 import process.util.UserNameResolver;
@@ -67,7 +67,7 @@ public class PipelineServiceImpl {
 
     private final PipelineRepository pipelineRepository;
 
-    private final TenantRepository tenantRepository;
+    private final IdentityPort identity;
 
     private final UserNameResolver userNameResolver;
 
@@ -77,10 +77,10 @@ public class PipelineServiceImpl {
     @Autowired(required = false)
     private AiPort ai;
 
-    public PipelineServiceImpl(PipelineRepository pipelineRepository, TenantRepository tenantRepository,
+    public PipelineServiceImpl(PipelineRepository pipelineRepository, IdentityPort identity,
         UserNameResolver userNameResolver, SourceTaskTypeRepository sourceTaskTypeRepository) {
         this.pipelineRepository = pipelineRepository;
-        this.tenantRepository = tenantRepository;
+        this.identity = identity;
         this.userNameResolver = userNameResolver;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
     }
@@ -136,12 +136,13 @@ public class PipelineServiceImpl {
      */
     public ResponseDto listForms(Long page, Long limit, String q, String topic, String status,
         Long tenantId, boolean onlyMine) {
-        long scope;
-        if (TenantContext.isPlatformAdmin()) {
-            scope = tenantId == null ? 0L : tenantId;
-        } else if (TenantContext.getTenantId() != null) {
-            scope = TenantContext.getTenantId();
-        } else {
+        // MIG-93: the request's TenantScope, not a tenant id with 0 for "all". A platform admin sees every
+        // workspace, or the one it names; anyone else their own, and a caller with no tenant nothing.
+        TenantScope scope = TenantContext.scope();
+        boolean allTenants = scope.isAllTenants() && tenantId == null;
+        long tenant = scope.isAllTenants() ? (tenantId == null ? TenantScope.NO_TENANT_MATCHES : tenantId)
+            : ((TenantScope.Scoped) scope).tenantId();
+        if (!scope.isAllTenants() && tenant == TenantScope.NO_TENANT_MATCHES) {
             return new ResponseDto(SUCCESS, "0 pipeline(s).", pageOf(Collections.emptyList(), null),
                 PagingUtil.convertEntityToPagingDTO(0L, PagingUtil.ApplyPaging("pipeline_key", "desc", 1L, limit)));
         }
@@ -153,7 +154,7 @@ public class PipelineServiceImpl {
         Pageable window = PageRequest.of(page == null || page < 1 ? 0 : (int) (page - 1),
             limit == null || limit < 1 ? 50 : (int) Math.min(limit, 200));
         Page<PipelineRowProjection> found = this.pipelineRepository.pageRows(
-            scope, topicId, untopped, ProcessUtil.isNull(status) ? "" : status.trim(), createdBy, term, window);
+            allTenants, tenant, topicId, untopped, ProcessUtil.isNull(status) ? "" : status.trim(), createdBy, term, window);
         List<PipelineRowDto> forms = found.getContent().stream().map(PipelineRowDto::from).collect(Collectors.toList());
         // One lookup for the whole page rather than one per row.
         this.userNameResolver.attachNames(forms);
@@ -171,7 +172,7 @@ public class PipelineServiceImpl {
             }
         }
         return new ResponseDto(SUCCESS, String.format("%d pipeline(s).", found.getTotalElements()),
-            pageOf(forms, this.pipelineRepository.summarise(scope)),
+            pageOf(forms, this.pipelineRepository.summarise(allTenants, tenant)),
             PagingUtil.convertEntityToPagingDTO(found.getTotalElements(), window));
     }
 
@@ -293,8 +294,8 @@ public class PipelineServiceImpl {
             // use it, and it stays reachable for anyone signed in as it to edit or delete.
             Long ownerTenantId = TenantContext.getTenantId();
             if (ownerTenantId == null) {
-                Optional<Tenant> defaultTenant = this.tenantRepository
-                    .findByTenantCode(TenantSeedService.DEFAULT_TENANT_CODE);
+                Optional<IdentityPort.Workspace> defaultTenant = this.identity
+                    .workspaceByCode(IdentityPort.DEFAULT_WORKSPACE_CODE);
                 if (!defaultTenant.isPresent()) {
                     return new ResponseDto(ERROR,
                         "No default tenant is configured to own this pipeline. Sign in as a tenant to create one.");

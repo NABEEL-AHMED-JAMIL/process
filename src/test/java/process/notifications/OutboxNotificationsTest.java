@@ -10,6 +10,7 @@ import org.barco.notifications.contract.NotificationCreated;
 import org.barco.notifications.contract.NotificationTopics;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import process.identity.TestIdentity;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import process.outbox.OutboxWriter;
@@ -45,7 +46,7 @@ class OutboxNotificationsTest {
     private final MailAttachmentStaging staging = mock(MailAttachmentStaging.class);
     private final LegacyConsolePush legacyConsole = mock(LegacyConsolePush.class);
     private final UnreadBadges badges = mock(UnreadBadges.class);
-    private final OutboxNotifications port = new OutboxNotifications(this.outbox, this.users, this.secrets, this.staging,
+    private final OutboxNotifications port = new OutboxNotifications(this.outbox, TestIdentity.over(this.users, null), this.secrets, this.staging,
         this.legacyConsole, this.badges, "http://host.docker.internal:4566");
 
     @BeforeEach
@@ -197,7 +198,7 @@ class OutboxNotificationsTest {
     @Test
     void anEmulatorEndpointMeansNoRealInboxes() {
         assertThat(this.port.deliversMailToRealInboxes()).isFalse();
-        assertThat(new OutboxNotifications(this.outbox, this.users, this.secrets, this.staging, this.legacyConsole,
+        assertThat(new OutboxNotifications(this.outbox, TestIdentity.over(this.users, null), this.secrets, this.staging, this.legacyConsole,
             this.badges, "").deliversMailToRealInboxes()).isTrue();
     }
 

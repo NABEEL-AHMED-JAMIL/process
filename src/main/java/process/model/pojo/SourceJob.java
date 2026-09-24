@@ -43,7 +43,6 @@ public class SourceJob implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-
     @GenericGenerator(
         name = "sourceJobSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
@@ -61,16 +60,8 @@ public class SourceJob implements Audited {
     @Column(name = "tenant_id")
     private Long tenantId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
-    private Tenant tenant;
-
     @Column(name = "assigned_user_id")
     private Long assignedUserId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_user_id", insertable = false, updatable = false)
-    private AppUser assignedUser;
 
     @Column(name = "job_name",
        length = 1000, nullable = false)
@@ -156,20 +147,12 @@ public class SourceJob implements Audited {
         this.tenantId = tenantId;
     }
 
-    public Tenant getTenant() {
-        return tenant;
-    }
-
     public Long getAssignedUserId() {
         return assignedUserId;
     }
 
     public void setAssignedUserId(Long assignedUserId) {
         this.assignedUserId = assignedUserId;
-    }
-
-    public AppUser getAssignedUser() {
-        return assignedUser;
     }
 
     public void setJobId(Long jobId) {
@@ -284,7 +267,6 @@ public class SourceJob implements Audited {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 
     @Override
     public Long getCreatedBy() {

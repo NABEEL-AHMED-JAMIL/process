@@ -25,7 +25,7 @@ class InternalUserDirectoryRestApiTest {
 
     private static final String TOKEN = "t0ken";
     private final AppUserRepository users = mock(AppUserRepository.class);
-    private final InternalUserDirectoryRestApi api = new InternalUserDirectoryRestApi(this.users, TOKEN);
+    private final InternalUserDirectoryRestApi api = new InternalUserDirectoryRestApi(TestIdentity.over(this.users, null), TOKEN);
 
     private static AppUser user(long id, long tenant, String username, String fullName) {
         AppUser u = new AppUser();

@@ -6,8 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import process.model.dto.ResponseDto;
-import process.model.repository.AppUserRepository;
-import process.model.service.PageAccessService;
+import process.identity.IdentityPort;
 import process.util.ProcessUtil;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -33,16 +32,16 @@ public class PageAccessInterceptor implements HandlerInterceptor {
 
     private static final Logger logger = LoggerFactory.getLogger(PageAccessInterceptor.class);
 
-    private final PageGate gate;
+    private final IdentityPort identity;
 
-    public PageAccessInterceptor(AppUserRepository appUserRepository, PageAccessService pageAccessService,
-        PageAccessCache cache) {
-        this.gate = new PageGate(appUserRepository, pageAccessService, cache);
+    /** The decision is Identity's page gate, asked through the port (MIG-93). */
+    public PageAccessInterceptor(IdentityPort identity) {
+        this.identity = identity;
     }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        PageGate.Decision decision = this.gate.decide(TenantContext.getUserRole(), TenantContext.getAppUserId(),
+        IdentityPort.PageDecision decision = this.identity.pageDecision(TenantContext.getUserRole(), TenantContext.getAppUserId(),
             request.getServletPath());
         if (decision.isAllowed()) {
             return true;

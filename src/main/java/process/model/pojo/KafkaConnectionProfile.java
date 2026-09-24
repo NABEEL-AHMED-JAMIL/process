@@ -40,7 +40,6 @@ public class KafkaConnectionProfile implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-
     @GenericGenerator(
         name = "kafkaConnectionProfileSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
@@ -57,10 +56,6 @@ public class KafkaConnectionProfile implements Audited {
 
     @Column(name = "tenant_id")
     private Long tenantId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
-    private Tenant tenant;
 
     @Column(name = "profile_name", nullable = false)
     private String profileName;
@@ -145,10 +140,6 @@ public class KafkaConnectionProfile implements Audited {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
-    }
-
-    public Tenant getTenant() {
-        return tenant;
     }
 
     public String getProfileName() {
@@ -331,7 +322,6 @@ public class KafkaConnectionProfile implements Audited {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 
     @Override
     public Long getCreatedBy() {

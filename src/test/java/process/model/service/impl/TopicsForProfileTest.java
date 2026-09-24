@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import org.barco.platform.tenancy.TenantScope;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -130,25 +131,25 @@ public class TopicsForProfileTest {
 
     @Test
     void aSearchIsScopedToTheWorkspaceAndCapped() throws Exception {
-        when(this.sourceTaskTypeRepository.searchTopicOptions(eq(MINE), eq("%claims%"), any())).thenReturn(Collections.emptyList());
+        when(this.sourceTaskTypeRepository.searchTopicOptions(eq(false), eq(MINE), eq("%claims%"), any())).thenReturn(Collections.emptyList());
 
         ResponseDto response = this.service.topics(" Claims ", 20, null, null);
 
         assertThat(response.getStatus()).isEqualTo("SUCCESS");
         ArgumentCaptor<Pageable> window = ArgumentCaptor.forClass(Pageable.class);
-        verify(this.sourceTaskTypeRepository).searchTopicOptions(eq(MINE), eq("%claims%"), window.capture());
+        verify(this.sourceTaskTypeRepository).searchTopicOptions(eq(false), eq(MINE), eq("%claims%"), window.capture());
         assertThat(window.getValue().getPageSize()).isEqualTo(20);
     }
 
     @Test
     void aPlatformAdminSearchesEveryWorkspace() throws Exception {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        when(this.sourceTaskTypeRepository.searchTopicOptions(eq(0L), eq(""), any())).thenReturn(Collections.emptyList());
+        when(this.sourceTaskTypeRepository.searchTopicOptions(eq(true), eq(TenantScope.NO_TENANT_MATCHES), eq(""), any())).thenReturn(Collections.emptyList());
 
         this.service.topics(null, null, null, null);
 
         ArgumentCaptor<Pageable> window = ArgumentCaptor.forClass(Pageable.class);
-        verify(this.sourceTaskTypeRepository).searchTopicOptions(eq(0L), eq(""), window.capture());
+        verify(this.sourceTaskTypeRepository).searchTopicOptions(eq(true), eq(TenantScope.NO_TENANT_MATCHES), eq(""), window.capture());
         assertThat(window.getValue().getPageSize()).isEqualTo(50);
     }
 

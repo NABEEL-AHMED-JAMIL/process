@@ -1,11 +1,13 @@
 package process.model.service.impl;
 
+import org.barco.platform.tenancy.TenantScope;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.identity.TestIdentity;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
@@ -78,7 +80,7 @@ public class PipelineServiceImplTenantIsolationTest {
 
     @BeforeEach
     void setUp() {
-        this.service = new PipelineServiceImpl(this.pipelineRepository, this.tenantRepository, this.userNameResolver, this.sourceTaskTypeRepository);
+        this.service = new PipelineServiceImpl(this.pipelineRepository, TestIdentity.over(null, this.tenantRepository), this.userNameResolver, this.sourceTaskTypeRepository);
         this.theTopicExists();
 
         this.tenantAForm = new Pipeline();
@@ -134,7 +136,14 @@ public class PipelineServiceImplTenantIsolationTest {
     private void summaryOf(long tenantId) {
         PipelineSummaryProjection summary = mock(PipelineSummaryProjection.class);
         when(summary.getTotal()).thenReturn(1L);
-        when(this.pipelineRepository.summarise(tenantId)).thenReturn(summary);
+        when(this.pipelineRepository.summarise(false, tenantId)).thenReturn(summary);
+    }
+
+    /** MIG-93: every tenant is a platform admin's grant, said as allTenants = true, never tenantId 0. */
+    private void summaryOfEveryTenant() {
+        PipelineSummaryProjection summary = mock(PipelineSummaryProjection.class);
+        when(summary.getTotal()).thenReturn(1L);
+        when(this.pipelineRepository.summarise(true, TenantScope.NO_TENANT_MATCHES)).thenReturn(summary);
     }
 
     @SuppressWarnings("unchecked")
@@ -145,7 +154,7 @@ public class PipelineServiceImplTenantIsolationTest {
     @Test
     void aTenantNeverSeesAnotherTenantsForms() {
         this.actAsTenant(TENANT_B);
-        when(this.pipelineRepository.pageRows(eq(TENANT_B), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
+        when(this.pipelineRepository.pageRows(eq(false), eq(TENANT_B), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
             .thenReturn(Page.empty());
         this.summaryOf(TENANT_B);
 
@@ -153,15 +162,15 @@ public class PipelineServiceImplTenantIsolationTest {
 
         // The tenantId a tenant sends is ignored: the scope is its own workspace, always.
         assertThat(rowsOf(response)).isEmpty();
-        verify(this.pipelineRepository, never()).pageRows(eq(TENANT_A), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
-        verify(this.pipelineRepository, never()).pageRows(eq(0L), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
+        verify(this.pipelineRepository, never()).pageRows(anyBoolean(), eq(TENANT_A), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
+        verify(this.pipelineRepository, never()).pageRows(eq(true), anyLong(), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
     }
 
     @Test
     void aTenantSeesItsOwnFormsOnePageAtATime() {
         this.actAsTenant(TENANT_A);
         PipelineRowProjection row = this.tenantARow();
-        when(this.pipelineRepository.pageRows(eq(TENANT_A), eq(0L), eq(false), eq(""), eq(0L), eq("%claims%"), any()))
+        when(this.pipelineRepository.pageRows(eq(false), eq(TENANT_A), eq(0L), eq(false), eq(""), eq(0L), eq("%claims%"), any()))
             .thenReturn(new PageImpl<>(Collections.singletonList(row), PageRequest.of(1, 50), 51));
         this.summaryOf(TENANT_A);
 
@@ -182,15 +191,15 @@ public class PipelineServiceImplTenantIsolationTest {
     void aPlatformAdminSeesEveryTenantsFormsOrOneWorkspacesOnAsk() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
         PipelineRowProjection row = this.tenantARow();
-        when(this.pipelineRepository.pageRows(eq(0L), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
+        when(this.pipelineRepository.pageRows(eq(true), eq(TenantScope.NO_TENANT_MATCHES), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
             .thenReturn(new PageImpl<>(Collections.singletonList(row)));
-        this.summaryOf(0L);
+        this.summaryOfEveryTenant();
 
         ResponseDto response = this.service.listForms(null, null, null, null, null, null, false);
         assertThat(rowsOf(response)).extracting(PipelineRowDto::getPipelineId).containsExactly(PIPELINE);
 
         // Asking for one workspace narrows the query to it.
-        when(this.pipelineRepository.pageRows(eq(TENANT_B), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
+        when(this.pipelineRepository.pageRows(eq(false), eq(TENANT_B), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
             .thenReturn(Page.empty());
         this.summaryOf(TENANT_B);
         assertThat(rowsOf(this.service.listForms(null, null, null, null, null, TENANT_B, false))).isEmpty();
@@ -199,7 +208,7 @@ public class PipelineServiceImplTenantIsolationTest {
     @Test
     void theNoTopicFilterAsksForUntoppedRowsAndOnlyMineForTheCallersOwn() {
         this.actAsTenant(TENANT_A);
-        when(this.pipelineRepository.pageRows(eq(TENANT_A), eq(0L), eq(true), eq("Active"), eq(9000L), eq(""), any()))
+        when(this.pipelineRepository.pageRows(eq(false), eq(TENANT_A), eq(0L), eq(true), eq("Active"), eq(9000L), eq(""), any()))
             .thenReturn(Page.empty());
         this.summaryOf(TENANT_A);
 
@@ -215,7 +224,7 @@ public class PipelineServiceImplTenantIsolationTest {
         ResponseDto response = this.service.listForms(1L, 50L, null, null, null, null, false);
 
         assertThat(rowsOf(response)).isEmpty();
-        verify(this.pipelineRepository, never()).pageRows(anyLong(), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
+        verify(this.pipelineRepository, never()).pageRows(anyBoolean(), anyLong(), anyLong(), anyBoolean(), any(), anyLong(), any(), any());
     }
 
     // ---- fieldsFor: the fields of one row, scoped like delete ----------------------------------
@@ -444,7 +453,7 @@ public class PipelineServiceImplTenantIsolationTest {
         this.actAsTenant(TENANT_A);
         PipelineRowProjection row = this.tenantARow();
         when(row.getSourceTaskTypeId()).thenReturn(77L);
-        when(this.pipelineRepository.pageRows(eq(TENANT_A), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
+        when(this.pipelineRepository.pageRows(eq(false), eq(TENANT_A), eq(0L), eq(false), eq(""), eq(0L), eq(""), any()))
             .thenReturn(new PageImpl<>(Collections.singletonList(row), PageRequest.of(0, 50), 1));
         this.summaryOf(TENANT_A);
         SourceTaskType topic = new SourceTaskType();

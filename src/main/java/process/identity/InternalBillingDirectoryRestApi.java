@@ -12,12 +12,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import process.model.enums.Status;
-import process.model.enums.TenantStatus;
-import process.model.pojo.Tenant;
-import process.model.repository.AppUserRepository;
 import process.model.repository.SourceTaskTypeRepository;
-import process.model.repository.TenantRepository;
 import process.util.UserNameResolver;
 
 import java.nio.charset.StandardCharsets;
@@ -42,16 +37,14 @@ import java.util.Set;
 public class InternalBillingDirectoryRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(InternalBillingDirectoryRestApi.class);
-    private final TenantRepository tenants;
-    private final AppUserRepository users;
+    private final IdentityPort identity;
     private final SourceTaskTypeRepository taskTypes;
     private final UserNameResolver names;
     private final byte[] token;
 
-    public InternalBillingDirectoryRestApi(TenantRepository tenants, AppUserRepository users, SourceTaskTypeRepository taskTypes,
+    public InternalBillingDirectoryRestApi(IdentityPort identity, SourceTaskTypeRepository taskTypes,
         UserNameResolver names, @Value("${internal.service-token:}") String token) {
-        this.tenants = tenants;
-        this.users = users;
+        this.identity = identity;
         this.taskTypes = taskTypes;
         this.names = names;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
@@ -67,11 +60,11 @@ public class InternalBillingDirectoryRestApi {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
         }
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Tenant tenant : this.tenants.findByStatusNotOrderByTenantIdDesc(TenantStatus.Delete)) {
+        for (IdentityPort.Workspace tenant : this.identity.liveWorkspaces()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("tenantId", tenant.getTenantId());
-            row.put("tenantName", tenant.getTenantName());
-            row.put("status", tenant.getStatus() == null ? null : tenant.getStatus().name());
+            row.put("tenantName", tenant.getName());
+            row.put("status", tenant.getStatus());
             rows.add(row);
         }
         return new ResponseEntity<>(rows, HttpStatus.OK);
@@ -86,7 +79,7 @@ public class InternalBillingDirectoryRestApi {
         }
         Map<String, Object> facts = new LinkedHashMap<>();
         facts.put("tenantId", tenantId);
-        facts.put("seats", this.users.countByTenantIdAndStatusNot(tenantId, Status.Delete));
+        facts.put("seats", this.identity.seats(tenantId));
         facts.put("topicsInUse", this.taskTypes.countTopicsInUse(tenantId));
         return new ResponseEntity<>(facts, HttpStatus.OK);
     }

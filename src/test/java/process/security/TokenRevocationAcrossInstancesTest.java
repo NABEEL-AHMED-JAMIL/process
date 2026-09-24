@@ -11,6 +11,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
+import process.identity.TestIdentity;
 import process.model.dto.AppUserDto;
 import process.model.dto.AuthResponseDto;
 import process.model.dto.ResponseDto;
@@ -84,7 +85,7 @@ class TokenRevocationAcrossInstancesTest {
 
         Instance(TokenRevocations revocations, boolean singleUseRefresh) {
             this.revocations = revocations;
-            this.filter = new JwtAuthenticationFilter(jwt, revocations);
+            this.filter = new JwtAuthenticationFilter(TestIdentity.authenticating(jwt, revocations));
             PasswordEncoder encoder = mock(PasswordEncoder.class);
             lenient().when(encoder.encode(anyString())).thenReturn("hash");
             this.auth = new AuthServiceImpl(users, tenantRepository(), encoder, jwt, mock(PageAccessService.class),

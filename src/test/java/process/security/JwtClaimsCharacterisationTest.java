@@ -11,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import process.identity.TestIdentity;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.util.JwtUtil;
@@ -49,7 +50,7 @@ class JwtClaimsCharacterisationTest {
         ReflectionTestUtils.setField(this.jwtUtil, "base64Key", Base64.getEncoder().encodeToString(KEY));
         ReflectionTestUtils.setField(this.jwtUtil, "accessTokenExpiryMinutes", 30L);
         ReflectionTestUtils.setField(this.jwtUtil, "refreshTokenExpiryDays", 7L);
-        this.filter = new JwtAuthenticationFilter(this.jwtUtil, mock(TokenRevocations.class));
+        this.filter = new JwtAuthenticationFilter(TestIdentity.authenticating(this.jwtUtil, mock(TokenRevocations.class)));
     }
 
     @AfterEach

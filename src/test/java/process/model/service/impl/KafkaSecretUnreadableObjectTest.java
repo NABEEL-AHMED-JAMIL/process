@@ -2,6 +2,7 @@ package process.model.service.impl;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import process.identity.TestIdentity;
 import process.model.dto.ResponseDto;
 import process.model.repository.AppUserRepository;
 import process.model.service.KafkaSecretService;
@@ -42,7 +43,7 @@ public class KafkaSecretUnreadableObjectTest {
 
     private final TrustedStorageOperations storageBrowserService = mock(TrustedStorageOperations.class);
     private final KafkaSecretService service =
-        new KafkaSecretServiceImpl(this.storageBrowserService, mock(AppUserRepository.class), null, "etl-config");
+        new KafkaSecretServiceImpl(this.storageBrowserService, TestIdentity.over(null, null), null, "etl-config");
 
     private final String ownersKey =
         KafkaSecretPath.newUpload(OWNER, "ca.pem", LocalDate.of(2026, 8, 31)).key();

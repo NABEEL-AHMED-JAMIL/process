@@ -1,5 +1,6 @@
 package process.security;
 
+import org.barco.platform.tenancy.TenantScope;
 import org.hibernate.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,15 +14,6 @@ import javax.persistence.EntityManager;
 public class TenantFilterHelper {
 
     private static final String FILTER_NAME = "tenantFilter";
-
-    /**
-     * The tenant a caller with no tenant of its own is filtered to.
-     *
-     * Every tenant_id is drawn from a sequence starting well above zero, so nothing can match
-     * this and nothing ever will. It is the JPQL-side equivalent of the "and 1 = 0" the native
-     * list queries use: a tenantless non-admin gets an empty result rather than an unfiltered one.
-     */
-    private static final long NO_TENANT_MATCHES = -1L;
 
     private final Logger logger = LoggerFactory.getLogger(TenantFilterHelper.class);
 
@@ -50,16 +42,20 @@ public class TenantFilterHelper {
                 ex.getMessage(), ex);
             throw new TenantIsolationException("Could not unwrap a Hibernate Session to turn the tenant filter on.", ex);
         }
-        if (TenantContext.isPlatformAdmin()) {
+        // The scope decides, not an if on the role (MIG-93): AllTenants is a named, audited grant, and
+        // anyone else is filtered to their tenant -- or, with none, to TenantScope.NO_TENANT_MATCHES,
+        // which no row carries (tenant ids start at 1000).
+        TenantScope scope = TenantContext.scope();
+        if (scope.isAllTenants()) {
             if (session.getEnabledFilter(FILTER_NAME) != null) {
                 session.disableFilter(FILTER_NAME);
             }
             return;
         }
-        if (tenantId == null) {
+        tenantId = ((TenantScope.Scoped) scope).tenantId();
+        if (tenantId == TenantScope.NO_TENANT_MATCHES) {
             this.logger.warn("A caller with role {} reached a tenant-scoped read with no tenant; "
                 + "filtering it to nothing. Its app_user row is missing a tenant_id.", TenantContext.getUserRole());
-            tenantId = NO_TENANT_MATCHES;
         }
         try {
             session.enableFilter(FILTER_NAME).setParameter("tenantId", tenantId);

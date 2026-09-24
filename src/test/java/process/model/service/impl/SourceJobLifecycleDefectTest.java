@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.identity.TestIdentity;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.ResponseDto;
 import process.model.dto.SchedulerDto;
@@ -39,6 +40,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 import process.notifications.TestNotifications;
@@ -85,7 +87,7 @@ public class SourceJobLifecycleDefectTest {
     void setUp() throws Exception {
         this.service = new SourceJobServiceImpl(this.sourceJobRepository, this.schedulerRepository,
             this.sourceTaskRepository, this.jobAuditLogRepository,
-            this.jobQueueRepository, this.lookupDataRepository, this.appUserRepository,
+            this.jobQueueRepository, this.lookupDataRepository, TestIdentity.over(this.appUserRepository, null),
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
             TestNotifications.recording(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");
@@ -473,13 +475,13 @@ public class SourceJobLifecycleDefectTest {
             .thenReturn(jobs);
         when(this.schedulerRepository.findByJobIdIn(anyList())).thenReturn(Collections.emptyList());
         when(this.jobQueueRepository.countGroupByJobIds(anyList())).thenReturn(Collections.emptyList());
-        when(this.appUserRepository.findAllById(anyList()))
+        when(this.appUserRepository.findAllByIdAcrossTenants(anyCollection()))
             .thenReturn(Arrays.asList(userNamed(500L, "ana@tenant-a"), userNamed(501L, "bo@tenant-a")));
 
         ResponseDto response = this.service.listSourceJob();
 
         assertThat(response.getStatus()).isEqualTo("SUCCESS");
-        verify(this.appUserRepository, times(1)).findAllById(anyList());
+        verify(this.appUserRepository, times(1)).findAllByIdAcrossTenants(anyCollection());
         verify(this.appUserRepository, never()).findById(any());
         List<?> data = (List<?>) response.getData();
         assertThat(data).hasSize(3);

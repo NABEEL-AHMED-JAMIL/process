@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
+import process.identity.TestIdentity;
 import process.api.AppUserRestApi;
 import process.api.PageAccessRestApi;
 import process.model.dto.AppUserDto;
@@ -101,13 +102,13 @@ class IdentityCrossTenantProbePostgresTest {
         storage = mock(TrustedStorageOperations.class);
         TenantFilterHelper filter = new TenantFilterHelper();
         PageAccessServiceImpl pageAccess = new PageAccessServiceImpl(db.repository(PageAccessProfileRepository.class), appUsers,
-            TestNotifications.recording(null, null, notices, null), new UserNameResolver(appUsers), new PageAccessCache(),
+            TestNotifications.recording(null, null, notices, null), new UserNameResolver(TestIdentity.over(appUsers, tenants)), new PageAccessCache(),
             tenants, db.repository(UserPageAccessRepository.class));
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         when(encoder.encode(any())).thenReturn("hash");
         when(encoder.matches(any(), any())).thenReturn(true);
         AppUserServiceImpl appUserService = new AppUserServiceImpl(appUsers, tenants, encoder,
-            TestNotifications.recording(null, null, notices, mock(TestNotifications.MailSink.class)), new UserNameResolver(appUsers),
+            TestNotifications.recording(null, null, notices, mock(TestNotifications.MailSink.class)), new UserNameResolver(TestIdentity.over(appUsers, tenants)),
             storage, pageAccess, filter, mock(TokenRevocations.class));
         ReflectionTestUtils.setField(appUserService, "entityManager", db.entityManager());
         ReflectionTestUtils.setField(appUserService, "consoleUrl", "http://localhost:4400");
