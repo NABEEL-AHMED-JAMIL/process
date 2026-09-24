@@ -3,7 +3,7 @@
     <property name="HOME_LOG" value="logs/process.log"/>
     <appender name="CONSOLE-ROLLING" class="ch.qos.logback.core.ConsoleAppender">
         <layout class="ch.qos.logback.classic.PatternLayout">
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${hostName} --- [%15.15t] %-40.40c{1.} : %m%n%ex</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${HOSTNAME:-process} --- [%15.15t] [%X{correlationId:--} t=%X{tenantId:--} u=%X{appUserId:--}] %-40.40c{1.} : %m%n%ex</pattern>
         </layout>
     </appender>
     <appender name="FILE-ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -18,7 +18,7 @@
             <maxHistory>60</maxHistory>
         </rollingPolicy>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${hostName} --- [%15.15t] %-40.40c{1.} : %m%n%ex</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${HOSTNAME:-process} --- [%15.15t] [%X{correlationId:--} t=%X{tenantId:--} u=%X{appUserId:--}] %-40.40c{1.} : %m%n%ex</pattern>
         </encoder>
     </appender>
     <logger name="process" level="debug" additivity="false">
