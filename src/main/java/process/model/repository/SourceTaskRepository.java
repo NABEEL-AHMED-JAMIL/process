@@ -50,6 +50,18 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
 
     Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId, Status taskStatus);
 
+    /**
+     * Live tasks -- Active or Inactive, not deleted -- that name this lookup row as their home page or group.
+     * What stops a home page or group being deleted out from under them (MIG-165).
+     */
+    default long countLiveTasksReferencing(Long lookupId) {
+        return this.countTasksReferencingOutsideStatus(lookupId, Status.Delete);
+    }
+
+    @Query("select count(st) from SourceTask st where (st.homePageId = :lookupId or st.groupId = :lookupId) "
+        + "and st.taskStatus <> :excluded")
+    long countTasksReferencingOutsideStatus(@Param("lookupId") Long lookupId, @Param("excluded") Status excluded);
+
     String DOWNLOAD_LIST_SOURCE_TASK_SELECT = "select st.task_detail_id as taskDetailId, st.task_name as taskName,\n" +
         " st.task_payload  as taskPayload, st.task_status as taskStatus,\n" +
         "stt.queue_topic_partition as queueTopicPartition, stt.service_name as serviceName," +
@@ -57,7 +69,7 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
         "ldg.lookup_type as groupLabel\n" +
         "from source_task st\n" +
         "inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n" +
-        "left join lookup_data ldg on cast(ldg.lookup_id as varchar(10)) = st.group_id\n";
+        "left join lookup_data ldg on ldg.lookup_id = st.group_id\n";
 
     @Query(value = DOWNLOAD_LIST_SOURCE_TASK_SELECT +
 
@@ -71,7 +83,7 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
     @Query(value = "select st.task_detail_id as taskDetailId, st.task_name as taskName, st.task_status as taskStatus,\n" +
         "ldg.lookup_type as groupLabel\n" +
         "from source_task st\n" +
-        "left join lookup_data ldg on cast(ldg.lookup_id as varchar(10)) = st.group_id\n" +
+        "left join lookup_data ldg on ldg.lookup_id = st.group_id\n" +
 
         "where st.source_task_type_id = :sourceTaskTypeId and st.task_status != 'Delete'", nativeQuery = true)
     public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeId(
@@ -80,7 +92,7 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
     @Query(value = "select st.task_detail_id as taskDetailId, st.task_name as taskName, st.task_status as taskStatus,\n" +
         "ldg.lookup_type as groupLabel\n" +
         "from source_task st\n" +
-        "left join lookup_data ldg on cast(ldg.lookup_id as varchar(10)) = st.group_id\n" +
+        "left join lookup_data ldg on ldg.lookup_id = st.group_id\n" +
         "where st.source_task_type_id = :sourceTaskTypeId and st.task_status != 'Delete' " +
         "and st.tenant_id = :tenantId", nativeQuery = true)
     public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeIdForTenant(

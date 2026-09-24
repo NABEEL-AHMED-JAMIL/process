@@ -6,6 +6,7 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,9 +17,11 @@ import process.model.enums.Status;
 import process.model.pojo.SourceTaskPayload;
 import process.util.XmlOutTagInfoUtil;
 import java.util.List;
+import process.model.pojo.LookupData;
 import process.model.pojo.SourceTaskType;
 import process.model.pojo.SourceTask;
 import process.model.projection.SourceTaskProjection;
+import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
@@ -69,6 +72,19 @@ public class SourceTaskServiceImpl implements SourceTaskService {
 
     private final UserNameResolver userNameResolver;
 
+    /**
+     * Field-injected and optional, like SettingServiceImpl's pipelines: only the home page and group check
+     * reads lookups, and the constructor is built by hand in several tests. Unwired, an id is still held to
+     * existing by the foreign key; wired, as it always is in the application, it is also held to its family
+     * and its workspace.
+     */
+    @Autowired(required = false)
+    private LookupDataRepository lookupDataRepository;
+
+    private static final String HOME_PAGES = "PIPELINE_HOME_PAGES";
+
+    private static final String TASK_GROUPS = "TASK_GROUPS";
+
 
     public SourceTaskServiceImpl(BulkExcel bulkExcel,
         QueryService queryService,
@@ -90,6 +106,44 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         this.taskPayloadLocationUtil = taskPayloadLocationUtil;
         this.tenantRepository = tenantRepository;
         this.notifications = notifications;
+    }
+
+    /**
+     * A home page or group id as the caller sent it, as the lookup row it has to be (MIG-165).
+     *
+     * The columns are bigint foreign keys to lookup_data since V70.3. Nothing checked them before: any
+     * string was stored, a non-number simply never resolved, and an id from another workspace's family
+     * was accepted -- and a home page is resolved to its URL at dispatch, so that put one workspace's URL
+     * into another's job payload. Blank is "none". Anything else must be a row of the named family that
+     * belongs to the task's workspace (or to no workspace, the platform's own); every other case gets the
+     * same refusal, so the answer does not confirm that another workspace's id exists.
+     */
+    private String refuseReference(String raw, String family, String what, Long taskTenantId, Consumer<Long> onResolved) {
+        if (raw == null || raw.trim().isEmpty()) {
+            onResolved.accept(null);
+            return null;
+        }
+        Long id = ProcessUtil.parseLongOrNull(raw);
+        String refusal = String.format("%s %s is not one of this workspace's %s.", what, raw.trim(),
+            HOME_PAGES.equals(family) ? "home pages" : "task groups");
+        if (id == null) {
+            return refusal;
+        }
+        if (this.lookupDataRepository != null) {
+            Optional<LookupData> row = this.lookupDataRepository.findById(id);
+            boolean fits = row.isPresent() && row.get().getParent() != null
+                && family.equals(row.get().getParent().getLookupType())
+                && (row.get().getTenantId() == null || row.get().getTenantId().equals(taskTenantId));
+            if (!fits) {
+                return refusal;
+            }
+        }
+        onResolved.accept(id);
+        return null;
+    }
+
+    private static String idText(Long id) {
+        return id == null ? null : String.valueOf(id);
     }
 
     private ResponseDto resolveTenantIdForCreate(Long requestedTenantId, Consumer<Long> onResolved) {
@@ -187,11 +241,18 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         if (tenantError != null) {
             return tenantError;
         }
+        String referenceError = this.refuseReference(sourceTaskDto.getHomePageId(), HOME_PAGES, "Home page",
+            sourceTask.getTenantId(), sourceTask::setHomePageId);
+        if (referenceError == null) {
+            referenceError = this.refuseReference(sourceTaskDto.getGroupId(), TASK_GROUPS, "Group",
+                sourceTask.getTenantId(), sourceTask::setGroupId);
+        }
+        if (referenceError != null) {
+            return new ResponseDto(ERROR, referenceError);
+        }
         sourceTask.setTaskName(sourceTaskDto.getTaskName());
         sourceTask.setTaskPayload(sourceTaskDto.getTaskPayload());
-        sourceTask.setHomePageId(sourceTaskDto.getHomePageId());
         sourceTask.setPipelineId(sourceTaskDto.getPipelineId());
-        sourceTask.setGroupId(sourceTaskDto.getGroupId());
         /*
          * The caller's choice, not a constant. Every other field here comes from the DTO and this
          * one was hard-coded to Active, so the console's Clone button -- which posts Inactive and
@@ -241,6 +302,18 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             && (!this.isOwnedByCaller(sourceTask.get()) || this.isDeleted(sourceTask.get()))) {
             return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
         }
+        Long[] references = new Long[2];
+        if (sourceTask.isPresent()) {
+            String referenceError = this.refuseReference(sourceTaskDto.getHomePageId(), HOME_PAGES, "Home page",
+                sourceTask.get().getTenantId(), id -> references[0] = id);
+            if (referenceError == null) {
+                referenceError = this.refuseReference(sourceTaskDto.getGroupId(), TASK_GROUPS, "Group",
+                    sourceTask.get().getTenantId(), id -> references[1] = id);
+            }
+            if (referenceError != null) {
+                return new ResponseDto(ERROR, referenceError);
+            }
+        }
         if (sourceTask.isPresent()) {
             if (!ProcessUtil.isNull(sourceTaskDto.getTaskName())) {
                 sourceTask.get().setTaskName(sourceTaskDto.getTaskName());
@@ -271,9 +344,9 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             if (!ProcessUtil.isNull(sourceTaskDto.getTaskStatus())) {
                 sourceTask.get().setTaskStatus(sourceTaskDto.getTaskStatus());
             }
-            sourceTask.get().setHomePageId(sourceTaskDto.getHomePageId());
+            sourceTask.get().setHomePageId(references[0]);
             sourceTask.get().setPipelineId(sourceTaskDto.getPipelineId());
-            sourceTask.get().setGroupId(sourceTaskDto.getGroupId());
+            sourceTask.get().setGroupId(references[1]);
             this.sourceTaskRepository.save(sourceTask.get());
             return new ResponseDto(SUCCESS, String.format("SourceTask successfully updated with ID %d.", sourceTaskDto.getTaskDetailId()));
         }
@@ -539,9 +612,9 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             sourceTaskDto.setTenantId(sourceTask.get().getTenantId());
             sourceTaskDto.setTaskName(sourceTask.get().getTaskName());
             sourceTaskDto.setTaskStatus(sourceTask.get().getTaskStatus());
-            sourceTaskDto.setHomePageId(sourceTask.get().getHomePageId());
+            sourceTaskDto.setHomePageId(idText(sourceTask.get().getHomePageId()));
             sourceTaskDto.setPipelineId(sourceTask.get().getPipelineId());
-            sourceTaskDto.setGroupId(sourceTask.get().getGroupId());
+            sourceTaskDto.setGroupId(idText(sourceTask.get().getGroupId()));
             sourceTaskDto.setTaskPayload(sourceTask.get().getTaskPayload());
             SourceTaskTypeDto sourceTaskTypeDto = this.getSourceTaskTypeDto(sourceTask.get().getSourceTaskType());
             sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
@@ -698,6 +771,17 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return tenantError;
         }
         Long uploadTenantId = uploadTenantIdHolder[0];
+        Map<SourceTaskValidation, Long> homePageByRow = new HashMap<>();
+        for (SourceTaskValidation row : sourceTaskValidations) {
+            String referenceError = this.refuseReference(row.getHomePageId(), HOME_PAGES, "Home page", uploadTenantId,
+                id -> homePageByRow.put(row, id));
+            if (referenceError != null) {
+                errors.add(String.format("%s at row %d.%n", referenceError.substring(0, referenceError.length() - 1), row.getRowCounter()));
+            }
+        }
+        if (!errors.isEmpty()) {
+            return new ResponseDto(ERROR, String.format("Total %d source task invalid.", errors.size()), errors);
+        }
         sourceTaskValidations.forEach(sourceTaskValidation -> {
             SourceTask sourceTask = new SourceTask();
 
@@ -705,7 +789,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             sourceTask.setTaskName(sourceTaskValidation.getTaskName());
             sourceTask.setTaskPayload(sourceTaskValidation.getTaskPayload());
             sourceTask.setPipelineId(sourceTaskValidation.getPipelineId());
-            sourceTask.setHomePageId(sourceTaskValidation.getHomePageId());
+            sourceTask.setHomePageId(homePageByRow.get(sourceTaskValidation));
             sourceTask.setTaskStatus(Status.Active);
             sourceTask.setSourceTaskType(this.sourceTaskTypeRepository.findById(Long.valueOf(sourceTaskValidation.getSourceTaskTypeId())).get());
             this.applyDerivedLocation(sourceTask);

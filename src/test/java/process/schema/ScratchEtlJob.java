@@ -1,7 +1,15 @@
 package process.schema;
 
 import com.zaxxer.hikari.HikariDataSource;
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+import liquibase.Liquibase;
+import liquibase.changelog.ChangeSet;
+import liquibase.database.Database;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
 import liquibase.integration.spring.SpringLiquibase;
+import liquibase.resource.ClassLoaderResourceAccessor;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -72,6 +80,58 @@ public final class ScratchEtlJob implements AutoCloseable {
             throw failed;
         }
         return scratch;
+    }
+
+    /**
+     * Stops the build before the named changeset, so a test can put a long-lived database's rows in place
+     * and then watch that changeset convert them. finish() applies the rest.
+     */
+    public static ScratchEtlJob buildUpTo(String prefix, String changeSetId) throws Exception {
+        String server = System.getenv("NOTIFICATIONS_TEST_DB_URL");
+        assumeTrue(server != null, "NOTIFICATIONS_TEST_DB_URL is not set");
+        String name = prefix + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        try (Connection admin = admin(server); Statement statement = admin.createStatement()) {
+            statement.execute("CREATE DATABASE " + name);
+        }
+        HikariDataSource pool = new HikariDataSource();
+        pool.setJdbcUrl(server.replaceAll("/[^/?]+(\\?.*)?$", "/" + name + "$1"));
+        pool.setUsername(System.getenv("NOTIFICATIONS_TEST_DB_USER"));
+        pool.setPassword(System.getenv("NOTIFICATIONS_TEST_DB_PASSWORD"));
+        pool.setMaximumPoolSize(1);
+        ScratchEtlJob scratch = new ScratchEtlJob(server, name, pool);
+        try {
+            scratch.migrate(changeSetId);
+        } catch (Exception | Error failed) {
+            scratch.close();
+            throw failed;
+        }
+        return scratch;
+    }
+
+    /** The rest of the changelog, after buildUpTo. */
+    public void finish() throws Exception {
+        this.migrate(null);
+    }
+
+    /** Applies the changelog up to, not including, stopBefore -- or all of it when that is null. */
+    private void migrate(String stopBefore) throws Exception {
+        try (Connection connection = this.connect()) {
+            Database database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
+            Liquibase liquibase = new Liquibase("db/changelog/db.changelog-master.yaml",
+                new ClassLoaderResourceAccessor(ScratchEtlJob.class.getClassLoader()), database);
+            if (stopBefore == null) {
+                liquibase.update(new Contexts("init"), new LabelExpression());
+                return;
+            }
+            List<ChangeSet> unrun = liquibase.listUnrunChangeSets(new Contexts("init"), new LabelExpression());
+            for (int i = 0; i < unrun.size(); i++) {
+                if (unrun.get(i).getId().equals(stopBefore)) {
+                    liquibase.update(i, new Contexts("init"), new LabelExpression());
+                    return;
+                }
+            }
+            throw new IllegalArgumentException("No changeset " + stopBefore + " in the changelog");
+        }
     }
 
     public JdbcTemplate sql() {

@@ -22,6 +22,7 @@ import process.model.pojo.TenantTaskTypeKafkaRoute;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
+import process.model.repository.SourceTaskRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.TenantRepository;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
@@ -239,6 +240,10 @@ public class SettingServiceImpl implements SettingService {
      */
     @Autowired(required = false)
     private PipelineRepository pipelineRepository;
+
+    /** Optional for the same reason: only the in-use check on deleting a home page or group reads tasks. */
+    @Autowired(required = false)
+    private SourceTaskRepository sourceTaskRepository;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
     private final LookupDataCacheService lookupDataCacheService;
@@ -795,12 +800,32 @@ public class SettingServiceImpl implements SettingService {
         if (deleteRefusal == null) {
             deleteRefusal = refuseDeletion(lookupDataOpt.get());
         }
+        if (deleteRefusal == null) {
+            deleteRefusal = this.refuseDeletionInUse(lookupDataOpt.get());
+        }
         if (deleteRefusal != null) {
             return new ResponseDto(ERROR, deleteRefusal);
         }
         this.lookupDataRepository.deleteById(tempLookupData.getLookupId());
         this.lookupDataCacheService.initializeCache();
         return new ResponseDto(SUCCESS, String.format("LookupData delete with %d.", tempLookupData.getLookupId()));
+    }
+
+    /**
+     * A home page or group a live task still names (MIG-165). Tasks hold these as foreign keys since V70.3;
+     * the key would null a tombstoned task's reference, but a live task silently losing its home page is
+     * what used to happen by accident, and is refused here instead, with the count.
+     */
+    private String refuseDeletionInUse(LookupData lookupData) {
+        if (this.sourceTaskRepository == null) {
+            return null;
+        }
+        long tasks = this.sourceTaskRepository.countLiveTasksReferencing(lookupData.getLookupId());
+        if (tasks == 0) {
+            return null;
+        }
+        return String.format("%d task%s still use%s \"%s\". Change %s first.", tasks, tasks == 1 ? "" : "s",
+            tasks == 1 ? "s" : "", lookupData.getLookupType(), tasks == 1 ? "that task" : "those tasks");
     }
 
     private boolean isLookupOwnedByCaller(LookupData lookupData) {

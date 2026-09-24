@@ -59,3 +59,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V70.1-job-queue-day-index-and-entity-indexes.yaml
   - include:
       file: db/changelog/yaml/V70.2-seed-platform-default-kafka-connection.yaml
+  - include:
+      file: db/changelog/yaml/V70.3-source-task-references-are-bigint-foreign-keys.yaml

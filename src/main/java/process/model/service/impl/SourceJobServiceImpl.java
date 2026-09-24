@@ -714,7 +714,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             if (ProcessUtil.isNull(job.getTaskDetail())) {
                 continue;
             }
-            Long homePageLookupId = ProcessUtil.parseLongOrNull(job.getTaskDetail().getHomePageId());
+            Long homePageLookupId = job.getTaskDetail().getHomePageId();
             if (homePageLookupId != null) {
                 lookupIds.add(homePageLookupId);
             }
@@ -803,7 +803,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         dto.setBucket(sourceTask.getBucket());
         dto.setInputFolder(sourceTask.getInputFolder());
         dto.setOutputFolder(sourceTask.getOutputFolder());
-        Long homePageLookupId = ProcessUtil.parseLongOrNull(sourceTask.getHomePageId());
+        Long homePageLookupId = sourceTask.getHomePageId();
         if (homePageLookupId != null) {
             dto.setHomePageId(lookupTypeByLookupId != null
                 ? lookupTypeByLookupId.get(homePageLookupId)

@@ -90,8 +90,9 @@ public class QueryService {
             // that for an id, so the join matched nothing and the list's Pipeline column was
             // blank for every task ever created. Selected straight from source_task now, the
             // same way SourceTaskRepository and the Kafka producer already read it.
-            query += "left join lookup_data ld1 on cast(ld1.lookup_id as varchar(10)) = st.home_page_id\n";
-            query += "left join lookup_data ld3 on cast(ld3.lookup_id as varchar(10)) = st.group_id\n";
+            // bigint foreign keys since V70.3 (MIG-165): joined on the key, no cast.
+            query += "left join lookup_data ld1 on ld1.lookup_id = st.home_page_id\n";
+            query += "left join lookup_data ld3 on ld3.lookup_id = st.group_id\n";
         }
         query += "where st.task_status in ('Active', 'Inactive') " + this.tenantClause("st");
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
