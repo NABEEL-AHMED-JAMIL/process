@@ -74,7 +74,7 @@ public class DuckDbSessionFactory {
      * site is the intended shape.
      */
     public Connection open(StorageConnection connection) throws SQLException {
-        Connection duck = DriverManager.getConnection("jdbc:duckdb:");
+        Connection duck = this.connect();
         boolean handedOver = false;
         try {
             try (Statement statement = duck.createStatement()) {
@@ -95,6 +95,11 @@ public class DuckDbSessionFactory {
                 }
             }
         }
+    }
+
+    /** A fresh in-memory engine: one per query, never pooled. The seam a test records the configuration through. */
+    Connection connect() throws SQLException {
+        return DriverManager.getConnection("jdbc:duckdb:");
     }
 
     private void applyResourceLimits(Statement statement) throws SQLException {

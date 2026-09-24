@@ -292,6 +292,13 @@ public final class StatementGate {
             // Fail closed. A tree that cannot be read is a tree nothing has been checked in.
             throw new AnalyticsException(BY_NAME_ONLY);
         }
+        // Fail closed on a tree that reads but is not the parser's answer either. An empty text,
+        // a JSON null, an array or a number all read without an error and hold no nodes, so the
+        // walk below found nothing to refuse and admitted them (MIG-116). The parser's answer is
+        // an object whose statements are exactly the one statement the count already reported.
+        if (root == null || !root.isObject() || !root.path("statements").isArray() || root.path("statements").size() != 1) {
+            throw new AnalyticsException(BY_NAME_ONLY);
+        }
         walk(root, 0);
     }
 
