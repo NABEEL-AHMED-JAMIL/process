@@ -155,7 +155,7 @@ class UsernameTakeoverTest {
         when(jwt.generateAccessToken(alice)).thenReturn("a");
         when(jwt.generateRefreshToken(alice)).thenReturn("r");
         AuthServiceImpl auth = new AuthServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
-            jwt, this.pageAccessService, new LoginAttemptGuard());
+            jwt, this.pageAccessService, mock(LoginAttemptGuard.class));
 
         LoginRequestDto request = new LoginRequestDto();
         request.setUsername("ALICE@X.COM");

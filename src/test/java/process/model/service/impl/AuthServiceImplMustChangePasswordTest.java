@@ -60,7 +60,7 @@ public class AuthServiceImplMustChangePasswordTest {
     void setUp() {
         when(this.passwordEncoder.encode(any(String.class))).thenReturn("nobodys-hash");
         this.service = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.jwtUtil, this.pageAccessService, new LoginAttemptGuard());
+            this.passwordEncoder, this.jwtUtil, this.pageAccessService, mock(LoginAttemptGuard.class));
     }
 
     /** No tenant, like the seeded platform admin, so the tenant lookup never comes into it. */

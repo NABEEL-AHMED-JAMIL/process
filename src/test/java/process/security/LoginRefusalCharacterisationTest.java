@@ -1,5 +1,6 @@
 package process.security;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -60,6 +61,7 @@ class LoginRefusalCharacterisationTest {
     private JwtUtil jwtUtil;
     private PageAccessService pageAccessService;
     private AtomicLong now;
+    private RedisLoginGuards redis;
     private AuthServiceImpl authService;
 
     @BeforeEach
@@ -73,8 +75,16 @@ class LoginRefusalCharacterisationTest {
         when(this.passwordEncoder.encode(anyString())).thenReturn(NOBODYS_HASH);
         when(this.passwordEncoder.matches("right", STORED_HASH)).thenReturn(true);
         when(this.pageAccessService.effectivePages(any(AppUser.class))).thenReturn(Collections.emptySet());
+        if (this.redis != null) this.redis.close();
+        this.redis = RedisLoginGuards.open();
         this.authService = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.jwtUtil, this.pageAccessService, new LoginAttemptGuard(this.now::get));
+            this.passwordEncoder, this.jwtUtil, this.pageAccessService, this.redis.guard(this.now::get));
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (this.redis != null) this.redis.close();
+        this.redis = null;
     }
 
     private AppUser tenantAdmin(Status status) {

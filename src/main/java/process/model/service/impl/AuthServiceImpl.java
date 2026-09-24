@@ -71,8 +71,16 @@ public class AuthServiceImpl implements AuthService {
         String username = loginRequestDto.getUsername().trim();
         String invalidCredentialsMessage = "Invalid username or password.";
 
-        // Too many wrong passwords against one name and the name rests, whoever is typing.
-        long wait = this.loginAttempts.secondsUntilAllowed(username);
+        // Too many wrong passwords against one name and the name rests, whoever is typing. The count
+        // is shared by every instance (MIG-109); when it cannot be read, nobody signs in -- one
+        // sentence for every name, asked before any lookup, so the refusal says nothing about who
+        // exists. Unlimited guesses for the length of a Redis outage is the alternative.
+        long wait;
+        try {
+            wait = this.loginAttempts.secondsUntilAllowed(username);
+        } catch (LoginAttemptGuard.Unavailable ex) {
+            return new ResponseDto(ERROR, "Sign-in is unavailable right now. Try again in a few minutes.");
+        }
         if (wait > 0) {
             return new ResponseDto(ERROR, String.format("Too many sign-in attempts. Try again in %d minute%s.",
                 (wait + 59) / 60, (wait + 59) / 60 == 1 ? "" : "s"));

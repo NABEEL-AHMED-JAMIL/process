@@ -1,5 +1,6 @@
 package process.security;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -56,6 +57,7 @@ class LoginHardeningTest {
     private JwtUtil jwtUtil;
     private PageAccessService pageAccessService;
     private AtomicLong now;
+    private RedisLoginGuards redis;
     private LoginAttemptGuard loginAttempts;
     private AuthServiceImpl authService;
 
@@ -67,12 +69,22 @@ class LoginHardeningTest {
         this.jwtUtil = mock(JwtUtil.class);
         this.pageAccessService = mock(PageAccessService.class);
         this.now = new AtomicLong(1_000_000L);
-        this.loginAttempts = new LoginAttemptGuard(this.now::get);
+        // A real guard over the shared Redis (MIG-109), under a prefix of this test's own, with the
+        // test's clock. A second setUp() in one test starts from an empty count, as it used to.
+        if (this.redis != null) this.redis.close();
+        this.redis = RedisLoginGuards.open();
+        this.loginAttempts = this.redis.guard(this.now::get);
         // The service hashes a random string in its constructor to get the hash that matches
         // nothing; stubbing encode is what lets the test name it.
         when(this.passwordEncoder.encode(anyString())).thenReturn(NOBODYS_HASH);
         this.authService = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
             this.passwordEncoder, this.jwtUtil, this.pageAccessService, this.loginAttempts);
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (this.redis != null) this.redis.close();
+        this.redis = null;
     }
 
     private AppUser activeUser() {
