@@ -13,8 +13,9 @@ import java.time.Instant;
  * Core's consumer of Identity's lifecycle events (MIG-153, MIG-166).
  *
  * People go into user_directory -- a deleted one too, marked deleted, so their old work still shows who did
- * it. A workspace deleted in Identity gets WorkspaceRetirement; every other workspace event changes nothing
- * in Core (a suspended workspace's people cannot sign in, and its admin can be restored).
+ * it. A workspace deleted in Identity gets WorkspaceRetirement. Every workspace event's status also goes into
+ * workspace_directory, Core's local view: a Suspended or Inactive workspace's scheduled jobs are paused by the
+ * enqueuer until it is Active again (owner decision 2026-09-24), and nothing about the jobs themselves changes.
  *
  * Each listener has its own group and starts from the beginning of the topic, which is how an empty
  * directory fills. An unreadable message is logged and skipped -- no retry makes it readable; a database
@@ -30,10 +31,12 @@ public class IdentityEventsListener {
     private final ObjectMapper json = new ObjectMapper();
     private final UserDirectory directory;
     private final WorkspaceRetirement retirement;
+    private final WorkspaceDirectory workspaces;
 
-    public IdentityEventsListener(UserDirectory directory, WorkspaceRetirement retirement) {
+    public IdentityEventsListener(UserDirectory directory, WorkspaceRetirement retirement, WorkspaceDirectory workspaces) {
         this.directory = directory;
         this.retirement = retirement;
+        this.workspaces = workspaces;
     }
 
     @KafkaListener(id = "identity-user-directory", topics = IdentityTopics.USER, groupId = "process-user-directory",
@@ -72,6 +75,40 @@ public class IdentityEventsListener {
         if ("tenant.deleted".equals(type)) {
             this.retirement.retire(tenantId);
         }
+    }
+
+    /**
+     * Every workspace event, into workspace_directory: the status the enqueuer pauses on. A group of its own,
+     * from the beginning of the (compacted) topic, so an empty view fills with every workspace's latest status
+     * -- a workspace suspended before this listener existed included.
+     */
+    @KafkaListener(id = "identity-workspace-directory", topics = IdentityTopics.TENANT, groupId = "process-workspace-directory",
+        autoStartup = "${identity.events.listen:true}", properties = {"auto.offset.reset=earliest"})
+    public void onWorkspaceStatus(String message) {
+        long tenantId;
+        String status;
+        Instant updatedAt;
+        try {
+            JsonNode workspace = this.json.readTree(message).get("payload");
+            JsonNode tenant = workspace.get("tenantId");
+            if (tenant == null || !tenant.isIntegralNumber()) {
+                throw new IllegalArgumentException("the event names no workspace");
+            }
+            tenantId = tenant.asLong();
+            status = workspace.get("status").asText();
+            updatedAt = Instant.parse(workspace.get("updatedAt").asText());
+        } catch (Exception unreadable) {
+            logger.warn("Skipped an unreadable {} event: {}", IdentityTopics.TENANT, unreadable.getMessage());
+            return;
+        }
+        this.workspaces.apply(tenantId, status, updatedAt).ifPresent(change -> {
+            if (change.pausedNow()) {
+                logger.info("Workspace {} is {} in Identity: its scheduled jobs are paused (each slot skipped) until it is Active again.",
+                    tenantId, change.getAfter());
+            } else if (change.resumedNow()) {
+                logger.info("Workspace {} is {} in Identity: its scheduled jobs resume from their next slot.", tenantId, change.getAfter());
+            }
+        });
     }
 
     private static Long longOrNull(JsonNode node) {

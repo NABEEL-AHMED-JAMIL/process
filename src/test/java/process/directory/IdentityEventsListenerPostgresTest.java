@@ -41,7 +41,8 @@ class IdentityEventsListenerPostgresTest {
         this.sql.update("TRUNCATE user_directory");
         this.sql.update("DELETE FROM scheduler");
         this.sql.update("DELETE FROM source_job");
-        this.listener = new IdentityEventsListener(new UserDirectory(this.sql), new WorkspaceRetirement(this.sql));
+        this.listener = new IdentityEventsListener(new UserDirectory(this.sql), new WorkspaceRetirement(this.sql),
+            new WorkspaceDirectory(this.sql));
     }
 
     private void job(long id, long tenantId, String status) {

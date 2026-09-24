@@ -497,6 +497,13 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR,
                 "A job can't be run while its last run is still in flight ('Queue', 'Start', 'Running').");
         }
+        // Owner decision 2026-09-24: a Suspended or Inactive workspace's jobs are paused, by hand as on schedule.
+        // Core's local view answers; Identity is not called.
+        Optional<String> paused = this.producerBulkEngine.workspacePause(sourceJob.get().getTenantId());
+        if (paused.isPresent()) {
+            return new ResponseDto(ERROR, String.format("This job's workspace is %s, so its runs are paused; "
+                + "it can be run again once the workspace is Active.", paused.get()));
+        }
         this.producerBulkEngine.addManualJobInQueue(sourceJob.get());
         sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
         // A DTO, not the entity (MIG-67). Jackson walked the entity after the transaction closed: its lazy

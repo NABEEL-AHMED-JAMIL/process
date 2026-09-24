@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 163.0-workspace-directory
+      author: nabeel.amd93
+      description: "workspace_directory: Core's local view of each workspace's status in Identity, and scheduler.paused_since, so a Suspended or Inactive workspace's scheduled slots are skipped without asking Identity (owner decision 2026-09-24, MIG-166)"
+      # Fed by platform.identity.tenant.v1 (compacted; a new database fills by reading it from the beginning).
+      # A workspace absent from the view is treated as Active -- today's behaviour -- so an empty view never
+      # stops a schedule. status_since is when the current status began at Identity: the enqueuer writes the
+      # "paused" audit line once per job per pause, keyed on it through scheduler.paused_since. Nothing here is
+      # a foreign key, and nothing decides access from it.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: >
+              CREATE TABLE IF NOT EXISTS workspace_directory (
+                tenant_id    BIGINT      PRIMARY KEY,
+                status       VARCHAR(32) NOT NULL,
+                status_since TIMESTAMPTZ NOT NULL,
+                updated_at   TIMESTAMPTZ NOT NULL
+              );
+              COMMENT ON TABLE workspace_directory IS 'Core''s read-only view of each workspace''s status in Identity (MIG-166): a Suspended or Inactive workspace''s scheduled slots are skipped. Fed by platform.identity.tenant.v1.';
+              ALTER TABLE scheduler ADD COLUMN IF NOT EXISTS paused_since TIMESTAMPTZ;
+              COMMENT ON COLUMN scheduler.paused_since IS 'The workspace pause (workspace_directory.status_since) this schedule has already written its audit line for; null when not paused.';
+      rollback:
+        - sql:
+            dbms: postgresql
+            splitStatements: true
+            sql: >
+              ALTER TABLE scheduler DROP COLUMN IF EXISTS paused_since;
+              DROP TABLE IF EXISTS workspace_directory;

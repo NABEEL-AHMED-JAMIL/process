@@ -126,3 +126,6 @@ databaseChangeLog:
   # V162: MIG-94 -- the correlation id on every hop, and on both audit stores (V160-V161 are MIG-166/153).
   - include:
       file: db/changelog/yaml/V162.0-job-audit-logs-correlation-id.yaml
+  # V163: MIG-166 follow-up -- a Suspended or Inactive workspace's schedules are paused (owner decision 2026-09-24).
+  - include:
+      file: db/changelog/yaml/V163.0-workspace-directory.yaml

@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.directory.WorkspaceDirectory;
 import process.util.BusinessTime;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
@@ -46,6 +47,12 @@ public class ProducerBulkEngine implements DispatchOutcomes {
     private final DispatchOutbox dispatchOutbox;
     /** One local transaction per enqueued slot and per dispatched run; none for an engine built by hand in a test. */
     private final TransactionOperations transactions;
+    /**
+     * Core's local view of workspace status (owner decision 2026-09-24): a Suspended or Inactive workspace's
+     * slots are skipped, not queued. A setter, so an engine built by hand in a test runs as before (no view:
+     * nothing is paused). Never a client of Identity -- see EnqueuePathAsksNoIdentityTest.
+     */
+    private WorkspaceDirectory workspaces;
     /** The dispatch pass's clock and pause, so the budget arithmetic can be tested without waiting minutes. */
     private LongSupplier clock = System::currentTimeMillis;
     private LongConsumer pause = ProducerBulkEngine::sleep;
@@ -89,6 +96,19 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setTimeout(DispatchTiming.ROW_TRANSACTION_TIMEOUT_SECONDS);
         return template;
+    }
+
+    @Autowired(required = false)
+    public void useWorkspaceDirectory(WorkspaceDirectory workspaces) {
+        this.workspaces = workspaces;
+    }
+
+    /** The status of the workspace when its jobs are paused (Suspended, Inactive); empty when they may run. */
+    public Optional<String> workspacePause(Long tenantId) {
+        if (this.workspaces == null || tenantId == null) {
+            return Optional.empty();
+        }
+        return this.workspaces.pauseOf(tenantId).map(WorkspaceDirectory.Pause::getStatus);
     }
 
     /** For the timing tests: a fake clock, and a pause that advances it instead of sleeping. */
@@ -297,8 +317,22 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         }
     }
 
-    /** One claimed slot: a run, or a skip when the job already has one in flight; then the cursor moves on. */
+    /**
+     * One claimed slot: a run, or a skip when the job already has one in flight or its workspace is paused;
+     * then the cursor moves on.
+     */
     private void enqueueSlot(Scheduler scheduler) {
+        // Paused (owner decision 2026-09-24): the workspace is Suspended or Inactive in Identity. Decided here,
+        // at enqueue, from the local view -- a run already queued keeps going, and dispatch is untouched.
+        Optional<WorkspaceDirectory.Pause> pause = this.workspaces == null ? Optional.empty()
+            : this.workspaces.pauseOfJob(scheduler.getJobId());
+        if (pause.isPresent()) {
+            this.skipPausedSlot(scheduler, pause.get());
+            return;
+        }
+        // The first slot after a pause: said once, on the run (or skip) this slot makes.
+        boolean resumed = scheduler.getPausedSince() != null;
+        scheduler.setPausedSince(null);
         JobQueue jobQueue;
         // Whether this pass moved the job's own running status. The skip branch does not, and the
         // announcement below reads that status to decide what to say -- see skipManualJobInQueue.
@@ -320,8 +354,35 @@ public class ProducerBulkEngine implements DispatchOutcomes {
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
             jobStatusMoved = true;
         }
+        if (resumed) {
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Scheduled runs resumed: "
+                + "job %s's workspace is Active again, so its slots are queued from this one on.", scheduler.getJobId()));
+            logger.info("addJobInQueue --> job {} resumed: its workspace is Active again.", scheduler.getJobId());
+        }
         this.bulkAction.updateNextScheduler(scheduler);
         this.bulkAction.sendJobStatusNotification(scheduler.getJobId(), jobStatusMoved);
+    }
+
+    /**
+     * A slot of a paused workspace's job: recorded as a Skip -- the way a slot is skipped when its job is busy --
+     * and the schedule moves on as usual, so no backlog of slots is waiting to fire when the workspace is Active
+     * again. The job is not changed. The audit line is written once per pause (scheduler.paused_since holds
+     * which pause it was written for), not once per slot; no skip mail -- a slot a minute would be a mail a minute.
+     */
+    private void skipPausedSlot(Scheduler scheduler, WorkspaceDirectory.Pause pause) {
+        JobQueue jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), BusinessTime.now(), JobStatus.Skip,
+            "Job %s skipped: its workspace is " + pause.getStatus() + ", so its scheduled runs are paused until the "
+                + "workspace is Active again.", true);
+        if (!pause.getSince().equals(scheduler.getPausedSince())) {
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Scheduled runs paused: workspace %s "
+                + "is %s in Identity, so each of job %s's slots is skipped, not queued, until the workspace is Active "
+                + "again. Nothing about the job is changed.", pause.getTenantId(), pause.getStatus(), scheduler.getJobId()));
+            scheduler.setPausedSince(pause.getSince());
+            logger.info("addJobInQueue --> job {} paused: workspace {} is {}.", scheduler.getJobId(), pause.getTenantId(),
+                pause.getStatus());
+        }
+        this.bulkAction.updateNextScheduler(scheduler);
+        this.bulkAction.sendJobStatusNotification(scheduler.getJobId(), false);
     }
 
     /**

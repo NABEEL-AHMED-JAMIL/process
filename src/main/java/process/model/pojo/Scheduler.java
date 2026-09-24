@@ -88,6 +88,14 @@ public class Scheduler {
     private boolean expired;
 
     /**
+     * The workspace pause (workspace_directory.status_since) this schedule has already written its audit line
+     * for (V163): one line per pause, not per skipped slot. Null when not paused. Core's own bookkeeping.
+     */
+    @JsonIgnore
+    @Column(name = "paused_since", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    private Timestamp pausedSince;
+
+    /**
      * The job's tenant (V102, MIG-29/164): set when the row is written, and kept equal to the source_job row's by the database
      * (fk_scheduler_job_tenant, ON UPDATE CASCADE) -- so never written again from here. What the tenant filter scopes on.
      */
@@ -215,6 +223,14 @@ public class Scheduler {
 
     public void setExpired(boolean expired) {
         this.expired = expired;
+    }
+
+    public Timestamp getPausedSince() {
+        return pausedSince;
+    }
+
+    public void setPausedSince(Timestamp pausedSince) {
+        this.pausedSince = pausedSince;
     }
 
     @Override
