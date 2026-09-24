@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.model.service.EmbeddingService;
 import process.model.service.impl.EmbeddingServiceImpl;
+import process.security.TenantContext;
 
 import java.util.Arrays;
 import java.util.List;
@@ -66,6 +67,8 @@ public class OpenSearchRagClientIT {
         assumeTrue(openSearchReachable, "OpenSearch is not reachable at " + OPENSEARCH_URL);
         assumeTrue(embeddingModelReachable, "Ollama is not reachable at " + OLLAMA_URL);
         ReflectionTestUtils.setField(this.ragClient, "baseUrl", OPENSEARCH_URL);
+        // Reads and writes are scoped to the caller's tenant (MIG-10); these chunks are tenant 1000's.
+        TenantContext.set(1000L, "TENANT_USER", 1L, "rag-it");
         ReflectionTestUtils.setField(this.embeddingService, "baseUrl", OLLAMA_URL);
         ReflectionTestUtils.setField(this.embeddingService, "model", "nomic-embed-text");
         ReflectionTestUtils.setField(this.embeddingService, "dimensions", 768);
@@ -75,6 +78,7 @@ public class OpenSearchRagClientIT {
 
     @AfterEach
     void cleanUp() {
+        TenantContext.clear();
         if (this.bucket == null || !openSearchReachable) {
             return;
         }
