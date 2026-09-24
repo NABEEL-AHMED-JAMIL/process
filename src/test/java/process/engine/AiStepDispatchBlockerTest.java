@@ -6,9 +6,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.test.util.ReflectionTestUtils;
-import process.ai.AiProviderGateway;
 import process.ai.AiStepService;
-import process.ai.PromptRunner;
+import process.ai.HttpAi;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
 import process.engine.cron.ProcessCron;
@@ -88,23 +87,23 @@ class AiStepDispatchBlockerTest {
     }
 
     /**
-     * The numbers, read from the code rather than restated: a JSON step is two rounds of up to
-     * ATTEMPTS calls each, and each call may wait the gateway's full read timeout. That lower bound
-     * -- before the retry sleeps and the five-minute wait for a semaphore permit per round -- is
-     * already several times both the dispatch budget and the lock around it.
+     * The numbers, read from the code rather than restated. Since ADR-020 a server step is one call
+     * to the AI service, and Core waits for it as long as HttpAi's read timeout: ten minutes, which
+     * is longer than the dispatch budget and as long as the lock around it. (The provider arithmetic
+     * behind that wait -- two rounds of three attempts at up to ten minutes each -- is pinned in
+     * ai-service, with PromptRunner.) Moving the step off the dispatch thread is MIG-25/134.
      */
     @Test
-    void oneAiStepsWorstCaseIsFarLongerThanTheDispatchBudgetAndTheLock() throws Exception {
+    void oneAiStepsWorstCaseIsLongerThanTheDispatchBudgetAndAsLongAsTheLock() throws Exception {
         long budgetMs = (Long) ReflectionTestUtils.getField(ProducerBulkEngine.class, "DISPATCH_BUDGET_MS");
         String lockAtMostFor = ProcessCron.class.getMethod("startJobInCurrentTimeSlot").getAnnotation(SchedulerLock.class).lockAtMostFor();
         long lockMs = Duration.parse("PT" + lockAtMostFor).toMillis();
-        int attempts = (Integer) ReflectionTestUtils.getField(PromptRunner.class, "ATTEMPTS");
-        OkHttpClient http = (OkHttpClient) ReflectionTestUtils.getField(new AiProviderGateway(), "httpClient");
-        long oneStepWorstCaseMs = 2L * attempts * http.readTimeoutMillis();
+        OkHttpClient http = (OkHttpClient) ReflectionTestUtils.getField(new HttpAi("http://ai:9150", "t"), "http");
+        long oneStepWorstCaseMs = http.readTimeoutMillis();
 
         assertThat(budgetMs).isEqualTo(Duration.ofMinutes(7).toMillis());
         assertThat(lockMs).isEqualTo(Duration.ofMinutes(10).toMillis());
-        assertThat(oneStepWorstCaseMs).isEqualTo(Duration.ofMinutes(60).toMillis());
-        assertThat(oneStepWorstCaseMs).isGreaterThan(lockMs).isGreaterThan(budgetMs);
+        assertThat(oneStepWorstCaseMs).isEqualTo(Duration.ofMinutes(10).toMillis());
+        assertThat(oneStepWorstCaseMs).isGreaterThan(budgetMs).isGreaterThanOrEqualTo(lockMs);
     }
 }
