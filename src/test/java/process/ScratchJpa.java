@@ -49,6 +49,11 @@ public final class ScratchJpa implements AutoCloseable {
         this.repositories = new JpaRepositoryFactory(shared);
     }
 
+    /** An entity manager bound to the current transaction, as @PersistenceContext injects one. */
+    public EntityManager sharedEntityManager() {
+        return SharedEntityManagerCreator.createSharedEntityManager(this.factory);
+    }
+
     public <T> T repository(Class<T> type) {
         return this.repositories.getRepository(type);
     }
