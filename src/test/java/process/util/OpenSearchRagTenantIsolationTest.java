@@ -113,12 +113,13 @@ class OpenSearchRagTenantIsolationTest {
         return out.append("]}}").toString();
     }
 
-    /** term, bool.must / bool.filter (all), bool.should (any, minimum 1), bool.must_not, match_all. */
+    /** term, match (exact, as on a keyword), bool.must / bool.filter (all), bool.should (any, minimum 1), bool.must_not, match_all. */
     private static boolean matches(JsonNode clause, JsonNode doc) {
         if (clause.isMissingNode() || clause.has("match_all")) return true;
-        if (clause.has("term")) {
-            String field = clause.path("term").fieldNames().next();
-            String wanted = clause.path("term").path(field).asText();
+        String leaf = clause.has("term") ? "term" : clause.has("match") ? "match" : null;
+        if (leaf != null) {
+            String field = clause.path(leaf).fieldNames().next();
+            String wanted = clause.path(leaf).path(field).asText();
             String field0 = field.endsWith(".keyword") ? field.substring(0, field.length() - 8) : field;
             return doc.has(field0) && doc.path(field0).asText().equals(wanted);
         }
@@ -279,7 +280,8 @@ class OpenSearchRagTenantIsolationTest {
 
     /**
      * For a single tenant the queries are what they were, plus one clause in the non-scoring filter
-     * context: the scoring must clauses, k, size and _source are unchanged, so ordering cannot move.
+     * context alongside the other four scoping clauses: k, size and _source are unchanged, and
+     * nothing in a filter scores, so ordering cannot move.
      */
     @Test
     void theTenantClauseIsNonScoringAndLeavesTheRestOfTheQueryAsItWas() throws Exception {
@@ -288,14 +290,12 @@ class OpenSearchRagTenantIsolationTest {
         JsonNode fetch = this.json.valueToTree(this.client.retrievalQuery("tenant-a-docs", "manual.pdf", "etag-a", true));
 
         JsonNode knnFilter = knn.path("query").path("knn").path("embedding").path("filter");
-        assertThat(knnFilter.path("bool").path("must")).hasSize(4);
-        assertThat(knnFilter.path("bool").path("filter")).hasSize(1);
+        assertThat(knnFilter.path("bool").path("filter")).hasSize(5);
         assertThat(tenantFilterOf(knnFilter)).isEqualTo(TENANT_A);
         assertThat(knn.path("size").asInt()).isEqualTo(8);
         assertThat(knn.path("query").path("knn").path("embedding").path("k").asInt()).isEqualTo(8);
         assertThat(knn.path("_source").toString()).isEqualTo("[\"chunkIndex\",\"chunkText\"]");
-        assertThat(fetch.path("query").path("bool").path("must")).hasSize(4);
-        assertThat(fetch.path("query").path("bool").path("filter")).hasSize(1);
+        assertThat(fetch.path("query").path("bool").path("filter")).hasSize(5);
         assertThat(fetch.path("_source").toString()).isEqualTo("[\"chunkIndex\",\"chunkText\",\"embedding\"]");
         assertThat(Arrays.asList(knn.toString(), fetch.toString())).noneMatch(s -> s.contains("\"should\":[{\"term\":{\"tenantId\""));
     }

@@ -160,8 +160,9 @@ public class OpenSearchRagClientTest {
             + String.join(",", hits) + "]}}";
     }
 
-    private JsonNode mustClausesOf(String body) throws Exception {
-        return this.objectMapper.readTree(body).path("query").path("bool").path("must");
+    /** The scoping clauses of a term-only query: bucket, key, etag, the model and the tenant. */
+    private JsonNode scopeClausesOf(String body) throws Exception {
+        return this.objectMapper.readTree(body).path("query").path("bool").path("filter");
     }
 
     // ---------------------------------------------------------------------------------------
@@ -234,13 +235,99 @@ public class OpenSearchRagClientTest {
         assertEquals("[\"chunkIndex\",\"chunkText\"]", body.path("_source").toString(),
             "the embedding must NOT be fetched -- that payload is the whole reason this query exists");
 
-        JsonNode must = knn.path("filter").path("bool").path("must");
-        assertEquals(4, must.size(), "bucket, key, etag and the vector space, applied during the graph walk");
-        assertEquals("etl-bucket", must.get(0).path("term").path("bucket").asText());
-        assertEquals("manual.pdf", must.get(1).path("term").path("key").asText());
-        assertEquals("etag-1", must.get(2).path("term").path("etag").asText());
+        JsonNode scope = knn.path("filter").path("bool").path("filter");
+        assertEquals(5, scope.size(), "bucket, key, etag, the vector space and the tenant, applied during the graph walk");
+        assertEquals("etl-bucket", scope.get(0).path("term").path("bucket").asText());
+        assertEquals("manual.pdf", scope.get(1).path("term").path("key").asText());
+        assertEquals("etag-1", scope.get(2).path("term").path("etag").asText());
         assertEquals("nomic-embed-text",
-            must.get(3).path("bool").path("should").get(0).path("term").path("embeddingModel").asText());
+            scope.get(3).path("bool").path("should").get(0).path("term").path("embeddingModel").asText());
+    }
+
+    /**
+     * The whole k-NN body, pinned. On the live 2.10 cluster the previous shape was answered with
+     * HTTP 400 "failed to create query: Rewrite first" on every question, the fast path latched
+     * off, and every retrieval paid for the fallback. OpenSearchRagKnnFilterIT is what proves this
+     * shape is accepted; this is what stops it drifting away from the shape that was proved.
+     */
+    @Test
+    void theKnnQueryBodyIsExactlyTheShapeTheClusterAccepts() throws Exception {
+        JsonNode expected = this.objectMapper.readTree("{"
+            + "\"size\":2,"
+            + "\"_source\":[\"chunkIndex\",\"chunkText\"],"
+            + "\"query\":{\"knn\":{\"embedding\":{"
+            + "  \"vector\":[1.0,0.0,0.0],"
+            + "  \"k\":2,"
+            + "  \"filter\":{\"bool\":{\"filter\":["
+            + "    {\"term\":{\"bucket\":\"etl-bucket\"}},"
+            + "    {\"term\":{\"key\":\"manual.pdf\"}},"
+            + "    {\"term\":{\"etag\":\"etag-1\"}},"
+            + "    {\"bool\":{\"should\":["
+            + "      {\"term\":{\"embeddingModel\":\"nomic-embed-text\"}},"
+            + "      {\"match\":{\"embeddingModel.keyword\":\"nomic-embed-text\"}}"
+            + "    ],\"minimum_should_match\":1}},"
+            + "    {\"term\":{\"tenantId\":1}}"
+            + "  ]}}"
+            + "}}}}");
+
+        // Compared as the bytes that go over the wire, re-read: key order is free, structure is not.
+        JsonNode actual = this.objectMapper.readTree(this.objectMapper.writeValueAsString(
+            this.client.knnQuery("etl-bucket", "manual.pdf", "etag-1", new float[] { 1f, 0f, 0f }, 2)));
+
+        assertEquals(expected, actual);
+    }
+
+    /**
+     * The root cause, as a rule. A {@code term} (or {@code terms}) query against a field the index
+     * does not map can only be answered after OpenSearch rewrites it to match-none, and the k-NN
+     * plugin on 2.10 turns its {@code filter} into a Lucene query WITHOUT rewriting it first -- so
+     * one such clause anywhere in the filter fails the whole search with "Rewrite first". The
+     * culprit was {@code embeddingModel.keyword}: a sub-field only a dynamically mapped index has,
+     * and not the index this class creates. Every term-level clause the read paths send has to
+     * name a field that mapping defines; the dynamic-mapping alternative goes through
+     * {@code match}, which answers an unmapped field with match-none on its own.
+     */
+    @Test
+    void everyTermClauseNamesAFieldTheIndexThisClassCreatesActuallyMaps() throws Exception {
+        doThrow(notFound()).when(this.restTemplate).getForEntity(anyString(), eq(String.class));
+        doReturn(new ResponseEntity<String>("{\"acknowledged\":true}", HttpStatus.OK))
+            .when(this.restTemplate).exchange(anyString(), any(HttpMethod.class), any(HttpEntity.class), eq(String.class));
+        stubSearches(countResponse(0));
+        this.client.indexChunks(1L, "etl-bucket", "a.pdf", "etag-1", Collections.singletonList("only chunk"),
+            Collections.singletonList(new float[] { 1f, 0f, 0f }), "nomic-embed-text");
+        ArgumentCaptor<HttpEntity> sent = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(this.restTemplate, times(2)).exchange(anyString(), any(HttpMethod.class), sent.capture(), eq(String.class));
+        JsonNode mapped = this.objectMapper.readTree(String.valueOf(sent.getAllValues().get(0).getBody()))
+            .path("mappings").path("properties");
+
+        List<JsonNode> queries = Arrays.asList(
+            this.objectMapper.valueToTree(this.client.knnQuery("etl-bucket", "a.pdf", "etag-1", new float[] { 1f, 0f, 0f }, 2)),
+            this.objectMapper.valueToTree(this.client.retrievalQuery("etl-bucket", "a.pdf", "etag-1", true)),
+            this.objectMapper.valueToTree(this.client.termsFilter("etl-bucket", "a.pdf", "etag-1")));
+        List<String> termFields = new ArrayList<>();
+        for (JsonNode query : queries) {
+            collectTermLevelFields(query, termFields);
+        }
+
+        assertFalse(termFields.isEmpty());
+        for (String field : termFields) {
+            assertTrue(mapped.has(field), "a term-level clause on '" + field + "', which the index this class "
+                + "creates does not map: inside a knn filter that is a 400 'Rewrite first' on OpenSearch 2.10");
+        }
+    }
+
+    private static void collectTermLevelFields(JsonNode node, List<String> into) {
+        if (node.isObject()) {
+            node.fields().forEachRemaining(entry -> {
+                if (("term".equals(entry.getKey()) || "terms".equals(entry.getKey())) && entry.getValue().isObject()) {
+                    entry.getValue().fieldNames().forEachRemaining(into::add);
+                } else {
+                    collectTermLevelFields(entry.getValue(), into);
+                }
+            });
+        } else if (node.isArray()) {
+            node.forEach(child -> collectTermLevelFields(child, into));
+        }
     }
 
     /**
@@ -416,17 +503,18 @@ public class OpenSearchRagClientTest {
 
         this.client.searchRelevantChunks("etl-bucket", "a.pdf", "etag-1", new float[] { 1f, 0f }, 8);
 
-        JsonNode must = this.mustClausesOf(this.postedBodies.get(0));
-        assertEquals(4, must.size(), "bucket, key, etag -- and the vector space they were embedded into");
-        // The model clause is a should over both field paths now, because an index that predates
+        JsonNode scope = this.scopeClausesOf(this.postedBodies.get(0));
+        assertEquals(5, scope.size(), "bucket, key, etag, the vector space they were embedded into, and the tenant");
+        // The model clause is a should over both field paths, because an index that predates
         // embeddingModel in the mapping has it as analyzed text and a bare term matched 0 of 222
         // chunks on the live cluster. Either path is enough; the scoping it exists for is intact.
-        JsonNode either = must.get(3).path("bool").path("should");
+        JsonNode either = scope.get(3).path("bool").path("should");
         assertEquals(2, either.size(), "one clause for a keyword mapping, one for a dynamic one");
         assertEquals("nomic-embed-text", either.get(0).path("term").path("embeddingModel").asText(),
             "a superseded model's chunks have to stop matching, not silently rank as noise");
-        assertEquals("nomic-embed-text", either.get(1).path("term").path("embeddingModel.keyword").asText(),
-            "and the same has to hold on an index whose embeddingModel was dynamically mapped");
+        assertEquals("nomic-embed-text", either.get(1).path("match").path("embeddingModel.keyword").asText(),
+            "and the same has to hold on an index whose embeddingModel was dynamically mapped -- through "
+                + "match, not term, which is a 400 inside a knn filter wherever that sub-field is not mapped");
     }
 
     /** The same clause guards the readiness check, or the swap heals on one path and not the other. */
@@ -436,11 +524,11 @@ public class OpenSearchRagClientTest {
 
         assertFalse(this.client.isIndexed("etl-bucket", "a.pdf", "etag-1"));
 
-        JsonNode must = this.mustClausesOf(this.postedBodies.get(0));
-        assertEquals(4, must.size());
-        JsonNode either = must.get(3).path("bool").path("should");
+        JsonNode scope = this.scopeClausesOf(this.postedBodies.get(0));
+        assertEquals(5, scope.size());
+        JsonNode either = scope.get(3).path("bool").path("should");
         assertEquals("nomic-embed-text", either.get(0).path("term").path("embeddingModel").asText());
-        assertEquals("nomic-embed-text", either.get(1).path("term").path("embeddingModel.keyword").asText());
+        assertEquals("nomic-embed-text", either.get(1).path("match").path("embeddingModel.keyword").asText());
     }
 
     /** A blank embedding.model keeps the old unfiltered scope rather than retrieving nothing at all. */
@@ -451,7 +539,7 @@ public class OpenSearchRagClientTest {
 
         this.client.searchRelevantChunks("etl-bucket", "a.pdf", "etag-1", new float[] { 1f, 0f }, 8);
 
-        assertEquals(3, this.mustClausesOf(this.postedBodies.get(0)).size(),
+        assertEquals(4, this.scopeClausesOf(this.postedBodies.get(0)).size(),
             "unfiltered is bad; matching nothing forever because a property was cleared is worse");
     }
 
