@@ -5,9 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import process.ai.AiStepService;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
 import process.model.service.impl.TransactionServiceImpl;
@@ -46,17 +43,13 @@ class RefusedCallbackReconcileTest {
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobMail jobMail;
-    @Mock private KafkaTemplateProvider kafkaTemplateProvider;
-    @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private AiStepService aiStepService;
 
     private ProducerBulkEngine engine;
 
     @BeforeEach
     void setUp() {
-        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail,
-            this.kafkaTemplateProvider, this.kafkaConnectionResolver, this.runCallbackTokens, this.aiStepService);
+        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail, this.runCallbackTokens, null);
     }
 
     private static JobQueue refused(long jobQueueId, JobStatus status, String reported, LocalDateTime at) {

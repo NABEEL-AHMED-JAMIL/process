@@ -1,110 +1,218 @@
 package process.engine;
 
-import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import okhttp3.OkHttpClient;
-import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionOperations;
 import process.ai.AiStepService;
 import process.ai.HttpAi;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
-import process.engine.cron.ProcessCron;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.pojo.SourceTaskType;
+import process.model.repository.JobQueueRepository;
 import process.model.service.impl.TransactionServiceImpl;
 import process.notifications.JobMail;
+import process.outbox.DispatchOutbox;
 import process.security.RunCallbackTokens;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * MIG-159, the dispatch blocker: a pipeline's server-side AI steps run inside the dispatch pass,
- * synchronously, on the scheduler's own thread. startJobInCurrentTimeSlot holds a ten-minute
- * ShedLock and gives itself a seven-minute budget, but it checks that budget only BETWEEN runs --
- * a run whose AI step is slow is never cut short -- and one AI step's own worst case is measured
- * in hours of provider timeouts, not minutes. A dispatch pass that outlives its lock lets a second
- * console claim the same queue rows. Pinned as it stands; the extracted AI service cannot keep
- * being called this way, which is why it blocks the move.
+ * MIG-159's dispatch blocker, resolved by MIG-25 and MIG-134.
+ *
+ * It was pinned that a pipeline's server AI steps ran synchronously on the scheduler's own thread,
+ * inside the dispatch pass's seven-minute budget and ten-minute lock, and that one step could hold that
+ * thread for HttpAi's ten-minute read timeout -- so one slow model call starved every queued job and
+ * could let a second instance dispatch the same rows. Both pins are resolved: the steps run in the
+ * pre-dispatch phase, on its own AI threads, and the dispatcher takes only runs that phase has finished
+ * with. Here, a model call held open -- the stand-in for twenty minutes of provider timeouts -- does not
+ * hold up an unrelated job, does not touch the dispatch pass, and is not prepared twice.
  */
 class AiStepDispatchBlockerTest {
 
-    private static final long JOB_ID = 1196L;
-    private static final long JOB_QUEUE_ID = 5073L;
+    private static final long TENANT = 2905L;
 
     private final BulkAction bulkAction = mock(BulkAction.class);
     private final TransactionServiceImpl transactionService = mock(TransactionServiceImpl.class);
-    private final KafkaTemplateProvider kafkaTemplateProvider = mock(KafkaTemplateProvider.class);
     private final AiStepService aiStepService = mock(AiStepService.class);
-    private final ProducerBulkEngine engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, mock(JobMail.class),
-        this.kafkaTemplateProvider, mock(KafkaConnectionResolver.class), mock(RunCallbackTokens.class), this.aiStepService);
+    private final DispatchOutbox outbox = mock(DispatchOutbox.class);
+    private final ExecutorService aiThreads = Executors.newFixedThreadPool(2);
+    private final CountDownLatch modelAnswers = new CountDownLatch(1);
 
-    private static SourceJob jobWithAnAiPipeline() {
+    @AfterEach
+    void stop() {
+        this.modelAnswers.countDown();
+        this.aiThreads.shutdownNow();
+    }
+
+    private static SourceJob job(long jobId, String pipelineId) {
         SourceTaskType type = new SourceTaskType();
-        type.setSourceTaskTypeId(31L); type.setStatus(Status.Active); type.setQueueTopicPartition("topic=claims&partitions=[*]");
+        type.setSourceTaskTypeId(31L);
+        type.setStatus(Status.Active);
+        type.setQueueTopicPartition("topic=claims&partitions=[*]");
         SourceTask task = new SourceTask();
-        task.setSourceTaskType(type); task.setPipelineId("F1"); task.setTaskPayload("<pipeline><document>notes</document></pipeline>");
+        task.setSourceTaskType(type);
+        task.setPipelineId(pipelineId);
+        task.setTaskPayload("<pipeline><document>notes</document></pipeline>");
         SourceJob job = new SourceJob();
-        job.setJobId(JOB_ID); job.setTenantId(2905L); job.setJobStatus(Status.Active); job.setTaskDetail(task);
+        job.setJobId(jobId);
+        job.setTenantId(TENANT);
+        job.setJobStatus(Status.Active);
+        job.setTaskDetail(task);
         return job;
     }
 
-    @Test
-    @Tag("pinned-unreviewed")
-    void theAiStepsRunOnTheSchedulersThreadBeforeTheSend() {
+    private JobQueue queued(long jobQueueId, long jobId, SourceJob job) {
         JobQueue run = new JobQueue();
-        run.setJobQueueId(JOB_QUEUE_ID); run.setJobId(JOB_ID); run.setJobStatus(JobStatus.Queue);
-        when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any())).thenReturn(Collections.singletonList(run));
-        when(this.transactionService.findByJobIdAndJobStatus(JOB_ID, Status.Active)).thenReturn(Optional.of(jobWithAnAiPipeline()));
+        run.setJobQueueId(jobQueueId);
+        run.setJobId(jobId);
+        run.setJobStatus(JobStatus.Queue);
+        when(this.transactionService.findJobQueueByJobQueueId(jobQueueId)).thenReturn(Optional.of(run));
+        when(this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active)).thenReturn(Optional.of(job));
+        return run;
+    }
+
+    private PreDispatchPhase phase() {
+        return new PreDispatchPhase(this.transactionService, this.bulkAction, this.aiStepService, mock(JobMail.class),
+            TransactionOperations.withoutTransaction(), this.aiThreads);
+    }
+
+    /**
+     * Job 1 has an AI step whose model call does not come back -- held for as long as the test lets it,
+     * the stand-in for twenty minutes of provider timeouts; job 2 has none.
+     */
+    private void aStalledModelCallOnJobOne() {
+        when(this.aiStepService.hasSteps(TENANT, "F1")).thenReturn(true);
+        when(this.aiStepService.hasSteps(TENANT, "F2")).thenReturn(false);
+        when(this.aiStepService.apply(eq(TENANT), eq("F1"), anyLong(), any())).thenAnswer(inv -> {
+            this.modelAnswers.await(8, TimeUnit.SECONDS);
+            return new AiStepService.Outcome("<pipeline><summary>late</summary></pipeline>", null);
+        });
+        when(this.aiStepService.apply(eq(TENANT), eq("F2"), anyLong(), any()))
+            .thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(3), null));
+        when(this.transactionService.markPrepared(anyLong(), any(), any(), any())).thenReturn(1);
+    }
+
+    @Test
+    void aStalledModelCallDoesNotDelayAnUnrelatedQueuedJob() {
+        this.aStalledModelCallOnJobOne();
+        this.queued(501L, 1L, job(1L, "F1"));
+        this.queued(502L, 2L, job(2L, "F2"));
+        when(this.transactionService.claimRunsToPrepare(any(), anyInt(), any())).thenReturn(Arrays.asList(501L, 502L));
+
+        long started = System.nanoTime();
+        this.phase().runPass();
+        long tookMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        assertThat(tookMs).as("the pass hands the AI run off and does not wait for it").isLessThan(5_000L);
+        verify(this.transactionService).markPrepared(eq(502L), any(), any(), any());
+        verify(this.transactionService, never()).markPrepared(eq(501L), any(), any(), any());
+
+        this.modelAnswers.countDown();
+        verify(this.transactionService, timeout(5_000)).markPrepared(eq(501L), eq("<pipeline><summary>late</summary></pipeline>"), any(), any());
+    }
+
+    /** The step runs on an AI thread -- never the scheduler's, which is where the dispatch lock is held. */
+    @Test
+    void theAiStepsNoLongerRunOnTheSchedulersThread() {
+        this.aStalledModelCallOnJobOne();
+        this.modelAnswers.countDown();
+        this.queued(501L, 1L, job(1L, "F1"));
+        when(this.transactionService.claimRunsToPrepare(any(), anyInt(), any())).thenReturn(Collections.singletonList(501L));
         AtomicReference<Thread> ranOn = new AtomicReference<>();
-        when(this.aiStepService.apply(eq(2905L), eq("F1"), eq(JOB_QUEUE_ID), any())).thenAnswer(inv -> {
+        when(this.aiStepService.apply(eq(TENANT), eq("F1"), eq(501L), any())).thenAnswer(inv -> {
             ranOn.set(Thread.currentThread());
             return new AiStepService.Outcome(inv.getArgument(3), null);
         });
 
-        this.engine.startJobInCurrentTimeSlot();
+        this.phase().runPass();
 
-        assertThat(ranOn.get()).as("the AI step ran synchronously inside the scheduler's call").isSameAs(Thread.currentThread());
-        InOrder order = inOrder(this.aiStepService, this.kafkaTemplateProvider);
-        order.verify(this.aiStepService).apply(eq(2905L), eq("F1"), eq(JOB_QUEUE_ID), any());
-        order.verify(this.kafkaTemplateProvider).getTemplate(any());
+        verify(this.transactionService, timeout(5_000)).markPrepared(eq(501L), any(), any(), any());
+        assertThat(ranOn.get()).isNotNull().isNotSameAs(Thread.currentThread());
+    }
+
+    /** The dispatch pass itself asks no AI step anything: it sends the document the phase prepared. */
+    @Test
+    void theDispatchPassNeverAsksTheAiService() {
+        SourceJob job = job(1L, "F1");
+        JobQueue run = this.queued(501L, 1L, job);
+        run.setPreparedAt(LocalDateTime.now());
+        run.setDispatchPayload("<pipeline><summary>prepared</summary></pipeline>");
+        when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any())).thenReturn(Collections.singletonList(run));
+        ProducerBulkEngine dispatcher = new ProducerBulkEngine(this.bulkAction, this.transactionService, mock(JobMail.class),
+            mock(RunCallbackTokens.class), this.outbox);
+
+        dispatcher.startJobInCurrentTimeSlot();
+
+        verify(this.outbox).write(any());
+        verify(this.aiStepService, never()).apply(any(), any(), any(), any());
+        verify(this.aiStepService, never()).hasSteps(any(), any());
     }
 
     /**
-     * The numbers, read from the code rather than restated. Since ADR-020 a server step is one call
-     * to the AI service, and Core waits for it as long as HttpAi's read timeout: ten minutes, which
-     * is longer than the dispatch budget and as long as the lock around it. (The provider arithmetic
-     * behind that wait -- two rounds of three attempts at up to ten minutes each -- is pinned in
-     * ai-service, with PromptRunner.) Moving the step off the dispatch thread is MIG-25/134.
+     * A job whose AI step is still pending is not dispatched -- the dispatcher's pick-up takes prepared
+     * runs only -- and not prepared twice: a second pass while the first run is still answering does not
+     * hand it to a second thread (and across replicas the claim's lease keeps it to one).
      */
     @Test
-    @Tag("pinned-unreviewed")
-    void oneAiStepsWorstCaseIsLongerThanTheDispatchBudgetAndAsLongAsTheLock() throws Exception {
-        long budgetMs = (Long) ReflectionTestUtils.getField(ProducerBulkEngine.class, "DISPATCH_BUDGET_MS");
-        String lockAtMostFor = ProcessCron.class.getMethod("startJobInCurrentTimeSlot").getAnnotation(SchedulerLock.class).lockAtMostFor();
-        long lockMs = Duration.parse("PT" + lockAtMostFor).toMillis();
-        OkHttpClient http = (OkHttpClient) ReflectionTestUtils.getField(new HttpAi("http://ai:9150", "t"), "http");
-        long oneStepWorstCaseMs = http.readTimeoutMillis();
+    void aRunStillBeingPreparedIsNeitherDispatchedNorPreparedTwice() throws Exception {
+        String pickUp = JobQueueRepository.class.getMethod("findAllJobForTodayWithLimit", Long.class, LocalDateTime.class)
+            .getAnnotation(Query.class).value();
+        assertThat(pickUp).contains("prepared_at is not null");
 
-        assertThat(budgetMs).isEqualTo(Duration.ofMinutes(7).toMillis());
-        assertThat(lockMs).isEqualTo(Duration.ofMinutes(10).toMillis());
-        assertThat(oneStepWorstCaseMs).isEqualTo(Duration.ofMinutes(10).toMillis());
-        assertThat(oneStepWorstCaseMs).isGreaterThan(budgetMs).isGreaterThanOrEqualTo(lockMs);
+        this.aStalledModelCallOnJobOne();
+        this.queued(501L, 1L, job(1L, "F1"));
+        when(this.transactionService.claimRunsToPrepare(any(), anyInt(), any())).thenReturn(Collections.singletonList(501L));
+        PreDispatchPhase phase = this.phase();
+
+        phase.runPass();
+        phase.runPass();
+        this.modelAnswers.countDown();
+
+        verify(this.transactionService, timeout(5_000)).markPrepared(eq(501L), any(), any(), any());
+        verify(this.aiStepService, times(1)).apply(eq(TENANT), eq("F1"), eq(501L), any());
+    }
+
+    /**
+     * The numbers, re-derived (MIG-136). One server step still waits up to HttpAi's ten-minute read
+     * timeout -- but on the pre-dispatch phase's lease, which covers three of them, not on the dispatch
+     * pass, whose own worst case per row is its pause and one bounded transaction.
+     */
+    @Test
+    void oneAiStepsWorstCaseNowFallsInsideThePreparationLeaseAndOutsideTheDispatchLock() {
+        OkHttpClient http = (OkHttpClient) ReflectionTestUtils.getField(new HttpAi("http://ai:9150", "t"), "http");
+        Duration oneStep = Duration.ofMillis(http.readTimeoutMillis());
+
+        assertThat(oneStep).isEqualTo(Duration.ofMinutes(10));
+        assertThat(DispatchTiming.PREPARE_LEASE).isGreaterThanOrEqualTo(oneStep.multipliedBy(3));
+        Duration lastRowEnds = Duration.ofMillis(DispatchTiming.DISPATCH_BUDGET_MS + DispatchTiming.PER_ROW_PAUSE_MS)
+            .plusSeconds(DispatchTiming.ROW_TRANSACTION_TIMEOUT_SECONDS);
+        assertThat(lastRowEnds).isLessThan(DispatchTiming.DISPATCH_LOCK);
     }
 }

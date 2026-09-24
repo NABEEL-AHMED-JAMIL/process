@@ -11,9 +11,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.scheduling.annotation.Scheduled;
-import process.ai.AiStepService;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
 import process.engine.cron.ProcessCron;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
@@ -69,18 +66,14 @@ class StalledRunSweepTest {
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobMail jobMail;
-    @Mock private KafkaTemplateProvider kafkaTemplateProvider;
-    @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private AiStepService aiStepService;
     @Mock private Logger logger;
 
     private ProducerBulkEngine engine;
 
     @BeforeEach
     void setUp() {
-        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail,
-            this.kafkaTemplateProvider, this.kafkaConnectionResolver, this.runCallbackTokens, this.aiStepService);
+        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail, this.runCallbackTokens, null);
         this.engine.logger = this.logger;
     }
 

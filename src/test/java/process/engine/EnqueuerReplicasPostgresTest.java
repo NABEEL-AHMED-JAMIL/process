@@ -81,8 +81,7 @@ class EnqueuerReplicasPostgresTest {
             jpa.repository(LookupDataRepository.class), jpa.repository(JobAuditLogRepository.class),
             jpa.repository(SourceTaskRepository.class), mock(OpenSearchAuditLogClient.class));
         BulkAction bulkAction = new BulkAction(store, mock(NotificationPort.class));
-        return new ProducerBulkEngine(bulkAction, store, mock(JobMail.class), null, null, null, null,
-            jpa.transactionManager());
+        return new ProducerBulkEngine(bulkAction, store, mock(JobMail.class), null, null, jpa.transactionManager());
     }
 
     private void dueSlot(long jobId, LocalDateTime nextRunAt) {

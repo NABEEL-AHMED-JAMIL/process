@@ -141,6 +141,18 @@ public class JobQueue {
     @Column(name = "correlation_id", length = 64)
     private String correlationId;
 
+    /**
+     * When the pre-dispatch phase finished with this run, and the document it prepared: the task's
+     * payload with every server AI step's answer written in (V86, MIG-134). The dispatcher takes only
+     * prepared runs and sends exactly this. A retry clears both, so the next attempt is prepared afresh
+     * from the task as it then is -- the AI service reuses any answer it already recorded for the run.
+     */
+    @Column(name = "prepared_at", columnDefinition = "TIMESTAMP")
+    private LocalDateTime preparedAt;
+
+    @Column(name = "dispatch_payload", columnDefinition = "TEXT")
+    private String dispatchPayload;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -308,4 +320,8 @@ public class JobQueue {
     public void setRefusedCallbackStatus(String refusedCallbackStatus) { this.refusedCallbackStatus = refusedCallbackStatus; }
     public String getCorrelationId() { return correlationId; }
     public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
+    public LocalDateTime getPreparedAt() { return preparedAt; }
+    public void setPreparedAt(LocalDateTime preparedAt) { this.preparedAt = preparedAt; }
+    public String getDispatchPayload() { return dispatchPayload; }
+    public void setDispatchPayload(String dispatchPayload) { this.dispatchPayload = dispatchPayload; }
 }

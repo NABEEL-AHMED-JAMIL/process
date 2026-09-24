@@ -342,7 +342,8 @@ class JobStatusTransitionTableTest {
                 .as(method.getName())
                 .doesNotContain("job_status");
         }
-        // Five since MIG-63 added noteRefusedCallback and findRunsWithRefusedCallbacks, both through UPPER().
-        assertThat(filtering).as("queries filtering on a run's job_status").isEqualTo(5);
+        // Five since MIG-63 added noteRefusedCallback and findRunsWithRefusedCallbacks, seven since MIG-134
+        // added findRunsToPrepare and markPrepared -- every one of them through UPPER().
+        assertThat(filtering).as("queries filtering on a run's job_status").isEqualTo(7);
     }
 }

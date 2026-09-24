@@ -10,10 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import process.ai.AiStepService;
 import process.api.SourceJobRestApi;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobDto;
 import process.model.enums.JobStatus;
@@ -61,17 +58,13 @@ class OneRunInFlightTest {
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobMail jobMail;
-    @Mock private KafkaTemplateProvider kafkaTemplateProvider;
-    @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private AiStepService aiStepService;
 
     private ProducerBulkEngine engine;
 
     @BeforeEach
     void setUp() {
-        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail,
-            this.kafkaTemplateProvider, this.kafkaConnectionResolver, this.runCallbackTokens, this.aiStepService);
+        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail, this.runCallbackTokens, null);
     }
 
     /** What Spring hands back when the index refuses an insert, root cause and all. */

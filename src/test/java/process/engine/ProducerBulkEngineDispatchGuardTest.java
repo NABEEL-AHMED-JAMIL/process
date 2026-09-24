@@ -6,13 +6,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
 import process.notifications.JobMail;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
-import process.model.pojo.LookupData;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.service.impl.TransactionServiceImpl;
@@ -28,9 +25,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Mockito;
-import process.ai.AiStepService;
 
 /**
  * Two ways the dispatcher used to stop working quietly.
@@ -54,29 +48,13 @@ public class ProducerBulkEngineDispatchGuardTest {
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobMail jobMail;
-    @Mock private KafkaTemplateProvider kafkaTemplateProvider;
-    @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private AiStepService aiStepService;
 
     private ProducerBulkEngine engine;
 
     @BeforeEach
     void setUp() {
-        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService,
-            this.jobMail, this.kafkaTemplateProvider, this.kafkaConnectionResolver,
-            this.runCallbackTokens, this.aiStepService);
-        // No AI steps on these pipelines: the document goes through as stored.
-        Mockito.lenient().when(this.aiStepService.apply(ArgumentMatchers.any(), ArgumentMatchers.any(),
-            ArgumentMatchers.any(), ArgumentMatchers.any()))
-            .thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(3), null));
-    }
-
-    private static LookupData lookupValued(String value) {
-        LookupData lookupData = new LookupData();
-        lookupData.setLookupType(ProcessUtil.QUEUE_FETCH_LIMIT);
-        lookupData.setLookupValue(value);
-        return lookupData;
+        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail, this.runCallbackTokens, null);
     }
 
     private long limitUsedForTheFetch() {
@@ -89,8 +67,8 @@ public class ProducerBulkEngineDispatchGuardTest {
 
     @Test
     void aValidLimitIsUsedAsGiven() {
-        when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT))
-            .thenReturn(lookupValued("5000"));
+        when(this.transactionService.findOrchestrationSetting(ProcessUtil.QUEUE_FETCH_LIMIT))
+            .thenReturn("5000");
         when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
@@ -102,8 +80,8 @@ public class ProducerBulkEngineDispatchGuardTest {
     /** "5,000" is what an admin types when they mean five thousand. */
     @Test
     void anUnparsableLimitFallsBackInsteadOfKillingTheCycle() {
-        when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT))
-            .thenReturn(lookupValued("5,000"));
+        when(this.transactionService.findOrchestrationSetting(ProcessUtil.QUEUE_FETCH_LIMIT))
+            .thenReturn("5,000");
         when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
@@ -114,11 +92,14 @@ public class ProducerBulkEngineDispatchGuardTest {
         assertThat(this.limitUsedForTheFetch()).isPositive();
     }
 
-    /** Ciphertext, from ticking "Store encrypted" on a row the engine reads directly. */
+    /**
+     * Ciphertext, from ticking "Store encrypted" on the lookup row the engine used to read. The dial is
+     * orchestration_setting's now (MIG-136), which has no encryption column; garbage still falls back.
+     */
     @Test
     void anEncryptedLimitFallsBackInsteadOfKillingTheCycle() {
-        when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT))
-            .thenReturn(lookupValued("Xy8aQ2dF9k1LmNpQrStUvW=="));
+        when(this.transactionService.findOrchestrationSetting(ProcessUtil.QUEUE_FETCH_LIMIT))
+            .thenReturn("Xy8aQ2dF9k1LmNpQrStUvW==");
         when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
@@ -127,10 +108,10 @@ public class ProducerBulkEngineDispatchGuardTest {
         assertThat(this.limitUsedForTheFetch()).isPositive();
     }
 
-    /** The row deleted or renamed out from under findByLookupType. */
+    /** The setting deleted or renamed out from under the read. */
     @Test
     void aMissingLookupFallsBackInsteadOfKillingTheCycle() {
-        when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT)).thenReturn(null);
+        when(this.transactionService.findOrchestrationSetting(ProcessUtil.QUEUE_FETCH_LIMIT)).thenReturn(null);
         when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 
@@ -142,8 +123,8 @@ public class ProducerBulkEngineDispatchGuardTest {
     /** Zero or a negative would fetch nothing at all, which is the same outage by another route. */
     @Test
     void aZeroLimitFallsBackRatherThanFetchingNothing() {
-        when(this.transactionService.findByLookupType(ProcessUtil.QUEUE_FETCH_LIMIT))
-            .thenReturn(lookupValued("0"));
+        when(this.transactionService.findOrchestrationSetting(ProcessUtil.QUEUE_FETCH_LIMIT))
+            .thenReturn("0");
         when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any()))
             .thenReturn(Collections.emptyList());
 

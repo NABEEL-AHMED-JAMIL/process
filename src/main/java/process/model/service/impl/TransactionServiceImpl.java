@@ -171,6 +171,23 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findStalledRuns(startedBefore);
     }
 
+    /** For the caller's transaction: see JobQueueRepository.findRunsToPrepare. */
+    public List<Long> claimRunsToPrepare(LocalDateTime now, int limit, LocalDateTime leaseUntil) {
+        List<Long> ids = this.jobQueueRepository.findRunsToPrepare(now, limit);
+        if (!ids.isEmpty()) {
+            this.jobQueueRepository.leaseForPreparation(ids, leaseUntil);
+        }
+        return ids;
+    }
+
+    public int markPrepared(Long jobQueueId, String payload, LocalDateTime at, String correlationId) {
+        return this.jobQueueRepository.markPrepared(jobQueueId, payload, at, correlationId);
+    }
+
+    public String findOrchestrationSetting(String settingKey) {
+        return this.jobQueueRepository.findOrchestrationSetting(settingKey);
+    }
+
     public List<JobQueue> findRunsWithRefusedCallbacks() {
         return this.jobQueueRepository.findRunsWithRefusedCallbacks();
     }

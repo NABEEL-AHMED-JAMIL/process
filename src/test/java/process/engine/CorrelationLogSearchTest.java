@@ -5,9 +5,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.TopicPartition;
 import org.barco.platform.correlation.CorrelationId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,13 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
-import org.springframework.util.concurrent.SettableListenableFuture;
-import process.ai.AiStepService;
 import process.api.NotifyResetApi;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
@@ -36,9 +27,11 @@ import process.model.repository.JobQueueRepository;
 import process.model.service.NotifyService;
 import process.model.service.impl.TransactionServiceImpl;
 import process.notifications.JobMail;
+import process.outbox.DispatchOutbox;
 import process.security.RunCallbackTokens;
 import process.util.ProcessUtil;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -48,9 +41,9 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -72,10 +65,6 @@ class CorrelationLogSearchTest {
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobMail jobMail;
-    @Mock private KafkaTemplateProvider kafkaTemplateProvider;
-    @Mock private KafkaConnectionResolver kafkaConnectionResolver;
-    @Mock private AiStepService aiStepService;
-    @Mock private KafkaTemplate<String, String> template;
     @Mock private JobQueueRepository jobQueueRepository;
     @Mock private NotifyService notifyService;
 
@@ -127,28 +116,25 @@ class CorrelationLogSearchTest {
     }
 
     @Test
-    void oneSearchFindsTheDispatchAndTheCallbacksOfALegacyWorker() {
+    void oneSearchFindsTheDispatchAndTheCallbacksOfALegacyWorker() throws Exception {
         RunCallbackTokens tokens = new RunCallbackTokens(this.jobQueueRepository, 24, "");
-        ProducerBulkEngine engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail,
-            this.kafkaTemplateProvider, this.kafkaConnectionResolver, tokens, this.aiStepService);
+        DispatchOutbox outbox = mock(DispatchOutbox.class);
+        ProducerBulkEngine engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail, tokens, outbox);
+        // Prepared by the pre-dispatch phase; the dispatcher takes it from here.
+        this.run.setPreparedAt(LocalDateTime.now());
+        this.run.setDispatchPayload("<pipeline/>");
         when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any())).thenReturn(Collections.singletonList(this.run));
         when(this.transactionService.findByJobIdAndJobStatus(JOB_ID, Status.Active)).thenReturn(Optional.of(job()));
-        when(this.aiStepService.apply(eq(TENANT), any(), eq(QUEUE_ID), anyString()))
-            .thenReturn(new AiStepService.Outcome("<pipeline/>", null));
-        when(this.kafkaTemplateProvider.getTemplate(any())).thenReturn(this.template);
-        SettableListenableFuture<SendResult<String, String>> taken = new SettableListenableFuture<>();
-        taken.set(new SendResult<>(new ProducerRecord<>("etl.jobs", "k", "v"),
-            new RecordMetadata(new TopicPartition("etl.jobs", 0), 4200L, 0L, 0L, 0L, 0, 0)));
-        when(this.template.send(eq("etl.jobs"), anyString(), anyString())).thenReturn(taken);
 
         engine.startJobInCurrentTimeSlot();
 
-        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(this.template).send(eq("etl.jobs"), anyString(), message.capture());
-        JsonObject sent = JsonParser.parseString(message.getValue()).getAsJsonObject();
+        ArgumentCaptor<DispatchOutbox.Record> written = ArgumentCaptor.forClass(DispatchOutbox.Record.class);
+        verify(outbox).write(written.capture());
+        JsonObject sent = JsonParser.parseString(written.getValue().payload).getAsJsonObject();
         String correlationId = this.run.getCorrelationId();
         assertThat(CorrelationId.isAcceptable(correlationId)).isTrue();
         assertThat(sent.get("correlationId").getAsString()).as("the worker is handed the id to echo").isEqualTo(correlationId);
+        assertThat(written.getValue().headers).containsEntry(CorrelationId.HEADER, correlationId);
         assertThat(CorrelationId.current()).as("cleared after the run's dispatch").isNull();
 
         // The worker reports back, echoing nothing: the filter bound a fresh id for the request.

@@ -296,6 +296,10 @@ public class BulkAction {
         // The run has not ended. An end time left over from the failed attempt makes its duration
         // read as negative once the retry finally completes.
         row.setEndTime(null);
+        // Prepared afresh (MIG-134): the pre-dispatch phase reads the task as it is at the retry, and
+        // the AI service hands back any answer it already recorded for this run.
+        row.setPreparedAt(null);
+        row.setDispatchPayload(null);
         row.setJobStatusMessage(String.format(
             "Attempt %s of %s failed: %s Retrying at %s.", attempt, maxAttempts, endWithStop(reason), dueAt));
         this.transactionService.saveOrUpdateJobQueue(row);

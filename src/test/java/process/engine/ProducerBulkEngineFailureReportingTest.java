@@ -6,8 +6,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import process.config.KafkaConnectionResolver;
-import process.config.KafkaTemplateProvider;
 import process.notifications.JobMail;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -27,9 +25,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Mockito;
-import process.ai.AiStepService;
 
 /**
  * What the engine says about a run it could not dispatch, and what it says about one nobody
@@ -64,22 +59,13 @@ public class ProducerBulkEngineFailureReportingTest {
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
     @Mock private JobMail jobMail;
-    @Mock private KafkaTemplateProvider kafkaTemplateProvider;
-    @Mock private KafkaConnectionResolver kafkaConnectionResolver;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private AiStepService aiStepService;
 
     private ProducerBulkEngine engine;
 
     @BeforeEach
     void setUp() {
-        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService,
-            this.jobMail, this.kafkaTemplateProvider, this.kafkaConnectionResolver,
-            this.runCallbackTokens, this.aiStepService);
-        // No AI steps on these pipelines: the document goes through as stored.
-        Mockito.lenient().when(this.aiStepService.apply(ArgumentMatchers.any(), ArgumentMatchers.any(),
-            ArgumentMatchers.any(), ArgumentMatchers.any()))
-            .thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(3), null));
+        this.engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail, this.runCallbackTokens, null);
     }
 
     private static SourceJob activeJob() {

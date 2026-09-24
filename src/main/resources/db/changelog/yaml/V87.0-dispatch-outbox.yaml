@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: 87.0-dispatch-outbox
+      author: nabeel.amd93
+      description: "dispatch_outbox: a run's hand-off to its worker queue, written with the run's token and job_send latch and published after commit (MIG-136, T4)"
+      # The Kafka send used to happen inside the dispatch pass, so a send could succeed for a job_queue
+      # row that was then rolled back -- a dispatched run that does not exist -- and a slow broker spent
+      # the pass's lock. Now the dispatcher writes this row in the same local transaction as the
+      # callback token hash and job_send, and DispatchRelay publishes it after commit, per run and
+      # attempt exactly once (the unique key). payload carries the run's callback token in the clear
+      # for the seconds between commit and publish, and is set to NULL once the row is published or
+      # abandoned; the database otherwise only ever holds the token's hash.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE TABLE dispatch_outbox (
+                  outbox_id           BIGSERIAL     PRIMARY KEY,
+                  job_queue_id        BIGINT        NOT NULL,
+                  attempt             INT           NOT NULL,
+                  tenant_id           BIGINT,
+                  source_task_type_id BIGINT,
+                  topic               VARCHAR(255)  NOT NULL,
+                  topic_partition     INT,
+                  message_key         VARCHAR(64)   NOT NULL,
+                  payload             TEXT,
+                  headers             TEXT          NOT NULL,
+                  created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+                  claimed_until       TIMESTAMPTZ,
+                  published_at        TIMESTAMPTZ,
+                  record_offset       BIGINT,
+                  abandoned_at        TIMESTAMPTZ,
+                  attempts            INT           NOT NULL DEFAULT 0,
+                  last_error          VARCHAR(2000),
+                  CONSTRAINT uk_dispatch_outbox_run_attempt UNIQUE (job_queue_id, attempt)
+              );
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE INDEX idx_dispatch_outbox_pending ON dispatch_outbox (outbox_id)
+              WHERE published_at IS NULL AND abandoned_at IS NULL;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP TABLE IF EXISTS public.dispatch_outbox;

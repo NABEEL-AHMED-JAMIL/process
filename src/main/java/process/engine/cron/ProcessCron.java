@@ -5,6 +5,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import process.engine.DispatchTiming;
 import process.engine.ProducerBulkEngine;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
@@ -54,8 +55,9 @@ public class ProcessCron {
         }
     }
 
+    /** The lock and the pass's budget are derived together, in DispatchTiming (MIG-136). */
     @Scheduled(initialDelay = 5000, fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
-    @SchedulerLock(name = "startJobInCurrentTimeSlot", lockAtLeastFor = "5S", lockAtMostFor = "10M")
+    @SchedulerLock(name = "startJobInCurrentTimeSlot", lockAtLeastFor = "5S", lockAtMostFor = DispatchTiming.DISPATCH_LOCK_AT_MOST_FOR)
     public void startJobInCurrentTimeSlot() {
         try {
             logger.info("************************Start-RunJob********************************");
