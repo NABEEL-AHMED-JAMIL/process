@@ -237,4 +237,20 @@ class EtlJobChangelogPostgresTest {
         assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE conname = 'fk_pipeline_field_pipeline' "
             + "AND confrelid = 'pipeline'::regclass", Integer.class)).isEqualTo(1);
     }
+
+    /**
+     * MIG-87 / MIG-100 (contradictions B2, B3): nothing re-seeds V3's task types. A built database has no task
+     * type at all -- V50 seeds none, and since V39 every task type has one owning tenant, so V3's and V10's
+     * platform-wide rows (1000-1011) could not exist -- and no row routes to comparison-topic.
+     */
+    @Test
+    void noV3TaskTypeIsSeeded() {
+        JdbcTemplate sql = db.sql();
+        assertThat(sql.queryForObject("SELECT count(*) FROM source_task_type WHERE source_task_type_id BETWEEN 1000 AND 1011",
+            Integer.class)).isZero();
+        assertThat(sql.queryForObject("SELECT count(*) FROM source_task_type WHERE queue_topic_partition LIKE '%comparison-topic%'",
+            Integer.class)).isZero();
+        assertThat(sql.queryForObject("SELECT is_nullable FROM information_schema.columns WHERE table_name = 'source_task_type' "
+            + "AND column_name = 'tenant_id'", String.class)).isEqualTo("NO");
+    }
 }
