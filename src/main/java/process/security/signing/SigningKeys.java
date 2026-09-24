@@ -4,6 +4,7 @@ import org.barco.platform.security.Jwks;
 import org.barco.platform.security.PublicKeys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.util.EncryptionUtil;
 
@@ -69,6 +70,7 @@ public class SigningKeys implements PublicKeys {
     private volatile Map<String, RSAPublicKey> published = Collections.emptyMap();
     private volatile long loadedAt = Long.MIN_VALUE;
 
+    @Autowired
     public SigningKeys(SigningKeyStore store, EncryptionUtil seal) {
         this(store, seal, System::currentTimeMillis);
     }
