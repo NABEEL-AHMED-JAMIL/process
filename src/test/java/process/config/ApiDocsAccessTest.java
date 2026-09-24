@@ -57,9 +57,9 @@ class ApiDocsAccessTest {
             Mockito.when(identity.authenticate("platform-admin")).thenReturn(Optional.of(
                 new CallerIdentity(1L, 1L, "PLATFORM_ADMIN", "root", false)));
             Mockito.when(identity.authenticate("workspace-admin")).thenReturn(Optional.of(
-                new CallerIdentity(2L, 7L, "ADMIN", "owner", false)));
+                new CallerIdentity(2L, 7L, "TENANT_ADMIN", "owner", false)));
             Mockito.when(identity.authenticate("workspace-user")).thenReturn(Optional.of(
-                new CallerIdentity(3L, 7L, "USER", "member", false)));
+                new CallerIdentity(3L, 7L, "TENANT_USER", "member", false)));
             return identity;
         }
 
