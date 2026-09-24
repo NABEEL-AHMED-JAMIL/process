@@ -14,6 +14,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import process.security.TenantContext;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -427,6 +428,12 @@ public class OpenSearchRagClient {
      * retrieval -- see {@link #searchRelevantChunks}.
      */
     private int countChunks(String bucket, String key, String etag) {
+        if (TenantContext.getTenantId() == null) {
+            // Not "none": nothing was asked, so nothing is known. UNKNOWN keeps the caller from
+            // re-indexing a file under no tenant on the strength of a count it never ran.
+            logger.warn("RAG chunk count for {}/{} with no resolvable tenant; not querying, reporting unknown.", bucket, key);
+            return -1;
+        }
         try {
             Map<String, Object> query = new HashMap<>();
             query.put("size", 0);
@@ -473,6 +480,15 @@ public class OpenSearchRagClient {
         }
         if (chunkTexts.size() != embeddings.size()) {
             throw new IllegalArgumentException("chunkTexts and embeddings must be the same length.");
+        }
+        // The delete below is scoped to the caller's tenant, and the chunks are written under the
+        // tenant handed in: a write with no caller tenant, or for a tenant other than the caller's,
+        // would delete or write somebody else's chunks. Refused, loudly, before anything is sent.
+        Long callerTenant = TenantContext.getTenantId();
+        if (callerTenant == null || !callerTenant.equals(tenantId)) {
+            logger.error("Refusing to index {}/{}: chunks for tenant {} from a caller whose tenant is {} (no resolvable tenant "
+                + "writes nothing, and one tenant never writes another's).", bucket, key, tenantId, callerTenant);
+            return new IndexOutcome(chunkTexts.size(), 0, "no resolvable tenant, or not the caller's tenant");
         }
 
         this.deleteChunksForFile(bucket, key);
@@ -654,6 +670,12 @@ public class OpenSearchRagClient {
             // a fact this call never established.
             logger.error("RAG retrieval for {}/{} was handed an empty question vector; returning no chunks.",
                 bucket, key);
+            return RetrievalResult.unavailable();
+        }
+        if (TenantContext.getTenantId() == null) {
+            // Zero hits, never an unfiltered query. Reported as unavailable rather than empty, so
+            // FileChatServiceImpl answers from the raw file instead of re-indexing it under no tenant.
+            logger.warn("RAG retrieval for {}/{} with no resolvable tenant; returning no chunks.", bucket, key);
             return RetrievalResult.unavailable();
         }
         int ceiling = Math.max(topK, 0);
@@ -1004,6 +1026,7 @@ public class OpenSearchRagClient {
         try {
             Map<String, Object> bool = new HashMap<>();
             bool.put("must", Arrays.asList(termQuery("bucket", bucket), termQuery("key", key)));
+            bool.put("filter", Collections.singletonList(tenantClause()));
             Map<String, Object> body = new HashMap<>();
             body.put("query", Collections.singletonMap("bool", bool));
             this.restTemplate.postForObject(
@@ -1056,7 +1079,32 @@ public class OpenSearchRagClient {
         }
         Map<String, Object> bool = new HashMap<>();
         bool.put("must", must);
+        bool.put("filter", Collections.singletonList(tenantClause()));
         return Collections.singletonMap("bool", bool);
+    }
+
+    /**
+     * The tenant predicate on every query this class sends to {@code file-rag-chunks} (MIG-10,
+     * DEF-009): {@code tenantId} has been written on every chunk since the index existed, and until
+     * this clause nothing read it back. Isolation lived entirely in
+     * FileChatServiceImpl.validateBucketAccess plus the bucket term -- a check in another subsystem,
+     * which leaves with the caller the moment bucket names stop being tenant-scoped or RAG is
+     * extracted. That check and the bucket clause stay; this is defence in depth.
+     *
+     * The tenant is TenantContext's, never an argument's: a caller cannot ask for someone else's.
+     * It sits in the bool's {@code filter}, which does not score, so a single tenant's relevance
+     * ordering is exactly what it was. With no resolvable tenant the clause matches nothing -- the
+     * read paths refuse before they get here, and this is what keeps a path that forgets to from
+     * returning every tenant's chunks.
+     */
+    static Map<String, Object> tenantClause() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            return Collections.singletonMap("bool",
+                Collections.singletonMap("must_not", Collections.singletonList(
+                    Collections.singletonMap("match_all", Collections.emptyMap()))));
+        }
+        return Collections.singletonMap("term", Collections.singletonMap("tenantId", tenantId));
     }
 
     private static Map<String, Object> termQuery(String field, String value) {
