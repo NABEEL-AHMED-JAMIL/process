@@ -15,7 +15,7 @@
 #
 # Run the pins alone: mvn -o test -Dgroups=pinned-unreviewed
 #
-# count: 6
+# count: 7
 
 process.model.service.impl.JobStatusTransitionTableTest#aJobThatNeverRanIsRefusedByANullPointerNotByTheTable | MIG-139 | a callback on a job whose running status is null throws NullPointerException from isValidStatusTransition's switch; NotifyResetApi answers the worker 500, not a readable refusal
 process.security.RetireExtendsTokenExpiryTest#aTokenRetiredOnARunRequeuedForRetryStillOpensCallbacksUntilTheRetryIsDispatched | MIG-138 | NotifyResetApi retires the token of a Failed that the service answered with a retry; the run is back in Queue (not OVER), so the failed attempt's token keeps callback access (addLogs, addLogsBatch) for 24 more hours until the retry's dispatch re-mints it
@@ -23,3 +23,4 @@ process.engine.AiStepAtDispatchTest#aMalformedVariableMapThrowsAndIsRetriedAsIfT
 process.util.AuditLogBulkEncodingTest#theAuditBulkIsSentWithoutACharsetSoAnythingAboveLatin1BecomesAQuestionMark | MIG-156 | OpenSearchAuditLogClient's _bulk posts application/x-ndjson with no charset, so Spring writes it as ISO-8859-1: audit text above U+00FF is stored as '?', and U+0080..U+00FF is refused by OpenSearch and falls back to the database -- the defect the RAG client had and fixed
 process.engine.AiStepDispatchBlockerTest#theAiStepsRunOnTheSchedulersThreadBeforeTheSend | MIG-159 | a pipeline's server AI steps run synchronously on the scheduler thread, before the Kafka send and inside the dispatch lock; moving them off is MIG-25/134
 process.engine.AiStepDispatchBlockerTest#oneAiStepsWorstCaseIsLongerThanTheDispatchBudgetAndAsLongAsTheLock | MIG-159 | since ADR-020 one server step can hold the dispatch thread for HttpAi's ten-minute read timeout: longer than the 7-minute dispatch budget and as long as the 10-minute lock
+process.model.service.impl.EffectivePagesCharacterisationTest#aTenantUserWithNoTenantHoldsEveryPage | MIG-91 | a TENANT_USER row with tenant_id NULL has no default profile and matches no profile, so effectivePages falls to the terminal PageKey.all(); addUser/updateUser cannot create such a row and dev holds none (2026-09-24). Fail-closed would be the empty set

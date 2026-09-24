@@ -43,6 +43,8 @@ public class PageKeyTest {
         assertThat(PageKey.pagesGating("/dashboard.json/summary")).isEmpty();
         assertThat(PageKey.pagesGating("/appUser.json/listUsers")).isEmpty();
         assertThat(PageKey.pagesGating("/sourceJob.json/myActivity")).isEmpty();
+        // Role-gated only since MIG-34 retired PageKey.BILLING: TENANT_ADMIN at billing-service is the gate.
+        assertThat(PageKey.pagesGating("/billing.json/summary")).isEmpty();
         assertThat(PageKey.pagesGating(null)).isEmpty();
     }
 }

@@ -49,7 +49,9 @@ public class UserNameResolver {
         if (wanted.isEmpty()) {
             return new HashMap<>();
         }
-        List<AppUser> found = this.appUserRepository.findAllById(wanted);
+        // Across tenants on purpose: the author of a tenant's row may be a platform admin, and the
+        // tenant filter would otherwise blank their name (MIG-13).
+        List<AppUser> found = this.appUserRepository.findAllByIdAcrossTenants(wanted);
         Map<Long, String> names = new HashMap<>();
         for (AppUser user : found) {
             names.put(user.getAppUserId(), displayName(user));

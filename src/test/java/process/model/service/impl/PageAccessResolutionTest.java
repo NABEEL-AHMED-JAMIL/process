@@ -176,9 +176,9 @@ public class PageAccessResolutionTest {
         when(this.profileRepository.findById(500L))
             .thenReturn(Optional.of(profile(500L, TENANT_A, Status.Active, "jobs", "queue")));
         when(this.exceptionRepository.findByIdAppUserId(7L)).thenReturn(Arrays.asList(
-            new UserPageAccess(7L, "reports", true, 9L),
-            new UserPageAccess(7L, "queue", false, 9L),
-            new UserPageAccess(7L, "page-that-was-removed", true, 9L)));
+            new UserPageAccess(7L, TENANT_A, "reports", true, 9L),
+            new UserPageAccess(7L, TENANT_A, "queue", false, 9L),
+            new UserPageAccess(7L, TENANT_A, "page-that-was-removed", true, 9L)));
 
         assertThat(this.service.effectivePages(user(UserRole.TENANT_USER, TENANT_A, 500L)))
             .containsExactlyInAnyOrder(PageKey.JOBS, PageKey.REPORTS);
@@ -201,7 +201,7 @@ public class PageAccessResolutionTest {
         AppUser ava = user(UserRole.TENANT_USER, TENANT_A, null); ava.setAppUserId(45L);
         AppUser daniel = user(UserRole.TENANT_ADMIN, TENANT_A, null); daniel.setAppUserId(9L);
         when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Arrays.asList(
-            new UserPageAccess(44L, "reports", true, 9L)));
+            new UserPageAccess(44L, TENANT_A, "reports", true, 9L)));
 
         Map<Long, PageAccessService.AccessSummary> summary =
             this.service.accessSummaryFor(Arrays.asList(olivia, ava, daniel));

@@ -32,30 +32,30 @@ class PageAccessCacheAcrossInstancesTest {
 
     @Test
     void aRevocationOnOneInstanceIsSeenOnEveryInstanceWithinTheTtl() {
-        this.database.put(OLIVIA, EnumSet.of(PageKey.JOBS, PageKey.BILLING));
+        this.database.put(OLIVIA, EnumSet.of(PageKey.JOBS, PageKey.REPORTS));
         List<PageAccessCache> instances = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             instances.add(new PageAccessCache(this.now::get));
         }
         PageAccessCache a = instances.get(0);
         long readAt = this.now.get();
-        instances.forEach(cache -> assertThat(cache.get(OLIVIA, this::read)).contains(PageKey.BILLING));
+        instances.forEach(cache -> assertThat(cache.get(OLIVIA, this::read)).contains(PageKey.REPORTS));
 
         // The profile edit lands on A: the database changes and A forgets its own entry.
         this.now.addAndGet(2_000);
         this.database.put(OLIVIA, EnumSet.of(PageKey.JOBS));
         a.forget(OLIVIA);
 
-        assertThat(a.get(OLIVIA, this::read)).as("the instance that made the change").doesNotContain(PageKey.BILLING);
+        assertThat(a.get(OLIVIA, this::read)).as("the instance that made the change").doesNotContain(PageKey.REPORTS);
 
         // The others may still answer from what they read, but never past the TTL of that read.
         this.now.set(readAt + PageAccessCache.TTL_MILLIS - 1);
         for (PageAccessCache other : instances.subList(1, 3)) {
-            assertThat(other.get(OLIVIA, this::read)).as("stale, inside the TTL").contains(PageKey.BILLING);
+            assertThat(other.get(OLIVIA, this::read)).as("stale, inside the TTL").contains(PageKey.REPORTS);
         }
         this.now.set(readAt + PageAccessCache.TTL_MILLIS);
         for (PageAccessCache every : instances) {
-            assertThat(every.get(OLIVIA, this::read)).as("at the TTL, on every instance").doesNotContain(PageKey.BILLING);
+            assertThat(every.get(OLIVIA, this::read)).as("at the TTL, on every instance").doesNotContain(PageKey.REPORTS);
         }
     }
 

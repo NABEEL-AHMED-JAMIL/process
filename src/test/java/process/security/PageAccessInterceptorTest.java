@@ -134,7 +134,7 @@ public class PageAccessInterceptorTest {
     void aTenantUserWithNoUserIdIsRefusedOnEveryGatedPage() throws Exception {
         TenantContext.set(1001L, "TENANT_USER", null, "olivia@a.example");
         for (String path : new String[] {"/sourceJob.json/listSourceJob", "/report.json/fetchReports", "/documentConverter.json/list",
-                "/analytics.json/run", "/billing.json/summary"}) {
+                "/analytics.json/run"}) {
             MockHttpServletResponse response = new MockHttpServletResponse();
             assertThat(this.call(path, response)).as(path).isFalse();
             assertThat(response.getStatus()).as(path).isEqualTo(403);

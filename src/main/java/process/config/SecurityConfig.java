@@ -11,6 +11,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import process.security.JwtAuthenticationFilter;
+import process.security.TokenRevocations;
 import process.util.JwtUtil;
 
 /**
@@ -21,8 +22,11 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     private final JwtUtil jwtUtil;
 
-    public SecurityConfig(JwtUtil jwtUtil) {
+    private final TokenRevocations tokenRevocations;
+
+    public SecurityConfig(JwtUtil jwtUtil, TokenRevocations tokenRevocations) {
         this.jwtUtil = jwtUtil;
+        this.tokenRevocations = tokenRevocations;
     }
 
     @Override
@@ -57,7 +61,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/swagger-ui/**", "/swagger-ui.html", "/v2/api-docs",
                     "/swagger-resources/**", "/webjars/**").permitAll()
                 .anyRequest().authenticated().and()
-            .addFilterBefore(new JwtAuthenticationFilter(this.jwtUtil), UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(new JwtAuthenticationFilter(this.jwtUtil, this.tokenRevocations), UsernamePasswordAuthenticationFilter.class);
     }
 
     @Override

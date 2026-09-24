@@ -1,10 +1,15 @@
 package process.model.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,8 +21,56 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     public Optional<AppUser> findByUsernameAndStatusNot(String username, Status status);
 
-    /** Sign-in: the name is an e-mail address and is matched regardless of case. */
-    public Optional<AppUser> findFirstByUsernameIgnoreCaseAndStatusNot(String username, Status status);
+    /**
+     * The live account a name belongs to, whatever its case and whichever tenant holds it (MIG-17).
+     *
+     * At most one row: ux_app_user_username_lower makes lower(username) unique over the whole table,
+     * which is why this is a plain find and not the findFirst it replaces -- that one existed because
+     * the answer might not have been unique. Native SQL on purpose: the Hibernate tenant filter does
+     * not reach it, and must not -- signing in happens before there is a tenant at all.
+     */
+    @Query(value = "SELECT * FROM app_user WHERE lower(username) = lower(:username) AND status <> 'Delete'", nativeQuery = true)
+    public Optional<AppUser> findLiveByUsernameIgnoringCase(@Param("username") String username);
+
+    /**
+     * Whether a new account may take this name: false when any row holds it in any case, in any
+     * tenant, deleted rows included -- the unique index covers those too, so answering "free" for
+     * one only moves the refusal to a constraint violation at save. Native for the same reason as
+     * above: whether a name is taken is a platform-wide fact, not a tenant-scoped one.
+     */
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM app_user WHERE lower(username) = lower(:username))", nativeQuery = true)
+    public boolean isUsernameTaken(@Param("username") String username);
+
+    /**
+     * People by id, whichever tenant they are in -- for putting a name to an id, never for deciding
+     * what a caller may touch (MIG-13).
+     *
+     * findAllById is a query, so the tenant filter reaches it: a tenant's job created by a platform
+     * admin would lose its author's name. This is the explicit exception, native so the filter
+     * cannot reach it, and named for what it crosses so nobody mistakes it for a scoped read.
+     */
+    @Query(value = "SELECT * FROM app_user WHERE app_user_id IN (:ids)", nativeQuery = true)
+    public List<AppUser> findAllByIdAcrossTenants(@Param("ids") Collection<Long> ids);
+
+    /** Ends every token the person holds (MIG-14): the one place token_version is written. */
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE app_user SET token_version = token_version + 1 WHERE app_user_id = :id", nativeQuery = true)
+    public int bumpTokenVersion(@Param("id") Long appUserId);
+
+    /** The same for everybody in a tenant, when the tenant stops being Active. */
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE app_user SET token_version = token_version + 1 WHERE tenant_id = :tenantId", nativeQuery = true)
+    public int bumpTokenVersionsInTenant(@Param("tenantId") Long tenantId);
+
+    /** The person's current token version, or null when there is no such row. Native: not tenant-filtered. */
+    @Query(value = "SELECT token_version FROM app_user WHERE app_user_id = :id", nativeQuery = true)
+    public Integer findTokenVersion(@Param("id") Long appUserId);
+
+    /** Everybody in a tenant, by id. Numbers because a native bigint may come back as BigInteger. */
+    @Query(value = "SELECT app_user_id FROM app_user WHERE tenant_id = :tenantId", nativeQuery = true)
+    public List<Number> findIdsInTenant(@Param("tenantId") Long tenantId);
 
     public List<AppUser> findByTenantIdAndStatusNotOrderByAppUserIdDesc(Long tenantId, Status status);
 

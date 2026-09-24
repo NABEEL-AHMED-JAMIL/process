@@ -52,7 +52,16 @@ databaseChangeLog:
       file: db/changelog/yaml/V62.0-analytics-tables-read-only.yaml
   - include:
       file: db/changelog/yaml/V63.0-ai-tables-read-only.yaml
-  # Numbered from V70, so the core-dispatch track's changesets (V64 on) cannot clash with these ids.
+  - include:
+      file: db/changelog/yaml/V64.0-username-unique-ignoring-case.yaml
+  - include:
+      file: db/changelog/yaml/V65.0-user-page-access-tenant.yaml
+  - include:
+      file: db/changelog/yaml/V66.0-app-user-token-version.yaml
+  - include:
+      file: db/changelog/yaml/V67.0-retire-billing-page-key.yaml
+  # Numbered from V70, so the other tracks' changesets (identity took V64-V67; core-dispatch adds its own)
+  # cannot clash with these ids.
   - include:
       file: db/changelog/yaml/V70.0-one-scheduler-per-job-one-default-kafka-profile.yaml
   - include:
