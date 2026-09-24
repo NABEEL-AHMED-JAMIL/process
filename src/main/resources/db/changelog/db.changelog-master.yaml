@@ -57,3 +57,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V70.0-one-scheduler-per-job-one-default-kafka-profile.yaml
   - include:
       file: db/changelog/yaml/V70.1-job-queue-day-index-and-entity-indexes.yaml
+  - include:
+      file: db/changelog/yaml/V70.2-seed-platform-default-kafka-connection.yaml

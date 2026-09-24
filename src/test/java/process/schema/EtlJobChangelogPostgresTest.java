@@ -9,7 +9,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -31,7 +33,8 @@ class EtlJobChangelogPostgresTest {
 
     @BeforeAll
     static void build() throws Exception {
-        db = ScratchEtlJob.build("etl_job_fresh");
+        db = ScratchEtlJob.build("etl_job_fresh", Arrays.asList("platformKafkaBootstrapServers=broker.platform.test:9092",
+            "platformKafkaSecurityProtocol=PLAINTEXT"));
     }
 
     @AfterAll
@@ -131,7 +134,7 @@ class EtlJobChangelogPostgresTest {
         // Another tenant's default is its own business, and a non-default is never limited.
         sql.update(profile, 7104L, false, "B other", 7102L);
         // The platform (no tenant) gets exactly one too: NULLs must not make every platform row distinct.
-        sql.update(profile, 7105L, true, "Platform one", null);
+        // V70.2 seeded the platform's default, so a second is refused outright.
         assertThatThrownBy(() -> sql.update(profile, 7106L, true, "Platform two", null))
             .hasMessageContaining("ux_kcp_one_platform_default");
     }
@@ -175,6 +178,40 @@ class EtlJobChangelogPostgresTest {
             return "ok";
         } catch (SQLException refused) {
             return refused.getMessage().replaceAll("(?s).*constraint \"([^\"]+)\".*", "$1");
+        }
+    }
+
+    /**
+     * MIG-45 (V70.2): a database built from the changelog has a platform default Kafka connection on the
+     * brokers the deployment is configured with, so the resolver's last tier finds a profile rather than
+     * nothing -- and every dispatch stops going out on the auto-configured fallback template unannounced.
+     * The resolver's tier-4 and tier-3 reads, as the repository issues them, find the seeded row.
+     */
+    @Test
+    void aBuiltDatabaseHasAPlatformDefaultKafkaConnection() {
+        JdbcTemplate sql = db.sql();
+        List<Map<String, Object>> platformDefault = sql.queryForList("SELECT kafka_connection_profile_id, bootstrap_servers, "
+            + "security_protocol FROM kafka_connection_profile WHERE tenant_id IS NULL AND is_default = true AND status = 'Active'");
+
+        assertThat(platformDefault).hasSize(1);
+        assertThat(platformDefault.get(0).get("kafka_connection_profile_id")).isEqualTo(1L);
+        assertThat(platformDefault.get(0).get("bootstrap_servers")).isEqualTo("broker.platform.test:9092");
+        assertThat(platformDefault.get(0).get("security_protocol")).isEqualTo("PLAINTEXT");
+        // Below the sequence's first value (1000), so no profile the console creates can ever take its id.
+        assertThat(sql.queryForObject("SELECT start_value FROM pg_sequences WHERE sequencename = 'kafka_connection_profile_seq'",
+            Long.class)).isGreaterThan(1L);
+        // A new tenant has no default of its own (tier 3 misses) and lands on the seeded platform default.
+        sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (7201, 'Active', 'T72', 'Seventy-two')");
+        assertThat(sql.queryForList("SELECT kafka_connection_profile_id FROM kafka_connection_profile WHERE tenant_id = 7201 "
+            + "AND is_default = true AND status = 'Active'", Long.class)).isEmpty();
+    }
+
+    /** A secured platform broker needs credentials a changeset must not carry: nothing is seeded for it. */
+    @Test
+    void aSecuredPlatformBrokerIsNotSeeded() throws Exception {
+        try (ScratchEtlJob secured = ScratchEtlJob.build("etl_job_sasl", Arrays.asList(
+                "platformKafkaBootstrapServers=broker.secure.test:9094", "platformKafkaSecurityProtocol=SASL_SSL"))) {
+            assertThat(secured.sql().queryForObject("SELECT count(*) FROM kafka_connection_profile", Integer.class)).isZero();
         }
     }
 }
