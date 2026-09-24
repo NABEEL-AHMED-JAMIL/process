@@ -51,6 +51,8 @@ databaseChangeLog:
   - include:
       file: db/changelog/yaml/V62.0-analytics-tables-read-only.yaml
   - include:
+      file: db/changelog/yaml/V63.0-ai-tables-read-only.yaml
+  - include:
       file: db/changelog/yaml/V64.0-username-unique-ignoring-case.yaml
   - include:
       file: db/changelog/yaml/V65.0-user-page-access-tenant.yaml

@@ -34,7 +34,6 @@ public class TenantSeedService {
     private final PasswordEncoder passwordEncoder;
     private final SourceJobRepository sourceJobRepository;
     private final SourceTaskRepository sourceTaskRepository;
-    private final AiAgentRepository aiAgentRepository;
     private final LookupDataRepository lookupDataRepository;
     private final LookupDataCacheService lookupDataCacheService;
 
@@ -44,14 +43,12 @@ public class TenantSeedService {
     public TenantSeedService(TenantRepository tenantRepository, AppUserRepository appUserRepository,
         PasswordEncoder passwordEncoder, SourceJobRepository sourceJobRepository,
         SourceTaskRepository sourceTaskRepository,
-        AiAgentRepository aiAgentRepository,
         LookupDataRepository lookupDataRepository, LookupDataCacheService lookupDataCacheService) {
         this.tenantRepository = tenantRepository;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskRepository = sourceTaskRepository;
-        this.aiAgentRepository = aiAgentRepository;
         this.lookupDataRepository = lookupDataRepository;
         this.lookupDataCacheService = lookupDataCacheService;
     }
@@ -127,13 +124,12 @@ public class TenantSeedService {
     private void backfillTenantIds(Long defaultTenantId) {
         int jobs = this.sourceJobRepository.backfillTenantId(defaultTenantId);
         int tasks = this.sourceTaskRepository.backfillTenantId(defaultTenantId);
-        int agents = this.aiAgentRepository.backfillTenantId(defaultTenantId);
         int buckets = this.lookupDataRepository.backfillBucketTenantId(defaultTenantId);
-        int total = jobs + tasks + agents + buckets;
+        int total = jobs + tasks + buckets;
         if (total > 0) {
             this.logger.info("=========Backfilled tenantId to Default tenant ({}) on {} pre-existing row(s): "
-                + "sourceJob={}, sourceTask={}, aiAgent={}, bucketLookup={} ==========",
-                defaultTenantId, total, jobs, tasks, agents, buckets);
+                + "sourceJob={}, sourceTask={}, bucketLookup={} ==========",
+                defaultTenantId, total, jobs, tasks, buckets);
         }
     }
 

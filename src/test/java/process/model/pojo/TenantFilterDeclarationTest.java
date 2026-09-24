@@ -120,8 +120,8 @@ public class TenantFilterDeclarationTest {
             }
         }
         Collections.sort(filtered);
-        assertEquals(Arrays.asList("AiAgent", "AiModelConnection", "AiPrompt", "AiPromptRun", "AppUser", "KafkaConnectionProfile", "PageAccessProfile",
-            "Pipeline", "SourceJob", "SourceTask", "SourceTaskType", "TenantTaskTypeKafkaRoute", "UserPageAccess"), filtered);
+        assertEquals(Arrays.asList("AppUser", "KafkaConnectionProfile", "PageAccessProfile", "Pipeline", "SourceJob",
+            "SourceTask", "SourceTaskType", "TenantTaskTypeKafkaRoute", "UserPageAccess"), filtered);
     }
 
     /** An entity that imports the filter annotations without applying them reads as filtered and is not (DEF-165). */

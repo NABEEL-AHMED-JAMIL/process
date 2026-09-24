@@ -1,26 +1,24 @@
 package process.model.service;
 
 import process.model.dto.AdHocPromptRequestDto;
-import process.model.dto.AiAgentDto;
 import process.model.dto.ResponseDto;
 
 /**
+ * What Core asks about an AI agent -- file chat and the job assistant (ADR-020). Agents are the AI
+ * service's; this is answered by it through {@link process.ai.AiPort}, as the signed-in caller.
+ *
  * @author Nabeel Ahmed
- * */
+ */
 public interface AiAgentService {
 
-    public ResponseDto fetchAllAgents() throws Exception;
-
-    public ResponseDto fetchAgentByAgentId(Long aiAgentId) throws Exception;
-
-    public ResponseDto fetchToolByUuid(String toolUuid) throws Exception;
-
-    public ResponseDto processAdHoc(AdHocPromptRequestDto adHocPromptRequestDto) throws Exception;
-
-    // Looks up one agent (checking ownership/status like every other agent lookup here) and
-    // returns its provider/model/apiEndpoint plus the DECRYPTED api key, for another service
-    // (FileChatServiceImpl) to call the provider directly with -- distinct from
-    // fetchAgentByAgentId, whose AiAgentDto response only ever reports apiKeyConfigured.
+    /**
+     * An agent's provider, model, endpoint, JSON mode, instructions and file types, after the same
+     * ownership and status checks every agent lookup makes. Never its key: the provider key stays in
+     * the AI service, which answers the ad-hoc call itself.
+     */
     public ResponseDto resolveRuntimeConfig(Long aiAgentId) throws Exception;
+
+    /** One answer from the agent the request names (its aiAgentId); the AI service supplies the key. */
+    public ResponseDto processAdHoc(AdHocPromptRequestDto adHocPromptRequestDto) throws Exception;
 
 }

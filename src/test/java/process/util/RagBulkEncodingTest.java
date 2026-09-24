@@ -1,6 +1,7 @@
 package process.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -15,6 +16,7 @@ import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.mock.http.MockHttpOutputMessage;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
+import process.security.TenantContext;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -81,6 +83,13 @@ public class RagBulkEncodingTest {
         ReflectionTestUtils.setField(this.client, "objectMapper", this.objectMapper);
         ReflectionTestUtils.setField(this.client, "indexEnsured", true);
         this.posted.clear();
+        // indexChunks writes only for the caller's own tenant (MIG-10).
+        TenantContext.set(1000L, "TENANT_USER", 1L, "rag-test");
+    }
+
+    @AfterEach
+    void clearTheCaller() {
+        TenantContext.clear();
     }
 
     // ------------------------------------------------------------------------------------------
@@ -315,7 +324,7 @@ public class RagBulkEncodingTest {
         Mockito.doThrow(new ResourceAccessException("connect timed out"))
             .when(this.restTemplate).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class));
         List<float[]> vectors = Arrays.asList(new float[] { 1f });
-        OpenSearchRagClient.IndexOutcome outcome = this.client.indexChunks(1L, "b", "k", "e",
+        OpenSearchRagClient.IndexOutcome outcome = this.client.indexChunks(1000L, "b", "k", "e",
             Arrays.asList("text"), vectors, "m");
         assertEquals(0, outcome.getStored());
         assertTrue(outcome.getFailureSummary().contains("connect timed out"), outcome.getFailureSummary());
@@ -324,7 +333,7 @@ public class RagBulkEncodingTest {
     @Test
     @DisplayName("18. nothing to index is complete rather than a failure")
     void nothingToIndexIsComplete() {
-        OpenSearchRagClient.IndexOutcome outcome = this.client.indexChunks(1L, "b", "k", "e",
+        OpenSearchRagClient.IndexOutcome outcome = this.client.indexChunks(1000L, "b", "k", "e",
             Collections.<String>emptyList(), Collections.<float[]>emptyList(), "m");
         assertEquals(0, outcome.getAttempted());
         assertTrue(outcome.isComplete());

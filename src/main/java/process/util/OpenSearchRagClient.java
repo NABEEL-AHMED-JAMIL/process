@@ -14,6 +14,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import process.security.TenantContext;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -149,6 +150,11 @@ public class OpenSearchRagClient {
     private RestTemplate restTemplate = buildRestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // Not final for the same reason as restTemplate: OpenSearchRagKnnFilterIT points a client at a
+    // throwaway index of its own, so a test against a real cluster never writes to the index
+    // production reads. Nothing in production reassigns it.
+    private String indexName = INDEX_NAME;
+
     /**
      * Whether this process has already satisfied itself that the index exists with the right
      * mapping.
@@ -234,7 +240,7 @@ public class OpenSearchRagClient {
                         + "knn_vector dimension can be changed in place, so fixing this means reindexing {} "
                         + "from scratch. (A legacy embeddingModel mapping is NOT one of these: termsFilter "
                         + "matches its .keyword sub-field, so that shape retrieves correctly and is not "
-                        + "reported here.)", INDEX_NAME, complaint, INDEX_NAME);
+                        + "reported here.)", this.indexName, complaint, this.indexName);
                 }
                 this.indexEnsured = true;
                 return;
@@ -242,7 +248,7 @@ public class OpenSearchRagClient {
             try {
                 this.createIndex(dimensions, true);
                 logger.info("Created the {} index (knn_vector dimension={}, hnsw/lucene/cosinesimil).",
-                    INDEX_NAME, dimensions);
+                    this.indexName, dimensions);
             } catch (Exception ex) {
                 // Never let an opinion about the method block cost this deployment its index. If a
                 // cluster will not take hnsw/lucene/cosinesimil -- too old for the Lucene engine, a
@@ -252,15 +258,15 @@ public class OpenSearchRagClient {
                 // because the next _bulk auto-creates a dynamic mapping in its place and that
                 // breaks every term query in this class permanently.
                 logger.warn("Could not create the {} index with an explicit hnsw/lucene/cosinesimil method "
-                    + "({}); retrying with this cluster's default method.", INDEX_NAME, ex.getMessage());
+                    + "({}); retrying with this cluster's default method.", this.indexName, ex.getMessage());
                 try {
                     this.createIndex(dimensions, false);
                     logger.info("Created the {} index (knn_vector dimension={}, default method). Retrieval on "
                         + "this index may have to rank in application code -- a filtered knn query needs an "
-                        + "engine that supports filters.", INDEX_NAME, dimensions);
+                        + "engine that supports filters.", this.indexName, dimensions);
                 } catch (Exception secondAttempt) {
                     logger.warn("Could not create the {} index (it may already exist): {}",
-                        INDEX_NAME, secondAttempt.getMessage());
+                        this.indexName, secondAttempt.getMessage());
                 }
             }
             this.indexEnsured = true;
@@ -322,7 +328,7 @@ public class OpenSearchRagClient {
         body.put("settings", settings);
         body.put("mappings", Collections.singletonMap("properties", properties));
 
-        this.restTemplate.exchange(this.baseUrl + "/" + INDEX_NAME, HttpMethod.PUT,
+        this.restTemplate.exchange(this.baseUrl + "/" + this.indexName, HttpMethod.PUT,
             this.jsonEntity(body), String.class);
     }
 
@@ -336,19 +342,19 @@ public class OpenSearchRagClient {
     private JsonNode fetchIndexMetadata() {
         try {
             ResponseEntity<String> response = this.restTemplate.getForEntity(
-                this.baseUrl + "/" + INDEX_NAME, String.class);
+                this.baseUrl + "/" + this.indexName, String.class);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
                 return null;
             }
             // OpenSearch keys the response by index name; tolerate a body that is not wrapped
             // that way rather than reporting a perfectly good index as broken.
             JsonNode root = this.objectMapper.readTree(response.getBody());
-            JsonNode index = root.path(INDEX_NAME);
+            JsonNode index = root.path(this.indexName);
             return index.isMissingNode() ? root : index;
         } catch (HttpClientErrorException.NotFound notFound) {
             return null;
         } catch (Exception ex) {
-            logger.warn("Could not check for the {} index; will attempt to create it: {}", INDEX_NAME, ex.getMessage());
+            logger.warn("Could not check for the {} index; will attempt to create it: {}", this.indexName, ex.getMessage());
             return null;
         }
     }
@@ -427,6 +433,12 @@ public class OpenSearchRagClient {
      * retrieval -- see {@link #searchRelevantChunks}.
      */
     private int countChunks(String bucket, String key, String etag) {
+        if (TenantContext.getTenantId() == null) {
+            // Not "none": nothing was asked, so nothing is known. UNKNOWN keeps the caller from
+            // re-indexing a file under no tenant on the strength of a count it never ran.
+            logger.warn("RAG chunk count for {}/{} with no resolvable tenant; not querying, reporting unknown.", bucket, key);
+            return -1;
+        }
         try {
             Map<String, Object> query = new HashMap<>();
             query.put("size", 0);
@@ -436,7 +448,7 @@ public class OpenSearchRagClient {
             query.put("track_total_hits", true);
             query.put("query", this.termsFilter(bucket, key, etag));
             String response = this.restTemplate.postForObject(
-                this.baseUrl + "/" + INDEX_NAME + "/_search", this.jsonEntity(query), String.class);
+                this.baseUrl + "/" + this.indexName + "/_search", this.jsonEntity(query), String.class);
             JsonNode root = this.objectMapper.readTree(response);
             return (int) root.path("hits").path("total").path("value").asLong(0);
         } catch (HttpClientErrorException.NotFound notFound) {
@@ -474,6 +486,15 @@ public class OpenSearchRagClient {
         if (chunkTexts.size() != embeddings.size()) {
             throw new IllegalArgumentException("chunkTexts and embeddings must be the same length.");
         }
+        // The delete below is scoped to the caller's tenant, and the chunks are written under the
+        // tenant handed in: a write with no caller tenant, or for a tenant other than the caller's,
+        // would delete or write somebody else's chunks. Refused, loudly, before anything is sent.
+        Long callerTenant = TenantContext.getTenantId();
+        if (callerTenant == null || !callerTenant.equals(tenantId)) {
+            logger.error("Refusing to index {}/{}: chunks for tenant {} from a caller whose tenant is {} (no resolvable tenant "
+                + "writes nothing, and one tenant never writes another's).", bucket, key, tenantId, callerTenant);
+            return new IndexOutcome(chunkTexts.size(), 0, "no resolvable tenant, or not the caller's tenant");
+        }
 
         this.deleteChunksForFile(bucket, key);
         this.ensureIndex(embeddings.get(0).length);
@@ -487,7 +508,7 @@ public class OpenSearchRagClient {
         String dateCreated = Instant.now().toString();
         StringBuilder body = new StringBuilder();
         for (int i = 0; i < count; i++) {
-            body.append("{\"index\":{\"_index\":\"").append(INDEX_NAME)
+            body.append("{\"index\":{\"_index\":\"").append(this.indexName)
                 .append("\",\"_id\":\"").append(chunkId(bucket, key, etag, i)).append("\"}}\n");
             Map<String, Object> doc = new HashMap<>();
             doc.put("tenantId", tenantId);
@@ -656,6 +677,12 @@ public class OpenSearchRagClient {
                 bucket, key);
             return RetrievalResult.unavailable();
         }
+        if (TenantContext.getTenantId() == null) {
+            // Zero hits, never an unfiltered query. Reported as unavailable rather than empty, so
+            // FileChatServiceImpl answers from the raw file instead of re-indexing it under no tenant.
+            logger.warn("RAG retrieval for {}/{} with no resolvable tenant; returning no chunks.", bucket, key);
+            return RetrievalResult.unavailable();
+        }
         int ceiling = Math.max(topK, 0);
         try {
             int chunkCount = this.countChunks(bucket, key, etag);
@@ -794,7 +821,7 @@ public class OpenSearchRagClient {
             String rejection;
             try {
                 JsonNode root = this.objectMapper.readTree(this.restTemplate.postForObject(
-                    this.baseUrl + "/" + INDEX_NAME + "/_search",
+                    this.baseUrl + "/" + this.indexName + "/_search",
                     this.jsonEntity(this.knnQuery(bucket, key, etag, queryEmbedding, ceiling)), String.class));
                 rejection = knnRejection(root);
                 if (rejection == null) {
@@ -817,7 +844,9 @@ public class OpenSearchRagClient {
                 + "process's life. That path answers correctly but pulls the whole file's vectors over HTTP on "
                 + "every question; the causes worth checking are an OpenSearch older than 2.4, index.knn "
                 + "disabled on the index, or an embedding field that is not a knn_vector because a _bulk "
-                + "auto-created the index after a wipe.", INDEX_NAME, rejection);
+                + "auto-created the index after a wipe. A \"Rewrite first\" reason is none of those: it is a filter clause "
+                + "the k-NN plugin cannot build without a rewrite, such as a term on a field the index does not map.",
+                this.indexName, rejection);
         }
         return this.rankChunks(this.runRetrievalQuery(bucket, key, etag, true),
             queryEmbedding, ceiling, bucket, key);
@@ -951,7 +980,7 @@ public class OpenSearchRagClient {
             logger.error("RAG retrieval for {}/{}: not one of the {} stored vectors could be compared with the "
                 + "{}-dimension question vector. Every chunk was dropped, so this file now reads as un-indexed "
                 + "and will be re-embedded. Check that embedding.model and embedding.dimensions match the "
-                + "vectors already written to {}.", bucket, key, chunks.size(), queryEmbedding.length, INDEX_NAME);
+                + "vectors already written to {}.", bucket, key, chunks.size(), queryEmbedding.length, this.indexName);
         } else if (incomparable > 0) {
             logger.warn("RAG retrieval for {}/{}: dropped {} of {} chunks whose stored vector could not be "
                 + "compared with the question vector.", bucket, key, incomparable, chunks.size());
@@ -971,7 +1000,7 @@ public class OpenSearchRagClient {
 
     private JsonNode runRetrievalQuery(String bucket, String key, String etag, boolean includeVectors)
         throws Exception {
-        String response = this.restTemplate.postForObject(this.baseUrl + "/" + INDEX_NAME + "/_search",
+        String response = this.restTemplate.postForObject(this.baseUrl + "/" + this.indexName + "/_search",
             this.jsonEntity(this.retrievalQuery(bucket, key, etag, includeVectors)), String.class);
         return this.objectMapper.readTree(response).path("hits").path("hits");
     }
@@ -1004,10 +1033,11 @@ public class OpenSearchRagClient {
         try {
             Map<String, Object> bool = new HashMap<>();
             bool.put("must", Arrays.asList(termQuery("bucket", bucket), termQuery("key", key)));
+            bool.put("filter", Collections.singletonList(tenantClause()));
             Map<String, Object> body = new HashMap<>();
             body.put("query", Collections.singletonMap("bool", bool));
             this.restTemplate.postForObject(
-                this.baseUrl + "/" + INDEX_NAME + "/_delete_by_query?conflicts=proceed",
+                this.baseUrl + "/" + this.indexName + "/_delete_by_query?conflicts=proceed",
                 this.jsonEntity(body), String.class);
         } catch (HttpClientErrorException.NotFound notFound) {
             // Nothing to delete -- the index does not exist yet, or does not exist any more.
@@ -1047,16 +1077,43 @@ public class OpenSearchRagClient {
      * nothing at all from a perfectly good index.
      */
     Map<String, Object> termsFilter(String bucket, String key, String etag) {
-        List<Map<String, Object>> must = new ArrayList<>();
-        must.add(termQuery("bucket", bucket));
-        must.add(termQuery("key", key));
-        must.add(termQuery("etag", etag));
+        // Every clause in one non-scoring bool.filter. Nothing here is meant to score: the count
+        // reads a total, the document-order fetch sorts by chunkIndex, the fallback ranks by its
+        // own cosine, and inside a knn filter a score is meaningless. What each clause may be is
+        // constrained by that last use -- see modelClause.
+        List<Map<String, Object>> scope = new ArrayList<>();
+        scope.add(termQuery("bucket", bucket));
+        scope.add(termQuery("key", key));
+        scope.add(termQuery("etag", etag));
         if (this.configuredEmbeddingModel != null && !this.configuredEmbeddingModel.trim().isEmpty()) {
-            must.add(modelClause(this.configuredEmbeddingModel.trim()));
+            scope.add(modelClause(this.configuredEmbeddingModel.trim()));
         }
-        Map<String, Object> bool = new HashMap<>();
-        bool.put("must", must);
-        return Collections.singletonMap("bool", bool);
+        scope.add(tenantClause());
+        return Collections.singletonMap("bool", Collections.singletonMap("filter", scope));
+    }
+
+    /**
+     * The tenant predicate on every query this class sends to {@code file-rag-chunks} (MIG-10,
+     * DEF-009): {@code tenantId} has been written on every chunk since the index existed, and until
+     * this clause nothing read it back. Isolation lived entirely in
+     * FileChatServiceImpl.validateBucketAccess plus the bucket term -- a check in another subsystem,
+     * which leaves with the caller the moment bucket names stop being tenant-scoped or RAG is
+     * extracted. That check and the bucket clause stay; this is defence in depth.
+     *
+     * The tenant is TenantContext's, never an argument's: a caller cannot ask for someone else's.
+     * It sits in the bool's {@code filter}, which does not score, so a single tenant's relevance
+     * ordering is exactly what it was. With no resolvable tenant the clause matches nothing -- the
+     * read paths refuse before they get here, and this is what keeps a path that forgets to from
+     * returning every tenant's chunks.
+     */
+    static Map<String, Object> tenantClause() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            return Collections.singletonMap("bool",
+                Collections.singletonMap("must_not", Collections.singletonList(
+                    Collections.singletonMap("match_all", Collections.emptyMap()))));
+        }
+        return Collections.singletonMap("term", Collections.singletonMap("tenantId", tenantId));
     }
 
     private static Map<String, Object> termQuery(String field, String value) {
@@ -1081,13 +1138,34 @@ public class OpenSearchRagClient {
      *
      * Matching either path fixes it without a reindex, and the reindex is the part worth avoiding:
      * the chunks and their vectors are perfectly good, it is only the query that could not reach
-     * them. A term clause against a field the mapping does not define matches nothing rather than
-     * erroring, so each side is inert on the index the other belongs to.
+     * them.
+     *
+     * <h3>Why the second path is a {@code match} and not a {@code term}</h3>
+     *
+     * Both paths used to be {@code term} clauses, on the belief that a term against a field the
+     * mapping does not define "matches nothing rather than erroring". That is only true of a query
+     * OpenSearch has REWRITTEN: an unmapped {@code term} (or {@code terms}) becomes match-none during
+     * the rewrite phase, and building it into a Lucene query without that rewrite throws
+     * {@code IllegalStateException("Rewrite first")}. A top-level search rewrites; the k-NN plugin
+     * on 2.10 turns a knn query's {@code filter} into a Lucene query without rewriting it. The index
+     * this class creates maps {@code embeddingModel} as a plain keyword with no sub-field, so
+     * {@code embeddingModel.keyword} is unmapped there, and every filtered k-NN retrieval against it
+     * failed with HTTP 400 "failed to create query: Rewrite first" -- latching
+     * {@link #knnQuerySupported} off and sending every question through the fallback that fetches
+     * every vector. Measured on the live cluster, 2026-09-24.
+     *
+     * {@code match} resolves an unmapped field to match-none at query-construction time, with no
+     * rewrite needed, and on the keyword sub-field it is exact: a keyword has no analyzer to split
+     * the value, so it becomes the same single term the {@code term} clause asked for. The
+     * {@code term} on {@code embeddingModel} stays a {@code term} on purpose: that field is mapped in
+     * both shapes, and on the dynamic shape it is analyzed text where a {@code match} would accept
+     * any model name sharing a token (nomic, embed, text) -- exactly the model-swap confusion this
+     * clause exists to prevent.
      */
     static Map<String, Object> modelClause(String model) {
         List<Map<String, Object>> either = new ArrayList<>();
         either.add(termQuery("embeddingModel", model));
-        either.add(termQuery("embeddingModel.keyword", model));
+        either.add(Collections.singletonMap("match", Collections.singletonMap("embeddingModel.keyword", model)));
         Map<String, Object> bool = new HashMap<>();
         bool.put("should", either);
         bool.put("minimum_should_match", 1);
@@ -1106,7 +1184,7 @@ public class OpenSearchRagClient {
         if (this.indexEnsured) {
             logger.warn("The {} index was not found while running {}; clearing the created-it-already flag so "
                 + "the next write re-creates it with its k-NN mapping instead of letting a _bulk auto-create a "
-                + "dynamic one in its place.", INDEX_NAME, what);
+                + "dynamic one in its place.", this.indexName, what);
         }
         this.indexEnsured = false;
     }

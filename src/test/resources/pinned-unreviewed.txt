@@ -1,0 +1,26 @@
+# Pinning tests: @Tag("pinned-unreviewed") (MIG-154). Enforced by process.PinnedUnreviewedLedgerTest.
+#
+# A pinning test records what the code does today with NO claim that it is right. Each one is
+# waiting on a decision, and this list going DOWN over the migration is the measure that the
+# undocumented surface is being decided rather than carried (16-testing-strategy 2.5, gate D11).
+#
+# Rules:
+#   - One line per tagged test METHOD:  <package.Class>#<method> | <decision item> | <what is pinned>
+#   - The decision item is a DEC-nn row, or the MIG-nnn row whose Notes describe the behaviour
+#     until a DEC row is raised for it.
+#   - "# count:" is the number of lines below. Change it in the same commit as the tags, so the
+#     pull request shows the delta. It must not rise without a decision item for every new line.
+#   - A pin that fails is a prompt, not a regression: resolve the decision, then fix the code or
+#     update the test, with the decision id in the commit message -- and delete its line here.
+#
+# Run the pins alone: mvn -o test -Dgroups=pinned-unreviewed
+#
+# count: 7
+
+process.model.service.impl.JobStatusTransitionTableTest#aJobThatNeverRanIsRefusedByANullPointerNotByTheTable | MIG-139 | a callback on a job whose running status is null throws NullPointerException from isValidStatusTransition's switch; NotifyResetApi answers the worker 500, not a readable refusal
+process.security.RetireExtendsTokenExpiryTest#aTokenRetiredOnARunRequeuedForRetryStillOpensCallbacksUntilTheRetryIsDispatched | MIG-138 | NotifyResetApi retires the token of a Failed that the service answered with a retry; the run is back in Queue (not OVER), so the failed attempt's token keeps callback access (addLogs, addLogsBatch) for 24 more hours until the retry's dispatch re-mints it
+process.engine.AiStepAtDispatchTest#aMalformedVariableMapThrowsAndIsRetriedAsIfTheBrokerWereDown | MIG-133 | AiStepService.apply throws JsonSyntaxException for a step whose variable map is not JSON (Core's half, read before the AI service is asked); pushMessageToQueue's outer catch then retries the run as 'could not be dispatched' (row 6) instead of a final AI-step failure (row 5). The prompt-variables and undecryptable-key halves were closed by ADR-020: the AI service reports them as a failed step
+process.util.AuditLogBulkEncodingTest#theAuditBulkIsSentWithoutACharsetSoAnythingAboveLatin1BecomesAQuestionMark | MIG-156 | OpenSearchAuditLogClient's _bulk posts application/x-ndjson with no charset, so Spring writes it as ISO-8859-1: audit text above U+00FF is stored as '?', and U+0080..U+00FF is refused by OpenSearch and falls back to the database -- the defect the RAG client had and fixed
+process.engine.AiStepDispatchBlockerTest#theAiStepsRunOnTheSchedulersThreadBeforeTheSend | MIG-159 | a pipeline's server AI steps run synchronously on the scheduler thread, before the Kafka send and inside the dispatch lock; moving them off is MIG-25/134
+process.engine.AiStepDispatchBlockerTest#oneAiStepsWorstCaseIsLongerThanTheDispatchBudgetAndAsLongAsTheLock | MIG-159 | since ADR-020 one server step can hold the dispatch thread for HttpAi's ten-minute read timeout: longer than the 7-minute dispatch budget and as long as the 10-minute lock
+process.model.service.impl.EffectivePagesCharacterisationTest#aTenantUserWithNoTenantHoldsEveryPage | MIG-91 | a TENANT_USER row with tenant_id NULL has no default profile and matches no profile, so effectivePages falls to the terminal PageKey.all(); addUser/updateUser cannot create such a row and dev holds none (2026-09-24). Fail-closed would be the empty set
