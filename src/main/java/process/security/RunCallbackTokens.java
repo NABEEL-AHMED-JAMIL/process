@@ -53,6 +53,11 @@ public class RunCallbackTokens {
     private static final EnumSet<JobStatus> OVER = EnumSet.of(
         JobStatus.Failed, JobStatus.Completed, JobStatus.Skip, JobStatus.Interrupt, JobStatus.Missed);
 
+    /** Whether a run has ended, by the same rule the callback check applies (MIG-189). */
+    public static boolean isOver(JobStatus status) {
+        return status != null && OVER.contains(status);
+    }
+
     private final JobQueueRepository jobQueueRepository;
     private final long budgetHours;
     private final String legacyToken;
