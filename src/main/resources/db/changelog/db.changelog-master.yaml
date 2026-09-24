@@ -129,3 +129,6 @@ databaseChangeLog:
   # V163: MIG-166 follow-up -- a Suspended or Inactive workspace's schedules are paused (owner decision 2026-09-24).
   - include:
       file: db/changelog/yaml/V163.0-workspace-directory.yaml
+  # V164: every enum-backed status column takes only its enum's exact spellings (task 7, 2026-09-24).
+  - include:
+      file: db/changelog/yaml/V164.0-enum-status-spellings.yaml

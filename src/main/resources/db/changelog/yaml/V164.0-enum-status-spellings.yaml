@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 164.0-enum-status-spellings
+      author: nabeel.amd93
+      description: "Every @Enumerated(STRING) status column accepts only its enum's exact spellings: case-only misspellings respelt (reported), then a CHECK each (MIG-166 follow-up, task 7)"
+      # 50 source_job rows spelt 'ACTIVE'/'INACTIVE' by old seed scripts made Hibernate throw on every read of them,
+      # so even deleting those jobs through the API answered 500. A value matching no spelling stops the migration.
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V164.0-enum-status-spellings/V164__enum_status_spellings.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V164.0-enum-status-spellings/V164__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
