@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: 160.0-job-audit-logs-correlation-id
+      id: 162.0-job-audit-logs-correlation-id
       author: nabeel.amd93
       description: "job_audit_logs.correlation_id: the correlation id of the work that wrote the line, indexed, so a run's audit trail is found from the same id as every service's log lines (MIG-94, acceptance 5)"
       changes:

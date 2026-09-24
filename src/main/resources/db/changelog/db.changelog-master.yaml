@@ -118,6 +118,6 @@ databaseChangeLog:
       file: db/changelog/yaml/V143.0-pipeline-config.yaml
   - include:
       file: db/changelog/yaml/V144.0-lookup-data-read-only.yaml
-  # V160-V169: MIG-94 -- the correlation id on every hop, and on both audit stores.
+  # V162: MIG-94 -- the correlation id on every hop, and on both audit stores (V160-V161 are MIG-166/153).
   - include:
-      file: db/changelog/yaml/V160.0-job-audit-logs-correlation-id.yaml
+      file: db/changelog/yaml/V162.0-job-audit-logs-correlation-id.yaml

@@ -179,7 +179,7 @@ class LookupDecompositionPostgresTest {
             rowsAsDevHasThem(sql);
             db.finish();
 
-            // Everything from V141 on, counted rather than fixed: a changeset added after V144 (V160, MIG-94) is
+            // Everything from V141 on, counted rather than fixed: a changeset added after V144 (V162, MIG-94) is
             // rolled back with them instead of standing in for one of them.
             db.rollback(sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE orderexecuted >= "
                 + "(SELECT orderexecuted FROM databasechangelog WHERE id = ?)", Integer.class, "141.0-task-reference"));

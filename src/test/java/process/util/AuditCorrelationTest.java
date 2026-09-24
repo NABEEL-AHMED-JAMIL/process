@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
  * MIG-94 acceptance 5: both audit stores carry the correlation id of the work that wrote the line, so a run's
  * audit trail and every service's logs are joined by one string. OpenSearch documents gain correlationId,
  * mapped as a keyword (exact match, and a ULID sorts chronologically); job_audit_logs gains correlation_id
- * (V160); the sync from OpenSearch carries it across (OpenSearchJobAuditLogProjection, 5 fields). And the
+ * (V162); the sync from OpenSearch carries it across (OpenSearchJobAuditLogProjection, 5 fields). And the
  * Postgres fallback row now keeps its externalId, so the two stores stay reconcilable.
  */
 class AuditCorrelationTest {

@@ -55,7 +55,7 @@ public class JobAuditLogs {
     private String externalId;
 
     /**
-     * The correlation id of the work that wrote the line (V160, MIG-94): the callback's, the dispatch's, the
+     * The correlation id of the work that wrote the line (V162, MIG-94): the callback's, the dispatch's, the
      * request's. Stamped when the row is written; one string then joins the run's audit trail to every log line
      * of every service the work passed through.
      */
