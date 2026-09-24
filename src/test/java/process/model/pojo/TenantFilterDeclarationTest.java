@@ -87,20 +87,10 @@ public class TenantFilterDeclarationTest {
     }
 
     /**
-     * MIG-47 / MIG-86: invoice_line was listed among the filtered entities in the tenancy analysis while
-     * it imported Filter, FilterDef and ParamDef and applied none of them, and had no tenant_id -- a Billing
-     * service written from that list could drop the join to Invoice and leak another workspace's lines.
-     * It now carries its invoice's tenant_id (V59, held by a composite foreign key) and the filter.
-     */
-    @Test
-    void anInvoiceLineBelongsToExactlyOneTenant() {
-        assertEquals("tenant_id = :tenantId", conditionOf(InvoiceLine.class));
-    }
-
-    /**
      * The whole list, so a count quoted in a document can be checked against the code rather than the
      * other way round. 24 in the Phase 1 analysis; StorageConnection (MIG-68) and DocumentConverterTask
-     * (Media) have left process since, and InvoiceLine joined (MIG-47): 23.
+     * (Media) have left process since, InvoiceLine joined (MIG-47), and then the five billing entities left
+     * with billing-service (MIG-88/89): 18.
      */
     @Test
     void theFilteredEntitiesAreExactlyThese() throws Exception {
@@ -113,8 +103,8 @@ public class TenantFilterDeclarationTest {
         }
         Collections.sort(filtered);
         assertEquals(Arrays.asList("AiAgent", "AiModelConnection", "AiPrompt", "AiPromptRun", "AnalyticsAnalysis", "AnalyticsDashboard",
-            "AnalyticsDashboardWidget", "AnalyticsDataset", "AnalyticsQuery", "AnalyticsQueryRun", "BenchmarkResult", "BillingAccount",
-            "BillingDocument", "Invoice", "InvoiceLine", "KafkaConnectionProfile", "PageAccessProfile", "Payment", "Pipeline", "SourceJob",
+            "AnalyticsDashboardWidget", "AnalyticsDataset", "AnalyticsQuery", "AnalyticsQueryRun", "BenchmarkResult",
+            "KafkaConnectionProfile", "PageAccessProfile", "Pipeline", "SourceJob",
             "SourceTask", "SourceTaskType", "TenantTaskTypeKafkaRoute"), filtered);
     }
 

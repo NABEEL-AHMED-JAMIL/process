@@ -2,8 +2,8 @@ package process.ai;
 
 import com.google.gson.Gson;
 import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.MeterReporter;
 import org.barco.platform.meter.UsageEvent;
-import process.billing.MeterClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -39,7 +39,7 @@ public class PromptRunner {
 
     /** The meter, when the console has one; optional so hand-built instances in tests need none. */
     @Autowired(required = false)
-    private MeterClient meter;
+    private MeterReporter meter;
 
 
     private final Logger logger = LoggerFactory.getLogger(PromptRunner.class);

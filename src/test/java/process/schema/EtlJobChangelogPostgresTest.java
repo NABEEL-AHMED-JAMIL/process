@@ -71,6 +71,13 @@ class EtlJobChangelogPostgresTest {
                 .as("insert").hasMessageContaining("storage-service");
             assertThatThrownBy(() -> sql.update("UPDATE storage_connection SET alias = 'y'")).as("update").hasMessageContaining("storage-service");
             assertThatThrownBy(() -> sql.update("DELETE FROM storage_connection")).as("delete").hasMessageContaining("storage-service");
+            // MIG-88/89 (V61): billing's tables are billing_db's now. The copies here are read-only, reads
+            // still answer, and every kind of write -- a truncate included -- is refused naming billing_db.
+            assertThat(sql.queryForObject("SELECT count(*) FROM invoice", Integer.class)).isZero();
+            assertThatThrownBy(() -> sql.update("INSERT INTO billing_account (tenant_id) VALUES (9001)")).as("insert").hasMessageContaining("billing_db");
+            assertThatThrownBy(() -> sql.update("UPDATE invoice SET status = 'paid'")).as("update").hasMessageContaining("billing_db");
+            assertThatThrownBy(() -> sql.update("DELETE FROM payment")).as("delete").hasMessageContaining("billing_db");
+            assertThatThrownBy(() -> sql.execute("TRUNCATE billing_document")).as("truncate").hasMessageContaining("billing_db");
         } finally {
             pool.close();
             try (Connection admin = DriverManager.getConnection(server, user, password); Statement sql = admin.createStatement()) {

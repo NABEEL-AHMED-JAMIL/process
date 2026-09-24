@@ -13,7 +13,6 @@ public enum TrustedCaller {
     /** Stores and reads Kafka certificates under paths it builds for the caller's own profile. */
     KAFKA_SECRETS,
     /** Reads a user's picture from the avatar fields of that user's own row. */
-    IDENTITY_AVATAR,
-    /** Keeps invoices, receipts and slips under keys it builds from the document row (DEF-021: unmetered). */
-    BILLING_DOCUMENTS
+    IDENTITY_AVATAR
+    // BILLING_DOCUMENTS left with Billing (MIG-88/89): billing-service is storage-service's caller now.
 }

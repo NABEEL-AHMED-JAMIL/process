@@ -29,12 +29,15 @@ class TrustedStorageBoundaryTest {
 
     private static final Path MAIN = Paths.get("src", "main", "java", "process");
 
-    /** The four, as MIG-52 names them. Adding a fifth is a decision, and this test is where it is made. */
+    /**
+     * The three left in process: MIG-52 named four, and the fourth -- Billing's documents -- left with
+     * billing-service (MIG-88/89), which is storage-service's own caller now. Adding one is a decision,
+     * and this test is where it is made.
+     */
     private static final List<String> TRUSTED_CALLERS = Arrays.asList(
         "config/KafkaTemplateProvider.java",
         "model/service/impl/KafkaSecretServiceImpl.java",
-        "model/service/impl/AppUserServiceImpl.java",
-        "billing/BillingService.java");
+        "model/service/impl/AppUserServiceImpl.java");
 
     private static List<Path> sources() throws IOException {
         try (Stream<Path> files = Files.walk(MAIN)) {
@@ -95,6 +98,5 @@ class TrustedStorageBoundaryTest {
         assertThat(source(MAIN.resolve("config/KafkaTemplateProvider.java"))).contains("TrustedCaller.KAFKA_TEMPLATE_PROVIDER");
         assertThat(source(MAIN.resolve("model/service/impl/KafkaSecretServiceImpl.java"))).contains("TrustedCaller.KAFKA_SECRETS");
         assertThat(source(MAIN.resolve("model/service/impl/AppUserServiceImpl.java"))).contains("TrustedCaller.IDENTITY_AVATAR");
-        assertThat(source(MAIN.resolve("billing/BillingService.java"))).contains("TrustedCaller.BILLING_DOCUMENTS");
     }
 }

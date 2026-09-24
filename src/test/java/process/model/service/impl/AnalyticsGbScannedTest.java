@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.MeterReporter;
 import org.barco.platform.meter.UsageEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.analytics.DatasetBytes;
-import process.billing.MeterClient;
 import process.model.pojo.AnalyticsQueryRun;
 import process.model.repository.AnalyticsDashboardWidgetRepository;
 import process.model.repository.AnalyticsQueryRepository;
@@ -40,7 +40,7 @@ class AnalyticsGbScannedTest {
     private static final long GIB = 1024L * 1024 * 1024;
 
     private final AnalyticsQueryRunRepository runs = mock(AnalyticsQueryRunRepository.class);
-    private final MeterClient meter = mock(MeterClient.class);
+    private final MeterReporter meter = mock(MeterReporter.class);
     private final DatasetBytes sizes = mock(DatasetBytes.class);
     private AnalyticsQueryLibraryServiceImpl service;
 

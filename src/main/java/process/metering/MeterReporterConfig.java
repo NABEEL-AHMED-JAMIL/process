@@ -1,4 +1,4 @@
-package process.billing;
+package process.metering;
 
 import io.micrometer.core.instrument.FunctionCounter;
 import io.micrometer.core.instrument.MeterRegistry;

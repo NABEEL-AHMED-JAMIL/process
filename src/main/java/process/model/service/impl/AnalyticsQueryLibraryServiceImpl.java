@@ -1,9 +1,9 @@
 package process.model.service.impl;
 
 import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.MeterReporter;
 import org.barco.platform.meter.UsageEvent;
 import org.slf4j.Logger;
-import process.billing.MeterClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -47,7 +47,7 @@ public class AnalyticsQueryLibraryServiceImpl implements AnalyticsQueryLibrarySe
 
     /** The meter, when the console has one; optional so hand-built instances in tests need none. */
     @Autowired(required = false)
-    private MeterClient meter;
+    private MeterReporter meter;
 
     /** How many bytes a scan reads, for analytics.gb_scanned; optional as the meter is. */
     @Autowired(required = false)

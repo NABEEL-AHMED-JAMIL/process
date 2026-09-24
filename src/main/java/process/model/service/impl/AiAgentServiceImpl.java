@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.MeterReporter;
 import org.barco.platform.meter.RequestUsageKey;
 import org.barco.platform.meter.UsageEvent;
 import org.slf4j.Logger;
@@ -10,7 +11,6 @@ import org.springframework.stereotype.Service;
 import process.ai.AiEndpointPolicy;
 import process.ai.AiProviderGateway;
 import process.ai.PromptRunner;
-import process.billing.MeterClient;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
 import process.model.dto.AiAgentRuntimeConfigDto;
@@ -47,7 +47,7 @@ public class AiAgentServiceImpl implements AiAgentService {
     private final AiProviderGateway gateway;
     private final AiEndpointPolicy endpointPolicy;
     /** The meter, when the console has one; optional so hand-built instances in tests need none. */
-    private MeterClient meter;
+    private MeterReporter meter;
 
     public AiAgentServiceImpl(AiPromptServiceImpl prompts, AiModelConnectionServiceImpl connections,
         AiProviderGateway gateway, AiEndpointPolicy endpointPolicy) {
@@ -55,7 +55,7 @@ public class AiAgentServiceImpl implements AiAgentService {
     }
 
     @Autowired(required = false)
-    public void setMeter(MeterClient meter) {
+    public void setMeter(MeterReporter meter) {
         this.meter = meter;
     }
 

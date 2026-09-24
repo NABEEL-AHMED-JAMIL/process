@@ -1,4 +1,4 @@
-package process.billing;
+package process.metering;
 
 import org.barco.platform.meter.Meter;
 import org.junit.jupiter.api.Test;

@@ -3,7 +3,6 @@ package process.storage.remote;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import process.analytics.DatasetResolver;
-import process.engine.cron.UsageMeasurerCron;
 import process.model.service.StorageBrowserService;
 import process.model.service.impl.KafkaConnectionProfileServiceImpl;
 import process.model.service.impl.TenantServiceImpl;
@@ -35,7 +34,7 @@ class StorageRemoteConfigTest {
 
     @Test
     void theConsumersOfConnectionFactsRequireStoragesDirectory() {
-        for (Class<?> consumer : Arrays.asList(DatasetResolver.class, UsageMeasurerCron.class, TenantServiceImpl.class,
+        for (Class<?> consumer : Arrays.asList(DatasetResolver.class, TenantServiceImpl.class,
             KafkaConnectionProfileServiceImpl.class)) {
             Constructor<?>[] constructors = consumer.getConstructors();
             assertThat(constructors).as(consumer.getSimpleName()).hasSize(1);
