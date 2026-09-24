@@ -98,3 +98,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V87.0-dispatch-outbox.yaml
   - include:
       file: db/changelog/yaml/V88.0-orchestration-setting.yaml
+  - include:
+      file: db/changelog/yaml/V131.0-scheduler-day-of-month-integer.yaml
