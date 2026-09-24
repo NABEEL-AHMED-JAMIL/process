@@ -97,10 +97,10 @@ public class AppUserServiceImplUserCreatedNotificationTest {
         tenant.setTenantId(TENANT_A);
         tenant.setTenantName("Acme");
         lenient().when(this.tenantRepository.findById(TENANT_A)).thenReturn(Optional.of(tenant));
-        lenient().when(this.appUserRepository.isUsernameTaken(anyString())).thenReturn(false);
+        lenient().when(this.appUserRepository.isUsernameTakenAcrossTenants(anyString())).thenReturn(false);
         lenient().when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete))
             .thenReturn(Collections.emptyList());
-        lenient().when(this.appUserRepository.findAll()).thenReturn(Collections.emptyList());
+        lenient().when(this.appUserRepository.findActiveByRoleAcrossTenants("PLATFORM_ADMIN")).thenReturn(Collections.emptyList());
     }
 
     @AfterEach
@@ -217,7 +217,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
         when(this.appUserRepository.findById(1L)).thenReturn(Optional.of(actor));
         AppUser peer = this.userIn(null, 2L, UserRole.PLATFORM_ADMIN, "Pia Platform");
         AppUser tenantAdmin = this.userIn(TENANT_A, 77L, UserRole.TENANT_ADMIN, "Other Admin");
-        when(this.appUserRepository.findAll()).thenReturn(Arrays.asList(actor, peer, tenantAdmin));
+        when(this.appUserRepository.findActiveByRoleAcrossTenants("PLATFORM_ADMIN")).thenReturn(Arrays.asList(actor, peer, tenantAdmin));
         when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.USER_WELCOME), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn("Sent");
 

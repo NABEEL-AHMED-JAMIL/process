@@ -66,16 +66,16 @@ class UsernameUniquenessPostgresTest {
             AppUserRepository users = db.repository(AppUserRepository.class);
 
             db.transaction().executeWithoutResult(tx -> {
-                assertThat(users.findLiveByUsernameIgnoringCase("DANA@x.COM")).get()
+                assertThat(users.findLiveByUsernameAcrossTenants("DANA@x.COM")).get()
                     .extracting(u -> u.getAppUserId()).isEqualTo(9001L);
                 // Inactive is still an account -- login must find it to say so after the password.
-                assertThat(users.findLiveByUsernameIgnoringCase("Fay@X.com")).isPresent();
-                assertThat(users.findLiveByUsernameIgnoringCase("erin@x.com")).isEmpty();
-                assertThat(users.findLiveByUsernameIgnoringCase("nobody@x.com")).isEmpty();
+                assertThat(users.findLiveByUsernameAcrossTenants("Fay@X.com")).isPresent();
+                assertThat(users.findLiveByUsernameAcrossTenants("erin@x.com")).isEmpty();
+                assertThat(users.findLiveByUsernameAcrossTenants("nobody@x.com")).isEmpty();
 
-                assertThat(users.isUsernameTaken("dana@X.COM")).isTrue();
-                assertThat(users.isUsernameTaken("ERIN@x.com")).as("a deleted row still holds its name").isTrue();
-                assertThat(users.isUsernameTaken("nobody@x.com")).isFalse();
+                assertThat(users.isUsernameTakenAcrossTenants("dana@X.COM")).isTrue();
+                assertThat(users.isUsernameTakenAcrossTenants("ERIN@x.com")).as("a deleted row still holds its name").isTrue();
+                assertThat(users.isUsernameTakenAcrossTenants("nobody@x.com")).isFalse();
             });
         }
     }

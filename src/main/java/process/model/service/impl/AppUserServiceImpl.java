@@ -16,12 +16,14 @@ import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
+import process.model.repository.ScopedAppUserReads;
 import process.model.repository.TenantRepository;
 import process.model.service.AppUserService;
 import process.model.service.PageAccessService;
 import process.storage.TrustedAccess;
 import process.storage.TrustedCaller;
 import process.storage.TrustedStorageOperations;
+import org.barco.platform.tenancy.TenantScope;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.security.TokenRevocations;
@@ -158,11 +160,11 @@ public class AppUserServiceImpl implements AppUserService {
         // later findAll() here scoped too. A platform admin's filter is turned off, not skipped --
         // its listing spans tenants on purpose.
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        List<AppUser> users = TenantContext.isPlatformAdmin()
-            ? this.appUserRepository.findAll().stream()
-                .filter(u -> u.getStatus() != Status.Delete)
-                .collect(Collectors.toList())
-            : this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TenantContext.getTenantId(), Status.Delete);
+        // The scope is a value, not a choice between two queries (MIG-93): a platform admin's all-tenants
+        // grant is named and audited, and a caller with no tenant is scoped to nothing -- the derived
+        // query it used to reach, findByTenantId(null, ...), reads "tenant_id IS NULL": every platform admin.
+        List<AppUser> users = ScopedAppUserReads.findLive(this.appUserRepository, TenantScope.of(TenantContext.getTenantId(),
+            TenantContext.getUserRole(), TenantContext.getAppUserId()));
         // One lookup for the whole page rather than one per row.
         this.userNameResolver.attachNames(users);
         List<AppUserDto> dtos = this.mapToDtoList(users);
@@ -212,7 +214,7 @@ public class AppUserServiceImpl implements AppUserService {
         }
         // Taken in any case, in any tenant, by any row: a name that differs only by case is the same
         // sign-in, and letting it be created beside the first was an account takeover (MIG-17).
-        if (this.appUserRepository.isUsernameTaken(appUserDto.getUsername().trim())) {
+        if (this.appUserRepository.isUsernameTakenAcrossTenants(appUserDto.getUsername().trim())) {
             return new ResponseDto(ERROR, String.format("Username \"%s\" is already in use.", appUserDto.getUsername().trim()));
         }
         // Blank means the server picks one. That is the better path -- it is random, it is
@@ -352,7 +354,7 @@ public class AppUserServiceImpl implements AppUserService {
         List<AppUser> candidates;
         UserRole peerRole;
         if (isNull(user.getTenantId())) {
-            candidates = this.appUserRepository.findAll();
+            candidates = this.appUserRepository.findActiveByRoleAcrossTenants(UserRole.PLATFORM_ADMIN.name());
             peerRole = UserRole.PLATFORM_ADMIN;
         } else {
             candidates = this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(

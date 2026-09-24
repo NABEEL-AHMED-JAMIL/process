@@ -175,9 +175,6 @@ class TenantFilterFailsClosedTest {
         EXPLAINED.put("JwtAuthenticationFilter.java catch (JwtException | IllegalArgumentException ex)",
             "a token that cannot be read leaves the request anonymous, and Spring Security refuses an anonymous request "
                 + "to anything that is not permitAll");
-        EXPLAINED.put("LoginAttemptGuard.java catch (DataAccessException ex)",
-            "failed() and succeeded() only log: the attempt they record has already been decided, and the next one asks "
-                + "secondsUntilAllowed first, whose catch throws Unavailable -- sign-in refuses everybody while Redis is away");
         EXPLAINED.put("JwtAuthenticationFilter.java catch (TokenRevocations.Unavailable ex)",
             "revocations cannot be checked, so the token authenticates nobody: stillGood answers false (MIG-14)");
         EXPLAINED.put("TokenRevocations.java catch (Unavailable ex)",

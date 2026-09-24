@@ -52,15 +52,40 @@ class InternalPageAccessRestApiTest {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> ask(String path) {
-        ResponseEntity<?> answer = this.api.check(TOKEN, Collections.singletonMap("path", path));
+        ResponseEntity<?> answer = this.api.check(TOKEN, "Bearer caller-token", Collections.singletonMap("path", path));
         assertThat(answer.getStatusCodeValue()).isEqualTo(200);
         return (Map<String, Object>) answer.getBody();
     }
 
+    /**
+     * The gateway's revocation check (MIG-14 follow-up). A bearer token process's filter refused --
+     * signed out, minted before a demotion, expired, forged -- leaves no caller; the answer says so, and
+     * the gateway refuses the call with a 401 instead of forwarding it to a service that may not yet
+     * check revocations itself.
+     */
+    @Test
+    void aBearerTokenTheFilterRefusedIsAnsweredUnauthenticated() {
+        TenantContext.clear();
+
+        Map<String, Object> answer = ask("/documentConverter.json/convert");
+
+        assertThat(answer).containsEntry("allowed", false).containsEntry("authenticated", false)
+            .containsEntry("message", "Sign in to continue.");
+    }
+
+    /** No bearer token at all: nothing to gate, as before -- the service refuses an anonymous call itself. */
+    @Test
+    void noBearerTokenIsNoCallerToGate() {
+        TenantContext.clear();
+        ResponseEntity<?> answer = this.api.check(TOKEN, null, Collections.singletonMap("path", "/documentConverter.json/convert"));
+        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(((Map<?, ?>) answer.getBody()).get("allowed")).isEqualTo(true);
+    }
+
     @Test
     void withoutTheServiceTokenNothingIsAnswered() {
-        assertThat(this.api.check(null, Collections.singletonMap("path", "/billing.json")).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.check("wrong", Collections.singletonMap("path", "/billing.json")).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.check(null, "Bearer caller-token", Collections.singletonMap("path", "/billing.json")).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.check("wrong", "Bearer caller-token", Collections.singletonMap("path", "/billing.json")).getStatusCodeValue()).isEqualTo(401);
         verifyNoInteractions(this.users, this.pages);
     }
 

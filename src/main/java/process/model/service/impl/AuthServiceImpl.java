@@ -19,7 +19,7 @@ import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AuthService;
-import process.security.LoginAttemptGuard;
+import org.barco.platform.security.LoginAttemptGuard;
 import process.security.TokenRevocations;
 import org.springframework.beans.factory.annotation.Value;
 import process.util.JwtUtil;
@@ -103,7 +103,7 @@ public class AuthServiceImpl implements AuthService {
         // The name is an e-mail address, and e-mail addresses are not case-sensitive: the
         // person who typed a capital in theirs is the same person. One row at most -- a name is
         // unique ignoring case across the platform (MIG-17) -- so login no longer picks one of two.
-        Optional<AppUser> userOpt = this.appUserRepository.findLiveByUsernameIgnoringCase(username);
+        Optional<AppUser> userOpt = this.appUserRepository.findLiveByUsernameAcrossTenants(username);
 
         // The password is checked BEFORE anything is said about the account, and checked even
         // when there is no account -- against a hash that matches nothing -- so a wrong name
@@ -168,6 +168,11 @@ public class AuthServiceImpl implements AuthService {
             return new ResponseDto(ERROR, "Account no longer active -- please log in again.");
         }
         AppUser user = userOpt.get();
+        // Against the database, not only the Redis copy: a bump whose publish failed must not be renewed
+        // past by a refresh (MIG-92 made the Redis copy long-lived, for the services that have no database).
+        if (TokenRevocations.mintedUnder(claims) < (user.getTokenVersion() == null ? 0 : user.getTokenVersion())) {
+            return new ResponseDto(ERROR, "Refresh token is invalid or expired -- please log in again.");
+        }
 
         if (this.checkAccountAndTenantActive(user) != null) {
             return new ResponseDto(ERROR, "Account no longer active -- please log in again.");

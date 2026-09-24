@@ -1,6 +1,7 @@
 package process.security;
 
 import io.jsonwebtoken.Claims;
+import org.barco.platform.security.RevocationCheck;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,19 +33,21 @@ import java.util.List;
  *     the version it was minted under; a token below the person's current version is refused.
  *     Bumping it ends every token the person holds, whatever instance minted them.
  *
- * The check is one Redis round trip (MGET of both keys). The version is cached per person for
- * {@link #VERSION_TTL} and read from the database on a miss; a bump publishes the new number
- * straight away, and a publish never lowers what is cached (a Lua max), so a reader racing a bump
- * cannot put the old number back. If publishing fails, the TTL is the bound on how long an old
- * token can outlive its bump -- which is why it is a minute, not a day.
+ * The check is one Redis round trip (MGET of both keys). The version is kept per person for
+ * {@link #VERSION_TTL} -- longer than any token lives, because the other services read the same key
+ * through platform-commons' RevocationCheck and have no database to fall back on: to them a missing
+ * key has to mean "no change a live token could predate". process reads the database on a miss; a
+ * bump publishes the new number straight away, and a publish never lowers what is there (a Lua max),
+ * so a reader racing a bump cannot put the old number back. If publishing fails, access tokens minted
+ * before the bump live out their thirty minutes (refresh checks the database, so they are not renewed);
+ * the failure is logged at ERROR.
  *
  * Redis unreachable fails closed: {@link #isRevoked} throws {@link Unavailable} and the filter
  * treats the token as unusable. That is every signed-in request refused for the length of an
  * outage, chosen over accepting tokens nobody can vouch for.
  *
- * Only process checks today. Every other service verifies tokens with platform-commons' JwtVerifier,
- * which reads neither key; teaching it to (the key names here are the contract) is a follow-up in
- * that repository.
+ * The key names are platform-commons' ({@link RevocationCheck#DENIED}, {@link RevocationCheck#VERSION}):
+ * every service built with JwtVerifier.builder().revocations(...) reads what this writes (1.7.0).
  *
  * @author Nabeel Ahmed
  */
@@ -53,9 +56,10 @@ public class TokenRevocations {
 
     public static final String CLAIM_TOKEN_VERSION = "tokenVersion";
 
-    static final String DENIED = "auth:denied:";
-    static final String VERSION = "auth:token-version:";
-    static final Duration VERSION_TTL = Duration.ofSeconds(60);
+    static final String DENIED = RevocationCheck.DENIED;
+    static final String VERSION = RevocationCheck.VERSION;
+    /** Longer than any token lives -- seven days of refresh token, and a day over (see above). */
+    static final Duration VERSION_TTL = Duration.ofDays(8);
 
     /** SET the version only if it is higher than what is there; refresh the TTL either way. */
     private static final DefaultRedisScript<Long> RAISE = new DefaultRedisScript<>(
@@ -196,9 +200,10 @@ public class TokenRevocations {
         try {
             this.raise(appUserId, version);
         } catch (Unavailable ex) {
-            // The database already holds the new version; a cached old one lasts at most VERSION_TTL.
-            this.logger.error("Token version {} for user {} is saved but not published; old tokens may be "
-                + "accepted for up to {} s", version, appUserId, VERSION_TTL.getSeconds());
+            // The database holds the new version: refresh reads it there, so old access tokens are not
+            // renewed, but other services may accept one until it expires.
+            this.logger.error("Token version {} for user {} is saved but not published; access tokens minted before "
+                + "it may be accepted elsewhere until they expire", version, appUserId);
         }
     }
 

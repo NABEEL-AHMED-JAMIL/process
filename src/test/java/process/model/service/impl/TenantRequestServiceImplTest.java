@@ -95,7 +95,7 @@ public class TenantRequestServiceImplTest {
     @Test
     void submitSavesAPendingRequestOnAFreshAddress() {
         when(this.tenantRequestRepository.findOpenByEmail("jane@example.com")).thenReturn(Optional.empty());
-        when(this.appUserRepository.isUsernameTaken("jane@example.com"))
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("jane@example.com"))
             .thenReturn(false);
 
         ResponseDto response = this.service.submit(submitted("Acme Corp", "Jane Doe", "Jane@Example.com"));
@@ -126,7 +126,7 @@ public class TenantRequestServiceImplTest {
     @Test
     void submitSavesNothingWhenAnAccountAlreadyExistsForTheAddress() {
         when(this.tenantRequestRepository.findOpenByEmail("jane@example.com")).thenReturn(Optional.empty());
-        when(this.appUserRepository.isUsernameTaken("jane@example.com"))
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("jane@example.com"))
             .thenReturn(true);
 
         ResponseDto response = this.service.submit(submitted("Acme", "Jane", "jane@example.com"));
@@ -152,7 +152,7 @@ public class TenantRequestServiceImplTest {
         TenantRequest request = this.pendingRequest();
         when(this.tenantRequestRepository.findById(9L)).thenReturn(Optional.of(request));
         when(this.tenantRepository.findByTenantCode("acme-corp")).thenReturn(Optional.empty());
-        when(this.appUserRepository.isUsernameTaken("jane@example.com"))
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("jane@example.com"))
             .thenReturn(false);
         when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
         when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
@@ -217,7 +217,7 @@ public class TenantRequestServiceImplTest {
         TenantRequest request = this.pendingRequest();
         when(this.tenantRequestRepository.findById(9L)).thenReturn(Optional.of(request));
         when(this.tenantRepository.findByTenantCode("acme-corp")).thenReturn(Optional.empty());
-        when(this.appUserRepository.isUsernameTaken("jane@example.com"))
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("jane@example.com"))
             .thenReturn(true);
 
         ResponseDto response = this.service.approve(9L, null);
@@ -232,7 +232,7 @@ public class TenantRequestServiceImplTest {
         TenantRequest request = this.pendingRequest();
         when(this.tenantRequestRepository.findById(9L)).thenReturn(Optional.of(request));
         when(this.tenantRepository.findByTenantCode("acme-corp")).thenReturn(Optional.empty());
-        when(this.appUserRepository.isUsernameTaken("jane@example.com"))
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("jane@example.com"))
             .thenReturn(false);
         lenient().when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
         when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))
@@ -254,7 +254,7 @@ public class TenantRequestServiceImplTest {
         TenantRequest request = this.pendingRequest();
         when(this.tenantRequestRepository.findById(9L)).thenReturn(Optional.of(request));
         when(this.tenantRepository.findByTenantCode("acme-eu")).thenReturn(Optional.empty());
-        when(this.appUserRepository.isUsernameTaken("jane@example.com"))
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("jane@example.com"))
             .thenReturn(false);
         lenient().when(this.passwordEncoder.encode(anyString())).thenReturn("hashed");
         lenient().when(this.emailMessagesFactory.sendTemplate(eq(MailRequested.Template.TENANT_WELCOME), anyString(), any(), anyString(), any(), any(), any(), any()))

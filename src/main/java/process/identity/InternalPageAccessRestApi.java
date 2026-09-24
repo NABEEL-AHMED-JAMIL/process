@@ -41,9 +41,20 @@ public class InternalPageAccessRestApi {
     /** POST, as every /internal lookup is: SecurityConfig admits /internal/** for POST only. Body: {path}. */
     @PostMapping(value = "/check", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> check(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
         @RequestBody Map<String, Object> body) {
         if (!this.admits(presented)) {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+        }
+        // A bearer token the filter did not accept -- signed out, minted before its person's standing
+        // changed, expired, forged -- leaves no caller behind it. Say so, and the gateway answers 401
+        // rather than forwarding it to a service that may not check revocations itself (MIG-14).
+        if (authorization != null && authorization.startsWith("Bearer ") && TenantContext.getAppUserId() == null) {
+            Map<String, Object> refused = new LinkedHashMap<>();
+            refused.put("allowed", false);
+            refused.put("authenticated", false);
+            refused.put("message", "Sign in to continue.");
+            return new ResponseEntity<>(refused, HttpStatus.OK);
         }
         Object path = body == null ? null : body.get("path");
         PageGate.Decision decision = this.gate.decideFresh(TenantContext.getUserRole(), TenantContext.getAppUserId(),

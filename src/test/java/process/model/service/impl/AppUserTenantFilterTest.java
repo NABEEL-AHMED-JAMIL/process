@@ -18,6 +18,7 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.PageAccessService;
 import process.notifications.TestNotifications;
+import org.barco.platform.tenancy.TenantScope;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.security.TokenRevocations;
@@ -93,6 +94,32 @@ class AppUserTenantFilterTest {
         InOrder order = inOrder(this.tenantFilterHelper, this.appUserRepository);
         order.verify(this.tenantFilterHelper).enableIfNeeded(this.entityManager);
         order.verify(this.appUserRepository).findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete);
+    }
+
+    /**
+     * MIG-93: a tenant admin whose token carries no tenant reads nobody. Before TenantScope it reached
+     * findByTenantIdAndStatusNot(null, ...), which Spring Data derives as "tenant_id IS NULL" -- every
+     * platform administrator's row.
+     */
+    @Test
+    void aTenantAdminWithNoTenantListsNobodyNotThePlatformAdmins() throws Exception {
+        TenantContext.set(null, "TENANT_ADMIN", 9L, "admin@nowhere.example");
+
+        assertThat(this.service.listUsers().getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+
+        verify(this.appUserRepository).findByTenantIdAndStatusNotOrderByAppUserIdDesc(TenantScope.NO_TENANT_MATCHES, Status.Delete);
+        verify(this.appUserRepository, never()).findByTenantIdAndStatusNotOrderByAppUserIdDesc(null, Status.Delete);
+        verify(this.appUserRepository, never()).findAllLiveAcrossTenants();
+    }
+
+    @Test
+    void aPlatformAdminListsEveryTenantThroughTheNamedGrant() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "root@example.com");
+
+        this.service.listUsers();
+
+        verify(this.appUserRepository).findAllLiveAcrossTenants();
+        verify(this.appUserRepository, never()).findAll();
     }
 
     @Test

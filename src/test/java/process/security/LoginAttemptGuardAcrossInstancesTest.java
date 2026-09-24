@@ -1,5 +1,6 @@
 package process.security;
 
+import org.barco.platform.security.LoginAttemptGuard;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -198,7 +199,7 @@ class LoginAttemptGuardAcrossInstancesTest {
         emily.setPassword("stored");
         emily.setUserRole(UserRole.PLATFORM_ADMIN);
         emily.setStatus(Status.Active);
-        when(users.findLiveByUsernameIgnoringCase(anyString())).thenReturn(Optional.of(emily));
+        when(users.findLiveByUsernameAcrossTenants(anyString())).thenReturn(Optional.of(emily));
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         when(encoder.encode(anyString())).thenReturn("nobody");
         AuthServiceImpl onA = this.signIn(this.a, users, encoder);
@@ -227,7 +228,7 @@ class LoginAttemptGuardAcrossInstancesTest {
 
             assertThat(refused.getStatus()).isEqualTo("ERROR");
             assertThat(refused.getMessage()).isEqualTo("Sign-in is unavailable right now. Try again in a few minutes.");
-            verify(users, never()).findLiveByUsernameIgnoringCase(anyString());
+            verify(users, never()).findLiveByUsernameAcrossTenants(anyString());
             verify(encoder, never()).matches(anyString(), anyString());
         } finally {
             nowhere.destroy();

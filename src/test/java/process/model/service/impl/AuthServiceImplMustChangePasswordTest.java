@@ -16,7 +16,7 @@ import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.PageAccessService;
-import process.security.LoginAttemptGuard;
+import org.barco.platform.security.LoginAttemptGuard;
 import process.security.TokenRevocations;
 import process.util.JwtUtil;
 import process.util.ProcessUtil;
@@ -79,7 +79,7 @@ public class AuthServiceImplMustChangePasswordTest {
     }
 
     private ResponseDto login(AppUser user) throws Exception {
-        when(this.appUserRepository.findLiveByUsernameIgnoringCase(USERNAME))
+        when(this.appUserRepository.findLiveByUsernameAcrossTenants(USERNAME))
             .thenReturn(Optional.of(user));
         when(this.passwordEncoder.matches(PASSWORD, user.getPassword())).thenReturn(true);
         when(this.jwtUtil.generateAccessToken(any(AppUser.class))).thenReturn("access");

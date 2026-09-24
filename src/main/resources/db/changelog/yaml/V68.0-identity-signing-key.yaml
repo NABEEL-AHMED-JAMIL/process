@@ -1,0 +1,28 @@
+databaseChangeLog:
+  - changeSet:
+      id: 68.0-identity-signing-key
+      author: nabeel.amd93
+      description: "Identity's RS256 signing keys: made and kept by Identity, the private half sealed (MIG-92, P11)"
+      # No key is inserted here: the first instance to start makes one (SigningKeys), so no signing
+      # secret ever passes through a changeset, an image or an environment file. At most one key is
+      # active -- the partial unique index is how two instances starting together agree on one.
+      changes:
+        - sql:
+            sql: >-
+              CREATE TABLE identity_signing_key (
+                kid VARCHAR(64) PRIMARY KEY,
+                algorithm VARCHAR(10) NOT NULL DEFAULT 'RS256',
+                public_key TEXT NOT NULL,
+                private_key_sealed TEXT,
+                status VARCHAR(10) NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT now(),
+                retired_at TIMESTAMP,
+                CONSTRAINT ck_identity_signing_key_status CHECK (status IN ('active', 'retired')),
+                CONSTRAINT ck_identity_signing_key_algorithm CHECK (algorithm = 'RS256'))
+        - sql:
+            sql: CREATE UNIQUE INDEX ux_identity_signing_key_one_active ON identity_signing_key (status) WHERE status = 'active'
+        - sql:
+            sql: COMMENT ON TABLE identity_signing_key IS 'RS256 key pairs Identity signs tokens with (MIG-92). public_key is published at /internal/jwks; private_key_sealed is the PKCS#8 key sealed by EncryptionUtil. One active; retired keys stay published until their tokens expire.'
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS identity_signing_key

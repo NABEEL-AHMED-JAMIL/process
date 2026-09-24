@@ -1,5 +1,6 @@
 package process.security;
 
+import org.barco.platform.security.LoginAttemptGuard;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;

@@ -30,7 +30,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
      * not reach it, and must not -- signing in happens before there is a tenant at all.
      */
     @Query(value = "SELECT * FROM app_user WHERE lower(username) = lower(:username) AND status <> 'Delete'", nativeQuery = true)
-    public Optional<AppUser> findLiveByUsernameIgnoringCase(@Param("username") String username);
+    public Optional<AppUser> findLiveByUsernameAcrossTenants(@Param("username") String username);
 
     /**
      * Whether a new account may take this name: false when any row holds it in any case, in any
@@ -39,7 +39,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
      * above: whether a name is taken is a platform-wide fact, not a tenant-scoped one.
      */
     @Query(value = "SELECT EXISTS (SELECT 1 FROM app_user WHERE lower(username) = lower(:username))", nativeQuery = true)
-    public boolean isUsernameTaken(@Param("username") String username);
+    public boolean isUsernameTakenAcrossTenants(@Param("username") String username);
 
     /**
      * People by id, whichever tenant they are in -- for putting a name to an id, never for deciding
@@ -74,11 +74,24 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     public List<AppUser> findByTenantIdAndStatusNotOrderByAppUserIdDesc(Long tenantId, Status status);
 
+    /**
+     * Every live account on the platform, newest first: the platform administrator's users screen and
+     * nothing else (MIG-92, P5). It replaces a bare findAll(), which read every tenant because a filter
+     * happened to be off -- an omission nobody could see in review. This is a named grant.
+     */
+    @Query(value = "SELECT * FROM app_user WHERE status <> 'Delete' ORDER BY app_user_id DESC", nativeQuery = true)
+    public List<AppUser> findAllLiveAcrossTenants();
+
+    /**
+     * Everyone active in a role, in every tenant: the platform's own administrators -- they belong to no
+     * tenant -- for telling them about a new one.
+     */
+    @Query(value = "SELECT * FROM app_user WHERE user_role = :role AND status = 'Active' ORDER BY app_user_id", nativeQuery = true)
+    public List<AppUser> findActiveByRoleAcrossTenants(@Param("role") String role);
+
     public Optional<AppUser> findFirstByTenantIdAndUserRoleAndStatusOrderByAppUserIdAsc(Long tenantId, UserRole userRole, Status status);
 
     public long countByTenantIdAndStatusNot(Long tenantId, Status status);
-
-    public Optional<AppUser> findByUuid(String uuid);
 
     /** Who still holds a profile -- what stops a profile from being deleted. */
     public long countByPageAccessProfileIdAndStatusNot(Long pageAccessProfileId, Status status);

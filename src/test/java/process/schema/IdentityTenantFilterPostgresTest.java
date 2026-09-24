@@ -145,9 +145,9 @@ class IdentityTenantFilterPostgresTest {
 
     @Test
     void theReadsThatCrossTenantsStillCrossThemWithTheFilterOn() {
-        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> users.findLiveByUsernameIgnoringCase("BRIAN@b.example")))
+        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> users.findLiveByUsernameAcrossTenants("BRIAN@b.example")))
             .as("sign-in").isPresent();
-        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> users.isUsernameTaken("brian@b.example")))
+        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> users.isUsernameTakenAcrossTenants("brian@b.example")))
             .as("is the name taken").isTrue();
         assertThat(ids(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A,
             () -> users.findAllByIdAcrossTenants(Arrays.asList(PLATFORM_ADMIN, USER_B))))).as("names")

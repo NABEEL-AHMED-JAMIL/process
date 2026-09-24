@@ -1,5 +1,6 @@
 package process.security;
 
+import org.barco.platform.security.LoginAttemptGuard;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -100,7 +101,7 @@ class LoginRefusalCharacterisationTest {
     }
 
     private void accountIs(AppUser user) {
-        when(this.appUserRepository.findLiveByUsernameIgnoringCase(anyString()))
+        when(this.appUserRepository.findLiveByUsernameAcrossTenants(anyString()))
             .thenReturn(Optional.ofNullable(user));
     }
 

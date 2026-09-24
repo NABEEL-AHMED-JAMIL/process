@@ -1,5 +1,6 @@
 package process.security;
 
+import org.barco.platform.security.LoginAttemptGuard;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -425,6 +426,23 @@ class TokenRevocationAcrossInstancesTest {
         assertThat(this.b.caller(data.getAccessToken())).isEqualTo(90L);
         // Single use is off by default, until both consoles keep the rotated token: the old one still works.
         assertThat(this.b.auth.refresh(presented).getStatus()).isEqualTo("SUCCESS");
+    }
+
+    /**
+     * MIG-92 keeps the Redis copy of a version for days, for the services that have no database. A bump
+     * whose publish failed leaves the old number there; refresh reads the database, so it still refuses.
+     */
+    @Test
+    void aRefreshAfterABumpWhosePublishFailedIsStillRefused() throws Exception {
+        this.person(92L, TENANT_A, UserRole.TENANT_USER);
+        String refresh = this.refreshFor(92L);
+        this.a.revocations.isRevoked(this.jwt.parseClaims(refresh));
+        assertThat(this.redis.redis().opsForValue().get(this.redis.prefix() + "auth:token-version:92")).isEqualTo("0");
+
+        this.versions.put(92L, 1);
+
+        assertThat(this.b.revocations.isRevoked(this.jwt.parseClaims(refresh))).as("Redis still holds the old number").isFalse();
+        assertThat(this.b.auth.refresh(refresh).getMessage()).isEqualTo("Refresh token is invalid or expired -- please log in again.");
     }
 
     @Test

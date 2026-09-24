@@ -1,5 +1,6 @@
 package process.security;
 
+import org.barco.platform.security.LoginAttemptGuard;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,12 +102,12 @@ class LoginHardeningTest {
     }
 
     private void accountExists(AppUser user) {
-        when(this.appUserRepository.findLiveByUsernameIgnoringCase(anyString()))
+        when(this.appUserRepository.findLiveByUsernameAcrossTenants(anyString()))
             .thenReturn(Optional.of(user));
     }
 
     private void noSuchAccount() {
-        when(this.appUserRepository.findLiveByUsernameIgnoringCase(anyString()))
+        when(this.appUserRepository.findLiveByUsernameAcrossTenants(anyString()))
             .thenReturn(Optional.empty());
     }
 
@@ -140,7 +141,7 @@ class LoginHardeningTest {
         // method asked. Swapping it for findByUsername would reintroduce the original defect
         // while every other assertion here still passed. The query itself is proved against
         // Postgres in UsernameUniquenessPostgresTest (MIG-17).
-        verify(this.appUserRepository).findLiveByUsernameIgnoringCase("EMILY@Example.COM");
+        verify(this.appUserRepository).findLiveByUsernameAcrossTenants("EMILY@Example.COM");
     }
 
     @Test
@@ -151,7 +152,7 @@ class LoginHardeningTest {
 
         this.signIn("  " + KNOWN_NAME + "  ", "right");
 
-        verify(this.appUserRepository).findLiveByUsernameIgnoringCase(KNOWN_NAME);
+        verify(this.appUserRepository).findLiveByUsernameAcrossTenants(KNOWN_NAME);
     }
 
     // -- what an unknown name costs -------------------------------------------------------
@@ -232,7 +233,7 @@ class LoginHardeningTest {
 
         // The lock is checked before the lookup, so a locked name costs no query and no hash.
         verify(this.appUserRepository, times(LoginAttemptGuard.MAX_FAILURES))
-            .findLiveByUsernameIgnoringCase(anyString());
+            .findLiveByUsernameAcrossTenants(anyString());
     }
 
     @Test
@@ -313,6 +314,6 @@ class LoginHardeningTest {
         assertThat(noPassword.getMessage()).isEqualTo("Username and password are required.");
         assertThat(noName.getMessage()).isEqualTo("Username and password are required.");
         verify(this.appUserRepository, times(0))
-            .findLiveByUsernameIgnoringCase(anyString());
+            .findLiveByUsernameAcrossTenants(anyString());
     }
 }

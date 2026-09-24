@@ -21,7 +21,7 @@ import process.model.repository.TenantRepository;
 import process.model.repository.TenantRequestRepository;
 import process.model.service.PageAccessService;
 import process.notifications.TestNotifications;
-import process.security.LoginAttemptGuard;
+import org.barco.platform.security.LoginAttemptGuard;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.security.TokenRevocations;
@@ -90,7 +90,7 @@ class UsernameTakeoverTest {
     void aTenantAdminCannotCreateANameThatDiffersOnlyByCase() throws Exception {
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 9L, "admin@a.example");
         when(this.tenantRepository.findById(TENANT_A)).thenReturn(Optional.of(new Tenant()));
-        when(this.appUserRepository.isUsernameTaken("Alice@X.com")).thenReturn(true);
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("Alice@X.com")).thenReturn(true);
 
         AppUserDto dto = new AppUserDto();
         dto.setUsername("  Alice@X.com ");
@@ -106,7 +106,7 @@ class UsernameTakeoverTest {
     @Test
     void aWorkspaceRequestForAnExistingNameInAnotherCaseCreatesNothingAndSaysNothing() {
         when(this.tenantRequestRepository.findOpenByEmail("alice@x.com")).thenReturn(Optional.empty());
-        when(this.appUserRepository.isUsernameTaken("alice@x.com")).thenReturn(true);
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("alice@x.com")).thenReturn(true);
 
         TenantRequest submitted = new TenantRequest();
         submitted.setOrganisationName("Mallory Ltd");
@@ -130,7 +130,7 @@ class UsernameTakeoverTest {
         pending.setStatus("Pending");
         when(this.tenantRequestRepository.findById(5L)).thenReturn(Optional.of(pending));
         when(this.tenantRepository.findByTenantCode(anyString())).thenReturn(Optional.empty());
-        when(this.appUserRepository.isUsernameTaken("alice@x.com")).thenReturn(true);
+        when(this.appUserRepository.isUsernameTakenAcrossTenants("alice@x.com")).thenReturn(true);
 
         ResponseDto response = this.requests().approve(5L, "mallory");
 
@@ -150,7 +150,7 @@ class UsernameTakeoverTest {
         alice.setFullName("Alice");
         alice.setUserRole(UserRole.PLATFORM_ADMIN);
         alice.setStatus(Status.Active);
-        when(this.appUserRepository.findLiveByUsernameIgnoringCase("ALICE@X.COM")).thenReturn(Optional.of(alice));
+        when(this.appUserRepository.findLiveByUsernameAcrossTenants("ALICE@X.COM")).thenReturn(Optional.of(alice));
         when(this.passwordEncoder.matches("right", "stored")).thenReturn(true);
         JwtUtil jwt = mock(JwtUtil.class);
         when(jwt.generateAccessToken(alice)).thenReturn("a");
