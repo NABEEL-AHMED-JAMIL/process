@@ -187,6 +187,15 @@ public class NotifyServiceImpl implements NotifyService {
         }
         JobStatus currentStatus = job.get().getJobRunningStatus();
         JobStatus newStatus = jobQueue.getJobStatus();
+        // The hand-off race (run 7309): the relay publishes, and the run and the job only move to Start
+        // in the transaction after the broker's ack. A worker quicker than that ack reports Running while
+        // the job still says Queue. A run latched as sent IS handed off from any worker's side -- its
+        // message and the token proving this callback exist only in what was published -- so for that
+        // run, and only that run, Running is read against Start.
+        if (currentStatus == JobStatus.Queue && newStatus == JobStatus.Running && this.latchedAsSent(jobQueue.getJobQueueId())) {
+            logger.info("Run {} reported Running before its hand-off was recorded; taking it as handed off.", jobQueue.getJobQueueId());
+            currentStatus = JobStatus.Start;
+        }
         logger.info("Job {} current status: {}, requested status: {}", jobQueue.getJobId(), currentStatus, newStatus);
         if (!this.isValidStatusTransition(currentStatus, newStatus)) {
             logger.warn("Invalid status transition for job {} from {} to {}", jobQueue.getJobId(), currentStatus, newStatus);
@@ -304,6 +313,11 @@ public class NotifyServiceImpl implements NotifyService {
      * to and any other tenant's queue id, and the write landed on the latter. The queue row is
      * the only thing that knows which job it belongs to, so it is what decides.
      */
+    private boolean latchedAsSent(Long jobQueueId) {
+        Optional<JobQueue> run = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        return run.isPresent() && run.get().getJobStatus() == JobStatus.Queue && run.get().isJobSend();
+    }
+
     private boolean queueBelongsToJob(Long jobId, Long jobQueueId) {
         if (jobId == null || jobQueueId == null) {
             return false;
