@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -58,8 +57,11 @@ public class InternalBillingDirectoryRestApi {
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
     }
 
-    /** Every workspace that is not deleted: [{tenantId, tenantName, status}], newest first. */
-    @GetMapping(value = "/tenants", produces = MediaType.APPLICATION_JSON_VALUE)
+    /**
+     * Every workspace that is not deleted: [{tenantId, tenantName, status}], newest first. POST, as every
+     * /internal lookup is: SecurityConfig admits /internal/** for POST only, and the token is checked here.
+     */
+    @PostMapping(value = "/tenants", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> tenants(@RequestHeader(value = "X-Internal-Token", required = false) String presented) {
         if (!this.admits(presented)) {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
@@ -76,7 +78,7 @@ public class InternalBillingDirectoryRestApi {
     }
 
     /** One workspace's facts for the nightly measurement: {tenantId, seats, topicsInUse}. */
-    @GetMapping(value = "/usageFacts", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/usageFacts", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> usageFacts(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestParam Long tenantId) {
         if (!this.admits(presented)) {
