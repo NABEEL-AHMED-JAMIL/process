@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.identity.IdentityInProcess;
 import process.storage.remote.RemoteStorageDirectory;
 import process.util.TenantCode;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ import static process.util.ProcessUtil.*;
 /**
  * @author Nabeel Ahmed
  * */
+@IdentityInProcess
 @Service
 public class TenantServiceImpl implements TenantService {
 

@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import java.util.Collections;
+import java.util.Arrays;
 import process.util.RequestRefused;
 
 import org.junit.jupiter.api.AfterEach;
@@ -10,8 +12,10 @@ import process.security.TenantContext;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The per-user statistics query, checked where it matters: that a tenant user cannot be shown
- * another tenant's people, and that the aggregate still counts users who own nothing.
+ * The per-user statistics query and the run report's, checked where it matters. Since MIG-107 who is
+ * listed is Identity's answer (IdentityPort.members, scoped there -- DashboardScopeTest) and the query only
+ * counts the listed people's work; the report carries owner and workspace ids that Identity names
+ * (ReportRunNamesTest). Neither reads app_user or tenant.
  *
  * The SQL is asserted as a string rather than executed. That is deliberate -- the isolation is
  * a property of the text this builder produces, and a test that runs it would pass just as
@@ -26,47 +30,48 @@ public class UserStatisticsQueryTest {
         TenantContext.clear();
     }
 
+    // MIG-107: who is listed is Identity's answer (IdentityPort.members, scoped there -- see
+    // DashboardScopeTest); this query only counts their work, for the ids it is handed.
+
     @Test
-    @DisplayName("a tenant user's query is scoped to their own tenant")
-    void scopedForTenantUser() {
-        TenantContext.set(1004L, "TENANT_USER", 42L, "someone@tenant.test");
-        String sql = queryService.userStatistics(null, null);
-        assertTrue(sql.contains("u.tenant_id = 1004"),
-            "the tenant filter must name the caller's tenant: " + sql);
+    @DisplayName("the counts are asked for exactly the people listed")
+    void countsOnlyThePeopleHandedIn() {
+        String sql = queryService.userStatistics(null, null, Arrays.asList(42L, 7L));
+        assertTrue(sql.contains("sj.assigned_user_id in (7, 42)"), sql);
+        assertTrue(sql.contains("group by sj.assigned_user_id"), sql);
     }
 
     @Test
-    @DisplayName("a platform administrator sees every tenant")
-    void unscopedForPlatformAdmin() {
-        TenantContext.set(1000L, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        String sql = queryService.userStatistics(null, null);
-        assertFalse(sql.contains("tenant_id ="),
-            "a platform administrator must not be filtered to one tenant: " + sql);
+    @DisplayName("nobody to count is a query that matches nothing, never every row")
+    void nobodyMatchesNothing() {
+        // A caller with a tenant, so the only "1 = 0" can be the people clause's.
+        TenantContext.set(1004L, "TENANT_ADMIN", 42L, "ops@tenant.test");
+        assertTrue(queryService.userStatistics(null, null, Collections.emptyList()).contains(" and 1 = 0 "));
+        assertTrue(queryService.userStatistics(null, null, null).contains(" and 1 = 0 "));
     }
 
     @Test
-    @DisplayName("no tenant in context is treated as unscoped rather than tenant zero")
-    void noTenantInContext() {
-        String sql = queryService.userStatistics(null, null);
-        assertFalse(sql.contains("tenant_id = 0"), sql);
+    @DisplayName("the statistics query reads Core's tables only")
+    void readsNoIdentityTable() {
+        String sql = queryService.userStatistics("2026-08-01", "2026-08-24", Collections.singletonList(42L)).toLowerCase();
+        assertFalse(sql.contains("app_user"), sql);
+        assertFalse(sql.contains(" tenant "), sql);
     }
 
     @Test
-    @DisplayName("users who own nothing are still counted, so the joins stay LEFT")
-    void keepsUsersWithoutJobs() {
-        String sql = queryService.userStatistics(null, null).toLowerCase();
-        assertTrue(sql.contains("left join source_job"), sql);
+    @DisplayName("runs are counted with a LEFT join, so a person's jobs without runs still count")
+    void keepsJobsWithoutRuns() {
+        String sql = queryService.userStatistics(null, null, Collections.singletonList(42L)).toLowerCase();
         assertTrue(sql.contains("left join job_queue"), sql);
-        assertFalse(sql.contains("inner join source_job"),
-            "an inner join would drop every user who has not been given work yet");
+        assertFalse(sql.contains("inner join job_queue"), sql);
     }
 
     @Test
-    @DisplayName("the date range filters the runs, not the users")
+    @DisplayName("the date range filters the runs, not the jobs")
     void dateFilterAppliesToRuns() {
-        String sql = queryService.userStatistics("2026-08-01", "2026-08-24");
+        String sql = queryService.userStatistics("2026-08-01", "2026-08-24", Collections.singletonList(42L));
         int joinAt = sql.indexOf("left join job_queue");
-        int whereAt = sql.indexOf("where u.status");
+        int whereAt = sql.indexOf("where sj.job_status in");
         int filterAt = sql.indexOf("date(jq.date_created)");
         assertTrue(filterAt > joinAt && filterAt < whereAt,
             "the range belongs in the join, or the left join collapses to an inner one: " + sql);
@@ -97,13 +102,12 @@ public class UserStatisticsQueryTest {
     }
 
     @Test
-    @DisplayName("every run row carries the workspace it belongs to")
-    void reportRowsCarryTenantName() {
+    @DisplayName("every run row carries the workspace it belongs to -- its id; the name is Identity's (MIG-107)")
+    void reportRowsCarryTenant() {
         TenantContext.set(1000L, "PLATFORM_ADMIN", 1L, "admin@platform.local");
         String sql = queryService.runReportRows(null, null);
-        assertTrue(sql.contains("as tenant"), "the payload needs a workspace column: " + sql);
-        assertTrue(sql.contains("left join tenant t on t.tenant_id = sj.tenant_id"),
-            "the workspace name has to be joined, not inferred: " + sql);
+        assertTrue(sql.contains("sj.tenant_id as tenant_id"), "the payload needs a workspace column: " + sql);
+        assertFalse(sql.contains("join tenant"), "the workspace's name comes from Identity, not a join: " + sql);
     }
 
     @Test
@@ -130,7 +134,9 @@ public class UserStatisticsQueryTest {
     void keepsRunsWithoutTaskOrOwner() {
         String sql = queryService.runReportRows(null, null).toLowerCase();
         assertTrue(sql.contains("left join source_task"), sql);
-        assertTrue(sql.contains("left join app_user"), sql);
+        // The owner is the job's assignee id; Identity names them (ReportRunNamesTest), a gone one "Unassigned".
+        assertTrue(sql.contains("sj.assigned_user_id as owner_id"), sql);
+        assertFalse(sql.contains("app_user"), sql);
     }
 
     @Test
@@ -142,6 +148,6 @@ public class UserStatisticsQueryTest {
     @Test
     @DisplayName("a malformed date is refused, never interpolated (MIG-103: refused, no longer silently dropped)")
     void rejectsMalformedDates() {
-        assertThrows(RequestRefused.class, () -> queryService.userStatistics("2026-08-01'; drop table app_user; --", "nonsense"));
+        assertThrows(RequestRefused.class, () -> queryService.userStatistics("2026-08-01'; drop table app_user; --", "nonsense", Collections.singletonList(1L)));
     }
 }

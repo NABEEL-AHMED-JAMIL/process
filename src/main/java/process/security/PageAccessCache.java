@@ -1,5 +1,6 @@
 package process.security;
 
+import process.identity.IdentityInProcess;
 import org.barco.platform.cache.SharedCacheVersion;
 import org.barco.platform.cache.VersionStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,7 @@ import java.util.function.LongSupplier;
  *
  * @author Nabeel Ahmed
  */
+@IdentityInProcess
 @Component
 public class PageAccessCache {
 

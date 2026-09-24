@@ -1,5 +1,6 @@
 package process.util;
 
+import process.identity.IdentityInProcess;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.barco.platform.error.PlatformException;
@@ -26,6 +27,7 @@ import java.util.UUID;
  *
  * @author Nabeel Ahmed
  * */
+@IdentityInProcess
 @Component
 public class JwtUtil {
 

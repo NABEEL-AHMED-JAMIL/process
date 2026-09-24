@@ -211,6 +211,9 @@ services:
       # guarded ones as the signed-in user, the four trusted callers and the directory with the
       # service token above. process has no storage code or table access of its own.
       STORAGE_SERVICE_URL: http://storage:9120
+      # MIG-107: local until the cutover (identity-service/scripts/copy-from-etl-job.sh), then remote.
+      IDENTITY_MODE: ${IDENTITY_MODE:-local}
+      IDENTITY_URL: http://identity:9160
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is not set in process/.env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092

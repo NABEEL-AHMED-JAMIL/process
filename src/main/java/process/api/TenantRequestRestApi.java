@@ -1,5 +1,6 @@
 package process.api;
 
+import process.identity.IdentityInProcess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,7 @@ import process.util.ProcessUtil;
  * @author Nabeel Ahmed
  */
 @CrossOrigin(origins = "*")
+@IdentityInProcess
 @RestController
 @RequestMapping(value = "/tenantRequest.json")
 public class TenantRequestRestApi {

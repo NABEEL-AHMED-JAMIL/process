@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.identity.IdentityInProcess;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ import static process.util.ProcessUtil.isNull;
 /**
  * @author Nabeel Ahmed
  * */
+@IdentityInProcess
 @Service
 public class AuthServiceImpl implements AuthService {
 

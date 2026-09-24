@@ -32,7 +32,7 @@ import static org.mockito.Mockito.verify;
 class ReportExportKeyPolicyTest {
 
     private final StorageBrowserService storage = mock(StorageBrowserService.class);
-    private final ReportExportServiceImpl export = new ReportExportServiceImpl(null, this.storage, null);
+    private final ReportExportServiceImpl export = new ReportExportServiceImpl(null, this.storage, null, null);
 
     private String keyWrittenFor(String folder) {
         ReportExportRequestDto dto = new ReportExportRequestDto();

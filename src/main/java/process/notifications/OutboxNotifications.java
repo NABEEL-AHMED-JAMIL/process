@@ -66,7 +66,7 @@ public class OutboxNotifications implements NotificationPort {
     @Override
     public void jobStatusChanged(Long tenantId, JobStatusChanged event) {
         if (event.getRecipientUserId() != null) {
-            Optional<IdentityPort.Person> recipient = this.users.person(event.getRecipientUserId());
+            Optional<IdentityPort.Person> recipient = this.personOrNobody(event.getRecipientUserId());
             if (recipient.isPresent()) {
                 // Core resolves the recipient; the service cannot read app_user (contract 1.2.0).
                 event.setRecipientUsername(recipient.get().getUsername()).setRecipientTenantId(scopeOf(recipient.get()));
@@ -106,7 +106,7 @@ public class OutboxNotifications implements NotificationPort {
             this.logger.debug("A {} notice had no recipient; nothing sent.", notice.getType());
             return;
         }
-        Optional<IdentityPort.Person> recipient = this.users.person(notice.getAppUserId());
+        Optional<IdentityPort.Person> recipient = this.personOrNobody(notice.getAppUserId());
         if (!recipient.isPresent()) {
             this.logger.info("Not sending a {} notice to app user {}, who does not exist.", notice.getType(), notice.getAppUserId());
             return;
@@ -136,7 +136,7 @@ public class OutboxNotifications implements NotificationPort {
             }
             if (mail.getFailureNotice() != null) {
                 // The sender hears about a failure later; resolve who they are now, as for any notice.
-                Optional<IdentityPort.Person> sender = this.users.person(mail.getFailureNotice().getAppUserId());
+                Optional<IdentityPort.Person> sender = this.personOrNobody(mail.getFailureNotice().getAppUserId());
                 if (sender.isPresent()) {
                     mail.getFailureNotice().setRecipientUsername(sender.get().getUsername()).setRecipientTenantId(scopeOf(sender.get()));
                 } else {
@@ -152,6 +152,19 @@ public class OutboxNotifications implements NotificationPort {
             // The attachment bucket or the secret store could not take it: nothing was queued.
             this.logger.error("Could not queue a {} mail: {}", mail.getTemplate(), unstaged.getMessage());
             return "Error while Sending Mail";
+        }
+    }
+
+    /**
+     * The person, or nobody when Identity cannot be asked (identity.mode=remote, MIG-107): this port never
+     * fails its caller, so the one thing that needs the person -- a notice -- is not sent, and said so.
+     */
+    private Optional<IdentityPort.Person> personOrNobody(Long appUserId) {
+        try {
+            return this.users.person(appUserId);
+        } catch (IdentityPort.Unavailable unavailable) {
+            this.logger.warn("Identity could not say who user {} is; their notice is not sent: {}", appUserId, unavailable.getMessage());
+            return Optional.empty();
         }
     }
 

@@ -86,7 +86,7 @@ class CrossTenantReadsAreNamedTest {
         String engine = "the engine's own work across every tenant, run with no caller (scheduler, dispatch, sweeper)";
         for (String name : new String[] {"JobQueueRepository.findAllJobForTodayWithLimit", "JobQueueRepository.findStalledRuns",
             "SchedulerRepository.findDueSchedulers", "JobAuditLogRepository.upsertFromOpenSearch",
-            "JobAuditLogRepository.findExistingJobQueueIds", "SourceJobRepository.findNotificationRecipient",
+            "JobAuditLogRepository.findExistingJobQueueIds", "SourceJobRepository.findAssignedUserId",
             // core-dispatch's pre-dispatch phase and scheduler claim, and the worker callbacks' refusal record.
             "JobQueueRepository.findRunsToPrepare", "JobQueueRepository.leaseForPreparation", "JobQueueRepository.markPrepared",
             "JobQueueRepository.findOrchestrationSetting", "JobQueueRepository.noteRefusedCallback",

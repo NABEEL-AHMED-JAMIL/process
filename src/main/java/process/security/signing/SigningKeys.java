@@ -1,5 +1,6 @@
 package process.security.signing;
 
+import process.identity.IdentityInProcess;
 import org.barco.platform.security.Jwks;
 import org.barco.platform.security.PublicKeys;
 import org.slf4j.Logger;
@@ -40,6 +41,7 @@ import java.util.function.LongSupplier;
  *
  * @author Nabeel Ahmed
  */
+@IdentityInProcess
 @Component
 public class SigningKeys implements PublicKeys {
 

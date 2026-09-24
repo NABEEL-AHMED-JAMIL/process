@@ -63,6 +63,13 @@ public class SourceJob implements Audited {
     @Column(name = "assigned_user_id")
     private Long assignedUserId;
 
+    /**
+     * The assignee's username, kept beside the id so the live job-event read never joins app_user (V85,
+     * MIG-151). Written with assigned_user_id, from IdentityPort (MIG-107).
+     */
+    @Column(name = "assigned_username")
+    private String assignedUsername;
+
     @Column(name = "job_name",
        length = 1000, nullable = false)
     private String jobName;
@@ -153,6 +160,14 @@ public class SourceJob implements Audited {
 
     public void setAssignedUserId(Long assignedUserId) {
         this.assignedUserId = assignedUserId;
+    }
+
+    public String getAssignedUsername() {
+        return assignedUsername;
+    }
+
+    public void setAssignedUsername(String assignedUsername) {
+        this.assignedUsername = assignedUsername;
     }
 
     public void setJobId(Long jobId) {

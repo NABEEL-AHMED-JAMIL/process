@@ -192,7 +192,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         sourceJob.setFailJob(sourceJobDto.isFailJob());
         sourceJob.setSkipJob(sourceJobDto.isSkipJob());
 
-        sourceJob.setAssignedUserId(assignedUserId);
+        this.assign(sourceJob, assignedUserId);
         this.sourceJobRepository.saveAndFlush(sourceJob);
         this.notifyTaskAssigned(sourceJob, null);
         if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && !sourceJobDto.getSchedulers().isEmpty()) {
@@ -369,7 +369,7 @@ public class SourceJobServiceImpl implements SourceJobService {
                 if (assigneeError != null) {
                     return new ResponseDto(ERROR, assigneeError);
                 }
-                sourceJob.get().setAssignedUserId(sourceJobDto.getAssignedUserId());
+                this.assign(sourceJob.get(), sourceJobDto.getAssignedUserId());
             }
             this.sourceJobRepository.saveAndFlush(sourceJob.get());
             this.notifyTaskAssigned(sourceJob.get(), previousAssignedUserId);
@@ -736,6 +736,13 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.lookupDataRepository.findAllById(lookupIds)
             .forEach(lookupData -> lookupTypeByLookupId.put(lookupData.getLookupId(), lookupData.getLookupType()));
         return lookupTypeByLookupId;
+    }
+
+    /** The assignee, and their username beside the id (MIG-107): read from Identity, not joined from app_user. */
+    private void assign(SourceJob sourceJob, Long assignedUserId) {
+        sourceJob.setAssignedUserId(assignedUserId);
+        sourceJob.setAssignedUsername(assignedUserId == null ? null
+            : this.identity.person(assignedUserId).map(IdentityPort.Person::getUsername).orElse(null));
     }
 
     private String validateAssignee(Long assignedUserId, Long tenantId) {

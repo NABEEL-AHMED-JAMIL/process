@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
  * whenever a token names a key it has not seen. It is /internal all the same: the gateway answers 404
  * for /internal from outside, so the keys are served to the services, not to the internet.
  */
+@IdentityInProcess
 @RestController
 @RequestMapping("/internal")
 public class InternalJwksRestApi {

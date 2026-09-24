@@ -1,5 +1,12 @@
 package process.model.service.impl;
 
+import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.Locale;
+import java.util.HashMap;
+import java.util.Comparator;
+import java.text.Collator;
+import process.identity.IdentityPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -37,11 +44,14 @@ public class DashboardServiceImpl implements DashboardService {
     private final SchedulerRepository schedulerRepository;
     private final LookupDataRepository lookupDataRepository;
 
+    private final IdentityPort identity;
+
     public DashboardServiceImpl(QueryService queryService,
         SourceJobRepository sourceJobRepository,
         JobQueueRepository jobQueueRepository,
         SchedulerRepository schedulerRepository,
-        LookupDataRepository lookupDataRepository) {
+        LookupDataRepository lookupDataRepository, IdentityPort identity) {
+        this.identity = identity;
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
         this.jobQueueRepository = jobQueueRepository;
@@ -68,34 +78,59 @@ public class DashboardServiceImpl implements DashboardService {
         return responseDto;
     }
 
+    /**
+     * The people list with each person's work (MIG-107). Who is listed is Identity's answer for the caller's
+     * scope -- a workspace's people, every workspace's for a platform administrator, nobody for a caller
+     * scoped to nothing -- and a tenant user's view is their own row (MIG-46, DEF-128): the list names every
+     * colleague with their failed-run counts, and the lowest role has no business profiling colleagues. No
+     * user id is nobody. The counts are Core's, one query for everyone listed; a person with no work is
+     * listed at zero. Most jobs first, then by name, as the query ordered it.
+     */
     @Override
     public ResponseDto userStatistics(String startDate, String endDate) throws Exception {
-        ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
-        List<Object[]> result = this.queryService.executeQuery(this.queryService.userStatistics(startDate, endDate));
-        if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
-            List<UserStatisticDto> stats = new ArrayList<>();
-            for (Object[] obj : result) {
-                int index = 0;
-                UserStatisticDto dto = new UserStatisticDto();
-                dto.setAppUserId(asLong(obj[index]));
-                dto.setUsername(asText(obj[++index]));
-                dto.setFullName(asText(obj[++index]));
-                dto.setUserRole(asText(obj[++index]));
-                dto.setStatus(asText(obj[++index]));
-                dto.setAvatarBucket(asText(obj[++index]));
-                dto.setAvatarKey(asText(obj[++index]));
-                dto.setJobCount(asInt(obj[++index]));
-                dto.setActiveJobs(asInt(obj[++index]));
-                dto.setTaskCount(asInt(obj[++index]));
-                dto.setRunCount(asInt(obj[++index]));
-                dto.setCompletedCount(asInt(obj[++index]));
-                dto.setFailedCount(asInt(obj[++index]));
-                dto.setTenantId(obj.length > ++index ? asLong(obj[index]) : null);
-                stats.add(dto);
-            }
-            responseDto = new ResponseDto(SUCCESS, "Data found.", stats);
+        List<IdentityPort.Person> people = new ArrayList<>(this.identity.members(TenantContext.scope()));
+        if ("TENANT_USER".equals(TenantContext.getUserRole())) {
+            Long me = TenantContext.getAppUserId();
+            people.removeIf(person -> me == null || !me.equals(person.getAppUserId()));
         }
-        return responseDto;
+        List<Long> ids = people.stream().map(IdentityPort.Person::getAppUserId).collect(Collectors.toList());
+        // Built even for nobody: a malformed range is refused in words whoever is listed (MIG-103).
+        String counts = this.queryService.userStatistics(startDate, endDate, ids);
+        if (people.isEmpty()) {
+            return new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
+        }
+        Map<Long, Object[]> work = new HashMap<>();
+        List<Object[]> result = this.queryService.executeQuery(counts);
+        if (!ProcessUtil.isNull(result)) {
+            for (Object[] row : result) {
+                work.put(asLong(row[0]), row);
+            }
+        }
+        List<UserStatisticDto> stats = new ArrayList<>();
+        for (IdentityPort.Person person : people) {
+            Object[] row = work.getOrDefault(person.getAppUserId(), new Object[7]);
+            int index = 0;
+            UserStatisticDto dto = new UserStatisticDto();
+            dto.setAppUserId(person.getAppUserId());
+            dto.setUsername(person.getUsername());
+            dto.setFullName(person.getFullName());
+            dto.setUserRole(person.getUserRole());
+            dto.setStatus(person.getStatus());
+            dto.setAvatarBucket(person.getAvatarBucket());
+            dto.setAvatarKey(person.getAvatarKey());
+            dto.setJobCount(asInt(row[++index]));
+            dto.setActiveJobs(asInt(row[++index]));
+            dto.setTaskCount(asInt(row[++index]));
+            dto.setRunCount(asInt(row[++index]));
+            dto.setCompletedCount(asInt(row[++index]));
+            dto.setFailedCount(asInt(row[++index]));
+            dto.setTenantId(person.getTenantId());
+            stats.add(dto);
+        }
+        Collator byName = Collator.getInstance(Locale.US);
+        stats.sort(Comparator.comparing(UserStatisticDto::getJobCount, Comparator.reverseOrder())
+            .thenComparing(UserStatisticDto::getFullName, Comparator.nullsLast(byName)));
+        return new ResponseDto(SUCCESS, "Data found.", stats);
     }
 
     /* Null-tolerant readers: avatar columns and any count can come back null, and

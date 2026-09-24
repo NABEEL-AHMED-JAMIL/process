@@ -80,7 +80,7 @@ class DashboardRefusalTest {
     @Test
     void theRunReportSaysWhyADateWasRefused() {
         ReportExportServiceImpl report =
-            new ReportExportServiceImpl(null, null, new QueryService());
+            new ReportExportServiceImpl(null, null, new QueryService(), null);
         ResponseDto answer = report.runRows("2026-13-45", "2026-09-24");
         assertThat(answer.getStatus()).isEqualTo("ERROR");
         assertThat(answer.getMessage()).isEqualTo("Invalid date -- expected yyyy-MM-dd.");

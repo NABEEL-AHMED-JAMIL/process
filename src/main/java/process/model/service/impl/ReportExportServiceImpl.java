@@ -1,5 +1,10 @@
 package process.model.service.impl;
 
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
+import process.identity.IdentityPort;
 import process.util.RequestRefused;
 
 import process.media.MediaPort;
@@ -70,12 +75,30 @@ public class ReportExportServiceImpl {
     @Value("${report.submit.allow-internal:false}")
     private boolean allowInternalSubmit;
 
+    private final IdentityPort identity;
+
     public ReportExportServiceImpl(MediaPort extractionService,
                                    StorageBrowserService storageService,
-                                   QueryService queryService) {
+                                   QueryService queryService,
+                                   IdentityPort identity) {
+        this.identity = identity;
         this.extractionService = extractionService;
         this.storageService = storageService;
         this.queryService = queryService;
+    }
+
+    /** As coalesce(u.full_name, u.username, 'Unassigned') named the owner when the report joined app_user. */
+    static String ownerName(Map<Long, IdentityPort.Person> people, Object ownerId) {
+        IdentityPort.Person owner = ownerId == null ? null : people.get(Long.valueOf(String.valueOf(ownerId)));
+        if (owner == null) return "Unassigned";
+        if (owner.getFullName() != null) return owner.getFullName();
+        return owner.getUsername() != null ? owner.getUsername() : "Unassigned";
+    }
+
+    /** As coalesce(t.tenant_name, '(no workspace)') named the workspace when the report joined tenant. */
+    static String workspaceName(Map<Long, String> workspaces, Object tenantId) {
+        String name = tenantId == null ? null : workspaces.get(Long.valueOf(String.valueOf(tenantId)));
+        return name != null ? name : "(no workspace)";
     }
 
     /**
@@ -101,6 +124,24 @@ public class ReportExportServiceImpl {
         boolean truncated = result.size() > MAX_ROWS;
         if (truncated) result = result.subList(0, MAX_ROWS);
 
+        // Owners and workspaces are ids in the rows; Identity names them, once for the page (MIG-107).
+        Map<Long, IdentityPort.Person> people;
+        Map<Long, String> workspaces = new HashMap<>();
+        try {
+            Set<Long> ownerIds = new HashSet<>(), tenantIds = new HashSet<>();
+            for (Object[] r : result) {
+                if (r[2] != null) ownerIds.add(Long.valueOf(String.valueOf(r[2])));
+                if (r.length > 7 && r[7] != null) tenantIds.add(Long.valueOf(String.valueOf(r[7])));
+            }
+            people = ownerIds.isEmpty() ? new HashMap<>() : this.identity.people(ownerIds);
+            if (!tenantIds.isEmpty()) {
+                this.identity.workspaces(tenantIds).forEach(w -> workspaces.put(w.getTenantId(), w.getName()));
+            }
+        } catch (IdentityPort.Unavailable ex) {
+            logger.error("Report: could not name the runs' owners and workspaces: {}", ex.getMessage());
+            return new ResponseDto(ERROR, "Could not read the runs for that range.");
+        }
+
         // dictionaries per dimension, rows as indexes into them
         List<String> tasks = new ArrayList<>(), statuses = new ArrayList<>(),
                      owners = new ArrayList<>(), days = new ArrayList<>(),
@@ -113,14 +154,14 @@ public class ReportExportServiceImpl {
             rows.add(Arrays.asList(
                 intern(tasks, ti, text(r[0])),
                 intern(statuses, si, text(r[1])),
-                intern(owners, oi, text(r[2])),
+                intern(owners, oi, ownerName(people, r[2])),
                 intern(days, di, text(r[3])),
                 r[4] == null ? -1 : Integer.valueOf(String.valueOf(r[4])),
                 text(r[5]),
                 r[6] == null ? null : Long.valueOf(String.valueOf(r[6])),
                 // Appended at index 7. Every existing index keeps pointing where it did, so an
                 // older client reading seven elements is unaffected.
-                intern(tenants, ni, text(r.length > 7 ? r[7] : null)),
+                intern(tenants, ni, workspaceName(workspaces, r.length > 7 ? r[7] : null)),
                 // Double, not Integer: this one carries two decimals on purpose.
                 r.length > 8 && r[8] != null ? Double.valueOf(String.valueOf(r[8])) : -1D));
         }

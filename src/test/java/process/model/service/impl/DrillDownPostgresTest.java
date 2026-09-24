@@ -92,7 +92,7 @@ class DrillDownPostgresTest {
         QueryService rows = mock(QueryService.class);
         when(rows.weeklyHrRunningStatisticsDimensionDetail("2026-09-21", 14L, "Completed", null)).thenReturn(built);
         when(rows.executeQuery(anyString())).thenAnswer(call -> this.rows(searchPath, call.getArgument(0)));
-        ResponseDto response = new DashboardServiceImpl(rows, null, null, null, null)
+        ResponseDto response = new DashboardServiceImpl(rows, null, null, null, null, null)
             .weeklyHrRunningStatisticsDimensionDetail("2026-09-21", 14L, "Completed", null);
         @SuppressWarnings("unchecked")
         List<SourceJobQueueDto> runs = (List<SourceJobQueueDto>) ((Map<String, Object>) response.getData()).get("sourceJobQueues");

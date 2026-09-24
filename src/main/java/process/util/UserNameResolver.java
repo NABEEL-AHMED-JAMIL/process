@@ -1,5 +1,7 @@
 package process.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import process.identity.IdentityPort;
 
@@ -34,6 +36,8 @@ public class UserNameResolver {
     private final IdentityPort identity;
 
     /** Names come from Identity, through the port (MIG-93): nothing here reads app_user. */
+    private static final Logger logger = LoggerFactory.getLogger(UserNameResolver.class);
+
     public UserNameResolver(IdentityPort identity) {
         this.identity = identity;
     }
@@ -52,7 +56,15 @@ public class UserNameResolver {
         // Across tenants on purpose: the author of a tenant's row may be a platform admin, and the
         // tenant filter would otherwise blank their name (MIG-13).
         Map<Long, String> names = new HashMap<>();
-        for (IdentityPort.Person person : this.identity.people(wanted).values()) {
+        Map<Long, IdentityPort.Person> people;
+        try {
+            people = this.identity.people(wanted);
+        } catch (IdentityPort.Unavailable unavailable) {
+            // Names are for reading, never for deciding: the list is served without them (MIG-107).
+            logger.warn("Names for {} user(s) are left out: {}", wanted.size(), unavailable.getMessage());
+            return names;
+        }
+        for (IdentityPort.Person person : people.values()) {
             names.put(person.getAppUserId(), person.getDisplayName());
         }
         return names;
@@ -132,7 +144,12 @@ public class UserNameResolver {
         if (userId == null) {
             return null;
         }
-        return this.identity.person(userId).map(IdentityPort.Person::getDisplayName).orElse(null);
+        try {
+            return this.identity.person(userId).map(IdentityPort.Person::getDisplayName).orElse(null);
+        } catch (IdentityPort.Unavailable unavailable) {
+            logger.warn("The name of user {} is left out: {}", userId, unavailable.getMessage());
+            return null;
+        }
     }
 
 }

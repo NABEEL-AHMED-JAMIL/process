@@ -80,17 +80,15 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      * unused task and quietly removing a few hundred jobs along with it.
      */
     /**
-     * The address a job's notifications belong to: its assigned user's login, which in this
-     * system IS an email (app_user has no separate email column, and all 252 accounts are
-     * addresses).
+     * Who a job's notifications belong to: its assignee's id. Their address -- their username, which in
+     * this system IS an email -- is Identity's to give (JobMail, through IdentityPort; MIG-107); this used
+     * to join app_user for it.
      *
-     * Returns empty when the job has no assignee, so the caller can decline to send rather than
-     * fall back to some other mailbox.
+     * Null when the job has no assignee, so the caller can decline to send rather than fall back to some
+     * other mailbox.
      */
-    @Query(value = "select u.username from source_job j "
-        + "join app_user u on u.app_user_id = j.assigned_user_id "
-        + "where j.job_id = ?1 and u.status <> 'Delete'", nativeQuery = true)
-    String findNotificationRecipient(Long jobId);
+    @Query(value = "select assigned_user_id from source_job where job_id = ?1", nativeQuery = true)
+    Long findAssignedUserId(Long jobId);
 
     @Query(value = "select count(*) from source_job where task_detail_id = ?1 "
         + "and upper(job_status) <> 'DELETE'", nativeQuery = true)

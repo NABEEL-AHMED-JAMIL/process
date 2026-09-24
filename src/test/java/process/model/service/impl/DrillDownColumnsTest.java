@@ -76,7 +76,7 @@ class DrillDownColumnsTest {
             this.queries.weeklyRunningJobStatistics("2026-09-15", "2026-09-21"),
             this.queries.jobStatusStatistics("2026-09-15", "2026-09-21"),
             this.queries.jobRunningStatistics("2026-09-15", "2026-09-21"),
-            this.queries.userStatistics("2026-09-15", "2026-09-21"),
+            this.queries.userStatistics("2026-09-15", "2026-09-21", Collections.singletonList(42L)),
             this.queries.runReportRows("2026-09-15", "2026-09-21"),
             this.queries.statisticsBySourceJobId(7L),
             this.queries.listSourceTaskQuery(false, null, null, null, null, null),
@@ -97,7 +97,7 @@ class DrillDownColumnsTest {
         when(rows.executeQuery(anyString())).thenReturn(new ArrayList<>(Collections.singletonList(new Object[] {
             5073L, Timestamp.valueOf("2026-09-21 14:03:07"), Timestamp.valueOf("2026-09-21 14:05:09"), 1196L, true, "Completed",
             "done", false, false, null, Timestamp.valueOf("2026-09-21 14:04:01")})));
-        DashboardServiceImpl dashboard = new DashboardServiceImpl(rows, null, null, null, null);
+        DashboardServiceImpl dashboard = new DashboardServiceImpl(rows, null, null, null, null, null);
 
         ResponseDto response = dashboard.weeklyHrRunningStatisticsDimensionDetail("2026-09-21", 14L, "Completed", null);
 

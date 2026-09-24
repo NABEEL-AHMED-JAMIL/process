@@ -289,7 +289,7 @@ public class PipelineServiceImpl {
             // pipeline with no form for the caller's tenant just falls back to plain tags (see
             // formForPipeline), so a null-tenant row would only ever be dead weight -- visible
             // to nobody's task screen. A platform admin's new form is therefore filed under the
-            // seeded "default" tenant instead (the same tenant TenantSeedService backfills
+            // seeded "default" tenant instead (the same tenant V69.0 backfills
             // pre-tenancy rows into) rather than left tenantless: only that tenant's users can
             // use it, and it stays reachable for anyone signed in as it to edit or delete.
             Long ownerTenantId = TenantContext.getTenantId();

@@ -1,5 +1,6 @@
 package process.config;
 
+import process.identity.IdentityInProcess;
 import org.barco.platform.security.LoginAttemptGuard;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +14,7 @@ import org.springframework.data.redis.core.RedisTemplate;
  *
  * @author Nabeel Ahmed
  */
+@IdentityInProcess
 @Configuration
 public class LoginGuardConfig {
 

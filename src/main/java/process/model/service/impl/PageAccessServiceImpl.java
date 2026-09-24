@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.identity.IdentityInProcess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,7 @@ import process.notifications.NotificationPort;
 /**
  * @author Nabeel Ahmed
  * */
+@IdentityInProcess
 @Service
 public class PageAccessServiceImpl implements PageAccessService {
 

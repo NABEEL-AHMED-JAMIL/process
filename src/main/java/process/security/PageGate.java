@@ -1,5 +1,6 @@
 package process.security;
 
+import process.identity.IdentityInProcess;
 import org.springframework.stereotype.Component;
 import process.model.enums.PageKey;
 import process.model.enums.UserRole;
@@ -17,6 +18,7 @@ import java.util.Set;
  * Only a tenant user is gated; an administrator's page access is decided elsewhere. A tenant user
  * with no user id, or whose row is gone, holds no pages: both used to fail open (MIG-12).
  */
+@IdentityInProcess
 @Component
 public class PageGate {
 

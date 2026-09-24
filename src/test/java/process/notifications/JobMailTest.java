@@ -1,5 +1,9 @@
 package process.notifications;
 
+import process.identity.TestIdentity;
+import process.model.enums.Status;
+import process.model.pojo.AppUser;
+import process.model.repository.AppUserRepository;
 import org.barco.notifications.contract.MailRequested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -26,7 +30,18 @@ class JobMailTest {
     private final SourceJobRepository jobs = mock(SourceJobRepository.class);
     private final JobQueueRepository runs = mock(JobQueueRepository.class);
     private final NotificationPort port = mock(NotificationPort.class);
-    private final JobMail jobMail = new JobMail(this.jobs, this.runs, this.port);
+    private final AppUserRepository users = mock(AppUserRepository.class);
+    private final JobMail jobMail = new JobMail(this.jobs, this.runs, this.port, TestIdentity.over(this.users, null));
+
+    /** Job 41's assignee, as Identity knows them (MIG-107: no longer a join on app_user). */
+    private void ownedBy(String username, Status status) {
+        when(this.jobs.findAssignedUserId(41L)).thenReturn(10L);
+        AppUser owner = new AppUser();
+        owner.setAppUserId(10L);
+        owner.setUsername(username);
+        owner.setStatus(status);
+        when(this.users.findById(10L)).thenReturn(Optional.of(owner));
+    }
 
     private static SourceJobQueueDto run() {
         SourceJobQueueDto run = new SourceJobQueueDto();
@@ -39,7 +54,7 @@ class JobMailTest {
 
     @Test
     void aFailedRunsMailGoesToTheJobsOwnerAndNamesItsOutcome() {
-        when(this.jobs.findNotificationRecipient(41L)).thenReturn("owner@medaxis.example");
+        this.ownedBy("owner@medaxis.example", Status.Active);
         JobQueue attemptTwo = new JobQueue();
         attemptTwo.setAttempt(2);
         when(this.runs.findById(7001L)).thenReturn(Optional.of(attemptTwo));
@@ -65,12 +80,31 @@ class JobMailTest {
 
     @Test
     void theTemplatesMatchTheStatuses() {
-        when(this.jobs.findNotificationRecipient(41L)).thenReturn("owner@medaxis.example");
+        this.ownedBy("owner@medaxis.example", Status.Active);
         ArgumentCaptor<MailRequested> mail = ArgumentCaptor.forClass(MailRequested.class);
         this.jobMail.send(run(), JobStatus.Skip);
         this.jobMail.send(run(), JobStatus.Completed);
         verify(this.port, Mockito.times(2)).mailRequested(any(), mail.capture(), any());
         assertThat(mail.getAllValues()).extracting(MailRequested::getTemplate)
             .containsExactly(MailRequested.Template.SKIP_JOB, MailRequested.Template.COMPLETE_JOB);
+    }
+
+    /** The query said u.status <> 'Delete': a deleted owner is no owner. */
+    @Test
+    void aDeletedOwnerIsSentNothing() {
+        this.ownedBy("gone@medaxis.example", Status.Delete);
+
+        assertThat(this.jobMail.send(run(), JobStatus.Failed)).isEqualTo(JobMail.NO_RECIPIENT);
+        verify(this.port, never()).mailRequested(any(), any(), any());
+    }
+
+    /** An assignee Identity does not know -- the join found no row. */
+    @Test
+    void anOwnerIdentityDoesNotKnowIsSentNothing() {
+        when(this.jobs.findAssignedUserId(41L)).thenReturn(10L);
+        when(this.users.findById(10L)).thenReturn(Optional.empty());
+
+        assertThat(this.jobMail.send(run(), JobStatus.Failed)).isEqualTo(JobMail.NO_RECIPIENT);
+        verify(this.port, never()).mailRequested(any(), any(), any());
     }
 }

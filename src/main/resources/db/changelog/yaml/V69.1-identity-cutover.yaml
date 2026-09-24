@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: 69.1-identity-cutover
+      author: nabeel.amd93
+      description: "Identity's six tables live in identity_db: Core stops leaning on its copies (MIG-107)"
+      # Runs only once identity-service/scripts/copy-from-etl-job.sh has frozen the six tables (its
+      # identity_moved_read_only trigger) and copied them; until then it is skipped and tried again at
+      # the next start, so this build deploys safely before the cutover as well as after it.
+      #  1. Every foreign key from a Core table to the six goes: a workspace or person made from now on
+      #     exists only in identity_db, and tenant_id / assigned_user_id / created_by are opaque ids.
+      #  2. source_job.assigned_username is written by process (SourceJobServiceImpl and the bulk
+      #     import, through IdentityPort) instead of by a trigger reading app_user; the rename trigger
+      #     on app_user goes too -- the frozen copy never changes. A rename in Identity reaching the
+      #     column is a user.renamed consumer's job (follow-up on the board).
+      preConditions:
+        - onFail: CONTINUE
+        - onFailMessage: the six Identity tables are not frozen yet (identity-service copy not run); tried again next start.
+        - sqlCheck:
+            expectedResult: 6
+            sql: >
+              SELECT count(*) FROM pg_trigger WHERE tgname = 'identity_moved_read_only'
+              AND tgrelid::regclass::text IN ('tenant', 'app_user', 'tenant_request', 'page_access_profile',
+                'page_access_profile_page', 'user_page_access')
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE fk record;
+              BEGIN
+                FOR fk IN SELECT conrelid::regclass AS owner, conname FROM pg_constraint
+                  WHERE contype = 'f'
+                    AND confrelid::regclass::text IN ('tenant', 'app_user', 'tenant_request', 'page_access_profile',
+                      'page_access_profile_page', 'user_page_access')
+                    AND conrelid::regclass::text NOT IN ('tenant', 'app_user', 'tenant_request', 'page_access_profile',
+                      'page_access_profile_page', 'user_page_access')
+                LOOP
+                  EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', fk.owner, fk.conname);
+                END LOOP;
+              END $$;
+        - sql:
+            splitStatements: false
+            sql: >
+              DROP TRIGGER IF EXISTS app_user_renamed ON app_user;
+              DROP FUNCTION IF EXISTS source_job_assigned_username_on_rename();
+              DROP TRIGGER IF EXISTS source_job_assigned_username ON source_job;
+              DROP FUNCTION IF EXISTS source_job_assigned_username_on_write();

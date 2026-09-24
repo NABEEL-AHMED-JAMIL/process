@@ -32,6 +32,10 @@ class ChangelogRollbackDeclarationTest {
         forwardOnly.put("54.0-document-converter-task-moves-to-media-db", "drops an empty table whose data lives in media_db");
         forwardOnly.put("55.1-drop-recreated-platform-wide-alias-constraint", "drops a constraint ddl-auto re-created by mistake");
         forwardOnly.put("56.0-analytics-rows-carry-storage-connection-id", "addColumn only; Liquibase derives the rollback");
+        forwardOnly.put("69.0-tenant-seed-backfills", "data backfills that matched no row when written (2026-09-24); undoing one "
+            + "would un-assign rows nobody can tell apart from real ones");
+        forwardOnly.put("69.1-identity-cutover", "runs only after the six tables moved to identity_db; the foreign keys it drops "
+            + "cannot come back once a job names a workspace or person that exists only there");
         forwardOnly.put("56.1-stamp-platform-admin-analytics-rows", "a data backfill; the previous values were wrong");
         FORWARD_ONLY = Collections.unmodifiableMap(forwardOnly);
     }

@@ -289,6 +289,8 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
 
             sourceJob.setTenantId(linkedTask.getTenantId());
             sourceJob.setAssignedUserId(TenantContext.getAppUserId());
+            // The importer is the assignee, and their username is the token's subject (MIG-107).
+            sourceJob.setAssignedUsername(TenantContext.getUsername());
             sourceJob.setPriority(Integer.valueOf(jobDetailValidation.getPriority()));
             sourceJob.setSkipJob(Boolean.parseBoolean(jobDetailValidation.getEmailJobSkip()));
             sourceJob.setFailJob(Boolean.parseBoolean(jobDetailValidation.getEmailJobFail()));

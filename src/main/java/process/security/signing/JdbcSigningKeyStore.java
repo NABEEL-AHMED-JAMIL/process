@@ -1,5 +1,6 @@
 package process.security.signing;
 
+import process.identity.IdentityInProcess;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -15,6 +16,7 @@ import java.util.Optional;
  *
  * @author Nabeel Ahmed
  */
+@IdentityInProcess
 @Component
 public class JdbcSigningKeyStore implements SigningKeyStore {
 

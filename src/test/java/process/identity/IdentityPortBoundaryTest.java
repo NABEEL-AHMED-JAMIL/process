@@ -43,7 +43,7 @@ class IdentityPortBoundaryTest {
         "model/service/TenantService.java",
         "model/service/impl/AppUserServiceImpl.java", "model/service/impl/AuthServiceImpl.java",
         "model/service/impl/PageAccessServiceImpl.java", "model/service/impl/TenantServiceImpl.java",
-        "model/service/impl/TenantRequestServiceImpl.java", "model/service/impl/TenantSeedService.java",
+        "model/service/impl/TenantRequestServiceImpl.java",
         "api/AppUserRestApi.java", "api/AuthRestApi.java", "api/PageAccessRestApi.java", "api/TenantRestApi.java",
         "api/TenantRequestRestApi.java",
         "security/PageGate.java", "security/PageAccessCache.java", "security/TokenRevocations.java",

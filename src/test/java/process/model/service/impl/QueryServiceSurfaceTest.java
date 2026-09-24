@@ -33,7 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * Each builder is listed with the tables it reads, taken from the SQL it actually builds, and its caller.
  * These joins are where a service boundary may and may not fall: job_queue and source_job are Core's,
- * app_user and tenant are Identity's, lookup_data is being decomposed (MIG-167). Adding, removing or
+ * app_user and tenant are Identity's and no builder reads them any more (MIG-107), lookup_data is being
+ * decomposed (MIG-167). Adding, removing or
  * re-joining a method fails here until this list -- the documentation -- is updated with it.
  */
 class QueryServiceSurfaceTest {
@@ -73,8 +74,9 @@ class QueryServiceSurfaceTest {
         // DashboardServiceImpl, /dashboard.json: the seven endpoints and the drill-down's per-job totals.
         builders.put("jobStatusStatistics(String,String)", new Builder(
             () -> this.queries.jobStatusStatistics("2026-09-01", "2026-09-21"), "source_job"));
-        builders.put("userStatistics(String,String)", new Builder(
-            () -> this.queries.userStatistics("2026-09-01", "2026-09-21"), "app_user", "job_queue", "source_job"));
+        // The people are Identity's (IdentityPort.members, MIG-107); this counts the listed ones' work.
+        builders.put("userStatistics(String,String,Collection)", new Builder(
+            () -> this.queries.userStatistics("2026-09-01", "2026-09-21", Arrays.asList(42L, 43L)), "job_queue", "source_job"));
         builders.put("jobRunningStatistics(String,String)", new Builder(
             () -> this.queries.jobRunningStatistics("2026-09-01", "2026-09-21"), "source_job"));
         builders.put("weeklyRunningJobStatistics(String,String)", new Builder(
@@ -87,10 +89,10 @@ class QueryServiceSurfaceTest {
             () -> this.queries.weeklyHrRunningStatisticsDimensionDetail("2026-09-21", 14L, "Completed", 7L), "job_queue", "source_job"));
         builders.put("statisticsBySourceJobId(Long)", new Builder(
             () -> this.queries.statisticsBySourceJobId(7L), "job_queue", "source_job"));
-        // ReportExportServiceImpl, /report.json/runs: one row per run, with its owner and workspace names.
+        // ReportExportServiceImpl, /report.json/runs: one row per run, with its owner and workspace ids (named by Identity).
         builders.put("runReportRows(String,String)", new Builder(
             () -> this.queries.runReportRows("2026-09-01", "2026-09-21"),
-            "app_user", "job_audit_logs", "job_queue", "source_job", "source_task", "tenant"));
+            "job_audit_logs", "job_queue", "source_job", "source_task"));
         // MessageQServiceImpl: the run log and its per-status totals.
         builders.put("fetchJobQLog(MessageQSearchDto,boolean)", new Builder(
             () -> this.queries.fetchJobQLog(runs, false) + "\n" + this.queries.fetchJobQLog(runs, true), "job_queue", "source_job"));

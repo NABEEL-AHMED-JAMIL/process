@@ -1,5 +1,6 @@
 package process.notifications;
 
+import process.identity.IdentityPort;
 import org.barco.notifications.contract.JobStatusChanged;
 import org.barco.notifications.contract.MailRequested;
 import org.slf4j.Logger;
@@ -17,8 +18,10 @@ import java.util.Optional;
  * The job-mail half of Core: who a job's mail goes to, what it says, and which outcome it announces.
  *
  * Moved out of EmailMessagesFactory.sendSourceJobEmail, unchanged in what it decides, because those
- * are Core's decisions -- the recipient is a Core query (findNotificationRecipient), and whether to
- * mail at all is the job's own switch, read by each caller. Notifications only renders and sends.
+ * are Core's decisions -- the recipient is the job's assignee (findAssignedUserId), their address
+ * Identity's answer through the port, and whether to mail at all is the job's own switch, read by each
+ * caller. Notifications only renders and sends. A deleted assignee, or one Identity does not know, is
+ * no recipient -- as the join on app_user with status <> 'Delete' decided before MIG-107.
  *
  * A job with no assignee sends nothing. There is deliberately no fallback address: the previous one
  * sent every tenant's job names and failure messages to one platform-wide mailbox (removed in V30.0).
@@ -35,17 +38,19 @@ public class JobMail {
     private final SourceJobRepository jobs;
     private final JobQueueRepository runs;
     private final NotificationPort notifications;
+    private final IdentityPort identity;
 
-    public JobMail(SourceJobRepository jobs, JobQueueRepository runs, NotificationPort notifications) {
+    public JobMail(SourceJobRepository jobs, JobQueueRepository runs, NotificationPort notifications, IdentityPort identity) {
         this.jobs = jobs;
         this.runs = runs;
         this.notifications = notifications;
+        this.identity = identity;
     }
 
     /** Sends the Completed, Failed or Skip mail for one run. Returns the mailer's answer. */
     public String send(SourceJobQueueDto run, JobStatus status) {
         try {
-            String recipient = run.getJobId() == null ? null : this.jobs.findNotificationRecipient(run.getJobId());
+            String recipient = run.getJobId() == null ? null : this.recipientOf(run.getJobId());
             if (recipient == null || recipient.trim().isEmpty()) {
                 logger.warn("Job {} has no assigned user, so its {} notification was not sent.", run.getJobId(), status);
                 return NO_RECIPIENT;
@@ -82,6 +87,13 @@ public class JobMail {
             logger.error("Could not send the {} mail for job {}: {}", status, run.getJobId(), ex.getMessage());
             return "Error while Sending Mail";
         }
+    }
+
+    /** The assignee's username, if the job has one and they are not deleted. */
+    private String recipientOf(Long jobId) {
+        Long assignee = this.jobs.findAssignedUserId(jobId);
+        return assignee == null ? null : this.identity.person(assignee).filter(person -> !person.isDeleted())
+            .map(IdentityPort.Person::getUsername).orElse(null);
     }
 
     private int attemptOf(Long jobQueueId) {

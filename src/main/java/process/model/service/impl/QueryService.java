@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import java.util.TreeSet;
+import java.util.Collection;
 import process.util.RequestRefused;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -302,22 +304,6 @@ public class QueryService {
         return String.format(" and %s.tenant_id = %d ", tableAlias, tenantId);
     }
 
-    /**
-     * A tenant user's view of the people list is their own row (MIG-46, DEF-128). The list names every
-     * colleague with their failed-run counts, and the lowest role has no business profiling colleagues;
-     * administrators keep the whole workspace, platform administrators every workspace. No user id is
-     * nobody, and nobody sees nothing.
-     */
-    private String ownRowClause(String tableAlias) {
-        if (!"TENANT_USER".equals(TenantContext.getUserRole())) {
-            return "";
-        }
-        if (ProcessUtil.isNull(TenantContext.getAppUserId())) {
-            return " and 1 = 0 ";
-        }
-        return String.format(" and %s.app_user_id = %d ", tableAlias, TenantContext.getAppUserId());
-    }
-
     public String jobStatusStatistics(String startDate, String endDate) {
 
         String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
@@ -328,17 +314,6 @@ public class QueryService {
             "select 'All' as job_status, count(job_id) as total_count from source_job where job_status in ('Active','Inactive') " + dateFilter + tenantFilter;
     }
 
-    /**
-     * Per-user totals, for "who owns what and how is it going".
-     *
-     * Jobs carry assigned_user_id so they attribute directly. Tasks do not carry an owner at
-     * all, so a user's task count is the distinct tasks their jobs point at rather than
-     * anything they are recorded as owning -- which is the honest reading of the schema.
-     *
-     * The left joins matter: a user with no jobs still belongs in the answer, at zero. An
-     * inner join would quietly drop everyone who has not been given work yet, which is
-     * exactly the group this is most often opened to find.
-     */
     /**
      * Run rows for the report screen: one row per recorded run, with the dimensions it can be
      * grouped by and the duration it can be measured on.
@@ -362,7 +337,8 @@ public class QueryService {
         String dateFilter = this.dateRangeFilter("coalesce(q.start_time, q.skip_time)", startDate, endDate);
         return "select coalesce(st.task_name, '(no task)') as task, "
             + "q.job_status as status, "
-            + "coalesce(u.full_name, u.username, 'Unassigned') as owner, "
+            // The owner and the workspace are ids here; Identity names them (ReportExportServiceImpl, MIG-107).
+            + "sj.assigned_user_id as owner_id, "
             + "to_char(coalesce(q.start_time, q.skip_time), 'YYYY-MM-DD') as day, "
             + "case when q.end_time is null then -1 "
             + "else round(extract(epoch from (q.end_time - q.start_time))) end as seconds, "
@@ -371,7 +347,7 @@ public class QueryService {
             // tenant filter switched off (see tenantClause), so their report already merged
             // every workspace's runs into one set of totals -- with no column, no filter and
             // nothing on screen to reveal that it had happened.
-            + "coalesce(t.tenant_name, '(no workspace)') as tenant, "
+            + "sj.tenant_id as tenant_id, "
             /*
              * TRUE execution time, separated from the wait in front of it.
              *
@@ -399,8 +375,6 @@ public class QueryService {
             + "from job_queue q "
             + "join source_job sj on sj.job_id = q.job_id "
             + "left join source_task st on st.task_detail_id = sj.task_detail_id "
-            + "left join tenant t on t.tenant_id = sj.tenant_id "
-            + "left join app_user u on u.app_user_id = sj.assigned_user_id "
             + "left join (select job_queue_id, min(date_created) as exec_start "
             // The marker is JobAuditMarker.JOB_STARTED, one constant with the worker's literal behind it
             // (MIG-77): matched exactly, never with LIKE.
@@ -415,25 +389,36 @@ public class QueryService {
             + "order by q.job_queue_id desc";
     }
 
-    public String userStatistics(String startDate, String endDate) {
+    /**
+     * Per-user totals, for "who owns what and how is it going": jobs, active jobs, distinct tasks, runs,
+     * completed and failed runs -- for the people listed, and only them.
+     *
+     * Jobs carry assigned_user_id so they attribute directly. Tasks do not carry an owner at all, so a
+     * user's task count is the distinct tasks their jobs point at rather than anything they are recorded
+     * as owning. The run join stays LEFT with the date range inside it, so a job without runs in the range
+     * still counts; a person with no jobs at all gets no row here and is listed at zero by the caller.
+     * The caller's tenant clause stays on the jobs too, as on every builder here: the id list is the
+     * scope, and this is the defence behind it. Who is listed (the caller's scope, a tenant user's own row) is decided
+     * by DashboardServiceImpl through IdentityPort.members (MIG-107); this used to be a join on app_user.
+     * Nobody listed is a query that matches nothing.
+     */
+    public String userStatistics(String startDate, String endDate, Collection<Long> appUserIds) {
 
         String dateFilter = this.dateRangeFilter("jq.date_created", startDate, endDate);
-        return "select u.app_user_id, u.username, u.full_name, u.user_role, u.status, "
-            + "u.avatar_bucket, u.avatar_key, "
+        String people = appUserIds == null || appUserIds.isEmpty() ? " and 1 = 0 "
+            : " and sj.assigned_user_id in (" + new TreeSet<>(appUserIds).stream().map(String::valueOf)
+                .collect(Collectors.joining(", ")) + ") ";
+        return "select sj.assigned_user_id, "
             + "count(distinct sj.job_id) as job_count, "
             + "count(distinct sj.job_id) filter (where sj.job_status = 'Active') as active_jobs, "
             + "count(distinct sj.task_detail_id) as task_count, "
             + "count(jq.job_queue_id) as run_count, "
             + "count(jq.job_queue_id) filter (where jq.job_status = 'Completed') as completed_count, "
-            + "count(jq.job_queue_id) filter (where jq.job_status = 'Failed') as failed_count, u.tenant_id "
-            + "from app_user u "
-            + "left join source_job sj on sj.assigned_user_id = u.app_user_id "
-            + "and sj.job_status in ('Active','Inactive') "
+            + "count(jq.job_queue_id) filter (where jq.job_status = 'Failed') as failed_count "
+            + "from source_job sj "
             + "left join job_queue jq on jq.job_id = sj.job_id " + dateFilter
-            + "where u.status in ('Active','Inactive') " + this.tenantClause("u") + this.ownRowClause("u")
-            + "group by u.app_user_id, u.username, u.full_name, u.user_role, u.status, "
-            + "u.avatar_bucket, u.avatar_key, u.tenant_id "
-            + "order by job_count desc, u.full_name asc";
+            + "where sj.job_status in ('Active','Inactive') " + people + this.tenantClause("sj")
+            + "group by sj.assigned_user_id";
     }
 
     public String jobRunningStatistics(String startDate, String endDate) {

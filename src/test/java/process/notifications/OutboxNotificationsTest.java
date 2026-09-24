@@ -10,6 +10,7 @@ import org.barco.notifications.contract.NotificationCreated;
 import org.barco.notifications.contract.NotificationTopics;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import process.identity.IdentityPort;
 import process.identity.TestIdentity;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
@@ -253,5 +254,48 @@ class OutboxNotificationsTest {
         assertThat(payload.get("jobRunningStatus").asText()).isEqualTo("Failed");
         assertThat(payload.has("recipientUserId")).isFalse();
         assertThat(payload.has("recipientUsername")).isFalse();
+    }
+
+    // ---- Identity out of reach (identity.mode=remote, MIG-107): the port never fails its caller ----
+
+    /** A port whose every directory read finds Identity unreachable. */
+    private OutboxNotifications withIdentityDown() {
+        IdentityPort down = mock(IdentityPort.class);
+        when(down.person(any())).thenThrow(new IdentityPort.Unavailable("identity down", null));
+        return new OutboxNotifications(this.outbox, down, this.secrets, this.staging, this.legacyConsole, this.badges,
+            "http://host.docker.internal:4566");
+    }
+
+    @Test
+    void aJobStatusStillGoesOutWhenItsRecipientCannotBeLookedUp() throws Exception {
+        OutboxNotifications port = this.withIdentityDown();
+
+        assertThatCode(() -> port.jobStatusChanged(TENANT, new JobStatusChanged().setJobId(41L).setJobQueueId(7001L).setAttempt(1)
+            .setJobRunningStatus("Failed").setNewTransition(true).setRecipientUserId(10L).setJobName("Nightly export")))
+            .doesNotThrowAnyException();
+
+        JsonNode payload = this.written(NotificationTopics.JOB_STATUS, "7001").get("payload");
+        assertThat(payload.has("recipientUserId")).as("the feed push goes; only the notice does not").isFalse();
+    }
+
+    @Test
+    void aNoticeWhoseRecipientCannotBeLookedUpIsDroppedNotThrown() {
+        OutboxNotifications port = this.withIdentityDown();
+
+        assertThatCode(() -> port.notificationCreated(TENANT, new NotificationCreated().setAppUserId(10L).setType("JOB_FAILED")
+            .setSeverity("ERROR").setTitle("t").setBody("b"))).doesNotThrowAnyException();
+
+        verify(this.outbox, never()).write(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void aMailStillGoesWhenItsSendersFailureNoticeCannotBeResolved() {
+        OutboxNotifications port = this.withIdentityDown();
+        MailRequested mail = new MailRequested().setTemplate(MailRequested.Template.COMPLETE_JOB).setRecipient("owner@medaxis.example")
+            .setSubject("Source Job Completed").setFailureNotice(new NotificationCreated().setAppUserId(10L)
+                .setType("FILE_SHARE_FAILED").setSeverity("ERROR").setTitle("Not sent"));
+
+        assertThat(port.mailRequested(TENANT, mail, MailExtras.NONE)).isEqualTo(OutboxNotifications.QUEUED);
+        assertThat(mail.getFailureNotice()).isNull();
     }
 }

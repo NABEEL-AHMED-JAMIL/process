@@ -1,6 +1,7 @@
 package process.identity;
 
 import org.barco.platform.security.CallerIdentity;
+import org.barco.platform.tenancy.TenantScope;
 
 import java.util.Collection;
 import java.util.List;
@@ -14,8 +15,12 @@ import java.util.Optional;
  * the engine, the notification outbox and the security filters used to reach by reading app_user,
  * tenant and the page-access tables themselves. Identity keeps all six of its tables together behind
  * this port (the app_user / page_access_profile foreign-key cycle stays in one place); nothing outside
- * it names an Identity repository or entity. Today {@link LocalIdentity} answers from the monolith's
- * own tables; when Identity is its own service only the implementation changes.
+ * it names an Identity repository or entity. {@link LocalIdentity} answers from the monolith's own
+ * tables (identity.mode=local, the default); {@link HttpIdentity} asks identity-service (identity.mode=
+ * remote, MIG-107). Nothing that calls the port changes between them.
+ *
+ * Remotely, a directory read can fail: it throws {@link Unavailable}, and a caller that must never fail
+ * (the notification outbox, the name resolver) says in its own code what it does instead.
  *
  * @author Nabeel Ahmed
  */
@@ -48,6 +53,13 @@ public interface IdentityPort {
     /** Every workspace that is not deleted, newest first. */
     List<Workspace> liveWorkspaces();
 
+    /**
+     * The people who are not deleted, in this scope: every workspace's for AllTenants, one workspace's
+     * otherwise, nobody for a caller scoped to nothing. The dashboard's people list (MIG-107): it used to
+     * be a join on app_user inside Core's own statistics query.
+     */
+    List<Person> members(TenantScope scope);
+
     /** How many people a workspace has who are not deleted: its seats. */
     long seats(Long tenantId);
 
@@ -57,6 +69,13 @@ public interface IdentityPort {
      */
     PageDecision pageDecision(String userRole, Long appUserId, String servletPath);
 
+    /** Identity could not be asked (identity.mode=remote): unreachable, or it answered with an error. */
+    final class Unavailable extends RuntimeException {
+        public Unavailable(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
     /** What crosses the port about a person: never a password, never a token. */
     final class Person {
         private final Long appUserId;
@@ -65,14 +84,23 @@ public interface IdentityPort {
         private final String fullName;
         private final String userRole;
         private final String status;
+        private final String avatarBucket;
+        private final String avatarKey;
 
         public Person(Long appUserId, Long tenantId, String username, String fullName, String userRole, String status) {
+            this(appUserId, tenantId, username, fullName, userRole, status, null, null);
+        }
+
+        public Person(Long appUserId, Long tenantId, String username, String fullName, String userRole, String status,
+            String avatarBucket, String avatarKey) {
             this.appUserId = appUserId;
             this.tenantId = tenantId;
             this.username = username;
             this.fullName = fullName;
             this.userRole = userRole;
             this.status = status;
+            this.avatarBucket = avatarBucket;
+            this.avatarKey = avatarKey;
         }
 
         public Long getAppUserId() { return this.appUserId; }
@@ -82,6 +110,9 @@ public interface IdentityPort {
         public String getFullName() { return this.fullName; }
         public String getUserRole() { return this.userRole; }
         public String getStatus() { return this.status; }
+        /** Where the person's picture is, if they have one: the object key, never the bytes. */
+        public String getAvatarBucket() { return this.avatarBucket; }
+        public String getAvatarKey() { return this.avatarKey; }
 
         public boolean isDeleted() { return "Delete".equals(this.status); }
 

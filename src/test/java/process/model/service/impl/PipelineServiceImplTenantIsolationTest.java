@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.identity.IdentityPort;
 import process.identity.TestIdentity;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
@@ -348,7 +349,7 @@ public class PipelineServiceImplTenantIsolationTest {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
         Tenant defaultTenant = new Tenant();
         defaultTenant.setTenantId(DEFAULT_TENANT);
-        when(this.tenantRepository.findByTenantCode(TenantSeedService.DEFAULT_TENANT_CODE))
+        when(this.tenantRepository.findByTenantCode(IdentityPort.DEFAULT_WORKSPACE_CODE))
             .thenReturn(Optional.of(defaultTenant));
         when(this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(
             PIPELINE, DEFAULT_TENANT, Status.Delete)).thenReturn(Collections.emptyList());
@@ -373,7 +374,7 @@ public class PipelineServiceImplTenantIsolationTest {
         // in practice, but a missing default tenant must fail with an explainable message rather
         // than an NPE from an absent Optional.
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        when(this.tenantRepository.findByTenantCode(TenantSeedService.DEFAULT_TENANT_CODE))
+        when(this.tenantRepository.findByTenantCode(IdentityPort.DEFAULT_WORKSPACE_CODE))
             .thenReturn(Optional.empty());
 
         Pipeline submitted = new Pipeline();

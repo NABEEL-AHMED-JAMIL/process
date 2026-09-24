@@ -25,6 +25,7 @@ import java.util.Map;
  * verified that token and set TenantContext before this runs, so the answer is about the real caller.
  * Answers {allowed, message} with the interceptor's own sentence, for the gateway to return as 403.
  */
+@IdentityInProcess
 @RestController
 @RequestMapping("/internal/pageAccess")
 public class InternalPageAccessRestApi {

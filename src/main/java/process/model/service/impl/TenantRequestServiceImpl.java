@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.identity.IdentityInProcess;
 import process.util.validation.EmailValidator;
 import process.util.TenantCode;
 import org.slf4j.Logger;
@@ -49,6 +50,7 @@ import static process.util.ProcessUtil.SUCCESS;
  *
  * @author Nabeel Ahmed
  */
+@IdentityInProcess
 @Service
 public class TenantRequestServiceImpl {
 

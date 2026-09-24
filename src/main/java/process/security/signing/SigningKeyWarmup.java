@@ -1,5 +1,6 @@
 package process.security.signing;
 
+import process.identity.IdentityInProcess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
  * the key yet, and /internal/jwks answering nothing is safer than no process. Once it signs RS256 the
  * key is every sign-in, and startup stops.
  */
+@IdentityInProcess
 @Component
 public class SigningKeyWarmup implements ApplicationRunner {
 

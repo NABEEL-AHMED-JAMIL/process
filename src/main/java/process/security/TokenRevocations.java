@@ -1,5 +1,6 @@
 package process.security;
 
+import process.identity.IdentityInProcess;
 import io.jsonwebtoken.Claims;
 import org.barco.platform.security.RevocationCheck;
 import org.slf4j.Logger;
@@ -51,6 +52,7 @@ import java.util.List;
  *
  * @author Nabeel Ahmed
  */
+@IdentityInProcess
 @Component
 public class TokenRevocations {
 

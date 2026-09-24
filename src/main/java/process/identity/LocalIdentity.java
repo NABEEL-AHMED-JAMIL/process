@@ -3,6 +3,7 @@ package process.identity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import org.barco.platform.security.CallerIdentity;
+import org.barco.platform.tenancy.TenantScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -12,6 +13,7 @@ import process.model.enums.TenantStatus;
 import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
+import process.model.repository.ScopedAppUserReads;
 import process.model.repository.TenantRepository;
 import process.security.PageGate;
 import process.security.TokenRevocations;
@@ -38,6 +40,7 @@ import java.util.stream.Collectors;
  *
  * @author Nabeel Ahmed
  */
+@IdentityInProcess
 @Component
 public class LocalIdentity implements IdentityPort {
 
@@ -138,6 +141,11 @@ public class LocalIdentity implements IdentityPort {
     }
 
     @Override
+    public List<Person> members(TenantScope scope) {
+        return ScopedAppUserReads.findLive(this.users, scope).stream().map(LocalIdentity::toPerson).collect(Collectors.toList());
+    }
+
+    @Override
     public long seats(Long tenantId) {
         return tenantId == null ? 0 : this.users.countByTenantIdAndStatusNot(tenantId, Status.Delete);
     }
@@ -150,7 +158,8 @@ public class LocalIdentity implements IdentityPort {
 
     static Person toPerson(AppUser user) {
         return new Person(user.getAppUserId(), user.getTenantId(), user.getUsername(), user.getFullName(),
-            user.getUserRole() == null ? null : user.getUserRole().name(), user.getStatus() == null ? null : user.getStatus().name());
+            user.getUserRole() == null ? null : user.getUserRole().name(), user.getStatus() == null ? null : user.getStatus().name(),
+            user.getAvatarBucket(), user.getAvatarKey());
     }
 
     static Workspace toWorkspace(Tenant tenant) {
