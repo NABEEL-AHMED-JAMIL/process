@@ -1,0 +1,69 @@
+package process.identity;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.util.concurrent.SettableListenableFuture;
+import process.config.KafkaConnectionResolver;
+import process.config.KafkaTemplateProvider;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+/**
+ * ADR-015 / MIG-176: Core publishes Analytics' query event through the workspace's own Kafka
+ * profile, so the profile's credentials never leave Core. Only the allow-listed topic is accepted,
+ * and the tenant is taken from the request -- the publisher has no principal to read it from.
+ */
+class InternalKafkaPublishRestApiTest {
+
+    private static final String TOKEN = "t0ken";
+    private final KafkaConnectionResolver resolver = mock(KafkaConnectionResolver.class);
+    private final KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
+    private final InternalKafkaPublishRestApi api = new InternalKafkaPublishRestApi(this.resolver, this.templates, TOKEN);
+
+    private static Map<String, Object> event(String topic) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("tenantId", 2905);
+        body.put("topic", topic);
+        body.put("key", "2905");
+        body.put("payload", "{\"event\":\"analytics.query.completed\"}");
+        return body;
+    }
+
+    @Test
+    void withoutTheServiceTokenNothingIsPublished() {
+        assertThat(this.api.publish(null, event("analytics.query.completed")).getStatusCodeValue()).isEqualTo(401);
+        verifyNoInteractions(this.resolver, this.templates);
+    }
+
+    @Test
+    void aTopicThatIsNotOnTheListIsRefused() {
+        assertThat(this.api.publish(TOKEN, event("job.events")).getStatusCodeValue()).isEqualTo(400);
+        verifyNoInteractions(this.resolver, this.templates);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theEventGoesOutThroughTheWorkspacesOwnProfileAtTierThree() {
+        KafkaTemplate<String, String> template = mock(KafkaTemplate.class);
+        when(this.resolver.resolve(2905L, null)).thenReturn(Optional.empty());
+        when(this.templates.getTemplate(any())).thenReturn(template);
+        when(template.send(any(String.class), any(String.class), any(String.class))).thenReturn(new SettableListenableFuture<>());
+
+        assertThat(this.api.publish(TOKEN, event("analytics.query.completed")).getStatusCodeValue()).isEqualTo(202);
+
+        // No task type: the resolver enters at the tenant's default and falls through to the platform's.
+        verify(this.resolver).resolve(eq(2905L), isNull());
+        verify(template).send("analytics.query.completed", "2905", "{\"event\":\"analytics.query.completed\"}");
+    }
+}
