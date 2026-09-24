@@ -1,5 +1,6 @@
 package process.security;
 
+import process.util.BusinessTime;
 import org.barco.platform.correlation.CorrelationId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,7 +12,6 @@ import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
 import process.model.repository.JobQueueRepository;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,7 +57,7 @@ public class RunCallbackTokensTest {
         assertThat(token).startsWith("cbt_1." + RUN + ".");
         assertThat(this.run.getCallbackTokenHash()).isNotEqualTo(token).hasSize(64);
         assertThat(this.run.getCallbackTokenAttempt()).isEqualTo(1);
-        assertThat(this.run.getCallbackTokenExpiresAt()).isAfter(LocalDateTime.now().plusHours(23));
+        assertThat(this.run.getCallbackTokenExpiresAt()).isAfter(BusinessTime.now().plusHours(23));
         verify(this.jobQueueRepository).save(this.run);
 
         assertThat(this.tokens.verify(JOB, RUN, token)).isEmpty();
@@ -121,7 +121,7 @@ public class RunCallbackTokensTest {
     @Test
     void anExpiredTokenIsRefusedEvenWhenItMatches() {
         String token = this.tokens.issue(this.run);
-        this.run.setCallbackTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
+        this.run.setCallbackTokenExpiresAt(BusinessTime.now().minusMinutes(1));
         assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.EXPIRED);
     }
 
@@ -133,7 +133,7 @@ public class RunCallbackTokensTest {
 
         // The hash stays: a report can still prove it is this run's...
         assertThat(this.run.getCallbackTokenHash()).isNotNull();
-        assertThat(this.run.getCallbackTokenExpiresAt()).isAfter(LocalDateTime.now().plusHours(23));
+        assertThat(this.run.getCallbackTokenExpiresAt()).isAfter(BusinessTime.now().plusHours(23));
         assertThat(this.tokens.verifyForReport(JOB, RUN, token)).isEmpty();
         // ...while a callback on the finished run is refused whatever it carries.
         assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.RUN_OVER);
@@ -177,7 +177,7 @@ public class RunCallbackTokensTest {
         assertThat(this.tokens.verifyForReport(JOB, RUN, token)).isEmpty();
         assertThat(this.tokens.verifyForReport(JOB, RUN, "not-it")).contains(RunCallbackTokens.Refusal.MISMATCH);
 
-        this.run.setCallbackTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
+        this.run.setCallbackTokenExpiresAt(BusinessTime.now().minusMinutes(1));
         assertThat(this.tokens.verifyForReport(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.EXPIRED);
     }
 
@@ -200,7 +200,7 @@ public class RunCallbackTokensTest {
         assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.RUN_OVER);
 
         this.run.setJobStatus(JobStatus.Running);
-        this.run.setCallbackTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
+        this.run.setCallbackTokenExpiresAt(BusinessTime.now().minusMinutes(1));
         assertThat(this.tokens.verify(JOB, RUN, someoneElses)).contains(RunCallbackTokens.Refusal.MISMATCH);
         assertThat(this.tokens.verify(JOB, RUN, token)).contains(RunCallbackTokens.Refusal.EXPIRED);
     }

@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.BusinessTime;
 import process.util.RequestRefused;
 
 import process.media.MediaPort;
@@ -354,7 +355,7 @@ public class ReportExportServiceImpl {
             .replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
         if (base.isEmpty()) base = "report";
         if (base.length() > 60) base = base.substring(0, 60);
-        String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String stamp = BusinessTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
         return base + "-" + stamp + "." + format;
     }
 

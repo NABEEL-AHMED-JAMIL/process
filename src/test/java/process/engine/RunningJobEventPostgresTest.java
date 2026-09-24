@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,7 +12,6 @@ import process.model.enums.JobStatus;
 import process.model.projection.SourceJobProjection;
 import process.model.repository.SourceJobRepository;
 
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
@@ -65,7 +65,7 @@ class RunningJobEventPostgresTest {
     private void job(long jobId, Long assignee) {
         this.sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, "
             + "assigned_user_id, job_running_status) VALUES (?, ?, 'Auto', ?, 'Active', 1, ?, 'Running')",
-            jobId, Timestamp.valueOf(NOW), "event-" + jobId, assignee);
+            jobId, BusinessTime.timestampOf(NOW), "event-" + jobId, assignee);
     }
 
     private String usernameOn(long jobId) {
@@ -98,7 +98,7 @@ class RunningJobEventPostgresTest {
         this.job(9503, 95003L);
         this.job(9504, null);
         this.sql.update("INSERT INTO scheduler (scheduler_id, job_id, start_date, start_time, frequency, next_run_at, expired) "
-            + "VALUES (9503, 9503, ?, '00:00:00', 'Daily', ?, false)", NOW.toLocalDate(), Timestamp.valueOf(NOW.plusDays(1)));
+            + "VALUES (9503, 9503, ?, '00:00:00', 'Daily', ?, false)", NOW.toLocalDate(), BusinessTime.timestampOf(NOW.plusDays(1)));
         SourceJobRepository jobs = jpa.repository(SourceJobRepository.class);
 
         List<SourceJobProjection> events = jpa.transactions().execute(status -> jobs.fetchRunningJobEvent(Arrays.asList(9503L, 9504L)));

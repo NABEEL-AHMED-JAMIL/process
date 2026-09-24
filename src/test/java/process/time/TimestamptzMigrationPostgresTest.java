@@ -50,19 +50,12 @@ class TimestamptzMigrationPostgresTest {
     static void migrateAFixtureDatabase() throws Exception {
         db = ScratchEtlJob.buildUpTo("timestamptz_v100", V100);
         JdbcTemplate sql = db.sql();
-        seedBaseRows(sql);
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(
-            TimestamptzMigrationPostgresTest.class.getResourceAsStream("/timestamptz/before-fixture.csv"), StandardCharsets.UTF_8))) {
-            for (String line = in.readLine(); line != null; line = in.readLine()) {
-                if (line.startsWith("#") || line.trim().isEmpty()) {
-                    continue;
-                }
-                String[] row = line.split(",");
-                FIXTURE.add(row);
-                String where = whereKey(sql, row[0], row[1]);
-                int updated = sql.update(String.format("UPDATE public.%s SET %s = ?::timestamp WHERE %s", row[0], row[2], where), row[3]);
-                assertThat(updated).as("fixture row %s %s", row[0], row[1]).isEqualTo(1);
-            }
+        seedBaseRows(sql, true);
+        for (String[] row : fixture()) {
+            FIXTURE.add(row);
+            String where = whereKey(sql, row[0], row[1]);
+            int updated = sql.update(String.format("UPDATE public.%s SET %s = ?::timestamp WHERE %s", row[0], row[2], where), row[3]);
+            assertThat(updated).as("fixture row %s %s", row[0], row[1]).isEqualTo(1);
         }
         for (Map.Entry<String, List<String>> table : TimestampColumns.CONVERTED.entrySet()) {
             ROWS_BEFORE.put(table.getKey(), TimestampColumns.rows(sql, table.getKey()));
@@ -81,13 +74,18 @@ class TimestamptzMigrationPostgresTest {
         }
     }
 
-    /** One row under every key the fixture names, with placeholder times the fixture then overwrites. */
-    private static void seedBaseRows(JdbcTemplate sql) {
-        // identity-prep's V68 table, as it stands on the live etl_job: V100 converts it wherever it exists.
-        sql.execute("CREATE TABLE IF NOT EXISTS identity_signing_key (kid VARCHAR(64) PRIMARY KEY, algorithm VARCHAR(10) NOT NULL DEFAULT 'RS256', "
-            + "public_key TEXT NOT NULL, private_key_sealed TEXT, status VARCHAR(10) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT now(), "
-            + "retired_at TIMESTAMP)");
-        sql.update("INSERT INTO identity_signing_key (kid, public_key, status) VALUES ('v100-kid', 'pk', 'retired')");
+    /**
+     * One row under every key the fixture names, with placeholder times the fixture then overwrites. With
+     * identityKeyTable, also identity-prep's V68 table as it stands on the live etl_job (V100 converts it wherever
+     * it exists); only before V100, or it stays naive.
+     */
+    static void seedBaseRows(JdbcTemplate sql, boolean identityKeyTable) {
+        if (identityKeyTable) {
+            sql.execute("CREATE TABLE IF NOT EXISTS identity_signing_key (kid VARCHAR(64) PRIMARY KEY, algorithm VARCHAR(10) NOT NULL "
+                + "DEFAULT 'RS256', public_key TEXT NOT NULL, private_key_sealed TEXT, status VARCHAR(10) NOT NULL, "
+                + "created_at TIMESTAMP NOT NULL DEFAULT now(), retired_at TIMESTAMP)");
+            sql.update("INSERT INTO identity_signing_key (kid, public_key, status) VALUES ('v100-kid', 'pk', 'retired')");
+        }
         sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (900, 'Active', 'V100', 'Fixture')");
         sql.update("INSERT INTO app_user (app_user_id, full_name, password, status, user_role, username, tenant_id) "
             + "VALUES (900201, 'Fixture', 'x', 'Active', 'TENANT_USER', 'fixture@v100.test', 900)");
@@ -106,13 +104,16 @@ class TimestamptzMigrationPostgresTest {
         for (long job : new long[] {900001, 900002}) {
             sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, tenant_id) "
                 + "VALUES (?, now(), 'Auto', 'fixture', 'Active', 1, 900)", job);
+            sql.update("UPDATE source_job SET complete_job = false, fail_job = false, skip_job = false WHERE job_id = ?", job);
         }
         sql.update("INSERT INTO scheduler (scheduler_id, job_id, start_date, start_time, frequency, interval_value, expired) "
             + "VALUES (900301, 900001, '2026-01-01', '02:30', 'Daily', '1', false)");
         sql.update("INSERT INTO scheduler (scheduler_id, job_id, start_date, start_time, frequency, interval_value, expired) "
             + "VALUES (900302, 900002, '2026-01-01', '01:30', 'Daily', '1', false)");
         sql.update("INSERT INTO job_queue (job_queue_id, date_created, job_id, job_status, status) VALUES (900101, now(), 900001, 'Completed', 'Active')");
+        sql.update("UPDATE job_queue SET job_send = true WHERE job_queue_id = 900101");
         sql.update("INSERT INTO job_queue (job_queue_id, date_created, job_id, job_status, status) VALUES (900102, now(), 900002, 'Completed', 'Active')");
+        sql.update("UPDATE job_queue SET job_send = true WHERE job_queue_id = 900102");
         sql.update("INSERT INTO job_audit_logs (job_audit_log_id, date_created, job_queue_id, log_detail, status) "
             + "VALUES (900401, now(), 900101, 'fixture', 'Active')");
         sql.update("INSERT INTO worker_callback_receipt (job_queue_id, idempotency_key, request, received_at) "
@@ -120,7 +121,21 @@ class TimestamptzMigrationPostgresTest {
         sql.update("INSERT INTO shedlock (name, lock_until, locked_at, locked_by) VALUES ('v100-fixture', now(), now(), 'fixture')");
     }
 
-    private static String whereKey(JdbcTemplate sql, String table, String key) {
+    /** The committed before-fixture's rows: table, key, column, stored, instant. */
+    static List<String[]> fixture() throws Exception {
+        List<String[]> rows = new ArrayList<>();
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(
+            TimestamptzMigrationPostgresTest.class.getResourceAsStream("/timestamptz/before-fixture.csv"), StandardCharsets.UTF_8))) {
+            for (String line = in.readLine(); line != null; line = in.readLine()) {
+                if (!line.startsWith("#") && !line.trim().isEmpty()) {
+                    rows.add(line.split(","));
+                }
+            }
+        }
+        return rows;
+    }
+
+    static String whereKey(JdbcTemplate sql, String table, String key) {
         return TimestampColumns.keyExpression(sql, table) + " = '" + key.replace("'", "''") + "'";
     }
 

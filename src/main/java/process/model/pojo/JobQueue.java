@@ -41,15 +41,15 @@ public class JobQueue {
     private Long jobQueueId;
 
     @Column(name = "start_time",
-        columnDefinition = "TIMESTAMP")
+        columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime startTime;
 
     @Column(name = "end_time",
-        columnDefinition = "TIMESTAMP")
+        columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime endTime;
 
     @Column(name = "skip_time",
-        columnDefinition = "TIMESTAMP")
+        columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime skipTime;
 
     @Column(name = "job_status",
@@ -100,10 +100,11 @@ public class JobQueue {
      * When a run awaiting retry becomes eligible for dispatch; null for every ordinary run.
      *
      * The dispatcher's pick-up query will not take a Queue row whose value here is still in the
-     * future, which is the whole of the backoff mechanism. Compared against the application clock,
-     * never the database's -- the two are five hours apart.
+     * future, which is the whole of the backoff mechanism. Compared against the application clock
+     * passed in as the query's cutoff. (It was never the database's while the column held Chicago
+     * wall-clock and now() was UTC; since V100 both are instants, but the cutoff stays a parameter.)
      */
-    @Column(name = "next_attempt_at", columnDefinition = "TIMESTAMP")
+    @Column(name = "next_attempt_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime nextAttemptAt;
 
     /**
@@ -117,7 +118,7 @@ public class JobQueue {
     @Column(name = "callback_token_attempt")
     private Integer callbackTokenAttempt;
 
-    @Column(name = "callback_token_expires_at", columnDefinition = "TIMESTAMP")
+    @Column(name = "callback_token_expires_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime callbackTokenExpiresAt;
 
     /**
@@ -126,7 +127,7 @@ public class JobQueue {
      * is proof the worker is no longer able to report, so the stall sweep closes the run on its next
      * pass instead of leaving it in flight, blocking its job, until the six-hour rule catches it.
      */
-    @Column(name = "refused_callback_at", columnDefinition = "TIMESTAMP")
+    @Column(name = "refused_callback_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime refusedCallbackAt;
 
     @Column(name = "refused_callback_status", length = 16)
@@ -147,7 +148,7 @@ public class JobQueue {
      * prepared runs and sends exactly this. A retry clears both, so the next attempt is prepared afresh
      * from the task as it then is -- the AI service reuses any answer it already recorded for the run.
      */
-    @Column(name = "prepared_at", columnDefinition = "TIMESTAMP")
+    @Column(name = "prepared_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime preparedAt;
 
     @Column(name = "dispatch_payload", columnDefinition = "TEXT")

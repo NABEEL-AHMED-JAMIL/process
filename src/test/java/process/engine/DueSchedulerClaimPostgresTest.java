@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,13 +72,13 @@ class DueSchedulerClaimPostgresTest {
 
     private void job(long jobId, String status, String execution) {
         this.sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority) "
-            + "VALUES (?, ?, ?, ?, ?, 1)", jobId, Timestamp.valueOf(NOW.minusDays(1)), execution, "claim-" + jobId, status);
+            + "VALUES (?, ?, ?, ?, ?, 1)", jobId, BusinessTime.timestampOf(NOW.minusDays(1)), execution, "claim-" + jobId, status);
     }
 
     private void scheduler(long schedulerId, long jobId, LocalDateTime nextRunAt) {
         this.sql.update("INSERT INTO scheduler (scheduler_id, job_id, start_date, start_time, frequency, next_run_at, expired) "
             + "VALUES (?, ?, ?, '00:00:00', 'Daily', ?, false)", schedulerId, jobId,
-            Date.valueOf(NOW.toLocalDate().minusDays(1)), Timestamp.valueOf(nextRunAt));
+            Date.valueOf(NOW.toLocalDate().minusDays(1)), BusinessTime.timestampOf(nextRunAt));
     }
 
     private boolean eligible(long jobId) {
@@ -86,14 +87,14 @@ class DueSchedulerClaimPostgresTest {
 
     /** The repository's claim, as JDBC runs it: the passed-over list as a Postgres array. */
     private static String claimSql() throws Exception {
-        String sql = SchedulerRepository.class.getMethod("claimNextDueScheduler", LocalDateTime.class, List.class)
+        String sql = SchedulerRepository.class.getMethod("claimNextDueScheduler", Timestamp.class, List.class)
             .getAnnotation(Query.class).value();
         return sql.replace(":now", "?").replace("(:passed)", "(select unnest(string_to_array(?, ',')::bigint[]))")
             .replace("scheduler.*", "scheduler.scheduler_id");
     }
 
     private Long claim(JdbcTemplate on, List<Long> passed) throws Exception {
-        List<Long> found = on.queryForList(claimSql(), Long.class, Timestamp.valueOf(NOW),
+        List<Long> found = on.queryForList(claimSql(), Long.class, BusinessTime.timestampOf(NOW),
             passed.stream().map(String::valueOf).collect(Collectors.joining(",")));
         return found.isEmpty() ? null : found.get(0);
     }
@@ -225,7 +226,7 @@ class DueSchedulerClaimPostgresTest {
                     JdbcTemplate own = db.jdbc();
                     assertThat(this.claim(own, Collections.singletonList(-1L))).isEqualTo(9350L);
                     own.update("INSERT INTO job_queue (job_queue_id, job_id, job_status, start_time, date_created, status) "
-                        + "VALUES (3501, 9350, 'Queue', ?, ?, 'Active')", Timestamp.valueOf(NOW), Timestamp.valueOf(NOW));
+                        + "VALUES (3501, 9350, 'Queue', ?, ?, 'Active')", BusinessTime.timestampOf(NOW), BusinessTime.timestampOf(NOW));
                     claimedByA.countDown();
                     killA.await(10, TimeUnit.SECONDS);
                 } catch (Exception failed) {
@@ -256,7 +257,7 @@ class DueSchedulerClaimPostgresTest {
                 JdbcTemplate own = db.jdbc();
                 assertThat(this.claim(own, Collections.singletonList(-1L))).isEqualTo(9350L);
                 own.update("INSERT INTO job_queue (job_queue_id, job_id, job_status, start_time, date_created, status) "
-                    + "VALUES (3502, 9350, 'Queue', ?, ?, 'Active')", Timestamp.valueOf(NOW), Timestamp.valueOf(NOW));
+                    + "VALUES (3502, 9350, 'Queue', ?, ?, 'Active')", BusinessTime.timestampOf(NOW), BusinessTime.timestampOf(NOW));
                 own.update("UPDATE scheduler SET next_run_at = next_run_at + interval '1 day' WHERE scheduler_id = 9350");
             } catch (Exception failed) {
                 throw new IllegalStateException(failed);

@@ -1,5 +1,6 @@
 package process.security;
 
+import process.util.BusinessTime;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -56,7 +57,7 @@ import static org.mockito.Mockito.when;
  *
  * Identity & Tenancy will own this token; these are the nine assertions of 16-testing-strategy 2.4 C5.
  *
- * The clock: RunCallbackTokens reads LocalDateTime.now() with no seam. "+24h" is asserted by
+ * The clock: RunCallbackTokens reads BusinessTime.now() with no seam. "+24h" is asserted by
  * bracketing the call; "+23h59m" and "+24h01m" are reached by moving the stored expiry back by that
  * much, which is the same comparison verify makes when the clock moves forward instead.
  */
@@ -127,9 +128,9 @@ class RetireExtendsTokenExpiryTest {
         this.dispatchedThreeHoursAgoAndNowOver(JobStatus.Completed);
         LocalDateTime budgetExpiry = this.run.getCallbackTokenExpiresAt();
 
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = BusinessTime.now();
         this.tokens.retire(RUN);
-        LocalDateTime after = LocalDateTime.now();
+        LocalDateTime after = BusinessTime.now();
 
         assertThat(RunCallbackTokens.REPORT_GRACE_HOURS).isEqualTo(24);
         assertWithin(this.run.getCallbackTokenExpiresAt(), before.plusHours(24), after.plusHours(24));
@@ -304,7 +305,7 @@ class RetireExtendsTokenExpiryTest {
         });
         SourceJobQueueDto body = new SourceJobQueueDto();
         body.setJobStatusMessage("source refused the connection");
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = BusinessTime.now();
 
         ResponseEntity<?> response = new NotifyResetApi(notifyService, this.tokens)
             .changeState(JOB, RUN, JobStatus.Failed, token, null, null, body);

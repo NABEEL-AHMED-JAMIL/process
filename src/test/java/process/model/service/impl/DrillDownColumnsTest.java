@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,8 +96,9 @@ class DrillDownColumnsTest {
         QueryService rows = mock(QueryService.class);
         when(rows.weeklyHrRunningStatisticsDimensionDetail("2026-09-21", 14L, "Completed", null)).thenReturn("drill-down");
         when(rows.executeQuery(anyString())).thenReturn(new ArrayList<>(Collections.singletonList(new Object[] {
-            5073L, Timestamp.valueOf("2026-09-21 14:03:07"), Timestamp.valueOf("2026-09-21 14:05:09"), 1196L, true, "Completed",
-            "done", false, false, null, Timestamp.valueOf("2026-09-21 14:04:01")})));
+            // What the driver hands back for a timestamptz column: the instant (here, Chicago afternoon ones).
+            5073L, chicago("2026-09-21T14:03:07"), chicago("2026-09-21T14:05:09"), 1196L, true, "Completed",
+            "done", false, false, null, chicago("2026-09-21T14:04:01")})));
         DashboardServiceImpl dashboard = new DashboardServiceImpl(rows, null, null, null, null);
 
         ResponseDto response = dashboard.weeklyHrRunningStatisticsDimensionDetail("2026-09-21", 14L, "Completed", null);
@@ -105,7 +107,7 @@ class DrillDownColumnsTest {
         List<SourceJobQueueDto> runs = (List<SourceJobQueueDto>) ((Map<String, Object>) response.getData()).get("sourceJobQueues");
         SourceJobQueueDto run = runs.get(0);
         assertThat(run.getJobQueueId()).isEqualTo(5073L);
-        assertThat(run.getDateCreated()).isEqualTo(Timestamp.valueOf("2026-09-21 14:03:07"));
+        assertThat(run.getDateCreated()).isEqualTo(chicago("2026-09-21T14:03:07"));
         assertThat(run.getEndTime()).isEqualTo(LocalDateTime.of(2026, 9, 21, 14, 5, 9));
         assertThat(run.getJobId()).isEqualTo(1196L);
         assertThat(run.getJobStatus()).isEqualTo(JobStatus.Completed);
@@ -131,5 +133,9 @@ class DrillDownColumnsTest {
             names.add(alias + "." + column);
         }
         return names;
+    }
+
+    private static Timestamp chicago(String wallClock) {
+        return BusinessTime.timestampOf(LocalDateTime.parse(wallClock));
     }
 }

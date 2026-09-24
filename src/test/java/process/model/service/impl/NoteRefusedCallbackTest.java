@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,9 +41,9 @@ class NoteRefusedCallbackTest {
 
     @Test
     void theRefusedStatusIsNotedOnTheRunAndNothingElseMoves() {
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = BusinessTime.now();
         this.service.noteRefusedCallback(5705L, JobStatus.Completed);
-        LocalDateTime after = LocalDateTime.now();
+        LocalDateTime after = BusinessTime.now();
 
         ArgumentCaptor<LocalDateTime> at = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(this.transactionService).noteRefusedCallback(eq(5705L), at.capture(), eq("Completed"));

@@ -52,7 +52,9 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      * rows that finds. A job with no username still reads: the push goes out by user id.
      */
     @Query(value = "select sj.job_id as jobId, sj.job_status as jobStatus, sj.job_running_status as jobRunningStatus," +
-        "sj.last_job_run as lastJobRun, sc.next_run_at as nextRunAt, sj.execution as execution," +
+        // lastJobRun is the instant (BulkAction prints its Chicago wall-clock); nextRunAt is Chicago text in the
+        // shape Timestamp#toString gave it on the Chicago JVM, which is what the live event has always carried.
+        "sj.last_job_run as lastJobRun, to_char(sc.next_run_at AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD HH24:MI:SS') || '.' || coalesce(nullif(rtrim(to_char(sc.next_run_at AT TIME ZONE 'America/Chicago', 'US'), '0'), ''), '0') as nextRunAt, sj.execution as execution," +
         "sj.assigned_username as assignedUsername, sj.assigned_user_id as assignedUserId, sj.tenant_id as tenantId, sj.job_name as jobName\n" +
         "from source_job sj left join scheduler sc on sc.job_id = sj.job_id\n" +
         "where sj.job_id in (?1) and UPPER(sj.job_status) = 'ACTIVE'", nativeQuery = true)

@@ -155,7 +155,7 @@ public class QueryService {
 
             selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, " +
                 "to_char(sj.last_job_run AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD HH24:MI:SS'), sj.priority, " +
-                "cast(sj.date_created AT TIME ZONE 'America/Chicago' AS varchar) ";
+                "sj.date_created ";
         }
         String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
         query += "where st.task_status in ('Active', 'Inactive') and sj.job_status in ('Active', 'Inactive') " + this.tenantClause("sj");

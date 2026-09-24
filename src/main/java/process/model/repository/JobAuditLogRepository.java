@@ -17,7 +17,14 @@ import java.util.List;
 @Repository
 public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long> {
 
-    @Query(value = "select job_audit_log_id as jobAuditLogId, job_queue_id as jobQueueId, log_detail as logsDetail, date_created as dateCreated, status as status, external_id as externalId " +
+    /**
+     * dateCreated is Chicago wall-clock text, exactly as java.sql.Timestamp#toString printed it on the Chicago JVM
+     * ("2026-01-15 23:30:05.123") -- the console's audit trail has always shown that. Rendered here, in SQL, since
+     * the column became an instant (V100): a Timestamp's toString now prints the JVM's zone.
+     */
+    @Query(value = "select job_audit_log_id as jobAuditLogId, job_queue_id as jobQueueId, log_detail as logsDetail, " +
+        "to_char(date_created AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD HH24:MI:SS') || '.' || coalesce(nullif(rtrim(to_char(date_created AT TIME ZONE 'America/Chicago', 'US'), '0'), ''), '0') as dateCreated, " +
+        "status as status, external_id as externalId " +
         "from job_audit_logs where job_queue_id = ? order by date_created asc", nativeQuery = true)
     public List<JobAuditLogProjection> findAllByJobQueueIdV1(Long jobQueueId);
 

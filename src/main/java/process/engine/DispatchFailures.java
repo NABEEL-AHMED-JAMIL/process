@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.springframework.transaction.support.TransactionOperations;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
@@ -65,7 +66,7 @@ public class DispatchFailures {
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
         this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), statusMessage);
-        this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), LocalDateTime.now());
+        this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), BusinessTime.now());
         // The run is named so the Failed notice is sent once for this run and attempt.
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), jobQueue.getJobQueueId(), true);
         Optional<SourceJob> sourceJobForFailMail = this.transactionService.findByJobId(jobQueue.getJobId());

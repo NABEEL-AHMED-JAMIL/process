@@ -2,7 +2,7 @@ package process.model.projection;
 
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import java.time.LocalDateTime;
+import java.sql.Timestamp;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
@@ -19,7 +19,8 @@ public interface SourceJobProjection {
 
     public JobStatus getJobRunningStatus();
 
-    public LocalDateTime getLastJobRun();
+    /** The instant; BusinessTime.wallClockOf gives what the event carries. */
+    public Timestamp getLastJobRun();
 
     public String getNextRunAt();
 

@@ -12,6 +12,7 @@ import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
 import process.model.projection.SourceJobProjection;
 import process.model.service.impl.TransactionServiceImpl;
+import process.util.BusinessTime;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.time.LocalDateTime;
@@ -283,7 +284,7 @@ public class BulkAction {
         // in another table to avoid overflowing.
         long multiplier = 1L << Math.min(attempt - 1, 20);
         long backoffSeconds = Math.min(base * multiplier, MAX_BACKOFF_SECONDS);
-        LocalDateTime dueAt = LocalDateTime.now().plusSeconds(backoffSeconds);
+        LocalDateTime dueAt = BusinessTime.now().plusSeconds(backoffSeconds);
 
         row.setAttempt(nextAttempt);
         row.setNextAttemptAt(dueAt);
@@ -431,13 +432,14 @@ public class BulkAction {
         return this.transactionService.findJobQueueByJobQueueId(jobQueueId).map(JobQueue::getAttempt).orElse(1);
     }
 
-    private String getSourceJobDetail(SourceJobProjection sourceJobProjection) {
+    /** The live job event's JSON. lastJobRun and nextRunAt are Chicago wall-clock, as the consoles have always had them. */
+    public static String getSourceJobDetail(SourceJobProjection sourceJobProjection) {
         HashMap<String, Object> jsonObject = new HashMap<>();
         jsonObject.put("jobId", sourceJobProjection.getJobId());
         jsonObject.put("jobStatus", sourceJobProjection.getJobStatus());
         jsonObject.put("jobRunningStatus", sourceJobProjection.getJobRunningStatus());
         if (!ProcessUtil.isNull(sourceJobProjection.getLastJobRun())) {
-            jsonObject.put("lastJobRun", sourceJobProjection.getLastJobRun().toString());
+            jsonObject.put("lastJobRun", BusinessTime.wallClockOf(sourceJobProjection.getLastJobRun()).toString());
         }
         if (!ProcessUtil.isNull(sourceJobProjection.getNextRunAt())) {
             jsonObject.put("nextRunAt", sourceJobProjection.getNextRunAt().toString());

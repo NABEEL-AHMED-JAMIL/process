@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import com.zaxxer.hikari.HikariDataSource;
 import liquibase.integration.spring.SpringLiquibase;
 import net.javacrumbs.shedlock.core.LockConfiguration;
@@ -108,13 +109,13 @@ class StalledRunSweepPostgresTest {
 
     private void job(long jobId) {
         this.sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority) "
-            + "VALUES (?, ?, 'Auto', ?, 'Active', 1)", jobId, Timestamp.valueOf(NOW.minusDays(1)), "stall-" + jobId);
+            + "VALUES (?, ?, 'Auto', ?, 'Active', 1)", jobId, BusinessTime.timestampOf(NOW.minusDays(1)), "stall-" + jobId);
     }
 
     private void run(long jobQueueId, long jobId, String status, LocalDateTime startTime, LocalDateTime dateCreated) {
         this.sql.update("INSERT INTO job_queue (job_queue_id, job_id, job_status, start_time, date_created, status) "
             + "VALUES (?, ?, ?, ?, ?, 'Active')", jobQueueId, jobId, status,
-            startTime == null ? null : Timestamp.valueOf(startTime), Timestamp.valueOf(dateCreated));
+            startTime == null ? null : BusinessTime.timestampOf(startTime), BusinessTime.timestampOf(dateCreated));
     }
 
     /** The repository's own SQL, with JPA's positional ?1 as JDBC's ?. */
@@ -144,8 +145,8 @@ class StalledRunSweepPostgresTest {
         this.run(112, 9012, "Queue", null, NOW.minusHours(1));             // queued an hour ago
 
         List<Long> swept = this.sql.queryForList(
-            nativeQuery("findStalledRuns", LocalDateTime.class).replace("job_queue.*", "job_queue.job_queue_id"),
-            Long.class, Timestamp.valueOf(CUTOFF));
+            nativeQuery("findStalledRuns", Timestamp.class).replace("job_queue.*", "job_queue.job_queue_id"),
+            Long.class, BusinessTime.timestampOf(CUTOFF));
 
         assertThat(swept).containsExactly(101L, 102L, 103L, 111L);
     }

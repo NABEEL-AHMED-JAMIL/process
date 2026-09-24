@@ -16,10 +16,10 @@ import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardService;
 import process.security.TenantContext;
+import process.util.BusinessTime;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
-import java.time.LocalDateTime;
 import java.util.*;
 import static process.util.ProcessUtil.*;
 
@@ -229,11 +229,11 @@ public class DashboardServiceImpl implements DashboardService {
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueueDto.setDateCreated(Timestamp.valueOf(String.valueOf(obj[index])));
+                    sourceJobQueueDto.setDateCreated((Timestamp) obj[index]);
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueueDto.setEndTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueueDto.setEndTime(BusinessTime.wallClockOf(obj[index]).withNano(0));
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
@@ -261,11 +261,11 @@ public class DashboardServiceImpl implements DashboardService {
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueueDto.setSkipTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueueDto.setSkipTime(BusinessTime.wallClockOf(obj[index]).withNano(0));
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueueDto.setStartTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueueDto.setStartTime(BusinessTime.wallClockOf(obj[index]).withNano(0));
                 }
 
                 sourceJobQueues.add(sourceJobQueueDto);

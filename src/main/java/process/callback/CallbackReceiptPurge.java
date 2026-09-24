@@ -1,5 +1,6 @@
 package process.callback;
 
+import process.util.BusinessTime;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,7 @@ public class CallbackReceiptPurge {
     @SchedulerLock(name = "purgeCallbackReceipts", lockAtLeastFor = "5S", lockAtMostFor = "5M")
     public void purge() {
         try {
-            int purged = this.receipts.purgeReceivedBefore(LocalDateTime.now().minusDays(CallbackReceipts.RETENTION_DAYS));
+            int purged = this.receipts.purgeReceivedBefore(BusinessTime.now().minusDays(CallbackReceipts.RETENTION_DAYS));
             if (purged > 0) {
                 logger.info("Purged {} worker callback receipt(s) older than {} days.", purged, CallbackReceipts.RETENTION_DAYS);
             }

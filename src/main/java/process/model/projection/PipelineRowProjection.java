@@ -1,6 +1,6 @@
 package process.model.projection;
 
-import java.time.LocalDateTime;
+import java.sql.Timestamp;
 
 /**
  * One pipeline as the list screens read it: the row's own columns plus how many fields it
@@ -17,7 +17,8 @@ public interface PipelineRowProjection {
     Long getTenantId();
     Long getSourceTaskTypeId();
     String getStatus();
-    LocalDateTime getDateCreated();
+    /** The instant; PipelineRowDto carries its Chicago wall-clock. */
+    Timestamp getDateCreated();
     Long getCreatedBy();
     Long getUpdatedBy();
     Long getFieldCount();

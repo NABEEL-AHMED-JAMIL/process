@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,7 +42,7 @@ import static org.mockito.Mockito.verify;
  * would have two workers writing the same output folder." And the write clears job_send and end_time,
  * without which the pick-up query never takes the row again.
  *
- * The clock: scheduleRetry reads LocalDateTime.now() itself, so each wait is asserted exactly by
+ * The clock: scheduleRetry reads BusinessTime.now() itself, so each wait is asserted exactly by
  * bracketing -- next_attempt_at minus the expected wait must lie between the instants read either
  * side of the call.
  */
@@ -68,7 +69,7 @@ class RetryArithmeticTest {
         row.setAttempt(attempt);
         row.setJobStatus(JobStatus.Running);
         row.setJobSend(true);
-        row.setEndTime(LocalDateTime.now());
+        row.setEndTime(BusinessTime.now());
         row.setOutputFolder("etl-demo/out/2420");
         return row;
     }
@@ -86,9 +87,9 @@ class RetryArithmeticTest {
     private long waitChosen(int attempt, Integer maxAttempts, Integer base) {
         JobQueue stored = this.storedRun(attempt);
         this.given(maxAttempts, base, stored);
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = BusinessTime.now();
         boolean retried = this.bulkAction.scheduleRetry(QUEUE_ID, JOB_ID, "connection reset");
-        LocalDateTime after = LocalDateTime.now();
+        LocalDateTime after = BusinessTime.now();
         if (!retried) {
             return -1;
         }

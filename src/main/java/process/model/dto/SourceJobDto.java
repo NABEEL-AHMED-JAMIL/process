@@ -1,5 +1,6 @@
 package process.model.dto;
 
+import process.util.BusinessTime;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
@@ -117,7 +118,7 @@ public class SourceJobDto implements AuditNamed {
 
     /** The server's stall verdict (MIG-63): see RunStall. Derived, so it can never disagree with the row. */
     public boolean isStalled() {
-        return RunStall.isStalled(this.jobRunningStatus, this.lastJobRun, LocalDateTime.now());
+        return RunStall.isStalled(this.jobRunningStatus, this.lastJobRun, BusinessTime.now());
     }
 
     public Set<SchedulerDto> getSchedulers() {

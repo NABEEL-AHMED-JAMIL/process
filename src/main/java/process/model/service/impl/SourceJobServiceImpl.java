@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.slf4j.Logger;
+import process.util.BusinessTime;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
@@ -10,7 +11,6 @@ import org.springframework.util.StringUtils;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
 import process.model.enums.Execution;
-import process.model.enums.JobStatus;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.enums.Status;
@@ -31,7 +31,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
-import java.sql.Timestamp;
 import org.barco.notifications.contract.JobLifecycleChanged;
 import process.notifications.Notices;
 import process.notifications.NotificationPort;
@@ -912,7 +911,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         }
 
         List<Object[]> counts = this.jobQueueRepository.countRecentRunsForAssignee(
-            callerId, LocalDateTime.now().minusDays(windowDays));
+            callerId, BusinessTime.timestampOf(BusinessTime.now().minusDays(windowDays)));
         if (!counts.isEmpty() && counts.get(0) != null) {
             activity.setRecentRuns(this.asLong(counts.get(0)[0]));
             activity.setRecentFailures(this.asLong(counts.get(0)[1]));
@@ -949,11 +948,9 @@ public class SourceJobServiceImpl implements SourceJobService {
         return value instanceof Number ? ((Number) value).longValue() : null;
     }
 
+    /** A run's time as the profile shows it: Chicago wall-clock (the cell is an instant since V100). */
     private LocalDateTime asDateTime(Object value) {
-        if (value instanceof LocalDateTime) {
-            return (LocalDateTime) value;
-        }
-        return value instanceof Timestamp ? ((Timestamp) value).toLocalDateTime() : null;
+        return BusinessTime.wallClockOf(value);
     }
 
 }

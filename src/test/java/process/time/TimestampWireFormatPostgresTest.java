@@ -12,8 +12,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.ScratchJpa;
-import process.ScratchPostgres;
+import process.engine.BulkAction;
 import process.model.dto.MessageQSearchDto;
+import process.model.dto.PipelineRowDto;
 import process.model.dto.ResponseDto;
 import process.model.projection.JobAuditLogProjection;
 import process.model.projection.PipelineRowProjection;
@@ -29,6 +30,7 @@ import process.model.service.impl.MessageQServiceImpl;
 import process.model.service.impl.QueryService;
 import process.model.service.impl.SourceJobServiceImpl;
 import process.model.service.impl.SourceTaskServiceImpl;
+import process.schema.ScratchEtlJob;
 import process.security.TenantContext;
 
 import javax.persistence.EntityManager;
@@ -43,7 +45,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * MIG-28 / MIG-96 / MIG-163: what the two consoles are sent for a stored time, pinned before the columns
  * became timestamptz and the JVM stopped being told it lives in Chicago -- and held after.
  *
- * The rows are written as the database held them before V100: naive America/Chicago wall-clock strings.
+ * The rows are written as the database held them before V100 -- naive America/Chicago wall-clock strings -- into a
+ * scratch etl_job built up to V100, which then converts them as it will convert the long-lived one.
  * Every expectation below was recorded from the code as it stood at e39381d, run the way production ran
  * it (a JVM defaulted to America/Chicago). The same expectations must hold on any JVM zone now: the suite
  * runs on UTC, which is what the containers are.
@@ -66,25 +69,22 @@ class TimestampWireFormatPostgresTest {
     private static final long TASK = 31201L;
     private static final long RUN = 310001L;
 
-    private static ScratchPostgres db;
+    private static ScratchEtlJob db;
     private static ScratchJpa jpa;
     private static ObjectMapper json;
     private static QueryService queries;
 
     @BeforeAll
     static void build() throws Exception {
-        db = ScratchPostgres.create("wire_format");
-        jpa = new ScratchJpa(db);
+        db = ScratchEtlJob.buildUpTo("wire_format", TimestamptzMigrationPostgresTest.V100);
         AtomicReference<ObjectMapper> mapper = new AtomicReference<>();
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class))
             .withPropertyValues("spring.jackson.serialization.fail-on-empty-beans=false")
             .run(context -> mapper.set(context.getBean(ObjectMapper.class)));
         json = mapper.get();
         queries = new QueryService();
-        EntityManager shared = jpa.sharedEntityManager();
-        ReflectionTestUtils.setField(queries, "_em", shared);
 
-        JdbcTemplate sql = db.jdbc();
+        JdbcTemplate sql = db.sql();
         sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (?, 'Active', 'WFT', 'Wire Format')", TENANT);
         sql.update("INSERT INTO app_user (app_user_id, full_name, password, status, user_role, username, tenant_id, date_created) "
             + "VALUES (?, 'Wire Owner', 'x', 'Active', 'TENANT_ADMIN', 'owner@wire.test', ?, '2026-01-15 08:00:00')", OWNER, TENANT);
@@ -104,6 +104,10 @@ class TimestampWireFormatPostgresTest {
             + "VALUES (31401, '2026-01-15 23:30:05.123', ?, 'started', 'Active')", RUN);
         sql.update("INSERT INTO pipeline (pipeline_key, pipeline_id, pipeline_name, tenant_id, status, date_created) "
             + "VALUES (31501, 'F-WIRE', 'wire pipeline', ?, 'Active', '2026-01-15 23:30:00')", TENANT);
+        db.finish();
+        jpa = new ScratchJpa(db.dataSource());
+        EntityManager shared = jpa.sharedEntityManager();
+        ReflectionTestUtils.setField(queries, "_em", shared);
     }
 
     @AfterAll
@@ -213,14 +217,18 @@ class TimestampWireFormatPostgresTest {
         assertThat(sent).isEqualTo("{\"jobsAssigned\":1,\"activeJobs\":1,\"recentRuns\":1,\"recentFailures\":0,\"windowDays\":100000,\"runs\":[{\"jobQueueId\":310001,\"jobId\":31001,\"jobName\":\"wire job\",\"jobStatus\":\"Completed\",\"startTime\":\"2026-01-15T23:30:00\",\"endTime\":\"2026-01-15T23:45:10.5\"}],\"outcomes\":[{\"name\":\"Completed\",\"value\":1}]}");
     }
 
-    /** The live job event pushed over the socket: lastJobRun and nextRunAt as strings. */
+    /**
+     * The live job event pushed over the socket: lastJobRun and nextRunAt as strings. Recorded at e39381d from the
+     * projection, whose LocalDateTime lastJobRun BulkAction printed with toString; asserted now on the event itself.
+     */
     @Test
-    void theRunningJobEventCarriesWallClockStrings() {
+    void theRunningJobEventCarriesWallClockStrings() throws Exception {
         List<SourceJobProjection> events = jpa.repository(SourceJobRepository.class).fetchRunningJobEvent(Collections.singletonList(JOB));
         assertThat(events).hasSize(1);
-        System.out.println("WIRE runningEvent lastJobRun=" + events.get(0).getLastJobRun() + " nextRunAt=" + events.get(0).getNextRunAt());
-        assertThat(events.get(0).getLastJobRun().toString()).isEqualTo("2026-01-15T23:30");
-        assertThat(events.get(0).getNextRunAt()).isEqualTo("2026-01-16 09:00:00.0");
+        String event = BulkAction.getSourceJobDetail(events.get(0));
+        System.out.println("WIRE runningEvent " + event);
+        assertThat(json.readTree(event).get("lastJobRun").asText()).isEqualTo("2026-01-15T23:30");
+        assertThat(json.readTree(event).get("nextRunAt").asText()).isEqualTo("2026-01-16 09:00:00.0");
     }
 
     /** A run's audit trail, read back from job_audit_logs. */
@@ -238,8 +246,9 @@ class TimestampWireFormatPostgresTest {
         List<PipelineRowProjection> rows = jpa.repository(PipelineRepository.class)
             .pageRows(TENANT, 0, false, "", 0, "", PageRequest.of(0, 10)).getContent();
         assertThat(rows).hasSize(1);
-        System.out.println("WIRE pipelineRow dateCreated=" + rows.get(0).getDateCreated());
-        assertThat(rows.get(0).getDateCreated().toString()).isEqualTo("2026-01-15T23:30");
+        String sent = wire(PipelineRowDto.from(rows.get(0)));
+        System.out.println("WIRE pipelineRow " + sent);
+        assertThat(sent).contains("\"dateCreated\":\"2026-01-15T23:30:00\"");
     }
 
     /** The run report (CSV, mail, submit): the day a run belongs to, rendered in SQL. */

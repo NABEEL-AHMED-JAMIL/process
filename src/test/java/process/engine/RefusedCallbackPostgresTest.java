@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -66,7 +67,7 @@ class RefusedCallbackPostgresTest {
 
     private void job(long jobId, String runningStatus) {
         this.sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, "
-            + "job_running_status) VALUES (?, ?, 'Auto', ?, 'Active', 1, ?)", jobId, Timestamp.valueOf(NOW.minusDays(1)),
+            + "job_running_status) VALUES (?, ?, 'Auto', ?, 'Active', 1, ?)", jobId, BusinessTime.timestampOf(NOW.minusDays(1)),
             "refused-" + jobId, runningStatus);
     }
 
@@ -74,8 +75,8 @@ class RefusedCallbackPostgresTest {
         this.sql.update("INSERT INTO job_queue (job_queue_id, job_id, job_status, start_time, date_created, status, "
             + "callback_token_hash, callback_token_attempt, callback_token_expires_at) "
             + "VALUES (?, ?, ?, ?, ?, 'Active', ?, 1, ?)", jobQueueId, jobId, status,
-            Timestamp.valueOf(NOW.minusMinutes(40)), Timestamp.valueOf(NOW.minusMinutes(41)),
-            "0000000000000000000000000000000000000000000000000000000000000000", Timestamp.valueOf(NOW.minusMinutes(1)));
+            BusinessTime.timestampOf(NOW.minusMinutes(40)), BusinessTime.timestampOf(NOW.minusMinutes(41)),
+            "0000000000000000000000000000000000000000000000000000000000000000", BusinessTime.timestampOf(NOW.minusMinutes(1)));
     }
 
     /** The repository's own SQL, with JPA's positional ?n as JDBC's ?. */
@@ -89,8 +90,8 @@ class RefusedCallbackPostgresTest {
 
     /** Runs the note as the repository declares it: JPA binds ?n by number, JDBC by the order they appear. */
     private int note(long jobQueueId, LocalDateTime at, String reported) throws Exception {
-        String sql = rawQuery("noteRefusedCallback", Long.class, LocalDateTime.class, String.class);
-        Object[] byNumber = {jobQueueId, Timestamp.valueOf(at), reported};
+        String sql = rawQuery("noteRefusedCallback", Long.class, Timestamp.class, String.class);
+        Object[] byNumber = {jobQueueId, BusinessTime.timestampOf(at), reported};
         Matcher positions = Pattern.compile("\\?(\\d)").matcher(sql);
         List<Object> inOrder = new ArrayList<>();
         while (positions.find()) {
@@ -115,7 +116,7 @@ class RefusedCallbackPostgresTest {
 
         // What the sweep's saveJobQueue writes for it.
         this.sql.update("UPDATE job_queue SET job_status = 'Interrupt', end_time = ? WHERE job_queue_id = 191",
-            Timestamp.valueOf(NOW.plusMinutes(15)));
+            BusinessTime.timestampOf(NOW.plusMinutes(15)));
         this.sql.update("UPDATE source_job SET job_running_status = 'Interrupt' WHERE job_id = 9101");
 
         assertThat(this.sql.queryForObject(nativeQuery("getCountForInQueueJobByJobId", Long.class), Integer.class, 9101L))

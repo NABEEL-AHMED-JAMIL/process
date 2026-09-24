@@ -90,7 +90,7 @@ public class SourceJob implements Audited {
     private JobStatus jobRunningStatus;
 
     @Column(name = "last_job_run",
-         columnDefinition = "TIMESTAMP")
+         columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime lastJobRun;
 
     @Enumerated(EnumType.STRING)

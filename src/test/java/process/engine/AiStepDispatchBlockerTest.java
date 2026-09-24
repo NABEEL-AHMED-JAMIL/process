@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import okhttp3.OkHttpClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -20,8 +21,8 @@ import process.notifications.JobMail;
 import process.outbox.DispatchOutbox;
 import process.security.RunCallbackTokens;
 
+import java.sql.Timestamp;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
@@ -162,7 +163,7 @@ class AiStepDispatchBlockerTest {
     void theDispatchPassNeverAsksTheAiService() {
         SourceJob job = job(1L, "F1");
         JobQueue run = this.queued(501L, 1L, job);
-        run.setPreparedAt(LocalDateTime.now());
+        run.setPreparedAt(BusinessTime.now());
         run.setDispatchPayload("<pipeline><summary>prepared</summary></pipeline>");
         when(this.transactionService.findAllJobForTodayWithLimit(anyLong(), any())).thenReturn(Collections.singletonList(run));
         ProducerBulkEngine dispatcher = new ProducerBulkEngine(this.bulkAction, this.transactionService, mock(JobMail.class),
@@ -182,7 +183,7 @@ class AiStepDispatchBlockerTest {
      */
     @Test
     void aRunStillBeingPreparedIsNeitherDispatchedNorPreparedTwice() throws Exception {
-        String pickUp = JobQueueRepository.class.getMethod("findAllJobForTodayWithLimit", Long.class, LocalDateTime.class)
+        String pickUp = JobQueueRepository.class.getMethod("findAllJobForTodayWithLimit", Long.class, Timestamp.class)
             .getAnnotation(Query.class).value();
         assertThat(pickUp).contains("prepared_at is not null");
 

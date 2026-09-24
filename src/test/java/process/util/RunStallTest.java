@@ -1,5 +1,6 @@
 package process.util;
 
+import process.util.BusinessTime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ class RunStallTest {
     void aJobRowCarriesTheVerdict() throws Exception {
         SourceJobDto job = new SourceJobDto();
         job.setJobRunningStatus(JobStatus.Start);
-        job.setLastJobRun(LocalDateTime.now().minusHours(2));
+        job.setLastJobRun(BusinessTime.now().minusHours(2));
         ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
 
         assertThat(json.readTree(json.writeValueAsString(job)).get("stalled").asBoolean()).isTrue();

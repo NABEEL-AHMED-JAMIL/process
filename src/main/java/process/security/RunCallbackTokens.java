@@ -1,5 +1,6 @@
 package process.security;
 
+import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -90,7 +91,7 @@ public class RunCallbackTokens {
             + Base64.getUrlEncoder().withoutPadding().encodeToString(random);
         jobQueue.setCallbackTokenHash(sha256(token));
         jobQueue.setCallbackTokenAttempt(Math.max(1, jobQueue.getAttempt()));
-        jobQueue.setCallbackTokenExpiresAt(LocalDateTime.now().plusHours(this.budgetHours));
+        jobQueue.setCallbackTokenExpiresAt(BusinessTime.now().plusHours(this.budgetHours));
         // In the same write as the hash (MIG-95): the dispatch's id if one is bound, otherwise a new
         // one, and a retry keeps the id its first dispatch was given -- it is the same piece of work.
         if (jobQueue.getCorrelationId() == null) {
@@ -150,7 +151,7 @@ public class RunCallbackTokens {
             if (token.isEmpty() || !constantTimeEquals(run.getCallbackTokenHash(), sha256(token))) {
                 return Optional.of(Refusal.MISMATCH);
             }
-            if (run.getCallbackTokenExpiresAt() != null && LocalDateTime.now().isAfter(run.getCallbackTokenExpiresAt())) {
+            if (run.getCallbackTokenExpiresAt() != null && BusinessTime.now().isAfter(run.getCallbackTokenExpiresAt())) {
                 return Optional.of(Refusal.EXPIRED);
             }
         }
@@ -179,7 +180,7 @@ public class RunCallbackTokens {
             if (run.getCallbackTokenHash() == null) {
                 return;
             }
-            run.setCallbackTokenExpiresAt(LocalDateTime.now().plusHours(REPORT_GRACE_HOURS));
+            run.setCallbackTokenExpiresAt(BusinessTime.now().plusHours(REPORT_GRACE_HOURS));
             this.jobQueueRepository.save(run);
             logger.debug("Retired the callback token for run {}; good for reports until {}.", jobQueueId, run.getCallbackTokenExpiresAt());
         });

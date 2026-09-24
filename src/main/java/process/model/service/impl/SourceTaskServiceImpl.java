@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.apache.poi.ss.usermodel.Row;
+import process.util.BusinessTime;
 import process.util.UserNameResolver;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -563,7 +564,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setDateCreated(Timestamp.valueOf(String.valueOf(obj[index])));
+                        sourceJobDto.setDateCreated((Timestamp) obj[index]);
                     }
                     sourceJobDtoList.add(sourceJobDto);
                 }

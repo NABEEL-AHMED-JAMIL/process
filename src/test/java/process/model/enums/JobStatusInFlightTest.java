@@ -4,11 +4,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.repository.Query;
 import process.model.repository.JobQueueRepository;
 
+import java.sql.Timestamp;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
@@ -64,7 +64,7 @@ class JobStatusInFlightTest {
 
     @Test
     void theStallSweepNamesExactlyTheSet() throws Exception {
-        Method method = JobQueueRepository.class.getMethod("findStalledRuns", LocalDateTime.class);
+        Method method = JobQueueRepository.class.getMethod("findStalledRuns", Timestamp.class);
         assertThat(statusesNamedIn(method)).isEqualTo(expected());
     }
 
@@ -72,7 +72,7 @@ class JobStatusInFlightTest {
     @Test
     void theRefusedCallbackNoteAndItsSweepNameExactlyTheSet() throws Exception {
         assertThat(statusesNamedIn(JobQueueRepository.class.getMethod("noteRefusedCallback",
-            Long.class, LocalDateTime.class, String.class))).isEqualTo(expected());
+            Long.class, Timestamp.class, String.class))).isEqualTo(expected());
         assertThat(statusesNamedIn(JobQueueRepository.class.getMethod("findRunsWithRefusedCallbacks")))
             .isEqualTo(expected());
     }

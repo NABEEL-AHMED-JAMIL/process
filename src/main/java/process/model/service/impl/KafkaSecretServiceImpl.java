@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,8 +28,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -111,7 +110,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
             return new ResponseDto(ERROR, invalid.getMessage());
         }
 
-        KafkaSecretPath path = KafkaSecretPath.newUpload(callerId, file.getOriginalFilename(), LocalDate.now());
+        KafkaSecretPath path = KafkaSecretPath.newUpload(callerId, file.getOriginalFilename(), BusinessTime.today());
         this.storageBrowserService.uploadForWorkflow(STORE_CERTIFICATE, this.secretBucket, path.key(),
             new ByteArrayInputStream(bytes), bytes.length, "application/octet-stream");
 
@@ -251,7 +250,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
             dto.setSubject(this.commonName(first.getSubjectX500Principal().getName()));
             dto.setIssuer(this.commonName(first.getIssuerX500Principal().getName()));
             dto.setExpiresOn(DAY.format(first.getNotAfter().toInstant()
-                .atZone(ZoneId.systemDefault()).toLocalDate()));
+                .atZone(BusinessTime.ZONE).toLocalDate()));
             dto.setExpired(first.getNotAfter().before(new Date()));
             return dto;
         }

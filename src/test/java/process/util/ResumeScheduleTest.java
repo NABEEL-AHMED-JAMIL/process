@@ -1,10 +1,9 @@
 package process.util;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.Test;
 import process.model.pojo.Scheduler;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,17 +23,17 @@ public class ResumeScheduleTest {
         Scheduler scheduler = new Scheduler();
         scheduler.setFrequency("Mint");
         scheduler.setIntervalValue("5");
-        scheduler.setStartDate(LocalDate.now().minusDays(1));
+        scheduler.setStartDate(BusinessTime.today().minusDays(1));
         scheduler.setStartTime(LocalTime.of(0, 0));
         // Frozen where the pause left it.
-        scheduler.setNextRunAt(LocalDateTime.now().minusHours(hoursAgo));
+        scheduler.setNextRunAt(BusinessTime.now().minusHours(hoursAgo));
         return scheduler;
     }
 
     @Test
     void aPausedScheduleIsOverdueUntilItIsMovedOn() {
         Scheduler scheduler = pausedFiveMinuteJob(4);
-        assertTrue(scheduler.getNextRunAt().isBefore(LocalDateTime.now()),
+        assertTrue(scheduler.getNextRunAt().isBefore(BusinessTime.now()),
             "the setup is wrong if the paused slot is not already in the past");
         // This is what the pause leaves behind, and what would be replayed on resume.
         assertTrue(ProcessTimeUtil.computeMissedRuns(scheduler).size() > 40,
@@ -45,7 +44,7 @@ public class ResumeScheduleTest {
     void resumingMovesTheScheduleIntoTheFuture() {
         Scheduler scheduler = pausedFiveMinuteJob(4);
         ProcessTimeUtil.applyInitialSchedule(scheduler);
-        assertTrue(scheduler.getNextRunAt().isAfter(LocalDateTime.now()),
+        assertTrue(scheduler.getNextRunAt().isAfter(BusinessTime.now()),
             "a resumed job should be waiting for its next slot, not already late");
     }
 
@@ -60,7 +59,7 @@ public class ResumeScheduleTest {
     @Test
     void anEndedScheduleStaysEndedWhenResumed() {
         Scheduler scheduler = pausedFiveMinuteJob(4);
-        scheduler.setEndDate(LocalDate.now().minusDays(1));
+        scheduler.setEndDate(BusinessTime.today().minusDays(1));
         ProcessTimeUtil.applyInitialSchedule(scheduler);
         assertTrue(scheduler.isExpired(),
             "resuming must not revive a schedule whose end date has passed");

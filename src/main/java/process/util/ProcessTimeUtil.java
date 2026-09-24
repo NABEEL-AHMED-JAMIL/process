@@ -154,11 +154,11 @@ public class ProcessTimeUtil {
         if (step == null) {
             return Collections.emptyList();
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = BusinessTime.now();
         // A ring of the last MAX_MISSED_RUNS_REPLAYED slots, so a long gap costs the walk but
         // never the memory: the alternative built the whole list and then threw most of it away.
         Deque<LocalDateTime> recent = new ArrayDeque<>();
-        LocalDateTime candidate = step.apply(scheduler.getNextRunAt());
+        LocalDateTime candidate = step.apply(stepBase(scheduler));
         int guard = 0;
         while (!candidate.isAfter(now) && guard++ < 100000) {
             if (recent.size() == MAX_MISSED_RUNS_REPLAYED) {
@@ -179,7 +179,7 @@ public class ProcessTimeUtil {
         if (step == null) {
             return seed;
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = BusinessTime.now();
         LocalDateTime candidate = seed;
         int guard = 0;
         // The start date says when a schedule begins, not which days it runs on. A seed already in
@@ -199,6 +199,32 @@ public class ProcessTimeUtil {
             candidate = step.apply(candidate);
         }
         return candidate;
+    }
+
+    /**
+     * The slot a schedule steps on from: next_run_at, except in one case.
+     *
+     * next_run_at is an instant since V100 (MIG-163), read back as Chicago wall-clock. A slot that fell in the
+     * spring-forward gap -- a Daily job at 02:30 on 8 March, a time that does not exist -- is stored as the moment
+     * it can run, 03:30, and reads back as 03:30. Stepping a day on from that moved the schedule to 03:30 for good,
+     * which the naive column (holding "02:30") never did. So a daily, weekly or monthly schedule whose slot is its
+     * own start time pushed on by a gap steps from the start time instead. Minute and hour schedules step on
+     * elapsed wall-clock and are left as they are.
+     */
+    private static LocalDateTime stepBase(Scheduler scheduler) {
+        LocalDateTime slot = scheduler.getNextRunAt();
+        String frequency = scheduler.getFrequency();
+        boolean daysOrLonger = Frequency.Daily.name().equals(frequency) || Frequency.Weekly.name().equals(frequency)
+            || Frequency.Monthly.name().equals(frequency);
+        if (slot == null || scheduler.getStartTime() == null || !daysOrLonger) {
+            return slot;
+        }
+        LocalDateTime intended = slot.toLocalDate().atTime(scheduler.getStartTime());
+        if (!intended.equals(slot) && BusinessTime.ZONE.getRules().getValidOffsets(intended).isEmpty()
+            && BusinessTime.instantOf(intended).equals(BusinessTime.instantOf(slot))) {
+            return intended;
+        }
+        return slot;
     }
 
     /** Whether this schedule names particular days, rather than just an interval. */
@@ -258,8 +284,8 @@ public class ProcessTimeUtil {
             return null;
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime next = step.apply(scheduler.getNextRunAt());
+        LocalDateTime now = BusinessTime.now();
+        LocalDateTime next = step.apply(stepBase(scheduler));
         int guard = 0;
         while (!next.isAfter(now) && guard++ < 100000) {
             next = step.apply(next);

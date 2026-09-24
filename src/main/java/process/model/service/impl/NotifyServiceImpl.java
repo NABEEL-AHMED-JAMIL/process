@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.BusinessTime;
 import org.barco.platform.meter.Meter;
 import org.barco.platform.meter.MeterReporter;
 import org.barco.platform.meter.UsageEvent;
@@ -113,7 +114,7 @@ public class NotifyServiceImpl implements NotifyService {
             return;
         }
         String reported = reportedStatus == null ? "log" : reportedStatus.name();
-        int noted = this.transactionService.noteRefusedCallback(jobQueueId, LocalDateTime.now(), reported);
+        int noted = this.transactionService.noteRefusedCallback(jobQueueId, BusinessTime.now(), reported);
         if (noted > 0) {
             logger.warn("Run {}: its worker's report ({}) was refused for an expired callback token; the run "
                 + "will be closed as interrupted by the next stall sweep.", jobQueueId, reported);
@@ -151,7 +152,7 @@ public class NotifyServiceImpl implements NotifyService {
         if (key == null || jobQueueId == null) {
             return Optional.empty();
         }
-        Optional<CallbackReceipts.Receipt> prior = this.receipts.claim(jobQueueId, key, request, LocalDateTime.now());
+        Optional<CallbackReceipts.Receipt> prior = this.receipts.claim(jobQueueId, key, request, BusinessTime.now());
         if (!prior.isPresent()) {
             return Optional.empty();
         }

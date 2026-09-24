@@ -10,6 +10,8 @@ import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 
 import javax.persistence.*;
+import process.util.BusinessTime;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,7 +88,7 @@ public class Pipeline implements Audited {
     private Status status = Status.Active;
 
     @Column(name = "date_created", nullable = false)
-    private LocalDateTime dateCreated = LocalDateTime.now();
+    private LocalDateTime dateCreated = BusinessTime.now();
 
     @Column(name = "created_by")
     private Long createdBy;
