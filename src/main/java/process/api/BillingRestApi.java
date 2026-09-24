@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 import process.billing.BillingService;
 import process.billing.BillingNumber;
+import process.billing.BillingNumbers;
 import process.billing.InvoiceQr;
 import process.billing.MeterClient;
 import process.model.dto.ObjectContentDto;
@@ -80,6 +81,8 @@ public class BillingRestApi {
      * in one plain sentence, so an internal message never reaches a client.
      */
     private ResponseEntity<?> refused(String what, Exception ex) {
+        // Two documents met on one number (MIG-9): nothing was saved, and trying again takes the next.
+        if (BillingNumbers.isNumberCollision(ex)) return this.refused(BillingNumbers.COLLISION);
         if (ex instanceof IllegalArgumentException || ex instanceof IllegalStateException) return this.refused(ex.getMessage());
         if (ex instanceof DateTimeParseException) return this.refused("Not a valid date or period: " + ((DateTimeParseException) ex).getParsedString());
         this.logger.warn("billing {} failed", what, ex);

@@ -66,6 +66,13 @@ class BillingServiceTest {
     @Mock private TenantRepository tenants;
     @Mock private TrustedStorageOperations storage;
     @Mock private UserNameResolver names;
+    /** billing_number_counter, as a map: one running number per base (JdbcBillingNumbersPostgresTest has the real one). */
+    private final Map<String, Integer> counters = new HashMap<>();
+    private final Map<String, BillingNumbers.Series> seriesOf = new HashMap<>();
+    private final BillingNumbers numbers = (series, base) -> {
+        this.seriesOf.put(base, series);
+        return this.counters.merge(base, 1, Integer::sum);
+    };
 
     /** In-memory repositories: the rules under test are arithmetic and state, not SQL. */
     private final Map<Long, Invoice> invoiceRows = new LinkedHashMap<>();
@@ -90,7 +97,6 @@ class BillingServiceTest {
         lenient().when(invoices.save(any())).thenAnswer(inv -> { Invoice i = inv.getArgument(0); if (i.getInvoiceId() == null) i.setInvoiceId(this.ids.incrementAndGet()); this.invoiceRows.put(i.getInvoiceId(), i); return i; });
         lenient().when(invoices.findById(anyLong())).thenAnswer(inv -> Optional.ofNullable(this.invoiceRows.get(inv.<Long>getArgument(0))));
         lenient().when(invoices.findByNumber(anyString())).thenAnswer(inv -> this.invoiceRows.values().stream().filter(i -> i.getNumber().equals(inv.getArgument(0))).findFirst());
-        lenient().when(invoices.countByNumberPrefix(anyString())).thenAnswer(inv -> this.invoiceRows.values().stream().filter(i -> i.getNumber().startsWith(inv.getArgument(0))).count());
         lenient().when(invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatus(anyLong(), any(), anyString(), anyString())).thenAnswer(inv ->
             this.invoiceRows.values().stream().filter(i -> i.getTenantId().equals(inv.getArgument(0)) && i.getPeriodStart().equals(inv.getArgument(1)) && i.getKind().equals(inv.getArgument(2)) && i.getStatus().equals(inv.getArgument(3))).findFirst());
         lenient().when(invoices.findFirstByTenantIdAndPeriodStartAndKindAndStatusNotIn(anyLong(), any(), anyString(), any())).thenAnswer(inv -> {
@@ -112,8 +118,6 @@ class BillingServiceTest {
         lenient().when(payments.findById(anyLong())).thenAnswer(inv -> Optional.ofNullable(this.paymentRows.get(inv.<Long>getArgument(0))));
         lenient().when(payments.findByInvoiceIdOrderByDateCreatedAsc(anyLong())).thenAnswer(inv -> { List<Payment> out = new ArrayList<>(); for (Payment p : this.paymentRows.values()) if (p.getInvoiceId().equals(inv.getArgument(0))) out.add(p); return out; });
         lenient().when(payments.findAll()).thenAnswer(inv -> new ArrayList<>(this.paymentRows.values()));
-        lenient().when(payments.countByReceiptNumberStartingWith(anyString())).thenAnswer(inv ->
-            this.paymentRows.values().stream().filter(p -> p.getReceiptNumber() != null && p.getReceiptNumber().startsWith(inv.getArgument(0))).count());
         lenient().when(payments.existsByReceiptNumber(anyString())).thenAnswer(inv ->
             this.paymentRows.values().stream().anyMatch(p -> inv.getArgument(0).equals(p.getReceiptNumber())));
         lenient().when(payments.findByStatusOrderByDateCreatedAsc(anyString())).thenAnswer(inv -> { List<Payment> out = new ArrayList<>(); for (Payment p : this.paymentRows.values()) if (p.getStatus().equals(inv.getArgument(0))) out.add(p); return out; });
@@ -134,7 +138,7 @@ class BillingServiceTest {
             map("meter", "storage.bytes.deleted", "label", "Bytes deleted (data churn)", "unit", "byte", "per", 1073741824, "unitPrice", "0.01", "quantity", "41016604262", "amount", "0.382"),
             map("meter", "storage.bytes.read", "label", "Bytes read", "unit", "byte", "per", 1073741824, "unitPrice", "0", "quantity", "0", "amount", "0"))));
 
-        this.service = new BillingService(this.meter, accounts, invoices, lines, payments, documents, this.tenants, this.storage, this.names, "etl-config");
+        this.service = new BillingService(this.meter, accounts, invoices, lines, payments, documents, this.tenants, this.storage, this.names, this.numbers, "etl-config");
     }
 
     @AfterEach
@@ -563,4 +567,56 @@ class BillingServiceTest {
         assertThat(this.service.linesOf(draft.getInvoiceId()).get(0).getAmount()).isEqualByComparingTo("0");
     }
 
+
+    // ---- numbers from a counter (MIG-9) -------------------------------------------------------
+
+    /** A number someone wrote by hand past the counter is stepped over, not collided with. */
+    @Test
+    void aNumberAlreadyTakenIsSkippedNotCollidedWith() {
+        Invoice handWritten = new Invoice();
+        handWritten.setInvoiceId(9_999L); handWritten.setTenantId(TENANT + 1); handWritten.setNumber("INV-2026-09-0001");
+        handWritten.setKind(InvoiceKind.INVOICE.value()); handWritten.setStatus(InvoiceStatus.VOID.value());
+        this.invoiceRows.put(handWritten.getInvoiceId(), handWritten);
+
+        Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
+
+        assertThat(draft.getNumber()).isEqualTo("INV-2026-09-0002");
+    }
+
+    /** Each counter is seeded from its own table the first time: receipts from payment.receipt_number. */
+    @Test
+    void receiptsCountFromReceiptsAndInvoicesFromInvoices() throws Exception {
+        Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
+        Payment p = this.service.submitPayment(issued.getInvoiceId(), new BigDecimal("10"), "bank", "TRF-9", null, null);
+        String receipt = this.service.verifyPayment(p.getPaymentId(), true, null).getReceiptNumber();
+
+        assertThat(this.seriesOf.get(receipt.substring(0, receipt.lastIndexOf('-')))).isEqualTo(BillingNumbers.Series.RECEIPT);
+        assertThat(this.seriesOf.get("INV-2026-09")).isEqualTo(BillingNumbers.Series.INVOICE);
+    }
+
+    @Test
+    void invoicesAndCreditNotesOfAMonthCountSeparately() throws Exception {
+        Invoice issued = this.service.issue(this.service.draft(TENANT, YearMonth.of(2026, 9)).getInvoiceId());
+        Invoice note = this.service.creditNote(issued.getInvoiceId(), new BigDecimal("1.00"), "goodwill");
+
+        assertThat(issued.getNumber()).isEqualTo("INV-2026-09-0001");
+        assertThat(note.getNumber()).isEqualTo("CN-2026-09-0001");
+    }
+
+    /**
+     * A statement shows the balance on the day it is prepared, so a second one for the same range is
+     * a different document -- and was, under the same number, which V58's unique index now refuses.
+     */
+    @Test
+    void twoStatementsOfOneRangeAreTwoNumbers() throws Exception {
+        LocalDate from = LocalDate.of(2026, 1, 1), to = LocalDate.of(2026, 12, 31);
+
+        BillingDocument first = this.service.statement(TENANT, from, to);
+        BillingDocument second = this.service.statement(TENANT, from, to);
+
+        assertThat(first.getNumber()).isEqualTo("STM-" + TENANT + "-2026-01-01-2026-12-31-1");
+        assertThat(second.getNumber()).isEqualTo("STM-" + TENANT + "-2026-01-01-2026-12-31-2");
+        assertThat(BillingNumber.isValid(second.getNumber())).isTrue();
+        assertThat(BillingNumber.isValid("STM-" + TENANT + "-2026-01-01-2026-12-31")).as("one prepared before numbering").isTrue();
+    }
 }

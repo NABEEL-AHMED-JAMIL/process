@@ -81,13 +81,14 @@ public class BillingService {
     private final TenantRepository tenants;
     private final TrustedStorageOperations storage;
     private final UserNameResolver names;
+    private final BillingNumbers numbers;
     private final String bucket;
 
     public BillingService(MeterClient meter, BillingAccountRepository accounts, InvoiceRepository invoices, InvoiceLineRepository lines,
         PaymentRepository payments, BillingDocumentRepository documents, TenantRepository tenants, TrustedStorageOperations storage,
-        UserNameResolver names, @Value(StoragePropertyDefaults.CONFIG_BUCKET) String bucket) {
+        UserNameResolver names, BillingNumbers numbers, @Value(StoragePropertyDefaults.CONFIG_BUCKET) String bucket) {
         this.meter = meter; this.accounts = accounts; this.invoices = invoices; this.lines = lines; this.payments = payments;
-        this.documents = documents; this.tenants = tenants; this.storage = storage; this.names = names; this.bucket = bucket;
+        this.documents = documents; this.tenants = tenants; this.storage = storage; this.names = names; this.numbers = numbers; this.bucket = bucket;
     }
 
     // ---- accounts --------------------------------------------------------------------------
@@ -508,7 +509,10 @@ public class BillingService {
         BillingAccount account = this.accountFor(tenantId);
         List<Invoice> all = this.invoices.findByTenantIdOrderByPeriodStartDescInvoiceIdDesc(tenantId);
         BillingPdf.Doc doc = new BillingPdf.Doc();
-        doc.title = "Statement"; doc.number = "STM-" + tenantId + "-" + from + "-" + to; doc.currency = account.getCurrency();
+        // Each statement prepared for a range is its own document with its own number (MIG-9): the balance
+        // it shows is the balance on the day it was prepared, so a second one is not the first again.
+        String range = BillingNumber.statementBase(tenantId, from, to);
+        doc.title = "Statement"; doc.number = range + "-" + this.numbers.next(BillingNumbers.Series.STATEMENT, range); doc.currency = account.getCurrency();
         doc.billedTo = this.billedTo(account); doc.taxId = account.getTaxId();
         doc.facts = new ArrayList<>(); doc.facts.add(new String[] {"Period", DAY.format(from) + " - " + DAY.format(to)}); doc.facts.add(new String[] {"Prepared", DAY.format(LocalDate.now())});
         doc.lines = new ArrayList<>();
@@ -744,20 +748,20 @@ public class BillingService {
             InvoiceKind.INVOICE.value(), Arrays.asList(InvoiceStatus.DRAFT.value(), InvoiceStatus.VOID.value()));
     }
 
+    /**
+     * The next number of a kind for a period, from its counter (MIG-9): taken under the counter row's
+     * lock in this transaction, so two issuers -- here or on another instance -- never get the same one.
+     * It was COUNT(*) plus one and a probe, which two concurrent closes both answered alike. The probe
+     * stays as a guard against a number someone wrote by hand past the counter: the counter moves on.
+     */
     private String nextNumber(String prefix, YearMonth period) {
         String base = BillingNumber.base(prefix, period);
-        if (BillingDocumentKind.RECEIPT.numberPrefix().equals(prefix)) {
-            // Receipts only, and this month's only. This was every payment row counted plus one --
-            // submitted and rejected slips included -- so two slips submitted before either was
-            // verified both came out as the same number, with no concurrency involved at all.
-            long n = this.payments.countByReceiptNumberStartingWith(base + "-") + 1;
-            String candidate;
-            do { candidate = BillingNumber.format(base, (int) n++); } while (this.payments.existsByReceiptNumber(candidate));
-            return candidate;
-        }
-        long n = this.invoices.countByNumberPrefix(base + "-") + 1;
+        BillingNumbers.Series series = BillingDocumentKind.RECEIPT.numberPrefix().equals(prefix) ? BillingNumbers.Series.RECEIPT
+            : BillingNumbers.Series.INVOICE;
         String candidate;
-        do { candidate = BillingNumber.format(base, (int) n++); } while (this.invoices.findByNumber(candidate).isPresent());
+        do {
+            candidate = BillingNumber.format(base, this.numbers.next(series, base));
+        } while (series == BillingNumbers.Series.RECEIPT ? this.payments.existsByReceiptNumber(candidate) : this.invoices.findByNumber(candidate).isPresent());
         return candidate;
     }
 
