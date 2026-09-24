@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,11 +13,13 @@ import process.model.dto.ObjectMetadataDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.model.service.EmbeddingService;
+import process.filechat.RedisFileIndexLocks;
 import process.media.MediaPort;
 import process.model.service.StorageBrowserService;
 import process.util.OpenSearchRagClient;
 import process.util.ProcessUtil;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -42,7 +45,8 @@ import static org.mockito.Mockito.when;
  * mocked {@code searchRelevantChunks} carries real shared, mutable state (an {@link AtomicBoolean}
  * flipped by the mocked {@code indexChunks}) and a deliberate delay on its first read, so both
  * threads are forced to observe "not indexed" before either can finish the work -- the exact
- * window {@code resolveContext}'s per-file lock exists to close.
+ * window {@code resolveContext}'s per-file lock exists to close. Since MIG-111 that lock is in
+ * Redis (see FileChatIndexAcrossInstancesTest for the two-replica case).
  *
  * @author Nabeel Ahmed
  */
@@ -62,12 +66,15 @@ public class FileChatConcurrentIndexingTest {
     // Only emailExport reaches it; these cases never do. Present so the constructor resolves.
 
     private FileChatServiceImpl service;
+    /** The real lock, on the local Redis: one instance, two threads -- the double-submit case. */
+    private RedisFileIndexLocks locks;
 
     @BeforeEach
     void setUp() throws Exception {
+        this.locks = RedisFileIndexLocks.open();
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, this.locks.instance(Duration.ofSeconds(30), Duration.ofSeconds(10)));
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("Docs", BUCKET, "MINIO")));
@@ -88,6 +95,11 @@ public class FileChatConcurrentIndexingTest {
         lenient().when(this.embeddingService.embed(anyString())).thenReturn(new float[] {1f});
         lenient().when(this.embeddingService.embedAll(any()))
             .thenReturn(Collections.singletonList(new float[] {1f}));
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (this.locks != null) this.locks.close();
     }
 
     @Test
