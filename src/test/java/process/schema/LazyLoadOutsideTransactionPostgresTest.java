@@ -107,7 +107,9 @@ class LazyLoadOutsideTransactionPostgresTest {
         LookupDataDto homePages = cache.getParentLookupById("PIPELINE_HOME_PAGES");
         assertThat(homePages).as("the rebuild failed and left the cache empty").isNotNull();
         assertThat(homePages.getChildren()).extracting(LookupDataDto::getLookupType).containsExactly("MedAxis Home");
-        assertThat(cache.getParentLookupById("QUEUE_FETCH_LIMIT").getLookupValue()).isEqualTo("1000");
+        assertThat(cache.getParentLookupById("TASK_GROUPS")).as("a family with no children yet").isNotNull();
+        // QUEUE_FETCH_LIMIT left lookup_data for orchestration_setting (V88, MIG-136).
+        assertThat(cache.getParentLookupById("QUEUE_FETCH_LIMIT")).isNull();
     }
 
     /** SettingServiceImpl.fetchSubLookupByParentId: the children of one family, read by query, not by association. */

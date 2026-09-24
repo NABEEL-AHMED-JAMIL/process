@@ -267,8 +267,9 @@ class EtlJobChangelogPostgresTest {
         List<Map<String, Object>> seeded = sql.queryForList("SELECT lookup_id, lookup_type, lookup_value, is_encrypted, tenant_id, "
             + "parent_lookup_id FROM lookup_data WHERE lookup_type IN ('QUEUE_FETCH_LIMIT', 'PIPELINE_HOME_PAGES', 'TASK_GROUPS') ORDER BY lookup_id");
 
+        // QUEUE_FETCH_LIMIT is seeded by V70.5 and then moved out of lookup_data by V88 (MIG-136): one dial.
         assertThat(seeded).extracting(row -> row.get("lookup_type"))
-            .containsExactly("QUEUE_FETCH_LIMIT", "PIPELINE_HOME_PAGES", "TASK_GROUPS");
+            .containsExactly("PIPELINE_HOME_PAGES", "TASK_GROUPS");
         assertThat(seeded).allSatisfy(row -> {
             assertThat(((Number) row.get("lookup_id")).longValue()).isBetween(1L, 999L);
             assertThat(row.get("tenant_id")).isNull();
@@ -276,7 +277,8 @@ class EtlJobChangelogPostgresTest {
             assertThat(row.get("is_encrypted")).isEqualTo(false);
         });
         // QUEUE_FETCH_LIMIT stays resolvable, readable as a number, and what the engine already used without it.
-        assertThat(seeded.get(0).get("lookup_value")).isEqualTo("1000");
+        assertThat(sql.queryForObject("SELECT setting_value FROM orchestration_setting WHERE setting_key = 'QUEUE_FETCH_LIMIT'",
+            String.class)).isEqualTo("1000");
         // The next row the console adds takes the sequence's id, 1000 or later -- never a seeded one.
         assertThat(sql.queryForObject("SELECT start_value FROM pg_sequences WHERE sequencename = 'lookup_id_seq'", Long.class))
             .isGreaterThanOrEqualTo(1000L);

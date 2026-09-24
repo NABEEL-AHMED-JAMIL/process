@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Invariant I1 (MIG-156): one dispatch pass must end before the lock that makes it the only one does.
  *
- * ProducerBulkEngine.DISPATCH_BUDGET_MS stops startJobInCurrentTimeSlot's loop; the @SchedulerLock on
+ * DispatchTiming.DISPATCH_BUDGET_MS (ProducerBulkEngine's until MIG-136) stops startJobInCurrentTimeSlot's loop; the @SchedulerLock on
  * ProcessCron.startJobInCurrentTimeSlot is what keeps a second instance from running the same pass.
  * Verbatim from the constant: "The @SchedulerLock around it is ten minutes, and the work has to finish
  * inside that or a second instance can claim the same rows." If the budget ever reaches the lock, two
@@ -35,10 +35,9 @@ class DispatchBudgetInsideLockTest {
         return converter.convert(text);
     }
 
-    private static Duration dispatchBudget() throws Exception {
-        Field budget = ProducerBulkEngine.class.getDeclaredField("DISPATCH_BUDGET_MS");
-        budget.setAccessible(true);
-        return Duration.ofMillis(budget.getLong(null));
+    /** Read from DispatchTiming, where the four coupled dispatch values are written down together (MIG-136). */
+    private static Duration dispatchBudget() {
+        return Duration.ofMillis(DispatchTiming.DISPATCH_BUDGET_MS);
     }
 
     @Test

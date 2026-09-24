@@ -1,10 +1,16 @@
 package process.api;
 
+import org.barco.platform.correlation.CorrelationId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import process.callback.CallbackKeys;
+import process.callback.ReplayedResponse;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
@@ -16,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 
@@ -52,14 +59,86 @@ public class NotifyResetApi {
      * same words: which check failed is logged, never returned.
      */
     ResponseEntity<?> rejectIfUntrusted(Long jobId, Long jobQueueId, String presentedToken) {
-        return this.runCallbackTokens.verify(jobId, jobQueueId, presentedToken)
-            .map(refusal -> {
-                this.logger.warn("Rejected worker callback for job {} run {}: {}.", jobId, jobQueueId, refusal);
+        return this.refused(jobId, jobQueueId, this.runCallbackTokens.verify(jobId, jobQueueId, presentedToken));
+    }
+
+    private ResponseEntity<?> refused(Long jobId, Long jobQueueId, Optional<RunCallbackTokens.Refusal> refusal) {
+        return refusal
+            .map(why -> {
+                this.logger.warn("Rejected worker callback for job {} run {}: {}.", jobId, jobQueueId, why);
                 return new ResponseEntity<>(
                     new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Unauthorized worker callback."), HttpStatus.UNAUTHORIZED);
             })
             .map(r -> (ResponseEntity<?>) r)
             .orElse(null);
+    }
+
+    /**
+     * The token check, and -- for a run that is over -- the one way past it (MIG-18).
+     *
+     * RUN_OVER is only reported for the run's own token (RunCallbackTokens checks the token first), so
+     * a worker re-sending the last callback of a finished run, whose answer it never received, is
+     * answered from the receipt that callback left: exactly what it was told the first time. Anything
+     * without a receipt is the same 401 as ever. Null means go ahead.
+     */
+    private ResponseEntity<?> admit(Long jobId, Long jobQueueId, String presentedToken,
+        JobStatus jobStatus, String request, String idempotencyKey, String echoedCorrelationId) {
+        Optional<RunCallbackTokens.Refusal> refusal = this.runCallbackTokens.verify(jobId, jobQueueId, presentedToken);
+        if (!refusal.isPresent() || refusal.get() == RunCallbackTokens.Refusal.RUN_OVER
+            || refusal.get() == RunCallbackTokens.Refusal.EXPIRED) {
+            this.bindCorrelation(jobId, jobQueueId, request, echoedCorrelationId);
+        }
+        if (refusal.isPresent() && refusal.get() == RunCallbackTokens.Refusal.RUN_OVER
+            && (idempotencyKey == null || CallbackKeys.isAcceptable(idempotencyKey))) {
+            Optional<ResponseDto> answered = this.notifyService.replay(jobQueueId, jobStatus, request, idempotencyKey);
+            if (answered.isPresent()) {
+                this.logger.info("Answered a redelivered {} for finished run {} of job {} from its receipt.",
+                    request, jobQueueId, jobId);
+                return new ResponseEntity<>(answered.get(), HttpStatus.OK);
+            }
+        }
+        if (refusal.isPresent() && refusal.get() == RunCallbackTokens.Refusal.EXPIRED) {
+            // Still refused -- reconciliation is separate from acceptance (MIG-63). But EXPIRED is only
+            // said to the run's own token, so this is its worker, alive and unable to be heard: noted on
+            // the run for the stall sweep to close, instead of the run blocking its job for hours.
+            try {
+                this.notifyService.noteRefusedCallback(jobQueueId, jobStatus);
+            } catch (RuntimeException failed) {
+                this.logger.warn("Could not note the refused callback on run {}: {}", jobQueueId, failed.getMessage());
+            }
+        }
+        ResponseEntity<?> rejected = this.refused(jobId, jobQueueId, refusal);
+        if (rejected != null) {
+            return rejected;
+        }
+        if (idempotencyKey != null && !CallbackKeys.isAcceptable(idempotencyKey)) {
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE,
+                CallbackKeys.HEADER + " must be 8 to 128 letters, digits, '.', '_', ':' or '-'."), HttpStatus.BAD_REQUEST);
+        }
+        return null;
+    }
+
+    /**
+     * Logs this callback under its dispatch's correlation id (MIG-95). A worker that echoes
+     * X-Correlation-Id has it bound already, by CorrelationIdFilter; one that does not -- every worker
+     * dispatched before the id existed -- would otherwise log under a fresh id with no thread back to
+     * the dispatch, so the run's own id is resolved from job_queue.correlation_id and bound instead,
+     * and returned on the answer. Only for a token that has been found to be the run's own: the id
+     * is not an input to anything, and a caller who merely knows a run id is not told it.
+     */
+    private void bindCorrelation(Long jobId, Long jobQueueId, String request, String echoedCorrelationId) {
+        Optional<RunCallbackTokens.RunCorrelation> run = this.runCallbackTokens.correlationOf(jobQueueId);
+        if (!CorrelationId.isAcceptable(echoedCorrelationId)) {
+            run.map(found -> found.correlationId).filter(CorrelationId::isAcceptable).ifPresent(resolved -> {
+                CorrelationId.set(resolved);
+                RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+                if (attributes instanceof ServletRequestAttributes && ((ServletRequestAttributes) attributes).getResponse() != null) {
+                    ((ServletRequestAttributes) attributes).getResponse().setHeader(CorrelationId.HEADER, resolved);
+                }
+            });
+        }
+        this.logger.info("Worker callback {} for job {} run {} of tenant {}.", request, jobId, jobQueueId,
+            run.map(found -> found.tenantId).orElse(null));
     }
 
     @RequestMapping(value = "/changeState/jobId/{jobId}/jobQueueId/{jobQueueId}/jobStatus/{jobStatus}", method = RequestMethod.POST)
@@ -68,9 +147,12 @@ public class NotifyResetApi {
         @PathVariable("jobQueueId") Long jobQueueId,
         @PathVariable("jobStatus") JobStatus jobStatus,
         @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
+        @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
+        @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
         @RequestBody SourceJobQueueDto jobQueue) {
         try {
-            ResponseEntity<?> rejected = this.rejectIfUntrusted(jobId, jobQueueId, workerToken);
+            ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, jobStatus,
+                CallbackKeys.changeState(jobStatus), idempotencyKey, correlationId);
             if (rejected != null) {
                 return rejected;
             }
@@ -87,12 +169,13 @@ public class NotifyResetApi {
             if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
                 jobQueue.setEndTime(LocalDateTime.now());
             }
-            ResponseDto outcome = this.notifyService.changeState(jobQueue);
+            ResponseDto outcome = this.notifyService.changeState(jobQueue, idempotencyKey);
             // The run is over: its token is spent. A retry, should one be scheduled, is a new
             // dispatch and mints its own. Only on an accepted change -- a refused transition
-            // leaves the run, and its token, as they were.
+            // leaves the run, and its token, as they were -- and only the first time: a
+            // redelivery answered from its receipt changed nothing, so it spends nothing either.
             if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)
-                && !ProcessUtil.ERROR.equals(outcome.getStatus())) {
+                && !ProcessUtil.ERROR.equals(outcome.getStatus()) && !(outcome instanceof ReplayedResponse)) {
                 this.runCallbackTokens.retire(jobQueueId);
             }
             return new ResponseEntity<>(outcome, HttpStatus.OK);
@@ -114,9 +197,12 @@ public class NotifyResetApi {
             @PathVariable("jobId") Long jobId,
             @PathVariable("jobQueueId") Long jobQueueId,
             @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
+            @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
+            @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
             @RequestBody Map<String, List<String>> body) {
         try {
-            ResponseEntity<?> rejected = this.rejectIfUntrusted(jobId, jobQueueId, workerToken);
+            ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, null,
+                CallbackKeys.ADD_LOGS_BATCH, idempotencyKey, correlationId);
             if (rejected != null) {
                 return rejected;
             }
@@ -127,7 +213,7 @@ public class NotifyResetApi {
                     HttpStatus.BAD_REQUEST);
             }
             return new ResponseEntity<>(
-                this.notifyService.addLogsBatch(jobId, jobQueueId, messages), HttpStatus.OK);
+                this.notifyService.addLogsBatch(jobId, jobQueueId, messages, idempotencyKey), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addLogsBatch ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -139,9 +225,12 @@ public class NotifyResetApi {
             @PathVariable("jobId") Long jobId,
             @PathVariable("jobQueueId") Long jobQueueId,
             @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
+            @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
+            @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
             @RequestBody SourceJobQueueDto jobQueue) {
         try {
-            ResponseEntity<?> rejected = this.rejectIfUntrusted(jobId, jobQueueId, workerToken);
+            ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, null,
+                CallbackKeys.ADD_LOGS, idempotencyKey, correlationId);
             if (rejected != null) {
                 return rejected;
             }
@@ -151,7 +240,7 @@ public class NotifyResetApi {
             if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
                 return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
             }
-            return new ResponseEntity<>(this.notifyService.addLogs(jobQueue), HttpStatus.OK);
+            return new ResponseEntity<>(this.notifyService.addLogs(jobQueue, idempotencyKey), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while addLogs ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

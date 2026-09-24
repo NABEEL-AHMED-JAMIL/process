@@ -2,6 +2,7 @@ package process.model.repository;
 
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.Scheduler;
 import java.time.LocalDateTime;
@@ -15,23 +16,28 @@ import java.util.Optional;
 public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
 
     /**
-     * The schedulers the dispatch cron should queue right now.
+     * Claims the next slot the enqueuer should queue, for the caller's transaction (MIG-152).
      *
-     * The execution filter is load-bearing. Switching a job from Auto to Manual in the console
-     * sends no `schedulers` block, and updateSourceJob only touches the Scheduler row when one
-     * is present -- so the row survives the switch, unexpired and with its next_run_at intact.
-     * Without this clause the cron kept finding it and queueing a job the operator had just told
-     * it to stop running on its own. Filtering here rather than expiring the row on switch also
-     * fixes every job already left in that state, and keeps the schedule intact so switching
-     * back to Auto resumes it rather than losing it.
+     * One row, the oldest due first, locked FOR UPDATE SKIP LOCKED: any number of replicas run this
+     * loop at once with no coordinator, each taking a slot no other holds, and the claim, the run it
+     * enqueues and the advance of next_run_at commit or roll back together -- a replica that dies part-way
+     * leaves the slot exactly as it found it. It used to be every due scheduler in one unordered,
+     * unlimited list under an exclusive ShedLock.
+     *
+     * dispatch_eligible carries the rest of what used to be a join to source_job -- Active, and
+     * execution = 'Auto'. That clause is load-bearing: switching a job from Auto to Manual leaves its
+     * scheduler row unexpired with next_run_at intact, and without it the cron kept queueing a job the
+     * operator had just told it to stop running on its own (V84 keeps the flag by trigger).
+     *
+     * {@code passed} is the slots this pass has already given up on, so one that fails every time does not
+     * hold the loop; it always holds at least one id, because NOT IN () is not SQL.
      */
-    @Query(value = "select scheduler.* from scheduler\n" +
-        "inner join source_job on scheduler.job_id=source_job.job_id\n" +
-        "where scheduler.next_run_at <= ?1\n" +
-        "and scheduler.expired = false\n" +
-        "and source_job.job_status = 'Active'\n" +
-        "and source_job.execution = 'Auto'", nativeQuery = true)
-    public List<Scheduler> findDueSchedulers(LocalDateTime now);
+    @Query(value = "select scheduler.* from scheduler "
+        + "where scheduler.dispatch_eligible and scheduler.expired = false and scheduler.next_run_at <= :now "
+        + "and scheduler.scheduler_id not in (:passed) "
+        + "order by scheduler.next_run_at asc, scheduler.scheduler_id asc "
+        + "limit 1 for update skip locked", nativeQuery = true)
+    public Optional<Scheduler> claimNextDueScheduler(@Param("now") LocalDateTime now, @Param("passed") List<Long> passed);
 
     public Optional<Scheduler> findSchedulerByJobId(Long jobId);
 

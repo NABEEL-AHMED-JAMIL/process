@@ -120,6 +120,39 @@ public class JobQueue {
     @Column(name = "callback_token_expires_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime callbackTokenExpiresAt;
 
+    /**
+     * A report from this run's own worker that had to be refused because its token had expired, and
+     * what it said (V81, MIG-63). The refusal stands -- nothing here changes the run's status -- but it
+     * is proof the worker is no longer able to report, so the stall sweep closes the run on its next
+     * pass instead of leaving it in flight, blocking its job, until the six-hour rule catches it.
+     */
+    @Column(name = "refused_callback_at", columnDefinition = "TIMESTAMP")
+    private LocalDateTime refusedCallbackAt;
+
+    @Column(name = "refused_callback_status", length = 16)
+    private String refusedCallbackStatus;
+
+    /**
+     * The id the run's dispatch logged under, stamped in the same write as the callback token hash
+     * (V82, MIG-95). A worker that echoes no X-Correlation-Id on its callbacks is logged under this one,
+     * so one search finds the dispatch and every callback it caused. Kept across a retry: the retry is
+     * the same piece of work. Never an input to authentication.
+     */
+    @Column(name = "correlation_id", length = 64)
+    private String correlationId;
+
+    /**
+     * When the pre-dispatch phase finished with this run, and the document it prepared: the task's
+     * payload with every server AI step's answer written in (V86, MIG-134). The dispatcher takes only
+     * prepared runs and sends exactly this. A retry clears both, so the next attempt is prepared afresh
+     * from the task as it then is -- the AI service reuses any answer it already recorded for the run.
+     */
+    @Column(name = "prepared_at", columnDefinition = "TIMESTAMP")
+    private LocalDateTime preparedAt;
+
+    @Column(name = "dispatch_payload", columnDefinition = "TEXT")
+    private String dispatchPayload;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -281,4 +314,14 @@ public class JobQueue {
     public void setCallbackTokenAttempt(Integer callbackTokenAttempt) { this.callbackTokenAttempt = callbackTokenAttempt; }
     public LocalDateTime getCallbackTokenExpiresAt() { return callbackTokenExpiresAt; }
     public void setCallbackTokenExpiresAt(LocalDateTime callbackTokenExpiresAt) { this.callbackTokenExpiresAt = callbackTokenExpiresAt; }
+    public LocalDateTime getRefusedCallbackAt() { return refusedCallbackAt; }
+    public void setRefusedCallbackAt(LocalDateTime refusedCallbackAt) { this.refusedCallbackAt = refusedCallbackAt; }
+    public String getRefusedCallbackStatus() { return refusedCallbackStatus; }
+    public void setRefusedCallbackStatus(String refusedCallbackStatus) { this.refusedCallbackStatus = refusedCallbackStatus; }
+    public String getCorrelationId() { return correlationId; }
+    public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
+    public LocalDateTime getPreparedAt() { return preparedAt; }
+    public void setPreparedAt(LocalDateTime preparedAt) { this.preparedAt = preparedAt; }
+    public String getDispatchPayload() { return dispatchPayload; }
+    public void setDispatchPayload(String dispatchPayload) { this.dispatchPayload = dispatchPayload; }
 }

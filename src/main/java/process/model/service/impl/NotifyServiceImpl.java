@@ -12,6 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import process.notifications.JobMail;
 import process.notifications.NotificationPort;
 import org.barco.notifications.contract.JobLogAppended;
+import process.callback.CallbackKeys;
+import process.callback.CallbackReceipts;
+import process.callback.ReplayedResponse;
 import process.engine.BulkAction;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
@@ -20,6 +23,7 @@ import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.service.NotifyService;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import static process.util.ProcessUtil.ERROR;
@@ -43,15 +47,129 @@ public class NotifyServiceImpl implements NotifyService {
     private final TransactionServiceImpl transactionService;
     private final NotificationPort notifications;
 
+    private final CallbackReceipts receipts;
+
     public NotifyServiceImpl(
         BulkAction bulkAction,
         JobMail jobMail,
         TransactionServiceImpl transactionService,
         NotificationPort notifications) {
+        this(bulkAction, jobMail, transactionService, notifications, CallbackReceipts.NONE);
+    }
+
+    @Autowired
+    public NotifyServiceImpl(
+        BulkAction bulkAction,
+        JobMail jobMail,
+        TransactionServiceImpl transactionService,
+        NotificationPort notifications,
+        CallbackReceipts receipts) {
         this.bulkAction = bulkAction;
         this.jobMail = jobMail;
         this.transactionService = transactionService;
         this.notifications = notifications;
+        this.receipts = receipts;
+    }
+
+    /**
+     * The live worker's state change, applied once per idempotency key (MIG-18).
+     *
+     * The key is claimed before anything is read or written, in this same transaction, so a
+     * redelivery -- sequential or racing -- finds the claim and is handed the first delivery's answer
+     * instead of repeating its writes: one audit line, one status change, one email. A refused
+     * transition is an answer too, and a redelivery of it is refused the same way. Running with no
+     * key from the worker claims nothing: that is the heartbeat, and every one is new.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ResponseDto changeState(SourceJobQueueDto jobQueue, String idempotencyKey) {
+        String key = idempotencyKey != null ? idempotencyKey
+            : this.derivedKey(jobQueue.getJobQueueId(), jobQueue.getJobStatus());
+        String request = CallbackKeys.changeState(jobQueue.getJobStatus());
+        Optional<ResponseDto> replayed = this.claim(jobQueue.getJobQueueId(), key, request, jobQueue);
+        if (replayed.isPresent()) {
+            return replayed.get();
+        }
+        return this.recorded(jobQueue.getJobQueueId(), key, this.changeState(jobQueue));
+    }
+
+    public ResponseDto addLogs(SourceJobQueueDto jobQueue, String idempotencyKey) {
+        Optional<ResponseDto> replayed = this.claim(jobQueue.getJobQueueId(), idempotencyKey, CallbackKeys.ADD_LOGS, jobQueue);
+        if (replayed.isPresent()) {
+            return replayed.get();
+        }
+        return this.recorded(jobQueue.getJobQueueId(), idempotencyKey, this.addLogs(jobQueue));
+    }
+
+    public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, List<String> messages, String idempotencyKey) {
+        Optional<ResponseDto> replayed = this.claim(jobQueueId, idempotencyKey, CallbackKeys.ADD_LOGS_BATCH, messages.size());
+        if (replayed.isPresent()) {
+            return replayed.get();
+        }
+        return this.recorded(jobQueueId, idempotencyKey, this.addLogsBatch(jobId, jobQueueId, messages));
+    }
+
+    public void noteRefusedCallback(Long jobQueueId, JobStatus reportedStatus) {
+        if (jobQueueId == null) {
+            return;
+        }
+        String reported = reportedStatus == null ? "log" : reportedStatus.name();
+        int noted = this.transactionService.noteRefusedCallback(jobQueueId, LocalDateTime.now(), reported);
+        if (noted > 0) {
+            logger.warn("Run {}: its worker's report ({}) was refused for an expired callback token; the run "
+                + "will be closed as interrupted by the next stall sweep.", jobQueueId, reported);
+        }
+    }
+
+    public Optional<ResponseDto> replay(Long jobQueueId, JobStatus jobStatus, String request, String idempotencyKey) {
+        String key = idempotencyKey != null ? idempotencyKey
+            : jobStatus == null ? null : this.derivedKey(jobQueueId, jobStatus);
+        if (key == null || jobQueueId == null) {
+            return Optional.empty();
+        }
+        return this.receipts.find(jobQueueId, key)
+            .filter(receipt -> request.equals(receipt.request))
+            .map(receipt -> (ResponseDto) new ReplayedResponse(receipt, null));
+    }
+
+    /**
+     * A terminal state change the worker sent no key for is keyed on its run and the attempt its
+     * token was minted for -- not the row's attempt, which a retry has already moved on. A run
+     * dispatched before tokens existed has no token attempt, and its own attempt stands in.
+     */
+    private String derivedKey(Long jobQueueId, JobStatus status) {
+        if (jobQueueId == null) {
+            return null;
+        }
+        return this.transactionService.findJobQueueByJobQueueId(jobQueueId)
+            .map(run -> CallbackKeys.derived(status, run.getCallbackTokenAttempt() != null
+                ? run.getCallbackTokenAttempt() : run.getAttempt()))
+            .orElse(null);
+    }
+
+    /** Empty when this delivery is the first with its key (or has none); the first answer otherwise. */
+    private Optional<ResponseDto> claim(Long jobQueueId, String key, String request, Object data) {
+        if (key == null || jobQueueId == null) {
+            return Optional.empty();
+        }
+        Optional<CallbackReceipts.Receipt> prior = this.receipts.claim(jobQueueId, key, request, LocalDateTime.now());
+        if (!prior.isPresent()) {
+            return Optional.empty();
+        }
+        if (!request.equals(prior.get().request)) {
+            logger.warn("Run {}: Idempotency-Key {} was first used for {} and is now sent with {}; refused.",
+                jobQueueId, key, prior.get().request, request);
+            return Optional.of(new ResponseDto(ERROR, String.format(
+                "Idempotency-Key %s was already used for a different callback on this run.", key), data));
+        }
+        logger.info("Run {}: {} with Idempotency-Key {} was already applied; answering it again.", jobQueueId, request, key);
+        return Optional.of(new ReplayedResponse(prior.get(), data));
+    }
+
+    private ResponseDto recorded(Long jobQueueId, String key, ResponseDto outcome) {
+        if (key != null && jobQueueId != null) {
+            this.receipts.record(jobQueueId, key, outcome.getStatus(), outcome.getMessage());
+        }
+        return outcome;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

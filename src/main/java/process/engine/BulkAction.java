@@ -296,6 +296,10 @@ public class BulkAction {
         // The run has not ended. An end time left over from the failed attempt makes its duration
         // read as negative once the retry finally completes.
         row.setEndTime(null);
+        // Prepared afresh (MIG-134): the pre-dispatch phase reads the task as it is at the retry, and
+        // the AI service hands back any answer it already recorded for this run.
+        row.setPreparedAt(null);
+        row.setDispatchPayload(null);
         row.setJobStatusMessage(String.format(
             "Attempt %s of %s failed: %s Retrying at %s.", attempt, maxAttempts, endWithStop(reason), dueAt));
         this.transactionService.saveOrUpdateJobQueue(row);
@@ -359,17 +363,21 @@ public class BulkAction {
         for (LocalDateTime missedAt : missedRuns) {
             this.recordMissedRun(scheduler.getJobId(), missedAt);
         }
+        // One push for the whole catch-up, not one per slot (MIG-151): every slot left the job in the
+        // same state, and a fifty-slot replay read the same job fifty times to say so fifty times.
+        // The live push, but not an outcome announcement: a missed slot leaves the job's running
+        // status holding the PREVIOUS run's outcome, so the one-argument form re-announced it -- one
+        // "Job completed" per missed slot, each dated to a moment nothing ran. The same fix the skip
+        // path has (ProducerBulkEngine.skipManualJobInQueue).
+        if (!missedRuns.isEmpty()) {
+            this.sendJobStatusNotification(scheduler.getJobId(), false);
+        }
     }
 
     private void recordMissedRun(Long jobId, LocalDateTime missedAt) {
         String template = "Job %s missed its scheduled run at " + missedAt + " -- the system was catching up after downtime.";
         JobQueue jobQueue = this.createJobQueue(jobId, missedAt, JobStatus.Missed, template, true);
         this.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(template, jobId));
-        // The live push, but not an outcome announcement: a missed slot leaves the job's running
-        // status holding the PREVIOUS run's outcome, so the one-argument form re-announced it --
-        // one "Job completed" per missed slot, each dated to a moment nothing ran. The same fix
-        // the skip path has (ProducerBulkEngine.skipManualJobInQueue).
-        this.sendJobStatusNotification(jobId, false);
         logger.warn("Job {} missed its scheduled run at {}.", jobId, missedAt);
     }
 

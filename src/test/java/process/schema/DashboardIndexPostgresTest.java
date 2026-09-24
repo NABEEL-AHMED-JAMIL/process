@@ -49,7 +49,9 @@ class DashboardIndexPostgresTest {
         // 400,000 runs, about 1,100 a day for a year, spread over the hours.
         sql.update("INSERT INTO job_queue (job_queue_id, date_created, job_id, job_status, status, start_time, end_time) "
             + "SELECT g, timestamp '2025-09-22' + (g * interval '79 seconds'), 1 + g % 400, "
-            + "(ARRAY['Completed','Failed','Queue','Skip'])[1 + g % 4], 'Active', "
+            // Finished statuses only: since V83 (MIG-113) a job may hold one in-flight run, and 1,000 per job
+            // would break that index; the date filter under test does not care which status a row has.
+            + "(ARRAY['Completed','Failed','Interrupt','Skip'])[1 + g % 4], 'Active', "
             + "timestamp '2025-09-22' + (g * interval '79 seconds'), timestamp '2025-09-22' + (g * interval '79 seconds') + interval '40 seconds' "
             + "FROM generate_series(1, 400000) g");
         sql.execute("ANALYZE job_queue");

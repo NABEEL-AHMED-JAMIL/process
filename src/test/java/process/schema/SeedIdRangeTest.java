@@ -6,6 +6,7 @@ import org.yaml.snakeyaml.Yaml;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
@@ -22,6 +23,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SeedIdRangeTest {
 
+    /**
+     * Changesets whose INSERT moves a value that already exists, into a table with no sequence -- so
+     * there is no id to hide, which is what the rule guards. Each with its reason.
+     */
+    private static final Map<String, String> MOVES_NOT_SEEDS = Collections.singletonMap(
+        "db/changelog/yaml/V88.0-orchestration-setting.yaml",
+        "moves QUEUE_FETCH_LIMIT's value out of lookup_data (MIG-136); orchestration_setting is keyed by name, no sequence");
+
     @Test
     @SuppressWarnings("unchecked")
     void everySeededIdIsBelowEverySequence() throws Exception {
@@ -33,7 +42,7 @@ class SeedIdRangeTest {
             if (file.contains("V50.0-schema-baseline")) {
                 continue;
             }
-            if (text(file).toUpperCase().contains("INSERT INTO")) {
+            if (text(file).toUpperCase().contains("INSERT INTO") && !MOVES_NOT_SEEDS.containsKey(file)) {
                 handWritten.add(file);
             }
             for (Map<String, Object> item : list(load(file))) {

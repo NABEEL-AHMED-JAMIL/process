@@ -64,6 +64,17 @@ public class AiStepService {
         return steps;
     }
 
+    /**
+     * Whether a run of this pipeline has AI steps at all, server or worker -- either kind asks the AI
+     * service something before dispatch. Read from Core's own tables only; the pre-dispatch phase uses
+     * it to keep runs with none off the AI threads (MIG-134).
+     */
+    public boolean hasSteps(Long tenantId, String pipelineId) {
+        if (pipelineId == null || pipelineId.trim().isEmpty()) return false;
+        List<Pipeline> found = this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot(pipelineId.trim(), tenantId, Status.Delete);
+        return !found.isEmpty() && !stepsOf(found.get(0)).isEmpty();
+    }
+
     public Outcome apply(Long tenantId, String pipelineId, Long jobQueueId, String taskPayload) {
         if (pipelineId == null || pipelineId.trim().isEmpty()) return new Outcome(taskPayload, null);
         List<Pipeline> found = this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot(pipelineId.trim(), tenantId, Status.Delete);

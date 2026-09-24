@@ -23,10 +23,48 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     // parameter rather than being read here as now(), because the database's now() is UTC while
     // the application writes America/Chicago -- comparing the column against the database's clock
     // would make every backoff either instantly elapsed or five hours long, depending on sign.
+    //
+    // prepared_at: the dispatcher takes only runs the pre-dispatch phase has finished with (MIG-134),
+    // so no model call and no configuration check is left to happen inside the dispatch lock.
     @Query(value = "select job_queue.* from job_queue where UPPER(job_status) = 'QUEUE' and job_send = false "
+        + "and prepared_at is not null "
         + "and (next_attempt_at is null or next_attempt_at <= ?2) "
         + "order by job_queue_id asc limit ?1 ", nativeQuery = true)
     public List<JobQueue> findAllJobForTodayWithLimit(Long limit, LocalDateTime eligibleAt);
+
+    /**
+     * Runs waiting for the pre-dispatch phase, for the caller's transaction (MIG-134): queued, not sent,
+     * not yet prepared, due, and not leased to a preparer -- locked SKIP LOCKED so two replicas take
+     * different runs. The caller leases what it takes in the same transaction.
+     */
+    @Query(value = "select job_queue_id from job_queue where UPPER(job_status) = 'QUEUE' and job_send = false "
+        + "and prepared_at is null "
+        + "and (next_attempt_at is null or next_attempt_at <= :now) "
+        + "and (prepare_lease_until is null or prepare_lease_until < :now) "
+        + "order by job_queue_id asc limit :limit for update skip locked", nativeQuery = true)
+    List<Long> findRunsToPrepare(@Param("now") LocalDateTime now, @Param("limit") int limit);
+
+    @Transactional
+    @Modifying
+    @Query(value = "update job_queue set prepare_lease_until = :until where job_queue_id in (:ids)", nativeQuery = true)
+    int leaseForPreparation(@Param("ids") List<Long> ids, @Param("until") LocalDateTime until);
+
+    /**
+     * Hands a prepared run to the dispatcher. Only while it is still queued and unsent: a run closed or
+     * dispatched meanwhile is left as it is. The correlation id is stamped here if the run has none yet,
+     * so the preparation logs under the id the dispatch and the callbacks will carry.
+     */
+    @Transactional
+    @Modifying
+    @Query(value = "update job_queue set prepared_at = :at, dispatch_payload = :payload, prepare_lease_until = null, "
+        + "correlation_id = COALESCE(correlation_id, :correlationId) "
+        + "where job_queue_id = :id and UPPER(job_status) = 'QUEUE' and job_send = false", nativeQuery = true)
+    int markPrepared(@Param("id") Long jobQueueId, @Param("payload") String payload, @Param("at") LocalDateTime at,
+        @Param("correlationId") String correlationId);
+
+    /** Core's own dials (V88, MIG-136); null when the setting is missing. */
+    @Query(value = "select setting_value from orchestration_setting where setting_key = ?1", nativeQuery = true)
+    String findOrchestrationSetting(String settingKey);
 
     @Query(value = "select count(*) from job_queue where job_id = ?1 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
     public int getCountForInQueueJobByJobId(Long jobId);
@@ -64,6 +102,23 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "and COALESCE(start_time, date_created) < ?1 "
         + "order by job_queue_id asc", nativeQuery = true)
     public List<JobQueue> findStalledRuns(LocalDateTime startedBefore);
+
+    /**
+     * Notes on a run still in flight that its own worker's report was refused for an expired token
+     * (MIG-63). Guarded on the in-flight statuses so a late report on a finished run marks nothing.
+     */
+    @Transactional
+    @Modifying
+    @Query(value = "update job_queue set refused_callback_at = ?2, refused_callback_status = ?3 "
+        + "where job_queue_id = ?1 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
+    int noteRefusedCallback(Long jobQueueId, LocalDateTime refusedAt, String reportedStatus);
+
+    /** Runs still in flight whose worker is known to be unable to report: the stall sweep closes them now. */
+    @Query(value = "select job_queue.* from job_queue "
+        + "where UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') "
+        + "and refused_callback_at is not null "
+        + "order by job_queue_id asc", nativeQuery = true)
+    public List<JobQueue> findRunsWithRefusedCallbacks();
 
     public List<JobQueue> findAllByJobId(Long jobId);
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
+import process.util.RunStall;
 import process.model.enums.Status;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -112,6 +113,11 @@ public class SourceJobDto implements AuditNamed {
 
     public void setLastJobRun(LocalDateTime lastJobRun) {
         this.lastJobRun = lastJobRun;
+    }
+
+    /** The server's stall verdict (MIG-63): see RunStall. Derived, so it can never disagree with the row. */
+    public boolean isStalled() {
+        return RunStall.isStalled(this.jobRunningStatus, this.lastJobRun, LocalDateTime.now());
     }
 
     public Set<SchedulerDto> getSchedulers() {
