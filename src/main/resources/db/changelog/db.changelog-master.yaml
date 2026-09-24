@@ -56,3 +56,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V65.0-user-page-access-tenant.yaml
   - include:
       file: db/changelog/yaml/V66.0-app-user-token-version.yaml
+  - include:
+      file: db/changelog/yaml/V67.0-retire-billing-page-key.yaml
