@@ -1,8 +1,11 @@
 package process.analytics.canvas;
 
+import org.barco.platform.correlation.CorrelationId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 import process.analytics.AnalyticsException;
 import process.analytics.AnalyticsQueryService;
 import process.analytics.DatasetRef;
@@ -113,6 +116,11 @@ public class DatasetOverviewService {
         String userRole = TenantContext.getUserRole();
         Long appUserId = TenantContext.getAppUserId();
         String username = TenantContext.getUsername();
+        // The request too: Storage is reached as the signed-in user, whose token the client reads
+        // from the request. Without it every chart drawn here failed with "No signed-in caller".
+        // The request outlives the workers -- future.get() below waits for each of them.
+        RequestAttributes request = RequestContextHolder.getRequestAttributes();
+        String correlationId = CorrelationId.current();
         // Named, because "pool-16-thread-2" in the engine's read log says nothing about what read.
         ExecutorService pool = Executors.newFixedThreadPool(Math.min(PARALLEL_CHARTS, charts.size()),
             task -> { Thread t = new Thread(task, "overview-chart-" + THREAD_SEQ.incrementAndGet()); t.setDaemon(true); return t; });
@@ -121,10 +129,14 @@ public class DatasetOverviewService {
             for (Callable<DatasetOverviewDto.Chart> chart : charts) {
                 futures.add(pool.submit(() -> {
                     TenantContext.set(tenantId, userRole, appUserId, username);
+                    RequestContextHolder.setRequestAttributes(request);
+                    if (correlationId != null) CorrelationId.set(correlationId);
                     try {
                         return callQuietly(chart);
                     } finally {
                         TenantContext.clear();
+                        RequestContextHolder.resetRequestAttributes();
+                        CorrelationId.clear();
                     }
                 }));
             }
@@ -236,7 +248,7 @@ public class DatasetOverviewService {
         topN.setLimit(TOP_VALUES_LIMIT); topN.setIncludeOther(true);
         request.setTopN(topN);
         DatasetOverviewDto.Chart chart = chart("topValues", "Rows by " + column.getName(),
-            "Which values of " + column.getName() + " the rows carry most -- about " + column.getApproxDistinct() + " distinct.", column.getName(), request);
+            "Which values of " + column.getName() + " the rows carry most — about " + column.getApproxDistinct() + " distinct.", column.getName(), request);
         return this.run(chart);
     }
 

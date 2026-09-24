@@ -9,6 +9,11 @@ import process.analytics.canvas.dto.DatasetOverviewDto;
 import process.analytics.dto.ColumnDistributionDto;
 import process.analytics.dto.ColumnProfileDto;
 import process.analytics.dto.DatasetProfileDto;
+import org.barco.platform.correlation.CorrelationId;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import process.security.TenantContext;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
@@ -105,6 +110,9 @@ class DatasetOverviewServiceTest {
         assertThat(over.getRequest().getGrains()).containsExactly(AnalysisRequest.Grain.DAY);
         assertThat(over.getRequest().getMeasure().getAggregation()).isEqualTo(AnalysisRequest.Aggregation.COUNT_ROWS);
         assertThat(out.getCharts().get(1).getRequest().getTopN().getLimit()).isEqualTo(DatasetOverviewService.TOP_VALUES_LIMIT);
+        // MIG-212: the question under a chart's title is read by a person, so it takes an em dash.
+        assertThat(out.getCharts().get(1).getQuestion()).isEqualTo("Which values of region the rows carry most — about 4 distinct.");
+        assertThat(out.getCharts()).allSatisfy(c -> assertThat(String.valueOf(c.getQuestion())).doesNotContain(" -- "));
         assertThat(out.getCharts().get(2).getError()).isEqualTo("Refused for the test.");
         assertThat(out.getCharts().get(2).getResult()).isNull();
         assertThat(out.getCharts().get(3).getError()).contains("could not measure");
@@ -138,6 +146,53 @@ class DatasetOverviewServiceTest {
             assertThat(threads.size()).isBetween(1, DatasetOverviewService.PARALLEL_CHARTS);
         } finally {
             TenantContext.clear();
+        }
+    }
+
+    /**
+     * Since Storage became its own service, the dataset is resolved by calling it as the signed-in
+     * user, whose token the client reads from the request. The workers carried the tenant but not
+     * the request, so charts drawn on a pool thread failed with "No signed-in caller to reach
+     * Storage as" and the Studio showed four of seven tiles as "The engine could not run this
+     * chart". Every worker must carry the request and its correlation id too, then drop them.
+     */
+    @Test
+    void chartsOnWorkerThreadsCarryTheSignedInRequestAndItsCorrelationId() throws Exception {
+        AnalyticsQueryService queries = mock(AnalyticsQueryService.class);
+        AnalysisService analyses = mock(AnalysisService.class);
+        DatasetRef dataset = dataset();
+        when(queries.profileOf(dataset)).thenReturn(orders());
+        Set<String> tokens = Collections.synchronizedSet(new HashSet<>());
+        Set<String> correlations = Collections.synchronizedSet(new HashSet<>());
+        Set<String> threads = Collections.synchronizedSet(new HashSet<>());
+        when(analyses.analyze(any())).thenAnswer(inv -> {
+            threads.add(Thread.currentThread().getName());
+            RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+            tokens.add(attributes instanceof ServletRequestAttributes
+                ? String.valueOf(((ServletRequestAttributes) attributes).getRequest().getHeader("Authorization")) : "none");
+            correlations.add(String.valueOf(CorrelationId.current()));
+            AnalysisResultDto ok = new AnalysisResultDto(); ok.setRows(new ArrayList<>()); return ok;
+        });
+        when(queries.distributionOf(eq(dataset), any())).thenReturn(new ColumnDistributionDto());
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer emily-token");
+        ServletRequestAttributes attributes = new ServletRequestAttributes(request);
+        RequestContextHolder.setRequestAttributes(attributes);
+        CorrelationId.set("corr-overview-1");
+        TenantContext.set(2905L, "TENANT_ADMIN", 4385L, "emily");
+        try {
+            new DatasetOverviewService(queries, analyses).overviewOf(dataset, "worker-store", "sales/in/orders.csv");
+            assertThat(threads).doesNotContain(Thread.currentThread().getName());
+            assertThat(tokens).containsExactly("Bearer emily-token");
+            assertThat(correlations).containsExactly("corr-overview-1");
+            // The caller's own thread keeps its request; the workers' copies are theirs to drop.
+            assertThat(RequestContextHolder.getRequestAttributes()).isSameAs(attributes);
+            assertThat(CorrelationId.current()).isEqualTo("corr-overview-1");
+        } finally {
+            TenantContext.clear();
+            CorrelationId.clear();
+            RequestContextHolder.resetRequestAttributes();
         }
     }
 
