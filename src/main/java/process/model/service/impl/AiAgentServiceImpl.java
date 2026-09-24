@@ -1,11 +1,18 @@
 package process.model.service.impl;
 
+import org.barco.platform.correlation.CorrelationId;
+import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.UsageEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 import process.ai.AiEndpointPolicy;
 import process.ai.AiProviderGateway;
 import process.ai.PromptRunner;
+import process.billing.MeterClient;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentDto;
 import process.model.dto.AiAgentRuntimeConfigDto;
@@ -15,8 +22,10 @@ import process.model.enums.Status;
 import process.model.pojo.AiModelConnection;
 import process.model.pojo.AiPrompt;
 import process.model.service.AiAgentService;
+import process.security.TenantContext;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
@@ -40,10 +49,17 @@ public class AiAgentServiceImpl implements AiAgentService {
     private final AiModelConnectionServiceImpl connections;
     private final AiProviderGateway gateway;
     private final AiEndpointPolicy endpointPolicy;
+    /** The meter, when the console has one; optional so hand-built instances in tests need none. */
+    private MeterClient meter;
 
     public AiAgentServiceImpl(AiPromptServiceImpl prompts, AiModelConnectionServiceImpl connections,
         AiProviderGateway gateway, AiEndpointPolicy endpointPolicy) {
         this.prompts = prompts; this.connections = connections; this.gateway = gateway; this.endpointPolicy = endpointPolicy;
+    }
+
+    @Autowired(required = false)
+    public void setMeter(MeterClient meter) {
+        this.meter = meter;
     }
 
     @Override
@@ -116,7 +132,9 @@ public class AiAgentServiceImpl implements AiAgentService {
             req.provider = dto.getProvider(); req.apiKey = dto.getApiKey(); req.apiEndpoint = dto.getApiEndpoint();
             req.model = dto.getModel(); req.system = dto.getInstructions(); req.user = text;
             req.jsonMode = Boolean.TRUE.equals(dto.getJsonMode());
-            String answer = this.gateway.chat(req).text;
+            AiProviderGateway.ChatAnswer chat = this.gateway.chat(req);
+            this.metered(chat, req.model);
+            String answer = chat.text;
             if (req.jsonMode) answer = PromptRunner.stripFencesPublic(answer);
             return new ResponseDto(SUCCESS, "Processed successfully.", answer);
         } catch (Exception ex) {
@@ -124,6 +142,48 @@ public class AiAgentServiceImpl implements AiAgentService {
             this.logger.error("An error occurred while calling the AI provider (ad-hoc, provider={})", dto.getProvider(), ex);
             return new ResponseDto(ERROR, "The AI provider request failed.");
         }
+    }
+
+    /**
+     * What an ad-hoc call spent, told to the meter (MIG-198, the owner's decision): the file chat and the job
+     * assistant are real model spend, metered as prompt runs are. The key is the request's correlation id and
+     * this call's place in the request -- a replayed request meters once, two calls in one request twice.
+     * A provider that reports no usage (-1) is not guessed at.
+     */
+    private void metered(AiProviderGateway.ChatAnswer chat, String model) {
+        Long tenantId = TenantContext.getTenantId();
+        if (this.meter == null || tenantId == null) {
+            return;
+        }
+        if (chat.tokensIn < 0 && chat.tokensOut < 0) {
+            this.logger.warn("ad-hoc model call for workspace {} on {}: the provider reported no usage, so none is metered", tenantId, model);
+            return;
+        }
+        String key = adHocKey();
+        if (chat.tokensIn > 0) {
+            this.meter.report(UsageEvent.of(tenantId, Meter.AI_TOKENS_IN, chat.tokensIn, key + "#in")
+                .subject("ad-hoc", model).actor(TenantContext.getAppUserId()).source("console").note(model));
+        }
+        if (chat.tokensOut > 0) {
+            this.meter.report(UsageEvent.of(tenantId, Meter.AI_TOKENS_OUT, chat.tokensOut, key + "#out")
+                .subject("ad-hoc", model).actor(TenantContext.getAppUserId()).source("console").note(model));
+        }
+    }
+
+    private static final String AD_HOC_ORDINAL = AiAgentServiceImpl.class.getName() + ".adHocOrdinal";
+    private static final AtomicLong OUTSIDE_A_REQUEST = new AtomicLong();
+
+    /** "ai-adhoc#{correlation id}#{n}": the n-th ad-hoc call of this request. */
+    static String adHocKey() {
+        RequestAttributes request = RequestContextHolder.getRequestAttributes();
+        String correlation = CorrelationId.current();
+        if (request == null || correlation == null) {
+            return "ai-adhoc#at" + System.currentTimeMillis() + "#" + OUTSIDE_A_REQUEST.incrementAndGet();
+        }
+        Object seen = request.getAttribute(AD_HOC_ORDINAL, RequestAttributes.SCOPE_REQUEST);
+        int ordinal = seen instanceof Integer ? (Integer) seen + 1 : 1;
+        request.setAttribute(AD_HOC_ORDINAL, ordinal, RequestAttributes.SCOPE_REQUEST);
+        return "ai-adhoc#" + correlation + "#" + ordinal;
     }
 
     private ResponseDto validateAdHoc(AdHocPromptRequestDto dto) {
