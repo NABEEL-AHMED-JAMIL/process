@@ -429,7 +429,8 @@ public class QueryService {
         targetDate = this.requireValidDate(targetDate);
         String tenantFilter = this.tenantClause("source_job");
         return String.format(
-            "SELECT * FROM (\n" +
+            "SELECT job_id, job_name, queue, start, running, failed, completed, stop, skip, interrupt, missed, total, " +
+                "tenant_id FROM (\n" +
                 "    SELECT \n" +
                 "        job_queue.job_id,\n" +
                 "        source_job.job_name,\n" +
@@ -501,7 +502,12 @@ public class QueryService {
     }
 
     public String weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) {
-        String query = "select job_queue.* from job_queue\n" +
+        // Named, in the order DashboardServiceImpl reads them. This was select job_queue.*, read by
+        // position -- correct only while the table's physical column order happened to match, and a
+        // job_queue provisioned anywhere new by ddl-auto puts attempt at index 1 (MIG-8, DEF-126).
+        String query = "select job_queue.job_queue_id, job_queue.date_created, job_queue.end_time, job_queue.job_id, " +
+                "job_queue.job_send, job_queue.job_status, job_queue.job_status_message, job_queue.run_manual, " +
+                "job_queue.skip_manual, job_queue.skip_time, job_queue.start_time from job_queue\n" +
                 "inner join source_job on source_job.job_id = job_queue.job_id where 1=1\n" +
                 this.tenantClause("source_job") + "\n";
         if (!ProcessUtil.isNull(targetDate)) {
