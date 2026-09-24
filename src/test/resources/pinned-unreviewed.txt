@@ -15,9 +15,10 @@
 #
 # Run the pins alone: mvn -o test -Dgroups=pinned-unreviewed
 #
-# count: 4
+# count: 5
 
 process.model.service.impl.JobStatusTransitionTableTest#aJobThatNeverRanIsRefusedByANullPointerNotByTheTable | MIG-139 | a callback on a job whose running status is null throws NullPointerException from isValidStatusTransition's switch; NotifyResetApi answers the worker 500, not a readable refusal
 process.security.RetireExtendsTokenExpiryTest#aTokenRetiredOnARunRequeuedForRetryStillOpensCallbacksUntilTheRetryIsDispatched | MIG-138 | NotifyResetApi retires the token of a Failed that the service answered with a retry; the run is back in Queue (not OVER), so the failed attempt's token keeps callback access (addLogs, addLogsBatch) for 24 more hours until the retry's dispatch re-mints it
 process.engine.AiStepAtDispatchTest#applyThrowsOnAMalformedVariableMapAMalformedVariableListOrAnUndecryptableKey | MIG-133 | AiStepService.apply throws (JsonSyntaxException, IllegalStateException) instead of returning a failed Outcome for a malformed step variable map, a malformed prompt variable list, or a connection API key that will not decrypt
 process.engine.AiStepAtDispatchTest#anUndecryptableConnectionKeyIsRetriedAsIfTheBrokerWereDown | MIG-133 | such a throw lands in pushMessageToQueue's outer catch: the run is offered a retry and closed as 'could not be dispatched' (row 6) instead of a final AI-step failure (row 5)
+process.util.AuditLogBulkEncodingTest#theAuditBulkIsSentWithoutACharsetSoAnythingAboveLatin1BecomesAQuestionMark | MIG-156 | OpenSearchAuditLogClient's _bulk posts application/x-ndjson with no charset, so Spring writes it as ISO-8859-1: audit text above U+00FF is stored as '?', and U+0080..U+00FF is refused by OpenSearch and falls back to the database -- the defect the RAG client had and fixed

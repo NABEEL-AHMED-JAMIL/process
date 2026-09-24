@@ -1,0 +1,15 @@
+# Golden file (cross-boundary contract, MIG-156 invariant I3).
+#
+# The spellings of one file format that are folded to a single name before an agent's "Target file
+# types" are compared with a file's extension. The backend enforces it
+# (process FileChatServiceImpl.canonicalType); the console offers agents by it
+# (scheduler1/next/src/app/features/objects/chat/file-chat.ts, SAME_FORMAT / canonicalType()).
+# The migration may not move this boundary, so both tables are held to this file, and to each other,
+# by process.model.service.impl.CanonicalTypeAgreementTest. Change all three together.
+#
+# spelling=canonical
+jpeg=jpg
+tiff=tif
+htm=html
+yml=yaml
+mpeg=mpg
