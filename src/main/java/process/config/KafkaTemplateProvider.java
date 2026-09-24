@@ -7,6 +7,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -40,6 +41,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.nio.file.attribute.UserPrincipal;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -615,7 +617,7 @@ public class KafkaTemplateProvider {
             if (missing.isEmpty()) {
                 return TopicProvisioning.reached(0, existing);
             }
-            Map<String, org.apache.kafka.common.KafkaFuture<Void>> outcomes = adminClient.createTopics(missing).values();
+            Map<String, KafkaFuture<Void>> outcomes = adminClient.createTopics(missing).values();
             int created = 0;
             for (NewTopic topic : missing) {
                 try {
@@ -637,7 +639,7 @@ public class KafkaTemplateProvider {
             try {
                 // Bounded: close() with no timeout waits for whatever is still pending -- up to a minute against a
                 // broker that resolves but never answers, which is the wait this method exists to avoid.
-                adminClient.close(java.time.Duration.ofSeconds(1));
+                adminClient.close(Duration.ofSeconds(1));
             } catch (Exception ignored) {
                 // Closing a client that never connected can complain; there is nothing to do about it.
             }

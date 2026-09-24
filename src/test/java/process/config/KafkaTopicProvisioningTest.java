@@ -41,6 +41,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.apache.kafka.common.errors.PolicyViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.apache.kafka.common.KafkaException;
+import org.junit.jupiter.api.Assumptions;
+import java.util.concurrent.Executor;
+import org.mockito.ArgumentMatchers;
+import java.util.LinkedHashMap;
+import java.net.ServerSocket;
+import org.mockito.Mockito;
+import java.time.Duration;
 
 /**
  * Startup topic provisioning (KafkaTopicProvisioner): process logged ~1,400 "Could not auto-create Kafka topic"
@@ -97,7 +107,7 @@ class KafkaTopicProvisioningTest {
 
     /** A provisioner over these task types, each on the profile the map gives it; runs where the executor says. */
     private static KafkaTopicProvisioner provisioner(KafkaTemplateProvider provider, List<SourceTaskType> types,
-        Map<Long, Optional<KafkaConnectionProfile>> profileOf, java.util.concurrent.Executor background) {
+        Map<Long, Optional<KafkaConnectionProfile>> profileOf, Executor background) {
         SourceTaskTypeRepository repository = mock(SourceTaskTypeRepository.class);
         when(repository.findByStatus(Status.Active)).thenReturn(types);
         KafkaConnectionResolver resolver = mock(KafkaConnectionResolver.class);
@@ -168,7 +178,7 @@ class KafkaTopicProvisioningTest {
         ArgumentCaptor<Map<String, Integer>> topics = ArgumentCaptor.forClass(Map.class);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Optional<KafkaConnectionProfile>> profiles = ArgumentCaptor.forClass(Optional.class);
-        verify(provider, org.mockito.Mockito.times(3)).ensureTopicsExist(profiles.capture(), topics.capture());
+        verify(provider, Mockito.times(3)).ensureTopicsExist(profiles.capture(), topics.capture());
         Map<String, Map<String, Integer>> byProfile = new HashMap<>();
         for (int i = 0; i < 3; i++) {
             byProfile.put(profiles.getAllValues().get(i).map(KafkaConnectionProfile::getProfileName).orElse("default"),
@@ -178,7 +188,7 @@ class KafkaTopicProvisioningTest {
         assertThat(byProfile.get("a")).containsOnly(Map.entry("a1", 1), Map.entry("a2", 4));
         assertThat(byProfile.get("b")).containsOnly(Map.entry("b1", 1));
         assertThat(byProfile.get("default")).containsOnly(Map.entry("d1", 2));
-        verify(provider, never()).ensureTopicExists(any(), any(), org.mockito.ArgumentMatchers.anyInt());
+        verify(provider, never()).ensureTopicExists(any(), any(), ArgumentMatchers.anyInt());
     }
 
     // ---- a broker that answers: the same outcome as the per-topic loop ------------------------------------------
@@ -205,7 +215,7 @@ class KafkaTopicProvisioningTest {
         Map<String, KafkaFuture<Void>> outcomes = new HashMap<>();
         outcomes.put("new-one", done(null));
         outcomes.put("raced", failed(new TopicExistsException("made meanwhile")));
-        outcomes.put("refused", failed(new org.apache.kafka.common.errors.PolicyViolationException("no")));
+        outcomes.put("refused", failed(new PolicyViolationException("no")));
         when(created.values()).thenReturn(outcomes);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<NewTopic>> asked = ArgumentCaptor.forClass(Collection.class);
@@ -216,7 +226,7 @@ class KafkaTopicProvisioningTest {
             clientsMadeWith.add(props);
             return admin;
         });
-        Map<String, Integer> topics = new java.util.LinkedHashMap<>();
+        Map<String, Integer> topics = new LinkedHashMap<>();
         topics.put("already-there", 3);
         topics.put("new-one", 4);
         topics.put("raced", 1);
@@ -236,14 +246,14 @@ class KafkaTopicProvisioningTest {
             .isEqualTo("Auto-created Kafka topic 'new-one' with 4 partition(s)."));
         assertThat(this.warnings()).containsExactly("Could not auto-create Kafka topic 'refused': "
             + "org.apache.kafka.common.errors.PolicyViolationException: no");
-        verify(admin).close(any(java.time.Duration.class));
+        verify(admin).close(any(Duration.class));
     }
 
     @Test
     void aProfileWhoseClientCannotBeBuiltIsUnreachableNotAThrow() {
         KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null, null, null);
         provider.useAdminClients(props -> {
-            throw new org.apache.kafka.common.KafkaException("Failed to create new KafkaAdminClient");
+            throw new KafkaException("Failed to create new KafkaAdminClient");
         });
         Map<String, Integer> topics = new HashMap<>();
         topics.put("x", 1);
@@ -263,7 +273,7 @@ class KafkaTopicProvisioningTest {
     @Test
     @Timeout(40)
     void aBrokerThatNeverAnswersIsUnreachableWithinTheBound() throws Exception {
-        try (java.net.ServerSocket closed = new java.net.ServerSocket(0)) {
+        try (ServerSocket closed = new ServerSocket(0)) {
             int port = closed.getLocalPort();
             closed.close();
             KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null, null, null);
@@ -284,10 +294,10 @@ class KafkaTopicProvisioningTest {
     @Test
     void againstARealBrokerTheMissingTopicIsCreatedWithItsPartitions() throws Exception {
         String bootstrap = System.getenv("PROCESS_TEST_KAFKA");
-        org.junit.jupiter.api.Assumptions.assumeTrue(bootstrap != null && !bootstrap.isEmpty(), "PROCESS_TEST_KAFKA not set");
+        Assumptions.assumeTrue(bootstrap != null && !bootstrap.isEmpty(), "PROCESS_TEST_KAFKA not set");
         KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null, null, null);
         // What kafka.topic.replication-factor gives the application; a provider built by hand has none.
-        org.springframework.test.util.ReflectionTestUtils.setField(provider, "defaultReplicationFactor", (short) 1);
+        ReflectionTestUtils.setField(provider, "defaultReplicationFactor", (short) 1);
         String topic = "process-provisioning-test-" + System.nanoTime();
         Map<String, Integer> topics = new HashMap<>();
         topics.put(topic, 3);

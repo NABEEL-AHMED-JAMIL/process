@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -150,7 +151,7 @@ public class KafkaTopicProvisioner implements ApplicationRunner {
             for (Future<?> future : done) {
                 try {
                     future.get();
-                } catch (java.util.concurrent.ExecutionException ex) {
+                } catch (ExecutionException ex) {
                     this.logger.warn("KafkaTopicProvisioner -- a profile's provisioning failed: {}", ex.getMessage());
                 }
             }

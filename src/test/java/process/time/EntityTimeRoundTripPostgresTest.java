@@ -75,7 +75,7 @@ class EntityTimeRoundTripPostgresTest {
             SET.computeIfAbsent(row[0] + "." + row[2], k -> new ArrayList<>()).add(new String[] {row[1], row[4]});
         }
         // MIG-167's tables are born timestamptz (V141, V143), after V100, so the before-fixture cannot name them: a row
-        // each, at the fixture's DST edges.
+        // each, at the fixture's DST edges. Likewise V163's scheduler.paused_since.
         sql.update("INSERT INTO task_reference (id, tenant_id, kind, name, value) VALUES (900971, 900, 'HOME_PAGE', 'fixture', 'https://f.test')");
         sql.update("INSERT INTO pipeline_config (id, tenant_id, config_key, kind, value) VALUES (900981, 900, 'V100_FIXTURE', 'VALUE', 'x')");
         String[][] born = {
@@ -83,7 +83,9 @@ class EntityTimeRoundTripPostgresTest {
             {"task_reference", "900971", "updated_at", "2026-03-08T08:30:00Z"},
             {"pipeline_config", "900981", "created_at", "2026-01-15T14:00:00Z"},
             {"pipeline_config", "900981", "updated_at", "2026-07-04T13:00:00Z"},
-            {"pipeline_config", "900981", "value_set_at", "2026-01-16T05:45:10.123456Z"}};
+            {"pipeline_config", "900981", "value_set_at", "2026-01-16T05:45:10.123456Z"},
+            // V163 (the workspace pause), born timestamptz too.
+            {"scheduler", "900301", "paused_since", "2026-11-01T07:30:00.000001Z"}};
         for (String[] row : born) {
             sql.update(String.format("UPDATE public.%s SET %s = ?::timestamptz WHERE %s", row[0], row[2],
                 TimestamptzMigrationPostgresTest.whereKey(sql, row[0], row[1])), row[3]);

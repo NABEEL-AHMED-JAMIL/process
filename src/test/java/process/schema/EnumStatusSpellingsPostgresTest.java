@@ -25,6 +25,20 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.beans.factory.config.BeanDefinition;
+import process.model.pojo.KafkaConnectionProfile;
+import process.model.pojo.PageAccessProfile;
+import process.model.pojo.SourceTaskType;
+import process.model.pojo.JobAuditLogs;
+import process.model.pojo.SourceTask;
+import process.model.pojo.SourceJob;
+import process.model.pojo.JobQueue;
+import process.model.pojo.Pipeline;
+import process.model.pojo.AppUser;
+import process.model.pojo.Tenant;
+import javax.persistence.Entity;
 
 /**
  * Task 7 (2026-09-24), V164: every enum-backed status column accepts only its enum's exact spellings.
@@ -43,16 +57,16 @@ class EnumStatusSpellingsPostgresTest {
     private static final String V164 = "/db/changelog/changelog-sets/V164.0-enum-status-spellings/V164__enum_status_spellings.sql";
 
     private static final Class<?>[] ENTITIES = {
-        process.model.pojo.SourceJob.class, process.model.pojo.SourceTask.class, process.model.pojo.SourceTaskType.class,
-        process.model.pojo.JobQueue.class, process.model.pojo.JobAuditLogs.class, process.model.pojo.Pipeline.class,
-        process.model.pojo.KafkaConnectionProfile.class };
+        SourceJob.class, SourceTask.class, SourceTaskType.class,
+        JobQueue.class, JobAuditLogs.class, Pipeline.class,
+        KafkaConnectionProfile.class };
 
     /**
      * Entities with @Enumerated columns deliberately left out: their tables moved to identity_db (MIG-107) and Core's
      * copies refuse every write (identity_moved_read_only), so no new spelling can reach them here.
      */
     private static final Class<?>[] IDENTITYS = {
-        process.model.pojo.PageAccessProfile.class, process.model.pojo.AppUser.class, process.model.pojo.Tenant.class };
+        PageAccessProfile.class, AppUser.class, Tenant.class };
 
     private static ScratchPostgres db;
 
@@ -108,10 +122,10 @@ class EnumStatusSpellingsPostgresTest {
     void noEntityWithAnEnumColumnIsForgotten() throws Exception {
         List<Class<?>> known = new ArrayList<>(Arrays.asList(ENTITIES));
         known.addAll(Arrays.asList(IDENTITYS));
-        org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider scanner =
-            new org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider(false);
-        scanner.addIncludeFilter(new org.springframework.core.type.filter.AnnotationTypeFilter(javax.persistence.Entity.class));
-        for (org.springframework.beans.factory.config.BeanDefinition found : scanner.findCandidateComponents("process")) {
+        ClassPathScanningCandidateComponentProvider scanner =
+            new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(Entity.class));
+        for (BeanDefinition found : scanner.findCandidateComponents("process")) {
             Class<?> entity = Class.forName(found.getBeanClassName());
             boolean hasEnum = Arrays.stream(entity.getDeclaredFields()).anyMatch(f -> f.isAnnotationPresent(Enumerated.class));
             if (hasEnum) {

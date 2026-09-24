@@ -17,6 +17,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import process.model.enums.Status;
 
 /**
  * MIG-190, the console's side of the usage-reporting contract (job-search etl/meter/CONTRACT.md §2):
@@ -106,7 +107,7 @@ class MeterVerifyRunContractTest {
         queued.setJobQueueId(6000L);
         queued.setJobId(2600L);
         queued.setTenantId(2905L);
-        queued.setStatus(process.model.enums.Status.Delete);
+        queued.setStatus(Status.Delete);
         when(this.runs.findById(6000L)).thenReturn(Optional.of(queued));
         lenient().when(this.jobs.findById(2600L)).thenReturn(Optional.empty());
 

@@ -82,6 +82,10 @@ class StalledRunSweepPostgresTest {
         liquibase.setContexts("init");
         liquibase.setResourceLoader(new DefaultResourceLoader(StalledRunSweepPostgresTest.class.getClassLoader()));
         liquibase.afterPropertiesSet();
+        // V164 now refuses an off-case job_queue.job_status at the INSERT. The guards here stay case-blind for rows
+        // written before it (a database restored from an older dump), which is what these cases pin: the CHECK is
+        // taken off in this throwaway database only, so such rows can be made at all.
+        new JdbcTemplate(pool).execute("ALTER TABLE job_queue DROP CONSTRAINT IF EXISTS ck_job_queue_job_status_enum");
     }
 
     @AfterAll
