@@ -1,0 +1,18 @@
+# Pinning tests: @Tag("pinned-unreviewed") (MIG-154). Enforced by process.PinnedUnreviewedLedgerTest.
+#
+# A pinning test records what the code does today with NO claim that it is right. Each one is
+# waiting on a decision, and this list going DOWN over the migration is the measure that the
+# undocumented surface is being decided rather than carried (16-testing-strategy 2.5, gate D11).
+#
+# Rules:
+#   - One line per tagged test METHOD:  <package.Class>#<method> | <decision item> | <what is pinned>
+#   - The decision item is a DEC-nn row, or the MIG-nnn row whose Notes describe the behaviour
+#     until a DEC row is raised for it.
+#   - "# count:" is the number of lines below. Change it in the same commit as the tags, so the
+#     pull request shows the delta. It must not rise without a decision item for every new line.
+#   - A pin that fails is a prompt, not a regression: resolve the decision, then fix the code or
+#     update the test, with the decision id in the commit message -- and delete its line here.
+#
+# Run the pins alone: mvn -o test -Dgroups=pinned-unreviewed
+#
+# count: 0
