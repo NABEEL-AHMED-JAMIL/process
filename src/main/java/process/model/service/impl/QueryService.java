@@ -101,14 +101,18 @@ public class QueryService {
             query += "left join lookup_data ld3 on ld3.lookup_id = st.group_id\n";
         }
         query += "where st.task_status in ('Active', 'Inactive') " + this.tenantClause("st");
+        // source_task had no date_created until V130, so any range here was a 500. It is an instant, read as
+        // Chicago's day. A task made before V130 has NULL and no range claims it.
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
             if ((startDate != null && !startDate.isEmpty()) && (endDate != null && !endDate.isEmpty())) {
-                query += String.format("and cast(st.date_created as date) between '%s' and '%s' ",
+                query += String.format("and date(st.date_created AT TIME ZONE 'America/Chicago') between '%s' and '%s' ",
                     this.requireValidDate(startDate), this.requireValidDate(endDate));
             } else if (startDate != null && !startDate.isEmpty()) {
-                query += String.format("and cast(st.date_created as date) >= '%s' ", this.requireValidDate(startDate));
+                query += String.format("and date(st.date_created AT TIME ZONE 'America/Chicago') >= '%s' ",
+                    this.requireValidDate(startDate));
             } else if (endDate != null && !endDate.isEmpty()) {
-                query += String.format("and cast(st.date_created as date) <= '%s' ", this.requireValidDate(endDate));
+                query += String.format("and date(st.date_created AT TIME ZONE 'America/Chicago') <= '%s' ",
+                    this.requireValidDate(endDate));
             }
         }
         if (searchTextDto != null && (searchTextDto.getItemName() != null && searchTextDto.getItemValue() != null)) {
