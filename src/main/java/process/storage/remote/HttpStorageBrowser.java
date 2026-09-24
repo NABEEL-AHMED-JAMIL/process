@@ -23,7 +23,7 @@ import java.util.Map;
 
 /**
  * The guarded storage API, answered by storage-service (MIG-183) as the signed-in user: what file
- * chat, analytics export and report export call from inside a request. Storage applies every guard;
+ * chat and report export call from inside a request (analytics export left with Analytics). Storage applies every guard;
  * this only carries the user's token there and the answer back. fileChatMetadata stays here, with
  * file chat, keyed as before by who asked.
  */

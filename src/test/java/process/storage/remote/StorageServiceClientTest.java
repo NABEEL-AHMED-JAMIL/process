@@ -4,25 +4,19 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import process.model.dto.ObjectContentDto;
 import process.model.dto.ObjectMetadataDto;
-import process.model.enums.StorageProvider;
 import process.model.pojo.StorageConnection;
 import process.storage.TrustedAccess;
 import process.storage.TrustedCaller;
-import process.util.EncryptionUtil;
 import process.util.StorageNotFound;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
-import java.util.Base64;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -154,36 +148,6 @@ class StorageServiceClientTest {
     // ---- the directory ---------------------------------------------------------------------------
 
     @Test
-    void aVendedConnectionComesBackSealedUnderProcesssOwnKeyForTheRequest() throws Exception {
-        EncryptionUtil encryption = encryption();
-        try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage-connections/resolve", 200,
-            "{\"storageConnectionId\":1107,\"alias\":\"reports\",\"provider\":\"MINIO\",\"bucket\":\"acme-reports\","
-                + "\"endpoint\":\"http://minio:9000\",\"region\":\"us-east-1\",\"credential\":{\"keyId\":\"AKIA\",\"secret\":\"s3cret\"}}")) {
-            Optional<StorageConnection> vended = new RemoteStorageDirectory(new StorageServiceClient(storage.url(), TOKEN), encryption)
-                .vendForCaller("reports");
-
-            StorageConnection c = vended.get();
-            assertThat(c.getStorageConnectionId()).isEqualTo(1107L);
-            assertThat(c.getProvider()).isEqualTo(StorageProvider.MINIO);
-            assertThat(c.getBucketName()).isEqualTo("acme-reports");
-            assertThat(c.getAccessKey()).isEqualTo("AKIA");
-            assertThat(c.getSecretKeyEnc()).isNotEqualTo("s3cret");
-            assertThat(encryption.decrypt(c.getSecretKeyEnc())).isEqualTo("s3cret");
-            assertThat(storage.last().token).isEqualTo(TOKEN);
-            assertThat(storage.last().authorization).as("vending wants the user's own token too").isEqualTo(USER);
-            assertThat(storage.last().bodyText()).contains("\"alias\":\"reports\"");
-        }
-    }
-
-    @Test
-    void aRefusedVendIsEmpty() throws Exception {
-        try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage-connections/resolve", 404,
-            "{\"status\":\"ERROR\",\"message\":\"Storage connection not found.\"}")) {
-            assertThat(new RemoteStorageDirectory(new StorageServiceClient(storage.url(), TOKEN), encryption()).vendForCaller("archive")).isEmpty();
-        }
-    }
-
-    @Test
     void onlyAMeasuredOrPartialSizeIsBytesAnythingElseIsMinusOne() throws Exception {
         StorageConnection c = new StorageConnection();
         c.setStorageConnectionId(1107L);
@@ -194,13 +158,13 @@ class StorageServiceClientTest {
             {"{\"outcome\":\"SKIPPED\",\"reason\":\"FTP\"}", "-1"}};
         for (String[] each : cases) {
             try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage-connections/1107/size", 200, each[0])) {
-                long bytes = new RemoteStorageDirectory(new StorageServiceClient(storage.url(), TOKEN), encryption()).bytesIn(c);
+                long bytes = new RemoteStorageDirectory(new StorageServiceClient(storage.url(), TOKEN)).bytesIn(c);
                 assertThat(bytes).as(each[0]).isEqualTo(Long.parseLong(each[1]));
                 assertThat(storage.last().authorization).as("the nightly measurement has no user").isNull();
             }
         }
         try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage-connections/1107/size", 404, "")) {
-            assertThat(new RemoteStorageDirectory(new StorageServiceClient(storage.url(), TOKEN), encryption()).bytesIn(c)).isEqualTo(-1L);
+            assertThat(new RemoteStorageDirectory(new StorageServiceClient(storage.url(), TOKEN)).bytesIn(c)).isEqualTo(-1L);
         }
     }
 
@@ -209,20 +173,12 @@ class StorageServiceClientTest {
         try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage-connections", 200,
             "[{\"storageConnectionId\":1107,\"tenantId\":2901,\"alias\":\"reports\",\"provider\":\"MINIO\",\"bucketName\":\"b\",\"status\":\"Active\"},"
                 + "{\"storageConnectionId\":1000,\"tenantId\":null,\"alias\":\"archive\",\"provider\":\"S3\",\"bucketName\":\"a\",\"status\":\"Inactive\"}]")) {
-            RemoteStorageDirectory directory = new RemoteStorageDirectory(new StorageServiceClient(storage.url(), TOKEN), encryption());
+            RemoteStorageDirectory directory = new RemoteStorageDirectory(new StorageServiceClient(storage.url(), TOKEN));
 
             assertThat(directory.workspace(2901L)).extracting(StorageConnection::getTenantId).containsExactly(2901L, null);
             assertThat(storage.last().uri).endsWith("/internal/storage-connections?tenantId=2901");
             assertThat(directory.byAlias("reports")).hasSize(2);
             assertThat(storage.last().uri).contains("/byAlias?alias=reports");
         }
-    }
-
-    private static EncryptionUtil encryption() {
-        EncryptionUtil util = new EncryptionUtil();
-        byte[] key = new byte[32];
-        new SecureRandom().nextBytes(key);
-        ReflectionTestUtils.setField(util, "base64Key", Base64.getEncoder().encodeToString(key));
-        return util;
     }
 }

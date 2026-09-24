@@ -41,24 +41,6 @@ public class ApplicationPropertiesDeclarationTest {
         "kafka.topic.default-replication-factor",
         "worker.callback.token",
         "platform.admin.bootstrap-password",
-        // Analytics Studio's governor. Declared in every profile because an absent limit is an
-        // unlimited one: DuckDB runs in this JVM, so a missing memory ceiling is the container's
-        // OOM killer taking the ETL dispatcher down with the query.
-        "analytics.query.timeout-seconds",
-        "analytics.query.max-rows",
-        "analytics.query.max-concurrent",
-        "analytics.preview.page-size",
-        "analytics.duckdb.memory-limit",
-        "analytics.duckdb.threads",
-        // The three switches, here for the reason above turned around: a limit nobody declared is
-        // unlimited, and a SWITCH nobody declared is undiscoverable. An operator cannot turn
-        // analytics off in an incident, or stop a platform admin generating load, if the only
-        // record that the switch exists is an @Value default in a class they would have to already
-        // know to look at. analytics.profile.sample-rows used to be in this list and is gone with
-        // the property: AnalyticsLimits carries the measurement that declined it.
-        "analytics.enabled",
-        "analytics.benchmark.enabled",
-        "analytics.parquet.conversion-enabled",
         // The meter is a switch too: blank means the console runs unmetered, and an operator
         // must be able to see that is what is happening.
         "meter.url",

@@ -158,23 +158,6 @@ public class StorageServiceClient {
         }
     }
 
-    /** Vending opens a secret: the service token AND the signed-in user's own. Null when refused (404). */
-    public JsonNode resolveForCaller(String alias) {
-        ObjectNode body = this.json.createObjectNode().put("alias", alias);
-        try (Response response = this.execute(new Request.Builder().url(this.url("/internal/storage-connections/resolve", null))
-            .header("X-Internal-Token", this.serviceToken).header("Authorization", callerAuthorization())
-            .header("Accept", "application/json").post(this.jsonBody(body)).build())) {
-            JsonNode answer = this.readJson(response);
-            if (response.code() == 404) {
-                return null;
-            }
-            if (response.code() != 200) {
-                throw this.failure(response, answer);
-            }
-            return answer;
-        }
-    }
-
     // ---- plumbing ------------------------------------------------------------------------------
 
     private HttpUrl url(String path, Map<String, String> query) {

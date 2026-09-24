@@ -102,9 +102,7 @@ public class TenantFilterDeclarationTest {
             }
         }
         Collections.sort(filtered);
-        assertEquals(Arrays.asList("AiAgent", "AiModelConnection", "AiPrompt", "AiPromptRun", "AnalyticsAnalysis", "AnalyticsDashboard",
-            "AnalyticsDashboardWidget", "AnalyticsDataset", "AnalyticsQuery", "AnalyticsQueryRun", "BenchmarkResult",
-            "KafkaConnectionProfile", "PageAccessProfile", "Pipeline", "SourceJob",
+        assertEquals(Arrays.asList("AiAgent", "AiModelConnection", "AiPrompt", "AiPromptRun", "KafkaConnectionProfile", "PageAccessProfile", "Pipeline", "SourceJob",
             "SourceTask", "SourceTaskType", "TenantTaskTypeKafkaRoute"), filtered);
     }
 

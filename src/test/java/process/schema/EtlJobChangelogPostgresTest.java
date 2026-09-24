@@ -78,6 +78,15 @@ class EtlJobChangelogPostgresTest {
             assertThatThrownBy(() -> sql.update("UPDATE invoice SET status = 'paid'")).as("update").hasMessageContaining("billing_db");
             assertThatThrownBy(() -> sql.update("DELETE FROM payment")).as("delete").hasMessageContaining("billing_db");
             assertThatThrownBy(() -> sql.execute("TRUNCATE billing_document")).as("truncate").hasMessageContaining("billing_db");
+            // MIG-128 (V62): Analytics Studio's tables are analytics_db's, and process holds no code for them.
+            // Every one of the seven refuses every kind of write, naming analytics_db.
+            for (String table : new String[] {"analytics_dataset", "analytics_query", "analytics_query_run", "analytics_analysis",
+                "analytics_dashboard", "analytics_dashboard_widget", "analytics_benchmark_result"}) {
+                assertThat(sql.queryForObject("SELECT count(*) FROM " + table, Integer.class)).as(table).isZero();
+                assertThatThrownBy(() -> sql.update("DELETE FROM " + table)).as("delete %s", table).hasMessageContaining("analytics_db");
+                assertThatThrownBy(() -> sql.execute("TRUNCATE " + table + " CASCADE")).as("truncate %s", table).hasMessageContaining("analytics_db");
+            }
+            assertThatThrownBy(() -> sql.update("UPDATE analytics_dashboard SET dashboard_name = 'x'")).as("update").hasMessageContaining("analytics_db");
         } finally {
             pool.close();
             try (Connection admin = DriverManager.getConnection(server, user, password); Statement sql = admin.createStatement()) {

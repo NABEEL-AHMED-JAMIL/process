@@ -48,3 +48,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V60.0-one-quantity-scale.yaml
   - include:
       file: db/changelog/yaml/V61.0-billing-tables-read-only.yaml
+  - include:
+      file: db/changelog/yaml/V62.0-analytics-tables-read-only.yaml

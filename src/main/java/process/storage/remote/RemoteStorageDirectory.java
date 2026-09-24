@@ -3,79 +3,27 @@ package process.storage.remote;
 import com.fasterxml.jackson.databind.JsonNode;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
-import process.model.pojo.ConnectionIdResolver;
 import process.model.pojo.StorageConnection;
-import process.model.pojo.StorageConnectionStamp;
-import process.util.EncryptionUtil;
 
-import javax.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * What process reads about storage connections once Storage owns them (MIG-68): each question that
  * used to be a query on process's storage_connection table, asked of storage-service instead. Present
  * only when storage.remote is on; each consumer falls back to its table while it is absent.
  *
- * The connections handed back are transient -- never saved, never cached here. A vended one (DuckDB's)
- * carries its secret re-sealed under process's own key for the length of the request, because that is
- * the form DuckDbSessionFactory opens; nothing persists it.
+ * The connections handed back are transient summaries without secrets -- never saved, never cached here.
  */
-public class RemoteStorageDirectory implements ConnectionIdResolver {
+public class RemoteStorageDirectory {
 
     private final StorageServiceClient storage;
-    private final EncryptionUtil encryption;
 
-    public RemoteStorageDirectory(StorageServiceClient storage, EncryptionUtil encryption) {
+    public RemoteStorageDirectory(StorageServiceClient storage) {
         this.storage = storage;
-        this.encryption = encryption;
-    }
-
-    /** Analytics' connection ids resolve through Storage, as its own forRow rule does. */
-    @PostConstruct
-    void install() {
-        StorageConnectionStamp.use(this);
-    }
-
-    @Override
-    public Long resolve(Long tenantId, String alias) {
-        if (alias == null || alias.trim().isEmpty()) {
-            return null;
-        }
-        JsonNode answer = this.storage.directoryGet("/forRow", query("tenantId", tenantId == null ? null : String.valueOf(tenantId),
-            "alias", alias.trim()));
-        return answer == null || !answer.hasNonNull("storageConnectionId") ? null : answer.get("storageConnectionId").asLong();
-    }
-
-    /**
-     * The connection the signed-in caller means by this alias, for a DuckDB session: Active and theirs
-     * (Storage applies isOwnedByCaller), or empty for anything else -- absent and forbidden alike.
-     */
-    public Optional<StorageConnection> vendForCaller(String alias) {
-        JsonNode vended = this.storage.resolveForCaller(alias);
-        if (vended == null) {
-            return Optional.empty();
-        }
-        StorageConnection connection = new StorageConnection();
-        connection.setStorageConnectionId(vended.path("storageConnectionId").asLong());
-        connection.setAlias(text(vended, "alias"));
-        connection.setConnectionName(text(vended, "alias"));
-        connection.setProvider(provider(text(vended, "provider")));
-        connection.setBucketName(text(vended, "bucket"));
-        connection.setEndpoint(text(vended, "endpoint"));
-        connection.setRegion(text(vended, "region"));
-        connection.setStatus(Status.Active);
-        JsonNode credential = vended.path("credential");
-        connection.setAccessKey(text(credential, "keyId"));
-        String secret = text(credential, "secret");
-        connection.setSecretKeyEnc(secret == null ? null : this.encryption.encrypt(secret));
-        String connectionString = text(credential, "connectionString");
-        connection.setAzureConnectionStringEnc(connectionString == null ? null : this.encryption.encrypt(connectionString));
-        return Optional.of(connection);
     }
 
     /** Every live connection by this name, in any workspace (tenantId null for the platform's). */

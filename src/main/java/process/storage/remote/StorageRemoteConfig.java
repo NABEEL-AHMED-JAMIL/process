@@ -5,7 +5,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import process.model.service.StorageBrowserService;
 import process.storage.TrustedStorageOperations;
-import process.util.EncryptionUtil;
 
 /**
  * process's only way to storage (MIG-70): every call goes to storage-service -- the guarded ones as
@@ -32,7 +31,7 @@ public class StorageRemoteConfig {
     }
 
     @Bean
-    public RemoteStorageDirectory remoteStorageDirectory(StorageServiceClient storage, EncryptionUtil encryption) {
-        return new RemoteStorageDirectory(storage, encryption);
+    public RemoteStorageDirectory remoteStorageDirectory(StorageServiceClient storage) {
+        return new RemoteStorageDirectory(storage);
     }
 }
