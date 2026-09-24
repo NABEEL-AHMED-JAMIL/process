@@ -1,0 +1,293 @@
+# MIG-132: the two-instance harness. Driven by run.sh / harness.py -- not meant to be brought up by hand,
+# because every secret below is generated per run and passed in the environment (nothing is read from
+# any .env file and nothing here is a credential of the live stack).
+#
+# Self-contained on purpose: its own network, its own Postgres (tmpfs, so every run starts empty), its
+# own Redis and its own single-node Kafka. Nothing here joins process_default, takes an alias the live
+# gateway resolves, consumes a live topic, or publishes on the live Redis. That is what lets it start
+# two notifications replicas without doubling live pushes, and let a retention delete run without
+# touching live history. The live containers (process_app and the rest) are never touched.
+#
+# Two process instances, A and B, from ONE image, behind nginx round-robin with no sticky sessions.
+# The other services' pairs sit behind profiles and are started phase by phase:
+#   notifications (T2/T3), analytics (T8), billing (T10); mutant adds a second Redis for mutation runs.
+name: mig132
+
+networks:
+  harness:
+    name: mig132_harness
+
+x-process: &process
+  image: ${PROCESS_IMAGE:-process-two-instance:harness}
+  restart: "no"
+  networks: [harness]
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    kafka: { condition: service_healthy }
+  healthcheck:
+    test: ["CMD", "curl", "-sf", "http://localhost:9098/api/v1/actuator/health"]
+    interval: 3s
+    timeout: 3s
+    retries: 100
+    start_period: 20s
+
+x-process-env: &process-env
+  SPRING_PROFILES_ACTIVE: dev
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
+  SPRING_DATASOURCE_USERNAME: harness
+  SPRING_DATASOURCE_PASSWORD: ${H_PG_PASSWORD:?run through run.sh}
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SPRING_REDIS_PORT: "6379"
+  INTERNAL_SERVICE_TOKEN: ${H_INTERNAL_TOKEN:?run through run.sh}
+  PROCESS_ENCRYPTION_KEY_ID: mig132-harness
+  PROCESS_ENCRYPTION_KEY: ${H_ENCRYPTION_KEY:?run through run.sh}
+  JWT_SECRET_KEY: ${H_JWT_SECRET:?run through run.sh}
+  # Everything process may call outside itself points nowhere: the harness asserts process's own
+  # behaviour, and an unresolvable name fails fast instead of reaching a live service or real AWS.
+  STORAGE_SERVICE_URL: http://storage.invalid:9120
+  MEDIA_URL: http://media.invalid:9110
+  AWS_ENDPOINT: http://aws.invalid:4566
+  AWS_ACCESS_KEY: harness
+  AWS_SECRET_KEY: harness
+  METER_URL: ""
+  OPENSEARCH_URL: ""
+  EFS_FILE_DIRE: /tmp/efs
+  JAVA_TOOL_OPTIONS: -Xmx640m -XX:+ExitOnOutOfMemoryError
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: mig132-postgres
+    networks: [harness]
+    tmpfs: [/var/lib/postgresql/data]
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: ${H_PG_PASSWORD:?run through run.sh}
+      POSTGRES_DB: etl_job
+      ANALYTICS_OWNER_PASSWORD: ${H_ANALYTICS_OWNER_PASSWORD:?}
+      ANALYTICS_APP_PASSWORD: ${H_ANALYTICS_APP_PASSWORD:?}
+      BILLING_OWNER_PASSWORD: ${H_BILLING_OWNER_PASSWORD:?}
+      BILLING_APP_PASSWORD: ${H_BILLING_APP_PASSWORD:?}
+    volumes:
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    # Loopback only: the opt-in Postgres suites (EnqueuerReplicasPostgresTest and friends) run
+    # against this server from the host, each in a database of its own.
+    ports: ["127.0.0.1:${H_PG_PORT:-15432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d etl_job"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  redis:
+    image: redis:7-alpine
+    container_name: mig132-redis
+    networks: [harness]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Mutation runs only: a second Redis, so one replica can be given state of its own again.
+  redis2:
+    image: redis:7-alpine
+    container_name: mig132-redis2
+    profiles: ["mutant"]
+    networks: [harness]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: mig132-kafka
+    networks: [harness]
+    environment:
+      CLUSTER_ID: TUlHMTMydHdvaW5zdGFuYw
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: -Xmx384m -Xms128m
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 10s
+      retries: 60
+
+  process-a:
+    <<: *process
+    container_name: mig132-process-a
+    hostname: process-a
+    ports: ["127.0.0.1:${H_PORT_A:-19101}:9098"]
+    environment:
+      <<: *process-env
+      SPRING_REDIS_HOST: redis
+      PROCESS_RECONCILE_CRON: ${H_RECONCILE_CRON_A:-0 * * * * *}
+      IDENTITY_LOGIN_GUARD_KEY_PREFIX: ${H_LOGIN_GUARD_PREFIX_A:-identity:login-guard:}
+
+  process-b:
+    <<: *process
+    container_name: mig132-process-b
+    hostname: process-b
+    ports: ["127.0.0.1:${H_PORT_B:-19102}:9098"]
+    environment:
+      <<: *process-env
+      SPRING_REDIS_HOST: ${H_REDIS_HOST_B:-redis}
+      PROCESS_RECONCILE_CRON: ${H_RECONCILE_CRON_B:-0 * * * * *}
+      IDENTITY_LOGIN_GUARD_KEY_PREFIX: ${H_LOGIN_GUARD_PREFIX_B:-identity:login-guard:}
+
+  # Round-robin, no ip_hash, no cookie, no sticky anything. Answers as "process" on the harness
+  # network, so the other services reach process the way they do in production: through one name
+  # that could be either instance. X-Upstream says which one answered.
+  lb:
+    image: ${LB_IMAGE:-nginx:1.27-alpine}
+    container_name: mig132-lb
+    networks:
+      harness:
+        aliases: [process]
+    entrypoint: ["nginx", "-g", "daemon off;", "-c", "/etc/nginx/mig132.conf"]
+    volumes:
+      - ./lb/nginx.conf:/etc/nginx/mig132.conf:ro
+    ports: ["127.0.0.1:${H_PORT_LB:-19198}:9098"]
+    depends_on: [process-a, process-b]
+    # Its own, not whatever the image carries (a fallback image's checks port 80).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9098/api/v1/actuator/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  notifications-a: &notifications
+    image: ${NOTIFICATIONS_IMAGE:-notifications-service:local}
+    container_name: mig132-notifications-a
+    hostname: notifications-a
+    profiles: ["notifications"]
+    restart: "no"
+    mem_limit: 768m
+    networks: [harness]
+    ports: ["127.0.0.1:${H_PORT_NOTIF_A:-19111}:9100"]
+    environment: &notifications-env
+      NOTIFICATIONS_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notifications_db
+      NOTIFICATIONS_DATASOURCE_USERNAME: harness
+      NOTIFICATIONS_DATASOURCE_PASSWORD: ${H_PG_PASSWORD:?}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET_KEY: ${H_JWT_SECRET:?}
+      INTERNAL_SERVICE_TOKEN: ${H_INTERNAL_TOKEN:?}
+      PROCESS_INTERNAL_URL: http://process:9098
+      AWS_ENDPOINT: http://aws.invalid:4566
+      AWS_ACCESS_KEY: harness
+      AWS_SECRET_KEY: harness
+      WEBSOCKET_ALLOWED_ORIGINS: http://localhost
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_MESSAGING: ${H_NOTIF_MESSAGING_LOG:-INFO}
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_SOCKET: ${H_NOTIF_MESSAGING_LOG:-INFO}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9100/api/v1/actuator/health || wget -qO- http://localhost:9100/api/v1/actuator/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 100
+      start_period: 15s
+
+  notifications-b:
+    <<: *notifications
+    container_name: mig132-notifications-b
+    hostname: notifications-b
+    ports: ["127.0.0.1:${H_PORT_NOTIF_B:-19112}:9100"]
+    environment:
+      <<: *notifications-env
+      REDIS_HOST: ${H_REDIS_HOST_NOTIF_B:-redis}
+
+  analytics-a: &analytics
+    image: ${ANALYTICS_IMAGE:-analytics-service:local}
+    container_name: mig132-analytics-a
+    hostname: analytics-a
+    profiles: ["analytics"]
+    restart: "no"
+    mem_limit: 1g
+    networks: [harness]
+    environment:
+      ANALYTICS_DATASOURCE_URL: jdbc:postgresql://postgres:5432/analytics_db
+      ANALYTICS_DATASOURCE_USERNAME: analytics_app
+      ANALYTICS_DATASOURCE_PASSWORD: ${H_ANALYTICS_APP_PASSWORD:?}
+      ANALYTICS_OWNER_USERNAME: analytics_owner
+      ANALYTICS_OWNER_PASSWORD: ${H_ANALYTICS_OWNER_PASSWORD:?}
+      PROCESS_URL: http://process:9098
+      STORAGE_URL: http://storage.invalid:9120
+      REDIS_HOST: redis
+      JWT_SECRET_KEY: ${H_JWT_SECRET:?}
+      INTERNAL_SERVICE_TOKEN: ${H_INTERNAL_TOKEN:?}
+      METER_URL: ""
+      # A retention window, so the cleanup has something to do (the default is off).
+      SPRING_APPLICATION_JSON: '{"analytics":{"history":{"retention-days":30}}}'
+      # Sized to pass the startup guard in a 1 GiB container: T8 runs no queries.
+      ANALYTICS_QUERY_MAX_CONCURRENT: "1"
+      ANALYTICS_DUCKDB_MEMORY_LIMIT: 128MB
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9140/api/v1/actuator/health || wget -qO- http://localhost:9140/api/v1/actuator/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 100
+      start_period: 15s
+
+  analytics-b:
+    <<: *analytics
+    container_name: mig132-analytics-b
+    hostname: analytics-b
+
+  meter-stub:
+    image: ${PROCESS_IMAGE:-process-two-instance:harness}
+    container_name: mig132-meter-stub
+    profiles: ["billing"]
+    networks: [harness]
+    entrypoint: ["java", "/stub/MeterStub.java"]
+    volumes:
+      - ./meter-stub/MeterStub.java:/stub/MeterStub.java:ro
+
+  billing-a: &billing
+    image: ${BILLING_IMAGE:-billing-service:local}
+    container_name: mig132-billing-a
+    hostname: billing-a
+    profiles: ["billing"]
+    restart: "no"
+    mem_limit: 640m
+    networks: [harness]
+    depends_on: [meter-stub]
+    environment: &billing-env
+      BILLING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/billing_db
+      BILLING_DATASOURCE_USERNAME: billing_app
+      BILLING_DATASOURCE_PASSWORD: ${H_BILLING_APP_PASSWORD:?}
+      BILLING_OWNER_USERNAME: billing_owner
+      BILLING_OWNER_PASSWORD: ${H_BILLING_OWNER_PASSWORD:?}
+      PROCESS_URL: http://process:9098
+      STORAGE_URL: http://storage.invalid:9120
+      METER_URL: http://meter-stub:8200
+      METER_SERVICE_KEY: ${H_METER_KEY:?}
+      JWT_SECRET_KEY: ${H_JWT_SECRET:?}
+      INTERNAL_SERVICE_TOKEN: ${H_INTERNAL_TOKEN:?}
+      BILLING_CRONS_ENABLED: "true"
+      BILLING_CLOSE_CRON: ${H_CLOSE_CRON_A:-0 */2 * * * *}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9130/api/v1/actuator/health || wget -qO- http://localhost:9130/api/v1/actuator/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 100
+      start_period: 15s
+
+  billing-b:
+    <<: *billing
+    container_name: mig132-billing-b
+    hostname: billing-b
+    environment:
+      <<: *billing-env
+      BILLING_CLOSE_CRON: ${H_CLOSE_CRON_B:-0 */2 * * * *}
