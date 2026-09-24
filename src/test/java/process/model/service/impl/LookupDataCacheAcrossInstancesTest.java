@@ -54,7 +54,7 @@ class LookupDataCacheAcrossInstancesTest {
     @BeforeEach
     void table() {
         this.table.set(Collections.singletonList(row("BUCKET_LIST", "etl-bucket")));
-        when(this.repository.findByParentLookupIdIsNull()).thenAnswer(call -> new ArrayList<>(this.table.get()));
+        when(this.repository.findRootsWithChildren()).thenAnswer(call -> new ArrayList<>(this.table.get()));
     }
 
     @Test
@@ -86,7 +86,7 @@ class LookupDataCacheAcrossInstancesTest {
         LookupDataCacheService b = this.instance();
         b.poll();
         b.poll();
-        verify(this.repository, times(1)).findByParentLookupIdIsNull();
+        verify(this.repository, times(1)).findRootsWithChildren();
     }
 
     /**
