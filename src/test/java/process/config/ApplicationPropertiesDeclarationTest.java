@@ -35,7 +35,6 @@ public class ApplicationPropertiesDeclarationTest {
     /** Read by code that would otherwise silently take its own default. */
     private static final List<String> REQUIRED_IN_EVERY_PROFILE = Arrays.asList(
         "storage.allow-instance-role",
-        "ai.allowed-endpoint-hosts",
         "kafka.secret-cache.dir",
         "kafka.ssl.local-store-dir",
         "kafka.topic.default-replication-factor",

@@ -11,6 +11,8 @@ import com.google.gson.Gson;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AdHocPromptRequestDto {
 
+    /** The agent to ask (ADR-020): the AI service resolves its provider, model and key. */
+    private Long aiAgentId;
     private String provider;
     private String apiEndpoint;
     private String apiKey;
@@ -20,6 +22,14 @@ public class AdHocPromptRequestDto {
     private Boolean jsonMode;
 
     public AdHocPromptRequestDto() {}
+
+    public Long getAiAgentId() {
+        return aiAgentId;
+    }
+
+    public void setAiAgentId(Long aiAgentId) {
+        this.aiAgentId = aiAgentId;
+    }
 
     public String getProvider() {
         return provider;

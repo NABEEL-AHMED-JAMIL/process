@@ -43,9 +43,6 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // match across the segment boundary -- so every batched log line was rejected
                 // with a 401 and silently lost. The batch endpoint is listed in its own right.
                 .antMatchers("/changeState/**", "/addLogs/**", "/addLogsBatch/**").permitAll()
-                // A worker running an AI step it was handed: proved by the run's callback token,
-                // checked in AiPromptServiceImpl.runForWorker, the same way the callbacks above are.
-                .antMatchers(HttpMethod.POST, "/aiPrompt.json/run").permitAll()
                 // The meter asks whether a run's token is live; the token is the proof.
                 .antMatchers(HttpMethod.POST, "/meter.json/verifyRun").permitAll()
 

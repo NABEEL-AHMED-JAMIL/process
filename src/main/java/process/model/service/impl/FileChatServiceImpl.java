@@ -427,8 +427,8 @@ public class FileChatServiceImpl implements FileChatService {
 
         // File chat always runs through a configured AI Agent now -- e.g. an OpenAI agent set
         // up on the AI Agents page -- never a bare Ollama model name entered ad hoc.
-        // resolveRuntimeConfig re-checks ownership/status itself and returns the DECRYPTED key,
-        // scoped to this one request.
+        // resolveRuntimeConfig re-checks ownership/status in the AI service. The agent's key stays
+        // there (ADR-020): the ad-hoc call below names the agent, and AI uses the key it holds.
         ResponseDto agentConfigResponse = this.aiAgentService.resolveRuntimeConfig(dto.getAiAgentId());
         if (!SUCCESS.equals(agentConfigResponse.getStatus())) {
             return agentConfigResponse;
@@ -474,6 +474,7 @@ public class FileChatServiceImpl implements FileChatService {
         adHocPromptRequestDto.setModel(model);
         adHocPromptRequestDto.setApiKey(apiKey);
         adHocPromptRequestDto.setApiEndpoint(apiEndpoint);
+        adHocPromptRequestDto.setAiAgentId(dto.getAiAgentId());
         adHocPromptRequestDto.setInstructions(instructions);
         adHocPromptRequestDto.setText(dto.getMessage());
         // Carried from the agent's own row. resolveRuntimeConfig has always resolved it and this

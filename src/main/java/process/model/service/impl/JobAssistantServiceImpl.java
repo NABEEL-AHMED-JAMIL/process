@@ -100,6 +100,7 @@ public class JobAssistantServiceImpl {
         prompt.setModel(config.getModel());
         prompt.setApiKey(config.getApiKey());
         prompt.setApiEndpoint(config.getApiEndpoint());
+        prompt.setAiAgentId(dto.getAiAgentId());
         prompt.setInstructions(this.buildInstructions(job, dto.getHistory()));
         prompt.setText(dto.getMessage());
 

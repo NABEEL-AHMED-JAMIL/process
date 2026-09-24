@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
-import process.model.pojo.AiPrompt;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
@@ -43,7 +42,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import process.model.dto.AiPromptDto;
 import process.model.projection.PipelineRowProjection;
 import process.model.projection.PipelineSummaryProjection;
-import process.model.repository.AiPromptRepository;
+import process.ai.AiPort;
 
 /**
  * Form definitions: what a pipeline's payload looks like, so tasks can be filled in.
@@ -76,7 +75,7 @@ public class PipelineServiceImpl {
 
     /** Optional so the existing tests' constructor still stands; null means no AI-step check. */
     @Autowired(required = false)
-    private AiPromptRepository aiPromptRepository;
+    private AiPort ai;
 
     public PipelineServiceImpl(PipelineRepository pipelineRepository, TenantRepository tenantRepository,
         UserNameResolver userNameResolver, SourceTaskTypeRepository sourceTaskTypeRepository) {
@@ -417,7 +416,16 @@ public class PipelineServiceImpl {
      * step runs, and the step itself is its own output), and nothing else.
      */
     private String validateAiSteps(Pipeline form) {
-        if (this.aiPromptRepository == null) return null;
+        if (this.ai == null) return null;
+        Map<Long, AiPort.PromptInfo> prompts;
+        try {
+            // The prompts are AI's (ADR-020): every step's prompt in one question, never one per step.
+            prompts = this.ai.prompts(form.getFields().stream().filter(f -> "ai".equals(f.getFieldType()))
+                .map(PipelineField::getPromptId).collect(Collectors.toList()));
+        } catch (AiPort.AiUnavailableException ex) {
+            logger.warn("Pipeline form check: {}", ex.getMessage());
+            return "The AI steps could not be checked right now, because the AI service did not answer. Try again in a moment.";
+        }
         Set<String> before = new HashSet<>();
         // Tags a worker step writes: a server step (which runs earlier, before dispatch) cannot read them.
         Set<String> workerWritten = new HashSet<>();
@@ -425,20 +433,20 @@ public class PipelineServiceImpl {
             if (!"ai".equals(field.getFieldType())) { before.add(field.getTagKey()); continue; }
             boolean inWorker = "worker".equals(field.getRunIn());
             if (field.getPromptId() == null) return String.format("The AI step <%s> names no prompt.", field.getTagKey());
-            Optional<AiPrompt> prompt = this.aiPromptRepository.findById(field.getPromptId()).filter(p -> p.getStatus() != Status.Delete);
-            if (!prompt.isPresent() || !Objects.equals(prompt.get().getTenantId(), form.getTenantId())) {
+            Optional<AiPort.PromptInfo> prompt = Optional.ofNullable(prompts.get(field.getPromptId()))
+                .filter(p -> !Status.Delete.name().equals(p.status));
+            if (!prompt.isPresent() || !Objects.equals(prompt.get().tenantId, form.getTenantId())) {
                 return String.format("The AI step <%s> names a prompt this workspace cannot use.", field.getTagKey());
             }
-            if (prompt.get().getStatus() != Status.Active) {
-                return String.format("The AI step <%s> names \"%s\", which is not active. Activate the prompt first.", field.getTagKey(), prompt.get().getName());
+            if (!Status.Active.name().equals(prompt.get().status)) {
+                return String.format("The AI step <%s> names \"%s\", which is not active. Activate the prompt first.", field.getTagKey(), prompt.get().name);
             }
             Map<String, String> map = new HashMap<>();
             if (field.getVariableMap() != null && !field.getVariableMap().trim().isEmpty()) {
                 try { map = new Gson().fromJson(field.getVariableMap(), new TypeToken<Map<String, String>>() {}.getType()); }
                 catch (Exception ex) { return String.format("The AI step <%s> has an unreadable variable map.", field.getTagKey()); }
             }
-            List<AiPromptDto.Variable> variables = prompt.get().getVariables() == null ? new ArrayList<>()
-                : new Gson().fromJson(prompt.get().getVariables(), new TypeToken<List<AiPromptDto.Variable>>() {}.getType());
+            List<AiPromptDto.Variable> variables = prompt.get().variables;
             for (AiPromptDto.Variable v : variables) {
                 String source = map.get(v.name);
                 if (source == null || source.trim().isEmpty()) {
@@ -465,10 +473,18 @@ public class PipelineServiceImpl {
 
     /** The prompt's name on each AI step, for the screens. */
     void namePrompts(List<PipelineField> fields) {
-        if (this.aiPromptRepository == null || fields == null) return;
+        if (this.ai == null || fields == null) return;
+        Map<Long, AiPort.PromptInfo> prompts;
+        try {
+            prompts = this.ai.prompts(fields.stream().map(PipelineField::getPromptId).collect(Collectors.toList()));
+        } catch (AiPort.AiUnavailableException ex) {
+            // A name is an enrichment: the pipeline still shows, with its steps unnamed.
+            logger.warn("Could not name the pipeline's prompts: {}", ex.getMessage());
+            return;
+        }
         for (PipelineField f : fields) {
-            if (f.getPromptId() == null) continue;
-            this.aiPromptRepository.findById(f.getPromptId()).ifPresent(p -> f.setPromptName(p.getName()));
+            AiPort.PromptInfo prompt = f.getPromptId() == null ? null : prompts.get(f.getPromptId());
+            if (prompt != null) f.setPromptName(prompt.name);
         }
     }
 
