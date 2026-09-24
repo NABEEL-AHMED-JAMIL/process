@@ -495,7 +495,11 @@ public class SourceJobServiceImpl implements SourceJobService {
         }
         this.producerBulkEngine.addManualJobInQueue(sourceJob.get());
         sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
-        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.", sourceJob);
+        // A DTO, not the entity (MIG-67). Jackson walked the entity after the transaction closed: its lazy
+        // tenant and assignee, its task's payload rows, and the task type's Kafka profile -- encrypted SASL
+        // and keystore passwords included, which no response should carry. Neither console reads it.
+        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.",
+            sourceJob.map(this::mapSourceJobToDto).orElse(null));
     }
 
     @Override
@@ -547,7 +551,8 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.producerBulkEngine.skipManualJobInQueue(scheduler);
         ProcessTimeUtil.applyNextRun(scheduler);
         this.schedulerRepository.save(scheduler);
-        return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
+        // The schedule as a DTO, not the entity and its lazy job graph behind it (MIG-67).
+        return new ResponseDto(SUCCESS, "SourceJob skip successfully.", this.getSchedulerDto(scheduler));
     }
 
     @Override

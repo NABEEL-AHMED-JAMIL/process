@@ -757,8 +757,11 @@ public class SettingServiceImpl implements SettingService {
             boolean isTenantExtendableList = isTenantExtendable(parentLookup.get());
             boolean isPlatformAdmin = TenantContext.isPlatformAdmin();
             Long callerTenantId = TenantContext.getTenantId();
-            if (!isNull(parentLookup.get().getChildren())) {
-                for (LookupData lookup: parentLookup.get().getChildren()) {
+            // Read by query, not through the parent's lazy collection (MIG-67): nothing here is
+            // transactional, and the collection only loaded while enable_lazy_load_no_trans let it.
+            List<LookupData> children = this.lookupDataRepository.findChildrenOf(parentLookUpId);
+            if (!isNull(children)) {
+                for (LookupData lookup: children) {
                     // Owned: only the caller's own rows. Extendable: the platform's shared rows
                     // as well, since those are what a tenant points its models at.
                     if (!isPlatformAdmin && isTenantOwnedList

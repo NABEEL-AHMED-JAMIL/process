@@ -594,7 +594,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
 
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId) {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        Optional<SourceTask> sourceTask = this.sourceTaskRepository.findById(sourceTaskId);
+        // With its tag rows (MIG-67): they are mapped below, outside any transaction.
+        Optional<SourceTask> sourceTask = this.sourceTaskRepository.findWithPayloadByTaskDetailId(sourceTaskId);
         // The by-id read has to agree with the list the caller came from: a soft-deleted task
         // reads as absent, exactly like one belonging to another tenant.
         if (sourceTask.isPresent()

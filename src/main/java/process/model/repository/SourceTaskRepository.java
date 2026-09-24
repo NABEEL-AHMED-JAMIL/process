@@ -50,6 +50,10 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
 
     Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId, Status taskStatus);
 
+    /** A task with its tag rows in one read, for a caller outside a transaction (MIG-67). */
+    @Query("select distinct st from SourceTask st left join fetch st.sourceTaskPayload where st.taskDetailId = ?1")
+    Optional<SourceTask> findWithPayloadByTaskDetailId(Long taskDetailId);
+
     /**
      * Live tasks -- Active or Inactive, not deleted -- that name this lookup row as their home page or group.
      * What stops a home page or group being deleted out from under them (MIG-165).
