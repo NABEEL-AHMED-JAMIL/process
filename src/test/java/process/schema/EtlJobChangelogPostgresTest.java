@@ -253,4 +253,32 @@ class EtlJobChangelogPostgresTest {
         assertThat(sql.queryForObject("SELECT is_nullable FROM information_schema.columns WHERE table_name = 'source_task_type' "
             + "AND column_name = 'tenant_id'", String.class)).isEqualTo("NO");
     }
+
+    /**
+     * MIG-32 (V70.5): the reference rows every database needs, seeded under the id rule the decision records
+     * -- a seeded row takes a fixed id below 1000, every sequence starts at 1000, so the two can never meet.
+     * Before, a built database had no lookup at all: no QUEUE_FETCH_LIMIT (the engine fell back to 1000 and
+     * warned every cycle) and no PIPELINE_HOME_PAGES or TASK_GROUPS family, so no workspace could add a home
+     * page or a group.
+     */
+    @Test
+    void theReferenceFamiliesAreSeededBelowTheSequence() {
+        JdbcTemplate sql = db.sql();
+        List<Map<String, Object>> seeded = sql.queryForList("SELECT lookup_id, lookup_type, lookup_value, is_encrypted, tenant_id, "
+            + "parent_lookup_id FROM lookup_data WHERE lookup_type IN ('QUEUE_FETCH_LIMIT', 'PIPELINE_HOME_PAGES', 'TASK_GROUPS') ORDER BY lookup_id");
+
+        assertThat(seeded).extracting(row -> row.get("lookup_type"))
+            .containsExactly("QUEUE_FETCH_LIMIT", "PIPELINE_HOME_PAGES", "TASK_GROUPS");
+        assertThat(seeded).allSatisfy(row -> {
+            assertThat(((Number) row.get("lookup_id")).longValue()).isBetween(1L, 999L);
+            assertThat(row.get("tenant_id")).isNull();
+            assertThat(row.get("parent_lookup_id")).isNull();
+            assertThat(row.get("is_encrypted")).isEqualTo(false);
+        });
+        // QUEUE_FETCH_LIMIT stays resolvable, readable as a number, and what the engine already used without it.
+        assertThat(seeded.get(0).get("lookup_value")).isEqualTo("1000");
+        // The next row the console adds takes the sequence's id, 1000 or later -- never a seeded one.
+        assertThat(sql.queryForObject("SELECT start_value FROM pg_sequences WHERE sequencename = 'lookup_id_seq'", Long.class))
+            .isGreaterThanOrEqualTo(1000L);
+    }
 }

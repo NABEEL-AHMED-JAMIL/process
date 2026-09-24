@@ -63,3 +63,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V70.3-source-task-references-are-bigint-foreign-keys.yaml
   - include:
       file: db/changelog/yaml/V70.4-retire-task-form-names.yaml
+  - include:
+      file: db/changelog/yaml/V70.5-seed-reference-lookups.yaml

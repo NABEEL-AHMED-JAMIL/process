@@ -44,16 +44,17 @@ class LazyLoadOutsideTransactionPostgresTest {
     private static LocalContainerEntityManagerFactoryBean factoryBean;
     private static LookupDataRepository lookups;
     private static SourceTaskRepository tasks;
+    private static Long homePages;
 
     @BeforeAll
     static void build() throws Exception {
         db = ScratchEtlJob.build("lazy_load");
         JdbcTemplate sql = db.sql();
         sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (2905, 'Active', 'MCN', 'MedAxis')");
-        sql.update("INSERT INTO lookup_data (lookup_id, lookup_type, lookup_value, date_created) VALUES (1017, 'PIPELINE_HOME_PAGES', 'Home Pages', now())");
+        // PIPELINE_HOME_PAGES and QUEUE_FETCH_LIMIT are the ones V70.5 seeds; a workspace's home page goes under the family.
+        homePages = sql.queryForObject("SELECT lookup_id FROM lookup_data WHERE lookup_type = 'PIPELINE_HOME_PAGES'", Long.class);
         sql.update("INSERT INTO lookup_data (lookup_id, lookup_type, lookup_value, parent_lookup_id, tenant_id, date_created) "
-            + "VALUES (1275, 'MedAxis Home', 'https://console.medaxiscare.demo', 1017, 2905, now())");
-        sql.update("INSERT INTO lookup_data (lookup_id, lookup_type, lookup_value, date_created) VALUES (1002, 'QUEUE_FETCH_LIMIT', '5000', now())");
+            + "VALUES (1275, 'MedAxis Home', 'https://console.medaxiscare.demo', ?, 2905, now())", homePages);
         sql.update("INSERT INTO source_task_type (source_task_type_id, service_name, description, queue_topic_partition, tenant_id) "
             + "VALUES (7300, 'worker', 'd', 'topic=scrapping-topic&partitions=[*]', 2905)");
         sql.update("INSERT INTO source_task (task_detail_id, task_name, task_status, source_task_type_id, tenant_id) "
@@ -106,13 +107,13 @@ class LazyLoadOutsideTransactionPostgresTest {
         LookupDataDto homePages = cache.getParentLookupById("PIPELINE_HOME_PAGES");
         assertThat(homePages).as("the rebuild failed and left the cache empty").isNotNull();
         assertThat(homePages.getChildren()).extracting(LookupDataDto::getLookupType).containsExactly("MedAxis Home");
-        assertThat(cache.getParentLookupById("QUEUE_FETCH_LIMIT").getLookupValue()).isEqualTo("5000");
+        assertThat(cache.getParentLookupById("QUEUE_FETCH_LIMIT").getLookupValue()).isEqualTo("1000");
     }
 
     /** SettingServiceImpl.fetchSubLookupByParentId: the children of one family, read by query, not by association. */
     @Test
     void aFamilysChildrenAreReadWithoutTheAssociation() {
-        List<LookupData> children = lookups.findChildrenOf(1017L);
+        List<LookupData> children = lookups.findChildrenOf(homePages);
 
         assertThat(children).extracting(LookupData::getLookupType).containsExactly("MedAxis Home");
     }
