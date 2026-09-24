@@ -92,3 +92,6 @@ databaseChangeLog:
       file: db/changelog/yaml/V87.0-dispatch-outbox.yaml
   - include:
       file: db/changelog/yaml/V88.0-orchestration-setting.yaml
+  # V100-V119: timestamptz (MIG-28/96/163) and tenant_id (MIG-29/164).
+  - include:
+      file: db/changelog/yaml/V100.0-timestamps-are-instants.yaml

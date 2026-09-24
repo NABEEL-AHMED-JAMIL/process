@@ -110,7 +110,7 @@ class QueryServiceLoggingTest {
             assertThat(this.log.list).as("nothing at %s", deployed).isEmpty();
         } else {
             assertThat(this.lines()).contains("INNER JOIN source_job ON source_job.job_id = job_queue.job_id")
-                .contains("source_job.tenant_id = ?").contains("DATE(job_queue.date_created) = ?");
+                .contains("source_job.tenant_id = ?").contains("DATE(job_queue.date_created AT TIME ZONE ?) = ?");
         }
     }
 

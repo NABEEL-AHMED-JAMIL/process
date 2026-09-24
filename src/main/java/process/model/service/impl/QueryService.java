@@ -154,7 +154,8 @@ public class QueryService {
         } else {
 
             selectPortion = "select sj.job_id, sj.job_name, sj.job_status, sj.execution, sj.job_running_status, " +
-                "to_char(sj.last_job_run, 'YYYY-MM-DD HH24:MI:SS'), sj.priority, cast(sj.date_created AS varchar) ";
+                "to_char(sj.last_job_run AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD HH24:MI:SS'), sj.priority, " +
+                "cast(sj.date_created AT TIME ZONE 'America/Chicago' AS varchar) ";
         }
         String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
         query += "where st.task_status in ('Active', 'Inactive') and sj.job_status in ('Active', 'Inactive') " + this.tenantClause("sj");
@@ -163,12 +164,12 @@ public class QueryService {
         }
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
             if ((startDate != null && !startDate.isEmpty()) && (endDate != null && !endDate.isEmpty())) {
-                query += String.format("and cast(sj.date_created as date) between '%s' and '%s' ",
+                query += String.format("and cast(sj.date_created AT TIME ZONE 'America/Chicago' as date) between '%s' and '%s' ",
                     this.requireValidDate(startDate), this.requireValidDate(endDate));
             } else if (startDate != null && !startDate.isEmpty()) {
-                query += String.format("and cast(sj.date_created as date) >= '%s' ", this.requireValidDate(startDate));
+                query += String.format("and cast(sj.date_created AT TIME ZONE 'America/Chicago' as date) >= '%s' ", this.requireValidDate(startDate));
             } else if (endDate != null && !endDate.isEmpty()) {
-                query += String.format("and cast(sj.date_created as date) <= '%s' ", this.requireValidDate(endDate));
+                query += String.format("and cast(sj.date_created AT TIME ZONE 'America/Chicago' as date) <= '%s' ", this.requireValidDate(endDate));
             }
         }
         if (searchTextDto != null && (searchTextDto.getItemName() != null && searchTextDto.getItemValue() != null)) {
@@ -180,7 +181,7 @@ public class QueryService {
             } else if (searchTextDto.getItemName().equalsIgnoreCase("job_status")) {
                 query += "and cast(sj.job_status as varchar) like ('%" + itemValue + "%') ";
             } else if (searchTextDto.getItemName().equalsIgnoreCase("date_created")) {
-                query += "and cast(sj.date_created as varchar) like ('%" + itemValue + "%') ";
+                query += "and cast(sj.date_created AT TIME ZONE 'America/Chicago' as varchar) like ('%" + itemValue + "%') ";
             }
         }
         if (!isCount) {
@@ -195,6 +196,10 @@ public class QueryService {
     /**
      * No dates is all time. A date that is there but is not one is refused (MIG-103): it used to be
      * dropped without a word, so a typo showed all-time figures under the range the person asked for.
+     *
+     * The day is Chicago's (V100, MIG-163): the columns are instants now, and date() of an instant is the day
+     * in whatever zone the session happens to be in. Spelled exactly as idx_job_queue_date_created_day is, so
+     * a filter on job_queue.date_created still uses it (DashboardIndexPostgresTest).
      */
     private String dateRangeFilter(String column, String startDate, String endDate) {
         for (String date : new String[] {startDate, endDate}) {
@@ -205,7 +210,7 @@ public class QueryService {
         if (!isValidDate(startDate) || !isValidDate(endDate)) {
             return "";
         }
-        return String.format("and date(%s) between '%s' and '%s' ", column, startDate, endDate);
+        return String.format("and date(%s AT TIME ZONE 'America/Chicago') between '%s' and '%s' ", column, startDate, endDate);
     }
 
     /**
@@ -358,7 +363,7 @@ public class QueryService {
         return "select coalesce(st.task_name, '(no task)') as task, "
             + "q.job_status as status, "
             + "coalesce(u.full_name, u.username, 'Unassigned') as owner, "
-            + "to_char(coalesce(q.start_time, q.skip_time), 'YYYY-MM-DD') as day, "
+            + "to_char(coalesce(q.start_time, q.skip_time) AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD') as day, "
             + "case when q.end_time is null then -1 "
             + "else round(extract(epoch from (q.end_time - q.start_time))) end as seconds, "
             + "sj.job_name as job, q.job_queue_id as run_id, "
@@ -448,9 +453,9 @@ public class QueryService {
         // Tue, Wed -- and grouping on the name alone merged the same weekday from different
         // weeks into one bar whenever the range ran longer than seven days.
         return String.format("select weekData.daycode, count(*) from (\n" +
-            "select job_queue_id, to_char(cast(jq.date_created as date), 'Dy') as daycode,\n" +
-            "cast(jq.date_created as date) as runDate\n" +
-            "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created) between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')" +
+            "select job_queue_id, to_char(cast(jq.date_created AT TIME ZONE 'America/Chicago' as date), 'Dy') as daycode,\n" +
+            "cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) as runDate\n" +
+            "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created AT TIME ZONE 'America/Chicago') between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')" +
             this.tenantClause("sj") + ") as weekData\n" +
             "group by weekData.runDate, weekData.daycode\n" +
             "order by weekData.runDate", this.requireValidDate(startDate), this.requireValidDate(endDate));
@@ -459,10 +464,10 @@ public class QueryService {
     public String weeklyHrsRunningJobStatistics(String startDate, String endDate) {
 
         return String.format("select weekData.daycode, weekData.hr, weekData.date, count(*)\n" +
-            "from (select job_queue_id, to_char(cast(jq.date_created as date), 'Day') as daycode,\n" +
-            "cast(jq.date_created as date) as date, cast(jq.date_created as time) as time, \n" +
-            "extract(hour from cast(jq.date_created as time)) as hr\n" +
-            "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created) between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')" +
+            "from (select job_queue_id, to_char(cast(jq.date_created AT TIME ZONE 'America/Chicago' as date), 'Day') as daycode,\n" +
+            "cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) as date, cast(jq.date_created AT TIME ZONE 'America/Chicago' as time) as time, \n" +
+            "extract(hour from cast(jq.date_created AT TIME ZONE 'America/Chicago' as time)) as hr\n" +
+            "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created AT TIME ZONE 'America/Chicago') between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')" +
             this.tenantClause("sj") + ") as weekData\n" +
             "group by weekData.daycode, weekData.hr, weekData.date", this.requireValidDate(startDate), this.requireValidDate(endDate));
     }
@@ -490,8 +495,8 @@ public class QueryService {
                 "        source_job.tenant_id\n" +
                 "    FROM job_queue\n" +
                 "    INNER JOIN source_job ON source_job.job_id = job_queue.job_id\n" +
-                "    WHERE DATE(job_queue.date_created) = '%s'\n" +
-                "      AND EXTRACT(HOUR FROM job_queue.date_created) = %d\n" +
+                "    WHERE DATE(job_queue.date_created AT TIME ZONE 'America/Chicago') = '%s'\n" +
+                "      AND EXTRACT(HOUR FROM job_queue.date_created AT TIME ZONE 'America/Chicago') = %d\n" +
                 "      AND UPPER(source_job.job_status) IN ('ACTIVE','INACTIVE')\n" +
                 "      " + tenantFilter + "\n" +
                 "    GROUP BY job_queue.job_id, source_job.job_name, source_job.tenant_id\n" +
@@ -514,8 +519,8 @@ public class QueryService {
                 "        NULL AS tenant_id\n" +
                 "    FROM job_queue\n" +
                 "    INNER JOIN source_job ON source_job.job_id = job_queue.job_id\n" +
-                "    WHERE DATE(job_queue.date_created) = '%s'\n" +
-                "      AND EXTRACT(HOUR FROM job_queue.date_created) = %d\n" +
+                "    WHERE DATE(job_queue.date_created AT TIME ZONE 'America/Chicago') = '%s'\n" +
+                "      AND EXTRACT(HOUR FROM job_queue.date_created AT TIME ZONE 'America/Chicago') = %d\n" +
                 "      AND UPPER(source_job.job_status) IN ('ACTIVE','INACTIVE')\n" +
                 "      " + tenantFilter + "\n" +
                 ") t\n" +
@@ -554,10 +559,10 @@ public class QueryService {
                 "inner join source_job on source_job.job_id = job_queue.job_id where 1=1\n" +
                 this.tenantClause("source_job") + "\n";
         if (!ProcessUtil.isNull(targetDate)) {
-            query += String.format(" and date(job_queue.date_created) = '%s' \n", this.requireValidDate(targetDate));
+            query += String.format(" and date(job_queue.date_created AT TIME ZONE 'America/Chicago') = '%s' \n", this.requireValidDate(targetDate));
         }
         if (!ProcessUtil.isNull(targetHr)) {
-            query += String.format(" and extract(hour from cast(job_queue.date_created as time)) = %d\n", targetHr);
+            query += String.format(" and extract(hour from cast(job_queue.date_created AT TIME ZONE 'America/Chicago' as time)) = %d\n", targetHr);
         }
         if (!ProcessUtil.isNull(jobId)) {
             query += String.format("and job_queue.job_id = %d\n", jobId);
@@ -582,7 +587,7 @@ public class QueryService {
 
         String query = selectPortion + "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id \n";
         if (!isState) {
-            query += String.format("where cast(jq.date_created as date) between '%s' and '%s' \n",
+            query += String.format("where cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) between '%s' and '%s' \n",
                     this.requireValidDate(messageQSearch.getFromDate()), this.requireValidDate(messageQSearch.getToDate()));
             query += "and UPPER(sj.job_status) <> 'DELETE' and UPPER(jq.status) <> 'DELETE' \n";
             query += this.tenantClause("sj") + "\n";

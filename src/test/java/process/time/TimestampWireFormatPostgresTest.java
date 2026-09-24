@@ -32,6 +32,7 @@ import process.model.service.impl.SourceTaskServiceImpl;
 import process.security.TenantContext;
 
 import javax.persistence.EntityManager;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -246,7 +247,7 @@ class TimestampWireFormatPostgresTest {
     void theRunReportDatesTheRunByItsChicagoDay() {
         asOwner();
         List<Object[]> rows = queries.executeQuery(queries.runReportRows("2026-01-15", "2026-01-15"));
-        System.out.println("WIRE runReport rows=" + rows.size() + (rows.isEmpty() ? "" : " first=" + java.util.Arrays.toString(rows.get(0))));
+        System.out.println("WIRE runReport rows=" + rows.size() + (rows.isEmpty() ? "" : " first=" + Arrays.toString(rows.get(0))));
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)[3]).isEqualTo("2026-01-15");
     }

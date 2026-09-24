@@ -67,7 +67,7 @@ public class UserStatisticsQueryTest {
         String sql = queryService.userStatistics("2026-08-01", "2026-08-24");
         int joinAt = sql.indexOf("left join job_queue");
         int whereAt = sql.indexOf("where u.status");
-        int filterAt = sql.indexOf("date(jq.date_created)");
+        int filterAt = sql.indexOf("date(jq.date_created AT TIME ZONE 'America/Chicago')");
         assertTrue(filterAt > joinAt && filterAt < whereAt,
             "the range belongs in the join, or the left join collapses to an inner one: " + sql);
     }
@@ -114,8 +114,8 @@ public class UserStatisticsQueryTest {
         // made a task skipped six times look like six fewer runs.
         assertTrue(sql.contains("where (q.start_time is not null or q.skip_time is not null)"), sql);
         assertFalse(sql.contains("where q.start_time is not null and"), sql);
-        assertTrue(sql.contains("date(coalesce(q.start_time, q.skip_time)) between '2026-09-01' and '2026-09-30'"), sql);
-        assertTrue(sql.contains("to_char(coalesce(q.start_time, q.skip_time), 'YYYY-MM-DD') as day"), sql);
+        assertTrue(sql.contains("date(coalesce(q.start_time, q.skip_time) AT TIME ZONE 'America/Chicago') between '2026-09-01' and '2026-09-30'"), sql);
+        assertTrue(sql.contains("to_char(coalesce(q.start_time, q.skip_time) AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD') as day"), sql);
     }
 
     @Test

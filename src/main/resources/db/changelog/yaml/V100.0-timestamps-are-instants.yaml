@@ -1,0 +1,41 @@
+databaseChangeLog:
+  # V100-V119 are the timestamptz and tenant_id tracks' (MIG-28/96/163, MIG-29/164); identity keeps V68-V69 and
+  # V90-V99, the harness helper V120 and up.
+  - changeSet:
+      id: 100.0-timestamps-are-instants
+      author: nabeel.amd93
+      description: "Every naive timestamp process owns becomes timestamptz, read as the America/Chicago wall-clock it was written as (MIG-28, MIG-96, MIG-163, ADR-002)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V100.0-timestamps-are-instants/V100__timestamps_are_instants.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V100.0-timestamps-are-instants/V100__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+  - changeSet:
+      id: 101.0-naive-input-reads-as-chicago
+      author: nabeel.amd93
+      description: "A session that names no zone reads naive input, and renders times, as America/Chicago (MIG-163)"
+      # timestamptz takes a naive literal in the session's zone. pgjdbc -- process, Liquibase -- names the JVM's
+      # zone in its startup packet and binds Timestamps with their offset, so this changes nothing for them.
+      # Everything else names none and got the server's, UTC: psql, psycopg2 (job-search's seed scripts), and
+      # pg_dump / COPY, which is how a table is copied into another service's database. For those a naive
+      # string has meant Chicago wall-clock in etl_job since the first row; after V100, without this, it would
+      # silently mean UTC -- five or six hours off, no error. This keeps the meaning it always had.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$ BEGIN
+                EXECUTE format('ALTER DATABASE %I SET timezone TO %L', current_database(), 'America/Chicago');
+              END $$;
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$ BEGIN
+                EXECUTE format('ALTER DATABASE %I RESET timezone', current_database());
+              END $$;
