@@ -201,7 +201,14 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         return new ResponseDto(SUCCESS, "Kafka connection profiles fetched successfully.", profiles);
     }
 
+    /**
+     * One transaction for the demotion and the promotion (MIG-71). They ran as separate statements, each
+     * committing on its own, so two instances setting two defaults at once could both finish -- and the
+     * resolver reads a tenant's default with a single-result query. The partial unique indexes of V70.0
+     * now refuse the second promotion; GlobalExceptionHandler turns that into a 409 the caller can act on.
+     */
     @Override
+    @Transactional
     public ResponseDto setAsDefault(Long kafkaConnectionProfileId) throws Exception {
         if (isNull(kafkaConnectionProfileId)) {
             return new ResponseDto(ERROR, "Kafka connection profile id missing.");

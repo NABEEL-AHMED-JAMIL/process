@@ -2,6 +2,7 @@ package process.config;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -12,6 +13,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
@@ -107,8 +109,26 @@ public class KafkaTemplateProvider {
         this.storageBrowserService = storageBrowserService;
     }
 
+    /** Counts dispatches that no profile resolved for and so went out on the fallback template (MIG-45). */
+    public static final String FALLBACK_METER = "process.kafka.fallback.template";
+
+    private MeterRegistry meterRegistry;
+
+    /** Optional, so the tests that build this by hand need not supply one; the log line is written either way. */
+    @Autowired(required = false)
+    public void setMeterRegistry(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+
     public KafkaTemplate<String, String> getTemplate(Optional<KafkaConnectionProfile> profile) {
         if (!profile.isPresent()) {
+            // The deliberate degrade-never-fail path, no longer a silent one (MIG-45, DEF-127): a fresh
+            // database used to reach it on every dispatch with nothing to show for it.
+            this.logger.warn("Dispatching on the fallback template: no Kafka connection profile resolved, so this goes to "
+                + "spring.kafka.bootstrap-servers. Set a platform default Kafka connection if this is not intended.");
+            if (this.meterRegistry != null) {
+                this.meterRegistry.counter(FALLBACK_METER).increment();
+            }
             return this.fallbackTemplate;
         }
         KafkaConnectionProfile p = profile.get();

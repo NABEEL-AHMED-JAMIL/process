@@ -16,6 +16,7 @@ import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
 import process.model.service.EmbeddingService;
 import process.media.MediaPort;
+import process.filechat.FileIndexLock;
 import process.model.service.FileChatService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
@@ -30,7 +31,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import static process.util.ProcessUtil.*;
 
 /**
@@ -193,23 +193,6 @@ public class FileChatServiceImpl implements FileChatService {
      */
     private static final int RAG_TOP_K = 8;
 
-    /**
-     * One monitor per bucket+key+etag ever indexed, so two concurrent requests for the SAME
-     * not-yet-indexed file (two tabs, a double-submit) serialize on the index step instead of
-     * racing: both would otherwise see "not indexed" from an unsynchronized check, both chunk
-     * and embed the file, and their {@code indexChunks} calls (each a delete-then-write) could
-     * interleave -- one request's delete removing the other's just-written docs. Entries are
-     * never evicted; the cost is one small Object per distinct file version this process has
-     * ever indexed, for the life of the process -- a deliberate trade against the complexity of
-     * reference-counted cleanup for something this infrequent (once per file version, not once
-     * per message).
-     */
-    private final ConcurrentHashMap<String, Object> indexLocks = new ConcurrentHashMap<>();
-
-    private Object indexLockFor(String bucket, String key, String etag) {
-        return this.indexLocks.computeIfAbsent(bucket + "|" + key + "|" + etag, ignored -> new Object());
-    }
-
     private static final int MAX_EXPORT_CONTENT_CHARS = 200000;
 
     // "html" is included because the model sometimes hands back genuine HTML markup with a
@@ -252,17 +235,20 @@ public class FileChatServiceImpl implements FileChatService {
     private final AiAgentService aiAgentService;
     private final OpenSearchRagClient openSearchRagClient;
     private final EmbeddingService embeddingService;
+    private final FileIndexLock indexLock;
 
     public FileChatServiceImpl(StorageBrowserService storageBrowserService,
         MediaPort media,
         AiAgentService aiAgentService,
         OpenSearchRagClient openSearchRagClient,
-        EmbeddingService embeddingService) {
+        EmbeddingService embeddingService,
+        FileIndexLock indexLock) {
         this.storageBrowserService = storageBrowserService;
         this.media = media;
         this.aiAgentService = aiAgentService;
         this.openSearchRagClient = openSearchRagClient;
         this.embeddingService = embeddingService;
+        this.indexLock = indexLock;
     }
 
     /**
@@ -465,6 +451,10 @@ public class FileChatServiceImpl implements FileChatService {
                 this.memoizedExtraction(dto.getBucket(), dto.getKey(), etag, config), provider, dto.getMessage());
         } catch (UnsupportedFileTypeException ex) {
             return new ResponseDto(ERROR, ex.getMessage());
+        } catch (FileIndexLock.Busy ex) {
+            logger.info("File Chat: {}", ex.getMessage());
+            return new ResponseDto(ERROR, "This file is still being prepared for chat by another request. "
+                + "Ask again in a minute.");
         }
         String instructions = this.buildInstructions(dto.getBucket(), dto.getKey(), context,
             dto.getHistory(), config.getInstructions());
@@ -642,41 +632,66 @@ public class FileChatServiceImpl implements FileChatService {
                         + "without re-indexing it.", bucket, key);
                 } else if (result.chunks.isEmpty()) {
                     // Nothing indexed for this exact file version yet. Serialized per
-                    // bucket+key+etag -- see indexLockFor -- and re-checked once inside the lock,
-                    // so a request that lost the race for the lock finds the winner's work already
-                    // done instead of chunking/embedding/indexing the same file a second time. This
-                    // is the ONLY branch that reads the raw file at all when RAG is healthy -- an
-                    // already-indexed file (the common repeat-question case) never calls
-                    // fileTextSupplier, which is the whole point of deferring it to a supplier
-                    // instead of extracting unconditionally before this method is even called.
-                    synchronized (this.indexLockFor(bucket, key, etag)) {
-                        result = this.openSearchRagClient.searchRelevantChunks(
-                            bucket, key, etag, queryEmbedding, RAG_TOP_K);
-                        // The re-check can itself come back failed -- the cluster may have gone
-                        // down between the two calls -- and that is still not a licence to index.
-                        if (!result.failed && result.chunks.isEmpty()) {
-                            List<String> chunks = TextChunker.chunk(fileTextSupplier.get());
-                            if (!chunks.isEmpty()) {
-                                List<float[]> embeddings = this.embeddingService.embedAll(chunks);
-                                OpenSearchRagClient.IndexOutcome outcome =
-                                    this.openSearchRagClient.indexChunks(TenantContext.getTenantId(), bucket, key,
-                                        etag, chunks, embeddings, this.embeddingService.model());
-                                // A bulk write answers 200 even when it rejected individual items,
-                                // so "indexed N chunks" was printed for files that had stored
-                                // fewer -- and the gap it left was then read back as a complete
-                                // file. The outcome is null only from a mock that stubs the old
-                                // void signature; treat that as "nothing to report".
-                                if (outcome != null && !outcome.isComplete()) {
-                                    logger.error("File Chat: {}/{} (etag {}) stored only {} of {} chunks -- {}",
-                                        bucket, key, etag, outcome.getStored(), outcome.getAttempted(),
-                                        outcome.getFailureSummary());
-                                } else {
-                                    logger.info("File Chat: indexed {} chunks for {}/{} (etag {}).",
-                                        chunks.size(), bucket, key, etag);
+                    // bucket+key+etag across every replica (FileIndexLock, MIG-111) and re-checked
+                    // once inside the lock, so a request that lost the race -- in this JVM or another
+                    // -- finds the winner's work already done instead of extracting (for audio, a
+                    // fresh transcription), chunking, embedding and indexing the same file again.
+                    // This is the ONLY branch that reads the raw file at all when RAG is healthy --
+                    // an already-indexed file (the common repeat-question case) never calls
+                    // fileTextSupplier, nor takes the lock, which is the whole point of deferring it
+                    // to a supplier instead of extracting unconditionally before this method runs.
+                    FileIndexLock.Held lock;
+                    try {
+                        lock = this.indexLock.acquire(bucket, key, etag);
+                    } catch (FileIndexLock.Unavailable ex) {
+                        // No lock, no index write: two unlocked writers interleave their
+                        // delete-then-write and one erases the other's chunks. Answer from the raw
+                        // file, as for an OpenSearch outage, until the lock can be asked again.
+                        logger.warn("File Chat: the index lock is unavailable for {}/{}; answering from the raw "
+                            + "file without indexing it: {}", bucket, key, ex.getMessage());
+                        lock = null;
+                    }
+                    if (lock != null) {
+                        try {
+                            result = this.openSearchRagClient.searchRelevantChunks(
+                                bucket, key, etag, queryEmbedding, RAG_TOP_K);
+                            // The re-check can itself come back failed -- the cluster may have gone
+                            // down between the two calls, or while this request waited out a dead
+                            // holder's lease -- and that is still not a licence to index.
+                            if (!result.failed && result.chunks.isEmpty()) {
+                                List<String> chunks = TextChunker.chunk(fileTextSupplier.get());
+                                if (!chunks.isEmpty()) {
+                                    List<float[]> embeddings = this.embeddingService.embedAll(chunks);
+                                    // Asked of Redis, not remembered: a lock whose lease ran out while
+                                    // this was extracting may already be another replica's, and two
+                                    // writers must never interleave their delete-then-write.
+                                    if (!lock.stillHeld()) {
+                                        logger.warn("File Chat: lost the index lock for {}/{} (etag {}) while "
+                                            + "extracting; answering without writing the index.", bucket, key, etag);
+                                    } else {
+                                        OpenSearchRagClient.IndexOutcome outcome =
+                                            this.openSearchRagClient.indexChunks(TenantContext.getTenantId(), bucket,
+                                                key, etag, chunks, embeddings, this.embeddingService.model());
+                                        // A bulk write answers 200 even when it rejected individual
+                                        // items, so "indexed N chunks" was printed for files that had
+                                        // stored fewer -- and the gap it left was then read back as a
+                                        // complete file. The outcome is null only from a mock that
+                                        // stubs the old void signature; treat that as "nothing to report".
+                                        if (outcome != null && !outcome.isComplete()) {
+                                            logger.error("File Chat: {}/{} (etag {}) stored only {} of {} chunks -- {}",
+                                                bucket, key, etag, outcome.getStored(), outcome.getAttempted(),
+                                                outcome.getFailureSummary());
+                                        } else {
+                                            logger.info("File Chat: indexed {} chunks for {}/{} (etag {}).",
+                                                chunks.size(), bucket, key, etag);
+                                        }
+                                        result = this.openSearchRagClient.searchRelevantChunks(
+                                            bucket, key, etag, queryEmbedding, RAG_TOP_K);
+                                    }
                                 }
-                                result = this.openSearchRagClient.searchRelevantChunks(
-                                    bucket, key, etag, queryEmbedding, RAG_TOP_K);
                             }
+                        } finally {
+                            lock.close();
                         }
                     }
                 } else {
@@ -692,6 +707,11 @@ public class FileChatServiceImpl implements FileChatService {
                     logger.warn("File Chat: RAG retrieval returned nothing for {}/{}; falling back to direct content.",
                         bucket, key);
                 }
+            } catch (FileIndexLock.Busy ex) {
+                // Not a failure to degrade past either: another request -- here or on another
+                // replica -- is alive and extracting this very file. Degrading would read the raw
+                // file, i.e. extract it a second time, which is the cost the lock exists to save.
+                throw ex;
             } catch (UnsupportedFileTypeException ex) {
                 // Not a RAG failure to degrade past -- the file itself has no readable content,
                 // which the fallback below cannot fix either since it hits the same supplier.

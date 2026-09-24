@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.filechat.UncontendedFileIndexLock;
 import process.model.dto.AiAgentRuntimeConfigDto;
 import process.model.dto.BucketSummaryDto;
 import process.model.dto.FileChatMessageRequestDto;
@@ -61,7 +62,7 @@ public class FileChatLazyExtractionTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, new UncontendedFileIndexLock());
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("Docs", BUCKET, "MINIO")));

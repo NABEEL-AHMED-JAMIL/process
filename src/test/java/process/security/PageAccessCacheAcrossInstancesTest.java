@@ -1,5 +1,7 @@
 package process.security;
 
+import process.util.InMemoryVersionStore;
+
 import org.junit.jupiter.api.Test;
 import process.model.enums.PageKey;
 
@@ -63,5 +65,40 @@ class PageAccessCacheAcrossInstancesTest {
     @Test
     void theTtlIsFifteenSeconds() {
         assertThat(PageAccessCache.TTL_MILLIS).isEqualTo(15_000L);
+    }
+
+    /**
+     * With the shared version (Redis in production), a revocation reaches every instance at its next
+     * poll -- two seconds -- instead of at the end of the 15-second TTL, which stays as the bound
+     * when Redis cannot be reached (MIG-110).
+     */
+    @Test
+    void withTheSharedVersionARevocationReachesEveryInstanceAtItsNextPoll() {
+        this.database.put(OLIVIA, EnumSet.of(PageKey.JOBS, PageKey.REPORTS));
+        InMemoryVersionStore redis = new InMemoryVersionStore();
+        PageAccessCache a = new PageAccessCache(redis, this.now::get);
+        PageAccessCache b = new PageAccessCache(redis, this.now::get);
+        assertThat(b.get(OLIVIA, this::read)).contains(PageKey.REPORTS);
+
+        this.database.put(OLIVIA, EnumSet.of(PageKey.JOBS));
+        a.forget(OLIVIA);
+        b.poll();
+
+        assertThat(b.get(OLIVIA, this::read)).as("well inside the TTL").doesNotContain(PageKey.REPORTS);
+    }
+
+    @Test
+    void aProfileChangeOnOneInstanceEmptiesEveryInstanceAtItsNextPoll() {
+        this.database.put(OLIVIA, EnumSet.of(PageKey.JOBS, PageKey.REPORTS));
+        InMemoryVersionStore redis = new InMemoryVersionStore();
+        PageAccessCache a = new PageAccessCache(redis, this.now::get);
+        PageAccessCache b = new PageAccessCache(redis, this.now::get);
+        b.get(OLIVIA, this::read);
+
+        this.database.put(OLIVIA, EnumSet.of(PageKey.JOBS));
+        a.forgetAll();
+        b.poll();
+
+        assertThat(b.get(OLIVIA, this::read)).doesNotContain(PageKey.REPORTS);
     }
 }

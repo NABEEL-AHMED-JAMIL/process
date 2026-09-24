@@ -127,7 +127,7 @@ public class SourceTaskDeletedByIdVisibilityTest {
 
     @Test
     void fetchByIdRefusesADeletedTask() {
-        when(this.sourceTaskRepository.findById(TASK_ID))
+        when(this.sourceTaskRepository.findWithPayloadByTaskDetailId(TASK_ID))
             .thenReturn(Optional.of(taskWithStatus(Status.Delete)));
 
         ResponseDto response = this.service.fetchSourceTaskWithSourceTaskId(TASK_ID);
@@ -155,7 +155,7 @@ public class SourceTaskDeletedByIdVisibilityTest {
 
     @Test
     void fetchByIdStillReturnsAnActiveTask() {
-        when(this.sourceTaskRepository.findById(TASK_ID))
+        when(this.sourceTaskRepository.findWithPayloadByTaskDetailId(TASK_ID))
             .thenReturn(Optional.of(taskWithStatus(Status.Active)));
 
         ResponseDto response = this.service.fetchSourceTaskWithSourceTaskId(TASK_ID);
@@ -169,7 +169,7 @@ public class SourceTaskDeletedByIdVisibilityTest {
     void fetchByIdStillReturnsAnInactiveTask() {
         // Inactive is not deleted -- the list shows it and the editor must keep opening it,
         // otherwise the only way to switch a task back on would be gone.
-        when(this.sourceTaskRepository.findById(TASK_ID))
+        when(this.sourceTaskRepository.findWithPayloadByTaskDetailId(TASK_ID))
             .thenReturn(Optional.of(taskWithStatus(Status.Inactive)));
 
         ResponseDto response = this.service.fetchSourceTaskWithSourceTaskId(TASK_ID);

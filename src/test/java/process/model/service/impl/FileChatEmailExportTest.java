@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import process.filechat.UncontendedFileIndexLock;
 import process.model.dto.FileChatExportRequestDto;
 import process.model.dto.ResponseDto;
 import process.model.service.AiAgentService;
@@ -61,7 +62,7 @@ public class FileChatEmailExportTest {
     void setUp() {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, new UncontendedFileIndexLock());
     }
 
     private FileChatExportRequestDto request(String content, String source, String target, String recipient) {

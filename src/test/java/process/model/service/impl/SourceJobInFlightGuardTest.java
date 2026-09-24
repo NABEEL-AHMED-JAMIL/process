@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.ResponseDto;
+import process.model.dto.SchedulerDto;
 import process.model.dto.SourceJobDto;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
@@ -151,6 +152,8 @@ class SourceJobInFlightGuardTest {
 
         assertThat(response.getStatus()).isEqualTo("SUCCESS");
         verify(this.producerBulkEngine).addManualJobInQueue(any());
+        // MIG-67: a DTO, never the entity, whose lazy graph Jackson walked after the transaction closed.
+        assertThat(response.getData()).isInstanceOf(SourceJobDto.class);
     }
 
     @ParameterizedTest
@@ -173,6 +176,7 @@ class SourceJobInFlightGuardTest {
 
         assertThat(response.getStatus()).isEqualTo("SUCCESS");
         verify(this.producerBulkEngine).skipManualJobInQueue(scheduler);
+        assertThat(response.getData()).isInstanceOf(SchedulerDto.class);
     }
 
     // ---- a job that has never run ---------------------------------------------------------------

@@ -68,14 +68,16 @@ public class SourceTask implements Audited {
     @Enumerated(EnumType.STRING)
     private Status taskStatus;
 
+    /** A PIPELINE_HOME_PAGES lookup_data row; a bigint foreign key since V70.3 (MIG-165). */
     @Column(name = "home_page_id")
-    private String homePageId;
+    private Long homePageId;
 
     @Column(name = "pipeline_id")
     private String pipelineId;
 
+    /** A TASK_GROUPS lookup_data row; a bigint foreign key since V70.3 (MIG-165). */
     @Column(name = "group_id")
-    private String groupId;
+    private Long groupId;
 
     @Column(name = "task_payload",
         columnDefinition = "text")
@@ -136,11 +138,11 @@ public class SourceTask implements Audited {
         this.taskStatus = taskStatus;
     }
 
-    public String getHomePageId() {
+    public Long getHomePageId() {
         return homePageId;
     }
 
-    public void setHomePageId(String homePageId) {
+    public void setHomePageId(Long homePageId) {
         this.homePageId = homePageId;
     }
 
@@ -152,11 +154,11 @@ public class SourceTask implements Audited {
         this.pipelineId = pipelineId;
     }
 
-    public String getGroupId() {
+    public Long getGroupId() {
         return groupId;
     }
 
-    public void setGroupId(String groupId) {
+    public void setGroupId(Long groupId) {
         this.groupId = groupId;
     }
 
