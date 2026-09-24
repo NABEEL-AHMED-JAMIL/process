@@ -225,13 +225,13 @@
         <dependency>
             <groupId>org.barco</groupId>
             <artifactId>platform-commons</artifactId>
-            <version>1.8.0</version>
+            <version>1.10.0</version>
         </dependency>
         <!-- The platform's envelope contract suite (MIG-103): the same rows every service's build runs. -->
         <dependency>
             <groupId>org.barco</groupId>
             <artifactId>platform-commons</artifactId>
-            <version>1.8.0</version>
+            <version>1.10.0</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>

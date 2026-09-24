@@ -1,5 +1,6 @@
 package process.model.pojo;
 
+import org.barco.platform.correlation.CorrelationId;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.hibernate.annotations.ParamDef;
 import org.hibernate.annotations.FilterDef;
@@ -16,7 +17,8 @@ import process.model.enums.Status;
 @Entity
 
 @Table(name = "job_audit_logs", indexes = {
-    @Index(name = "idx_job_audit_logs_job_queue_id", columnList = "job_queue_id")
+    @Index(name = "idx_job_audit_logs_job_queue_id", columnList = "job_queue_id"),
+    @Index(name = "idx_job_audit_logs_correlation_id", columnList = "correlation_id")
 })
 /**
  * @author Nabeel Ahmed
@@ -52,6 +54,14 @@ public class JobAuditLogs {
     @Column(name = "external_id", unique = true)
     private String externalId;
 
+    /**
+     * The correlation id of the work that wrote the line (V160, MIG-94): the callback's, the dispatch's, the
+     * request's. Stamped when the row is written; one string then joins the run's audit trail to every log line
+     * of every service the work passed through.
+     */
+    @Column(name = "correlation_id", length = 64, updatable = false)
+    private String correlationId;
+
     @Column(name = "log_detail", nullable = false, columnDefinition = "TEXT")
     private String logsDetail;
 
@@ -78,9 +88,28 @@ public class JobAuditLogs {
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
+        if (this.correlationId == null && CorrelationId.isAcceptable(CorrelationId.current())) {
+            this.correlationId = CorrelationId.current();
+        }
         if (this.status == null) {
             this.status = Status.Active;
         }
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
     }
 
     public Long getJobAuditLogId() {

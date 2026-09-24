@@ -1,5 +1,8 @@
 package process.util;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.barco.platform.correlation.CorrelationId;
+import org.springframework.web.client.HttpClientErrorException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -49,6 +52,45 @@ public class OpenSearchAuditLogClient {
         return new RestTemplate(factory);
     }
 
+    /**
+     * correlationId is mapped as a keyword before the first document is written (MIG-94): matched exactly, and a
+     * ULID sorts chronologically. Left to dynamic mapping it would become text, which a term query does not match.
+     * Once per process; a refusal is logged and the lines are written anyway (X10). An index that does not exist
+     * yet is created with the mapping.
+     */
+    private final AtomicBoolean correlationMapped = new AtomicBoolean();
+
+    void ensureCorrelationMapping() {
+        if (!this.correlationMapped.compareAndSet(false, true)) {
+            return;
+        }
+        Map<String, Object> properties = Collections.singletonMap("properties",
+            Collections.singletonMap("correlationId", Collections.singletonMap("type", "keyword")));
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        try {
+            this.restTemplate.exchange(this.baseUrl + "/" + INDEX_NAME + "/_mapping", HttpMethod.PUT,
+                new HttpEntity<>(properties, headers), String.class);
+        } catch (HttpClientErrorException.NotFound noIndexYet) {
+            try {
+                this.restTemplate.exchange(this.baseUrl + "/" + INDEX_NAME, HttpMethod.PUT,
+                    new HttpEntity<>(Collections.singletonMap("mappings", properties), headers), String.class);
+            } catch (Exception ex) {
+                logger.warn("Could not create {} with correlationId as a keyword: {}", INDEX_NAME, ex.getMessage());
+            }
+        } catch (Exception ex) {
+            logger.warn("Could not map correlationId as a keyword on {}: {}", INDEX_NAME, ex.getMessage());
+        }
+    }
+
+    /** The correlation id of the work writing the line, when there is one (MIG-94). */
+    private static void putCorrelationId(Map<String, Object> doc) {
+        String id = CorrelationId.current();
+        if (CorrelationId.isAcceptable(id)) {
+            doc.put("correlationId", id);
+        }
+    }
+
     public boolean isEnabled() {
         return this.baseUrl != null && !this.baseUrl.trim().isEmpty();
     }
@@ -58,11 +100,13 @@ public class OpenSearchAuditLogClient {
             return false;
         }
         try {
+            this.ensureCorrelationMapping();
             String url = this.baseUrl + "/" + INDEX_NAME + "/_doc/" + externalId;
             Map<String, Object> body = new HashMap<>();
             body.put("jobQueueId", jobQueueId);
             body.put("logDetail", logDetail);
             body.put("dateCreated", dateCreated.toInstant().toString());
+            putCorrelationId(body);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             this.restTemplate.exchange(url, HttpMethod.PUT, new HttpEntity<>(body, headers), String.class);
@@ -107,6 +151,7 @@ public class OpenSearchAuditLogClient {
             return entries;
         }
         try {
+            this.ensureCorrelationMapping();
             StringBuilder body = new StringBuilder();
             for (Object[] entry : entries) {
                 String externalId = (String) entry[0];
@@ -119,6 +164,7 @@ public class OpenSearchAuditLogClient {
                 doc.put("jobQueueId", jobQueueId);
                 doc.put("logDetail", logDetail);
                 doc.put("dateCreated", dateCreated.toInstant().toString());
+                putCorrelationId(doc);
                 body.append(this.objectMapper.writeValueAsString(doc)).append("\n");
             }
             HttpHeaders headers = new HttpHeaders();
@@ -230,7 +276,8 @@ public class OpenSearchAuditLogClient {
                     id,
                     source.path("jobQueueId").asLong(),
                     source.path("logDetail").asText(""),
-                    source.path("dateCreated").asText("")
+                    source.path("dateCreated").asText(""),
+                    source.path("correlationId").isTextual() ? source.path("correlationId").asText() : null
                 ));
             }
         } catch (Exception ex) {

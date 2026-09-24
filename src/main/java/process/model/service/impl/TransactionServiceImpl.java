@@ -62,6 +62,8 @@ public class TransactionServiceImpl {
             return;
         }
         JobAuditLogs jobAuditLogs = new JobAuditLogs();
+        // The id it was offered to OpenSearch under, so the two stores stay reconcilable (MIG-94).
+        jobAuditLogs.setExternalId(externalId);
         jobAuditLogs.setJobQueueId(jobQueueId);
         jobAuditLogs.setTenantId(this.tenantOfRun(jobQueueId));
         jobAuditLogs.setLogsDetail(logsDetail);
@@ -94,6 +96,7 @@ public class TransactionServiceImpl {
                 tenantId = this.tenantOfRun(jobQueueId);
             }
             JobAuditLogs row = new JobAuditLogs();
+            row.setExternalId((String) rejected[0]);
             row.setJobQueueId(jobQueueId);
             row.setTenantId(tenantId);
             row.setLogsDetail((String) rejected[2]);

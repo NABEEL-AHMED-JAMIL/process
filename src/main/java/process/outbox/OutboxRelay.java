@@ -4,6 +4,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.jdbc.core.JdbcTemplate;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.barco.platform.correlation.CorrelationId;
+import org.barco.platform.correlation.CorrelationScope;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -36,6 +43,7 @@ public class OutboxRelay implements SmartLifecycle {
     /** Any fixed number; it only has to be the same on every instance. */
     static final long DRAIN_LOCK = 0x0B0C_5E1A_7E0AL;
     static final int BATCH = 100;
+    private static final ObjectMapper EVENTS = new ObjectMapper();
     static final int RETENTION_DAYS = 7;
     private static final long SEND_TIMEOUT_SECONDS = 10;
 
@@ -81,8 +89,12 @@ public class OutboxRelay implements SmartLifecycle {
         List<Long> sent = new ArrayList<>();
         boolean refused = false;
         for (Object[] row : rows) {
+            ProducerRecord<String, String> record = recordOf((String) row[1], (String) row[2], (String) row[3]);
+            Header traced = record.headers().lastHeader(CorrelationId.HEADER);
+            // Published, and any failure logged, under the event's own id.
+            CorrelationScope scope = CorrelationScope.open(traced == null ? null : CorrelationId.fromHeader(traced.value()));
             try {
-                this.kafka.send((String) row[1], (String) row[2], (String) row[3]).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                this.kafka.send(record).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 sent.add((Long) row[0]);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -96,6 +108,8 @@ public class OutboxRelay implements SmartLifecycle {
                 this.logger.warn("Could not publish outbox event {} to {}; it goes first on the next pass: {}", row[0], row[1], reason);
                 refused = true;
                 break;
+            } finally {
+                scope.close();
             }
         }
         if (!sent.isEmpty()) {
@@ -103,6 +117,34 @@ public class OutboxRelay implements SmartLifecycle {
                 + sent.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")");
         }
         return new int[] {sent.size(), !refused && rows.size() == BATCH ? 1 : 0};
+    }
+
+    /**
+     * The record for one outbox row: the event as written, and its traceId -- the correlation id of the work that
+     * raised it (PlatformEvent) -- as the X-Correlation-Id header, so a consumer reading headers finds it without
+     * parsing the payload (X6). An event with no usable traceId goes out without the header; nothing here can stop
+     * an event from being published (X10).
+     */
+    public static ProducerRecord<String, String> recordOf(String topic, String key, String event) {
+        return recordOf(topic, key, event, traceIdOf(event));
+    }
+
+    /** A record with this id as its X-Correlation-Id header, when the id is usable. */
+    public static ProducerRecord<String, String> recordOf(String topic, String key, String value, String correlationId) {
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+        if (CorrelationId.isAcceptable(correlationId)) {
+            record.headers().add(CorrelationId.HEADER, correlationId.getBytes(StandardCharsets.UTF_8));
+        }
+        return record;
+    }
+
+    static String traceIdOf(String event) {
+        try {
+            JsonNode traceId = EVENTS.readTree(event).path("traceId");
+            return traceId.isTextual() ? traceId.asText() : null;
+        } catch (Exception notJson) {
+            return null;
+        }
     }
 
     /** Deletes published events past their retention; answers how many. */

@@ -1,5 +1,7 @@
 package process.identity;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.util.concurrent.SettableListenableFuture;
@@ -58,12 +60,16 @@ class InternalKafkaPublishRestApiTest {
         KafkaTemplate<String, String> template = mock(KafkaTemplate.class);
         when(this.resolver.resolve(2905L, null)).thenReturn(Optional.empty());
         when(this.templates.getTemplate(any())).thenReturn(template);
-        when(template.send(any(String.class), any(String.class), any(String.class))).thenReturn(new SettableListenableFuture<>());
+        when(template.send(any(ProducerRecord.class))).thenReturn(new SettableListenableFuture<>());
 
         assertThat(this.api.publish(TOKEN, event("analytics.query.completed")).getStatusCodeValue()).isEqualTo(202);
 
         // No task type: the resolver enters at the tenant's default and falls through to the platform's.
         verify(this.resolver).resolve(eq(2905L), isNull());
-        verify(template).send("analytics.query.completed", "2905", "{\"event\":\"analytics.query.completed\"}");
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(template).send(sent.capture());
+        assertThat(sent.getValue().topic()).isEqualTo("analytics.query.completed");
+        assertThat(sent.getValue().key()).isEqualTo("2905");
+        assertThat(sent.getValue().value()).isEqualTo("{\"event\":\"analytics.query.completed\"}");
     }
 }

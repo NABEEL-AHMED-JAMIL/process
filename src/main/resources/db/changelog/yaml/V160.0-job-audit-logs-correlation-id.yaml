@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 160.0-job-audit-logs-correlation-id
+      author: nabeel.amd93
+      description: "job_audit_logs.correlation_id: the correlation id of the work that wrote the line, indexed, so a run's audit trail is found from the same id as every service's log lines (MIG-94, acceptance 5)"
+      changes:
+        - sql:
+            splitStatements: true
+            sql: >
+              ALTER TABLE job_audit_logs ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(64);
+              CREATE INDEX IF NOT EXISTS idx_job_audit_logs_correlation_id ON job_audit_logs (correlation_id);
+      rollback:
+        - sql:
+            dbms: postgresql
+            splitStatements: true
+            sql: >
+              DROP INDEX IF EXISTS idx_job_audit_logs_correlation_id;
+              ALTER TABLE job_audit_logs DROP COLUMN IF EXISTS correlation_id;

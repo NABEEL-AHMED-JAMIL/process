@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.barco.platform.correlation.CorrelationId;
+import org.barco.platform.correlation.CorrelationScope;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -379,7 +380,8 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     if (jobQueue.getCorrelationId() == null) {
                         jobQueue.setCorrelationId(CorrelationId.generate());
                     }
-                    CorrelationId.set(jobQueue.getCorrelationId());
+                    // The run's id for its dispatch; the tick's id back afterwards (MIG-94, X5).
+                    CorrelationScope scope = CorrelationScope.open(jobQueue.getCorrelationId());
                     try {
                         this.pause.accept(DispatchTiming.PER_ROW_PAUSE_MS);
                         Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
@@ -393,7 +395,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     } catch (Exception ex) {
                         logger.error("Error in runJobInCurrentTimeSlot: {}.", ExceptionUtil.getRootCauseMessage(ex));
                     } finally {
-                        CorrelationId.clear();
+                        scope.close();
                     }
                 }
                 return;

@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
+import org.barco.platform.correlation.CorrelationId;
+import org.barco.platform.correlation.CorrelationScope;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -151,7 +153,24 @@ public class DispatchRelay implements SmartLifecycle {
     }
 
     /** True when the broker took the row. Either way the outcome is recorded before this returns. */
-    private boolean publish(Row row) {
+    boolean publish(Row row) {
+        // The run's own id (its X-Correlation-Id header, MIG-95): the hand-over, its outcome and any failure are
+        // logged and audited under the id the worker and every callback will carry (MIG-94).
+        try (CorrelationScope scope = CorrelationScope.open(correlationIdOf(row.headers))) {
+            return this.publishUnderItsId(row);
+        }
+    }
+
+    static String correlationIdOf(String headersJson) {
+        try {
+            Map<String, String> map = GSON.fromJson(headersJson, new TypeToken<Map<String, String>>() { }.getType());
+            return map == null ? null : map.get(CorrelationId.HEADER);
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
+
+    private boolean publishUnderItsId(Row row) {
         try {
             KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
                 this.kafkaConnectionResolver.resolve(row.tenantId, row.sourceTaskTypeId));
