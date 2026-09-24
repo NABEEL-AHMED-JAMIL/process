@@ -3,6 +3,8 @@ package process.util;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
+
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
@@ -37,7 +39,39 @@ public class EncryptionUtil {
     @Value("${process.encryption.key:}")
     private String currentKey;
 
+    /** Set in every deployed profile: there, a blank or malformed current key refuses to boot (MIG-5). */
+    @Value("${process.encryption.required:false}")
+    private boolean required;
+
     private volatile KeyringSeal keyring;
+
+    /**
+     * Refuses to boot on a key that would fail later: blank where one is required, half configured,
+     * or not 256 bits of base64. Named by the variable an operator sets, never by its value.
+     */
+    @PostConstruct
+    public void checkAtStartup() {
+        boolean hasId = this.currentKeyId != null && !this.currentKeyId.trim().isEmpty();
+        boolean hasKey = this.currentKey != null && !this.currentKey.trim().isEmpty();
+        if (!hasId && !hasKey && !this.required) {
+            return;
+        }
+        if (!hasKey) {
+            throw new IllegalStateException("PROCESS_ENCRYPTION_KEY is not set; process cannot seal or open stored secrets without it.");
+        }
+        if (!hasId) {
+            throw new IllegalStateException("PROCESS_ENCRYPTION_KEY_ID is not set; it names the key every sealed value is tagged with.");
+        }
+        byte[] key;
+        try {
+            key = Base64.getDecoder().decode(this.currentKey.trim());
+        } catch (IllegalArgumentException notBase64) {
+            throw new IllegalStateException("PROCESS_ENCRYPTION_KEY is not base64 (openssl rand -base64 32).");
+        }
+        if (key.length != 32) {
+            throw new IllegalStateException(String.format("PROCESS_ENCRYPTION_KEY is %d bits; it must be 256 (openssl rand -base64 32).", key.length * 8));
+        }
+    }
 
     public String encrypt(String plainText) {
         if (this.hasCurrentKey()) {

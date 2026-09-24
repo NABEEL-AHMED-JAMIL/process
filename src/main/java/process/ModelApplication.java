@@ -25,15 +25,11 @@ public class ModelApplication {
     @Autowired
     private TransactionServiceImpl transactionService;
 
+    /** A start that fails must exit non-zero (MIG-5): catching it here once made a refused boot exit 0. */
     public static void main(String[] args) {
-        try {
-
-            TimeZone.setDefault(TimeZone.getTimeZone("America/Chicago"));
-            LoggerFactory.getLogger(ModelApplication.class).info("Default TimeZone: {}", TimeZone.getDefault().getID());
-            SpringApplication.run(ModelApplication.class, args);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        TimeZone.setDefault(TimeZone.getTimeZone("America/Chicago"));
+        LoggerFactory.getLogger(ModelApplication.class).info("Default TimeZone: {}", TimeZone.getDefault().getID());
+        SpringApplication.run(ModelApplication.class, args);
     }
 
     @PostConstruct
