@@ -55,3 +55,5 @@ databaseChangeLog:
   # Numbered from V70, so the core-dispatch track's changesets (V64 on) cannot clash with these ids.
   - include:
       file: db/changelog/yaml/V70.0-one-scheduler-per-job-one-default-kafka-profile.yaml
+  - include:
+      file: db/changelog/yaml/V70.1-job-queue-day-index-and-entity-indexes.yaml
