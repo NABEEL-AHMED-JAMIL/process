@@ -18,10 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * still say java.sql.Timestamp and LocalDateTime (through BusinessWallClockConverter). Validation has to accept that,
  * or the first deploy after V100 does not start.
  *
- * Hibernate stops at the first mismatch, and a changelog-built etl_job already has some that are nothing to do with
- * time (scheduler.day_of_month is smallint in the V50 baseline, the entity says Integer). Each such one is patched
- * in this scratch database only and recorded, so validation goes on to the time columns; a mismatch on a time column
- * fails the test outright. The recorded list is pinned, so it is visible, and so it is noticed when it changes.
+ * Hibernate stops at the first mismatch, so one that is nothing to do with time would hide every time column behind
+ * it. Each such one is patched in this scratch database only and recorded, so validation goes on to the time
+ * columns; a mismatch on a time column fails the test outright. The recorded list must be empty: anything in it
+ * stops a validate-mode boot on a database built from the changelog. (There was one, scheduler.day_of_month,
+ * smallint in the V50 baseline where the entity says Integer; V70.6 widens it.)
  *
  * Opt-in: needs NOTIFICATIONS_TEST_DB_URL (see ScratchPostgres).
  */
@@ -49,8 +50,7 @@ class HibernateValidatesTimestamptzPostgresTest {
                 }
             }
         }
-        // Pre-existing, and not this change's: each would stop a validate-mode boot on a database built from the changelog.
-        assertThat(notAboutTime).containsExactly("scheduler.day_of_month int2 -> int4");
+        assertThat(notAboutTime).as("non-time columns the changelog and the entities disagree on").isEmpty();
     }
 
     private static String rootMessage(Throwable thrown) {

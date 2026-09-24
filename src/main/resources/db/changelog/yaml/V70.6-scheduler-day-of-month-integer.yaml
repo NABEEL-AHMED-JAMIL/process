@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 70.6-scheduler-day-of-month-integer
+      author: nabeel.amd93
+      description: "scheduler.day_of_month becomes integer, the type the Scheduler entity maps it as, so ddl-auto=validate accepts a changelog-built etl_job"
+      # The V50 baseline captured smallint from the live instance, where ddl-auto=update had never changed the
+      # column's type. The entity says Integer, and stage and prod boot with validate, which refuses int2 for
+      # int4 -- on a database built from the changelog and on the live one alike. Widening loses nothing: the
+      # column holds a day of the month, 1 to 31. Found by HibernateValidatesTimestamptzPostgresTest.
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: ALTER TABLE public.scheduler ALTER COLUMN day_of_month TYPE integer;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: ALTER TABLE public.scheduler ALTER COLUMN day_of_month TYPE smallint USING day_of_month::smallint;
