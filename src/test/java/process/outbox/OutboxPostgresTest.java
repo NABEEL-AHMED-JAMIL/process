@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -27,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -89,14 +90,16 @@ class OutboxPostgresTest {
     @SuppressWarnings("unchecked")
     private KafkaTemplate<String, String> kafka(String failOnKey) {
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
-        when(kafka.send(anyString(), anyString(), anyString())).thenAnswer(call -> {
+        // The relay sends a ProducerRecord, so the event's traceId can travel as its X-Correlation-Id header (MIG-94).
+        when(kafka.send(any(ProducerRecord.class))).thenAnswer(call -> {
+            ProducerRecord<String, String> record = call.getArgument(0);
             SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
-            String key = call.getArgument(1);
+            String key = record.key();
             if (key.equals(failOnKey)) {
                 future.setException(new IllegalStateException("broker unavailable"));
             } else {
                 synchronized (this.sent) {
-                    this.sent.add(call.getArgument(0) + " " + key + " " + call.getArgument(2));
+                    this.sent.add(record.topic() + " " + key + " " + record.value());
                 }
                 future.set(null);
             }

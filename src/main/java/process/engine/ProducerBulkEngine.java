@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.barco.platform.correlation.CorrelationId;
+import org.barco.platform.correlation.CorrelationScope;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -108,6 +109,8 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
             BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+        // Under the request's id, which the run now carries (MIG-94): the trace's enqueue hop.
+        logger.info("Run {} of job {} queued by request.", jobQueue.getJobQueueId(), sourceJob.getJobId());
         this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
@@ -379,7 +382,8 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     if (jobQueue.getCorrelationId() == null) {
                         jobQueue.setCorrelationId(CorrelationId.generate());
                     }
-                    CorrelationId.set(jobQueue.getCorrelationId());
+                    // The run's id for its dispatch; the tick's id back afterwards (MIG-94, X5).
+                    CorrelationScope scope = CorrelationScope.open(jobQueue.getCorrelationId());
                     try {
                         this.pause.accept(DispatchTiming.PER_ROW_PAUSE_MS);
                         Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
@@ -393,7 +397,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     } catch (Exception ex) {
                         logger.error("Error in runJobInCurrentTimeSlot: {}.", ExceptionUtil.getRootCauseMessage(ex));
                     } finally {
-                        CorrelationId.clear();
+                        scope.close();
                     }
                 }
                 return;

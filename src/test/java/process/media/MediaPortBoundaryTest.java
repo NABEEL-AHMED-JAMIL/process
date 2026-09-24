@@ -39,9 +39,10 @@ class MediaPortBoundaryTest {
     private static final List<String> THE_PORT = Arrays.asList("media.MediaPort", "media.UnreadableFileException");
 
     /** What Media may use outside itself: the edges it keeps as a service. */
+    // correlation.: the X-Correlation-Id interceptor every internal client carries (MIG-94), cross-cutting like security.
     private static final List<String> MEDIA_EDGES = Arrays.asList(
         "model.service.StorageBrowserService", "notifications.", "billing.", "security.",
-        "model.dto.", "model.enums.", "util.");
+        "model.dto.", "model.enums.", "util.", "correlation.");
 
     private static List<Path> sources(Path root) throws IOException {
         try (Stream<Path> files = Files.walk(root)) {

@@ -179,7 +179,7 @@ class LookupDecompositionPostgresTest {
             rowsAsDevHasThem(sql);
             db.finish();
 
-            // V141-V144 and every changeset after them (counted, so a later changeset does not move the target).
+            // V141-V144 and every changeset after them (V160-V162, MIG-166/153/94) -- counted, so a later changeset does not move the target.
             db.rollback(sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE orderexecuted > "
                 + "(SELECT orderexecuted FROM databasechangelog WHERE id = '140.0-lookup-data-test-residue')", Integer.class));
 

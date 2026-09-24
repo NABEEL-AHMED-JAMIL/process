@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# MIG-166 / MIG-153: rehearse V160-V161 (user_directory, the demoted Identity foreign keys) on a full copy of the
+# MIG-166 / MIG-153: rehearse V160-V161 (user_directory, the demoted Identity foreign keys) -- and MIG-94's V162
+# (job_audit_logs.correlation_id) with them, since the copy takes every pending changeset -- on a full copy of the
 # live etl_job and run both audits against it, with Identity's answers read from identity_db (read-only); then drop
 # the copy.
 #

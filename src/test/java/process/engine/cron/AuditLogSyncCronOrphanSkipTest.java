@@ -77,21 +77,21 @@ public class AuditLogSyncCronOrphanSkipTest {
         // BigInteger, not Long: that is what a bigint column comes back as through a native query.
         when(this.jobAuditLogRepository.findExistingJobQueueIds(anyList()))
             .thenReturn(Arrays.<Number>asList(BigInteger.valueOf(LIVE_QUEUE_ID), BigInteger.valueOf(ANOTHER_LIVE_QUEUE_ID)));
-        when(this.jobAuditLogRepository.upsertFromOpenSearch(anyString(), any(), anyString(), any(Timestamp.class)))
+        when(this.jobAuditLogRepository.upsertFromOpenSearch(anyString(), any(), anyString(), any(Timestamp.class), any()))
             .thenReturn(1);
 
         this.cron.syncAuditLogsFromOpenSearch();
 
         verify(this.jobAuditLogRepository, never())
-            .upsertFromOpenSearch(anyString(), eq(PURGED_QUEUE_ID), anyString(), any(Timestamp.class));
+            .upsertFromOpenSearch(anyString(), eq(PURGED_QUEUE_ID), anyString(), any(Timestamp.class), any());
         // The dead row came first: the two live rows behind it must still be written, which is the
         // half that would break if one refusal were allowed to take the rest of the batch with it.
         verify(this.jobAuditLogRepository)
-            .upsertFromOpenSearch(eq("a-2"), eq(LIVE_QUEUE_ID), anyString(), any(Timestamp.class));
+            .upsertFromOpenSearch(eq("a-2"), eq(LIVE_QUEUE_ID), anyString(), any(Timestamp.class), any());
         verify(this.jobAuditLogRepository)
-            .upsertFromOpenSearch(eq("a-3"), eq(ANOTHER_LIVE_QUEUE_ID), anyString(), any(Timestamp.class));
+            .upsertFromOpenSearch(eq("a-3"), eq(ANOTHER_LIVE_QUEUE_ID), anyString(), any(Timestamp.class), any());
         verify(this.jobAuditLogRepository, times(2))
-            .upsertFromOpenSearch(anyString(), any(), anyString(), any(Timestamp.class));
+            .upsertFromOpenSearch(anyString(), any(), anyString(), any(Timestamp.class), any());
     }
 
     @Test
@@ -106,7 +106,7 @@ public class AuditLogSyncCronOrphanSkipTest {
         this.cron.syncAuditLogsFromOpenSearch();
 
         verify(this.jobAuditLogRepository, never())
-            .upsertFromOpenSearch(anyString(), any(), anyString(), any(Timestamp.class));
+            .upsertFromOpenSearch(anyString(), any(), anyString(), any(Timestamp.class), any());
         // Skipping is a decision, not a failure. Left as a failure the watermark stayed where it
         // was, so the next scan re-read the same purged rows for ever and the window only grew.
         assertThat(this.savedBookmarkValue()).isEqualTo(newest.toString());
@@ -131,7 +131,7 @@ public class AuditLogSyncCronOrphanSkipTest {
     }
 
     private static OpenSearchJobAuditLogProjection hit(String externalId, Long jobQueueId, Instant dateCreated) {
-        return new OpenSearchJobAuditLogProjection(externalId, jobQueueId, "a log line", dateCreated.toString());
+        return new OpenSearchJobAuditLogProjection(externalId, jobQueueId, "a log line", dateCreated.toString(), null);
     }
 
 }

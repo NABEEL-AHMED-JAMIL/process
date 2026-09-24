@@ -23,7 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * MIG-166 / MIG-153: V160 and V161 on a full copy of the live etl_job, then both audits run against it for real,
+ * MIG-166 / MIG-153: V160 and V161 (and MIG-94's V162) on a full copy of the live etl_job, then both audits run against it for real,
  * with Identity's answers read from identity_db (read-only). Not part of `mvn test`:
  * scripts/rehearse-identity-directory.sh makes the copy, runs this and drops it.
  */
@@ -33,7 +33,7 @@ class DirectoryRehearsal {
         + "'user_page_access')";
 
     @Test
-    void aFullCopyTakesV160AndV161AndIsAudited() throws Exception {
+    void aFullCopyTakesV160ToV162AndIsAudited() throws Exception {
         String server = System.getenv("NOTIFICATIONS_TEST_DB_URL");
         String copy = System.getenv("DIRECTORY_REHEARSAL_DB");
         String identityDb = System.getenv("DIRECTORY_REHEARSAL_IDENTITY_DB");
@@ -57,7 +57,14 @@ class DirectoryRehearsal {
 
             List<String> ran = sql.queryForList("SELECT id FROM databasechangelog ORDER BY orderexecuted", String.class);
             ran.removeAll(had);
-            assertThat(ran).containsExactly("160.0-user-directory", "161.0-demote-identity-foreign-keys");
+            assertThat(ran).containsExactly("160.0-user-directory", "161.0-demote-identity-foreign-keys",
+                "162.0-job-audit-logs-correlation-id");
+            // V162 (MIG-94): the audit trail's correlation id, indexed, on the live rows too.
+            assertThat(sql.queryForObject("SELECT count(*) FROM information_schema.columns WHERE table_name = 'job_audit_logs' "
+                + "AND column_name = 'correlation_id'", Long.class)).isEqualTo(1L);
+            assertThat(sql.queryForObject("SELECT to_regclass('idx_job_audit_logs_correlation_id') IS NOT NULL", Boolean.class)).isTrue();
+            System.out.println("REHEARSAL V162: job_audit_logs rows " + sql.queryForObject("SELECT count(*) FROM job_audit_logs", Long.class)
+                + ", with a correlation id " + sql.queryForObject("SELECT count(correlation_id) FROM job_audit_logs", Long.class));
             assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND confrelid::regclass::text IN "
                 + SIX + " AND conrelid::regclass::text NOT IN " + SIX, Long.class)).isZero();
             assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE contype = 'f'", Long.class)).isEqualTo(allOthers);

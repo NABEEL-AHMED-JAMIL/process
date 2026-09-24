@@ -11,12 +11,16 @@ public class OpenSearchJobAuditLogProjection implements JobAuditLogProjection {
     private final Long jobQueueId;
     private final String logsDetail;
     private final String dateCreated;
+    /** The correlation id of the work that wrote the line (MIG-94); null for a line written before it existed. */
+    private final String correlationId;
 
-    public OpenSearchJobAuditLogProjection(String externalId, Long jobQueueId, String logsDetail, String dateCreated) {
+    public OpenSearchJobAuditLogProjection(String externalId, Long jobQueueId, String logsDetail, String dateCreated,
+        String correlationId) {
         this.externalId = externalId;
         this.jobQueueId = jobQueueId;
         this.logsDetail = logsDetail;
         this.dateCreated = dateCreated;
+        this.correlationId = correlationId;
     }
 
     @Override
@@ -48,8 +52,14 @@ public class OpenSearchJobAuditLogProjection implements JobAuditLogProjection {
         return "Active";
     }
 
+
     public String getExternalId() {
         return this.externalId;
+    }
+
+    @Override
+    public String getCorrelationId() {
+        return this.correlationId;
     }
 
 }

@@ -3,6 +3,7 @@ package process.media;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import process.correlation.CorrelationInterceptor;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -53,6 +54,7 @@ public class HttpMedia implements MediaPort {
     private final ObjectMapper json = new ObjectMapper();
     // Extraction can wait on a vision model page by page, or on a transcription that runs minutes.
     private final OkHttpClient http = new OkHttpClient.Builder()
+        .addInterceptor(new CorrelationInterceptor())
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.MINUTES)
         .writeTimeout(2, TimeUnit.MINUTES)

@@ -27,24 +27,26 @@ class TenantContextLoggingTest {
     void theCallerIsOnEveryLogLineWhileSetAndGoneAfter() {
         TenantContext.set(2905L, "TENANT_ADMIN", 42L, "ops@tenant.test");
         assertThat(MDC.get("tenantId")).isEqualTo("2905");
-        assertThat(MDC.get("appUserId")).isEqualTo("42");
+        assertThat(MDC.get("userId")).isEqualTo("42");
 
         TenantContext.clear();
         assertThat(MDC.get("tenantId")).isNull();
-        assertThat(MDC.get("appUserId")).isNull();
+        assertThat(MDC.get("userId")).isNull();
     }
 
     @Test
     void aPlatformAdminHasNoTenantAndSaysSo() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1000L, "admin@platform.local");
         assertThat(MDC.get("tenantId")).isNull();
-        assertThat(MDC.get("appUserId")).isEqualTo("1000");
+        assertThat(MDC.get("userId")).isEqualTo("1000");
     }
 
     @Test
     void theLogPatternPrintsTheCorrelationTenantAndUserAndARealHostName() throws Exception {
         String logback = new String(Files.readAllBytes(Paths.get("src/main/resources/logback.xml")), StandardCharsets.UTF_8);
         assertThat(logback).doesNotContain("${hostName}");
-        assertThat(logback).contains("%X{correlationId").contains("%X{tenantId").contains("%X{appUserId");
+        assertThat(logback).contains("%X{correlationId").contains("%X{tenantId").contains("%X{userId");
+        // Every appender prints the key TenantContext writes (MIG-94 renamed appUserId to the platform's userId).
+        assertThat(logback).doesNotContain("%X{appUserId");
     }
 }

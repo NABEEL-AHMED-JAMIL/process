@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.correlation.RunCorrelation;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -169,6 +170,8 @@ public class BulkAction {
         jobQueue.setJobStatus(jobStatus);
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatusMessage(String.format(message, jobId));
+        // Made by a request (Run now, Skip next): the run is worked and called back under that request's id.
+        RunCorrelation.stamp(jobQueue);
         this.applyJobSnapshot(jobQueue, jobId);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
         return jobQueue;

@@ -170,4 +170,35 @@ public class TransactionServiceImplAuditLogTest {
         return jobQueue;
     }
 
+
+    // ---- MIG-94: the fallback row keeps the externalId the line was offered to OpenSearch under ----------
+
+    /** The two stores stay reconcilable: a line either store holds is found by the same externalId. */
+    @Test
+    void aSingleLineOpenSearchRefusedKeepsItsExternalIdInTheDatabase() {
+        when(this.openSearchAuditLogClient.index(anyString(), anyLong(), anyString(), any(Timestamp.class))).thenReturn(false);
+
+        this.service.saveJobAuditLogs(QUEUE_ID, "run started");
+
+        ArgumentCaptor<String> offered = ArgumentCaptor.forClass(String.class);
+        verify(this.openSearchAuditLogClient).index(offered.capture(), anyLong(), anyString(), any(Timestamp.class));
+        ArgumentCaptor<JobAuditLogs> saved = ArgumentCaptor.forClass(JobAuditLogs.class);
+        verify(this.jobAuditLogRepository).save(saved.capture());
+        assertThat(saved.getValue().getExternalId()).isEqualTo(offered.getValue());
+    }
+
+    @Test
+    void batchedLinesOpenSearchRefusedKeepTheirExternalIds() {
+        when(this.openSearchAuditLogClient.indexAllReturningFailures(anyList()))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        this.service.saveJobAuditLogs(QUEUE_ID, Arrays.asList("first", "second"));
+
+        ArgumentCaptor<List<Object[]>> offered = ArgumentCaptor.forClass(List.class);
+        verify(this.openSearchAuditLogClient).indexAllReturningFailures(offered.capture());
+        ArgumentCaptor<JobAuditLogs> saved = ArgumentCaptor.forClass(JobAuditLogs.class);
+        verify(this.jobAuditLogRepository, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(0).getExternalId()).isEqualTo(offered.getValue().get(0)[0]);
+        assertThat(saved.getAllValues().get(1).getExternalId()).isEqualTo(offered.getValue().get(1)[0]);
+    }
 }

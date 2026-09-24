@@ -2,6 +2,7 @@ package process.engine;
 
 import process.util.BusinessTime;
 import org.barco.platform.correlation.CorrelationId;
+import org.barco.platform.correlation.CorrelationScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -185,7 +186,8 @@ public class PreDispatchPhase {
         if (run.getCorrelationId() == null) {
             run.setCorrelationId(CorrelationId.generate());
         }
-        CorrelationId.set(run.getCorrelationId());
+        // The run's id while it is prepared; the tick's id back afterwards (MIG-94, X5).
+        CorrelationScope scope = CorrelationScope.open(run.getCorrelationId());
         try {
             Decision decision;
             try {
@@ -201,7 +203,7 @@ public class PreDispatchPhase {
             logger.error("Pre-dispatch could not record the outcome for run {}: {}.", run.getJobQueueId(),
                 ExceptionUtil.getRootCauseMessage(ex));
         } finally {
-            CorrelationId.clear();
+            scope.close();
         }
     }
 

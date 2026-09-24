@@ -91,7 +91,8 @@ public class AuditLogSyncCron {
                         missingJobQueueIds.add(hit.getJobQueueId());
                     } else {
                         upserted += this.jobAuditLogRepository.upsertFromOpenSearch(
-                            hit.getExternalId(), hit.getJobQueueId(), hit.getLogsDetail(), Timestamp.from(dateCreated));
+                            hit.getExternalId(), hit.getJobQueueId(), hit.getLogsDetail(), Timestamp.from(dateCreated),
+                            hit.getCorrelationId());
                     }
                     // A skipped hit has still been examined, so it carries the watermark with the
                     // rest of the batch. Its run has been purged from job_queue and is not coming

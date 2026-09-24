@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.barco.platform.correlation.CorrelationId;
 import process.config.KafkaConnectionResolver;
+import process.outbox.OutboxRelay;
 import process.config.KafkaTemplateProvider;
 
 import java.nio.charset.StandardCharsets;
@@ -66,7 +68,8 @@ public class InternalKafkaPublishRestApi {
         // No source task type: the event belongs to a workspace, not a job, so the resolver falls
         // through to the tenant's default profile and then to the platform's.
         KafkaTemplate<String, String> template = this.templates.getTemplate(this.resolver.resolve(tenantId, null));
-        template.send(topic, key, payload).addCallback(
+        // The asking request's id travels as the record's X-Correlation-Id (MIG-94), so the consumer logs under it.
+        template.send(OutboxRelay.recordOf(topic, key, payload, CorrelationId.current())).addCallback(
             sent -> this.logger.debug("Published an event on {} for workspace {}.", topic, tenantId),
             failed -> this.logger.warn("An event on {} was not published: {}", topic, failed.getMessage()));
         return new ResponseEntity<>(HttpStatus.ACCEPTED);

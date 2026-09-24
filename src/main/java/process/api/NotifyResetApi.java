@@ -120,26 +120,30 @@ public class NotifyResetApi {
     }
 
     /**
-     * Logs this callback under its dispatch's correlation id (MIG-95). A worker that echoes
-     * X-Correlation-Id has it bound already, by CorrelationIdFilter; one that does not -- every worker
-     * dispatched before the id existed -- would otherwise log under a fresh id with no thread back to
-     * the dispatch, so the run's own id is resolved from job_queue.correlation_id and bound instead,
-     * and returned on the answer. Only for a token that has been found to be the run's own: the id
-     * is not an input to anything, and a caller who merely knows a run id is not told it.
+     * Logs this callback under its run's correlation id (MIG-95, MIG-94), and answers with it.
+     *
+     * A verified callback is about its run, so the run's own id (job_queue.correlation_id) is the one it is logged
+     * under, whatever id it arrived with. MIG-95 first kept an arriving id and resolved the run's only when none
+     * came; but behind the gateway one always comes -- the gateway mints an id for a worker that sends none, as
+     * job-search's Python workers do -- so live, every callback was logged under a fresh id of its own. The id it
+     * arrived under, when different, is named on the callback's line, so the gateway's access line still leads
+     * here. Only for a token that has been found to be the run's own: the id is not an input to anything, and a
+     * caller who merely knows a run id is not told it.
      */
-    private void bindCorrelation(Long jobId, Long jobQueueId, String request, String echoedCorrelationId) {
+    private void bindCorrelation(Long jobId, Long jobQueueId, String request, String arrivedWith) {
         Optional<RunCallbackTokens.RunCorrelation> run = this.runCallbackTokens.correlationOf(jobQueueId);
-        if (!CorrelationId.isAcceptable(echoedCorrelationId)) {
-            run.map(found -> found.correlationId).filter(CorrelationId::isAcceptable).ifPresent(resolved -> {
-                CorrelationId.set(resolved);
-                RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
-                if (attributes instanceof ServletRequestAttributes && ((ServletRequestAttributes) attributes).getResponse() != null) {
-                    ((ServletRequestAttributes) attributes).getResponse().setHeader(CorrelationId.HEADER, resolved);
-                }
-            });
-        }
-        this.logger.info("Worker callback {} for job {} run {} of tenant {}.", request, jobId, jobQueueId,
-            run.map(found -> found.tenantId).orElse(null));
+        String arrivedAs = CorrelationId.isAcceptable(arrivedWith) ? arrivedWith : CorrelationId.current();
+        Optional<String> resolved = run.map(found -> found.correlationId).filter(CorrelationId::isAcceptable);
+        resolved.ifPresent(id -> {
+            CorrelationId.set(id);
+            RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+            if (attributes instanceof ServletRequestAttributes && ((ServletRequestAttributes) attributes).getResponse() != null) {
+                ((ServletRequestAttributes) attributes).getResponse().setHeader(CorrelationId.HEADER, id);
+            }
+        });
+        boolean renamed = resolved.isPresent() && arrivedAs != null && !resolved.get().equals(arrivedAs);
+        this.logger.info("Worker callback {} for job {} run {} of tenant {}{}.", request, jobId, jobQueueId,
+            run.map(found -> found.tenantId).orElse(null), renamed ? " (arrived as " + arrivedAs + ")" : "");
     }
 
     @RequestMapping(value = "/changeState/jobId/{jobId}/jobQueueId/{jobQueueId}/jobStatus/{jobStatus}", method = RequestMethod.POST)

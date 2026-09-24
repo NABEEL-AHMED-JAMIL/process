@@ -24,17 +24,17 @@ public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long>
      */
     @Query(value = "select job_audit_log_id as jobAuditLogId, job_queue_id as jobQueueId, log_detail as logsDetail, " +
         "to_char(date_created AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD HH24:MI:SS') || '.' || coalesce(nullif(rtrim(to_char(date_created AT TIME ZONE 'America/Chicago', 'US'), '0'), ''), '0') as dateCreated, " +
-        "status as status, external_id as externalId " +
+        "status as status, external_id as externalId, correlation_id as correlationId " +
         "from job_audit_logs where job_queue_id = ? order by date_created asc", nativeQuery = true)
     public List<JobAuditLogProjection> findAllByJobQueueIdV1(Long jobQueueId);
 
     @Transactional
     @Modifying
-    // tenant_id is the run's (V102, MIG-29), read in the same statement.
-    @Query(value = "insert into job_audit_logs (job_audit_log_id, external_id, job_queue_id, log_detail, date_created, status, tenant_id) " +
-        "select nextval('job_audit_logs_source_seq'), ?1, ?2, ?3, ?4, 'Active', q.tenant_id from job_queue q where q.job_queue_id = ?2 " +
+    // tenant_id is the run's (V102, MIG-29), read in the same statement; correlation_id is the line's own (MIG-94).
+    @Query(value = "insert into job_audit_logs (job_audit_log_id, external_id, job_queue_id, log_detail, date_created, status, tenant_id, correlation_id) " +
+        "select nextval('job_audit_logs_source_seq'), ?1, ?2, ?3, ?4, 'Active', q.tenant_id, ?5 from job_queue q where q.job_queue_id = ?2 " +
         "on conflict (external_id) do nothing", nativeQuery = true)
-    public int upsertFromOpenSearch(String externalId, Long jobQueueId, String logDetail, Timestamp dateCreated);
+    public int upsertFromOpenSearch(String externalId, Long jobQueueId, String logDetail, Timestamp dateCreated, String correlationId);
 
     /**
      * Of the job_queue ids handed in, the ones job_queue still holds.

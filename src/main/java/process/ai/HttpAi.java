@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import process.correlation.CorrelationInterceptor;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -52,6 +53,7 @@ public class HttpAi implements AiPort {
     private final ObjectMapper json = new ObjectMapper();
     // A step is a model call: its provider may take minutes, and the AI service retries 429 and 5xx.
     private final OkHttpClient http = new OkHttpClient.Builder()
+        .addInterceptor(new CorrelationInterceptor())
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.MINUTES)
         .writeTimeout(1, TimeUnit.MINUTES)

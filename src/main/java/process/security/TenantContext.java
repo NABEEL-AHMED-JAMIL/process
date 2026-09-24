@@ -11,7 +11,7 @@ public final class TenantContext {
     /** The logging MDC keys the log pattern prints (MIG-43); the correlation id's is CorrelationId.MDC_KEY. */
     public static final String MDC_TENANT = "tenantId";
 
-    public static final String MDC_USER = "appUserId";
+    public static final String MDC_USER = "userId";
 
     private static final ThreadLocal<Long> TENANT_ID = new ThreadLocal<>();
     private static final ThreadLocal<String> USER_ROLE = new ThreadLocal<>();

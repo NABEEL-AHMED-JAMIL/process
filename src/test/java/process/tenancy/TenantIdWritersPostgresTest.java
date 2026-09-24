@@ -143,7 +143,7 @@ class TenantIdWritersPostgresTest {
             return null;
         });
         int synced = inTransaction(() -> jpa.repository(JobAuditLogRepository.class)
-            .upsertFromOpenSearch("writers-ext-1", run.getJobQueueId(), "from opensearch", Timestamp.from(Instant.now())));
+            .upsertFromOpenSearch("writers-ext-1", run.getJobQueueId(), "from opensearch", Timestamp.from(Instant.now()), null));
         assertThat(synced).isEqualTo(1);
         List<Long> tenants = db.jdbc().queryForList("SELECT tenant_id FROM job_audit_logs WHERE job_queue_id = ?", Long.class, run.getJobQueueId());
         assertThat(tenants).hasSize(4).containsOnly(A);
