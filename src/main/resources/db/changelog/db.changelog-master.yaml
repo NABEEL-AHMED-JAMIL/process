@@ -105,3 +105,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V102.0-tenant-id-on-child-tables.yaml
   - include:
       file: db/changelog/yaml/V130.0-source-task-date-created.yaml
+  - include:
+      file: db/changelog/yaml/V131.0-scheduler-day-of-month-integer.yaml

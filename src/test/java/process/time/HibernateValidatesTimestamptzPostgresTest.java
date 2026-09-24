@@ -50,7 +50,8 @@ class HibernateValidatesTimestamptzPostgresTest {
             }
         }
         // Pre-existing, and not this change's: each would stop a validate-mode boot on a database built from the changelog.
-        assertThat(notAboutTime).containsExactly("scheduler.day_of_month int2 -> int4");
+        // V131 (day-of-month-integer) made scheduler.day_of_month an integer, the one mismatch left over.
+        assertThat(notAboutTime).isEmpty();
     }
 
     private static String rootMessage(Throwable thrown) {
