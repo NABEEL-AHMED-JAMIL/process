@@ -108,6 +108,18 @@ public class NotifyServiceImpl implements NotifyService {
         return this.recorded(jobQueueId, idempotencyKey, this.addLogsBatch(jobId, jobQueueId, messages));
     }
 
+    public void noteRefusedCallback(Long jobQueueId, JobStatus reportedStatus) {
+        if (jobQueueId == null) {
+            return;
+        }
+        String reported = reportedStatus == null ? "log" : reportedStatus.name();
+        int noted = this.transactionService.noteRefusedCallback(jobQueueId, LocalDateTime.now(), reported);
+        if (noted > 0) {
+            logger.warn("Run {}: its worker's report ({}) was refused for an expired callback token; the run "
+                + "will be closed as interrupted by the next stall sweep.", jobQueueId, reported);
+        }
+    }
+
     public Optional<ResponseDto> replay(Long jobQueueId, JobStatus jobStatus, String request, String idempotencyKey) {
         String key = idempotencyKey != null ? idempotencyKey
             : jobStatus == null ? null : this.derivedKey(jobQueueId, jobStatus);

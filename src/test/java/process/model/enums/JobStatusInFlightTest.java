@@ -65,6 +65,15 @@ class JobStatusInFlightTest {
         assertThat(statusesNamedIn(method)).isEqualTo(expected());
     }
 
+    /** MIG-63: the note on a refused report, and the sweep that acts on it, guard on the same set. */
+    @Test
+    void theRefusedCallbackNoteAndItsSweepNameExactlyTheSet() throws Exception {
+        assertThat(statusesNamedIn(JobQueueRepository.class.getMethod("noteRefusedCallback",
+            Long.class, LocalDateTime.class, String.class))).isEqualTo(expected());
+        assertThat(statusesNamedIn(JobQueueRepository.class.getMethod("findRunsWithRefusedCallbacks")))
+            .isEqualTo(expected());
+    }
+
     private static Set<String> expected() {
         return JobStatus.IN_FLIGHT.stream()
             .map(status -> status.name().toUpperCase(Locale.ROOT))

@@ -342,6 +342,7 @@ class JobStatusTransitionTableTest {
                 .as(method.getName())
                 .doesNotContain("job_status");
         }
-        assertThat(filtering).as("queries filtering on a run's job_status").isEqualTo(3);
+        // Five since MIG-63 added noteRefusedCallback and findRunsWithRefusedCallbacks, both through UPPER().
+        assertThat(filtering).as("queries filtering on a run's job_status").isEqualTo(5);
     }
 }

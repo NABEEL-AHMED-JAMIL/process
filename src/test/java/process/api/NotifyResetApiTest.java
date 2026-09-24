@@ -261,4 +261,40 @@ public class NotifyResetApiTest {
 
         verify(this.runCallbackTokens, never()).retire(anyLong());
     }
+
+    // ---- MIG-63: a genuine report refused for an expired token -------------------------------------------------
+
+    /**
+     * Still the same bare 401 -- reconciliation is separate from acceptance -- but the refusal of the
+     * run's own token for expiry is proof its worker can no longer be heard, and is noted on the run so
+     * the stall sweep closes it on its next pass.
+     */
+    @Test
+    void aGenuineReportRefusedForExpiryIsStillRefusedAndIsNotedForTheSweep() {
+        tokenIsRefused(RunCallbackTokens.Refusal.EXPIRED);
+
+        ResponseEntity<?> state = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, callback());
+        ResponseEntity<?> line = this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, null, callback());
+
+        assertThat(state.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(line.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(((ResponseDto) state.getBody()).getMessage()).isEqualTo("Unauthorized worker callback.");
+        verify(this.notifyService).noteRefusedCallback(QUEUE_ID, JobStatus.Completed);
+        verify(this.notifyService).noteRefusedCallback(QUEUE_ID, null);
+        verify(this.notifyService, never()).changeState(any(SourceJobQueueDto.class), any());
+        verify(this.notifyService, never()).addLogs(any(SourceJobQueueDto.class), any());
+    }
+
+    /** Anyone can send a wrong token; only the run's own, expired, is evidence of anything. */
+    @Test
+    void noOtherRefusalIsNoted() {
+        for (RunCallbackTokens.Refusal why : RunCallbackTokens.Refusal.values()) {
+            if (why == RunCallbackTokens.Refusal.EXPIRED) {
+                continue;
+            }
+            when(this.runCallbackTokens.verify(JOB_ID, QUEUE_ID, "x")).thenReturn(Optional.of(why));
+            this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, "x", null, callback());
+        }
+        verify(this.notifyService, never()).noteRefusedCallback(any(), any());
+    }
 }

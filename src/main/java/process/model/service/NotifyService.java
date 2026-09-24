@@ -29,6 +29,13 @@ public interface NotifyService {
     public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, List<String> messages, String idempotencyKey);
 
     /**
+     * The run's own worker reported, and the report was refused because its token had expired (MIG-63).
+     * The refusal stands; this only notes it on the run, still in flight, for the stall sweep to close.
+     * A null status is a log line.
+     */
+    public void noteRefusedCallback(Long jobQueueId, JobStatus reportedStatus);
+
+    /**
      * The answer already given to this callback, if it was given one. For a run that is over, where the
      * callback itself would be refused: a worker re-sending the Completed whose answer it lost is told
      * what it was told the first time, not that it is unauthorised. Writes nothing.

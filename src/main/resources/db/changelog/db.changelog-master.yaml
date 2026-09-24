@@ -54,3 +54,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V63.0-ai-tables-read-only.yaml
   - include:
       file: db/changelog/yaml/V80.0-worker-callback-receipts.yaml
+  - include:
+      file: db/changelog/yaml/V81.0-refused-callback-on-run.yaml

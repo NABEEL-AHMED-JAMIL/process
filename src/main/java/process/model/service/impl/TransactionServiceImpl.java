@@ -170,6 +170,14 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findStalledRuns(startedBefore);
     }
 
+    public List<JobQueue> findRunsWithRefusedCallbacks() {
+        return this.jobQueueRepository.findRunsWithRefusedCallbacks();
+    }
+
+    public int noteRefusedCallback(Long jobQueueId, LocalDateTime refusedAt, String reportedStatus) {
+        return this.jobQueueRepository.noteRefusedCallback(jobQueueId, refusedAt, reportedStatus);
+    }
+
     public void saveJobQueue(JobQueue jobQueue) {
         this.jobQueueRepository.save(jobQueue);
     }

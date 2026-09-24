@@ -122,17 +122,38 @@ public class ProducerBulkEngine {
     public void reconcileStalledRuns() {
         try {
             LocalDateTime cutoff = LocalDateTime.now().minusMinutes(STALLED_AFTER_MINUTES);
-            List<JobQueue> stalled = this.transactionService.findStalledRuns(cutoff);
-            if (stalled.isEmpty()) {
+            // Two ways a run is known to be over without its worker saying so: six hours of silence, or
+            // (MIG-63) a report from its own worker refused because the token had expired -- proof the
+            // worker is alive and can no longer be heard, so there is no reason to wait out the six
+            // hours with the job blocked. A run on both lists is closed once, for the refusal, which
+            // is the more specific reason.
+            Map<Long, JobQueue> toClose = new LinkedHashMap<>();
+            for (JobQueue jobQueue : this.transactionService.findStalledRuns(cutoff)) {
+                toClose.put(jobQueue.getJobQueueId(), jobQueue);
+            }
+            int silent = toClose.size();
+            for (JobQueue jobQueue : this.transactionService.findRunsWithRefusedCallbacks()) {
+                toClose.put(jobQueue.getJobQueueId(), jobQueue);
+            }
+            if (toClose.isEmpty()) {
                 return;
             }
-            logger.warn("reconcileStalledRuns --> {} run(s) have been in flight since before {}; "
-                + "closing them so their jobs can be scheduled again.", stalled.size(), cutoff);
-            for (JobQueue jobQueue : stalled) {
+            if (silent > 0) {
+                logger.warn("reconcileStalledRuns --> {} run(s) have been in flight since before {}; "
+                    + "closing them so their jobs can be scheduled again.", silent, cutoff);
+            }
+            for (JobQueue jobQueue : toClose.values()) {
                 try {
+                    boolean refused = jobQueue.getRefusedCallbackAt() != null;
+                    String reported = "log".equals(jobQueue.getRefusedCallbackStatus())
+                        || jobQueue.getRefusedCallbackStatus() == null ? "a log line" : jobQueue.getRefusedCallbackStatus();
                     jobQueue.setJobStatus(JobStatus.Interrupt);
                     jobQueue.setEndTime(LocalDateTime.now());
-                    jobQueue.setJobStatusMessage(String.format(
+                    jobQueue.setJobStatusMessage(refused
+                        ? String.format("Job %s's worker reported %s at %s, but its callback token had expired, "
+                            + "so the report was refused. Closed as interrupted -- check the output before "
+                            + "running it again.", jobQueue.getJobId(), reported, jobQueue.getRefusedCallbackAt())
+                        : String.format(
                         "Job %s stopped reporting and was closed after %d hours. Its worker may "
                         + "have finished the work -- check the output before running it again.",
                         jobQueue.getJobId(), STALLED_AFTER_MINUTES / 60));
@@ -141,7 +162,11 @@ public class ProducerBulkEngine {
                     // start_time, and "no update since null" reads as "we lost track of it" when
                     // what happened is "it was never picked up" -- two different incidents, told
                     // apart here or nowhere.
-                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getStartTime() != null
+                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), refused
+                        ? String.format("Run closed automatically: the worker's report (%s) at %s was refused "
+                            + "because its callback token had expired.",
+                            reported, jobQueue.getRefusedCallbackAt())
+                        : jobQueue.getStartTime() != null
                         ? String.format("Run closed automatically: no update from the worker since %s.",
                             jobQueue.getStartTime())
                         : String.format("Run closed automatically: queued at %s and never picked up.",

@@ -65,6 +65,23 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "order by job_queue_id asc", nativeQuery = true)
     public List<JobQueue> findStalledRuns(LocalDateTime startedBefore);
 
+    /**
+     * Notes on a run still in flight that its own worker's report was refused for an expired token
+     * (MIG-63). Guarded on the in-flight statuses so a late report on a finished run marks nothing.
+     */
+    @Transactional
+    @Modifying
+    @Query(value = "update job_queue set refused_callback_at = ?2, refused_callback_status = ?3 "
+        + "where job_queue_id = ?1 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
+    int noteRefusedCallback(Long jobQueueId, LocalDateTime refusedAt, String reportedStatus);
+
+    /** Runs still in flight whose worker is known to be unable to report: the stall sweep closes them now. */
+    @Query(value = "select job_queue.* from job_queue "
+        + "where UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') "
+        + "and refused_callback_at is not null "
+        + "order by job_queue_id asc", nativeQuery = true)
+    public List<JobQueue> findRunsWithRefusedCallbacks();
+
     public List<JobQueue> findAllByJobId(Long jobId);
 
     @Transactional

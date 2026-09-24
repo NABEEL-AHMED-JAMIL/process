@@ -89,6 +89,16 @@ public class NotifyResetApi {
                 return new ResponseEntity<>(answered.get(), HttpStatus.OK);
             }
         }
+        if (refusal.isPresent() && refusal.get() == RunCallbackTokens.Refusal.EXPIRED) {
+            // Still refused -- reconciliation is separate from acceptance (MIG-63). But EXPIRED is only
+            // said to the run's own token, so this is its worker, alive and unable to be heard: noted on
+            // the run for the stall sweep to close, instead of the run blocking its job for hours.
+            try {
+                this.notifyService.noteRefusedCallback(jobQueueId, jobStatus);
+            } catch (RuntimeException failed) {
+                this.logger.warn("Could not note the refused callback on run {}: {}", jobQueueId, failed.getMessage());
+            }
+        }
         ResponseEntity<?> rejected = this.refused(jobId, jobQueueId, refusal);
         if (rejected != null) {
             return rejected;
