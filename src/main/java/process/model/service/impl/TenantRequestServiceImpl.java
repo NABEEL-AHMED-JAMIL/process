@@ -110,7 +110,7 @@ public class TenantRequestServiceImpl {
         // An address that already has an open request, or already has an account, gets the same
         // acknowledgement as a new one. Nothing is created in either case.
         if (this.tenantRequestRepository.findOpenByEmail(email).isPresent()
-            || this.appUserRepository.findByUsernameAndStatusNot(email, Status.Delete).isPresent()) {
+            || this.appUserRepository.isUsernameTaken(email)) {
             return new ResponseDto(SUCCESS, acknowledgement);
         }
 
@@ -160,8 +160,7 @@ public class TenantRequestServiceImpl {
         }
         // Checked again at approval rather than trusting the check made at submission: an account
         // may have been created for this address in between.
-        if (this.appUserRepository.findByUsernameAndStatusNot(
-                request.getContactEmail(), Status.Delete).isPresent()) {
+        if (this.appUserRepository.isUsernameTaken(request.getContactEmail())) {
             return new ResponseDto(ERROR, String.format(
                 "There is already an account for %s.", request.getContactEmail()));
         }

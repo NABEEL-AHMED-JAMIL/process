@@ -49,7 +49,7 @@ class InternalUserDirectoryRestApiTest {
     @Test
     @SuppressWarnings("unchecked")
     void answersTheFiveColumnProjectionForTheIdsAskedAndNothingElse() {
-        when(this.users.findAllById(any())).thenReturn(Arrays.asList(user(7, 2901, "daniel@a.example", "Daniel Carter")));
+        when(this.users.findAllByIdAcrossTenants(any())).thenReturn(Arrays.asList(user(7, 2901, "daniel@a.example", "Daniel Carter")));
 
         ResponseEntity<?> answer = this.api.resolve(TOKEN, Collections.singletonMap("ids", Arrays.asList(7, "x", 8)));
 

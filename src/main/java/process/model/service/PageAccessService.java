@@ -103,6 +103,13 @@ public interface PageAccessService {
      */
     void notifyProfileChanged(AppUser user);
 
+    /**
+     * Drops every page exception a person holds, for when they stop being a tenant user (MIG-13).
+     * The exceptions mean nothing on an admin, would silently come back on a demotion, and cannot
+     * outlive the person's tenant: user_page_access.tenant_id is NOT NULL and held to theirs.
+     */
+    void dropExceptions(Long appUserId);
+
     /** A tenant user asking their admins for a page they cannot open. */
     ResponseDto requestAccess(String pageKey) throws Exception;
 

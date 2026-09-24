@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 66.0-app-user-token-version
+      author: nabeel.amd93
+      description: "app_user.token_version: a token minted under an older version is refused (MIG-14, DEF-013)"
+      # Every existing row starts at 0, which is what a token minted before this change is read as
+      # carrying: nobody is signed out by the migration itself.
+      changes:
+        - sql:
+            sql: ALTER TABLE app_user ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0
+        - sql:
+            sql: COMMENT ON COLUMN app_user.token_version IS 'Bumped when the person''s role, tenant, status or password is changed by an administrator, or their tenant stops being Active. Access and refresh tokens carry the version they were minted under and are refused once it is lower (MIG-14).'
+      rollback:
+        - sql:
+            sql: ALTER TABLE app_user DROP COLUMN IF EXISTS token_version

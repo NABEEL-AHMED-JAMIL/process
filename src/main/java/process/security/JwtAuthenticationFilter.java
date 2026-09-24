@@ -24,8 +24,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    private final TokenRevocations revocations;
+
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenRevocations revocations) {
         this.jwtUtil = jwtUtil;
+        this.revocations = revocations;
     }
 
     @Override
@@ -36,7 +39,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (header != null && header.startsWith("Bearer ")) {
                 String token = header.substring(7);
                 Claims claims = this.jwtUtil.parseClaims(token);
-                if (!this.jwtUtil.isRefreshToken(claims)) {
+                // A signed, unexpired token that has been signed out, or minted before its person's
+                // standing changed, authenticates nobody (MIG-14): the request goes on anonymous and
+                // Spring Security refuses it wherever a login is needed.
+                if (!this.jwtUtil.isRefreshToken(claims) && this.stillGood(claims, request)) {
                     // The gate the browser draws is now also drawn here. A one-time password
                     // used to open a full API session: the console kept the person on the
                     // profile page, and nothing kept a script anywhere.
@@ -65,6 +71,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             TenantContext.clear();
+        }
+    }
+
+    /** False when the token is revoked, and when nobody can say whether it is (Redis down): fail closed. */
+    private boolean stillGood(Claims claims, HttpServletRequest request) {
+        try {
+            return !this.revocations.isRevoked(claims);
+        } catch (TokenRevocations.Unavailable ex) {
+            this.logger.warn("Refused a token on {}: revocations cannot be checked", request.getRequestURI());
+            return false;
         }
     }
 

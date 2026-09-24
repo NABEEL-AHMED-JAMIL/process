@@ -61,7 +61,8 @@ public class InternalUserDirectoryRestApi {
             return new ResponseEntity<>(Collections.emptyList(), HttpStatus.OK);
         }
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (AppUser user : this.users.findAllById(ids)) {
+        // A directory for other services, answering for every tenant: the explicit cross-tenant read (MIG-13).
+        for (AppUser user : this.users.findAllByIdAcrossTenants(ids)) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("appUserId", user.getAppUserId());
             row.put("tenantId", user.getTenantId());

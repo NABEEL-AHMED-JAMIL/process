@@ -1,5 +1,9 @@
 package process.model.pojo;
 
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
+
 import javax.persistence.Column;
 import javax.persistence.Embeddable;
 import javax.persistence.EmbeddedId;
@@ -19,6 +23,8 @@ import java.util.Objects;
  */
 @Entity
 @Table(name = "user_page_access")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class UserPageAccess {
 
     @Embeddable
@@ -44,6 +50,13 @@ public class UserPageAccess {
     @EmbeddedId
     private Key id;
 
+    /**
+     * The person's tenant (MIG-13). Written once, from the person, and kept equal to theirs by the
+     * database: fk_user_page_access_user_tenant cascades a move to another tenant onto this row.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private Long tenantId;
+
     @Column(name = "allowed", nullable = false)
     private boolean allowed;
 
@@ -55,8 +68,9 @@ public class UserPageAccess {
 
     public UserPageAccess() {}
 
-    public UserPageAccess(Long appUserId, String pageKey, boolean allowed, Long createdBy) {
+    public UserPageAccess(Long appUserId, Long tenantId, String pageKey, boolean allowed, Long createdBy) {
         this.id = new Key(appUserId, pageKey);
+        this.tenantId = tenantId;
         this.allowed = allowed;
         this.createdBy = createdBy;
         this.dateCreated = new Timestamp(System.currentTimeMillis());
@@ -65,6 +79,7 @@ public class UserPageAccess {
     public Key getId() { return id; }
     public Long getAppUserId() { return id == null ? null : id.getAppUserId(); }
     public String getPageKey() { return id == null ? null : id.getPageKey(); }
+    public Long getTenantId() { return tenantId; }
     public boolean isAllowed() { return allowed; }
     public void setAllowed(boolean allowed) { this.allowed = allowed; }
     public Timestamp getDateCreated() { return dateCreated; }

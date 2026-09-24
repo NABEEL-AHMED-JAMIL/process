@@ -23,6 +23,8 @@ import process.storage.TrustedAccess;
 import process.storage.TrustedCaller;
 import process.storage.TrustedStorageOperations;
 import process.security.TenantContext;
+import process.security.TenantFilterHelper;
+import process.security.TokenRevocations;
 import process.security.TenantOwnership;
 import process.notifications.MailExtras;
 import process.notifications.OutboxNotifications;
@@ -33,6 +35,8 @@ import process.util.PhoneNumberValidator;
 import process.util.UserNameResolver;
 import org.springframework.beans.factory.annotation.Value;
 import process.config.StoragePropertyDefaults;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
 import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.List;
@@ -85,10 +89,19 @@ public class AppUserServiceImpl implements AppUserService {
 
     private final PageAccessService pageAccessService;
 
+    private final TenantFilterHelper tenantFilterHelper;
+
+    private final TokenRevocations tokenRevocations;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, NotificationPort notifications,
         UserNameResolver userNameResolver, TrustedStorageOperations storageBrowserService,
-        PageAccessService pageAccessService) {
+        PageAccessService pageAccessService, TenantFilterHelper tenantFilterHelper, TokenRevocations tokenRevocations) {
+        this.tenantFilterHelper = tenantFilterHelper;
+        this.tokenRevocations = tokenRevocations;
         this.pageAccessService = pageAccessService;
         this.storageBrowserService = storageBrowserService;
         this.notifications = notifications;
@@ -141,6 +154,10 @@ public class AppUserServiceImpl implements AppUserService {
 
     @Override
     public ResponseDto listUsers() throws Exception {
+        // Defence in depth (MIG-13): the tenant query below is the rule, and the filter makes a
+        // later findAll() here scoped too. A platform admin's filter is turned off, not skipped --
+        // its listing spans tenants on purpose.
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<AppUser> users = TenantContext.isPlatformAdmin()
             ? this.appUserRepository.findAll().stream()
                 .filter(u -> u.getStatus() != Status.Delete)
@@ -193,7 +210,9 @@ public class AppUserServiceImpl implements AppUserService {
         if (!isNull(targetTenantId) && !this.tenantRepository.findById(targetTenantId).isPresent()) {
             return new ResponseDto(ERROR, String.format("Tenant not found with %d.", targetTenantId));
         }
-        if (this.appUserRepository.findByUsernameAndStatusNot(appUserDto.getUsername().trim(), Status.Delete).isPresent()) {
+        // Taken in any case, in any tenant, by any row: a name that differs only by case is the same
+        // sign-in, and letting it be created beside the first was an account takeover (MIG-17).
+        if (this.appUserRepository.isUsernameTaken(appUserDto.getUsername().trim())) {
             return new ResponseDto(ERROR, String.format("Username \"%s\" is already in use.", appUserDto.getUsername().trim()));
         }
         // Blank means the server picks one. That is the better path -- it is random, it is
@@ -420,6 +439,8 @@ public class AppUserServiceImpl implements AppUserService {
                 return badProfile;
             }
         }
+        UserRole previousRole = user.getUserRole();
+        Long previousTenant = user.getTenantId();
         user.setUserRole(effectiveRole);
         user.setPhoneNumber(phone.getValue());
         user.setTenantId(effectiveTenantId);
@@ -431,7 +452,18 @@ public class AppUserServiceImpl implements AppUserService {
         // were ever demoted.
         Long previousProfile = user.getPageAccessProfileId();
         user.setPageAccessProfileId(effectiveRole == UserRole.TENANT_USER ? appUserDto.getPageAccessProfileId() : null);
+        // The same for the person's page exceptions, and before the save: they carry the person's
+        // tenant (MIG-13), so a promotion to platform admin could not clear the tenant with them there.
+        if (previousRole == UserRole.TENANT_USER && effectiveRole != UserRole.TENANT_USER) {
+            this.pageAccessService.dropExceptions(user.getAppUserId());
+        }
         this.appUserRepository.save(user);
+        // A token names the role and the tenant it was minted with, and every service reads them
+        // from it. Changing either ends the person's tokens, so the old role or the old tenant's
+        // scope does not outlive this request by thirty minutes (MIG-14).
+        if (previousRole != effectiveRole || !Objects.equals(previousTenant, effectiveTenantId)) {
+            this.tokenRevocations.revokeSessionsOf(user.getAppUserId());
+        }
         if (!Objects.equals(previousProfile, user.getPageAccessProfileId())) {
             this.pageAccessService.notifyProfileChanged(user);
         }
@@ -455,6 +487,10 @@ public class AppUserServiceImpl implements AppUserService {
         AppUser user = userOpt.get();
         user.setStatus(appUserDto.getStatus());
         this.appUserRepository.save(user);
+        // Deactivated, suspended or deleted: signed out everywhere now, not when the token expires (MIG-14).
+        if (appUserDto.getStatus() != Status.Active) {
+            this.tokenRevocations.revokeSessionsOf(user.getAppUserId());
+        }
         /*
          * The cached unread counter goes with the account.
          *
@@ -492,6 +528,9 @@ public class AppUserServiceImpl implements AppUserService {
         // addUser generates -- the account owes a change before it is theirs alone again.
         user.setMustChangePassword(true);
         this.appUserRepository.save(user);
+        // An administrator's reset is how an account is taken back: whoever was using the old
+        // password is signed out with it (MIG-14).
+        this.tokenRevocations.revokeSessionsOf(user.getAppUserId());
         return new ResponseDto(SUCCESS, String.format("Password reset for \"%s\".", user.getUsername()));
     }
 

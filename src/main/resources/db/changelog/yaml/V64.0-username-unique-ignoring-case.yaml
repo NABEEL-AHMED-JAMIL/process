@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 64.0-username-unique-ignoring-case
+      author: nabeel.amd93
+      description: "A username is unique across the platform whatever its case (MIG-17, DEF-024, P4)"
+      # Login matches the name without case, so two rows that differ only by case made login pick one
+      # of them arbitrarily -- and registering Alice@x.com beside alice@x.com was an account takeover.
+      #
+      # Across the platform, not per tenant: sign-in names no tenant, so a name shared by two tenants
+      # could not be resolved at login either. Uniqueness over the whole table implies it within every
+      # tenant, which is the P4 requirement. Over every row, deleted ones included, because
+      # uk_3k4cplvh82srueuttfkwnylq0 (UNIQUE username, exact case) already covers them; that
+      # constraint stays -- this index implies it, and Hibernate would recreate it under ddl-auto=update.
+      #
+      # Halts rather than choosing a winner: which of two colliding accounts is the real one is a
+      # person's decision.
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            V64 cannot make usernames unique ignoring case: some already differ only by case. Find them with
+            SELECT lower(username), array_agg(app_user_id), array_agg(username), array_agg(status) FROM app_user
+            GROUP BY lower(username) HAVING count(*) > 1;
+            Decide which account is the person's, rename the other (for example append +dup to the local part),
+            and start again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT count(*) FROM (SELECT lower(username) FROM public.app_user
+              GROUP BY lower(username) HAVING count(*) > 1) d
+      changes:
+        - sql:
+            sql: CREATE UNIQUE INDEX ux_app_user_username_lower ON app_user (lower(username))
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS ux_app_user_username_lower

@@ -1,5 +1,6 @@
 package process.security;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,7 +22,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -57,6 +57,7 @@ class LoginHardeningTest {
     private JwtUtil jwtUtil;
     private PageAccessService pageAccessService;
     private AtomicLong now;
+    private RedisLoginGuards redis;
     private LoginAttemptGuard loginAttempts;
     private AuthServiceImpl authService;
 
@@ -68,12 +69,22 @@ class LoginHardeningTest {
         this.jwtUtil = mock(JwtUtil.class);
         this.pageAccessService = mock(PageAccessService.class);
         this.now = new AtomicLong(1_000_000L);
-        this.loginAttempts = new LoginAttemptGuard(this.now::get);
+        // A real guard over the shared Redis (MIG-109), under a prefix of this test's own, with the
+        // test's clock. A second setUp() in one test starts from an empty count, as it used to.
+        if (this.redis != null) this.redis.close();
+        this.redis = RedisLoginGuards.open();
+        this.loginAttempts = this.redis.guard(this.now::get);
         // The service hashes a random string in its constructor to get the hash that matches
         // nothing; stubbing encode is what lets the test name it.
         when(this.passwordEncoder.encode(anyString())).thenReturn(NOBODYS_HASH);
         this.authService = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.jwtUtil, this.pageAccessService, this.loginAttempts);
+            this.passwordEncoder, this.jwtUtil, this.pageAccessService, this.loginAttempts, mock(TokenRevocations.class));
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (this.redis != null) this.redis.close();
+        this.redis = null;
     }
 
     private AppUser activeUser() {
@@ -90,12 +101,12 @@ class LoginHardeningTest {
     }
 
     private void accountExists(AppUser user) {
-        when(this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), eq(Status.Delete)))
+        when(this.appUserRepository.findLiveByUsernameIgnoringCase(anyString()))
             .thenReturn(Optional.of(user));
     }
 
     private void noSuchAccount() {
-        when(this.appUserRepository.findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), eq(Status.Delete)))
+        when(this.appUserRepository.findLiveByUsernameIgnoringCase(anyString()))
             .thenReturn(Optional.empty());
     }
 
@@ -127,8 +138,9 @@ class LoginHardeningTest {
         assertThat(response.getStatus()).isEqualTo(SUCCESS);
         // The case rule lives in the repository method, not in the service: pin that this is the
         // method asked. Swapping it for findByUsername would reintroduce the original defect
-        // while every other assertion here still passed.
-        verify(this.appUserRepository).findFirstByUsernameIgnoreCaseAndStatusNot("EMILY@Example.COM", Status.Delete);
+        // while every other assertion here still passed. The query itself is proved against
+        // Postgres in UsernameUniquenessPostgresTest (MIG-17).
+        verify(this.appUserRepository).findLiveByUsernameIgnoringCase("EMILY@Example.COM");
     }
 
     @Test
@@ -139,7 +151,7 @@ class LoginHardeningTest {
 
         this.signIn("  " + KNOWN_NAME + "  ", "right");
 
-        verify(this.appUserRepository).findFirstByUsernameIgnoreCaseAndStatusNot(KNOWN_NAME, Status.Delete);
+        verify(this.appUserRepository).findLiveByUsernameIgnoringCase(KNOWN_NAME);
     }
 
     // -- what an unknown name costs -------------------------------------------------------
@@ -220,7 +232,7 @@ class LoginHardeningTest {
 
         // The lock is checked before the lookup, so a locked name costs no query and no hash.
         verify(this.appUserRepository, times(LoginAttemptGuard.MAX_FAILURES))
-            .findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), eq(Status.Delete));
+            .findLiveByUsernameIgnoringCase(anyString());
     }
 
     @Test
@@ -301,6 +313,6 @@ class LoginHardeningTest {
         assertThat(noPassword.getMessage()).isEqualTo("Username and password are required.");
         assertThat(noName.getMessage()).isEqualTo("Username and password are required.");
         verify(this.appUserRepository, times(0))
-            .findFirstByUsernameIgnoreCaseAndStatusNot(anyString(), any());
+            .findLiveByUsernameIgnoringCase(anyString());
     }
 }

@@ -12,4 +12,7 @@ public interface AuthService {
 
     public ResponseDto refresh(String refreshToken) throws Exception;
 
+    /** Ends the tokens presented, everywhere (MIG-14). */
+    public ResponseDto logout(String accessToken, String refreshToken);
+
 }

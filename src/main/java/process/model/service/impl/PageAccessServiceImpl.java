@@ -500,7 +500,8 @@ public class PageAccessServiceImpl implements PageAccessService {
             // stored as a difference that makes no difference.
             this.exceptionRepository.deleteOne(person.getAppUserId(), page.get().getKey());
         } else {
-            this.exceptionRepository.save(new UserPageAccess(person.getAppUserId(), page.get().getKey(), allowed, TenantContext.getAppUserId()));
+            this.exceptionRepository.save(new UserPageAccess(person.getAppUserId(), person.getTenantId(), page.get().getKey(),
+                allowed, TenantContext.getAppUserId()));
         }
         this.exceptionRepository.flush();
         this.cache.forget(person.getAppUserId());
@@ -527,6 +528,16 @@ public class PageAccessServiceImpl implements PageAccessService {
         return new ResponseDto(SUCCESS, dropped == 0 ? "No exceptions to clear."
             : String.format("%s reads exactly as their profile again (%d %s cleared).", holder[0].getFullName(), dropped, dropped == 1 ? "exception" : "exceptions"),
             this.personRow(holder[0]));
+    }
+
+    @Override
+    @Transactional
+    public void dropExceptions(Long appUserId) {
+        if (isNull(appUserId)) {
+            return;
+        }
+        this.exceptionRepository.deleteAllFor(appUserId);
+        this.cache.forget(appUserId);
     }
 
     @Override
