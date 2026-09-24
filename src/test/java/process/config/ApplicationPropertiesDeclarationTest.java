@@ -43,7 +43,9 @@ public class ApplicationPropertiesDeclarationTest {
         // The meter is a switch too: blank means the console runs unmetered, and an operator
         // must be able to see that is what is happening.
         "meter.url",
-        "meter.service-key");
+        "meter.service-key",
+        // Whether the API documentation is generated at all (SwaggerConfig; owner, 2026-09-24).
+        "process.api-docs.enabled");
 
     /** Nothing in this list may ever be committed with a value beside it. */
     private static final List<String> SECRETS = Arrays.asList(
@@ -107,6 +109,18 @@ public class ApplicationPropertiesDeclarationTest {
         String poolSize = properties.getProperty("spring.task.scheduling.pool.size");
         assertTrue(poolSize != null && !poolSize.trim().isEmpty(),
             "spring.task.scheduling.pool.size must stay declared, or every cron shares one thread");
+    }
+
+    /**
+     * Outside dev the API documentation is not generated, and the value is written down rather than
+     * read from the environment: a stray variable must not publish a map of the API in production.
+     */
+    @Test
+    void theApiDocsAreOffOutsideDev() throws IOException {
+        for (String profile : Arrays.asList("application-stage.properties", "application-prod.properties")) {
+            assertEquals("false", this.load(profile).getProperty("process.api-docs.enabled"),
+                profile + " must declare process.api-docs.enabled=false");
+        }
     }
 
     @Test

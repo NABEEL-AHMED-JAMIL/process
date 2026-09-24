@@ -58,8 +58,10 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // rate, which is a map of the application for anyone who asks for it.
                 .antMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 .antMatchers("/actuator/**").hasRole("PLATFORM_ADMIN")
+                // The API documentation is a map of every endpoint and model: a platform admin's only
+                // (owner, 2026-09-24), and generated at all only where process.api-docs.enabled says so.
                 .antMatchers("/swagger-ui/**", "/swagger-ui.html", "/v2/api-docs",
-                    "/swagger-resources/**", "/webjars/**").permitAll()
+                    "/swagger-resources/**", "/webjars/**").hasRole("PLATFORM_ADMIN")
                 .anyRequest().authenticated().and()
             .addFilterBefore(new JwtAuthenticationFilter(this.identity), UsernamePasswordAuthenticationFilter.class);
     }
