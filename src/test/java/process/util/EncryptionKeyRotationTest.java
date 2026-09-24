@@ -71,7 +71,40 @@ class EncryptionKeyRotationTest {
         String old = newKey();
         EncryptionUtil util = util(old, null, null);
         String sealed = util.encrypt("v");
-        assertThat(sealed).doesNotStartWith("k");
+        // Untagged: base64 has no ':', so no "k<id>:" prefix (a bare leading 'k' is chance, 1 in 64).
+        assertThat(sealed).doesNotContain(":");
         assertThat(util.decrypt(sealed)).isEqualTo("v");
+    }
+
+    private static EncryptionUtil required(String currentId, String current) {
+        EncryptionUtil util = util(null, currentId, current);
+        ReflectionTestUtils.setField(util, "required", true);
+        return util;
+    }
+
+    /** Where a key is required (every deployed profile), a blank one refuses to boot, naming the variable. */
+    @Test
+    void aRequiredKeyThatIsBlankRefusesToBootNamingTheVariable() {
+        assertThatThrownBy(() -> required(null, null).checkAtStartup())
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("PROCESS_ENCRYPTION_KEY");
+        assertThatThrownBy(() -> required("p2026a", " ").checkAtStartup())
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("PROCESS_ENCRYPTION_KEY");
+        assertThatThrownBy(() -> required(null, newKey()).checkAtStartup())
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("PROCESS_ENCRYPTION_KEY_ID");
+    }
+
+    /** A key that is not 256 bits of base64 is refused at boot, not at the first secret someone saves. */
+    @Test
+    void aMalformedKeyRefusesToBoot() {
+        assertThatThrownBy(() -> required("p2026a", "c2hvcnQ=").checkAtStartup())
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("PROCESS_ENCRYPTION_KEY");
+        assertThatThrownBy(() -> required("p2026a", "not base64 at all!").checkAtStartup())
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("PROCESS_ENCRYPTION_KEY");
+    }
+
+    @Test
+    void aGoodKeyBootsAndSoDoesNoKeyWhereNoneIsRequired() {
+        required("p2026a", newKey()).checkAtStartup();
+        util(null, null, null).checkAtStartup();
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
+import process.config.RaceRefusals;
 import process.model.dto.ResponseDto;
 import process.model.dto.JobAssistantRequestDto;
 import process.model.service.impl.JobAssistantServiceImpl;
@@ -49,8 +50,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobService.addSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while addSourceJob.", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+            return RaceRefusals.answer(ex, logger, "addSourceJob");
         }
     }
 
@@ -60,8 +60,7 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobService.updateSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while updateSourceJob.", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+            return RaceRefusals.answer(ex, logger, "updateSourceJob");
         }
     }
 

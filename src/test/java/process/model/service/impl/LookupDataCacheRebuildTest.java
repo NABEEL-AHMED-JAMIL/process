@@ -55,7 +55,7 @@ public class LookupDataCacheRebuildTest {
 
     /** The table as it reads on successive calls: the first list, then the second. */
     private void tableReads(List<LookupData> first, List<LookupData> second) {
-        when(this.lookupDataRepository.findByParentLookupIdIsNull())
+        when(this.lookupDataRepository.findRootsWithChildren())
             .thenReturn(new ArrayList<LookupData>(first))
             .thenReturn(new ArrayList<LookupData>(second));
     }

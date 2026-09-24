@@ -262,7 +262,7 @@ public class PageAccessServiceImpl implements PageAccessService {
         }
         profile.setDefaultProfile(wantsDefault);
         this.profileRepository.save(profile);
-        this.cache.forgetAllHere();
+        this.cache.forgetAll();
         logger.info("Access profile '{}' ({}) created for tenant {}{}.", profile.getProfileName(),
             profile.getPageAccessProfileId(), tenantId, wantsDefault ? " as the default" : "");
         return new ResponseDto(SUCCESS, String.format("Access profile \"%s\" created%s.",
@@ -294,7 +294,7 @@ public class PageAccessServiceImpl implements PageAccessService {
         }
         profile.setDateUpdated(new Timestamp(System.currentTimeMillis()));
         this.profileRepository.save(profile);
-        this.cache.forgetAllHere();
+        this.cache.forgetAll();
         if (!before.equals(profile.getPageKeys())) {
             this.tellHolders(profile);
         }
@@ -344,7 +344,7 @@ public class PageAccessServiceImpl implements PageAccessService {
         profile.setDefaultProfile(false);
         profile.setDateUpdated(new Timestamp(System.currentTimeMillis()));
         this.profileRepository.save(profile);
-        this.cache.forgetAllHere();
+        this.cache.forgetAll();
         return new ResponseDto(SUCCESS, String.format("Access profile \"%s\" deleted.", profile.getProfileName()));
     }
 
@@ -363,7 +363,7 @@ public class PageAccessServiceImpl implements PageAccessService {
         profile.setDefaultProfile(true);
         profile.setDateUpdated(new Timestamp(System.currentTimeMillis()));
         this.profileRepository.save(profile);
-        this.cache.forgetAllHere();
+        this.cache.forgetAll();
         return new ResponseDto(SUCCESS, String.format("\"%s\" is now the default for new and unassigned users.",
             profile.getProfileName()), this.toDto(profile));
     }

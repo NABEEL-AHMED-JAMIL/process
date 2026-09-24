@@ -505,7 +505,7 @@ public class ProducerBulkEngine {
         dto.setCallbackToken(this.runCallbackTokens.issue(jobQueue));
         dto.setAttempt(Math.max(1, jobQueue.getAttempt()));
         if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
-            Long homePageLookupId = ProcessUtil.parseLongOrNull(sourceJob.getTaskDetail().getHomePageId());
+            Long homePageLookupId = sourceJob.getTaskDetail().getHomePageId();
             if (homePageLookupId != null) {
                 dto.setHomePageId(this.transactionService.findLookupValueByLookupId(homePageLookupId));
             }

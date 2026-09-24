@@ -1,5 +1,7 @@
 package process.util.validation;
 
+import process.util.PlatformDatabases;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
@@ -124,6 +126,9 @@ public class SourceTaskValidation {
         if (isNull(this.taskPayload)) {
             this.setErrorMsg(String.format("Task payload should not be empty at row %s.<br>", rowCounter));
         }
+        // The same rule as a task saved one at a time: no pipeline data in a platform database.
+        PlatformDatabases.refusal(this.taskPayload).ifPresent(refusal ->
+            this.setErrorMsg(String.format("%s (row %s)<br>", refusal, rowCounter)));
         try {
             if (!isNull(this.taskPayload)) {
                 this.setXmlTagsInfo(this.parseXmlToRequest(this.taskPayload));

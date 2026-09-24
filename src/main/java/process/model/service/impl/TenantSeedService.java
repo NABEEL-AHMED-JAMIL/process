@@ -65,7 +65,7 @@ public class TenantSeedService {
                 this.backfillAssignedUserIds(platformAdmin.getAppUserId());
             }
 
-            this.lookupDataCacheService.initializeCache();
+            this.lookupDataCacheService.changed();
         } catch (Exception ex) {
             this.logger.error("An error occurred while seeding tenant foundation: {}", ex.getMessage(), ex);
         }
