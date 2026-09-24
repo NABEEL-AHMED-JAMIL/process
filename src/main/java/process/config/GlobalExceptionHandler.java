@@ -3,6 +3,7 @@ package process.config;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import process.model.dto.ResponseDto;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import process.util.ProcessUtil;
 
@@ -40,6 +42,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ResponseDto> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         logger.warn("Request value '{}' has the wrong type for {}", ex.getName(), ex.getRequiredType() == null ? "?" : ex.getRequiredType().getSimpleName());
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "The value of '" + ex.getName() + "' is not valid."), HttpStatus.BAD_REQUEST);
+    }
+
+    /** A write that lost a race to one of Core's unique rules is refused in words (MIG-71, RaceRefusals). */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ResponseDto> handleIntegrityViolation(DataIntegrityViolationException ex) {
+        Optional<ResponseDto> refused = RaceRefusals.refusalFor(ex);
+        if (refused.isPresent()) {
+            logger.warn("A concurrent write lost and was refused: {}", refused.get().getMessage());
+            return new ResponseEntity<>(refused.get(), HttpStatus.CONFLICT);
+        }
+        return this.handleUncaught(ex);
     }
 
     @ExceptionHandler(Exception.class)

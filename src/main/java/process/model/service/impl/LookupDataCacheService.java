@@ -150,7 +150,11 @@ public class LookupDataCacheService {
     public void initializeCache() {
         logger.info("****************Cache-Lookup-Start***************************");
         Map<String, LookupDataDto> rebuiltCache = new HashMap<>();
-        Iterable<LookupData> lookupDataList = this.lookupDataRepository.findByParentLookupIdIsNull();
+        // Children fetched in the same read (MIG-67): this runs from @PostConstruct, where the self-call
+        // bypasses the proxy and there is no transaction, and the lazy children only loaded while
+        // enable_lazy_load_no_trans let them. With it off the rebuild threw, was logged, and left the
+        // cache empty until something else rebuilt it.
+        Iterable<LookupData> lookupDataList = this.lookupDataRepository.findRootsWithChildren();
         lookupDataList.forEach(lookupData ->
             rebuiltCache.put(lookupData.getLookupType(), getLookupDataDetail(lookupData)));
         this.lookupCacheMap = rebuiltCache;

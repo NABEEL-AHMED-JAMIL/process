@@ -325,7 +325,7 @@ public class DashboardServiceImpl implements DashboardService {
         sourceTaskDto.setBucket(sourceTask.getBucket());
         sourceTaskDto.setInputFolder(sourceTask.getInputFolder());
         sourceTaskDto.setOutputFolder(sourceTask.getOutputFolder());
-        Long homePageLookupId = ProcessUtil.parseLongOrNull(sourceTask.getHomePageId());
+        Long homePageLookupId = sourceTask.getHomePageId();
         if (homePageLookupId != null) {
             this.lookupDataRepository.findById(homePageLookupId)
                 .ifPresent(lookupData -> sourceTaskDto.setHomePageId(lookupData.getLookupType()));

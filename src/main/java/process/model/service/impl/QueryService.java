@@ -7,8 +7,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.SearchTextDto;
+import process.model.enums.JobAuditMarker;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
+import process.util.SqlLogRedaction;
 import javax.persistence.*;
 import javax.transaction.Transactional;
 import java.util.Arrays;
@@ -26,23 +28,37 @@ public class QueryService {
 
     private Logger logger = LoggerFactory.getLogger(QueryService.class);
 
+    /**
+     * What the executors log (MIG-74, DEF-142). Every query here is string-built, so the composed text
+     * carries the caller's tenant id and search terms; it went out at INFO. The shape, literals redacted,
+     * goes to DEBUG -- which logback.xml enables everywhere, so it must be safe to ship -- and the
+     * composed query only to TRACE, for a developer who turns it on locally.
+     */
+    private void logQuery(String queryStr) {
+        if (this.logger.isTraceEnabled()) {
+            this.logger.trace("Execute Query :- {}.", queryStr);
+        } else if (this.logger.isDebugEnabled()) {
+            this.logger.debug("Execute Query :- {}.", SqlLogRedaction.redact(queryStr));
+        }
+    }
+
     @PersistenceContext
     private EntityManager _em;
 
     public Object executeQueryForSingleResult(String queryStr) {
-        logger.info("Execute Query :- {}.", queryStr);
+        this.logQuery(queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getSingleResult();
     }
 
     public List<Object[]> executeQuery(String queryStr) {
-        logger.info("Execute Query :- {}.", queryStr);
+        this.logQuery(queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getResultList();
     }
 
     public List<Object[]> executeQuery(String queryStr, Pageable paging) {
-        logger.info("Execute Query :- {}.", queryStr);
+        this.logQuery(queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         if (paging != null) {
             query.setFirstResult(paging.getPageNumber() * paging.getPageSize());
@@ -74,8 +90,9 @@ public class QueryService {
             // that for an id, so the join matched nothing and the list's Pipeline column was
             // blank for every task ever created. Selected straight from source_task now, the
             // same way SourceTaskRepository and the Kafka producer already read it.
-            query += "left join lookup_data ld1 on cast(ld1.lookup_id as varchar(10)) = st.home_page_id\n";
-            query += "left join lookup_data ld3 on cast(ld3.lookup_id as varchar(10)) = st.group_id\n";
+            // bigint foreign keys since V70.3 (MIG-165): joined on the key, no cast.
+            query += "left join lookup_data ld1 on ld1.lookup_id = st.home_page_id\n";
+            query += "left join lookup_data ld3 on ld3.lookup_id = st.group_id\n";
         }
         query += "where st.task_status in ('Active', 'Inactive') " + this.tenantClause("st");
         if ((startDate != null && !startDate.isEmpty()) || (endDate != null && !endDate.isEmpty())) {
@@ -356,7 +373,9 @@ public class QueryService {
             + "left join tenant t on t.tenant_id = sj.tenant_id "
             + "left join app_user u on u.app_user_id = sj.assigned_user_id "
             + "left join (select job_queue_id, min(date_created) as exec_start "
-            + "from job_audit_logs where log_detail = 'Job started' group by job_queue_id) x "
+            // The marker is JobAuditMarker.JOB_STARTED, one constant with the worker's literal behind it
+            // (MIG-77): matched exactly, never with LIKE.
+            + "from job_audit_logs where log_detail = '" + JobAuditMarker.JOB_STARTED.logDetail() + "' group by job_queue_id) x "
             + "on x.job_queue_id = q.job_queue_id "
             // A deleted job's runs are not history any more, and every other statistic here
             // already leaves them out -- a report that counted them would disagree with the
@@ -429,7 +448,8 @@ public class QueryService {
         targetDate = this.requireValidDate(targetDate);
         String tenantFilter = this.tenantClause("source_job");
         return String.format(
-            "SELECT * FROM (\n" +
+            "SELECT job_id, job_name, queue, start, running, failed, completed, stop, skip, interrupt, missed, total, " +
+                "tenant_id FROM (\n" +
                 "    SELECT \n" +
                 "        job_queue.job_id,\n" +
                 "        source_job.job_name,\n" +
@@ -501,7 +521,12 @@ public class QueryService {
     }
 
     public String weeklyHrRunningStatisticsDimensionDetail(String targetDate, Long targetHr, String jobStatus, Long jobId) {
-        String query = "select job_queue.* from job_queue\n" +
+        // Named, in the order DashboardServiceImpl reads them. This was select job_queue.*, read by
+        // position -- correct only while the table's physical column order happened to match, and a
+        // job_queue provisioned anywhere new by ddl-auto puts attempt at index 1 (MIG-8, DEF-126).
+        String query = "select job_queue.job_queue_id, job_queue.date_created, job_queue.end_time, job_queue.job_id, " +
+                "job_queue.job_send, job_queue.job_status, job_queue.job_status_message, job_queue.run_manual, " +
+                "job_queue.skip_manual, job_queue.skip_time, job_queue.start_time from job_queue\n" +
                 "inner join source_job on source_job.job_id = job_queue.job_id where 1=1\n" +
                 this.tenantClause("source_job") + "\n";
         if (!ProcessUtil.isNull(targetDate)) {

@@ -22,6 +22,7 @@ import process.model.pojo.TenantTaskTypeKafkaRoute;
 import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
+import process.model.repository.SourceTaskRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.TenantRepository;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
@@ -239,6 +240,10 @@ public class SettingServiceImpl implements SettingService {
      */
     @Autowired(required = false)
     private PipelineRepository pipelineRepository;
+
+    /** Optional for the same reason: only the in-use check on deleting a home page or group reads tasks. */
+    @Autowired(required = false)
+    private SourceTaskRepository sourceTaskRepository;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
     private final LookupDataCacheService lookupDataCacheService;
@@ -752,8 +757,11 @@ public class SettingServiceImpl implements SettingService {
             boolean isTenantExtendableList = isTenantExtendable(parentLookup.get());
             boolean isPlatformAdmin = TenantContext.isPlatformAdmin();
             Long callerTenantId = TenantContext.getTenantId();
-            if (!isNull(parentLookup.get().getChildren())) {
-                for (LookupData lookup: parentLookup.get().getChildren()) {
+            // Read by query, not through the parent's lazy collection (MIG-67): nothing here is
+            // transactional, and the collection only loaded while enable_lazy_load_no_trans let it.
+            List<LookupData> children = this.lookupDataRepository.findChildrenOf(parentLookUpId);
+            if (!isNull(children)) {
+                for (LookupData lookup: children) {
                     // Owned: only the caller's own rows. Extendable: the platform's shared rows
                     // as well, since those are what a tenant points its models at.
                     if (!isPlatformAdmin && isTenantOwnedList
@@ -795,12 +803,32 @@ public class SettingServiceImpl implements SettingService {
         if (deleteRefusal == null) {
             deleteRefusal = refuseDeletion(lookupDataOpt.get());
         }
+        if (deleteRefusal == null) {
+            deleteRefusal = this.refuseDeletionInUse(lookupDataOpt.get());
+        }
         if (deleteRefusal != null) {
             return new ResponseDto(ERROR, deleteRefusal);
         }
         this.lookupDataRepository.deleteById(tempLookupData.getLookupId());
         this.lookupDataCacheService.changed();
         return new ResponseDto(SUCCESS, String.format("LookupData delete with %d.", tempLookupData.getLookupId()));
+    }
+
+    /**
+     * A home page or group a live task still names (MIG-165). Tasks hold these as foreign keys since V70.3;
+     * the key would null a tombstoned task's reference, but a live task silently losing its home page is
+     * what used to happen by accident, and is refused here instead, with the count.
+     */
+    private String refuseDeletionInUse(LookupData lookupData) {
+        if (this.sourceTaskRepository == null) {
+            return null;
+        }
+        long tasks = this.sourceTaskRepository.countLiveTasksReferencing(lookupData.getLookupId());
+        if (tasks == 0) {
+            return null;
+        }
+        return String.format("%d task%s still use%s \"%s\". Change %s first.", tasks, tasks == 1 ? "" : "s",
+            tasks == 1 ? "s" : "", lookupData.getLookupType(), tasks == 1 ? "that task" : "those tasks");
     }
 
     private boolean isLookupOwnedByCaller(LookupData lookupData) {
