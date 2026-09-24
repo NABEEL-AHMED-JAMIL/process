@@ -47,7 +47,7 @@ public class SourceJobAssignedUsernameTest {
     @Mock private SourceTaskRepository sourceTaskRepository;
     @Mock private JobAuditLogRepository jobAuditLogRepository;
     @Mock private JobQueueRepository jobQueueRepository;
-    @Mock private LookupDataRepository lookupDataRepository;
+    @Mock private TaskReferenceRepository taskReferenceRepository;
     @Mock private AppUserRepository appUserRepository;
     @Mock private ProducerBulkEngine producerBulkEngine;
     @Mock private TenantFilterHelper tenantFilterHelper;
@@ -60,7 +60,7 @@ public class SourceJobAssignedUsernameTest {
     void setUp() {
         this.service = new SourceJobServiceImpl(this.sourceJobRepository, this.schedulerRepository,
             this.sourceTaskRepository, this.jobAuditLogRepository,
-            this.jobQueueRepository, this.lookupDataRepository, TestIdentity.over(this.appUserRepository, null),
+            this.jobQueueRepository, this.taskReferenceRepository, TestIdentity.over(this.appUserRepository, null),
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
             TestNotifications.recording(null, null, null, null), this.userNameResolver);
     }

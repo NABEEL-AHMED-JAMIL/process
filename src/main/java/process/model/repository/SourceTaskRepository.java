@@ -55,25 +55,33 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
     Optional<SourceTask> findWithPayloadByTaskDetailId(Long taskDetailId);
 
     /**
-     * Live tasks -- Active or Inactive, not deleted -- that name this lookup row as their home page or group.
-     * What stops a home page or group being deleted out from under them (MIG-165).
+     * Live tasks -- Active or Inactive, not deleted -- that name this task_reference row as their home page or group.
+     * What stops a home page or group being deleted out from under them (MIG-165, MIG-167).
      */
-    default long countLiveTasksReferencing(Long lookupId) {
-        return this.countTasksReferencingOutsideStatus(lookupId, Status.Delete);
+    default long countLiveTasksReferencing(Long taskReferenceId) {
+        return this.countTasksReferencingOutsideStatus(taskReferenceId, Status.Delete);
     }
 
-    @Query("select count(st) from SourceTask st where (st.homePageId = :lookupId or st.groupId = :lookupId) "
+    @Query("select count(st) from SourceTask st where (st.homePageId = :referenceId or st.groupId = :referenceId) "
         + "and st.taskStatus <> :excluded")
-    long countTasksReferencingOutsideStatus(@Param("lookupId") Long lookupId, @Param("excluded") Status excluded);
+    long countTasksReferencingOutsideStatus(@Param("referenceId") Long referenceId, @Param("excluded") Status excluded);
+
+    /**
+     * Live tasks of one workspace whose payload contains this exact text -- a ${config:KEY} or ${secret:KEY}
+     * reference (MIG-167). strpos, not LIKE: a key's underscores are LIKE wildcards.
+     */
+    @Query(value = "select count(*) from source_task where tenant_id = :tenantId and task_status <> 'Delete' "
+        + "and strpos(task_payload, :reference) > 0", nativeQuery = true)
+    long countLiveTasksWithPayloadContaining(@Param("tenantId") Long tenantId, @Param("reference") String reference);
 
     String DOWNLOAD_LIST_SOURCE_TASK_SELECT = "select st.task_detail_id as taskDetailId, st.task_name as taskName,\n" +
         " st.task_payload  as taskPayload, st.task_status as taskStatus,\n" +
         "stt.queue_topic_partition as queueTopicPartition, stt.service_name as serviceName," +
         "stt.task_type_status as taskTypeStatus, st.pipeline_id as pipelineTaskId, st.home_page_id as homePage,\n" +
-        "ldg.lookup_type as groupLabel\n" +
+        "ldg.name as groupLabel\n" +
         "from source_task st\n" +
         "inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n" +
-        "left join lookup_data ldg on ldg.lookup_id = st.group_id\n";
+        "left join task_reference ldg on ldg.id = st.group_id\n";
 
     @Query(value = DOWNLOAD_LIST_SOURCE_TASK_SELECT +
 
@@ -85,18 +93,18 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
     public List<SourceTaskProjection> downloadListSourceTaskForTenant(@Param("tenantId") Long tenantId);
 
     @Query(value = "select st.task_detail_id as taskDetailId, st.task_name as taskName, st.task_status as taskStatus,\n" +
-        "ldg.lookup_type as groupLabel\n" +
+        "ldg.name as groupLabel\n" +
         "from source_task st\n" +
-        "left join lookup_data ldg on ldg.lookup_id = st.group_id\n" +
+        "left join task_reference ldg on ldg.id = st.group_id\n" +
 
         "where st.source_task_type_id = :sourceTaskTypeId and st.task_status != 'Delete'", nativeQuery = true)
     public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeId(
         @Param("sourceTaskTypeId") Long sourceTaskTypeId);
 
     @Query(value = "select st.task_detail_id as taskDetailId, st.task_name as taskName, st.task_status as taskStatus,\n" +
-        "ldg.lookup_type as groupLabel\n" +
+        "ldg.name as groupLabel\n" +
         "from source_task st\n" +
-        "left join lookup_data ldg on ldg.lookup_id = st.group_id\n" +
+        "left join task_reference ldg on ldg.id = st.group_id\n" +
         "where st.source_task_type_id = :sourceTaskTypeId and st.task_status != 'Delete' " +
         "and st.tenant_id = :tenantId", nativeQuery = true)
     public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeIdForTenant(

@@ -1,0 +1,109 @@
+databaseChangeLog:
+  - changeSet:
+      id: 141.0-task-reference
+      author: nabeel.amd93
+      description: "task_reference: each workspace's home pages and task groups, out of lookup_data with their ids (MIG-167, MIG-165)"
+      # A home page and a task group were children of the PIPELINE_HOME_PAGES and TASK_GROUPS families in
+      # lookup_data, told apart only by their parent, their names unique across the whole platform, and the table
+      # also holding engine dials. Here they are one table of Core's own, with the kind as a column and the name
+      # unique per workspace and kind (owner's D3). The ids are the lookup ids, unchanged, so source_task's
+      # home_page_id and group_id (bigint foreign keys since V70.3) are re-pointed here and nothing else changes.
+      #
+      # No is_encrypted column: a home page is a URL the dispatcher hands to the worker and a group is a label, and
+      # V140 has already refused to go on if any row that moves here was encrypted. Secrets belong in pipeline_config.
+      # tenant_id is NOT NULL with no foreign key: workspaces are identity-service's (MIG-107), as for source_task.
+      #
+      # dev on 2026-09-24: five home pages (1274-1278, one per workspace) and two groups (1280, 1282) move.
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            source_task names a home page that is not a PIPELINE_HOME_PAGES row of the task's own workspace, or a group
+            that is not a TASK_GROUPS row of it, and task_reference would make that permanent. Find them with
+            SELECT st.task_detail_id, st.tenant_id, st.home_page_id, st.group_id FROM source_task st
+            LEFT JOIN lookup_data h ON h.lookup_id = st.home_page_id LEFT JOIN lookup_data hp ON hp.lookup_id = h.parent_lookup_id
+            LEFT JOIN lookup_data g ON g.lookup_id = st.group_id LEFT JOIN lookup_data gp ON gp.lookup_id = g.parent_lookup_id
+            WHERE (st.home_page_id IS NOT NULL AND (hp.lookup_type IS DISTINCT FROM 'PIPELINE_HOME_PAGES' OR h.tenant_id IS DISTINCT FROM st.tenant_id))
+            OR (st.group_id IS NOT NULL AND (gp.lookup_type IS DISTINCT FROM 'TASK_GROUPS' OR g.tenant_id IS DISTINCT FROM st.tenant_id));
+            point each at the right row (or clear it), and deploy again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >
+              SELECT count(*) FROM source_task st
+              LEFT JOIN lookup_data h ON h.lookup_id = st.home_page_id
+              LEFT JOIN lookup_data hp ON hp.lookup_id = h.parent_lookup_id
+              LEFT JOIN lookup_data g ON g.lookup_id = st.group_id
+              LEFT JOIN lookup_data gp ON gp.lookup_id = g.parent_lookup_id
+              WHERE (st.home_page_id IS NOT NULL
+                     AND (hp.lookup_type IS DISTINCT FROM 'PIPELINE_HOME_PAGES' OR h.tenant_id IS DISTINCT FROM st.tenant_id))
+                 OR (st.group_id IS NOT NULL
+                     AND (gp.lookup_type IS DISTINCT FROM 'TASK_GROUPS' OR g.tenant_id IS DISTINCT FROM st.tenant_id))
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE TABLE task_reference (
+                  id           BIGINT        PRIMARY KEY,
+                  tenant_id    BIGINT        NOT NULL,
+                  kind         VARCHAR(16)   NOT NULL CONSTRAINT ck_task_reference_kind CHECK (kind IN ('HOME_PAGE', 'TASK_GROUP')),
+                  name         VARCHAR(255)  NOT NULL CONSTRAINT ck_task_reference_name CHECK (btrim(name) <> ''),
+                  value        TEXT,
+                  description  VARCHAR(255),
+                  created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+                  created_by   BIGINT,
+                  updated_at   TIMESTAMPTZ,
+                  updated_by   BIGINT,
+                  CONSTRAINT uq_task_reference_tenant_kind_name UNIQUE (tenant_id, kind, name)
+              );
+        - sql:
+            splitStatements: false
+            sql: >
+              INSERT INTO task_reference (id, tenant_id, kind, name, value, description, created_at, created_by, updated_by)
+              SELECT c.lookup_id, c.tenant_id,
+                     CASE p.lookup_type WHEN 'PIPELINE_HOME_PAGES' THEN 'HOME_PAGE' ELSE 'TASK_GROUP' END,
+                     btrim(c.lookup_type), c.lookup_value, c.description, c.date_created, c.created_by, c.updated_by
+              FROM lookup_data c
+              JOIN lookup_data p ON p.lookup_id = c.parent_lookup_id
+              WHERE p.parent_lookup_id IS NULL AND p.lookup_type IN ('PIPELINE_HOME_PAGES', 'TASK_GROUPS');
+        # Ids from here on are the sequence's (SeedIdRangeTest: sequences own 1000 and up), past every kept id.
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE SEQUENCE task_reference_id_seq START WITH 1000 INCREMENT BY 1;
+              SELECT setval('task_reference_id_seq', GREATEST(1000, (SELECT COALESCE(max(id), 0) + 1 FROM task_reference)), false);
+              ALTER TABLE task_reference ALTER COLUMN id SET DEFAULT nextval('task_reference_id_seq');
+              ALTER SEQUENCE task_reference_id_seq OWNED BY task_reference.id;
+        - sql:
+            sql: >
+              ALTER TABLE source_task DROP CONSTRAINT IF EXISTS fk_source_task_home_page,
+                                      DROP CONSTRAINT IF EXISTS fk_source_task_group
+        - sql:
+            sql: >
+              ALTER TABLE source_task
+                ADD CONSTRAINT fk_source_task_home_page FOREIGN KEY (home_page_id) REFERENCES task_reference (id) ON DELETE SET NULL,
+                ADD CONSTRAINT fk_source_task_group FOREIGN KEY (group_id) REFERENCES task_reference (id) ON DELETE SET NULL
+        - sql:
+            sql: COMMENT ON TABLE task_reference IS 'Each workspace''s home pages and task groups (MIG-167), moved out of lookup_data with their ids.'
+        - sql:
+            sql: >
+              COMMENT ON COLUMN task_reference.value IS 'HOME_PAGE: the http(s) URL people land on after a run of the task
+              completes, handed to the worker at dispatch. TASK_GROUP: an optional label.'
+        - sql:
+            sql: >
+              COMMENT ON COLUMN source_task.home_page_id IS 'Where people land after a run of this task completes: a
+              HOME_PAGE row of the task''s workspace in task_reference (MIG-165, MIG-167).'
+        - sql:
+            sql: >
+              COMMENT ON COLUMN source_task.group_id IS 'The group this task is filed under: a TASK_GROUP row of the
+              task''s workspace in task_reference (MIG-165, MIG-167).'
+      rollback:
+        - sql:
+            sql: >
+              ALTER TABLE source_task DROP CONSTRAINT IF EXISTS fk_source_task_home_page,
+                                      DROP CONSTRAINT IF EXISTS fk_source_task_group
+        - sql:
+            sql: >
+              ALTER TABLE source_task
+                ADD CONSTRAINT fk_source_task_home_page FOREIGN KEY (home_page_id) REFERENCES lookup_data (lookup_id) ON DELETE SET NULL,
+                ADD CONSTRAINT fk_source_task_group FOREIGN KEY (group_id) REFERENCES lookup_data (lookup_id) ON DELETE SET NULL
+        - sql:
+            sql: DROP TABLE IF EXISTS task_reference

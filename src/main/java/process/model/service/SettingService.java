@@ -1,6 +1,5 @@
 package process.model.service;
 
-import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
 import java.util.List;
@@ -13,8 +12,6 @@ public interface SettingService {
     public ResponseDto appSetting() throws Exception;
 
     public ResponseDto topicsForProfile(Long kafkaConnectionProfileId) throws Exception;
-
-    public ResponseDto lookups() throws Exception;
 
     public ResponseDto topics(String q, Integer limit, List<Long> ids, Long kafkaConnectionProfileId) throws Exception;
 
@@ -29,13 +26,5 @@ public interface SettingService {
     public ResponseDto setKafkaRoute(Long sourceTaskTypeId, Long kafkaConnectionProfileId) throws Exception;
 
     public ResponseDto deleteKafkaRoute(Long sourceTaskTypeId) throws Exception;
-
-    public ResponseDto addLookupData(LookupDataDto lookupDataDto) throws Exception;
-
-    public ResponseDto updateLookupData(LookupDataDto lookupDataDto) throws Exception;
-
-    public ResponseDto fetchSubLookupByParentId(Long parentLookUpId) throws Exception;
-
-    public ResponseDto deleteLookupData(LookupDataDto lookupDataDto) throws Exception;
 
 }

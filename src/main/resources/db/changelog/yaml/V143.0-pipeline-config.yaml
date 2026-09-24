@@ -1,0 +1,56 @@
+databaseChangeLog:
+  - changeSet:
+      id: 143.0-pipeline-config
+      author: nabeel.amd93
+      description: "pipeline_config: each workspace's configuration values and secrets, read by pipelines by key (MIG-167)"
+      # What the generic Lookups screen was used for in practice -- somewhere to keep a setting a pipeline needs, and
+      # sometimes a password -- as a store of its own (owner's direction, 2026-09-24). A task payload references an
+      # entry as ${config:KEY} or ${secret:KEY}; the worker asks Core for the values of the keys its run's task
+      # references, with the run's X-Worker-Token (RunConfigRestApi), so no value is ever in a payload, a Kafka
+      # message or a log.
+      #
+      # A VALUE keeps its value in `value`. A SECRET keeps it ONLY in `value_sealed`, sealed by process's EncryptionUtil
+      # under the current key ("k<key-id>:..."), and EncryptionReseal re-seals it on a key rotation. The check
+      # constraints make the two exclusive, so a secret can never sit in the readable column, and refuse a sealed
+      # column that is not in the tagged format -- plaintext written there by mistake is refused by the database.
+      # value_set_at / value_set_by say when and by whom the value or secret itself was last written -- what the console
+      # shows for a secret ("set on <date> by <who>") -- apart from updated_at, which a description edit also moves.
+      # tenant_id is NOT NULL: every entry belongs to exactly one workspace (identity-service's; no foreign key).
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE SEQUENCE pipeline_config_id_seq START WITH 1000 INCREMENT BY 1;
+              CREATE TABLE pipeline_config (
+                  id            BIGINT        PRIMARY KEY DEFAULT nextval('pipeline_config_id_seq'),
+                  tenant_id     BIGINT        NOT NULL,
+                  config_key    VARCHAR(64)   NOT NULL CONSTRAINT ck_pipeline_config_key CHECK (config_key ~ '^[A-Z][A-Z0-9_]{0,63}$'),
+                  kind          VARCHAR(8)    NOT NULL CONSTRAINT ck_pipeline_config_kind CHECK (kind IN ('VALUE', 'SECRET')),
+                  value         TEXT,
+                  value_sealed  TEXT,
+                  description   VARCHAR(255),
+                  value_set_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+                  value_set_by  BIGINT,
+                  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+                  created_by    BIGINT,
+                  updated_at    TIMESTAMPTZ,
+                  updated_by    BIGINT,
+                  CONSTRAINT uq_pipeline_config_tenant_key UNIQUE (tenant_id, config_key),
+                  CONSTRAINT ck_pipeline_config_one_value CHECK (
+                      (kind = 'VALUE' AND value IS NOT NULL AND value_sealed IS NULL)
+                   OR (kind = 'SECRET' AND value IS NULL AND value_sealed ~ '^k[A-Za-z0-9_-]+:.'))
+              );
+              ALTER SEQUENCE pipeline_config_id_seq OWNED BY pipeline_config.id;
+        - sql:
+            sql: >
+              COMMENT ON TABLE pipeline_config IS 'Each workspace''s configuration values and secrets (MIG-167). Tasks
+              reference them as ${config:KEY} / ${secret:KEY}; the worker fetches them from Core at run time.'
+        - sql:
+            sql: >
+              COMMENT ON COLUMN pipeline_config.value_sealed IS 'A SECRET, sealed by EncryptionUtil under the current key
+              (k<key-id>:...). Never returned by any console API; handed only to a live run whose task references it.'
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS pipeline_config
+        - sql:
+            sql: DROP SEQUENCE IF EXISTS pipeline_config_id_seq

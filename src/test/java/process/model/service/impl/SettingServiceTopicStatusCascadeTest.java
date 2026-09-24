@@ -52,7 +52,7 @@ public class SettingServiceTopicStatusCascadeTest {
     private SettingServiceImpl service() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1000L, "admin@platform.local");
         when(this.resolver.resolve(any(), anyLong())).thenReturn(Optional.empty());
-        return new SettingServiceImpl(null, this.jobs, this.taskTypes, null, null, null, null, this.kafka, this.resolver, null, null);
+        return new SettingServiceImpl(this.jobs, this.taskTypes, null, null, null, this.kafka, this.resolver, null);
     }
 
     private SourceTaskType existing(Status status, Long kafkaProfileId) {

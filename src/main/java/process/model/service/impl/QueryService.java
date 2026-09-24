@@ -79,8 +79,8 @@ public class QueryService {
         if (isCount) {
             selectPortion = "select count(*) as result\n";
         } else {
-            selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, ld1.lookup_type as home_page_id, " +
-                "st.pipeline_id, ld3.lookup_type as group_id, st.task_status, stt.source_task_type_id, stt.service_name, " +
+            selectPortion = "select st.task_detail_id, st.task_name, st.task_payload, ld1.name as home_page_id, " +
+                "st.pipeline_id, ld3.name as group_id, st.task_status, stt.source_task_type_id, stt.service_name, " +
                 "stt.description, stt.queue_topic_partition, stt.task_type_status, stt.kafka_connection_profile_id, " +
                 "st.bucket, st.input_folder, st.output_folder, " +
                 "count(sj.job_id) as total_link_jobs\n";
@@ -88,8 +88,8 @@ public class QueryService {
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n";
         if (!isCount) {
             query += "left join source_job sj on sj.task_detail_id = st.task_detail_id and sj.job_status in ('Active', 'Inactive')\n";
-            // home_page_id and group_id really are lookup ids -- the Home page and Group
-            // fields both store lookup_data.lookup_id. pipeline_id is NOT, and used to be
+            // home_page_id and group_id are task_reference ids (MIG-167; lookup_data ids before, kept as they
+            // were) -- the Home page and Group fields. pipeline_id is NOT, and used to be
             // joined the same way here: since the PIPELINE_IDS lookup family was dropped
             // (changeset V28) and Pipeline Forms became the catalogue, source_task.pipeline_id
             // holds the raw id the worker routes on ("F768930"). Nothing in lookup_data has
@@ -97,8 +97,8 @@ public class QueryService {
             // blank for every task ever created. Selected straight from source_task now, the
             // same way SourceTaskRepository and the Kafka producer already read it.
             // bigint foreign keys since V70.3 (MIG-165): joined on the key, no cast.
-            query += "left join lookup_data ld1 on ld1.lookup_id = st.home_page_id\n";
-            query += "left join lookup_data ld3 on ld3.lookup_id = st.group_id\n";
+            query += "left join task_reference ld1 on ld1.id = st.home_page_id\n";
+            query += "left join task_reference ld3 on ld3.id = st.group_id\n";
         }
         query += "where st.task_status in ('Active', 'Inactive') " + this.tenantClause("st");
         // source_task had no date_created until V130, so any range here was a 500. It is an instant, read as
@@ -133,7 +133,7 @@ public class QueryService {
             // ld2 is gone with the pipeline_id join above; st.pipeline_id needs no entry here
             // because st.task_detail_id is source_task's primary key, so every other
             // column of that table is functionally dependent on it.
-            query += "\ngroup by st.task_detail_id, stt.source_task_type_id, ld1.lookup_id, ld3.lookup_id\n";
+            query += "\ngroup by st.task_detail_id, stt.source_task_type_id, ld1.id, ld3.id\n";
             if (order != null && columnName != null) {
                 query += String.format("order by %s %s ", this.sanitizeSortColumn(columnName), this.sanitizeSortOrder(order));
             }

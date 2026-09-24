@@ -7,10 +7,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import process.model.pojo.LookupData;
 import process.model.projection.OpenSearchJobAuditLogProjection;
 import process.model.repository.JobAuditLogRepository;
-import process.model.service.impl.TransactionServiceImpl;
+import process.settings.OrchestrationSettings;
+import process.settings.Watermark;
 import process.util.OpenSearchAuditLogClient;
 import process.util.ProcessUtil;
 
@@ -18,6 +18,7 @@ import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -50,7 +51,7 @@ public class AuditLogSyncCronOrphanSkipTest {
 
     @Mock private OpenSearchAuditLogClient openSearchAuditLogClient;
     @Mock private JobAuditLogRepository jobAuditLogRepository;
-    @Mock private TransactionServiceImpl transactionService;
+    @Mock private OrchestrationSettings orchestrationSettings;
 
     private AuditLogSyncCron cron;
     private Instant lastRun;
@@ -58,12 +59,12 @@ public class AuditLogSyncCronOrphanSkipTest {
     @BeforeEach
     void setUp() {
         this.cron = new AuditLogSyncCron(this.openSearchAuditLogClient,
-            this.jobAuditLogRepository, this.transactionService);
+            this.jobAuditLogRepository, this.orchestrationSettings);
         ReflectionTestUtils.setField(this.cron, "initialLookbackDays", 30);
         this.lastRun = Instant.now().minus(Duration.ofHours(6));
         when(this.openSearchAuditLogClient.isEnabled()).thenReturn(true);
-        when(this.transactionService.findByLookupType(ProcessUtil.AUDIT_LOG_SYNC_LAST_RUN_TIME))
-            .thenReturn(this.bookmarkAt(this.lastRun));
+        when(this.orchestrationSettings.value(ProcessUtil.AUDIT_LOG_SYNC_LAST_RUN_TIME))
+            .thenReturn(Optional.of(this.lastRun.toString()));
     }
 
     @Test
@@ -122,17 +123,11 @@ public class AuditLogSyncCronOrphanSkipTest {
         verify(this.jobAuditLogRepository, never()).findExistingJobQueueIds(anyList());
     }
 
+    /** Moved by the cron itself, and only through its own watermark door (MIG-167, D4). */
     private String savedBookmarkValue() {
-        ArgumentCaptor<LookupData> captor = ArgumentCaptor.forClass(LookupData.class);
-        verify(this.transactionService).updateLookupDate(captor.capture());
-        return captor.getValue().getLookupValue();
-    }
-
-    private LookupData bookmarkAt(Instant value) {
-        LookupData bookmark = new LookupData();
-        bookmark.setLookupType(ProcessUtil.AUDIT_LOG_SYNC_LAST_RUN_TIME);
-        bookmark.setLookupValue(value.toString());
-        return bookmark;
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(this.orchestrationSettings).writeWatermark(eq(Watermark.AUDIT_LOG_SYNC_LAST_RUN_TIME), captor.capture());
+        return captor.getValue();
     }
 
     private static OpenSearchJobAuditLogProjection hit(String externalId, Long jobQueueId, Instant dateCreated) {

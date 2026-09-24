@@ -6,7 +6,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.dto.ConfigurationMakerRequest;
@@ -41,17 +40,6 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.appSetting(), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while appSetting ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    /** The parent lookups alone -- what the Lookups screen and the task editor need from appSetting. */
-    @RequestMapping(value = "/lookups", method = RequestMethod.GET)
-    public ResponseEntity<?> lookups() {
-        try {
-            return new ResponseEntity<>(this.settingService.lookups(), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while lookups.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -138,50 +126,6 @@ public class SettingRestApi {
             return new ResponseEntity<>(this.settingService.deleteKafkaRoute(sourceTaskTypeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while deleteKafkaRoute ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @RequestMapping(value = "/addLookupData", method = RequestMethod.POST)
-    public ResponseEntity<?> addLookupData(
-        @RequestBody LookupDataDto tempLookupData) {
-        try {
-            return new ResponseEntity<>(this.settingService.addLookupData(tempLookupData), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while addLookupData ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @RequestMapping(value = "/updateLookupData", method = RequestMethod.PUT)
-    public ResponseEntity<?> updateLookupData(
-        @RequestBody LookupDataDto tempLookupData) {
-        try {
-            return new ResponseEntity<>(this.settingService.updateLookupData(tempLookupData), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while updateLookupData ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @RequestMapping(value = "/fetchSubLookupByParentId", method = RequestMethod.GET)
-    public ResponseEntity<?> fetchSubLookupByParentId(
-        @RequestParam Long parentLookUpId) {
-        try {
-            return new ResponseEntity<>(this.settingService.fetchSubLookupByParentId(parentLookUpId), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while fetchSubLookupByParentId ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @RequestMapping(value = "/deleteLookupData", method = RequestMethod.PUT)
-    public ResponseEntity<?> deleteLookupData(
-        @RequestBody LookupDataDto tempLookupData) {
-        try {
-            return new ResponseEntity<>(this.settingService.deleteLookupData(tempLookupData), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while deleteLookupData ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

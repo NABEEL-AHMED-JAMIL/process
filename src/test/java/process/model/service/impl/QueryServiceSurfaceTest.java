@@ -33,8 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * Each builder is listed with the tables it reads, taken from the SQL it actually builds, and its caller.
  * These joins are where a service boundary may and may not fall: job_queue and source_job are Core's,
- * app_user and tenant are Identity's and no builder reads them any more (MIG-107), lookup_data is being
- * decomposed (MIG-167). Adding, removing or
+ * app_user and tenant are Identity's and no builder reads them any more (MIG-107), and lookup_data was
+ * decomposed and retired (MIG-167): home page and group names come from Core's task_reference. Adding, removing or
  * re-joining a method fails here until this list -- the documentation -- is updated with it.
  */
 class QueryServiceSurfaceTest {
@@ -61,10 +61,10 @@ class QueryServiceSurfaceTest {
         runs.setFromDate("2026-09-01");
         runs.setToDate("2026-09-21");
         Map<String, Builder> builders = new LinkedHashMap<>();
-        // SourceTaskServiceImpl: the task list and its count. lookup_data resolves home page and group names.
+        // SourceTaskServiceImpl: the task list and its count. task_reference resolves home page and group names.
         builders.put("listSourceTaskQuery(boolean,String,String,String,String,SearchTextDto)", new Builder(
             () -> this.queries.listSourceTaskQuery(false, null, null, null, null, search),
-            "lookup_data", "source_job", "source_task", "source_task_type"));
+            "source_job", "source_task", "source_task_type", "task_reference"));
         // SourceTaskServiceImpl: a task's linked jobs, unordered and ordered.
         builders.put("fetchAllLinkJobsWithSourceTaskQuery(boolean,Long,String,String,SearchTextDto)", new Builder(
             () -> this.queries.fetchAllLinkJobsWithSourceTaskQuery(false, 7L, null, null, search), "source_job", "source_task"));

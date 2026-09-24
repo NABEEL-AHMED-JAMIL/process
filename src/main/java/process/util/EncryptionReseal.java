@@ -47,7 +47,9 @@ public class EncryptionReseal implements ApplicationRunner {
     }
 
     static final List<Column> SEALED = Arrays.asList(
-        new Column("lookup_data", "lookup_id", "lookup_value", "is_encrypted = true"),
+        // MIG-167: a workspace's secrets. lookup_data left the list with its retirement (V144, read-only): V140
+        // refused to go on while any row of it was still encrypted.
+        new Column("pipeline_config", "id", "value_sealed", "kind = 'SECRET'"),
         new Column("kafka_connection_profile", "kafka_connection_profile_id", "sasl_password", "true"),
         new Column("kafka_connection_profile", "kafka_connection_profile_id", "ssl_keystore_password_enc", "true"),
         new Column("kafka_connection_profile", "kafka_connection_profile_id", "ssl_key_password_enc", "true"),

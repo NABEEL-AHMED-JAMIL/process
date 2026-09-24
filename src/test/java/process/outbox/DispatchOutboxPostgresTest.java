@@ -26,7 +26,7 @@ import process.engine.PreDispatchPhase;
 import process.engine.ProducerBulkEngine;
 import process.model.repository.JobAuditLogRepository;
 import process.model.repository.JobQueueRepository;
-import process.model.repository.LookupDataRepository;
+import process.model.repository.TaskReferenceRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
@@ -127,7 +127,7 @@ class DispatchOutboxPostgresTest {
 
         TransactionServiceImpl store = new TransactionServiceImpl(jpa.repository(SourceJobRepository.class),
             jpa.repository(SchedulerRepository.class), jpa.repository(JobQueueRepository.class),
-            jpa.repository(LookupDataRepository.class), jpa.repository(JobAuditLogRepository.class),
+            jpa.repository(TaskReferenceRepository.class), jpa.repository(JobAuditLogRepository.class),
             jpa.repository(SourceTaskRepository.class), mock(OpenSearchAuditLogClient.class));
         BulkAction bulkAction = new BulkAction(store, mock(NotificationPort.class));
         AiStepService noAiSteps = mock(AiStepService.class);

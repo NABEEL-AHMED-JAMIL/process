@@ -93,7 +93,13 @@ class TimestamptzMigrationPostgresTest {
             + "VALUES (900501, 'o', 'c', 'c@v100.test')");
         sql.update("INSERT INTO page_access_profile (page_access_profile_id, tenant_id, profile_name) VALUES (900601, 900, 'fixture')");
         sql.update("INSERT INTO user_page_access (app_user_id, page_key, allowed, tenant_id) VALUES (900201, 'HOME', true, 900)");
-        sql.update("INSERT INTO lookup_data (lookup_id, lookup_type, lookup_value, date_created) VALUES (900701, 'V100_FIXTURE', 'x', now())");
+        // A workspace's task group: MIG-167's V140 halts on a lookup_data row that no destination takes. Only while
+        // lookup_data is still writable -- after V144 it is retired and read-only, and a built database's round trip
+        // (EntityTimeRoundTripPostgresTest) has no entity for it any more.
+        boolean lookupsWritable = sql.queryForObject("SELECT count(*) FROM pg_trigger WHERE tgname = 'lookup_data_read_only'", Long.class) == 0;
+        if (lookupsWritable) sql.update("INSERT INTO lookup_data (lookup_id, lookup_type, lookup_value, parent_lookup_id, tenant_id, date_created) "
+            + "VALUES (900701, 'V100_FIXTURE', 'x', (SELECT lookup_id FROM lookup_data WHERE lookup_type = 'TASK_GROUPS' "
+            + "AND parent_lookup_id IS NULL), 900, now())");
         sql.update("INSERT INTO pipeline (pipeline_key, pipeline_id, pipeline_name, tenant_id) VALUES (900801, 'F-V100', 'fixture', 900)");
         sql.update("INSERT INTO kafka_connection_profile (kafka_connection_profile_id, bootstrap_servers, is_default, profile_name, "
             + "security_protocol, status, tenant_id) VALUES (900901, 'b:9092', false, 'fixture', 'PLAINTEXT', 'Active', 900)");

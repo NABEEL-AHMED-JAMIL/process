@@ -18,12 +18,10 @@ import org.springframework.data.domain.Pageable;
 import org.mockito.ArgumentCaptor;
 import process.model.projection.TopicOptionProjection;
 import process.model.repository.KafkaConnectionProfileRepository;
-import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.security.TenantContext;
-import process.util.EncryptionUtil;
 import process.util.UserNameResolver;
 
 import java.util.Collections;
@@ -51,26 +49,22 @@ public class TopicsForProfileTest {
 
     private static final long MINE = 2905L;
     private static final long THEIRS = 2901L;
-
-    @Mock private LookupDataRepository lookupDataRepository;
     @Mock private SourceJobRepository sourceJobRepository;
     @Mock private SourceTaskTypeRepository sourceTaskTypeRepository;
     @Mock private KafkaConnectionProfileRepository kafkaConnectionProfileRepository;
     @Mock private TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository;
-    @Mock private EncryptionUtil encryptionUtil;
     @Mock private KafkaTemplateProvider kafkaTemplateProvider;
     @Mock private KafkaConnectionResolver kafkaConnectionResolver;
-    @Mock private LookupDataCacheService lookupDataCacheService;
     @Mock private UserNameResolver userNameResolver;
 
     private SettingServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        this.service = new SettingServiceImpl(this.lookupDataRepository, this.sourceJobRepository,
+        this.service = new SettingServiceImpl(this.sourceJobRepository,
             this.sourceTaskTypeRepository, this.kafkaConnectionProfileRepository,
-            this.tenantTaskTypeKafkaRouteRepository, null, this.encryptionUtil, this.kafkaTemplateProvider,
-            this.kafkaConnectionResolver, this.lookupDataCacheService, this.userNameResolver);
+            this.tenantTaskTypeKafkaRouteRepository, null, this.kafkaTemplateProvider,
+            this.kafkaConnectionResolver, this.userNameResolver);
         TenantContext.set(MINE, "TENANT_ADMIN", 4385L, "emily@example.com");
     }
 

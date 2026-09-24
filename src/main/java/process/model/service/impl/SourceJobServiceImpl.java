@@ -49,7 +49,7 @@ public class SourceJobServiceImpl implements SourceJobService {
     private final SourceTaskRepository sourceTaskRepository;
     private final JobAuditLogRepository jobAuditLogRepository;
         private final JobQueueRepository jobQueueRepository;
-    private final LookupDataRepository lookupDataRepository;
+    private final TaskReferenceRepository taskReferenceRepository;
     private final IdentityPort identity;
     private final ProducerBulkEngine producerBulkEngine;
     private final TenantFilterHelper tenantFilterHelper;
@@ -67,7 +67,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         SourceTaskRepository sourceTaskRepository,
         JobAuditLogRepository jobAuditLogRepository,
         JobQueueRepository jobQueueRepository,
-        LookupDataRepository lookupDataRepository,
+        TaskReferenceRepository taskReferenceRepository,
         IdentityPort identity,
         ProducerBulkEngine producerBulkEngine,
         TenantFilterHelper tenantFilterHelper,
@@ -80,7 +80,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.sourceTaskRepository = sourceTaskRepository;
         this.jobAuditLogRepository = jobAuditLogRepository;
         this.jobQueueRepository = jobQueueRepository;
-        this.lookupDataRepository = lookupDataRepository;
+        this.taskReferenceRepository = taskReferenceRepository;
         this.identity = identity;
         this.producerBulkEngine = producerBulkEngine;
         this.tenantFilterHelper = tenantFilterHelper;
@@ -710,35 +710,20 @@ public class SourceJobServiceImpl implements SourceJobService {
         return usernameByUserId;
     }
 
-    /**
-     * Every distinct home-page and pipeline lookup id behind the list's tasks, in one query.
-     *
-     * Both are stored as text and only some of them are lookup ids at all -- pipeline_id has held
-     * the raw worker id since the PIPELINE_IDS family was dropped -- so the ones that do not parse
-     * are simply not asked about, exactly as the per-row version skipped them.
-     */
+    /** Every distinct home page behind the list's tasks, by name, in one query (task_reference since MIG-167). */
     private Map<Long, String> resolveTaskLookupTypes(List<SourceJob> jobs) {
-        Set<Long> lookupIds = new LinkedHashSet<>();
+        Set<Long> homePageIds = new LinkedHashSet<>();
         for (SourceJob job : jobs) {
-            if (ProcessUtil.isNull(job.getTaskDetail())) {
-                continue;
-            }
-            Long homePageLookupId = job.getTaskDetail().getHomePageId();
-            if (homePageLookupId != null) {
-                lookupIds.add(homePageLookupId);
-            }
-            Long pipelineLookupId = ProcessUtil.parseLongOrNull(job.getTaskDetail().getPipelineId());
-            if (pipelineLookupId != null) {
-                lookupIds.add(pipelineLookupId);
+            if (!ProcessUtil.isNull(job.getTaskDetail()) && job.getTaskDetail().getHomePageId() != null) {
+                homePageIds.add(job.getTaskDetail().getHomePageId());
             }
         }
-        if (lookupIds.isEmpty()) {
+        if (homePageIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<Long, String> lookupTypeByLookupId = new HashMap<>();
-        this.lookupDataRepository.findAllById(lookupIds)
-            .forEach(lookupData -> lookupTypeByLookupId.put(lookupData.getLookupId(), lookupData.getLookupType()));
-        return lookupTypeByLookupId;
+        Map<Long, String> nameById = new HashMap<>();
+        this.taskReferenceRepository.findAllById(homePageIds).forEach(row -> nameById.put(row.getId(), row.getName()));
+        return nameById;
     }
 
     /** The assignee, and their username beside the id (MIG-107): read from Identity, not joined from app_user. */
@@ -819,29 +804,15 @@ public class SourceJobServiceImpl implements SourceJobService {
         dto.setBucket(sourceTask.getBucket());
         dto.setInputFolder(sourceTask.getInputFolder());
         dto.setOutputFolder(sourceTask.getOutputFolder());
-        Long homePageLookupId = sourceTask.getHomePageId();
-        if (homePageLookupId != null) {
+        Long homePageId = sourceTask.getHomePageId();
+        if (homePageId != null) {
             dto.setHomePageId(lookupTypeByLookupId != null
-                ? lookupTypeByLookupId.get(homePageLookupId)
-                : lookupDataRepository.findById(homePageLookupId).map(ld -> ld.getLookupType()).orElse(null));
+                ? lookupTypeByLookupId.get(homePageId)
+                : taskReferenceRepository.findById(homePageId).map(row -> row.getName()).orElse(null));
         }
-        /*
-         * pipeline_id is the raw id the worker routes on ("F768930") since the PIPELINE_IDS
-         * lookup family was dropped (changeset V28) and Pipeline Forms became the catalogue.
-         * parseLongOrNull returns null for it, so the guarded block below was skipped and the
-         * field was left unset entirely -- which is why the console showed "Pipeline --" on
-         * every task. A numeric value is still resolved, for rows written before that change,
-         * and falls back to the raw value when it resolves to nothing.
-         */
-        String pipelineId = sourceTask.getPipelineId();
-        Long pipelineLookupId = ProcessUtil.parseLongOrNull(pipelineId);
-        if (pipelineLookupId != null) {
-            dto.setPipelineId(lookupTypeByLookupId != null
-                ? lookupTypeByLookupId.getOrDefault(pipelineLookupId, pipelineId)
-                : lookupDataRepository.findById(pipelineLookupId).map(ld -> ld.getLookupType()).orElse(pipelineId));
-        } else {
-            dto.setPipelineId(pipelineId);
-        }
+        // pipeline_id is the raw id the worker routes on ("F768930"); the PIPELINE_IDS lookup family it once named
+        // was dropped by V28, and lookup_data is retired (MIG-167), so it is shown as it is stored.
+        dto.setPipelineId(sourceTask.getPipelineId());
         if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
             dto.setSourceTaskType(getSourceTaskTypeDto(sourceTask.getSourceTaskType()));
         }

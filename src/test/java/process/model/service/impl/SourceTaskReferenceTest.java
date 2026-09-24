@@ -5,15 +5,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
-import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskDto;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.enums.Status;
-import process.model.pojo.LookupData;
 import process.model.pojo.SourceTask;
 import process.model.pojo.SourceTaskType;
-import process.model.repository.LookupDataRepository;
+import process.model.pojo.TaskReference;
+import process.model.repository.TaskReferenceRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.notifications.TestNotifications;
@@ -31,8 +30,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * MIG-165: a task's home page and group are bigint foreign keys to lookup_data since V70.3, and the
- * service holds what the key cannot: the row must be of the right family and of the task's own workspace.
+ * MIG-165: a task's home page and group are bigint foreign keys (to lookup_data since V70.3, to task_reference since
+ * MIG-167's V141), and the service holds what the key cannot: the row must be of the right kind and of the task's
+ * own workspace.
  * Before, any string was stored -- and a home page is resolved to its URL at dispatch, so another
  * workspace's id put that workspace's URL into this one's job payload.
  */
@@ -43,26 +43,23 @@ class SourceTaskReferenceTest {
 
     private final SourceTaskRepository tasks = mock(SourceTaskRepository.class);
     private final SourceTaskTypeRepository types = mock(SourceTaskTypeRepository.class);
-    private final LookupDataRepository lookups = mock(LookupDataRepository.class);
+    private final TaskReferenceRepository references = mock(TaskReferenceRepository.class);
     private SourceTaskServiceImpl service;
 
     @BeforeEach
     void setUp() {
         this.service = new SourceTaskServiceImpl(null, null, null, this.tasks, this.types, mock(TenantFilterHelper.class),
             new TaskPayloadLocationUtil(), null, TestNotifications.recording(null, null, null, null), null);
-        ReflectionTestUtils.setField(this.service, "lookupDataRepository", this.lookups);
+        ReflectionTestUtils.setField(this.service, "taskReferenceRepository", this.references);
         TenantContext.set(MINE, "TENANT_ADMIN", 42L, "ops@medaxis.test");
         SourceTaskType type = new SourceTaskType();
         type.setSourceTaskTypeId(7300L);
         type.setTenantId(MINE);
         type.setStatus(Status.Active);
         when(this.types.findSourceTaskTypeBySourceTaskTypeIdAndStatus(7300L, Status.Active)).thenReturn(Optional.of(type));
-        LookupData homePages = row(1017L, "PIPELINE_HOME_PAGES", null, null);
-        LookupData groups = row(1033L, "TASK_GROUPS", null, null);
-        this.lookup(row(1275L, "MedAxis Home", homePages, MINE));
-        this.lookup(row(1274L, "CareBridge Home", homePages, THEIRS));
-        this.lookup(row(1280L, "Nightly", groups, MINE));
-        this.lookup(row(1002L, "QUEUE_FETCH_LIMIT", null, null));
+        this.reference(row(1275L, "MedAxis Home", TaskReference.HOME_PAGE, MINE));
+        this.reference(row(1274L, "CareBridge Home", TaskReference.HOME_PAGE, THEIRS));
+        this.reference(row(1280L, "Nightly", TaskReference.TASK_GROUP, MINE));
     }
 
     @AfterEach
@@ -104,7 +101,6 @@ class SourceTaskReferenceTest {
     void aRowOfTheWrongFamilyOrNotANumberIsRefused() throws Exception {
         assertThat(this.service.addSourceTask(task("1280", null)).getMessage()).contains("home pages");
         assertThat(this.service.addSourceTask(task(null, "1275")).getMessage()).isEqualTo("Group 1275 is not one of this workspace's task groups.");
-        assertThat(this.service.addSourceTask(task(null, "1002")).getMessage()).contains("task groups");
         assertThat(this.service.addSourceTask(task("MedAxis Home", null)).getMessage()).contains("home pages");
         verify(this.tasks, never()).save(any());
     }
@@ -129,41 +125,21 @@ class SourceTaskReferenceTest {
         verify(this.tasks, never()).save(any());
     }
 
-    @Test
-    void aHomePageALiveTaskUsesCannotBeDeleted() throws Exception {
-        LookupDataRepository settingsLookups = mock(LookupDataRepository.class);
-        SourceTaskRepository settingsTasks = mock(SourceTaskRepository.class);
-        LookupData home = row(1275L, "MedAxis Home", row(1017L, "PIPELINE_HOME_PAGES", null, null), MINE);
-        when(settingsLookups.findById(1275L)).thenReturn(Optional.of(home));
-        when(settingsTasks.countLiveTasksReferencing(1275L)).thenReturn(2L);
-        SettingServiceImpl settings = new SettingServiceImpl(settingsLookups, null, null, null, null, null, null, null, null,
-            mock(LookupDataCacheService.class), null);
-        ReflectionTestUtils.setField(settings, "sourceTaskRepository", settingsTasks);
-        LookupDataDto delete = new LookupDataDto();
-        delete.setLookupId(1275L);
-
-        ResponseDto response = settings.deleteLookupData(delete);
-
-        assertThat(response.getStatus()).isEqualTo("ERROR");
-        assertThat(response.getMessage()).isEqualTo("2 tasks still use \"MedAxis Home\". Change those tasks first.");
-        verify(settingsLookups, never()).deleteById(any());
-    }
-
     private SourceTask saved() {
         ArgumentCaptor<SourceTask> saved = ArgumentCaptor.forClass(SourceTask.class);
         verify(this.tasks).save(saved.capture());
         return saved.getValue();
     }
 
-    private void lookup(LookupData row) {
-        when(this.lookups.findById(row.getLookupId())).thenReturn(Optional.of(row));
+    private void reference(TaskReference row) {
+        when(this.references.findById(row.getId())).thenReturn(Optional.of(row));
     }
 
-    private static LookupData row(Long id, String type, LookupData parent, Long tenantId) {
-        LookupData row = new LookupData();
-        row.setLookupId(id);
-        row.setLookupType(type);
-        row.setParent(parent);
+    private static TaskReference row(Long id, String name, String kind, Long tenantId) {
+        TaskReference row = new TaskReference();
+        row.setId(id);
+        row.setName(name);
+        row.setKind(kind);
         row.setTenantId(tenantId);
         return row;
     }

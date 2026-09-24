@@ -10,7 +10,7 @@ import process.ScratchJpa;
 import process.ScratchPostgres;
 import process.model.repository.JobAuditLogRepository;
 import process.model.repository.JobQueueRepository;
-import process.model.repository.LookupDataRepository;
+import process.model.repository.TaskReferenceRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
@@ -72,7 +72,7 @@ class PreDispatchClaimPostgresTest {
         this.sql.update("DELETE FROM source_job WHERE job_id BETWEEN 9701 AND 9799");
         this.store = new TransactionServiceImpl(jpa.repository(SourceJobRepository.class),
             jpa.repository(SchedulerRepository.class), jpa.repository(JobQueueRepository.class),
-            jpa.repository(LookupDataRepository.class), jpa.repository(JobAuditLogRepository.class),
+            jpa.repository(TaskReferenceRepository.class), jpa.repository(JobAuditLogRepository.class),
             jpa.repository(SourceTaskRepository.class), mock(OpenSearchAuditLogClient.class));
     }
 

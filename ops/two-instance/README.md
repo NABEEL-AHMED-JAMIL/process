@@ -50,13 +50,13 @@ T5 throwaway user, 200 T1 jobs, the T7 stranded run, 42 analytics history rows.
 
 | # | How it is proved |
 |---|---|
-| unit gate | `mvn -o test` of the cross-instance and Postgres suites (ReconcileOncePerTickTest, DispatchBudgetInsideLockTest, DispatchTimingTest, PageAccessCache/LookupDataCache/LoginAttemptGuard/TokenRevocation AcrossInstances, EnqueuerReplicas/OneRunInFlight/DueSchedulerClaim/StalledRunSweep Postgres), the Postgres ones against the harness server. |
+| unit gate | `mvn -o test` of the cross-instance and Postgres suites (ReconcileOncePerTickTest, DispatchBudgetInsideLockTest, DispatchTimingTest, PageAccessCache/LoginAttemptGuard/TokenRevocation AcrossInstances, EnqueuerReplicas/OneRunInFlight/DueSchedulerClaim/StalledRunSweep Postgres), the Postgres ones against the harness server. |
 | LB | Six requests through the balancer alternate A, B, A, B... |
 | T9 | A and B booted together on an empty database (their Liquibase runs race for the changelog lock), then stopped and booted together again with work due: both healthy, no restarts. |
 | T1 | 200 schedules due at once, written while both were stopped, both started together so their enqueuers wake within a second of each other: every job has exactly one `job_queue` row; how many slots each instance took. |
 | T5 | A throwaway user created for the purpose; five made-up wrong passwords A,B,A,B,A; the sixth (on B) and seventh (through the balancer) are refused as locked. No real account's credentials are ever used. |
 | T4 | Page `reports` granted to the tenant user, B's cache warmed, the grant revoked through A: B refuses within the 2 s poll (asserted at 3.5 s; the 15 s TTL is the outage bound), and the reverse. |
-| T6 | A lookup added and then edited through A: B's `/lookups` and B's cached `appSetting` have it within 3.5 s. B's in-memory lookup copy (its rebuild log line) is reported, not asserted: nothing reads that copy any more, and its 30 s refresh could pass it by luck. |
+| T6 | A configuration value added and then edited through A: B's `/setting.json/pipelineConfig` has it within 1.5 s. Since MIG-167 retired lookup_data (and its in-memory copy and shared cache version), the configuration store is read from the table on every request, so there is no cache to go stale. |
 | T7 | A run stranded seven hours ago; B restarted so the replicas' start times differ; the sweep's ShedLock row is watched for 150 s: one execution per minute tick, on the tick, and the run closed once. `DISPATCH_BUDGET_MS < lockAtMostFor` is DispatchBudgetInsideLockTest in the unit gate. |
 | T2 | A job event keyed onto a partition only notifications-B consumes; a browser (STOMP over WebSocket) on A receives it; B's `ws_broadcast_published` and A's `ws_broadcast_received` counters move. |
 | T3 | The user's only session is on A; `ws:online:<user>` says online; a notice keyed onto B's partition is filed by B and sent with `convertAndSendToUser`; A's session receives it. |
@@ -73,7 +73,7 @@ exits 0 only when they went red.
 |---|---|---|
 | `unlocked-enqueuer` | the enqueuer's claim without `FOR UPDATE SKIP LOCKED`, and the V83 one-run-per-job index dropped (image from `mutants/build-unlocked-enqueuer.sh`) | T1 |
 | `split-login-guard` | A and B count failed sign-ins under different keys (the per-JVM guard) | T5 |
-| `split-redis` | process B on a Redis of its own: cache versions and counters per instance again | T4, T5, T6 |
+| `split-redis` | process B on a Redis of its own: cache versions and counters per instance again | T4, T5 (T6 has no cache since MIG-167) |
 | `unaligned-reconcile` | B sweeps every other minute, 40 s after A's tick: past A's lock, so both sweep in that minute (the fixedDelay defect) | T7 |
 | `split-broadcast` | notifications B on a Redis of its own (the per-instance STOMP broker) | T2, T3 |
 | `unaligned-close` | billing B closes 90 s after A's tick | T10 |

@@ -37,9 +37,9 @@ public class TenantFilterDeclarationTest {
      * narrower than the tenant. Filtering these would hide rows their owners are meant to see:
      *
      *   Tenant       -- tenant_id is its own primary key.
-     *   LookupData   -- the parent rows are engine state, and the whole tree is loaded into a
-     *                   process-wide cache that is rebuilt from inside tenant requests, so a
-     *                   filtered rebuild would serve one tenant's view to everybody.
+     *
+     * LookupData used to be here too (a process-wide cache rebuilt from inside tenant requests); MIG-167
+     * retired the table, and its workspace-owned rows became TaskReference, which is filtered.
      *
      * AppUser used to be here, and is filtered now (MIG-13): the reads that legitimately cross
      * tenants -- sign-in, "is this name taken", the created-by name resolver, the internal user
@@ -49,7 +49,7 @@ public class TenantFilterDeclarationTest {
      * every read is by recipient.
      */
     private static final List<String> NOT_SCOPED_BY_TENANT_FILTER =
-        Arrays.asList("Tenant", "LookupData");
+        Arrays.asList("Tenant");
 
     private String conditionOf(Class<?> entity) {
         Filter filter = entity.getAnnotation(Filter.class);
@@ -83,6 +83,13 @@ public class TenantFilterDeclarationTest {
         for (File source : pojoSources()) {
             assertTrue(!source.getName().equals("Notification.java"), "notification lives in notifications_db (MIG-21)");
         }
+    }
+
+    /** MIG-167: a configuration entry, a home page and a group belong to exactly one workspace; there is no shared row. */
+    @Test
+    void configurationAndTaskReferencesBelongToExactlyOneTenant() {
+        assertEquals("tenant_id = :tenantId", conditionOf(PipelineConfig.class));
+        assertEquals("tenant_id = :tenantId", conditionOf(TaskReference.class));
     }
 
     @Test
@@ -122,9 +129,10 @@ public class TenantFilterDeclarationTest {
         Collections.sort(filtered);
         // MIG-29 (V102): JobAuditLogs, JobQueue, PipelineField, Scheduler and SourceTaskPayload carry their parent's
         // tenant_id now, and the filter with it.
+        // MIG-167: PipelineConfig (a workspace's configuration and secrets) and TaskReference (its home pages and groups).
         assertEquals(Arrays.asList("AppUser", "JobAuditLogs", "JobQueue", "KafkaConnectionProfile", "PageAccessProfile", "Pipeline",
-            "PipelineField", "Scheduler", "SourceJob", "SourceTask", "SourceTaskPayload", "SourceTaskType", "TenantTaskTypeKafkaRoute",
-            "UserPageAccess"), filtered);
+            "PipelineConfig", "PipelineField", "Scheduler", "SourceJob", "SourceTask", "SourceTaskPayload", "SourceTaskType",
+            "TaskReference", "TenantTaskTypeKafkaRoute", "UserPageAccess"), filtered);
     }
 
     /**
