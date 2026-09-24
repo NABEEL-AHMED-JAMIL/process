@@ -19,7 +19,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
-      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-admin}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is not set in process/.env}
       POSTGRES_DB: ${POSTGRES_DB:-etl_job}
     ports:
       # Host port 5433 -> container 5432 -- the host machine may already have its own Postgres
@@ -204,7 +204,7 @@ services:
       # service token above. process has no storage code or table access of its own.
       STORAGE_SERVICE_URL: http://storage:9120
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-admin}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is not set in process/.env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
