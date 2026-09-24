@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import process.filechat.UncontendedFileIndexLock;
 import process.model.dto.AdHocPromptRequestDto;
 import process.model.dto.AiAgentRuntimeConfigDto;
 import process.model.dto.BucketSummaryDto;
@@ -62,7 +63,7 @@ public class FileChatImageInstructionsTest {
     void setUp() throws Exception {
         this.service = new FileChatServiceImpl(this.storageBrowserService,
             this.fileChatExtractionService, this.aiAgentService,
-            this.openSearchRagClient, this.embeddingService);
+            this.openSearchRagClient, this.embeddingService, new UncontendedFileIndexLock());
 
         lenient().when(this.storageBrowserService.listBuckets())
             .thenReturn(Collections.singletonList(new BucketSummaryDto("ETL", BUCKET, "MINIO")));
