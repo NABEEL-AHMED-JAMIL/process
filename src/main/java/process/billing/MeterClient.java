@@ -1,13 +1,9 @@
 package process.billing;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonPrimitive;
-import com.google.gson.JsonSerializer;
-import java.time.Instant;
-import com.google.gson.JsonObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.barco.platform.meter.MeterReporter;
+import org.barco.platform.meter.UsageEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -20,25 +16,19 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * The console's line to the metering service.
  *
- * Reports are queued and sent in batches from one background thread, so the request that
- * deleted a file or ran a prompt never waits on the meter; a meter that is down costs a
- * warning and, past the queue's capacity, dropped events -- logged, never thrown. Reads
- * (usage, subjects, events, the rate card) are synchronous and carry the service key.
+ * Reports go through platform-commons' MeterReporter (MIG-80), the one every service uses:
+ * queued and sent in batches from its own thread, so the request that ran a prompt never waits
+ * on the meter; what the meter rejects is parked and what it cannot take is spooled (MIG-15).
+ * Reads (usage, subjects, events, the rate card) are synchronous and carry the service key.
  *
  * Not configured (no meter.url) means every report is a no-op and every read answers
  * empty, so the console runs exactly as it did before the meter existed.
@@ -46,25 +36,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Component
 public class MeterClient {
 
-    private static final Logger logger = LoggerFactory.getLogger(MeterClient.class);
-    static final int BATCH = 500;
-    static final int QUEUE_CAPACITY = 50_000;
-
     @Value("${meter.url:}")
     private String url;
     @Value("${meter.service-key:}")
     private String serviceKey;
 
     private final RestTemplate http;
-    // Instant is serialised as ISO-8601 text: Gson's default reflects into java.time, which a
-    // modern JVM refuses, and the meter parses the text form anyway.
-    private final Gson gson = new GsonBuilder()
-        .registerTypeAdapter(Instant.class, (JsonSerializer<Instant>) (instant, type, context) -> new JsonPrimitive(instant.toString()))
-        .create();
-    private final LinkedBlockingQueue<UsageEvent> queue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
-    private Thread sender;
-    private volatile boolean running;
-    private long dropped;
+    private final Gson gson = new Gson();
+    /** Null only where there is no meter to report to (a test that builds its own). */
+    @Autowired(required = false)
+    private MeterReporter reporter;
 
     public MeterClient() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -73,102 +54,27 @@ public class MeterClient {
         this.http = new RestTemplate(factory);
     }
 
-    /** For tests: a client pointed at a URL with a key, no Spring. */
-    public MeterClient(String url, String serviceKey, RestTemplate http) {
-        this.url = url; this.serviceKey = serviceKey; this.http = http;
+    /** For tests: a client pointed at a URL with a key and a reporter, no Spring. */
+    public MeterClient(String url, String serviceKey, RestTemplate http, MeterReporter reporter) {
+        this.url = url; this.serviceKey = serviceKey; this.http = http; this.reporter = reporter;
     }
 
     public boolean isConfigured() {
         return this.url != null && !this.url.trim().isEmpty();
     }
 
-    @PostConstruct
-    void start() {
-        if (!this.isConfigured()) {
-            logger.info("meter.url is not set; usage is not reported");
-            return;
-        }
-        this.running = true;
-        this.sender = new Thread(this::drain, "meter-sender");
-        this.sender.setDaemon(true);
-        this.sender.start();
-    }
-
-    @PreDestroy
-    void stop() {
-        this.running = false;
-        if (this.sender != null) {
-            this.sender.interrupt();
-        }
-        this.flush();
-    }
-
     /** Queues one event. Never blocks, never throws. */
     public void report(UsageEvent event) {
-        if (!this.isConfigured() || event == null || event.tenantId == null || event.quantity == 0) {
-            return;
-        }
-        if (!this.queue.offer(event)) {
-            if (this.dropped++ % 1000 == 0) {
-                logger.warn("meter: queue full ({}), dropping usage events -- {} dropped so far", QUEUE_CAPACITY, this.dropped);
-            }
-        }
-    }
-
-    private void drain() {
-        while (this.running) {
-            try {
-                UsageEvent first = this.queue.poll(2, TimeUnit.SECONDS);
-                if (first == null) {
-                    continue;
-                }
-                List<UsageEvent> batch = new ArrayList<>();
-                batch.add(first);
-                this.queue.drainTo(batch, BATCH - 1);
-                this.send(batch);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                return;
-            } catch (RuntimeException ex) {
-                logger.warn("meter: sender loop error: {}", ex.toString());
-            }
+        if (this.reporter != null) {
+            this.reporter.report(event);
         }
     }
 
     /** Sends whatever is queued now, synchronously. Tests and shutdown. */
-    public int flush() {
-        List<UsageEvent> batch = new ArrayList<>();
-        this.queue.drainTo(batch);
-        int sent = 0;
-        for (int i = 0; i < batch.size(); i += BATCH) {
-            sent += this.send(batch.subList(i, Math.min(batch.size(), i + BATCH)));
+    public void flush() {
+        if (this.reporter != null) {
+            this.reporter.flush();
         }
-        return sent;
-    }
-
-    private int send(List<UsageEvent> batch) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("events", batch);
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            try {
-                ResponseEntity<String> response = this.http.exchange(this.url + "/v1/events", HttpMethod.POST,
-                    new HttpEntity<>(this.gson.toJson(body), this.headers()), String.class);
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    JsonObject answer = this.gson.fromJson(response.getBody(), JsonObject.class);
-                    int rejected = answer.has("rejected") ? answer.getAsJsonArray("rejected").size() : 0;
-                    if (rejected > 0) {
-                        logger.warn("meter: {} of {} event(s) rejected: {}", rejected, batch.size(), answer.get("rejected"));
-                    }
-                    return batch.size();
-                }
-                logger.warn("meter: attempt {} answered {}", attempt, response.getStatusCode());
-            } catch (RestClientException ex) {
-                logger.warn("meter: attempt {} failed: {}", attempt, ex.getMessage());
-            }
-            try { Thread.sleep(500L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return 0; }
-        }
-        logger.error("meter: {} usage event(s) could not be delivered and are lost", batch.size());
-        return 0;
     }
 
     // ---- reads ---------------------------------------------------------------------------------

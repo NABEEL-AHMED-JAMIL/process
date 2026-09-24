@@ -1,9 +1,9 @@
 package process.engine.cron;
 
+import org.barco.platform.meter.UsageEvent;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import process.billing.MeterClient;
-import process.billing.UsageEvent;
 import process.model.enums.Status;
 import process.model.enums.StorageProvider;
 import process.model.pojo.StorageConnection;

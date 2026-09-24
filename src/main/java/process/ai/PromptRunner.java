@@ -1,9 +1,9 @@
 package process.ai;
 
 import com.google.gson.Gson;
+import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.UsageEvent;
 import process.billing.MeterClient;
-import process.billing.Meter;
-import process.billing.UsageEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;

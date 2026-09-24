@@ -1,6 +1,8 @@
 package process.engine.cron;
 
 import java.util.stream.Collectors;
+import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.UsageEvent;
 import process.storage.remote.RemoteStorageDirectory;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
@@ -8,8 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import process.billing.MeterClient;
-import process.billing.Meter;
-import process.billing.UsageEvent;
 import process.model.enums.Status;
 import process.model.enums.TenantStatus;
 import process.model.pojo.StorageConnection;

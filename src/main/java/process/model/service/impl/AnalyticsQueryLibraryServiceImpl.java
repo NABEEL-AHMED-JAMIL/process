@@ -1,9 +1,9 @@
 package process.model.service.impl;
 
+import org.barco.platform.meter.Meter;
+import org.barco.platform.meter.UsageEvent;
 import org.slf4j.Logger;
 import process.billing.MeterClient;
-import process.billing.Meter;
-import process.billing.UsageEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;

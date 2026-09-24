@@ -9,6 +9,7 @@ volumes:
   kafka_data:
   redis_data:
   redisinsight_data:
+  meter_spool:
 
 services:
   # PostgreSQL Database
@@ -229,6 +230,8 @@ services:
       # for Cost & usage. Empty METER_URL means the console runs without metering.
       METER_URL: ${METER_URL:-http://host.docker.internal:8200}
       METER_SERVICE_KEY: ${METER_SERVICE_KEY:-}
+      # Usage the meter could not take yet, and what it refused: kept across redeploys (MIG-15).
+      METER_SPOOL_DIR: /app/meter-spool
       # Bucket Browser storage. Credentials now live in the storage_connection table
       # (encrypted, managed under Settings > Storage Connections) -- StorageConnectionBootstrap
       # copied whatever was configured here into that table on first startup. These are kept
@@ -256,6 +259,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - /tmp/efs:/tmp/efs
+      - meter_spool:/app/meter-spool
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9098/api/v1/actuator/health"]
       interval: 30s
