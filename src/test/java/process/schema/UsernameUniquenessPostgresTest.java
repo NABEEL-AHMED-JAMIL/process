@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * MIG-17 against a real Postgres: the index V63 adds, the migration's refusal to run over existing
+ * MIG-17 against a real Postgres: the index V64 adds, the migration's refusal to run over existing
  * collisions, and the two repository queries every new account and every sign-in now go through.
  *
  * Opt-in: NOTIFICATIONS_TEST_DB_URL / _USER / _PASSWORD (see IdentityPostgres).
@@ -42,13 +42,13 @@ class UsernameUniquenessPostgresTest {
     void theMigrationHaltsWhileCollisionsRemainAndSaysHowToFindThem() throws Exception {
         try (IdentityPostgres db = IdentityPostgres.create("mig17_halt").migrate()) {
             JdbcTemplate sql = db.sql();
-            // Back to the database as it stood before V63, holding the collision V63 exists to forbid.
+            // Back to the database as it stood before V64, holding the collision V64 exists to forbid.
             sql.execute("DROP INDEX ux_app_user_username_lower");
-            sql.update("DELETE FROM databasechangelog WHERE id = '63.0-username-unique-ignoring-case'");
+            sql.update("DELETE FROM databasechangelog WHERE id = '64.0-username-unique-ignoring-case'");
             user(sql, 9001, "Carol@X.com", "Active");
             user(sql, 9002, "carol@x.com", "Inactive");
 
-            assertThatThrownBy(db::migrate).hasStackTraceContaining("V63 cannot make usernames unique ignoring case");
+            assertThatThrownBy(db::migrate).hasStackTraceContaining("V64 cannot make usernames unique ignoring case");
             assertThat(sql.queryForObject("SELECT count(*) FROM pg_indexes WHERE indexname = 'ux_app_user_username_lower'",
                 Integer.class)).isZero();
             assertThat(sql.queryForObject("SELECT count(*) FROM app_user WHERE lower(username) = 'carol@x.com'",

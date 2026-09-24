@@ -78,7 +78,7 @@ class LoginRefusalCharacterisationTest {
         if (this.redis != null) this.redis.close();
         this.redis = RedisLoginGuards.open();
         this.authService = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.jwtUtil, this.pageAccessService, this.redis.guard(this.now::get));
+            this.passwordEncoder, this.jwtUtil, this.pageAccessService, this.redis.guard(this.now::get), mock(TokenRevocations.class));
     }
 
     @AfterEach

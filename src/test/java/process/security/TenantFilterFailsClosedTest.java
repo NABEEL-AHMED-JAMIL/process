@@ -25,7 +25,9 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -166,6 +168,23 @@ class TenantFilterFailsClosedTest {
         assertThatThrownBy(() -> this.helper.enableIfNeeded(this.cannotUnwrap())).isInstanceOf(TenantIsolationException.class);
     }
 
+    /** Each catch in process/security that does not throw, and why falling through it is closed rather than open. */
+    private static final Map<String, String> EXPLAINED = new HashMap<>();
+
+    static {
+        EXPLAINED.put("JwtAuthenticationFilter.java catch (JwtException | IllegalArgumentException ex)",
+            "a token that cannot be read leaves the request anonymous, and Spring Security refuses an anonymous request "
+                + "to anything that is not permitAll");
+        EXPLAINED.put("LoginAttemptGuard.java catch (DataAccessException ex)",
+            "failed() and succeeded() only log: the attempt they record has already been decided, and the next one asks "
+                + "secondsUntilAllowed first, whose catch throws Unavailable -- sign-in refuses everybody while Redis is away");
+        EXPLAINED.put("JwtAuthenticationFilter.java catch (TokenRevocations.Unavailable ex)",
+            "revocations cannot be checked, so the token authenticates nobody: stillGood answers false (MIG-14)");
+        EXPLAINED.put("TokenRevocations.java catch (Unavailable ex)",
+            "publishing a bumped version failed after the database took it; a cached older version expires within "
+                + "VERSION_TTL (60 s), and while Redis is away isRevoked throws and every token is refused");
+    }
+
     /**
      * The grep, kept: no catch block in process/security ends the method quietly. Each one throws,
      * or is listed here with the reason its fall-through is closed rather than open.
@@ -184,9 +203,7 @@ class TenantFilterFailsClosedTest {
                 if (m.group(2).contains("throw ")) {
                     continue;
                 }
-                // A token that cannot be read leaves the request anonymous, and Spring Security refuses
-                // an anonymous request to anything that is not permitAll: closed, not open.
-                if (where.equals("JwtAuthenticationFilter.java catch (JwtException | IllegalArgumentException ex)")) {
+                if (EXPLAINED.containsKey(where)) {
                     continue;
                 }
                 quiet.add(where);

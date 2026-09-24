@@ -179,7 +179,7 @@ class LoginAttemptGuardAcrossInstancesTest {
 
     private AuthServiceImpl signIn(LoginAttemptGuard guard, AppUserRepository users, PasswordEncoder encoder) {
         return new AuthServiceImpl(users, mock(TenantRepository.class), encoder, mock(JwtUtil.class),
-            mock(PageAccessService.class), guard);
+            mock(PageAccessService.class), guard, mock(TokenRevocations.class));
     }
 
     private static ResponseDto attempt(AuthServiceImpl auth, String password) throws Exception {

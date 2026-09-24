@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 /**
  * MIG-91: what a token says and how the filter turns it into a tenant context.
@@ -48,7 +49,7 @@ class JwtClaimsCharacterisationTest {
         ReflectionTestUtils.setField(this.jwtUtil, "base64Key", Base64.getEncoder().encodeToString(KEY));
         ReflectionTestUtils.setField(this.jwtUtil, "accessTokenExpiryMinutes", 30L);
         ReflectionTestUtils.setField(this.jwtUtil, "refreshTokenExpiryDays", 7L);
-        this.filter = new JwtAuthenticationFilter(this.jwtUtil);
+        this.filter = new JwtAuthenticationFilter(this.jwtUtil, mock(TokenRevocations.class));
     }
 
     @AfterEach
@@ -85,7 +86,10 @@ class JwtClaimsCharacterisationTest {
         // No debt, no claim: the flag is absent rather than false.
         assertThat(claims.containsKey("pwd")).isFalse();
         Map<String, Object> names = new TreeMap<>(claims);
-        assertThat(names.keySet()).containsExactly("appUserId", "exp", "iat", "sub", "tenantId", "type", "userRole");
+        // jti and tokenVersion joined with MIG-14; every name that was here before is unchanged, and
+        // platform-commons' JwtVerifier ignores the two it does not read.
+        assertThat(names.keySet()).containsExactly("appUserId", "exp", "iat", "jti", "sub", "tenantId", "tokenVersion", "type", "userRole");
+        assertThat(claims.get("tokenVersion", Number.class).intValue()).isZero();
         assertThat((claims.getExpiration().getTime() - claims.getIssuedAt().getTime()) / 1000).isEqualTo(30 * 60);
     }
 

@@ -18,6 +18,7 @@ import process.model.service.PageAccessService;
 import process.notifications.TestNotifications;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TokenRevocations;
 import process.storage.TrustedStorageOperations;
 import process.util.ProcessUtil;
 import process.util.UserNameResolver;
@@ -72,7 +73,7 @@ class ScopedFindCharacterisationTest {
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
             TestNotifications.recording(null, null, this.notices, this.mails), this.userNameResolver, this.storage,
-            this.pageAccessService, mock(TenantFilterHelper.class));
+            this.pageAccessService, mock(TenantFilterHelper.class), mock(TokenRevocations.class));
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }
 

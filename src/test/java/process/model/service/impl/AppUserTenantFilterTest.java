@@ -20,6 +20,7 @@ import process.model.service.PageAccessService;
 import process.notifications.TestNotifications;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TokenRevocations;
 import process.storage.TrustedStorageOperations;
 import process.util.ProcessUtil;
 import process.util.UserNameResolver;
@@ -60,7 +61,7 @@ class AppUserTenantFilterTest {
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
             TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
-            mock(UserNameResolver.class), mock(TrustedStorageOperations.class), this.pageAccessService, this.tenantFilterHelper);
+            mock(UserNameResolver.class), mock(TrustedStorageOperations.class), this.pageAccessService, this.tenantFilterHelper, mock(TokenRevocations.class));
         ReflectionTestUtils.setField(this.service, "entityManager", this.entityManager);
         lenient().when(this.pageAccessService.accessSummaryFor(any())).thenReturn(Collections.emptyMap());
     }

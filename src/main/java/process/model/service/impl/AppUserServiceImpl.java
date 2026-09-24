@@ -24,6 +24,7 @@ import process.storage.TrustedCaller;
 import process.storage.TrustedStorageOperations;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TokenRevocations;
 import process.security.TenantOwnership;
 import process.notifications.MailExtras;
 import process.notifications.OutboxNotifications;
@@ -90,14 +91,17 @@ public class AppUserServiceImpl implements AppUserService {
 
     private final TenantFilterHelper tenantFilterHelper;
 
+    private final TokenRevocations tokenRevocations;
+
     @PersistenceContext
     private EntityManager entityManager;
 
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, NotificationPort notifications,
         UserNameResolver userNameResolver, TrustedStorageOperations storageBrowserService,
-        PageAccessService pageAccessService, TenantFilterHelper tenantFilterHelper) {
+        PageAccessService pageAccessService, TenantFilterHelper tenantFilterHelper, TokenRevocations tokenRevocations) {
         this.tenantFilterHelper = tenantFilterHelper;
+        this.tokenRevocations = tokenRevocations;
         this.pageAccessService = pageAccessService;
         this.storageBrowserService = storageBrowserService;
         this.notifications = notifications;
@@ -436,6 +440,7 @@ public class AppUserServiceImpl implements AppUserService {
             }
         }
         UserRole previousRole = user.getUserRole();
+        Long previousTenant = user.getTenantId();
         user.setUserRole(effectiveRole);
         user.setPhoneNumber(phone.getValue());
         user.setTenantId(effectiveTenantId);
@@ -453,6 +458,12 @@ public class AppUserServiceImpl implements AppUserService {
             this.pageAccessService.dropExceptions(user.getAppUserId());
         }
         this.appUserRepository.save(user);
+        // A token names the role and the tenant it was minted with, and every service reads them
+        // from it. Changing either ends the person's tokens, so the old role or the old tenant's
+        // scope does not outlive this request by thirty minutes (MIG-14).
+        if (previousRole != effectiveRole || !Objects.equals(previousTenant, effectiveTenantId)) {
+            this.tokenRevocations.revokeSessionsOf(user.getAppUserId());
+        }
         if (!Objects.equals(previousProfile, user.getPageAccessProfileId())) {
             this.pageAccessService.notifyProfileChanged(user);
         }
@@ -476,6 +487,10 @@ public class AppUserServiceImpl implements AppUserService {
         AppUser user = userOpt.get();
         user.setStatus(appUserDto.getStatus());
         this.appUserRepository.save(user);
+        // Deactivated, suspended or deleted: signed out everywhere now, not when the token expires (MIG-14).
+        if (appUserDto.getStatus() != Status.Active) {
+            this.tokenRevocations.revokeSessionsOf(user.getAppUserId());
+        }
         /*
          * The cached unread counter goes with the account.
          *
@@ -513,6 +528,9 @@ public class AppUserServiceImpl implements AppUserService {
         // addUser generates -- the account owes a change before it is theirs alone again.
         user.setMustChangePassword(true);
         this.appUserRepository.save(user);
+        // An administrator's reset is how an account is taken back: whoever was using the old
+        // password is signed out with it (MIG-14).
+        this.tokenRevocations.revokeSessionsOf(user.getAppUserId());
         return new ResponseDto(SUCCESS, String.format("Password reset for \"%s\".", user.getUsername()));
     }
 

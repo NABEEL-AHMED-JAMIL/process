@@ -121,6 +121,15 @@ public class AppUser implements Audited {
     @Column(name = "must_change_password", nullable = false)
     private boolean mustChangePassword;
 
+    /**
+     * Moves up whenever the person's standing changes -- role, tenant, status, an administrator's
+     * password reset, their tenant's suspension -- and a token minted under a lower one is refused
+     * (MIG-14). Never written through the entity: only AppUserRepository.bumpTokenVersion moves it,
+     * in SQL, so an entity loaded before a bump cannot put the old number back when it is saved.
+     */
+    @Column(name = "token_version", insertable = false, updatable = false)
+    private Integer tokenVersion;
+
     @Column(name = "avatar_bucket")
     private String avatarBucket;
 
@@ -244,6 +253,8 @@ public class AppUser implements Audited {
     }
 
     public boolean isMustChangePassword() { return mustChangePassword; }
+    public Integer getTokenVersion() { return tokenVersion; }
+    public void setTokenVersion(Integer tokenVersion) { this.tokenVersion = tokenVersion; }
     public Long getPageAccessProfileId() { return pageAccessProfileId; }
     public void setPageAccessProfileId(Long pageAccessProfileId) { this.pageAccessProfileId = pageAccessProfileId; }
     public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }

@@ -37,6 +37,24 @@ public class AuthRestApi {
         }
     }
 
+    /**
+     * Signs out: the bearer token and the refresh token in the body, if any, stop working on every
+     * instance (MIG-14). Open like the rest of /auth.json -- the tokens are the proof, and a token that
+     * proves nothing is simply ignored.
+     */
+    @RequestMapping(value = "/logout", method = RequestMethod.POST)
+    public ResponseEntity<?> logout(@RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestBody(required = false) Map<String, String> body) {
+        try {
+            String accessToken = authorization != null && authorization.startsWith("Bearer ") ? authorization.substring(7) : null;
+            return new ResponseEntity<>(this.authService.logout(accessToken, body == null ? null : body.get("refreshToken")),
+                HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while logout ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @RequestMapping(value = "/refresh", method = RequestMethod.POST)
     public ResponseEntity<?> refresh(@RequestBody Map<String, String> body) {
         try {

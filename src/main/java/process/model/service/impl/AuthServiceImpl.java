@@ -20,6 +20,8 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.AuthService;
 import process.security.LoginAttemptGuard;
+import process.security.TokenRevocations;
+import org.springframework.beans.factory.annotation.Value;
 import process.util.JwtUtil;
 import java.sql.Timestamp;
 import java.util.Optional;
@@ -51,10 +53,22 @@ public class AuthServiceImpl implements AuthService {
 
     private final LoginAttemptGuard loginAttempts;
 
+    private final TokenRevocations tokenRevocations;
+
+    /**
+     * Whether a refresh token is spent by its first use (MIG-14). Off until both consoles keep the
+     * rotated token a refresh now returns: the next console merges it into the stored session, the
+     * legacy one keeps only the access token and would present the spent one half an hour later --
+     * which, with this on, reads as reuse and signs the person out everywhere.
+     */
+    @Value("${jwt.refresh-token.single-use:false}")
+    private boolean singleUseRefreshTokens;
+
     public AuthServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, JwtUtil jwtUtil, PageAccessService pageAccessService,
-        LoginAttemptGuard loginAttempts) {
+        LoginAttemptGuard loginAttempts, TokenRevocations tokenRevocations) {
         this.loginAttempts = loginAttempts;
+        this.tokenRevocations = tokenRevocations;
         this.nobodysHash = passwordEncoder.encode(UUID.randomUUID().toString());
         this.appUserRepository = appUserRepository;
         this.tenantRepository = tenantRepository;
@@ -132,6 +146,23 @@ public class AuthServiceImpl implements AuthService {
         if (!this.jwtUtil.isRefreshToken(claims)) {
             return new ResponseDto(ERROR, "Not a refresh token.");
         }
+        // MIG-14: a refresh token that was signed out, or minted before its person's standing changed,
+        // is as good as expired -- the same sentence, so the console signs in again either way. A
+        // single-use token presented twice is reuse: somebody else holds a copy, so every token the
+        // person has is ended, the one the rightful holder just received included.
+        try {
+            if (this.singleUseRefreshTokens && this.tokenRevocations.isDenied(claims)) {
+                this.logger.warn("A spent refresh token was presented again for user {}; ending all of their sessions.",
+                    this.jwtUtil.appUserIdOf(claims));
+                this.tokenRevocations.revokeSessionsOf(this.jwtUtil.appUserIdOf(claims));
+                return new ResponseDto(ERROR, "Refresh token is invalid or expired -- please log in again.");
+            }
+            if (this.tokenRevocations.isRevoked(claims)) {
+                return new ResponseDto(ERROR, "Refresh token is invalid or expired -- please log in again.");
+            }
+        } catch (TokenRevocations.Unavailable ex) {
+            return new ResponseDto(ERROR, "Refresh token is invalid or expired -- please log in again.");
+        }
         Optional<AppUser> userOpt = this.appUserRepository.findByUsernameAndStatusNot(claims.getSubject(), Status.Delete);
         if (!userOpt.isPresent()) {
             return new ResponseDto(ERROR, "Account no longer active -- please log in again.");
@@ -143,7 +174,43 @@ public class AuthServiceImpl implements AuthService {
         }
         AuthResponseDto response = new AuthResponseDto();
         response.setAccessToken(this.jwtUtil.generateAccessToken(user));
+        // Rotated: a new id, the same expiry as the one presented. A console that keeps it can have
+        // its old one spent (jwt.refresh-token.single-use); one that ignores it loses nothing.
+        response.setRefreshToken(this.jwtUtil.rotateRefreshToken(user, claims.getExpiration()));
+        if (this.singleUseRefreshTokens) {
+            try {
+                this.tokenRevocations.deny(claims);
+            } catch (TokenRevocations.Unavailable ex) {
+                return new ResponseDto(ERROR, "Refresh token is invalid or expired -- please log in again.");
+            }
+        }
         return new ResponseDto(SUCCESS, "Token refreshed.", response);
+    }
+
+    /**
+     * Signs the tokens presented out, on every instance (MIG-14): each is denied until it would have
+     * expired. Anything unreadable is ignored and the answer is the same -- sign-out tells nobody
+     * whether what they held was ever good.
+     */
+    @Override
+    public ResponseDto logout(String accessToken, String refreshToken) {
+        for (String token : new String[] {accessToken, refreshToken}) {
+            if (isNull(token) || token.trim().isEmpty()) {
+                continue;
+            }
+            Claims claims;
+            try {
+                claims = this.jwtUtil.parseClaims(token.trim());
+            } catch (JwtException | IllegalArgumentException ex) {
+                continue;
+            }
+            try {
+                this.tokenRevocations.deny(claims);
+            } catch (TokenRevocations.Unavailable ex) {
+                return new ResponseDto(ERROR, "Sign-out could not be recorded. Try again in a few minutes.");
+            }
+        }
+        return new ResponseDto(SUCCESS, "Signed out.");
     }
 
     private String checkAccountAndTenantActive(AppUser user) {

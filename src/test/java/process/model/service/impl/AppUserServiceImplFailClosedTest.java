@@ -17,6 +17,7 @@ import process.model.service.PageAccessService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TokenRevocations;
 import process.util.ProcessUtil;
 import process.util.UserNameResolver;
 
@@ -75,7 +76,7 @@ public class AppUserServiceImplFailClosedTest {
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
             this.passwordEncoder, TestNotifications.recording(null, null, this.notificationCenterService, this.emailMessagesFactory),
-            this.userNameResolver, this.storageBrowserService, this.pageAccessService, mock(TenantFilterHelper.class));
+            this.userNameResolver, this.storageBrowserService, this.pageAccessService, mock(TenantFilterHelper.class), mock(TokenRevocations.class));
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }
 

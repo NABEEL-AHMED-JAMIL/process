@@ -17,6 +17,7 @@ import process.model.repository.AppUserRepository;
 import process.model.repository.TenantRepository;
 import process.model.service.PageAccessService;
 import process.security.LoginAttemptGuard;
+import process.security.TokenRevocations;
 import process.util.JwtUtil;
 import process.util.ProcessUtil;
 
@@ -60,7 +61,7 @@ public class AuthServiceImplMustChangePasswordTest {
     void setUp() {
         when(this.passwordEncoder.encode(any(String.class))).thenReturn("nobodys-hash");
         this.service = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.jwtUtil, this.pageAccessService, mock(LoginAttemptGuard.class));
+            this.passwordEncoder, this.jwtUtil, this.pageAccessService, mock(LoginAttemptGuard.class), mock(TokenRevocations.class));
     }
 
     /** No tenant, like the seeded platform admin, so the tenant lookup never comes into it. */

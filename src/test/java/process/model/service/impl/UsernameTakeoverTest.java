@@ -24,6 +24,7 @@ import process.notifications.TestNotifications;
 import process.security.LoginAttemptGuard;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TokenRevocations;
 import process.storage.TrustedStorageOperations;
 import process.util.JwtUtil;
 import process.util.UserNameResolver;
@@ -74,7 +75,7 @@ class UsernameTakeoverTest {
     private AppUserServiceImpl users() {
         return new AppUserServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
             TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
-            mock(UserNameResolver.class), mock(TrustedStorageOperations.class), this.pageAccessService, mock(TenantFilterHelper.class));
+            mock(UserNameResolver.class), mock(TrustedStorageOperations.class), this.pageAccessService, mock(TenantFilterHelper.class), mock(TokenRevocations.class));
     }
 
     private TenantRequestServiceImpl requests() {
@@ -155,7 +156,7 @@ class UsernameTakeoverTest {
         when(jwt.generateAccessToken(alice)).thenReturn("a");
         when(jwt.generateRefreshToken(alice)).thenReturn("r");
         AuthServiceImpl auth = new AuthServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
-            jwt, this.pageAccessService, mock(LoginAttemptGuard.class));
+            jwt, this.pageAccessService, mock(LoginAttemptGuard.class), mock(TokenRevocations.class));
 
         LoginRequestDto request = new LoginRequestDto();
         request.setUsername("ALICE@X.COM");

@@ -1,9 +1,11 @@
 package process.model.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
@@ -49,6 +51,26 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
      */
     @Query(value = "SELECT * FROM app_user WHERE app_user_id IN (:ids)", nativeQuery = true)
     public List<AppUser> findAllByIdAcrossTenants(@Param("ids") Collection<Long> ids);
+
+    /** Ends every token the person holds (MIG-14): the one place token_version is written. */
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE app_user SET token_version = token_version + 1 WHERE app_user_id = :id", nativeQuery = true)
+    public int bumpTokenVersion(@Param("id") Long appUserId);
+
+    /** The same for everybody in a tenant, when the tenant stops being Active. */
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE app_user SET token_version = token_version + 1 WHERE tenant_id = :tenantId", nativeQuery = true)
+    public int bumpTokenVersionsInTenant(@Param("tenantId") Long tenantId);
+
+    /** The person's current token version, or null when there is no such row. Native: not tenant-filtered. */
+    @Query(value = "SELECT token_version FROM app_user WHERE app_user_id = :id", nativeQuery = true)
+    public Integer findTokenVersion(@Param("id") Long appUserId);
+
+    /** Everybody in a tenant, by id. Numbers because a native bigint may come back as BigInteger. */
+    @Query(value = "SELECT app_user_id FROM app_user WHERE tenant_id = :tenantId", nativeQuery = true)
+    public List<Number> findIdsInTenant(@Param("tenantId") Long tenantId);
 
     public List<AppUser> findByTenantIdAndStatusNotOrderByAppUserIdDesc(Long tenantId, Status status);
 

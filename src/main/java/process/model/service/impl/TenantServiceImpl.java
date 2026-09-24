@@ -12,6 +12,7 @@ import process.model.dto.TenantDto;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.enums.TenantStatus;
+import process.security.TokenRevocations;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
 import process.model.repository.KafkaConnectionProfileRepository;
@@ -47,13 +48,16 @@ public class TenantServiceImpl implements TenantService {
 
     private final UserNameResolver userNameResolver;
 
+    private final TokenRevocations tokenRevocations;
+
 
     public TenantServiceImpl(TenantRepository tenantRepository, AppUserRepository appUserRepository,
         KafkaConnectionProfileRepository kafkaConnectionProfileRepository,
         RemoteStorageDirectory storage,
         SourceTaskTypeRepository sourceTaskTypeRepository, SourceTaskRepository sourceTaskRepository,
         SourceJobRepository sourceJobRepository,
-        UserNameResolver userNameResolver) {
+        UserNameResolver userNameResolver, TokenRevocations tokenRevocations) {
+        this.tokenRevocations = tokenRevocations;
         this.userNameResolver = userNameResolver;
         this.tenantRepository = tenantRepository;
         this.appUserRepository = appUserRepository;
@@ -133,10 +137,12 @@ public class TenantServiceImpl implements TenantService {
         Tenant tenant = tenantOpt.get();
         tenant.setTenantName(tenantDto.getTenantName().trim());
         tenant.setTenantCode(tenantCode);
+        TenantStatus previousStatus = tenant.getStatus();
         if (!isNull(tenantDto.getStatus())) {
             tenant.setStatus(tenantDto.getStatus());
         }
         this.tenantRepository.save(tenant);
+        this.endSessionsIfNoLongerActive(tenant, previousStatus);
         return new ResponseDto(SUCCESS, String.format("Tenant \"%s\" updated.", tenant.getTenantName()), this.mapToDto(tenant));
     }
 
@@ -152,9 +158,21 @@ public class TenantServiceImpl implements TenantService {
             return new ResponseDto(ERROR, String.format("Tenant not found with %d.", tenantDto.getTenantId()));
         }
         Tenant tenant = tenantOpt.get();
+        TenantStatus previousStatus = tenant.getStatus();
         tenant.setStatus(tenantDto.getStatus());
         this.tenantRepository.save(tenant);
+        this.endSessionsIfNoLongerActive(tenant, previousStatus);
         return new ResponseDto(SUCCESS, String.format("Tenant \"%s\" is now %s.", tenant.getTenantName(), tenant.getStatus()));
+    }
+
+    /**
+     * A tenant that stops being Active signs its people out on their next request (MIG-14). Login and
+     * refresh already refused a suspended tenant; tokens already issued did not, for up to seven days.
+     */
+    private void endSessionsIfNoLongerActive(Tenant tenant, TenantStatus previousStatus) {
+        if (tenant.getStatus() != TenantStatus.Active && tenant.getStatus() != previousStatus) {
+            this.tokenRevocations.revokeSessionsInTenant(tenant.getTenantId());
+        }
     }
 
     private String normalizeCode(String tenantCode) {

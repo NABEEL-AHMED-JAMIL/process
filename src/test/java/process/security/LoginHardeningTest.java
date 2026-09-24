@@ -78,7 +78,7 @@ class LoginHardeningTest {
         // nothing; stubbing encode is what lets the test name it.
         when(this.passwordEncoder.encode(anyString())).thenReturn(NOBODYS_HASH);
         this.authService = new AuthServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, this.jwtUtil, this.pageAccessService, this.loginAttempts);
+            this.passwordEncoder, this.jwtUtil, this.pageAccessService, this.loginAttempts, mock(TokenRevocations.class));
     }
 
     @AfterEach

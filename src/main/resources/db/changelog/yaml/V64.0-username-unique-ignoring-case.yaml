@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: 63.0-username-unique-ignoring-case
+      id: 64.0-username-unique-ignoring-case
       author: nabeel.amd93
       description: "A username is unique across the platform whatever its case (MIG-17, DEF-024, P4)"
       # Login matches the name without case, so two rows that differ only by case made login pick one
@@ -17,7 +17,7 @@ databaseChangeLog:
       preConditions:
         - onFail: HALT
         - onFailMessage: >-
-            V63 cannot make usernames unique ignoring case: some already differ only by case. Find them with
+            V64 cannot make usernames unique ignoring case: some already differ only by case. Find them with
             SELECT lower(username), array_agg(app_user_id), array_agg(username), array_agg(status) FROM app_user
             GROUP BY lower(username) HAVING count(*) > 1;
             Decide which account is the person's, rename the other (for example append +dup to the local part),

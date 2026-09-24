@@ -20,6 +20,7 @@ import process.model.service.impl.AppUserServiceImpl;
 import process.notifications.TestNotifications;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.security.TokenRevocations;
 import process.storage.TrustedStorageOperations;
 import process.util.UserNameResolver;
 
@@ -35,7 +36,7 @@ import static org.mockito.Mockito.mock;
 
 /**
  * MIG-13 (DEF-012, P5) against a real Postgres: the Hibernate tenant filter on app_user and
- * user_page_access, the reads that are deliberately outside it, and V64's tenant_id on
+ * user_page_access, the reads that are deliberately outside it, and V65's tenant_id on
  * user_page_access.
  *
  * The filter is defence in depth. The hand-written guards -- listUsers' tenant query, scopedFind,
@@ -168,7 +169,7 @@ class IdentityTenantFilterPostgresTest {
         AppUserServiceImpl service = new AppUserServiceImpl(users, db.repository(TenantRepository.class),
             mock(PasswordEncoder.class), TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class),
                 mock(TestNotifications.MailSink.class)), new UserNameResolver(users), mock(TrustedStorageOperations.class),
-            mock(PageAccessService.class), this.filter);
+            mock(PageAccessService.class), this.filter, mock(TokenRevocations.class));
         ReflectionTestUtils.setField(service, "entityManager", db.entityManager());
         AppUserDto reset = new AppUserDto();
         reset.setAppUserId(USER_B);
@@ -194,12 +195,12 @@ class IdentityTenantFilterPostgresTest {
         assertThat((List<?>) listed.getData()).hasSize(2);
     }
 
-    // -- V64 ----------------------------------------------------------------------------
+    // -- V65 ----------------------------------------------------------------------------
 
     @Test
     void v64BackfillsEachExceptionsTenantFromItsPerson() throws Exception {
         try (IdentityPostgres before = IdentityPostgres.create("mig13_backfill")
-                .migrateBefore("db/changelog/yaml/V64.0-user-page-access-tenant.yaml")) {
+                .migrateBefore("db/changelog/yaml/V65.0-user-page-access-tenant.yaml")) {
             JdbcTemplate sql = before.sql();
             tenant(sql, A, "a");
             user(sql, USER_A, A, "TENANT_USER", "olivia@a.example");
@@ -217,12 +218,12 @@ class IdentityTenantFilterPostgresTest {
     @Test
     void v64HaltsOnAnExceptionHeldByAPersonWithNoTenant() throws Exception {
         try (IdentityPostgres before = IdentityPostgres.create("mig13_halt")
-                .migrateBefore("db/changelog/yaml/V64.0-user-page-access-tenant.yaml")) {
+                .migrateBefore("db/changelog/yaml/V65.0-user-page-access-tenant.yaml")) {
             JdbcTemplate sql = before.sql();
             user(sql, PLATFORM_ADMIN, null, "PLATFORM_ADMIN", "root@platform.example");
             sql.update("INSERT INTO user_page_access (app_user_id, page_key, allowed) VALUES (?, 'jobs', true)", PLATFORM_ADMIN);
 
-            assertThatThrownBy(before::migrate).hasStackTraceContaining("V64 cannot give user_page_access a tenant");
+            assertThatThrownBy(before::migrate).hasStackTraceContaining("V65 cannot give user_page_access a tenant");
         }
     }
 
