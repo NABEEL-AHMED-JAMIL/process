@@ -63,6 +63,7 @@ public class TransactionServiceImpl {
         }
         JobAuditLogs jobAuditLogs = new JobAuditLogs();
         jobAuditLogs.setJobQueueId(jobQueueId);
+        jobAuditLogs.setTenantId(this.tenantOfRun(jobQueueId));
         jobAuditLogs.setLogsDetail(logsDetail);
         this.jobAuditLogRepository.save(jobAuditLogs);
     }
@@ -87,12 +88,22 @@ public class TransactionServiceImpl {
         for (String detail : logDetails) {
             entries.add(new Object[]{ UUID.randomUUID().toString(), jobQueueId, detail, now });
         }
+        Long tenantId = null;
         for (Object[] rejected : this.openSearchAuditLogClient.indexAllReturningFailures(entries)) {
+            if (tenantId == null) {
+                tenantId = this.tenantOfRun(jobQueueId);
+            }
             JobAuditLogs row = new JobAuditLogs();
             row.setJobQueueId(jobQueueId);
+            row.setTenantId(tenantId);
             row.setLogsDetail((String) rejected[2]);
             this.jobAuditLogRepository.save(row);
         }
+    }
+
+    /** The run's tenant, which its audit lines carry (V102, MIG-29); null for a run that does not exist. */
+    private Long tenantOfRun(Long jobQueueId) {
+        return this.jobQueueRepository.findById(jobQueueId).map(JobQueue::getTenantId).orElse(null);
     }
 
     /**

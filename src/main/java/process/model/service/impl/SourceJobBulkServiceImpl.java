@@ -298,6 +298,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             sourceJob.setExecution(Execution.Auto);
             this.transactionService.saveOrUpdateJob(sourceJob);
             Scheduler scheduler = new Scheduler();
+            scheduler.setTenantId(sourceJob.getTenantId());
             scheduler.setStartDate(LocalDate.parse(jobDetailValidation.getStartDate()));
             if (!StringUtils.isEmpty(jobDetailValidation.getEndDate())) {
                 scheduler.setEndDate(LocalDate.parse(jobDetailValidation.getEndDate()));

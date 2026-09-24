@@ -108,8 +108,11 @@ class StalledRunSweepPostgresTest {
     }
 
     private void job(long jobId) {
-        this.sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority) "
-            + "VALUES (?, ?, 'Auto', ?, 'Active', 1)", jobId, BusinessTime.timestampOf(NOW.minusDays(1)), "stall-" + jobId);
+        // Every job has a tenant (V102: its runs and schedule carry it, NOT NULL).
+        this.sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (9999, 'Active', 'FIXTURE', 'Fixture') "
+            + "ON CONFLICT DO NOTHING");
+        this.sql.update("INSERT INTO source_job (tenant_id, job_id, date_created, execution, job_name, job_status, priority) "
+            + "VALUES (9999, ?, ?, 'Auto', ?, 'Active', 1)", jobId, BusinessTime.timestampOf(NOW.minusDays(1)), "stall-" + jobId);
     }
 
     private void run(long jobQueueId, long jobId, String status, LocalDateTime startTime, LocalDateTime dateCreated) {

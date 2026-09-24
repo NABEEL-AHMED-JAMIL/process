@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# MIG-96: rehearse V100/V101 (timestamptz) on a full copy of a long-lived etl_job, then drop the copy.
+# MIG-96 and MIG-29: rehearse V100/V101 (timestamptz) and V102 (tenant_id) on a full copy of a long-lived etl_job,
+# then drop the copy.
 #
 #   scripts/rehearse-timestamptz.sh [source-db]        (default etl_job)
 #
 # The source is only read (pg_dump). The copy is made on the same server under a new name, migrated, checked and
-# rolled back by TimestamptzRehearsal, and dropped whatever happens. Credentials come from the
+# rolled back by TimestamptzRehearsal and TenantIdRehearsal (each on its own, one after the other), and dropped whatever happens. Credentials come from the
 # container's own environment and are never printed. POSTGRES_CONTAINER and NOTIFICATIONS_TEST_DB_URL override the
 # local defaults (postgres_db, jdbc:postgresql://localhost:5433/postgres).
 set -euo pipefail
@@ -33,5 +34,5 @@ if [ -z "${TIMESTAMPTZ_REHEARSAL_PARAMS:-}" ]; then
   export TIMESTAMPTZ_REHEARSAL_PARAMS="platformKafkaBootstrapServers=$BOOTSTRAP,platformKafkaSecurityProtocol=$PROTOCOL"
 fi
 
-TIMESTAMPTZ_REHEARSAL_DB=$COPY mvn -o -q test -Dtest=TimestamptzRehearsal
+TIMESTAMPTZ_REHEARSAL_DB=$COPY mvn -o -q test -Dtest='TimestamptzRehearsal,TenantIdRehearsal'
 echo "rehearsal passed on a full copy of $SOURCE_DB"

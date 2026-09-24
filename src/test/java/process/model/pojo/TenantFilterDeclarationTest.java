@@ -120,8 +120,22 @@ public class TenantFilterDeclarationTest {
             }
         }
         Collections.sort(filtered);
-        assertEquals(Arrays.asList("AppUser", "KafkaConnectionProfile", "PageAccessProfile", "Pipeline", "SourceJob",
-            "SourceTask", "SourceTaskType", "TenantTaskTypeKafkaRoute", "UserPageAccess"), filtered);
+        // MIG-29 (V102): JobAuditLogs, JobQueue, PipelineField, Scheduler and SourceTaskPayload carry their parent's
+        // tenant_id now, and the filter with it.
+        assertEquals(Arrays.asList("AppUser", "JobAuditLogs", "JobQueue", "KafkaConnectionProfile", "PageAccessProfile", "Pipeline",
+            "PipelineField", "Scheduler", "SourceJob", "SourceTask", "SourceTaskPayload", "SourceTaskType", "TenantTaskTypeKafkaRoute",
+            "UserPageAccess"), filtered);
+    }
+
+    /**
+     * MIG-29: a run, its schedule, its audit trail, a task's tags and a pipeline's fields belong to exactly their parent's
+     * tenant -- tenant_id is NOT NULL on all five and there is no shared row to admit.
+     */
+    @Test
+    void theChildTablesAreStrictlyTheirParentsTenant() {
+        for (Class<?> entity : new Class<?>[] {JobQueue.class, Scheduler.class, JobAuditLogs.class, SourceTaskPayload.class, PipelineField.class}) {
+            assertEquals("tenant_id = :tenantId", conditionOf(entity), entity.getSimpleName());
+        }
     }
 
     /** An entity that imports the filter annotations without applying them reads as filtered and is not (DEF-165). */

@@ -151,7 +151,7 @@ public class BulkAction {
         jobQueue.setJobStatus(jobStatus);
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatusMessage(String.format(message, jobId));
-        this.applyBucketSnapshot(jobQueue, jobId);
+        this.applyJobSnapshot(jobQueue, jobId);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
         return jobQueue;
     }
@@ -169,13 +169,15 @@ public class BulkAction {
         jobQueue.setJobStatus(jobStatus);
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatusMessage(String.format(message, jobId));
-        this.applyBucketSnapshot(jobQueue, jobId);
+        this.applyJobSnapshot(jobQueue, jobId);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
         return jobQueue;
     }
 
-    private void applyBucketSnapshot(JobQueue jobQueue, Long jobId) {
+    /** What the run takes from its job when it is made: the job's tenant (V102, MIG-29), its bucket and output folder. */
+    private void applyJobSnapshot(JobQueue jobQueue, Long jobId) {
         this.transactionService.findByJobId(jobId).ifPresent(sourceJob -> {
+            jobQueue.setTenantId(sourceJob.getTenantId());
             if (sourceJob.getTaskDetail() != null) {
                 jobQueue.setBucket(sourceJob.getTaskDetail().getBucket());
                 jobQueue.setOutputFolder(sourceJob.getTaskDetail().getOutputFolder());

@@ -30,8 +30,10 @@ public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long>
 
     @Transactional
     @Modifying
-    @Query(value = "insert into job_audit_logs (job_audit_log_id, external_id, job_queue_id, log_detail, date_created, status) " +
-        "values (nextval('job_audit_logs_source_seq'), ?1, ?2, ?3, ?4, 'Active') on conflict (external_id) do nothing", nativeQuery = true)
+    // tenant_id is the run's (V102, MIG-29), read in the same statement.
+    @Query(value = "insert into job_audit_logs (job_audit_log_id, external_id, job_queue_id, log_detail, date_created, status, tenant_id) " +
+        "select nextval('job_audit_logs_source_seq'), ?1, ?2, ?3, ?4, 'Active', q.tenant_id from job_queue q where q.job_queue_id = ?2 " +
+        "on conflict (external_id) do nothing", nativeQuery = true)
     public int upsertFromOpenSearch(String externalId, Long jobQueueId, String logDetail, Timestamp dateCreated);
 
     /**

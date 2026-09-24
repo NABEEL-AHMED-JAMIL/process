@@ -206,7 +206,10 @@ public class SourceJobLifecycleDefectTest {
 
         // The row is written -- findDueSchedulers is what keeps an Inactive job from running,
         // not the absence of a schedule -- so switching it on later resumes rather than loses it.
-        verify(this.schedulerRepository).save(any(Scheduler.class));
+        ArgumentCaptor<Scheduler> schedule = ArgumentCaptor.forClass(Scheduler.class);
+        verify(this.schedulerRepository).save(schedule.capture());
+        // MIG-29: with the job's tenant.
+        assertThat(schedule.getValue().getTenantId()).isEqualTo(TENANT_A);
         assertThat(this.savedJob().getJobStatus()).isEqualTo(Status.Inactive);
     }
 
@@ -245,6 +248,8 @@ public class SourceJobLifecycleDefectTest {
         assertThat(written.getStartTime()).isEqualTo(LocalTime.of(2, 0));
         // Seeded, or findDueSchedulers has nothing to compare against and the job never runs.
         assertThat(written.getNextRunAt()).isNotNull();
+        // MIG-29: a new row carries its job's tenant.
+        assertThat(written.getTenantId()).isEqualTo(TENANT_A);
     }
 
     /** An existing row is still updated in place rather than duplicated. */

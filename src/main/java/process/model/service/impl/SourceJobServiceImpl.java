@@ -197,6 +197,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             sourceJobDto.getSchedulers()
                 .forEach(schedulerDto -> {
                     Scheduler scheduler = new Scheduler();
+                    scheduler.setTenantId(sourceJob.getTenantId());
                     this.applySchedulerFields(scheduler, schedulerDto, sourceJob.getJobId());
                     this.schedulerRepository.save(scheduler);
                 });
@@ -387,6 +388,9 @@ public class SourceJobServiceImpl implements SourceJobService {
                          * against it, and Skip next answered that it had none.
                          */
                         Scheduler target = scheduler.isPresent() ? scheduler.get() : new Scheduler();
+                        if (target.getTenantId() == null) {
+                            target.setTenantId(sourceJob.get().getTenantId());
+                        }
                         this.applySchedulerFields(target, schedulerDto, sourceJob.get().getJobId());
                         this.schedulerRepository.save(target);
                     });

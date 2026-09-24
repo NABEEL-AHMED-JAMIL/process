@@ -1,5 +1,9 @@
 package process.model.pojo;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.ParamDef;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.Filter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
@@ -24,6 +28,8 @@ import java.time.LocalDateTime;
  * */
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class JobQueue {
 
     @GenericGenerator(
@@ -158,6 +164,15 @@ public class JobQueue {
         nullable = false)
     @Enumerated(EnumType.STRING)
     private Status status;
+    /**
+     * The job's tenant (V102, MIG-29/164): set when the row is written, and kept equal to the source_job row's by the database
+     * (fk_job_queue_job_tenant, ON UPDATE CASCADE) -- so never written again from here. What the tenant filter scopes on.
+     */
+    // Not on the wire: nothing a console sends or reads names it (the wire format is unchanged).
+    @JsonIgnore
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private Long tenantId;
+
     public JobQueue() {}
 
     @PrePersist
@@ -325,4 +340,12 @@ public class JobQueue {
     public void setPreparedAt(LocalDateTime preparedAt) { this.preparedAt = preparedAt; }
     public String getDispatchPayload() { return dispatchPayload; }
     public void setDispatchPayload(String dispatchPayload) { this.dispatchPayload = dispatchPayload; }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
 }

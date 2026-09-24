@@ -211,6 +211,8 @@ public class SourceJobBulkDefectTest {
         assertThat(captor.getValue().getIntervalValue()).isEqualTo("2");
         // Seeded, so the job has a slot to be due at rather than being born with none.
         assertThat(captor.getValue().getNextRunAt()).isNotNull();
+        // MIG-29: written with its job's tenant (the job takes the linked task's).
+        assertThat(captor.getValue().getTenantId()).isEqualTo(TENANT_A);
     }
 
     // ---- download: one query for the schedules, and no unguarded task dereference ----------------

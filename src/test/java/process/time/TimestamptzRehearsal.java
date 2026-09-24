@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * and the same again after: counts, instants and ProcessTimeUtil's answers equal. Then the rollback, and every stored
  * string equal to before, byte for byte. The copy is left migrated back: the script drops it.
  */
-class TimestamptzRehearsal {
+public class TimestamptzRehearsal {
 
     private static final Instant CLOCK = Instant.parse("2026-09-24T17:00:00Z");
 
@@ -150,7 +150,7 @@ class TimestamptzRehearsal {
     }
 
     /** Update when rollbackCount is null; otherwise roll that many back. */
-    private static void liquibase(HikariDataSource pool, Integer rollbackCount) throws Exception {
+    public static void liquibase(HikariDataSource pool, Integer rollbackCount) throws Exception {
         try (Connection connection = pool.getConnection()) {
             Database database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
             Liquibase liquibase = new Liquibase("db/changelog/db.changelog-master.yaml",

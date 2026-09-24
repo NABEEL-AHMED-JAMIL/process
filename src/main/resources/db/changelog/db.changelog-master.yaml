@@ -95,3 +95,5 @@ databaseChangeLog:
   # V100-V119: timestamptz (MIG-28/96/163) and tenant_id (MIG-29/164).
   - include:
       file: db/changelog/yaml/V100.0-timestamps-are-instants.yaml
+  - include:
+      file: db/changelog/yaml/V102.0-tenant-id-on-child-tables.yaml

@@ -80,6 +80,7 @@ class SchedulerAcrossDstPostgresTest {
     private static Scheduler daily(long jobId, LocalDate start, LocalTime time) {
         Scheduler scheduler = new Scheduler();
         scheduler.setJobId(jobId);
+        scheduler.setTenantId(3201L);
         scheduler.setStartDate(start);
         scheduler.setStartTime(time);
         scheduler.setFrequency("Daily");
