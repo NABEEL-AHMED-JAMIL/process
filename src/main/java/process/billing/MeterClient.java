@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -162,6 +163,12 @@ public class MeterClient {
         return this.asMap(response.getBody());
     }
 
+    /**
+     * The meter's numbers as exact decimals (MIG-197): a double keeps 15 to 17 significant digits, and a
+     * quantity at the ledger's full scale -- numeric(24,6) -- has more.
+     */
+    private static final ObjectMapper EXACT = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+
     /** The meter's JSON as plain maps and lists -- what the console's own serialiser can carry. */
     @SuppressWarnings("unchecked")
     private Map<String, Object> asMap(String body) {
@@ -169,7 +176,7 @@ public class MeterClient {
             return new HashMap<>();
         }
         try {
-            return new ObjectMapper().readValue(body, Map.class);
+            return EXACT.readValue(body, Map.class);
         } catch (IOException ex) {
             throw new IllegalStateException("The meter answered something that is not JSON: " + ex.getMessage());
         }

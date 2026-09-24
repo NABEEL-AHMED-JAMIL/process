@@ -9,13 +9,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeSet;
@@ -29,7 +22,6 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * MIG-9, against a real PostgreSQL: billing numbers from a locked counter, not COUNT(*) plus probing.
@@ -42,12 +34,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class JdbcBillingNumbersPostgresTest {
 
-    private static final String URL = env("BILLING_IT_POSTGRES_URL", "jdbc:postgresql://localhost:5433/etl_job");
-    private static final String USER = env("SPRING_DATASOURCE_USERNAME", "nabeel.amd93");
-    private static final String PASSWORD = env("SPRING_DATASOURCE_PASSWORD", "admin");
     private static final String V58 = "/db/changelog/changelog-sets/V58.0-atomic-billing-numbers/V58__atomic_billing_numbers.sql";
 
-    private String schema;
+    private ThrowawaySchema schema;
     private Instance first;
     private Instance second;
 
@@ -57,8 +46,8 @@ class JdbcBillingNumbersPostgresTest {
         final TransactionTemplate tx;
         final JdbcBillingNumbers numbers;
 
-        Instance(String schema) {
-            DriverManagerDataSource source = new DriverManagerDataSource(URL + "?currentSchema=" + schema, USER, PASSWORD);
+        Instance(ThrowawaySchema schema) {
+            DriverManagerDataSource source = schema.dataSource();
             this.jdbc = new JdbcTemplate(source);
             this.tx = new TransactionTemplate(new DataSourceTransactionManager(source));
             this.numbers = new JdbcBillingNumbers(this.jdbc);
@@ -70,32 +59,22 @@ class JdbcBillingNumbersPostgresTest {
     }
 
     @BeforeEach
-    void schema() throws Exception {
-        assumeTrue(reachable(), "no PostgreSQL at " + URL);
-        this.schema = "mig9_it_" + System.nanoTime();
-        try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD); Statement s = c.createStatement()) {
-            s.execute("CREATE SCHEMA " + this.schema);
-            s.execute("SET search_path TO " + this.schema);
-            // Just the columns the counter seeds from, shaped as in etl_job.
-            s.execute("CREATE TABLE invoice (invoice_id BIGSERIAL PRIMARY KEY, number VARCHAR(32) NOT NULL UNIQUE)");
-            s.execute("CREATE TABLE payment (payment_id BIGSERIAL PRIMARY KEY, receipt_number VARCHAR(32))");
-            s.execute("CREATE TABLE billing_document (billing_document_id BIGSERIAL PRIMARY KEY, kind VARCHAR(24) NOT NULL, number VARCHAR(64))");
-            for (String statement : v58().split(";")) {
-                if (!statement.replaceAll("(?m)^\\s*--.*$", "").trim().isEmpty()) {
-                    s.execute(statement);
-                }
-            }
-        }
+    void schema() {
+        this.schema = ThrowawaySchema.create("mig9_it");
+        JdbcTemplate jdbc = this.schema.jdbc();
+        // Just the columns the counter seeds from, shaped as in etl_job.
+        jdbc.execute("CREATE TABLE invoice (invoice_id BIGSERIAL PRIMARY KEY, number VARCHAR(32) NOT NULL UNIQUE)");
+        jdbc.execute("CREATE TABLE payment (payment_id BIGSERIAL PRIMARY KEY, receipt_number VARCHAR(32))");
+        jdbc.execute("CREATE TABLE billing_document (billing_document_id BIGSERIAL PRIMARY KEY, kind VARCHAR(24) NOT NULL, number VARCHAR(64))");
+        this.schema.run(V58, jdbc);
         this.first = new Instance(this.schema);
         this.second = new Instance(this.schema);
     }
 
     @AfterEach
-    void drop() throws Exception {
+    void drop() {
         if (this.schema != null) {
-            try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD); Statement s = c.createStatement()) {
-                s.execute("DROP SCHEMA " + this.schema + " CASCADE");
-            }
+            this.schema.close();
         }
     }
 
@@ -185,32 +164,5 @@ class JdbcBillingNumbersPostgresTest {
         assertThatThrownBy(() -> this.first.jdbc.update("INSERT INTO invoice (number) VALUES ('X'), ('X')"))
             .satisfies(ex -> assertThat(BillingNumbers.isNumberCollision(ex)).isTrue());
         assertThat(BillingNumbers.isNumberCollision(new IllegalStateException("no"))).isFalse();
-    }
-
-    // ---- plumbing ------------------------------------------------------------------------------
-
-    private static String v58() throws IOException {
-        try (InputStream in = JdbcBillingNumbersPostgresTest.class.getResourceAsStream(V58)) {
-            assertThat(in).as(V58).isNotNull();
-            byte[] bytes = new byte[in.available()];
-            int read = 0;
-            while (read < bytes.length) {
-                read += in.read(bytes, read, bytes.length - read);
-            }
-            return new String(bytes, StandardCharsets.UTF_8);
-        }
-    }
-
-    private static boolean reachable() {
-        try (Connection ignored = DriverManager.getConnection(URL, USER, PASSWORD)) {
-            return true;
-        } catch (SQLException unreachable) {
-            return false;
-        }
-    }
-
-    private static String env(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.trim().isEmpty() ? fallback : value;
     }
 }

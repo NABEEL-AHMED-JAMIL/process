@@ -6,15 +6,23 @@ import org.barco.platform.meter.MeterTransport;
 import org.barco.platform.meter.UsageEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
  * The console's line to the meter. Reporting is platform-commons' MeterReporter (MIG-80), tested
@@ -88,6 +96,33 @@ class MeterClientTest {
         MeterClient client = new MeterClient("http://meter:8200", "k", new RestTemplate(), null);
         client.report(UsageEvent.of(2905L, Meter.PIPELINE_RUNS, 1, "run#1"));
         client.flush();
+    }
+
+    /**
+     * MIG-197: a quantity at the ledger's full scale reaches the invoice with every digit. Read as a
+     * double it kept 15 to 17 significant digits; 123456789012.123456 has 18.
+     */
+    @Test
+    void theMetersNumbersAreReadAsExactDecimals() {
+        RestTemplate http = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(http);
+        server.expect(requestTo(startsWith("http://meter:8200/v1/usage"))).andRespond(withSuccess(
+            "{\"rows\":[{\"meter\":\"storage.bytes.read\",\"quantity\":123456789012.123456,\"amount\":0.00602,"
+                + "\"includedQuantity\":1000.000001,\"per\":1073741824}]}", MediaType.APPLICATION_JSON));
+        MeterClient client = new MeterClient("http://meter:8200", "k", http, null);
+
+        Map<String, Object> row = rows(client.usage(2905L, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), "meter")).get(0);
+
+        assertThat(row.get("quantity")).isEqualTo(new BigDecimal("123456789012.123456"));
+        assertThat(row.get("includedQuantity")).isEqualTo(new BigDecimal("1000.000001"));
+        assertThat(row.get("amount")).isEqualTo(new BigDecimal("0.00602"));
+        assertThat(row.get("per")).isEqualTo(1073741824);
+        server.verify();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> rows(Map<String, Object> answer) {
+        return (List<Map<String, Object>>) answer.get("rows");
     }
 
     @Test

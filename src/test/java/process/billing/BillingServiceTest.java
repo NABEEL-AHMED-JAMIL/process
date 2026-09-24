@@ -656,4 +656,28 @@ class BillingServiceTest {
 
         assertThat(json).doesNotContain("tenantId").contains("\"invoiceId\":2", "\"description\":\"Seats\"");
     }
+
+    // ---- one quantity scale from the meter to the bill (MIG-197) -----------------------------
+
+    /**
+     * A quantity reaches the invoice line exactly as the meter sent it -- MeterClient reads the meter's
+     * numbers as BigDecimal -- and nothing on the way rounds a quantity: only the line's amount is the
+     * meter's five places, and only the subtotal is rounded, once, to two (MIG-78).
+     */
+    @Test
+    void aFullScaleQuantityCrossesFromTheMeterToTheLineUntouched() {
+        when(this.meter.usage(eq(TENANT), any(), any(), eq("meter"))).thenReturn(map(
+            "rows", Arrays.asList(map("meter", "storage.bytes.read", "label", "Bytes read", "unit", "byte", "per", 1073741824,
+                "unitPrice", new BigDecimal("0.00900000"), "quantity", new BigDecimal("123456789012.123456"), "amount", new BigDecimal("1.03474"),
+                "includedQuantity", new BigDecimal("1000.000001"), "billableQuantity", new BigDecimal("123456788012.123455")))));
+
+        Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
+        InvoiceLine line = this.service.linesOf(draft).get(0);
+
+        assertThat(line.getQuantity()).isEqualTo(new BigDecimal("123456789012.123456"));
+        assertThat(line.getIncludedQuantity()).isEqualTo(new BigDecimal("1000.000001"));
+        assertThat(line.getBillableQuantity()).isEqualTo(new BigDecimal("123456788012.123455"));
+        assertThat(line.getAmount()).isEqualTo(new BigDecimal("1.03474"));
+        assertThat(draft.getSubtotal()).isEqualTo(new BigDecimal("1.03"));
+    }
 }
