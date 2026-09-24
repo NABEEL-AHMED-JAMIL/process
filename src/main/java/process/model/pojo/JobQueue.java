@@ -132,6 +132,15 @@ public class JobQueue {
     @Column(name = "refused_callback_status", length = 16)
     private String refusedCallbackStatus;
 
+    /**
+     * The id the run's dispatch logged under, stamped in the same write as the callback token hash
+     * (V82, MIG-95). A worker that echoes no X-Correlation-Id on its callbacks is logged under this one,
+     * so one search finds the dispatch and every callback it caused. Kept across a retry: the retry is
+     * the same piece of work. Never an input to authentication.
+     */
+    @Column(name = "correlation_id", length = 64)
+    private String correlationId;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -297,4 +306,6 @@ public class JobQueue {
     public void setRefusedCallbackAt(LocalDateTime refusedCallbackAt) { this.refusedCallbackAt = refusedCallbackAt; }
     public String getRefusedCallbackStatus() { return refusedCallbackStatus; }
     public void setRefusedCallbackStatus(String refusedCallbackStatus) { this.refusedCallbackStatus = refusedCallbackStatus; }
+    public String getCorrelationId() { return correlationId; }
+    public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
 }

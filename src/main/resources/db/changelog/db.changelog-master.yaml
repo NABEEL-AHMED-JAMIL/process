@@ -56,3 +56,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V80.0-worker-callback-receipts.yaml
   - include:
       file: db/changelog/yaml/V81.0-refused-callback-on-run.yaml
+  - include:
+      file: db/changelog/yaml/V82.0-job-queue-correlation-id.yaml

@@ -275,7 +275,7 @@ class RetireExtendsTokenExpiryTest {
         SourceJobQueueDto body = new SourceJobQueueDto();
         body.setJobStatusMessage("working");
 
-        ResponseEntity<?> response = api.changeState(JOB, RUN, JobStatus.Running, null, null, body);
+        ResponseEntity<?> response = api.changeState(JOB, RUN, JobStatus.Running, null, null, null, body);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verifyNoInteractions(notifyService);
@@ -307,7 +307,7 @@ class RetireExtendsTokenExpiryTest {
         LocalDateTime before = LocalDateTime.now();
 
         ResponseEntity<?> response = new NotifyResetApi(notifyService, this.tokens)
-            .changeState(JOB, RUN, JobStatus.Failed, token, null, body);
+            .changeState(JOB, RUN, JobStatus.Failed, token, null, null, body);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(this.run.getJobStatus()).isEqualTo(JobStatus.Queue);

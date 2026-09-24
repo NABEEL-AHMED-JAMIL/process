@@ -1,10 +1,14 @@
 package process.api;
 
+import org.barco.platform.correlation.CorrelationId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import process.callback.CallbackKeys;
 import process.callback.ReplayedResponse;
 import process.model.dto.ResponseDto;
@@ -78,8 +82,12 @@ public class NotifyResetApi {
      * without a receipt is the same 401 as ever. Null means go ahead.
      */
     private ResponseEntity<?> admit(Long jobId, Long jobQueueId, String presentedToken,
-        JobStatus jobStatus, String request, String idempotencyKey) {
+        JobStatus jobStatus, String request, String idempotencyKey, String echoedCorrelationId) {
         Optional<RunCallbackTokens.Refusal> refusal = this.runCallbackTokens.verify(jobId, jobQueueId, presentedToken);
+        if (!refusal.isPresent() || refusal.get() == RunCallbackTokens.Refusal.RUN_OVER
+            || refusal.get() == RunCallbackTokens.Refusal.EXPIRED) {
+            this.bindCorrelation(jobId, jobQueueId, request, echoedCorrelationId);
+        }
         if (refusal.isPresent() && refusal.get() == RunCallbackTokens.Refusal.RUN_OVER
             && (idempotencyKey == null || CallbackKeys.isAcceptable(idempotencyKey))) {
             Optional<ResponseDto> answered = this.notifyService.replay(jobQueueId, jobStatus, request, idempotencyKey);
@@ -110,6 +118,29 @@ public class NotifyResetApi {
         return null;
     }
 
+    /**
+     * Logs this callback under its dispatch's correlation id (MIG-95). A worker that echoes
+     * X-Correlation-Id has it bound already, by CorrelationIdFilter; one that does not -- every worker
+     * dispatched before the id existed -- would otherwise log under a fresh id with no thread back to
+     * the dispatch, so the run's own id is resolved from job_queue.correlation_id and bound instead,
+     * and returned on the answer. Only for a token that has been found to be the run's own: the id
+     * is not an input to anything, and a caller who merely knows a run id is not told it.
+     */
+    private void bindCorrelation(Long jobId, Long jobQueueId, String request, String echoedCorrelationId) {
+        Optional<RunCallbackTokens.RunCorrelation> run = this.runCallbackTokens.correlationOf(jobQueueId);
+        if (!CorrelationId.isAcceptable(echoedCorrelationId)) {
+            run.map(found -> found.correlationId).filter(CorrelationId::isAcceptable).ifPresent(resolved -> {
+                CorrelationId.set(resolved);
+                RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+                if (attributes instanceof ServletRequestAttributes && ((ServletRequestAttributes) attributes).getResponse() != null) {
+                    ((ServletRequestAttributes) attributes).getResponse().setHeader(CorrelationId.HEADER, resolved);
+                }
+            });
+        }
+        this.logger.info("Worker callback {} for job {} run {} of tenant {}.", request, jobId, jobQueueId,
+            run.map(found -> found.tenantId).orElse(null));
+    }
+
     @RequestMapping(value = "/changeState/jobId/{jobId}/jobQueueId/{jobQueueId}/jobStatus/{jobStatus}", method = RequestMethod.POST)
     public ResponseEntity<?> changeState(
         @PathVariable("jobId") Long jobId,
@@ -117,10 +148,11 @@ public class NotifyResetApi {
         @PathVariable("jobStatus") JobStatus jobStatus,
         @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
         @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
+        @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
         @RequestBody SourceJobQueueDto jobQueue) {
         try {
             ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, jobStatus,
-                CallbackKeys.changeState(jobStatus), idempotencyKey);
+                CallbackKeys.changeState(jobStatus), idempotencyKey, correlationId);
             if (rejected != null) {
                 return rejected;
             }
@@ -166,10 +198,11 @@ public class NotifyResetApi {
             @PathVariable("jobQueueId") Long jobQueueId,
             @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
             @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
+            @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
             @RequestBody Map<String, List<String>> body) {
         try {
             ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, null,
-                CallbackKeys.ADD_LOGS_BATCH, idempotencyKey);
+                CallbackKeys.ADD_LOGS_BATCH, idempotencyKey, correlationId);
             if (rejected != null) {
                 return rejected;
             }
@@ -193,10 +226,11 @@ public class NotifyResetApi {
             @PathVariable("jobQueueId") Long jobQueueId,
             @RequestHeader(value = WORKER_TOKEN_HEADER, required = false) String workerToken,
             @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
+            @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
             @RequestBody SourceJobQueueDto jobQueue) {
         try {
             ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, null,
-                CallbackKeys.ADD_LOGS, idempotencyKey);
+                CallbackKeys.ADD_LOGS, idempotencyKey, correlationId);
             if (rejected != null) {
                 return rejected;
             }

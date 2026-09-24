@@ -97,7 +97,7 @@ public class NotifyResetApiTest {
     void aStateChangeWithoutAGoodTokenNeverReachesTheService() {
         tokenIsRefused(RunCallbackTokens.Refusal.MISMATCH);
 
-        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, null, null, callback());
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, null, null, null, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verifyNoInteractions(this.notifyService);
@@ -110,8 +110,8 @@ public class NotifyResetApiTest {
         List<String> messages = Arrays.asList("line one", "line two");
         Map<String, List<String>> body = Collections.singletonMap("messages", messages);
 
-        ResponseEntity<?> single = this.api.addLogs(JOB_ID, QUEUE_ID, "stale", null, callback());
-        ResponseEntity<?> batch = this.api.addLogsBatch(JOB_ID, QUEUE_ID, "stale", null, body);
+        ResponseEntity<?> single = this.api.addLogs(JOB_ID, QUEUE_ID, "stale", null, null, callback());
+        ResponseEntity<?> batch = this.api.addLogsBatch(JOB_ID, QUEUE_ID, "stale", null, null, body);
 
         assertThat(single.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(batch.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -125,7 +125,7 @@ public class NotifyResetApiTest {
         when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
             .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
 
-        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, callback());
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, null, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(this.notifyService).changeState(any(SourceJobQueueDto.class), isNull());
@@ -139,7 +139,7 @@ public class NotifyResetApiTest {
         when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
             .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
 
-        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Running, TOKEN, null, callback());
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Running, TOKEN, null, null, callback());
 
         verify(this.runCallbackTokens, never()).retire(anyLong());
     }
@@ -151,7 +151,7 @@ public class NotifyResetApiTest {
         when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
             .thenReturn(new ResponseDto(ProcessUtil.ERROR, "already finished"));
 
-        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, null, callback());
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, null, null, callback());
 
         verify(this.runCallbackTokens, never()).retire(anyLong());
     }
@@ -161,7 +161,7 @@ public class NotifyResetApiTest {
         tokenIsGood();
         SourceJobQueueDto noMessage = new SourceJobQueueDto();
 
-        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, null, noMessage);
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Failed, TOKEN, null, null, noMessage);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         verifyNoInteractions(this.notifyService);
@@ -184,10 +184,9 @@ public class NotifyResetApiTest {
         when(this.notifyService.addLogsBatch(eq(JOB_ID), eq(QUEUE_ID), anyList(), eq("batch-0000007")))
             .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "ok"));
 
-        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, "done-7f3a9c2e", callback());
-        this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, "line-0000042", callback());
-        this.api.addLogsBatch(JOB_ID, QUEUE_ID, TOKEN, "batch-0000007",
-            Collections.singletonMap("messages", Arrays.asList("a", "b")));
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, "done-7f3a9c2e", null, callback());
+        this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, "line-0000042", null, callback());
+        this.api.addLogsBatch(JOB_ID, QUEUE_ID, TOKEN, "batch-0000007", null, Collections.singletonMap("messages", Arrays.asList("a", "b")));
 
         verify(this.notifyService).changeState(any(SourceJobQueueDto.class), eq("done-7f3a9c2e"));
         verify(this.notifyService).addLogs(any(SourceJobQueueDto.class), eq("line-0000042"));
@@ -200,7 +199,7 @@ public class NotifyResetApiTest {
         tokenIsGood();
 
         ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN,
-            "two\nlines", callback());
+            "two\nlines", null, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         verifyNoInteractions(this.notifyService);
@@ -217,7 +216,7 @@ public class NotifyResetApiTest {
         when(this.notifyService.replay(QUEUE_ID, JobStatus.Completed, CallbackKeys.changeState(JobStatus.Completed), null))
             .thenReturn(Optional.of(firstAnswer("Job 1196 status changed to Completed")));
 
-        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, callback());
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, null, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(((ResponseDto) response.getBody()).getMessage()).isEqualTo("Job 1196 status changed to Completed");
@@ -230,7 +229,7 @@ public class NotifyResetApiTest {
         tokenIsRefused(RunCallbackTokens.Refusal.RUN_OVER);
         when(this.notifyService.replay(eq(QUEUE_ID), any(), anyString(), any())).thenReturn(Optional.empty());
 
-        ResponseEntity<?> response = this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, "line-0000099", callback());
+        ResponseEntity<?> response = this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, "line-0000099", null, callback());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verify(this.notifyService, never()).addLogs(any(SourceJobQueueDto.class), any());
@@ -244,7 +243,7 @@ public class NotifyResetApiTest {
                 continue;
             }
             when(this.runCallbackTokens.verify(JOB_ID, QUEUE_ID, "x")).thenReturn(Optional.of(why));
-            ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, "x", "done-7f3a9c2e", callback());
+            ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, "x", "done-7f3a9c2e", null, callback());
             assertThat(response.getStatusCode()).as(why.name()).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
         verify(this.notifyService, never()).replay(any(), any(), any(), any());
@@ -257,7 +256,7 @@ public class NotifyResetApiTest {
         when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
             .thenReturn(firstAnswer("Job 1196 status changed to Completed"));
 
-        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, callback());
+        this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, null, callback());
 
         verify(this.runCallbackTokens, never()).retire(anyLong());
     }
@@ -273,8 +272,8 @@ public class NotifyResetApiTest {
     void aGenuineReportRefusedForExpiryIsStillRefusedAndIsNotedForTheSweep() {
         tokenIsRefused(RunCallbackTokens.Refusal.EXPIRED);
 
-        ResponseEntity<?> state = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, callback());
-        ResponseEntity<?> line = this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, null, callback());
+        ResponseEntity<?> state = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, null, callback());
+        ResponseEntity<?> line = this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, null, null, callback());
 
         assertThat(state.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(line.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -293,7 +292,7 @@ public class NotifyResetApiTest {
                 continue;
             }
             when(this.runCallbackTokens.verify(JOB_ID, QUEUE_ID, "x")).thenReturn(Optional.of(why));
-            this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, "x", null, callback());
+            this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, "x", null, null, callback());
         }
         verify(this.notifyService, never()).noteRefusedCallback(any(), any());
     }

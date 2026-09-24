@@ -1,8 +1,10 @@
 package process.security;
 
+import org.barco.platform.correlation.CorrelationId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.model.enums.JobStatus;
@@ -16,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -207,5 +210,49 @@ public class RunCallbackTokensTest {
         this.run.setJobStatus(JobStatus.Failed);
         assertThat(this.tokens.verify(JOB, RUN, "not-it")).contains(RunCallbackTokens.Refusal.NOT_ISSUED);
         assertThat(this.tokens.verify(JOB, RUN, LEGACY)).contains(RunCallbackTokens.Refusal.RUN_OVER);
+    }
+
+    // ---- MIG-95: the correlation id rides the token's write -------------------------------------------------
+
+    /** Stamped in the very save that stores the hash: one write, so the two can never disagree. */
+    @Test
+    void theCorrelationIdIsWrittenInTheSameSaveAsTheHash() {
+        this.tokens.issue(this.run);
+
+        ArgumentCaptor<JobQueue> saved = ArgumentCaptor.forClass(JobQueue.class);
+        verify(this.jobQueueRepository, times(1)).save(saved.capture());
+        assertThat(saved.getValue().getCallbackTokenHash()).isNotNull();
+        assertThat(CorrelationId.isAcceptable(saved.getValue().getCorrelationId())).isTrue();
+    }
+
+    @Test
+    void theDispatchsBoundIdIsTheOneStamped() {
+        CorrelationId.set("corr-bound-at-dispatch");
+        try {
+            this.tokens.issue(this.run);
+        } finally {
+            CorrelationId.clear();
+        }
+        assertThat(this.run.getCorrelationId()).isEqualTo("corr-bound-at-dispatch");
+    }
+
+    /** A retry re-mints the token and keeps the id: it is the same piece of work. */
+    @Test
+    void aRetryKeepsTheIdOfItsFirstDispatch() {
+        this.tokens.issue(this.run);
+        String first = this.run.getCorrelationId();
+        this.run.setAttempt(2);
+
+        this.tokens.issue(this.run);
+
+        assertThat(this.run.getCorrelationId()).isEqualTo(first);
+    }
+
+    @Test
+    void theRunsIdIsReadBackForItsCallbacks() {
+        this.run.setCorrelationId("corr-dispatch-88123");
+
+        assertThat(this.tokens.correlationOf(RUN).map(found -> found.correlationId)).contains("corr-dispatch-88123");
+        assertThat(this.tokens.correlationOf(null)).isEmpty();
     }
 }

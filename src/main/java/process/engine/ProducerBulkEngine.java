@@ -2,6 +2,7 @@ package process.engine;
 
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
+import org.barco.platform.correlation.CorrelationId;
 import org.apache.logging.log4j.Logger;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -298,8 +299,15 @@ public class ProducerBulkEngine {
                             dispatched, jobQueues.size());
                         break;
                     }
-                    Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
+                    // Everything logged about this run's dispatch carries its correlation id, which the
+                    // token write stamps on the row: a callback that echoes no id is logged under it too
+                    // (MIG-95). A retry keeps the id of its first dispatch.
+                    if (jobQueue.getCorrelationId() == null) {
+                        jobQueue.setCorrelationId(CorrelationId.generate());
+                    }
+                    CorrelationId.set(jobQueue.getCorrelationId());
                     try {
+                        Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobQueue.getJobId(), Status.Active);
                         Thread.sleep(100);
                         if (sourceJob.isPresent()) {
                             this.pushMessageToQueue(sourceJob.get(), jobQueue);
@@ -310,6 +318,8 @@ public class ProducerBulkEngine {
                         dispatched++;
                     } catch (Exception ex) {
                         logger.error("Error in runJobInCurrentTimeSlot: {}.", ExceptionUtil.getRootCauseMessage(ex));
+                    } finally {
+                        CorrelationId.clear();
                     }
                 }
                 return;
@@ -529,6 +539,7 @@ public class ProducerBulkEngine {
         // so the server knows the token before any worker can echo it. See RunCallbackTokens.
         dto.setCallbackToken(this.runCallbackTokens.issue(jobQueue));
         dto.setAttempt(Math.max(1, jobQueue.getAttempt()));
+        dto.setCorrelationId(jobQueue.getCorrelationId());
         if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
             Long homePageLookupId = ProcessUtil.parseLongOrNull(sourceJob.getTaskDetail().getHomePageId());
             if (homePageLookupId != null) {
