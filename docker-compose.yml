@@ -139,6 +139,13 @@ services:
   #
   # The profile keeps a plain `docker compose up` from starting a container that can only
   # crash-loop while no token is set.
+  #
+  # sts and iam (MIG-216): storage-service vends Analytics a GetFederationToken credential scoped to
+  # one bucket instead of the connection's own key. ENFORCE_IAM asks LocalStack to honour that
+  # scope, but the freemium license ignores it (checked 2026-09-24: an IAM user with no policy still
+  # lists every bucket), so analytics-service's second-bucket test skips here with that reason and
+  # MinIO, which does enforce a session policy, carries the negative case. The platform's own
+  # "test" key is the account root, which enforcement would leave unrestricted anyway.
   localstack:
     image: localstack/localstack-pro:latest
     container_name: localstack-aws
@@ -148,7 +155,8 @@ services:
       - "127.0.0.1:4566:4566"
     environment:
       LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:-}
-      SERVICES: s3,ses
+      SERVICES: ${LOCALSTACK_SERVICES:-s3,ses,sts,iam}
+      ENFORCE_IAM: ${LOCALSTACK_ENFORCE_IAM:-1}
     volumes:
       - ./localstack/init-platform.sh:/etc/localstack/init/ready.d/init-platform.sh:ro
     healthcheck:
