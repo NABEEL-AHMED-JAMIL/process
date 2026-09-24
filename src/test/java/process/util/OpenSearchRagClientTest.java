@@ -2,6 +2,7 @@ package process.util;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import process.security.TenantContext;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -68,6 +70,13 @@ public class OpenSearchRagClientTest {
         ReflectionTestUtils.setField(this.client, "baseUrl", BASE_URL);
         ReflectionTestUtils.setField(this.client, "configuredEmbeddingModel", "nomic-embed-text");
         ReflectionTestUtils.setField(this.client, "restTemplate", this.restTemplate);
+        // Every query is scoped to the caller's tenant (MIG-10); these tests are about everything else.
+        TenantContext.set(1L, "TENANT_USER", 1L, "rag-test");
+    }
+
+    @AfterEach
+    void clearTheCaller() {
+        TenantContext.clear();
     }
 
     /**
