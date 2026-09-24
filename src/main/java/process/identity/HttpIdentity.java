@@ -141,9 +141,11 @@ public class HttpIdentity implements IdentityPort {
         if (wanted.isEmpty()) {
             return found;
         }
-        for (Map<String, Object> row : this.rows("people", Collections.singletonMap("ids", wanted))) {
-            Person person = toPerson(row);
-            found.put(person.getAppUserId(), person);
+        for (List<Long> batch : batches(wanted)) {
+            for (Map<String, Object> row : this.rows("people", Collections.singletonMap("ids", batch))) {
+                Person person = toPerson(row);
+                found.put(person.getAppUserId(), person);
+            }
         }
         return found;
     }
@@ -176,8 +178,10 @@ public class HttpIdentity implements IdentityPort {
             return found;
         }
         Set<Long> wanted = tenantIds.stream().filter(Objects::nonNull).collect(Collectors.toCollection(TreeSet::new));
-        for (Map<String, Object> row : this.rows("workspaces", Collections.singletonMap("ids", wanted))) {
-            found.add(toWorkspace(row));
+        for (List<Long> batch : batches(wanted)) {
+            for (Map<String, Object> row : this.rows("workspaces", Collections.singletonMap("ids", batch))) {
+                found.add(toWorkspace(row));
+            }
         }
         return found;
     }
@@ -263,6 +267,18 @@ public class HttpIdentity implements IdentityPort {
     }
 
     @SuppressWarnings("unchecked")
+    /** Identity's /people and /workspaces answer at most this many ids at once, and refuse more. */
+    static final int MAX_IDS_PER_CALL = 500;
+
+    private static List<List<Long>> batches(Set<Long> ids) {
+        List<Long> all = new ArrayList<>(ids);
+        List<List<Long>> batches = new ArrayList<>();
+        for (int from = 0; from < all.size(); from += MAX_IDS_PER_CALL) {
+            batches.add(all.subList(from, Math.min(all.size(), from + MAX_IDS_PER_CALL)));
+        }
+        return batches;
+    }
+
     private List<Map<String, Object>> rows(String operation, Object body) {
         try {
             Object[] answer = this.http.postForObject(this.base + "/" + operation, this.request(body), Object[].class);

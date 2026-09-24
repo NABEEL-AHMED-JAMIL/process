@@ -21,6 +21,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -37,6 +38,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -90,6 +92,29 @@ class HttpIdentityTest {
             .claim("appUserId", 44).claim("tenantId", tenantId).claim("userRole", "TENANT_USER").claim("type", type)
             .claim("tokenVersion", 2).setExpiration(new Date(System.currentTimeMillis() + 60_000))
             .signWith(this.rsa.getPrivate(), SignatureAlgorithm.RS256).compact();
+    }
+
+    // ---- batches: Identity answers at most 500 ids at once (MIG-166) --------------------------------
+
+    @Test
+    void peopleAndWorkspacesPastFiveHundredIdsAreAskedInBatchesIdentityAccepts() {
+        for (int call = 0; call < 2; call++) {
+            this.identity.expect(requestTo("http://identity:9160/api/v1/internal/identity/people"))
+                .andExpect(jsonPath("$.ids.length()").value(call == 0 ? 500 : 120))
+                .andRespond(withSuccess("[{\"appUserId\": " + (call + 1) + ", \"username\": \"u\", \"status\": \"Active\"}]",
+                    MediaType.APPLICATION_JSON));
+        }
+        for (int call = 0; call < 2; call++) {
+            this.identity.expect(requestTo("http://identity:9160/api/v1/internal/identity/workspaces"))
+                .andExpect(jsonPath("$.ids.length()").value(call == 0 ? 500 : 120))
+                .andRespond(withSuccess("[{\"tenantId\": " + (call + 1) + ", \"status\": \"Active\"}]", MediaType.APPLICATION_JSON));
+        }
+        List<Long> ids = new ArrayList<>();
+        for (long id = 1; id <= 620; id++) ids.add(id);
+
+        assertThat(this.port.people(ids)).containsOnlyKeys(1L, 2L);
+        assertThat(this.port.workspaces(ids)).hasSize(2);
+        this.identity.verify();
     }
 
     // ---- authentication: here, not at Identity --------------------------------------------------

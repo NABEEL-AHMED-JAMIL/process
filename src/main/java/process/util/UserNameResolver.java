@@ -2,9 +2,13 @@ package process.util;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
+import process.directory.UserDirectory;
 import process.identity.IdentityPort;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,12 +38,24 @@ import process.model.pojo.Audited;
 public class UserNameResolver {
 
     private final IdentityPort identity;
+    private final UserDirectory directory;
 
     /** Names come from Identity, through the port (MIG-93): nothing here reads app_user. */
     private static final Logger logger = LoggerFactory.getLogger(UserNameResolver.class);
 
+    /** Identity only, with no local directory: for tests of the code that calls this. */
     public UserNameResolver(IdentityPort identity) {
+        this(identity, null);
+    }
+
+    /**
+     * MIG-153: user_directory first -- Core's projection of Identity's people, kept by its events -- and
+     * Identity only for the ids the directory does not hold, with the answers written back.
+     */
+    @Autowired
+    public UserNameResolver(IdentityPort identity, UserDirectory directory) {
         this.identity = identity;
+        this.directory = directory;
     }
 
     /**
@@ -56,16 +72,39 @@ public class UserNameResolver {
         // Across tenants on purpose: the author of a tenant's row may be a platform admin, and the
         // tenant filter would otherwise blank their name (MIG-13).
         Map<Long, String> names = new HashMap<>();
-        Map<Long, IdentityPort.Person> people;
-        try {
-            people = this.identity.people(wanted);
-        } catch (IdentityPort.Unavailable unavailable) {
-            // Names are for reading, never for deciding: the list is served without them (MIG-107).
-            logger.warn("Names for {} user(s) are left out: {}", wanted.size(), unavailable.getMessage());
+        Set<Long> missing = new HashSet<>(wanted);
+        if (this.directory != null) {
+            try {
+                // One query for the whole list, however long (MIG-153).
+                for (UserDirectory.Entry entry : this.directory.find(wanted).values()) {
+                    names.put(entry.getAppUserId(), entry.getDisplayName());
+                    missing.remove(entry.getAppUserId());
+                }
+            } catch (DataAccessException unreadable) {
+                logger.warn("The user directory could not be read; asking Identity for {} name(s): {}", wanted.size(),
+                    unreadable.getMessage());
+            }
+        }
+        if (missing.isEmpty()) {
             return names;
         }
+        // At most one call, for what the directory does not hold, stamped with when it was asked.
+        Instant asked = Instant.now();
+        Map<Long, IdentityPort.Person> people;
+        try {
+            people = this.identity.people(missing);
+        } catch (IdentityPort.Unavailable unavailable) {
+            // Names are for reading, never for deciding: the list is served without them (MIG-107).
+            logger.warn("Names for {} user(s) are left out: {}", missing.size(), unavailable.getMessage());
+            return names;
+        }
+        List<UserDirectory.Entry> learned = new ArrayList<>();
         for (IdentityPort.Person person : people.values()) {
             names.put(person.getAppUserId(), person.getDisplayName());
+            learned.add(UserDirectory.Entry.of(person, asked));
+        }
+        if (this.directory != null) {
+            this.directory.writeBack(learned);
         }
         return names;
     }
@@ -143,6 +182,9 @@ public class UserNameResolver {
     public String nameFor(Long userId) {
         if (userId == null) {
             return null;
+        }
+        if (this.directory != null) {
+            return this.namesFor(Collections.singletonList(userId)).get(userId);
         }
         try {
             return this.identity.person(userId).map(IdentityPort.Person::getDisplayName).orElse(null);

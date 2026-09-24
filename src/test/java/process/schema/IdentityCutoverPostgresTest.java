@@ -45,7 +45,8 @@ class IdentityCutoverPostgresTest {
         try (IdentityPostgres db = IdentityPostgres.create("mig107_cutover").migrate()) {
             JdbcTemplate sql = db.sql();
             assertThat(ran(sql, "69.1-identity-cutover")).as("not frozen yet: skipped, to be tried again").isFalse();
-            assertThat(foreignKeysIntoIdentity(sql)).isPositive();
+            // MIG-166 (V161) demotes them whether or not the cutover ran; V69.1 still waits for the freeze to drop the triggers.
+            assertThat(foreignKeysIntoIdentity(sql)).isZero();
             assertThat(triggers(sql, "source_job_assigned_username")).isEqualTo(1);
 
             freeze(sql);
