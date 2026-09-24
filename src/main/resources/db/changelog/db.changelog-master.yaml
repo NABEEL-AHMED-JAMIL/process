@@ -42,3 +42,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V57.0-storage-connection-read-only.yaml
   - include:
       file: db/changelog/yaml/V58.0-atomic-billing-numbers.yaml
+  - include:
+      file: db/changelog/yaml/V59.0-invoice-line-tenant.yaml

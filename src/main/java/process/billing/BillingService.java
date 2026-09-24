@@ -156,10 +156,10 @@ public class BillingService {
         invoice = this.invoices.save(invoice);
         // Metered lines are rebuilt; manual lines an admin added stay.
         List<InvoiceLine> kept = new ArrayList<>();
-        for (InvoiceLine line : this.lines.findByInvoiceIdOrderBySortAsc(invoice.getInvoiceId())) {
+        for (InvoiceLine line : this.linesOf(invoice)) {
             if (Boolean.TRUE.equals(line.getManual())) kept.add(line);
         }
-        this.lines.deleteByInvoiceId(invoice.getInvoiceId());
+        this.lines.deleteByInvoiceIdAndTenantId(invoice.getInvoiceId(), invoice.getTenantId());
         int sort = 0;
         List<InvoiceLine> fresh = new ArrayList<>();
         if (this.meter.isConfigured()) {
@@ -170,8 +170,8 @@ public class BillingService {
                     @SuppressWarnings("unchecked") Map<String, Object> row = (Map<String, Object>) o;
                     BigDecimal amount = decimal(row.get("amount"));
                     if (amount.signum() == 0 && decimal(row.get("quantity")).signum() == 0) continue;
-                    InvoiceLine line = new InvoiceLine();
-                    line.setInvoiceId(invoice.getInvoiceId()); line.setSort(sort++);
+                    InvoiceLine line = new InvoiceLine().of(invoice);
+                    line.setSort(sort++);
                     line.setMeter(String.valueOf(row.get("meter"))); line.setDescription(String.valueOf(row.get("label")));
                     line.setQuantity(decimal(row.get("quantity"))); line.setUnit(String.valueOf(row.get("unit")));
                     line.setPer(row.get("per") == null ? 1 : ((Number) row.get("per")).intValue());
@@ -196,8 +196,8 @@ public class BillingService {
         // Copies, not the managed rows with their ids nulled -- Hibernate refuses an identifier
         // that changed under it, and the old rows are gone with deleteByInvoiceId above.
         for (InvoiceLine old : kept) {
-            InvoiceLine copy = new InvoiceLine();
-            copy.setInvoiceId(invoice.getInvoiceId()); copy.setSort(sort++); copy.setMeter(old.getMeter()); copy.setDescription(old.getDescription());
+            InvoiceLine copy = new InvoiceLine().of(invoice);
+            copy.setSort(sort++); copy.setMeter(old.getMeter()); copy.setDescription(old.getDescription());
             copy.setQuantity(old.getQuantity()); copy.setUnit(old.getUnit()); copy.setPer(old.getPer()); copy.setUnitPrice(old.getUnitPrice());
             copy.setAmount(old.getAmount()); copy.setPeriodLabel(old.getPeriodLabel()); copy.setManual(true);
             fresh.add(copy);
@@ -269,12 +269,12 @@ public class BillingService {
         String what = text(description, "A description", DESCRIPTION_MAX, true);
         if (quantity == null || quantity.signum() <= 0 || quantity.compareTo(QUANTITY_MAX) > 0) throw new IllegalArgumentException("A quantity above zero.");
         if (unitPrice == null || unitPrice.abs().compareTo(UNIT_PRICE_MAX) > 0) throw new IllegalArgumentException("A unit price up to " + UNIT_PRICE_MAX.toPlainString() + " either way.");
-        InvoiceLine line = new InvoiceLine();
-        line.setInvoiceId(invoiceId); line.setDescription(what); line.setQuantity(quantity); line.setUnit("each"); line.setPer(1);
+        InvoiceLine line = new InvoiceLine().of(invoice);
+        line.setDescription(what); line.setQuantity(quantity); line.setUnit("each"); line.setPer(1);
         line.setUnitPrice(unitPrice); line.setAmount(quantity.multiply(unitPrice).setScale(5, RoundingMode.HALF_UP)); line.setManual(true);
-        line.setSort((int) this.lines.findByInvoiceIdOrderBySortAsc(invoiceId).size());
+        line.setSort(this.linesOf(invoice).size());
         line = this.lines.save(line);
-        this.total(invoice, this.lines.findByInvoiceIdOrderBySortAsc(invoiceId), this.accountFor(invoice.getTenantId()));
+        this.total(invoice, this.linesOf(invoice), this.accountFor(invoice.getTenantId()));
         this.invoices.save(invoice);
         return line;
     }
@@ -283,7 +283,7 @@ public class BillingService {
     public Invoice issue(Long invoiceId) throws IOException {
         Invoice invoice = this.mustBeDraft(invoiceId);
         BillingAccount account = this.accountFor(invoice.getTenantId());
-        List<InvoiceLine> invoiceLines = this.lines.findByInvoiceIdOrderBySortAsc(invoiceId);
+        List<InvoiceLine> invoiceLines = this.linesOf(invoice);
         this.total(invoice, invoiceLines, account);
         invoice.setStatus((invoice.getTotal().signum() == 0 ? InvoiceStatus.PAID : InvoiceStatus.ISSUED).value());
         invoice.setIssuedAt(now());
@@ -332,8 +332,8 @@ public class BillingService {
         note.setSubtotal(amount.negate()); note.setTaxRatePercent(BigDecimal.ZERO); note.setTax(BigDecimal.ZERO); note.setTotal(amount.negate()); note.setBalance(BigDecimal.ZERO);
         note.setNote(why); note.setIssuedAt(now()); note.setDateCreated(now()); note.setCreatedBy(TenantContext.getAppUserId());
         note = this.invoices.save(note);
-        InvoiceLine line = new InvoiceLine();
-        line.setInvoiceId(note.getInvoiceId()); line.setSort(0); line.setDescription("Credit against " + original.getNumber() + (reason == null ? "" : " - " + reason));
+        InvoiceLine line = new InvoiceLine().of(note);
+        line.setSort(0); line.setDescription("Credit against " + original.getNumber() + (reason == null ? "" : " - " + reason));
         line.setQuantity(BigDecimal.ONE); line.setUnit("each"); line.setPer(1); line.setUnitPrice(amount.negate()); line.setAmount(amount.negate()); line.setManual(true);
         this.lines.save(line);
         byte[] pdf = BillingPdf.render(this.invoiceDoc(note, Arrays.asList(line), account));
@@ -550,7 +550,8 @@ public class BillingService {
     }
 
     public Optional<Invoice> byNumber(String number) { return this.invoices.findByNumber(number); }
-    public List<InvoiceLine> linesOf(Long invoiceId) { return this.lines.findByInvoiceIdOrderBySortAsc(invoiceId); }
+    /** An invoice's lines in the order they print: by its id and its own tenant, so an id alone reaches nothing (MIG-47). */
+    public List<InvoiceLine> linesOf(Invoice invoice) { return this.lines.findByInvoiceIdAndTenantIdOrderBySortAsc(invoice.getInvoiceId(), invoice.getTenantId()); }
     /**
      * The bill in one glance, for a profile card or a dashboard row: this month's metered cost,
      * what is owed and by when, slips waiting. One workspace, or every workspace for the platform.

@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -83,6 +84,51 @@ public class TenantFilterDeclarationTest {
         // PipelineServiceImpl never calls TenantFilterHelper.enableIfNeeded -- but it should still
         // describe the rule the repository's own @Query methods actually enforce.
         assertEquals("tenant_id = :tenantId", conditionOf(Pipeline.class));
+    }
+
+    /**
+     * MIG-47 / MIG-86: invoice_line was listed among the filtered entities in the tenancy analysis while
+     * it imported Filter, FilterDef and ParamDef and applied none of them, and had no tenant_id -- a Billing
+     * service written from that list could drop the join to Invoice and leak another workspace's lines.
+     * It now carries its invoice's tenant_id (V59, held by a composite foreign key) and the filter.
+     */
+    @Test
+    void anInvoiceLineBelongsToExactlyOneTenant() {
+        assertEquals("tenant_id = :tenantId", conditionOf(InvoiceLine.class));
+    }
+
+    /**
+     * The whole list, so a count quoted in a document can be checked against the code rather than the
+     * other way round. 24 in the Phase 1 analysis; StorageConnection (MIG-68) and DocumentConverterTask
+     * (Media) have left process since, and InvoiceLine joined (MIG-47): 23.
+     */
+    @Test
+    void theFilteredEntitiesAreExactlyThese() throws Exception {
+        List<String> filtered = new ArrayList<>();
+        for (File source : pojoSources()) {
+            String text = new String(Files.readAllBytes(source.toPath()), StandardCharsets.UTF_8);
+            if (text.contains("@Filter(name = \"tenantFilter\"")) {
+                filtered.add(source.getName().replace(".java", ""));
+            }
+        }
+        Collections.sort(filtered);
+        assertEquals(Arrays.asList("AiAgent", "AiModelConnection", "AiPrompt", "AiPromptRun", "AnalyticsAnalysis", "AnalyticsDashboard",
+            "AnalyticsDashboardWidget", "AnalyticsDataset", "AnalyticsQuery", "AnalyticsQueryRun", "BenchmarkResult", "BillingAccount",
+            "BillingDocument", "Invoice", "InvoiceLine", "KafkaConnectionProfile", "PageAccessProfile", "Payment", "Pipeline", "SourceJob",
+            "SourceTask", "SourceTaskType", "TenantTaskTypeKafkaRoute"), filtered);
+    }
+
+    /** An entity that imports the filter annotations without applying them reads as filtered and is not (DEF-165). */
+    @Test
+    void noEntityImportsTheFilterWithoutApplyingIt() throws Exception {
+        List<String> misleading = new ArrayList<>();
+        for (File source : pojoSources()) {
+            String text = new String(Files.readAllBytes(source.toPath()), StandardCharsets.UTF_8);
+            if (text.contains("import org.hibernate.annotations.Filter;") && !text.contains("@Filter(")) {
+                misleading.add(source.getName().replace(".java", ""));
+            }
+        }
+        assertTrue(misleading.isEmpty(), "imports Filter but applies none: " + misleading);
     }
 
     @Test

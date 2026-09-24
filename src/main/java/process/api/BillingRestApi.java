@@ -173,7 +173,7 @@ public class BillingRestApi {
         if (!found.isPresent() || !this.mayTouch(found.get().getTenantId())) return this.refused("No such invoice.");
         Invoice i = found.get();
         Map<String, Object> out = this.invoiceRow(i, this.billing.tenantNames());
-        out.put("lines", this.billing.linesOf(i.getInvoiceId()));
+        out.put("lines", this.billing.linesOf(i));
         List<Payment> paymentRows = this.billing.paymentsOf(i.getInvoiceId());
         Set<Long> ids = new HashSet<>();
         for (Payment p : paymentRows) { if (p.getSubmittedBy() != null) ids.add(p.getSubmittedBy()); if (p.getVerifiedBy() != null) ids.add(p.getVerifiedBy()); }

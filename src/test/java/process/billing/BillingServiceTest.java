@@ -1,5 +1,6 @@
 package process.billing;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -110,8 +111,9 @@ class BillingServiceTest {
         InvoiceLineRepository lines = mock(InvoiceLineRepository.class);
         lenient().when(lines.save(any())).thenAnswer(inv -> { InvoiceLine l = inv.getArgument(0); if (l.getInvoiceLineId() == null) l.setInvoiceLineId(this.ids.incrementAndGet()); this.lineRows.put(l.getInvoiceLineId(), l); return l; });
         lenient().when(lines.saveAll(any())).thenAnswer(inv -> { for (InvoiceLine l : inv.<List<InvoiceLine>>getArgument(0)) { if (l.getInvoiceLineId() == null) l.setInvoiceLineId(this.ids.incrementAndGet()); this.lineRows.put(l.getInvoiceLineId(), l); } return inv.getArgument(0); });
-        lenient().when(lines.findByInvoiceIdOrderBySortAsc(anyLong())).thenAnswer(inv -> { List<InvoiceLine> out = new ArrayList<>(); for (InvoiceLine l : this.lineRows.values()) if (l.getInvoiceId().equals(inv.getArgument(0))) out.add(l); return out; });
-        lenient().doAnswer(inv -> { this.lineRows.values().removeIf(l -> l.getInvoiceId().equals(inv.getArgument(0))); return null; }).when(lines).deleteByInvoiceId(anyLong());
+        // By invoice id AND tenant, as the database answers them (MIG-47).
+        lenient().when(lines.findByInvoiceIdAndTenantIdOrderBySortAsc(anyLong(), anyLong())).thenAnswer(inv -> { List<InvoiceLine> out = new ArrayList<>(); for (InvoiceLine l : this.lineRows.values()) if (l.getInvoiceId().equals(inv.getArgument(0)) && inv.getArgument(1).equals(l.getTenantId())) out.add(l); return out; });
+        lenient().doAnswer(inv -> { this.lineRows.values().removeIf(l -> l.getInvoiceId().equals(inv.getArgument(0)) && inv.getArgument(1).equals(l.getTenantId())); return null; }).when(lines).deleteByInvoiceIdAndTenantId(anyLong(), anyLong());
 
         PaymentRepository payments = mock(PaymentRepository.class);
         lenient().when(payments.save(any())).thenAnswer(inv -> { Payment p = inv.getArgument(0); if (p.getPaymentId() == null) p.setPaymentId(this.ids.incrementAndGet()); this.paymentRows.put(p.getPaymentId(), p); return p; });
@@ -155,19 +157,19 @@ class BillingServiceTest {
         Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
         assertThat(draft.getNumber()).isEqualTo("INV-2026-09-0001");
         assertThat(draft.getStatus()).isEqualTo(InvoiceStatus.DRAFT.value());
-        assertThat(this.service.linesOf(draft.getInvoiceId())).extracting(InvoiceLine::getMeter).containsExactly("seats.user_days", "storage.bytes.deleted");
+        assertThat(this.service.linesOf(draft)).extracting(InvoiceLine::getMeter).containsExactly("seats.user_days", "storage.bytes.deleted");
         assertThat(draft.getSubtotal()).isEqualByComparingTo("46.58");
         assertThat(draft.getTax()).isEqualByComparingTo("0");
         assertThat(draft.getTotal()).isEqualByComparingTo("46.58");
         assertThat(draft.getRateCardVersion()).isEqualTo(1);
         assertThat(draft.getRateCardName()).isEqualTo("Standard");
         // The calculation the meter applied is frozen with the line: allowance, billable, tier bands.
-        InvoiceLine seats = this.service.linesOf(draft.getInvoiceId()).get(0);
+        InvoiceLine seats = this.service.linesOf(draft).get(0);
         assertThat(seats.getIncludedQuantity()).isEqualByComparingTo("10");
         assertThat(seats.getBillableQuantity()).isEqualByComparingTo("130");
         assertThat(BillingService.tierBands(seats)).hasSize(2);
         assertThat(BillingService.tierBands(seats).get(1).get("to")).isNull();
-        assertThat(BillingService.tierBands(this.service.linesOf(draft.getInvoiceId()).get(1))).isEmpty();
+        assertThat(BillingService.tierBands(this.service.linesOf(draft).get(1))).isEmpty();
 
         // A tax number alone is not tax; a number and a rate are.
         this.account.setTaxId("GB123456789");
@@ -185,7 +187,7 @@ class BillingServiceTest {
         Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
         this.service.addManualLine(draft.getInvoiceId(), "Onboarding support (2 h)", new BigDecimal("2"), new BigDecimal("3.02"));
         Invoice redrafted = this.service.draft(TENANT, YearMonth.of(2026, 9));
-        assertThat(this.service.linesOf(redrafted.getInvoiceId())).extracting(InvoiceLine::getDescription).contains("Onboarding support (2 h)");
+        assertThat(this.service.linesOf(redrafted)).extracting(InvoiceLine::getDescription).contains("Onboarding support (2 h)");
         assertThat(redrafted.getTotal()).isEqualByComparingTo("52.62");
 
         Invoice issued = this.service.issue(redrafted.getInvoiceId());
@@ -543,11 +545,11 @@ class BillingServiceTest {
         this.meterAnswers(row("storage.ops.read", "3000", "0.012"));
         Invoice invoice = this.service.draft(TENANT, YearMonth.of(2026, 9));
 
-        BillingPdf.Doc doc = this.service.invoiceDoc(invoice, this.service.linesOf(invoice.getInvoiceId()), this.account);
+        BillingPdf.Doc doc = this.service.invoiceDoc(invoice, this.service.linesOf(invoice), this.account);
         assertThat(doc.totals).extracting(t -> t[0] + " / " + t[1]).contains("Tax / not applied");
 
         invoice.setKind(InvoiceKind.CREDIT_NOTE.value());
-        BillingPdf.Doc credit = this.service.invoiceDoc(invoice, this.service.linesOf(invoice.getInvoiceId()), this.account);
+        BillingPdf.Doc credit = this.service.invoiceDoc(invoice, this.service.linesOf(invoice), this.account);
         assertThat(credit.totals).extracting(t -> t[0]).doesNotContain("Tax");
     }
 
@@ -562,9 +564,9 @@ class BillingServiceTest {
 
         Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
 
-        assertThat(this.service.linesOf(draft.getInvoiceId())).extracting(InvoiceLine::getMeter)
+        assertThat(this.service.linesOf(draft)).extracting(InvoiceLine::getMeter)
             .containsExactly("storage.bytes.read", "pipeline.runs");
-        assertThat(this.service.linesOf(draft.getInvoiceId()).get(0).getAmount()).isEqualByComparingTo("0");
+        assertThat(this.service.linesOf(draft).get(0).getAmount()).isEqualByComparingTo("0");
     }
 
 
@@ -618,5 +620,40 @@ class BillingServiceTest {
         assertThat(second.getNumber()).isEqualTo("STM-" + TENANT + "-2026-01-01-2026-12-31-2");
         assertThat(BillingNumber.isValid(second.getNumber())).isTrue();
         assertThat(BillingNumber.isValid("STM-" + TENANT + "-2026-01-01-2026-12-31")).as("one prepared before numbering").isTrue();
+    }
+
+    // ---- invoice lines carry their invoice's tenant (MIG-47) ---------------------------------
+
+    @Test
+    void everyLineCarriesItsInvoicesTenant() throws Exception {
+        Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
+        this.service.addManualLine(draft.getInvoiceId(), "Onboarding", new BigDecimal("1"), new BigDecimal("50"));
+        Invoice issued = this.service.issue(draft.getInvoiceId());
+        this.service.creditNote(issued.getInvoiceId(), new BigDecimal("5.00"), "goodwill");
+
+        assertThat(this.lineRows.values()).isNotEmpty().allSatisfy(line -> assertThat(line.getTenantId()).isEqualTo(TENANT));
+    }
+
+    /** A line stored under another workspace for this invoice id is not this invoice's line -- the finder names the tenant. */
+    @Test
+    void anInvoicesLinesAreReadUnderItsOwnTenantOnly() {
+        Invoice draft = this.service.draft(TENANT, YearMonth.of(2026, 9));
+        InvoiceLine stray = new InvoiceLine();
+        stray.setInvoiceLineId(77_777L); stray.setInvoiceId(draft.getInvoiceId()); stray.setTenantId(TENANT + 1); stray.setDescription("another workspace's");
+        this.lineRows.put(stray.getInvoiceLineId(), stray);
+
+        assertThat(this.service.linesOf(draft)).isNotEmpty().extracting(InvoiceLine::getDescription).doesNotContain("another workspace's");
+    }
+
+    /** What a line says on the bill is unchanged: its tenant is kept, not printed or sent. */
+    @Test
+    void aLinesJsonIsWhatItWasBeforeItHadATenant() throws Exception {
+        InvoiceLine line = new InvoiceLine();
+        line.setInvoiceLineId(1L); line.setInvoiceId(2L); line.setTenantId(TENANT); line.setSort(0); line.setDescription("Seats");
+        line.setQuantity(BigDecimal.ONE); line.setUnit("user-day"); line.setPer(1); line.setUnitPrice(BigDecimal.ONE); line.setAmount(BigDecimal.ONE); line.setManual(false);
+
+        String json = new ObjectMapper().writeValueAsString(line);
+
+        assertThat(json).doesNotContain("tenantId").contains("\"invoiceId\":2", "\"description\":\"Seats\"");
     }
 }

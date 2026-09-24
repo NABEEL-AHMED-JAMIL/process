@@ -11,9 +11,13 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
+/**
+ * Lines by invoice id AND tenant, never by invoice id alone (MIG-47): the tenant filter only runs where a
+ * session enabled it, and the invoice id is whatever the caller sent. InvoiceLineRepositoryGuardTest holds it.
+ */
 public interface InvoiceLineRepository extends JpaRepository<InvoiceLine, Long> {
-    List<InvoiceLine> findByInvoiceIdOrderBySortAsc(Long invoiceId);
+    List<InvoiceLine> findByInvoiceIdAndTenantIdOrderBySortAsc(Long invoiceId, Long tenantId);
     @Modifying
-    @Query("delete from InvoiceLine l where l.invoiceId = :invoiceId")
-    void deleteByInvoiceId(@Param("invoiceId") Long invoiceId);
+    @Query("delete from InvoiceLine l where l.invoiceId = :invoiceId and l.tenantId = :tenantId")
+    void deleteByInvoiceIdAndTenantId(@Param("invoiceId") Long invoiceId, @Param("tenantId") Long tenantId);
 }
