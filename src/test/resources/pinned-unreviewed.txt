@@ -15,4 +15,6 @@
 #
 # Run the pins alone: mvn -o test -Dgroups=pinned-unreviewed
 #
-# count: 0
+# count: 1
+
+process.model.service.impl.JobStatusTransitionTableTest#aJobThatNeverRanIsRefusedByANullPointerNotByTheTable | MIG-139 | a callback on a job whose running status is null throws NullPointerException from isValidStatusTransition's switch; NotifyResetApi answers the worker 500, not a readable refusal
