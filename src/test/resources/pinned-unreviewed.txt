@@ -15,6 +15,7 @@
 #
 # Run the pins alone: mvn -o test -Dgroups=pinned-unreviewed
 #
-# count: 1
+# count: 2
 
 process.model.service.impl.JobStatusTransitionTableTest#aJobThatNeverRanIsRefusedByANullPointerNotByTheTable | MIG-139 | a callback on a job whose running status is null throws NullPointerException from isValidStatusTransition's switch; NotifyResetApi answers the worker 500, not a readable refusal
+process.security.RetireExtendsTokenExpiryTest#aTokenRetiredOnARunRequeuedForRetryStillOpensCallbacksUntilTheRetryIsDispatched | MIG-138 | NotifyResetApi retires the token of a Failed that the service answered with a retry; the run is back in Queue (not OVER), so the failed attempt's token keeps callback access (addLogs, addLogsBatch) for 24 more hours until the retry's dispatch re-mints it
