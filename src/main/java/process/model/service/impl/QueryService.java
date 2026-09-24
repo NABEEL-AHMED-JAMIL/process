@@ -256,6 +256,22 @@ public class QueryService {
         return String.format(" and %s.tenant_id = %d ", tableAlias, TenantContext.getTenantId());
     }
 
+    /**
+     * A tenant user's view of the people list is their own row (MIG-46, DEF-128). The list names every
+     * colleague with their failed-run counts, and the lowest role has no business profiling colleagues;
+     * administrators keep the whole workspace, platform administrators every workspace. No user id is
+     * nobody, and nobody sees nothing.
+     */
+    private String ownRowClause(String tableAlias) {
+        if (!"TENANT_USER".equals(TenantContext.getUserRole())) {
+            return "";
+        }
+        if (ProcessUtil.isNull(TenantContext.getAppUserId())) {
+            return " and 1 = 0 ";
+        }
+        return String.format(" and %s.app_user_id = %d ", tableAlias, TenantContext.getAppUserId());
+    }
+
     public String jobStatusStatistics(String startDate, String endDate) {
 
         String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
@@ -361,14 +377,14 @@ public class QueryService {
             + "count(distinct sj.task_detail_id) as task_count, "
             + "count(jq.job_queue_id) as run_count, "
             + "count(jq.job_queue_id) filter (where jq.job_status = 'Completed') as completed_count, "
-            + "count(jq.job_queue_id) filter (where jq.job_status = 'Failed') as failed_count "
+            + "count(jq.job_queue_id) filter (where jq.job_status = 'Failed') as failed_count, u.tenant_id "
             + "from app_user u "
             + "left join source_job sj on sj.assigned_user_id = u.app_user_id "
             + "and sj.job_status in ('Active','Inactive') "
             + "left join job_queue jq on jq.job_id = sj.job_id " + dateFilter
-            + "where u.status in ('Active','Inactive') " + this.tenantClause("u")
+            + "where u.status in ('Active','Inactive') " + this.tenantClause("u") + this.ownRowClause("u")
             + "group by u.app_user_id, u.username, u.full_name, u.user_role, u.status, "
-            + "u.avatar_bucket, u.avatar_key "
+            + "u.avatar_bucket, u.avatar_key, u.tenant_id "
             + "order by job_count desc, u.full_name asc";
     }
 
@@ -426,14 +442,15 @@ public class QueryService {
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'SKIP' THEN 1 END) AS skip,\n" +
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'INTERRUPT' THEN 1 END) AS interrupt,\n" +
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'MISSED' THEN 1 END) AS missed,\n" +
-                "        COUNT(*) AS total\n" +
+                "        COUNT(*) AS total,\n" +
+                "        source_job.tenant_id\n" +
                 "    FROM job_queue\n" +
                 "    INNER JOIN source_job ON source_job.job_id = job_queue.job_id\n" +
                 "    WHERE DATE(job_queue.date_created) = '%s'\n" +
                 "      AND EXTRACT(HOUR FROM job_queue.date_created) = %d\n" +
                 "      AND UPPER(source_job.job_status) IN ('ACTIVE','INACTIVE')\n" +
                 "      " + tenantFilter + "\n" +
-                "    GROUP BY job_queue.job_id, source_job.job_name\n" +
+                "    GROUP BY job_queue.job_id, source_job.job_name, source_job.tenant_id\n" +
                 "\n" +
                 "    UNION ALL\n" +
                 "\n" +
@@ -449,7 +466,8 @@ public class QueryService {
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'SKIP' THEN 1 END),\n" +
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'INTERRUPT' THEN 1 END),\n" +
                 "        COUNT(CASE WHEN UPPER(job_queue.job_status) = 'MISSED' THEN 1 END),\n" +
-                "        COUNT(*)\n" +
+                "        COUNT(*),\n" +
+                "        NULL AS tenant_id\n" +
                 "    FROM job_queue\n" +
                 "    INNER JOIN source_job ON source_job.job_id = job_queue.job_id\n" +
                 "    WHERE DATE(job_queue.date_created) = '%s'\n" +

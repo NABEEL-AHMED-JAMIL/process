@@ -59,6 +59,10 @@ public class DashboardServiceImpl implements DashboardService {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
+            jobStatusStatistic.forEach(tile -> {
+                tile.setTenantId(scopeTenant());
+                tile.setAllWorkspaces(TenantContext.isPlatformAdmin());
+            });
             responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
         }
         return responseDto;
@@ -86,6 +90,7 @@ public class DashboardServiceImpl implements DashboardService {
                 dto.setRunCount(asInt(obj[++index]));
                 dto.setCompletedCount(asInt(obj[++index]));
                 dto.setFailedCount(asInt(obj[++index]));
+                dto.setTenantId(obj.length > ++index ? asLong(obj[index]) : null);
                 stats.add(dto);
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", stats);
@@ -107,6 +112,14 @@ public class DashboardServiceImpl implements DashboardService {
         return value == null ? null : Long.valueOf(value.toString());
     }
 
+    /**
+     * Whose numbers a total is (MIG-46, DEF-128): the caller's workspace, or none at all for a
+     * platform administrator, whose totals span every workspace and say so with allWorkspaces.
+     */
+    private static Long scopeTenant() {
+        return TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
+    }
+
     @Override
     public ResponseDto jobRunningStatistics(String startDate, String endDate) throws Exception {
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No data found.", new ArrayList<>());
@@ -117,6 +130,10 @@ public class DashboardServiceImpl implements DashboardService {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
+            jobStatusStatistic.forEach(tile -> {
+                tile.setTenantId(scopeTenant());
+                tile.setAllWorkspaces(TenantContext.isPlatformAdmin());
+            });
             responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
         }
         return responseDto;
@@ -132,6 +149,10 @@ public class DashboardServiceImpl implements DashboardService {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(obj[index].toString().trim(), Integer.valueOf(obj[++index].toString())));
             }
+            jobStatusStatistic.forEach(tile -> {
+                tile.setTenantId(scopeTenant());
+                tile.setAllWorkspaces(TenantContext.isPlatformAdmin());
+            });
             responseDto = new ResponseDto(SUCCESS, "Data found.", jobStatusStatistic);
         }
         return responseDto;
@@ -149,6 +170,10 @@ public class DashboardServiceImpl implements DashboardService {
                     Double.valueOf(obj[++index].toString()).longValue(), obj[++index].toString().trim(),
                     Double.valueOf(obj[++index].toString()).longValue()));
             }
+            weeklyJobStatistics.forEach(cell -> {
+                cell.setTenantId(scopeTenant());
+                cell.setAllWorkspaces(TenantContext.isPlatformAdmin());
+            });
             responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
         }
         return responseDto;
@@ -174,10 +199,15 @@ public class DashboardServiceImpl implements DashboardService {
                 Long interrupt = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
                 Long missed = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
                 Long total = obj[++i] != null ? Long.valueOf(obj[i].toString()) : 0L;
-                weeklyJobStatistics.add(
-                    new WeeklyHrJobDimensionStatisticsDto(jobId, jobName,
-                        queue, start, running, failed, completed, stop, skip, interrupt, missed, total)
-                );
+                Long tenantId = obj.length > ++i && obj[i] != null ? Long.valueOf(obj[i].toString()) : null;
+                WeeklyHrJobDimensionStatisticsDto row = new WeeklyHrJobDimensionStatisticsDto(jobId, jobName,
+                    queue, start, running, failed, completed, stop, skip, interrupt, missed, total);
+                // A job names its own workspace. The TOTAL row adds up the caller's scope: one
+                // workspace, or every workspace for a platform administrator.
+                boolean totalRow = jobId == null;
+                row.setTenantId(totalRow ? scopeTenant() : tenantId);
+                row.setAllWorkspaces(totalRow && TenantContext.isPlatformAdmin());
+                weeklyJobStatistics.add(row);
             }
             responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
         }

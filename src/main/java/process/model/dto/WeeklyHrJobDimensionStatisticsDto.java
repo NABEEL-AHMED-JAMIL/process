@@ -23,6 +23,8 @@ public class WeeklyHrJobDimensionStatisticsDto {
     private Long interrupt;
     private Long missed;
     private Long total;
+    private Long tenantId;
+    private Boolean allWorkspaces;
 
     public WeeklyHrJobDimensionStatisticsDto() {}
 
@@ -152,6 +154,24 @@ public class WeeklyHrJobDimensionStatisticsDto {
 
     public void setTotal(Long total) {
         this.total = total;
+    }
+
+    /** The workspace this job is in; absent on the TOTAL row of a platform administrator (MIG-46). */
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    /** True on a TOTAL row that adds up every workspace (MIG-46). */
+    public Boolean getAllWorkspaces() {
+        return allWorkspaces;
+    }
+
+    public void setAllWorkspaces(Boolean allWorkspaces) {
+        this.allWorkspaces = allWorkspaces;
     }
 
     @Override

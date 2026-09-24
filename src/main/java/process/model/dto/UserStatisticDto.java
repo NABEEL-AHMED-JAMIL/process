@@ -24,6 +24,7 @@ public class UserStatisticDto {
     private Integer runCount;
     private Integer completedCount;
     private Integer failedCount;
+    private Long tenantId;
 
     public UserStatisticDto() {}
 
@@ -65,4 +66,13 @@ public class UserStatisticDto {
 
     public Integer getFailedCount() { return failedCount; }
     public void setFailedCount(Integer failedCount) { this.failedCount = failedCount; }
+
+    /** The workspace this person belongs to (MIG-46). */
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
 }
