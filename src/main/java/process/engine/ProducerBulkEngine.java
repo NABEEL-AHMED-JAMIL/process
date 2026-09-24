@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -106,7 +107,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
     public void addManualJobInQueue(SourceJob sourceJob) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
-            LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+            BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
         this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
@@ -162,7 +163,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      */
     public void reconcileStalledRuns() {
         try {
-            LocalDateTime cutoff = LocalDateTime.now().minusMinutes(STALLED_AFTER_MINUTES);
+            LocalDateTime cutoff = BusinessTime.now().minusMinutes(STALLED_AFTER_MINUTES);
             // Two ways a run is known to be over without its worker saying so: six hours of silence, or
             // (MIG-63) a report from its own worker refused because the token had expired -- proof the
             // worker is alive and can no longer be heard, so there is no reason to wait out the six
@@ -189,7 +190,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     String reported = "log".equals(jobQueue.getRefusedCallbackStatus())
                         || jobQueue.getRefusedCallbackStatus() == null ? "a log line" : jobQueue.getRefusedCallbackStatus();
                     jobQueue.setJobStatus(JobStatus.Interrupt);
-                    jobQueue.setEndTime(LocalDateTime.now());
+                    jobQueue.setEndTime(BusinessTime.now());
                     jobQueue.setJobStatusMessage(refused
                         ? String.format("Job %s's worker reported %s at %s, but its callback token had expired, "
                             + "so the report was refused. Closed as interrupted -- check the output before "
@@ -211,7 +212,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                         ? String.format("Run closed automatically: no update from the worker since %s.",
                             jobQueue.getStartTime())
                         : String.format("Run closed automatically: queued at %s and never picked up.",
-                            jobQueue.getDateCreated()));
+                            BusinessTime.legacyText(jobQueue.getDateCreated())));
                     // The job carries its own copy of the running status, and that is what the
                     // console shows. Closing the queue row alone leaves the job reading Start for
                     // ever -- the same symptom, one table across. Only clear it once the job has
@@ -247,7 +248,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      */
     public void addJobInQueue() {
         try {
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = BusinessTime.now();
             // The slots this pass has given up on; -1 always, because NOT IN () is not SQL.
             List<Long> passed = new ArrayList<>(Collections.singletonList(-1L));
             Set<Long> raced = new HashSet<>();
@@ -300,7 +301,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         // announcement below reads that status to decide what to say -- see skipManualJobInQueue.
         boolean jobStatusMoved;
         if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
-            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
+            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), BusinessTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
             Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(scheduler.getJobId());
             if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
@@ -310,7 +311,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         } else {
             // The run row BEFORE the job is marked Queue: should the index refuse it, nothing of this
             // attempt -- the job's status included -- survives the rollback.
-            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
             this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
             this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
@@ -360,7 +361,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
     public void startJobInCurrentTimeSlot() {
         try {
             logger.info("runJobInCurrentTimeSlot --> FETCH JobQueue of current day STARTED ");
-            List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(this.resolveQueueFetchLimit(), LocalDateTime.now());
+            List<JobQueue> jobQueues = this.transactionService.findAllJobForTodayWithLimit(this.resolveQueueFetchLimit(), BusinessTime.now());
             logger.info("runJobInCurrentTimeSlot --> FETCHED JobQueue of current day: size {} ", jobQueues.size());
             if (!jobQueues.isEmpty()) {
                 long deadline = this.clock.getAsLong() + DispatchTiming.DISPATCH_BUDGET_MS;

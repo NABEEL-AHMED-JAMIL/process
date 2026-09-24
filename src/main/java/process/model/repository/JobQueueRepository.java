@@ -7,7 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.JobQueue;
-import java.time.LocalDateTime;
+import java.sql.Timestamp;
 import java.util.List;
 
 /**
@@ -20,9 +20,13 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     // whatever the planner returns, and a job can sit behind newer ones indefinitely.
     // next_attempt_at is how a backoff is enforced: a run awaiting retry sits in Queue like any
     // other, and is simply not eligible until the moment written on it. The cutoff arrives as a
-    // parameter rather than being read here as now(), because the database's now() is UTC while
-    // the application writes America/Chicago -- comparing the column against the database's clock
-    // would make every backoff either instantly elapsed or five hours long, depending on sign.
+    // parameter rather than being read here as now(). It used to be because the database's now() was
+    // UTC while the columns held Chicago wall-clock; since V100 both are instants and that reason is
+    // gone (MIG-163), but a paged pass still needs one cutoff for every page, so it stays a parameter.
+    //
+    // Every time parameter in this repository is a Timestamp -- an instant -- made from the application's
+    // Chicago wall-clock by TransactionServiceImpl (BusinessTime.timestampOf). A LocalDateTime here would be
+    // bound through the JVM's zone.
     //
     // prepared_at: the dispatcher takes only runs the pre-dispatch phase has finished with (MIG-134),
     // so no model call and no configuration check is left to happen inside the dispatch lock.
@@ -30,7 +34,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "and prepared_at is not null "
         + "and (next_attempt_at is null or next_attempt_at <= ?2) "
         + "order by job_queue_id asc limit ?1 ", nativeQuery = true)
-    public List<JobQueue> findAllJobForTodayWithLimit(Long limit, LocalDateTime eligibleAt);
+    public List<JobQueue> findAllJobForTodayWithLimit(Long limit, Timestamp eligibleAt);
 
     /**
      * Runs waiting for the pre-dispatch phase, for the caller's transaction (MIG-134): queued, not sent,
@@ -42,12 +46,12 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "and (next_attempt_at is null or next_attempt_at <= :now) "
         + "and (prepare_lease_until is null or prepare_lease_until < :now) "
         + "order by job_queue_id asc limit :limit for update skip locked", nativeQuery = true)
-    List<Long> findRunsToPrepare(@Param("now") LocalDateTime now, @Param("limit") int limit);
+    List<Long> findRunsToPrepare(@Param("now") Timestamp now, @Param("limit") int limit);
 
     @Transactional
     @Modifying
     @Query(value = "update job_queue set prepare_lease_until = :until where job_queue_id in (:ids)", nativeQuery = true)
-    int leaseForPreparation(@Param("ids") List<Long> ids, @Param("until") LocalDateTime until);
+    int leaseForPreparation(@Param("ids") List<Long> ids, @Param("until") Timestamp until);
 
     /**
      * Hands a prepared run to the dispatcher. Only while it is still queued and unsent: a run closed or
@@ -59,7 +63,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "update job_queue set prepared_at = :at, dispatch_payload = :payload, prepare_lease_until = null, "
         + "correlation_id = COALESCE(correlation_id, :correlationId) "
         + "where job_queue_id = :id and UPPER(job_status) = 'QUEUE' and job_send = false", nativeQuery = true)
-    int markPrepared(@Param("id") Long jobQueueId, @Param("payload") String payload, @Param("at") LocalDateTime at,
+    int markPrepared(@Param("id") Long jobQueueId, @Param("payload") String payload, @Param("at") Timestamp at,
         @Param("correlationId") String correlationId);
 
     /** Core's own dials (V88, MIG-136); null when the setting is missing. */
@@ -101,7 +105,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "and COALESCE(start_time, date_created) is not null "
         + "and COALESCE(start_time, date_created) < ?1 "
         + "order by job_queue_id asc", nativeQuery = true)
-    public List<JobQueue> findStalledRuns(LocalDateTime startedBefore);
+    public List<JobQueue> findStalledRuns(Timestamp startedBefore);
 
     /**
      * Notes on a run still in flight that its own worker's report was refused for an expired token
@@ -111,7 +115,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Modifying
     @Query(value = "update job_queue set refused_callback_at = ?2, refused_callback_status = ?3 "
         + "where job_queue_id = ?1 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
-    int noteRefusedCallback(Long jobQueueId, LocalDateTime refusedAt, String reportedStatus);
+    int noteRefusedCallback(Long jobQueueId, Timestamp refusedAt, String reportedStatus);
 
     /** Runs still in flight whose worker is known to be unable to report: the stall sweep closes them now. */
     @Query(value = "select job_queue.* from job_queue "
@@ -157,6 +161,6 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "count(*) filter (where UPPER(q.job_status) = 'FAILED') as failed_count "
         + "from job_queue q join source_job j on j.job_id = q.job_id "
         + "where j.assigned_user_id = ?1 and j.job_status <> 'Delete' and q.start_time >= ?2", nativeQuery = true)
-    List<Object[]> countRecentRunsForAssignee(Long appUserId, LocalDateTime since);
+    List<Object[]> countRecentRunsForAssignee(Long appUserId, Timestamp since);
 
 }

@@ -18,6 +18,13 @@
 
     <properties>
         <!--
+          The zone the tests' JVM runs in: UTC, as the containers do (MIG-163). Nothing in process may depend
+          on it (ModelApplication no longer tells the JVM it lives in Chicago), and a suite run on a laptop
+          in Chicago would hide exactly the code that still does. Pass test.timezone=Asia/Tokyo to rerun it
+          anywhere else.
+        -->
+        <test.timezone>UTC</test.timezone>
+        <!--
           Bytecode level, not the JDK you build or run on: any JDK from 17 up compiles and runs
           this. It has to stay at 1.8 while the parent is Spring Boot 2.3.2, whose bundled ASM
           reads class files up to Java 14. At 17 the build compiled cleanly and then failed at
@@ -265,6 +272,13 @@
               message when there is none, which is the intended outcome: silently compiling
               against the wrong JDK is what this exists to stop.
             -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-Duser.timezone=${test.timezone}</argLine>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-toolchains-plugin</artifactId>

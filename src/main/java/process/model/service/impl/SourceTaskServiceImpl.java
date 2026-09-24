@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.apache.poi.ss.usermodel.Row;
+import process.util.BusinessTime;
 import process.util.UserNameResolver;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -271,7 +272,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             ? sourceTaskDto.getTaskStatus() : Status.Active);
         sourceTask.setSourceTaskType(sourceTaskType.get());
         this.applyDerivedLocation(sourceTask);
-        sourceTask.setSourceTaskPayload(this.tagRowsFor(sourceTaskDto));
+        sourceTask.setSourceTaskPayload(this.tagRowsFor(sourceTaskDto, sourceTask.getTenantId()));
         this.sourceTaskRepository.save(sourceTask);
         return new ResponseDto(SUCCESS, String.format("SourceTask successfully saved with ID %d.", sourceTask.getTaskDetailId()));
     }
@@ -339,7 +340,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             // so the editor then showed a configuration the task did not have.
             if (!ProcessUtil.isNull(sourceTaskDto.getXmlTagsInfo())
                 || !ProcessUtil.isNull(sourceTaskDto.getTaskPayload())) {
-                List<SourceTaskPayload> rows = this.tagRowsFor(sourceTaskDto);
+                List<SourceTaskPayload> rows = this.tagRowsFor(sourceTaskDto, sourceTask.get().getTenantId());
                 // Mutated in place rather than replaced: the collection is orphan-removal managed,
                 // and handing Hibernate a new instance throws "A collection with cascade
                 // all-delete-orphan was no longer referenced".
@@ -563,7 +564,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setDateCreated(Timestamp.valueOf(String.valueOf(obj[index])));
+                        sourceJobDto.setDateCreated((Timestamp) obj[index]);
                     }
                     sourceJobDtoList.add(sourceJobDto);
                 }
@@ -587,7 +588,11 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * The XML is the source of truth and the rows are derived from it whenever they were not
      * supplied, so the two cannot disagree by omission.
      */
-    private List<SourceTaskPayload> tagRowsFor(SourceTaskDto sourceTaskDto) {
+    /**
+     * The tag rows carry their task's tenant from the start (V102): Hibernate inserts them before it points them at the
+     * task, so the database cannot take the tenant from the task for them.
+     */
+    private List<SourceTaskPayload> tagRowsFor(SourceTaskDto sourceTaskDto, Long tenantId) {
         List<ConfigurationMakerRequest.TagInfo> tags = sourceTaskDto.getXmlTagsInfo();
         if (ProcessUtil.isNull(tags) || tags.isEmpty()) {
             tags = XmlOutTagInfoUtil.parseXmlToTags(sourceTaskDto.getTaskPayload());
@@ -597,6 +602,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             sourceTaskPayload.setTagKey(tagInfo.getTagKey());
             sourceTaskPayload.setTagParent(tagInfo.getTagParent());
             sourceTaskPayload.setTagValue(tagInfo.getTagValue());
+            sourceTaskPayload.setTenantId(tenantId);
             return sourceTaskPayload;
         }).collect(Collectors.toList());
     }
@@ -809,6 +815,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     sourceTaskPayload.setTagKey(tagInfo.getTagKey());
                     sourceTaskPayload.setTagParent(tagInfo.getTagParent());
                     sourceTaskPayload.setTagValue(tagInfo.getTagValue());
+                    sourceTaskPayload.setTenantId(sourceTask.getTenantId());
                     return sourceTaskPayload;
                 }).collect(Collectors.toList()));
             this.sourceTaskRepository.save(sourceTask);

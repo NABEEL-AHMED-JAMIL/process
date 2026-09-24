@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,7 +55,7 @@ import static org.mockito.Mockito.when;
  * section 2.4 C4, against source. The selection predicate is asserted here as text and run against
  * a real Postgres, with a real shedlock table, in StalledRunSweepPostgresTest.
  *
- * The application clock: the sweep reads LocalDateTime.now() with no seam, so the clock is
+ * The application clock: the sweep reads BusinessTime.now() with no seam, so the clock is
  * controlled by bracketing -- the instant the code read lies between the instants read either side
  * of the call, and each timestamp is asserted to within that window rather than approximately.
  */
@@ -84,7 +85,7 @@ class StalledRunSweepTest {
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatus(status);
         jobQueue.setStartTime(startTime);
-        jobQueue.setDateCreated(dateCreated == null ? null : Timestamp.valueOf(dateCreated));
+        jobQueue.setDateCreated(dateCreated == null ? null : BusinessTime.timestampOf(dateCreated));
         return jobQueue;
     }
 
@@ -108,9 +109,9 @@ class StalledRunSweepTest {
         assertThat(constant.getLong(null)).isEqualTo(6 * 60);
 
         when(this.transactionService.findStalledRuns(any())).thenReturn(Collections.emptyList());
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = BusinessTime.now();
         this.engine.reconcileStalledRuns();
-        LocalDateTime after = LocalDateTime.now();
+        LocalDateTime after = BusinessTime.now();
 
         ArgumentCaptor<LocalDateTime> cutoff = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(this.transactionService).findStalledRuns(cutoff.capture());
@@ -126,7 +127,7 @@ class StalledRunSweepTest {
      */
     @Test
     void theSelectionIsEveryInFlightStatusMeasuredFromCoalesceInIdOrder() throws Exception {
-        Method method = JobQueueRepository.class.getMethod("findStalledRuns", LocalDateTime.class);
+        Method method = JobQueueRepository.class.getMethod("findStalledRuns", Timestamp.class);
         Query query = method.getAnnotation(Query.class);
         assertThat(query.nativeQuery()).isTrue();
         String sql = query.value().replaceAll("\\s+", " ");
@@ -140,12 +141,12 @@ class StalledRunSweepTest {
 
     @Test
     void aStalledRunIsClosedAsInterruptWithTheSixHourSentence() {
-        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, LocalDateTime.now().minusHours(7), null);
+        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, BusinessTime.now().minusHours(7), null);
         when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
 
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = BusinessTime.now();
         this.sweep(stalled);
-        LocalDateTime after = LocalDateTime.now();
+        LocalDateTime after = BusinessTime.now();
 
         ArgumentCaptor<JobQueue> saved = ArgumentCaptor.forClass(JobQueue.class);
         verify(this.transactionService).saveJobQueue(saved.capture());
@@ -159,7 +160,7 @@ class StalledRunSweepTest {
     /** Whatever state it was stranded in, the verdict is the same one -- and it is never an outcome. */
     @Test
     void noStalledRunIsEverRecordedAsFailedOrCompleted() {
-        LocalDateTime longAgo = LocalDateTime.now().minusHours(9);
+        LocalDateTime longAgo = BusinessTime.now().minusHours(9);
         JobQueue queued = run(1L, 11L, JobStatus.Queue, null, longAgo);
         JobQueue started = run(2L, 12L, JobStatus.Start, longAgo, longAgo);
         JobQueue running = run(3L, 13L, JobStatus.Running, longAgo, longAgo);
@@ -207,7 +208,7 @@ class StalledRunSweepTest {
 
     @Test
     void theJobRowIsClosedTooWhenNothingElseIsInFlight() {
-        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, LocalDateTime.now().minusHours(7), null);
+        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, BusinessTime.now().minusHours(7), null);
         when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
 
         this.sweep(stalled);
@@ -221,7 +222,7 @@ class StalledRunSweepTest {
      */
     @Test
     void aNewerRunInFlightLeavesTheJobRowAlone() {
-        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, LocalDateTime.now().minusHours(7), null);
+        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, BusinessTime.now().minusHours(7), null);
         when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(1);
 
         this.sweep(stalled);
@@ -232,7 +233,7 @@ class StalledRunSweepTest {
 
     @Test
     void eachRunIsSavedThenLoggedThenCountedThenAnnounced() {
-        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, LocalDateTime.now().minusHours(7), null);
+        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, BusinessTime.now().minusHours(7), null);
         when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
 
         this.sweep(stalled);
@@ -250,7 +251,7 @@ class StalledRunSweepTest {
 
     @Test
     void aStalledRunIsNeverOfferedARetry() {
-        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, LocalDateTime.now().minusHours(7), null);
+        JobQueue stalled = run(5073L, JOB_ID, JobStatus.Running, BusinessTime.now().minusHours(7), null);
         stalled.setAttempt(1);
 
         this.sweep(stalled);
@@ -263,7 +264,7 @@ class StalledRunSweepTest {
 
     @Test
     void oneRunThrowingIsLoggedAndTheRestAreStillClosed() {
-        LocalDateTime longAgo = LocalDateTime.now().minusHours(8);
+        LocalDateTime longAgo = BusinessTime.now().minusHours(8);
         JobQueue first = run(1L, 11L, JobStatus.Running, longAgo, null);
         JobQueue broken = run(2L, 12L, JobStatus.Running, longAgo, null);
         JobQueue last = run(3L, 13L, JobStatus.Running, longAgo, null);

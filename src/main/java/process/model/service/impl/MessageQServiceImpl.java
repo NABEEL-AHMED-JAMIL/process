@@ -13,10 +13,10 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQService;
 import process.security.TenantContext;
+import process.util.BusinessTime;
 import process.util.EnumUtils;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.Set;
 import static process.util.ProcessUtil.*;
@@ -95,11 +95,11 @@ public class MessageQServiceImpl implements MessageQService {
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueue.setDateCreated(Timestamp.valueOf(String.valueOf(obj[index])));
+                    sourceJobQueue.setDateCreated((Timestamp) obj[index]);
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueue.setEndTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueue.setEndTime(BusinessTime.wallClockOf(obj[index]).withNano(0));
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
@@ -127,11 +127,11 @@ public class MessageQServiceImpl implements MessageQService {
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueue.setSkipTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueue.setSkipTime(BusinessTime.wallClockOf(obj[index]).withNano(0));
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueue.setStartTime(LocalDateTime.parse(String.valueOf(obj[index]).substring(0,19), formatter));
+                    sourceJobQueue.setStartTime(BusinessTime.wallClockOf(obj[index]).withNano(0));
                 }
                 sourceJobQueues.add(sourceJobQueue);
             }
@@ -176,7 +176,7 @@ public class MessageQServiceImpl implements MessageQService {
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed, failMessage);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), failMessage);
-            this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
+            this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), BusinessTime.now());
 
             Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobQueue.get().getJobId());
             // Gated on the job's Failed preference. This read isSkipJob(), so whether a run marked
@@ -207,7 +207,7 @@ public class MessageQServiceImpl implements MessageQService {
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
             this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt, interruptMessage);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), interruptMessage);
-            this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), LocalDateTime.now());
+            this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), BusinessTime.now());
             return new ResponseDto(SUCCESS, "JobQueue successfully updated.", jobQId);
         }
         return new ResponseDto(ERROR, "JobQueue not found");

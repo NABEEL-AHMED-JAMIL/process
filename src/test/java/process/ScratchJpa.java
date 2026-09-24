@@ -11,6 +11,7 @@ import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.persistence.EntityManager;
+import javax.sql.DataSource;
 import javax.persistence.EntityManagerFactory;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,8 +32,18 @@ public final class ScratchJpa implements AutoCloseable {
     private final JpaRepositoryFactory repositories;
 
     public ScratchJpa(ScratchPostgres db) {
+        this(db.pool());
+    }
+
+    /** Over any scratch database's pool -- a ScratchEtlJob's, say, built part-way. */
+    public ScratchJpa(DataSource pool) {
+        this(pool, new HashMap<>());
+    }
+
+    /** As above, with Hibernate properties of the caller's on top (hibernate.hbm2ddl.auto=validate, say). */
+    public ScratchJpa(DataSource pool, Map<String, Object> overrides) {
         this.factoryBean = new LocalContainerEntityManagerFactoryBean();
-        this.factoryBean.setDataSource(db.pool());
+        this.factoryBean.setDataSource(pool);
         this.factoryBean.setPackagesToScan("process.model.pojo");
         this.factoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
         Map<String, Object> properties = new HashMap<>();
@@ -40,13 +51,19 @@ public final class ScratchJpa implements AutoCloseable {
         properties.put("hibernate.hbm2ddl.auto", "none");
         properties.put("hibernate.physical_naming_strategy", SpringPhysicalNamingStrategy.class.getName());
         properties.put("hibernate.implicit_naming_strategy", SpringImplicitNamingStrategy.class.getName());
+        properties.putAll(overrides);
         this.factoryBean.setJpaPropertyMap(properties);
         this.factoryBean.afterPropertiesSet();
         this.factory = this.factoryBean.getObject();
         this.transactionManager = new JpaTransactionManager(this.factory);
-        this.transactionManager.setDataSource(db.pool());
+        this.transactionManager.setDataSource(pool);
         EntityManager shared = SharedEntityManagerCreator.createSharedEntityManager(this.factory);
         this.repositories = new JpaRepositoryFactory(shared);
+    }
+
+    /** An entity manager bound to the current transaction, as @PersistenceContext injects one. */
+    public EntityManager sharedEntityManager() {
+        return SharedEntityManagerCreator.createSharedEntityManager(this.factory);
     }
 
     public <T> T repository(Class<T> type) {

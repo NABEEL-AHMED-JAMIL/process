@@ -1,5 +1,6 @@
 package process.util;
 
+import process.util.BusinessTime;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
@@ -59,7 +60,7 @@ public final class KafkaSecretPath {
             throw new IllegalArgumentException("Kafka secrets cannot be stored without a signed-in user.");
         }
         return new KafkaSecretPath(appUserId, UUID.randomUUID().toString(),
-            today == null ? LocalDate.now() : today, safeFileName(requestedFileName));
+            today == null ? BusinessTime.today() : today, safeFileName(requestedFileName));
     }
 
     /** Another file in the same upload, so a certificate and the store built from it stay together. */

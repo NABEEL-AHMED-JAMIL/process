@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,6 +14,7 @@ import process.schema.ScratchEtlJob;
 import process.security.TenantContext;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,17 +47,18 @@ class DrillDownPostgresTest {
         JdbcTemplate sql = db.sql();
         sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (2901, 'Active', 'CHS', 'CareBridge')");
         sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, tenant_id) "
-            + "VALUES (1196, '2026-09-01 09:00', 'Auto', 'Nightly claims', 'Active', 1, 2901)");
+            + "VALUES (1196, '2026-09-01 09:00-05', 'Auto', 'Nightly claims', 'Active', 1, 2901)");
+        // Chicago afternoon (CDT, -05): the times are instants since V100, and 14:03 is the Chicago hour the drill-down asks for.
         sql.update("INSERT INTO job_queue (job_queue_id, date_created, end_time, job_id, job_send, job_status, job_status_message, "
-            + "run_manual, skip_manual, skip_time, start_time, status, attempt) VALUES (5073, '2026-09-21 14:03:07', '2026-09-21 14:05:09', "
-            + "1196, true, 'Completed', 'done', false, false, NULL, '2026-09-21 14:04:01', 'Active', 1)");
+            + "run_manual, skip_manual, skip_time, start_time, status, attempt) VALUES (5073, '2026-09-21 14:03:07-05', '2026-09-21 14:05:09-05', "
+            + "1196, true, 'Completed', 'done', false, false, NULL, '2026-09-21 14:04:01-05', 'Active', 1)");
         // The same run in a table laid out the way ddl-auto lays one out: the id, then alphabetical.
         sql.execute("CREATE SCHEMA hibernate_order");
         sql.execute("CREATE TABLE hibernate_order.job_queue (job_queue_id bigint PRIMARY KEY, attempt integer NOT NULL, bucket varchar(255), "
-            + "callback_token_attempt integer, callback_token_expires_at timestamp, callback_token_hash varchar(64), "
-            + "date_created timestamp NOT NULL, end_time timestamp, job_id bigint NOT NULL, job_send boolean, "
-            + "job_status varchar(255) NOT NULL, job_status_message text, next_attempt_at timestamp, output_folder varchar(255), "
-            + "run_manual boolean, skip_manual boolean, skip_time timestamp, start_time timestamp, status varchar(255) NOT NULL)");
+            + "callback_token_attempt integer, callback_token_expires_at timestamptz, callback_token_hash varchar(64), "
+            + "date_created timestamptz NOT NULL, end_time timestamptz, job_id bigint NOT NULL, job_send boolean, "
+            + "job_status varchar(255) NOT NULL, job_status_message text, next_attempt_at timestamptz, output_folder varchar(255), "
+            + "run_manual boolean, skip_manual boolean, skip_time timestamptz, start_time timestamptz, status varchar(255) NOT NULL)");
         sql.update("INSERT INTO hibernate_order.job_queue SELECT job_queue_id, attempt, bucket, callback_token_attempt, "
             + "callback_token_expires_at, callback_token_hash, date_created, end_time, job_id, job_send, job_status, job_status_message, "
             + "next_attempt_at, output_folder, run_manual, skip_manual, skip_time, start_time, status FROM public.job_queue");
@@ -114,14 +117,14 @@ class DrillDownPostgresTest {
             .hasSameSizeAs(DrillDownColumnsTest.RUN_COLUMNS);
         SourceJobQueueDto run = new SourceJobQueueDto();
         run.setJobQueueId(((Number) row[0]).longValue());
-        run.setDateCreated(Timestamp.valueOf(String.valueOf(row[1])));
-        run.setEndTime(((Timestamp) row[2]).toLocalDateTime());
+        run.setDateCreated((Timestamp) row[1]);
+        run.setEndTime(BusinessTime.wallClockOf(row[2]));
         run.setJobId(((Number) row[3]).longValue());
         run.setJobStatus(JobStatus.valueOf(String.valueOf(row[5])));
         run.setJobStatusMessage(String.valueOf(row[6]));
         run.setRunManual((Boolean) row[7]);
-        run.setSkipTime(row[9] == null ? null : ((Timestamp) row[9]).toLocalDateTime());
-        run.setStartTime(((Timestamp) row[10]).toLocalDateTime());
+        run.setSkipTime(BusinessTime.wallClockOf(row[9]));
+        run.setStartTime(BusinessTime.wallClockOf(row[10]));
         return run;
     }
 
@@ -145,7 +148,7 @@ class DrillDownPostgresTest {
 
     private static void assertTheRun(SourceJobQueueDto run) {
         assertThat(run.getJobQueueId()).isEqualTo(5073L);
-        assertThat(run.getDateCreated()).isEqualTo(Timestamp.valueOf("2026-09-21 14:03:07"));
+        assertThat(run.getDateCreated().toInstant()).isEqualTo(Instant.parse("2026-09-21T19:03:07Z"));
         assertThat(run.getEndTime()).isEqualTo(LocalDateTime.of(2026, 9, 21, 14, 5, 9));
         assertThat(run.getJobId()).isEqualTo(1196L);
         assertThat(run.getJobStatus()).isEqualTo(JobStatus.Completed);

@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import java.time.LocalDateTime;
+import process.util.BusinessTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +31,6 @@ import process.util.excel.BulkExcel;
 
 import javax.persistence.EntityManager;
 import java.lang.reflect.Field;
-import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -272,7 +273,8 @@ public class SourceTaskLifecycleDefectTest {
     private static List<Object[]> oneLinkedJobRow() {
         return Collections.singletonList(new Object[] {
             BigInteger.valueOf(5073L), "Pacific hurricanes", "Active", "Auto", "Completed",
-            "2026-08-27 12:25:03", 1, Timestamp.valueOf("2026-08-27 12:25:03").toString() });
+            // last_job_run as to_char renders it (Chicago text); date_created as the driver returns a timestamptz: an instant.
+            "2026-08-27 12:25:03", 1, BusinessTime.timestampOf(LocalDateTime.of(2026, 8, 27, 12, 25, 3)) });
     }
 
     @Test

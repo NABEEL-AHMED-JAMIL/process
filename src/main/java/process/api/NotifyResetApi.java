@@ -1,5 +1,6 @@
 package process.api;
 
+import process.util.BusinessTime;
 import org.barco.platform.correlation.CorrelationId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -167,7 +168,7 @@ public class NotifyResetApi {
             }
 
             if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
-                jobQueue.setEndTime(LocalDateTime.now());
+                jobQueue.setEndTime(BusinessTime.now());
             }
             ResponseDto outcome = this.notifyService.changeState(jobQueue, idempotencyKey);
             // The run is over: its token is spent. A retry, should one be scheduled, is a new

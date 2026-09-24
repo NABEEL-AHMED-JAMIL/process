@@ -113,6 +113,16 @@ public final class ScratchEtlJob implements AutoCloseable {
         this.migrate(null);
     }
 
+    /** Undoes the last {@code count} changesets through their declared rollbacks, as `liquibase rollbackCount` does. */
+    public void rollback(int count) throws Exception {
+        try (Connection connection = this.connect()) {
+            Database database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
+            Liquibase liquibase = new Liquibase("db/changelog/db.changelog-master.yaml",
+                new ClassLoaderResourceAccessor(ScratchEtlJob.class.getClassLoader()), database);
+            liquibase.rollback(count, new Contexts("init"), new LabelExpression());
+        }
+    }
+
     /** Applies the changelog up to, not including, stopBefore -- or all of it when that is null. */
     private void migrate(String stopBefore) throws Exception {
         try (Connection connection = this.connect()) {

@@ -1,5 +1,6 @@
 package process.util;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.Test;
 import process.model.pojo.Scheduler;
 
@@ -28,7 +29,7 @@ public class ProcessTimeUtilTest {
         s.setFrequency(frequency);
         s.setIntervalValue(interval);
         s.setNextRunAt(nextRunAt);
-        s.setStartDate(nextRunAt == null ? LocalDate.now() : nextRunAt.toLocalDate());
+        s.setStartDate(nextRunAt == null ? BusinessTime.today() : nextRunAt.toLocalDate());
         s.setStartTime(nextRunAt == null ? LocalTime.of(0, 0) : nextRunAt.toLocalTime());
         return s;
     }
@@ -37,36 +38,36 @@ public class ProcessTimeUtilTest {
 
     @Test
     void minutesAdvanceByTheInterval() {
-        Scheduler s = scheduler("Mint", "5", LocalDateTime.now().minusMinutes(1));
+        Scheduler s = scheduler("Mint", "5", BusinessTime.now().minusMinutes(1));
         LocalDateTime next = ProcessTimeUtil.computeNextRun(s);
-        assertTrue(next.isAfter(LocalDateTime.now()), "next run must be in the future");
-        assertTrue(next.isBefore(LocalDateTime.now().plusMinutes(5)));
+        assertTrue(next.isAfter(BusinessTime.now()), "next run must be in the future");
+        assertTrue(next.isBefore(BusinessTime.now().plusMinutes(5)));
     }
 
     @Test
     void hoursAdvanceByTheInterval() {
-        Scheduler s = scheduler("Hr", "2", LocalDateTime.now().minusMinutes(30));
+        Scheduler s = scheduler("Hr", "2", BusinessTime.now().minusMinutes(30));
         LocalDateTime next = ProcessTimeUtil.computeNextRun(s);
-        assertTrue(next.isAfter(LocalDateTime.now()));
-        assertTrue(next.isBefore(LocalDateTime.now().plusHours(2)));
+        assertTrue(next.isAfter(BusinessTime.now()));
+        assertTrue(next.isBefore(BusinessTime.now().plusHours(2)));
     }
 
     @Test
     void daysAdvanceByTheInterval() {
-        LocalDateTime was = LocalDateTime.now().minusHours(1);
+        LocalDateTime was = BusinessTime.now().minusHours(1);
         Scheduler s = scheduler("Daily", "1", was);
         assertEquals(was.plusDays(1), ProcessTimeUtil.computeNextRun(s));
     }
 
     @Test
     void everyStepLandsStrictlyInTheFuture() {
-        Scheduler s = scheduler("Mint", "1", LocalDateTime.now().minusDays(3));
-        assertTrue(ProcessTimeUtil.computeNextRun(s).isAfter(LocalDateTime.now()));
+        Scheduler s = scheduler("Mint", "1", BusinessTime.now().minusDays(3));
+        assertTrue(ProcessTimeUtil.computeNextRun(s).isAfter(BusinessTime.now()));
     }
 
     @Test
     void theSameScheduleNeverReturnsTheSameSlotTwice() {
-        Scheduler s = scheduler("Mint", "10", LocalDateTime.now().minusMinutes(5));
+        Scheduler s = scheduler("Mint", "10", BusinessTime.now().minusMinutes(5));
         LocalDateTime first = ProcessTimeUtil.computeNextRun(s);
         s.setNextRunAt(first);
         assertTrue(ProcessTimeUtil.computeNextRun(s).isAfter(first));
@@ -117,7 +118,7 @@ public class ProcessTimeUtilTest {
 
     @Test
     void theTimeOfDayIsPreservedAcrossADailyStep() {
-        LocalDateTime at0230 = LocalDateTime.now()
+        LocalDateTime at0230 = BusinessTime.now()
             .withHour(2).withMinute(30).withSecond(0).withNano(0).minusDays(1);
         Scheduler s = scheduler("Daily", "1", at0230);
         LocalDateTime next = ProcessTimeUtil.computeNextRun(s);
@@ -129,7 +130,7 @@ public class ProcessTimeUtilTest {
 
     @Test
     void noIntervalYieldsNoNextRun() {
-        assertNull(ProcessTimeUtil.computeNextRun(scheduler("Daily", null, LocalDateTime.now())));
+        assertNull(ProcessTimeUtil.computeNextRun(scheduler("Daily", null, BusinessTime.now())));
     }
 
     @Test
@@ -139,12 +140,12 @@ public class ProcessTimeUtilTest {
 
     @Test
     void anUnknownFrequencyYieldsNoNextRun() {
-        assertNull(ProcessTimeUtil.computeNextRun(scheduler("Fortnightly", "1", LocalDateTime.now())));
+        assertNull(ProcessTimeUtil.computeNextRun(scheduler("Fortnightly", "1", BusinessTime.now())));
     }
 
     @Test
     void aScheduleWithNoNextRunIsMarkedExpired() {
-        Scheduler s = scheduler("Daily", null, LocalDateTime.now());
+        Scheduler s = scheduler("Daily", null, BusinessTime.now());
         ProcessTimeUtil.applyNextRun(s);
         assertTrue(s.isExpired(), "a schedule that cannot advance must not stay live");
     }
@@ -153,8 +154,8 @@ public class ProcessTimeUtilTest {
     void passingTheEndDateExpiresTheSchedule() {
         // Anchored to the last run rather than to today. An hour before midnight, "an hour ago"
         // falls on the previous date, so the next daily run lands on today and an end date of
-        // LocalDate.now() is not yet passed -- the test failed only between 00:00 and 01:00.
-        LocalDateTime lastRun = LocalDateTime.now().minusHours(1);
+        // BusinessTime.today() is not yet passed -- the test failed only between 00:00 and 01:00.
+        LocalDateTime lastRun = BusinessTime.now().minusHours(1);
         Scheduler s = scheduler("Daily", "1", lastRun);
         s.setEndDate(lastRun.toLocalDate());
         ProcessTimeUtil.applyNextRun(s);
@@ -163,7 +164,7 @@ public class ProcessTimeUtilTest {
 
     @Test
     void theEndDateItselfStillRuns() {
-        LocalDateTime lastRun = LocalDateTime.now().minusHours(1);
+        LocalDateTime lastRun = BusinessTime.now().minusHours(1);
         LocalDate nextRunDay = lastRun.plusDays(1).toLocalDate();
         Scheduler s = scheduler("Daily", "1", lastRun);
         s.setEndDate(nextRunDay);
@@ -174,18 +175,18 @@ public class ProcessTimeUtilTest {
 
     @Test
     void emptyDaysOfWeekFallsBackRatherThanLooping() {
-        Scheduler s = scheduler("Weekly", "1", LocalDateTime.now().minusDays(1));
+        Scheduler s = scheduler("Weekly", "1", BusinessTime.now().minusDays(1));
         s.setDaysOfWeek("");
         assertNotNull(ProcessTimeUtil.computeNextRun(s));
     }
 
     @Test
     void unrecognisedDayCodesFallBackRatherThanLooping() {
-        Scheduler s = scheduler("Weekly", "1", LocalDateTime.now().minusDays(1));
+        Scheduler s = scheduler("Weekly", "1", BusinessTime.now().minusDays(1));
         s.setDaysOfWeek("XXX,YYY");
         LocalDateTime next = ProcessTimeUtil.computeNextRun(s);
         assertNotNull(next);
-        assertTrue(next.isAfter(LocalDateTime.now()));
+        assertTrue(next.isAfter(BusinessTime.now()));
     }
 
     // ---- runs missed while the scheduler was down -------------------------------------------
@@ -197,29 +198,29 @@ public class ProcessTimeUtilTest {
         // An exact multiple (say -60) puts a slot on now() itself, and whether that counts
         // depends on microseconds -- it does count, since it is neither the slot being run
         // nor the one being scheduled, but it is no basis for an assertion.
-        Scheduler s = scheduler("Mint", "10", LocalDateTime.now().minusMinutes(55));
+        Scheduler s = scheduler("Mint", "10", BusinessTime.now().minusMinutes(55));
         List<LocalDateTime> missed = ProcessTimeUtil.computeMissedRuns(s);
         assertEquals(5, missed.size(), "slots strictly between the due one and now");
-        assertTrue(missed.stream().allMatch(m -> m.isBefore(LocalDateTime.now())));
+        assertTrue(missed.stream().allMatch(m -> m.isBefore(BusinessTime.now())));
     }
 
     @Test
     void aSlotFallingOnNowCountsAsMissed() {
         // It is not the slot being executed (that is nextRunAt) and applyNextRun will pick
         // the first slot strictly after now, so nothing else would ever account for it.
-        Scheduler s = scheduler("Mint", "10", LocalDateTime.now().minusMinutes(60));
+        Scheduler s = scheduler("Mint", "10", BusinessTime.now().minusMinutes(60));
         assertEquals(6, ProcessTimeUtil.computeMissedRuns(s).size());
     }
 
     @Test
     void anOnTimeRunMissesNothing() {
-        Scheduler s = scheduler("Daily", "1", LocalDateTime.now().minusSeconds(5));
+        Scheduler s = scheduler("Daily", "1", BusinessTime.now().minusSeconds(5));
         assertTrue(ProcessTimeUtil.computeMissedRuns(s).isEmpty());
     }
 
     @Test
     void missedRunsAreOrderedOldestFirst() {
-        Scheduler s = scheduler("Mint", "5", LocalDateTime.now().minusMinutes(30));
+        Scheduler s = scheduler("Mint", "5", BusinessTime.now().minusMinutes(30));
         List<LocalDateTime> missed = ProcessTimeUtil.computeMissedRuns(s);
         for (int i = 1; i < missed.size(); i++) {
             assertTrue(missed.get(i).isAfter(missed.get(i - 1)), "must read as a timeline");
@@ -230,7 +231,7 @@ public class ProcessTimeUtilTest {
     void aLongOutageIsBoundedRatherThanRunningForever() {
         // A one-minute schedule dormant for two years is over a million slots. The guard has
         // to stop it; without one this call never returns and the cron thread is gone.
-        Scheduler s = scheduler("Mint", "1", LocalDateTime.now().minusYears(2));
+        Scheduler s = scheduler("Mint", "1", BusinessTime.now().minusYears(2));
         long start = System.currentTimeMillis();
         List<LocalDateTime> missed = ProcessTimeUtil.computeMissedRuns(s);
         long elapsed = System.currentTimeMillis() - start;
@@ -245,10 +246,10 @@ public class ProcessTimeUtilTest {
         Scheduler s = new Scheduler();
         s.setFrequency("Daily");
         s.setIntervalValue("1");
-        s.setStartDate(LocalDate.now().plusDays(7));
+        s.setStartDate(BusinessTime.today().plusDays(7));
         s.setStartTime(LocalTime.of(3, 0));
         ProcessTimeUtil.applyInitialSchedule(s);
-        assertEquals(LocalDate.now().plusDays(7), s.getNextRunAt().toLocalDate());
+        assertEquals(BusinessTime.today().plusDays(7), s.getNextRunAt().toLocalDate());
         assertFalse(s.isExpired());
     }
 
@@ -257,10 +258,10 @@ public class ProcessTimeUtilTest {
         Scheduler s = new Scheduler();
         s.setFrequency("Daily");
         s.setIntervalValue("1");
-        s.setStartDate(LocalDate.now().minusDays(10));
+        s.setStartDate(BusinessTime.today().minusDays(10));
         s.setStartTime(LocalTime.of(3, 0));
         ProcessTimeUtil.applyInitialSchedule(s);
-        assertTrue(s.getNextRunAt().isAfter(LocalDateTime.now()), "must never be seeded in the past");
+        assertTrue(s.getNextRunAt().isAfter(BusinessTime.now()), "must never be seeded in the past");
     }
 
     @Test
@@ -268,9 +269,9 @@ public class ProcessTimeUtilTest {
         Scheduler s = new Scheduler();
         s.setFrequency("Daily");
         s.setIntervalValue("1");
-        s.setStartDate(LocalDate.now().minusDays(10));
+        s.setStartDate(BusinessTime.today().minusDays(10));
         s.setStartTime(LocalTime.of(3, 0));
-        s.setEndDate(LocalDate.now().minusDays(5));
+        s.setEndDate(BusinessTime.today().minusDays(5));
         ProcessTimeUtil.applyInitialSchedule(s);
         assertTrue(s.isExpired(), "a window that has already closed must not run");
     }
@@ -313,7 +314,7 @@ public class ProcessTimeUtilTest {
         scheduler.setFrequency("Monthly");
         scheduler.setIntervalValue("1");
         scheduler.setDayOfMonth(0);
-        scheduler.setStartDate(LocalDate.now());
+        scheduler.setStartDate(BusinessTime.today());
         scheduler.setStartTime(LocalTime.of(23, 0));
 
         LocalDateTime first = ProcessTimeUtil.resolveInitialNextRun(scheduler);
@@ -324,7 +325,7 @@ public class ProcessTimeUtilTest {
     void theFirstRunIsTheEarliestValidSlotRatherThanTheNextPeriod() {
         // Created on the 25th for a last-day schedule: the 31st is still ahead this month, so
         // jumping to the end of next month would skip a run the schedule was entitled to.
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessTime.today();
         Scheduler scheduler = new Scheduler();
         scheduler.setFrequency("Monthly");
         scheduler.setIntervalValue("1");
@@ -355,7 +356,7 @@ public class ProcessTimeUtilTest {
         // It survives the rollover too. If midnight passes between the capture below and the call,
         // the seed becomes yesterday-at-midnight, the walk steps twice instead of once, and it
         // lands on the same date this assertion names.
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessTime.today();
         Scheduler scheduler = new Scheduler();
         scheduler.setFrequency("Weekly");
         scheduler.setIntervalValue("1");
@@ -388,10 +389,10 @@ public class ProcessTimeUtilTest {
         Scheduler scheduler = new Scheduler();
         scheduler.setFrequency("Daily");
         scheduler.setIntervalValue("1");
-        scheduler.setStartDate(LocalDate.now().plusDays(3));
+        scheduler.setStartDate(BusinessTime.today().plusDays(3));
         scheduler.setStartTime(LocalTime.of(9, 0));
 
-        assertEquals(LocalDate.now().plusDays(3),
+        assertEquals(BusinessTime.today().plusDays(3),
             ProcessTimeUtil.resolveInitialNextRun(scheduler).toLocalDate());
     }
 
@@ -453,12 +454,12 @@ public class ProcessTimeUtilTest {
     /** Numbers outside the week are still nonsense and must not become a day. */
     @Test
     void aNumberOutsideOneToSevenIsStillUnrecognised() {
-        Scheduler s = scheduler("Weekly", "1", LocalDateTime.now().minusDays(1));
+        Scheduler s = scheduler("Weekly", "1", BusinessTime.now().minusDays(1));
         s.setDaysOfWeek("0,8,9");
         LocalDateTime next = ProcessTimeUtil.computeNextRun(s);
         assertNotNull(next);
         // No day matched, so it falls back to the plain weekly step rather than picking one.
-        assertTrue(next.isAfter(LocalDateTime.now()));
+        assertTrue(next.isAfter(BusinessTime.now()));
     }
 
     // -------- "Repeat every N weeks", which naming days used to cancel silently --------------

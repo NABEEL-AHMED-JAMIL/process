@@ -1,5 +1,9 @@
 package process.model.pojo;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.ParamDef;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.Filter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
@@ -14,6 +18,8 @@ import javax.persistence.*;
 @Table(name = "source_task_payload")
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class SourceTaskPayload {
 
     @GenericGenerator(
@@ -38,6 +44,15 @@ public class SourceTaskPayload {
 
     @Column(name = "tag_value", nullable = true, columnDefinition = "TEXT")
     private String tagValue;
+
+    /**
+     * The task's tenant (V102, MIG-29/164): set when the row is written, and kept equal to the source_task row's by the database
+     * (fk_source_task_payload_task_tenant, ON UPDATE CASCADE) -- so never written again from here. What the tenant filter scopes on.
+     */
+    // Not on the wire: nothing a console sends or reads names it (the wire format is unchanged).
+    @JsonIgnore
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private Long tenantId;
 
     public SourceTaskPayload() {
     }
@@ -79,4 +94,12 @@ public class SourceTaskPayload {
         return new Gson().toJson(this);
     }
 
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
 }

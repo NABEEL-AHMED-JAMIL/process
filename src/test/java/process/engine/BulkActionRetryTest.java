@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -74,7 +75,7 @@ public class BulkActionRetryTest {
         jobQueue.setAttempt(attempt);
         jobQueue.setJobStatus(JobStatus.Start);
         jobQueue.setJobSend(true);
-        jobQueue.setEndTime(LocalDateTime.now());
+        jobQueue.setEndTime(BusinessTime.now());
         return jobQueue;
     }
 
@@ -143,7 +144,7 @@ public class BulkActionRetryTest {
     void backoffDoublesWithEachAttempt() {
         JobQueue firstFailure = this.run(1);
         this.stub(this.job(4, 60), firstFailure);
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = BusinessTime.now();
         this.bulkAction.scheduleRetry(this.run(1), "reset");
         LocalDateTime afterFirst = this.savedRow().getNextAttemptAt();
         assertNotNull(afterFirst);
@@ -160,7 +161,7 @@ public class BulkActionRetryTest {
         // schedule again.
         JobQueue stored = this.run(9);
         this.stub(this.job(10, 3600), stored);
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = BusinessTime.now();
 
         this.bulkAction.scheduleRetry(this.run(9), "still down");
 

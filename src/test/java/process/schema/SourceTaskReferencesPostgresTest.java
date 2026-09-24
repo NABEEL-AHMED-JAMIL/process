@@ -48,6 +48,9 @@ class SourceTaskReferencesPostgresTest {
             // nothing is cast. Before, the best it could do was walk the whole index and filter.
             TenantContext.set(null, "PLATFORM_ADMIN", 1000L, "admin@platform.local");
             try {
+                // V100 rewrites lookup_data (its date_created becomes timestamptz), and a rewritten table has no
+                // statistics until autovacuum gets to it; measured, as it would be by then.
+                sql.execute("ANALYZE");
                 sql.execute("SET enable_seqscan = off");
                 String plan = String.join("\n", sql.queryForList("EXPLAIN " + new QueryService().listSourceTaskQuery(
                     false, null, null, null, null, null), String.class));

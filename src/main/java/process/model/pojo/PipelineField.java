@@ -1,5 +1,9 @@
 package process.model.pojo;
 
+import javax.persistence.PrePersist;
+import org.hibernate.annotations.ParamDef;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.Filter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -16,6 +20,8 @@ import javax.persistence.*;
 @Table(name = "pipeline_field")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class PipelineField {
 
     @GenericGenerator(
@@ -94,6 +100,26 @@ public class PipelineField {
 
     public Long getPipelineFieldId() { return pipelineFieldId; }
     public void setPipelineFieldId(Long pipelineFieldId) { this.pipelineFieldId = pipelineFieldId; }
+
+    /**
+     * The pipeline's tenant (V102, MIG-29/164): taken from the pipeline when the field is first written -- fields are
+     * made in several places and all reach the database through the pipeline's cascade -- and kept equal to it by the
+     * database (fk_pipeline_field_pipeline_tenant, ON UPDATE CASCADE), so never written again from here.
+     */
+    // Not on the wire: nothing a console sends or reads names it (the wire format is unchanged).
+    @JsonIgnore
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private Long tenantId;
+
+    @PrePersist
+    protected void takeThePipelinesTenant() {
+        if (this.tenantId == null && this.pipeline != null) {
+            this.tenantId = this.pipeline.getTenantId();
+        }
+    }
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 
     public Pipeline getPipeline() { return pipeline; }
     public void setPipeline(Pipeline pipeline) { this.pipeline = pipeline; }

@@ -18,6 +18,7 @@ import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.SourceJobBulkService;
 import process.security.TenantContext;
+import process.util.BusinessTime;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
@@ -135,7 +136,8 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             dataCellValue.add(String.valueOf(sourceJob.getExecution()));
             dataCellValue.add(String.valueOf(sourceJob.getPriority()));
             dataCellValue.add(String.valueOf(sourceJob.getJobStatus()));
-            dataCellValue.add(String.valueOf(sourceJob.getDateCreated()));
+            // Chicago wall-clock, as the Chicago JVM printed it; Timestamp#toString now prints the JVM's zone.
+            dataCellValue.add(String.valueOf(BusinessTime.legacyText(sourceJob.getDateCreated())));
 
             Optional<Scheduler> scheduler = Optional.ofNullable(schedulerByJobId.get(sourceJob.getJobId()));
             if (scheduler.isPresent()) {
@@ -298,6 +300,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             sourceJob.setExecution(Execution.Auto);
             this.transactionService.saveOrUpdateJob(sourceJob);
             Scheduler scheduler = new Scheduler();
+            scheduler.setTenantId(sourceJob.getTenantId());
             scheduler.setStartDate(LocalDate.parse(jobDetailValidation.getStartDate()));
             if (!StringUtils.isEmpty(jobDetailValidation.getEndDate())) {
                 scheduler.setEndDate(LocalDate.parse(jobDetailValidation.getEndDate()));

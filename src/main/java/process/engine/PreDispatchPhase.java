@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.barco.platform.correlation.CorrelationId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,7 +130,7 @@ public class PreDispatchPhase {
      * the rest to the AI threads. Returns how many it took.
      */
     public int runPass() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = BusinessTime.now();
         List<Long> claimed;
         try {
             claimed = this.transactions.execute(status -> this.transactionService.claimRunsToPrepare(now,
@@ -233,7 +234,7 @@ public class PreDispatchPhase {
             }
             if (decision.isPrepared()) {
                 int prepared = this.transactionService.markPrepared(run.getJobQueueId(), decision.payload,
-                    LocalDateTime.now(), run.getCorrelationId());
+                    BusinessTime.now(), run.getCorrelationId());
                 if (prepared == 0) {
                     logger.info("Run {} was closed or dispatched while it was being prepared; left as it is.", run.getJobQueueId());
                 }

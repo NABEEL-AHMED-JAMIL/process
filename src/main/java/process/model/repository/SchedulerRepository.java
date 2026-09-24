@@ -5,7 +5,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import process.model.pojo.Scheduler;
-import java.time.LocalDateTime;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,7 +37,7 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
         + "and scheduler.scheduler_id not in (:passed) "
         + "order by scheduler.next_run_at asc, scheduler.scheduler_id asc "
         + "limit 1 for update skip locked", nativeQuery = true)
-    public Optional<Scheduler> claimNextDueScheduler(@Param("now") LocalDateTime now, @Param("passed") List<Long> passed);
+    public Optional<Scheduler> claimNextDueScheduler(@Param("now") Timestamp now, @Param("passed") List<Long> passed);
 
     public Optional<Scheduler> findSchedulerByJobId(Long jobId);
 

@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -62,6 +63,7 @@ public class TransactionServiceImpl {
         }
         JobAuditLogs jobAuditLogs = new JobAuditLogs();
         jobAuditLogs.setJobQueueId(jobQueueId);
+        jobAuditLogs.setTenantId(this.tenantOfRun(jobQueueId));
         jobAuditLogs.setLogsDetail(logsDetail);
         this.jobAuditLogRepository.save(jobAuditLogs);
     }
@@ -86,12 +88,22 @@ public class TransactionServiceImpl {
         for (String detail : logDetails) {
             entries.add(new Object[]{ UUID.randomUUID().toString(), jobQueueId, detail, now });
         }
+        Long tenantId = null;
         for (Object[] rejected : this.openSearchAuditLogClient.indexAllReturningFailures(entries)) {
+            if (tenantId == null) {
+                tenantId = this.tenantOfRun(jobQueueId);
+            }
             JobAuditLogs row = new JobAuditLogs();
             row.setJobQueueId(jobQueueId);
+            row.setTenantId(tenantId);
             row.setLogsDetail((String) rejected[2]);
             this.jobAuditLogRepository.save(row);
         }
+    }
+
+    /** The run's tenant, which its audit lines carry (V102, MIG-29); null for a run that does not exist. */
+    private Long tenantOfRun(Long jobQueueId) {
+        return this.jobQueueRepository.findById(jobQueueId).map(JobQueue::getTenantId).orElse(null);
     }
 
     /**
@@ -158,30 +170,36 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findById(jobQueueId);
     }
 
+    /*
+     * The times below are the application's -- Chicago wall-clock LocalDateTimes -- and this is where they become
+     * the instants the timestamptz columns are compared with (MIG-163): BusinessTime.timestampOf, never the JVM's
+     * zone. CutoffSelectionPostgresTest holds each query to the rows it selected before V100.
+     */
+
     /** For the caller's transaction: see SchedulerRepository.claimNextDueScheduler. */
     public Optional<Scheduler> claimNextDueScheduler(LocalDateTime now, List<Long> passed) {
-        return this.schedulerRepository.claimNextDueScheduler(now, passed);
+        return this.schedulerRepository.claimNextDueScheduler(BusinessTime.timestampOf(now), passed);
     }
 
     public List<JobQueue> findAllJobForTodayWithLimit(Long limit, LocalDateTime eligibleAt) {
-        return this.jobQueueRepository.findAllJobForTodayWithLimit(limit, eligibleAt);
+        return this.jobQueueRepository.findAllJobForTodayWithLimit(limit, BusinessTime.timestampOf(eligibleAt));
     }
 
     public List<JobQueue> findStalledRuns(LocalDateTime startedBefore) {
-        return this.jobQueueRepository.findStalledRuns(startedBefore);
+        return this.jobQueueRepository.findStalledRuns(BusinessTime.timestampOf(startedBefore));
     }
 
     /** For the caller's transaction: see JobQueueRepository.findRunsToPrepare. */
     public List<Long> claimRunsToPrepare(LocalDateTime now, int limit, LocalDateTime leaseUntil) {
-        List<Long> ids = this.jobQueueRepository.findRunsToPrepare(now, limit);
+        List<Long> ids = this.jobQueueRepository.findRunsToPrepare(BusinessTime.timestampOf(now), limit);
         if (!ids.isEmpty()) {
-            this.jobQueueRepository.leaseForPreparation(ids, leaseUntil);
+            this.jobQueueRepository.leaseForPreparation(ids, BusinessTime.timestampOf(leaseUntil));
         }
         return ids;
     }
 
     public int markPrepared(Long jobQueueId, String payload, LocalDateTime at, String correlationId) {
-        return this.jobQueueRepository.markPrepared(jobQueueId, payload, at, correlationId);
+        return this.jobQueueRepository.markPrepared(jobQueueId, payload, BusinessTime.timestampOf(at), correlationId);
     }
 
     public String findOrchestrationSetting(String settingKey) {
@@ -193,7 +211,7 @@ public class TransactionServiceImpl {
     }
 
     public int noteRefusedCallback(Long jobQueueId, LocalDateTime refusedAt, String reportedStatus) {
-        return this.jobQueueRepository.noteRefusedCallback(jobQueueId, refusedAt, reportedStatus);
+        return this.jobQueueRepository.noteRefusedCallback(jobQueueId, BusinessTime.timestampOf(refusedAt), reportedStatus);
     }
 
     public void saveJobQueue(JobQueue jobQueue) {

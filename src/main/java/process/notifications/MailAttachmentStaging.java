@@ -1,5 +1,6 @@
 package process.notifications;
 
+import process.util.BusinessTime;
 import org.barco.notifications.contract.MailRequested;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +48,7 @@ public class MailAttachmentStaging {
         String name = filename == null ? "attachment" : filename.replace('\\', '/');
         name = name.substring(name.lastIndexOf('/') + 1).trim();
         if (name.isEmpty() || name.equals("..") || name.equals(".")) name = "attachment";
-        String key = LocalDate.now().format(DAY) + "/" + UUID.randomUUID() + "/" + name;
+        String key = BusinessTime.today().format(DAY) + "/" + UUID.randomUUID() + "/" + name;
         PutObjectRequest put = PutObjectRequest.builder().bucket(this.bucket).key(key).contentType(contentType).build();
         try {
             this.s3.get().putObject(put, RequestBody.fromBytes(bytes));

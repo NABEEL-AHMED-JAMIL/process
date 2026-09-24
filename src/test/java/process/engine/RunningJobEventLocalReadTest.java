@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,8 +15,6 @@ import process.model.repository.SourceJobRepository;
 import process.model.service.impl.TransactionServiceImpl;
 import process.notifications.TestNotifications;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
@@ -95,9 +94,9 @@ class RunningJobEventLocalReadTest {
         scheduler.setJobId(JOB_ID);
         scheduler.setFrequency("Mint");
         scheduler.setIntervalValue("1");
-        scheduler.setStartDate(LocalDate.now().minusDays(1));
+        scheduler.setStartDate(BusinessTime.today().minusDays(1));
         scheduler.setStartTime(LocalTime.of(0, 0));
-        scheduler.setNextRunAt(LocalDateTime.now().minusMinutes(200));
+        scheduler.setNextRunAt(BusinessTime.now().minusMinutes(200));
 
         this.bulkAction.updateNextScheduler(scheduler);
 

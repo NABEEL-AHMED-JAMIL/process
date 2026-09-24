@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,8 +11,6 @@ import process.model.pojo.Scheduler;
 import process.model.projection.SourceJobProjection;
 import process.model.service.impl.TransactionServiceImpl;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
 
@@ -71,9 +70,9 @@ class BulkActionMissedRunNotificationTest {
         scheduler.setJobId(JOB_ID);
         scheduler.setFrequency("Hr");
         scheduler.setIntervalValue("1");
-        scheduler.setStartDate(LocalDate.now().minusYears(1));
+        scheduler.setStartDate(BusinessTime.today().minusYears(1));
         scheduler.setStartTime(LocalTime.of(0, 0));
-        scheduler.setNextRunAt(LocalDateTime.now().minusHours(3));
+        scheduler.setNextRunAt(BusinessTime.now().minusHours(3));
         return scheduler;
     }
 

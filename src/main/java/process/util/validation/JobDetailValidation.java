@@ -1,5 +1,6 @@
 package process.util.validation;
 
+import process.util.BusinessTime;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
@@ -255,7 +256,7 @@ public class JobDetailValidation {
         LocalDate userInputStartDate = LocalDate.parse(this.startDate);
         logger.info("User startDate valid :- {}.", userInputStartDate);
 
-        LocalDate todayDateWithTimeZone = LocalDate.now();;
+        LocalDate todayDateWithTimeZone = BusinessTime.today();;
         logger.info("System date with time zone :- {}.", todayDateWithTimeZone);
 
         if (userInputStartDate.isEqual(todayDateWithTimeZone) || userInputStartDate.isAfter(todayDateWithTimeZone)) {
@@ -274,7 +275,7 @@ public class JobDetailValidation {
             }
 
             String timeSplit[] = this.startTime.split(":");
-            if (LocalDateTime.now().isAfter(userInputStartDate.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1])))) {
+            if (BusinessTime.now().isAfter(userInputStartDate.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1])))) {
                 this.setErrorMsg(String.format("StartTime should not be previous time at row %s.<br>", rowCounter));
             }
         } else {

@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.util.BusinessTime;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,12 +78,15 @@ class PreDispatchClaimPostgresTest {
 
     private void run(long jobQueueId, String status, boolean sent, LocalDateTime preparedAt, LocalDateTime nextAttemptAt) {
         long jobId = 9700 + (jobQueueId % 100);
-        this.sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority) "
-            + "VALUES (?, ?, 'Auto', ?, 'Active', 1) ON CONFLICT DO NOTHING", jobId, Timestamp.valueOf(NOW), "claim-" + jobId);
+        // Every job has a tenant (V102: its runs and schedule carry it, NOT NULL).
+        this.sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (9999, 'Active', 'FIXTURE', 'Fixture') "
+            + "ON CONFLICT DO NOTHING");
+        this.sql.update("INSERT INTO source_job (tenant_id, job_id, date_created, execution, job_name, job_status, priority) "
+            + "VALUES (9999, ?, ?, 'Auto', ?, 'Active', 1) ON CONFLICT DO NOTHING", jobId, BusinessTime.timestampOf(NOW), "claim-" + jobId);
         this.sql.update("INSERT INTO job_queue (job_queue_id, job_id, job_status, date_created, status, job_send, prepared_at, "
-            + "next_attempt_at) VALUES (?, ?, ?, ?, 'Active', ?, ?, ?)", jobQueueId, jobId, status, Timestamp.valueOf(NOW),
-            sent, preparedAt == null ? null : Timestamp.valueOf(preparedAt),
-            nextAttemptAt == null ? null : Timestamp.valueOf(nextAttemptAt));
+            + "next_attempt_at) VALUES (?, ?, ?, ?, 'Active', ?, ?, ?)", jobQueueId, jobId, status, BusinessTime.timestampOf(NOW),
+            sent, preparedAt == null ? null : BusinessTime.timestampOf(preparedAt),
+            nextAttemptAt == null ? null : BusinessTime.timestampOf(nextAttemptAt));
     }
 
     private List<Long> claim(LocalDateTime at) {

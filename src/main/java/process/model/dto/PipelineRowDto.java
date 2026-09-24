@@ -3,6 +3,7 @@ package process.model.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import process.model.pojo.Audited;
 import process.model.projection.PipelineRowProjection;
+import process.util.BusinessTime;
 import java.time.LocalDateTime;
 
 /** A list row for the Pipelines screen: see {@link PipelineRowProjection}. */
@@ -36,7 +37,7 @@ public class PipelineRowDto implements Audited {
         dto.tenantId = row.getTenantId();
         dto.sourceTaskTypeId = row.getSourceTaskTypeId();
         dto.status = row.getStatus();
-        dto.dateCreated = row.getDateCreated();
+        dto.dateCreated = BusinessTime.wallClockOf(row.getDateCreated());
         dto.createdBy = row.getCreatedBy();
         dto.updatedBy = row.getUpdatedBy();
         dto.fieldCount = row.getFieldCount() == null ? 0 : row.getFieldCount();

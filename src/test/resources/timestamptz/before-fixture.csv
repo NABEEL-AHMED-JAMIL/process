@@ -1,0 +1,59 @@
+# MIG-96 before-fixture: every timestamp column V100 converts, as etl_job stored it before V100, and the
+# instant the application made of it then.
+#
+# stored  -- the naive string in the column: America/Chicago wall-clock, written by a JVM defaulted to Chicago.
+# instant -- what that JVM read it as (pgjdbc parses a naive value into a Calendar of the JVM's zone, i.e.
+#            java.util.GregorianCalendar rules), in UTC. THIS is what must survive V100, not the string.
+#
+# The DEF-033 columns (next_attempt_at, next_run_at, start_time, end_time, last_job_run, date_created) are
+# all here; occurred_at is not, because meter.usage_event was timestamptz already and lives in billing_db.
+#
+# The six shapes, and the two that are not ordinary:
+#   2026-01-15 08:00:00          winter, CST (-6)            -> 14:00Z  (the 14:00:00+00 acceptance row)
+#   2026-07-04 08:00:00          summer, CDT (-5)            -> 13:00Z
+#   2026-01-15 23:45:10.123456   microseconds, crosses midnight UTC
+#   2026-01-31 17:30:00          month-end run at 23:30Z -- the run a meter event at 23:30Z on 31 January belongs to
+#   2026-03-08 02:30:00          DOES NOT EXIST in Chicago (clocks jump 02:00 -> 03:00). Read as 08:30Z, which
+#                                is 03:30 CDT: the gap's length is added, by Postgres and by the old JVM alike.
+#                                A rollback cannot recover 02:30 from 08:30Z, so V100 keeps the original.
+#   2026-11-01 01:30:00          OCCURS TWICE (01:00-02:00 repeats). Read as 07:30Z, the SECOND 01:30 (CST, -6):
+#                                Postgres's AT TIME ZONE and the old JVM agree on the later one. java.time's
+#                                atZone would pick the first (06:30Z); the converter asks for the later.
+#
+# table,key,column,stored,instant
+job_queue,900101,date_created,2026-01-15 08:00:00,2026-01-15T14:00:00Z
+job_queue,900101,start_time,2026-01-15 08:00:00,2026-01-15T14:00:00Z
+job_queue,900101,end_time,2026-01-15 23:45:10.123456,2026-01-16T05:45:10.123456Z
+job_queue,900101,next_attempt_at,2026-03-08 02:30:00,2026-03-08T08:30:00Z
+job_queue,900101,skip_time,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+job_queue,900101,prepared_at,2026-07-04 08:00:00,2026-07-04T13:00:00Z
+job_queue,900101,prepare_lease_until,2026-07-04 08:00:00,2026-07-04T13:00:00Z
+job_queue,900101,callback_token_expires_at,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+job_queue,900101,refused_callback_at,2026-03-08 02:30:00,2026-03-08T08:30:00Z
+job_queue,900102,date_created,2026-01-31 17:30:00,2026-01-31T23:30:00Z
+job_queue,900102,start_time,2026-01-31 17:30:00,2026-01-31T23:30:00Z
+source_job,900001,date_created,2026-01-15 08:00:00,2026-01-15T14:00:00Z
+source_job,900001,last_job_run,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+scheduler,900301,next_run_at,2026-03-08 02:30:00,2026-03-08T08:30:00Z
+scheduler,900301,date_created,2026-07-04 08:00:00,2026-07-04T13:00:00Z
+scheduler,900301,date_updated,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+scheduler,900302,next_run_at,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+job_audit_logs,900401,date_created,2026-01-15 23:45:10.123456,2026-01-16T05:45:10.123456Z
+tenant,900,date_created,2026-07-04 08:00:00,2026-07-04T13:00:00Z
+app_user,900201,date_created,2026-01-15 08:00:00,2026-01-15T14:00:00Z
+app_user,900201,last_login_at,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+tenant_request,900501,date_created,2026-01-15 08:00:00,2026-01-15T14:00:00Z
+tenant_request,900501,decided_at,2026-03-08 02:30:00,2026-03-08T08:30:00Z
+page_access_profile,900601,date_created,2026-01-15 08:00:00,2026-01-15T14:00:00Z
+page_access_profile,900601,date_updated,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+user_page_access,900201|HOME,date_created,2026-03-08 02:30:00,2026-03-08T08:30:00Z
+lookup_data,900701,date_created,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+pipeline,900801,date_created,2026-01-15 23:45:10.123456,2026-01-16T05:45:10.123456Z
+kafka_connection_profile,900901,date_created,2026-01-15 08:00:00,2026-01-15T14:00:00Z
+kafka_connection_profile,900901,last_tested_at,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+tenant_task_type_kafka_route,900951,date_created,2026-03-08 02:30:00,2026-03-08T08:30:00Z
+worker_callback_receipt,900101|v100-key,received_at,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+shedlock,v100-fixture,lock_until,2026-03-08 02:30:00,2026-03-08T08:30:00Z
+shedlock,v100-fixture,locked_at,2026-11-01 01:30:00,2026-11-01T07:30:00Z
+identity_signing_key,v100-kid,created_at,2026-01-15 08:00:00,2026-01-15T14:00:00Z
+identity_signing_key,v100-kid,retired_at,2026-11-01 01:30:00,2026-11-01T07:30:00Z
