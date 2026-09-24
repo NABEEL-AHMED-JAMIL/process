@@ -3,7 +3,7 @@
 # store types and protocols a real profile would carry.
 #
 # Inside a container, because that is the only place the broker's own addresses resolve. Every
-# listener in docker-compose.kafka-it.yml advertises host.docker.internal so that other containers
+# listener in ../kafka-it/docker-compose.kafka-it.yml advertises host.docker.internal so that other containers
 # can reach it, and the host cannot resolve that name -- a client on the host connects to
 # localhost:1909x, is handed back "host.docker.internal:1909x" as the node to talk to, and then
 # sits there until the call times out. The failure looks nothing like the cause: thirteen
@@ -21,7 +21,7 @@ cd "$(dirname "$0")"
 
 if ! docker ps --format '{{.Names}}' | grep -qx kafka_it; then
   echo "ERROR: the test broker is not running. Start it with:" >&2
-  echo "       ./kafka-it/start.sh" >&2
+  echo "       ../kafka-it/start.sh   (kafka-it is its own repository, beside this one)" >&2
   exit 1
 fi
 
