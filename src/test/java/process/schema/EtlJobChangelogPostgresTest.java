@@ -87,6 +87,15 @@ class EtlJobChangelogPostgresTest {
                 assertThatThrownBy(() -> sql.execute("TRUNCATE " + table + " CASCADE")).as("truncate %s", table).hasMessageContaining("analytics_db");
             }
             assertThatThrownBy(() -> sql.update("UPDATE analytics_dashboard SET dashboard_name = 'x'")).as("update").hasMessageContaining("analytics_db");
+            // MIG-147 / MIG-150 (V63): the AI tables are ai_db's (ADR-020). A pipeline step names a prompt
+            // by id, and new prompts exist only in ai_db, so pipeline_field.prompt_id keeps its bigint
+            // and loses its foreign key (C2); the five copies here refuse every write, naming ai_db.
+            assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE conrelid = 'pipeline_field'::regclass "
+                + "AND confrelid = 'ai_prompt'::regclass", Integer.class)).as("C2 demoted").isZero();
+            for (String table : new String[] {"ai_model_connection", "ai_prompt", "ai_prompt_version", "ai_prompt_run", "ai_agent"}) {
+                assertThat(sql.queryForObject("SELECT count(*) FROM " + table, Integer.class)).as(table).isZero();
+                assertThatThrownBy(() -> sql.update("DELETE FROM " + table)).as("delete %s", table).hasMessageContaining("ai_db");
+            }
         } finally {
             pool.close();
             try (Connection admin = DriverManager.getConnection(server, user, password); Statement sql = admin.createStatement()) {
