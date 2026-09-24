@@ -72,9 +72,16 @@ public class ProcessCron {
      * Runs a quarter-hour apart rather than every minute: it exists to catch something that has
      * already been stuck for six hours, so noticing within fifteen minutes is ample and it keeps
      * a table scan off the minute cycle.
+     *
+     * On the clock, not on a fixedDelay (MIG-132, T7). A fixedDelay counts from each JVM's own start,
+     * so two replicas fired at unrelated moments and the lock -- held for 5 s -- merged only firings
+     * that happened to land together: replicas started a minute apart each swept every quarter-hour.
+     * A cron fires every replica at the same tick, and the 30 s lock covers the skew between their
+     * clocks, so one of them sweeps. process.reconcile.cron exists for the two-instance harness, which
+     * ticks every minute; production keeps the default.
      */
-    @Scheduled(initialDelay = 30000, fixedDelay = 15 * 60 * 1000)
-    @SchedulerLock(name = "reconcileStalledRuns", lockAtLeastFor = "5S", lockAtMostFor = "5M")
+    @Scheduled(cron = "${process.reconcile.cron:0 */15 * * * *}")
+    @SchedulerLock(name = "reconcileStalledRuns", lockAtLeastFor = "30S", lockAtMostFor = "5M")
     public void reconcileStalledRuns() {
         try {
             this.producerBulkEngine.reconcileStalledRuns();
