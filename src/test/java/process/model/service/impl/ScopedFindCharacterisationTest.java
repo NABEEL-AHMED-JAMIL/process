@@ -17,6 +17,7 @@ import process.model.repository.TenantRepository;
 import process.model.service.PageAccessService;
 import process.notifications.TestNotifications;
 import process.security.TenantContext;
+import process.security.TenantFilterHelper;
 import process.storage.TrustedStorageOperations;
 import process.util.ProcessUtil;
 import process.util.UserNameResolver;
@@ -26,6 +27,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -70,7 +72,7 @@ class ScopedFindCharacterisationTest {
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
             TestNotifications.recording(null, null, this.notices, this.mails), this.userNameResolver, this.storage,
-            this.pageAccessService);
+            this.pageAccessService, mock(TenantFilterHelper.class));
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }
 

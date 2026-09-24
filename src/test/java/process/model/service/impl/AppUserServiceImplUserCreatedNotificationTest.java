@@ -22,6 +22,7 @@ import process.model.repository.TenantRepository;
 import process.model.service.PageAccessService;
 import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
+import process.security.TenantFilterHelper;
 import process.util.ProcessUtil;
 import process.util.UserNameResolver;
 
@@ -34,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -80,7 +82,7 @@ public class AppUserServiceImplUserCreatedNotificationTest {
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
             this.passwordEncoder, TestNotifications.recording(null, null, this.notificationCenterService, this.emailMessagesFactory),
-            this.userNameResolver, this.storageBrowserService, this.pageAccessService);
+            this.userNameResolver, this.storageBrowserService, this.pageAccessService, mock(TenantFilterHelper.class));
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
         // The id the database would hand back -- without it the new user has nobody to notify.
         lenient().when(this.appUserRepository.save(any())).thenAnswer(invocation -> {

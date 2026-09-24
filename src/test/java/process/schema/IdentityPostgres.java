@@ -13,9 +13,15 @@ import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StreamUtils;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -76,6 +82,37 @@ public final class IdentityPostgres implements AutoCloseable {
         liquibase.setContexts("init");
         liquibase.setResourceLoader(new DefaultResourceLoader(getClass().getClassLoader()));
         liquibase.afterPropertiesSet();
+        return this;
+    }
+
+    /**
+     * The database as it stood before a changeset: the master with that include and every one after
+     * it left out, written beside the real one so its includes resolve the same way. Running migrate()
+     * afterwards then applies only what was left out, which is how a migration meets existing rows.
+     */
+    public IdentityPostgres migrateBefore(String changelogFile) throws Exception {
+        String master;
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream("db/changelog/db.changelog-master.yaml")) {
+            master = new String(StreamUtils.copyToByteArray(in), StandardCharsets.UTF_8);
+        }
+        int cut = master.indexOf("  - include:\n      file: " + changelogFile);
+        if (cut < 0) {
+            throw new IllegalArgumentException(changelogFile + " is not included by the master changelog");
+        }
+        String name = "db/changelog/before-" + this.scratch + ".yaml";
+        Path copy = Paths.get(getClass().getClassLoader().getResource("db/changelog/db.changelog-master.yaml").toURI())
+            .resolveSibling("before-" + this.scratch + ".yaml");
+        Files.write(copy, master.substring(0, cut).getBytes(StandardCharsets.UTF_8));
+        try {
+            SpringLiquibase liquibase = new SpringLiquibase();
+            liquibase.setDataSource(this.pool);
+            liquibase.setChangeLog("classpath:" + name);
+            liquibase.setContexts("init");
+            liquibase.setResourceLoader(new DefaultResourceLoader(getClass().getClassLoader()));
+            liquibase.afterPropertiesSet();
+        } finally {
+            Files.deleteIfExists(copy);
+        }
         return this;
     }
 

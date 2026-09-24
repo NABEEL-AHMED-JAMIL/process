@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,6 +38,17 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
      */
     @Query(value = "SELECT EXISTS (SELECT 1 FROM app_user WHERE lower(username) = lower(:username))", nativeQuery = true)
     public boolean isUsernameTaken(@Param("username") String username);
+
+    /**
+     * People by id, whichever tenant they are in -- for putting a name to an id, never for deciding
+     * what a caller may touch (MIG-13).
+     *
+     * findAllById is a query, so the tenant filter reaches it: a tenant's job created by a platform
+     * admin would lose its author's name. This is the explicit exception, native so the filter
+     * cannot reach it, and named for what it crosses so nobody mistakes it for a scoped read.
+     */
+    @Query(value = "SELECT * FROM app_user WHERE app_user_id IN (:ids)", nativeQuery = true)
+    public List<AppUser> findAllByIdAcrossTenants(@Param("ids") Collection<Long> ids);
 
     public List<AppUser> findByTenantIdAndStatusNotOrderByAppUserIdDesc(Long tenantId, Status status);
 

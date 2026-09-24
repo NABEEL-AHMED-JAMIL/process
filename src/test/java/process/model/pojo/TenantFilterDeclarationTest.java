@@ -37,16 +37,19 @@ public class TenantFilterDeclarationTest {
      * narrower than the tenant. Filtering these would hide rows their owners are meant to see:
      *
      *   Tenant       -- tenant_id is its own primary key.
-     *   AppUser      -- the login lookup and the created-by name resolver both read users
-     *                   outside the caller's tenant, and the login one runs before there is a
-     *                   tenant at all.
      *   LookupData   -- the parent rows are engine state, and the whole tree is loaded into a
      *                   process-wide cache that is rebuilt from inside tenant requests, so a
      *                   filtered rebuild would serve one tenant's view to everybody.
-     *   Notification -- read by recipient, which is already narrower than by tenant.
+     *
+     * AppUser used to be here, and is filtered now (MIG-13): the reads that legitimately cross
+     * tenants -- sign-in, "is this name taken", the created-by name resolver, the internal user
+     * directory -- are native queries the filter does not reach, each named for what it crosses.
+     * Notification used to be here too; it is not a process entity any more. It left for
+     * notifications-service and its own notifications_db (MIG-21), where tenant_id is NOT NULL and
+     * every read is by recipient.
      */
     private static final List<String> NOT_SCOPED_BY_TENANT_FILTER =
-        Arrays.asList("Tenant", "AppUser", "LookupData", "Notification");
+        Arrays.asList("Tenant", "LookupData");
 
     private String conditionOf(Class<?> entity) {
         Filter filter = entity.getAnnotation(Filter.class);
@@ -64,6 +67,21 @@ public class TenantFilterDeclarationTest {
         for (Class<?> entity : new Class<?>[] { SourceTaskType.class, KafkaConnectionProfile.class }) {
             assertTrue(conditionOf(entity).contains("tenant_id is null"),
                 entity.getSimpleName() + " has shared rows, so the filter has to admit a null tenant");
+        }
+    }
+
+    /** MIG-13: a person, and a person's page exceptions, belong to exactly one tenant; a platform admin's row to none. */
+    @Test
+    void aPersonAndTheirExceptionsBelongToExactlyOneTenant() {
+        assertEquals("tenant_id = :tenantId", conditionOf(AppUser.class));
+        assertEquals("tenant_id = :tenantId", conditionOf(UserPageAccess.class));
+    }
+
+    /** The one Identity table that left: nothing in process may map it again. */
+    @Test
+    void notificationIsNoLongerAProcessEntity() {
+        for (File source : pojoSources()) {
+            assertTrue(!source.getName().equals("Notification.java"), "notification lives in notifications_db (MIG-21)");
         }
     }
 
@@ -90,7 +108,7 @@ public class TenantFilterDeclarationTest {
      * The whole list, so a count quoted in a document can be checked against the code rather than the
      * other way round. 24 in the Phase 1 analysis; StorageConnection (MIG-68) and DocumentConverterTask
      * (Media) have left process since, InvoiceLine joined (MIG-47), and then the five billing entities left
-     * with billing-service (MIG-88/89): 18.
+     * with billing-service (MIG-88/89): 18. AppUser and UserPageAccess joined (MIG-13).
      */
     @Test
     void theFilteredEntitiesAreExactlyThese() throws Exception {
@@ -102,8 +120,8 @@ public class TenantFilterDeclarationTest {
             }
         }
         Collections.sort(filtered);
-        assertEquals(Arrays.asList("AiAgent", "AiModelConnection", "AiPrompt", "AiPromptRun", "KafkaConnectionProfile", "PageAccessProfile", "Pipeline", "SourceJob",
-            "SourceTask", "SourceTaskType", "TenantTaskTypeKafkaRoute"), filtered);
+        assertEquals(Arrays.asList("AiAgent", "AiModelConnection", "AiPrompt", "AiPromptRun", "AppUser", "KafkaConnectionProfile", "PageAccessProfile",
+            "Pipeline", "SourceJob", "SourceTask", "SourceTaskType", "TenantTaskTypeKafkaRoute", "UserPageAccess"), filtered);
     }
 
     /** An entity that imports the filter annotations without applying them reads as filtered and is not (DEF-165). */

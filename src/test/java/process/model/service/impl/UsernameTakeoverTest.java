@@ -23,6 +23,7 @@ import process.model.service.PageAccessService;
 import process.notifications.TestNotifications;
 import process.security.LoginAttemptGuard;
 import process.security.TenantContext;
+import process.security.TenantFilterHelper;
 import process.storage.TrustedStorageOperations;
 import process.util.JwtUtil;
 import process.util.UserNameResolver;
@@ -73,7 +74,7 @@ class UsernameTakeoverTest {
     private AppUserServiceImpl users() {
         return new AppUserServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
             TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
-            mock(UserNameResolver.class), mock(TrustedStorageOperations.class), this.pageAccessService);
+            mock(UserNameResolver.class), mock(TrustedStorageOperations.class), this.pageAccessService, mock(TenantFilterHelper.class));
     }
 
     private TenantRequestServiceImpl requests() {

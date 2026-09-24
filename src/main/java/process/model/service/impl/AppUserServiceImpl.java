@@ -23,6 +23,7 @@ import process.storage.TrustedAccess;
 import process.storage.TrustedCaller;
 import process.storage.TrustedStorageOperations;
 import process.security.TenantContext;
+import process.security.TenantFilterHelper;
 import process.security.TenantOwnership;
 import process.notifications.MailExtras;
 import process.notifications.OutboxNotifications;
@@ -33,6 +34,8 @@ import process.util.PhoneNumberValidator;
 import process.util.UserNameResolver;
 import org.springframework.beans.factory.annotation.Value;
 import process.config.StoragePropertyDefaults;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
 import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.List;
@@ -85,10 +88,16 @@ public class AppUserServiceImpl implements AppUserService {
 
     private final PageAccessService pageAccessService;
 
+    private final TenantFilterHelper tenantFilterHelper;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public AppUserServiceImpl(AppUserRepository appUserRepository, TenantRepository tenantRepository,
         PasswordEncoder passwordEncoder, NotificationPort notifications,
         UserNameResolver userNameResolver, TrustedStorageOperations storageBrowserService,
-        PageAccessService pageAccessService) {
+        PageAccessService pageAccessService, TenantFilterHelper tenantFilterHelper) {
+        this.tenantFilterHelper = tenantFilterHelper;
         this.pageAccessService = pageAccessService;
         this.storageBrowserService = storageBrowserService;
         this.notifications = notifications;
@@ -141,6 +150,10 @@ public class AppUserServiceImpl implements AppUserService {
 
     @Override
     public ResponseDto listUsers() throws Exception {
+        // Defence in depth (MIG-13): the tenant query below is the rule, and the filter makes a
+        // later findAll() here scoped too. A platform admin's filter is turned off, not skipped --
+        // its listing spans tenants on purpose.
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<AppUser> users = TenantContext.isPlatformAdmin()
             ? this.appUserRepository.findAll().stream()
                 .filter(u -> u.getStatus() != Status.Delete)
@@ -422,6 +435,7 @@ public class AppUserServiceImpl implements AppUserService {
                 return badProfile;
             }
         }
+        UserRole previousRole = user.getUserRole();
         user.setUserRole(effectiveRole);
         user.setPhoneNumber(phone.getValue());
         user.setTenantId(effectiveTenantId);
@@ -433,6 +447,11 @@ public class AppUserServiceImpl implements AppUserService {
         // were ever demoted.
         Long previousProfile = user.getPageAccessProfileId();
         user.setPageAccessProfileId(effectiveRole == UserRole.TENANT_USER ? appUserDto.getPageAccessProfileId() : null);
+        // The same for the person's page exceptions, and before the save: they carry the person's
+        // tenant (MIG-13), so a promotion to platform admin could not clear the tenant with them there.
+        if (previousRole == UserRole.TENANT_USER && effectiveRole != UserRole.TENANT_USER) {
+            this.pageAccessService.dropExceptions(user.getAppUserId());
+        }
         this.appUserRepository.save(user);
         if (!Objects.equals(previousProfile, user.getPageAccessProfileId())) {
             this.pageAccessService.notifyProfileChanged(user);

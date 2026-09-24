@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 64.0-user-page-access-tenant
+      author: nabeel.amd93
+      description: "user_page_access carries its person's tenant_id, held to it by a composite foreign key (MIG-13, DEF-012)"
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            V64 cannot give user_page_access a tenant: some exceptions belong to a person with no tenant. Only a
+            tenant user holds exceptions, so these are leftovers from a person later made a platform admin. Find them with
+            SELECT a.* FROM user_page_access a JOIN app_user u ON u.app_user_id = a.app_user_id WHERE u.tenant_id IS NULL;
+            They change nothing for an admin (effectivePages ignores them); delete them and start again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT count(*) FROM public.user_page_access a JOIN public.app_user u ON u.app_user_id = a.app_user_id
+              WHERE u.tenant_id IS NULL
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V64.0-user-page-access-tenant/V64__user_page_access_tenant.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP INDEX IF EXISTS public.idx_user_page_access_tenant;
+              ALTER TABLE public.user_page_access DROP CONSTRAINT IF EXISTS fk_user_page_access_user_tenant;
+              ALTER TABLE public.app_user DROP CONSTRAINT IF EXISTS ux_app_user_id_tenant;
+              ALTER TABLE public.user_page_access DROP COLUMN IF EXISTS tenant_id;

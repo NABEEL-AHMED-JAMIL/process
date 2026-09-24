@@ -4,7 +4,10 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
+import org.hibernate.annotations.ParamDef;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
@@ -22,6 +25,13 @@ import java.sql.Timestamp;
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+// MIG-13: a person belongs to exactly one tenant and a platform admin's row to none, so a plain
+// equality -- a tenant caller never sees a platform row through a filtered query. The reads that
+// must cross tenants (sign-in, "is this name taken", created-by names, the internal user directory)
+// are native queries in AppUserRepository, which the filter does not reach. Loads by id are not
+// filtered either; scopedFind and TenantOwnership remain the guard on those.
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class AppUser implements Audited {
     @Transient
     private String createdByName;

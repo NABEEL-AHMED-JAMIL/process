@@ -382,6 +382,21 @@ public class PageAccessProfileScopeTest {
 
     // ---- per-person exceptions
 
+    /** MIG-13: the exception's tenant is the person's, not the caller's -- a platform admin has none. */
+    @Test
+    void anExceptionAPlatformAdminSetsCarriesThePersonsTenant() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "root@example.com");
+        AppUser olivia = person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L);
+        when(this.appUserRepository.findById(44L)).thenReturn(Optional.of(olivia));
+        when(this.profileRepository.findById(1L)).thenReturn(Optional.of(existing(1L, TENANT_A, "Operator", true, "jobs")));
+
+        assertThat(this.service.setPageAccess(44L, "reports", true).getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+
+        ArgumentCaptor<UserPageAccess> saved = ArgumentCaptor.forClass(UserPageAccess.class);
+        verify(this.exceptionRepository).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo(TENANT_A);
+    }
+
     @Test
     void tickingAPageTheProfileWithholdsStoresAnAllowedException() throws Exception {
         this.actAsTenantAdmin();
@@ -397,6 +412,8 @@ public class PageAccessProfileScopeTest {
         verify(this.exceptionRepository).save(saved.capture());
         assertThat(saved.getValue().getPageKey()).isEqualTo("reports");
         assertThat(saved.getValue().isAllowed()).isTrue();
+        // MIG-13: the exception carries its person's tenant, which the tenant filter scopes it by.
+        assertThat(saved.getValue().getTenantId()).isEqualTo(TENANT_A);
         verify(this.notificationCenterService).create(eq(TENANT_A), eq(44L), eq(NotificationType.PAGE_ACCESS_CHANGED),
             any(), any(), eq("Reports is now open for you."), eq("/dashboard"));
     }
@@ -448,8 +465,8 @@ public class PageAccessProfileScopeTest {
         when(this.appUserRepository.findByTenantIdAndStatusNotOrderByAppUserIdDesc(TENANT_A, Status.Delete))
             .thenReturn(Collections.singletonList(person(44L, TENANT_A, UserRole.TENANT_USER, "Olivia Bennett", 1L)));
         when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Arrays.asList(
-            new UserPageAccess(44L, "reports", true, ADMIN_A),
-            new UserPageAccess(44L, "queue", false, ADMIN_A)));
+            new UserPageAccess(44L, TENANT_A, "reports", true, ADMIN_A),
+            new UserPageAccess(44L, TENANT_A, "queue", false, ADMIN_A)));
 
         @SuppressWarnings("unchecked")
         List<AccessPersonDto> rows = (List<AccessPersonDto>) this.service.listPeople(null).getData();
