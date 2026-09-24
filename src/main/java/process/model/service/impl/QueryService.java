@@ -1,5 +1,8 @@
 package process.model.service.impl;
 
+import process.util.RequestRefused;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -189,20 +192,41 @@ public class QueryService {
         return query;
     }
 
+    /**
+     * No dates is all time. A date that is there but is not one is refused (MIG-103): it used to be
+     * dropped without a word, so a typo showed all-time figures under the range the person asked for.
+     */
     private String dateRangeFilter(String column, String startDate, String endDate) {
+        for (String date : new String[] {startDate, endDate}) {
+            if (date != null && !date.trim().isEmpty()) {
+                this.requireValidDate(date);
+            }
+        }
         if (!isValidDate(startDate) || !isValidDate(endDate)) {
             return "";
         }
         return String.format("and date(%s) between '%s' and '%s' ", column, startDate, endDate);
     }
 
+    /**
+     * A real calendar date, not just its shape: "2026-13-45" has the shape, passed, and failed inside
+     * Postgres's cast as a 500 -- the refusal the Dashboard is meant to give in words (MIG-103).
+     */
     private boolean isValidDate(String date) {
-        return date != null && date.matches("\\d{4}-\\d{2}-\\d{2}");
+        if (date == null || !date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return false;
+        }
+        try {
+            LocalDate.parse(date);
+            return true;
+        } catch (DateTimeParseException impossible) {
+            return false;
+        }
     }
 
     private String requireValidDate(String date) {
         if (!this.isValidDate(date)) {
-            throw new IllegalArgumentException("Invalid date -- expected yyyy-MM-dd.");
+            throw new RequestRefused("Invalid date -- expected yyyy-MM-dd.");
         }
         return date;
     }
@@ -249,7 +273,7 @@ public class QueryService {
         if (jobStatus != null && JOB_QUEUE_STATUSES.contains(jobStatus.toUpperCase())) {
             return jobStatus.toUpperCase();
         }
-        throw new IllegalArgumentException("Invalid jobStatus -- expected one of " + JOB_QUEUE_STATUSES);
+        throw new RequestRefused("Invalid jobStatus -- expected one of " + JOB_QUEUE_STATUSES);
     }
 
     /**

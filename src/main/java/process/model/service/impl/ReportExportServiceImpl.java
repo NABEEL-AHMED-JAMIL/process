@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import process.util.RequestRefused;
+
 import process.media.MediaPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,6 +89,9 @@ public class ReportExportServiceImpl {
         List<Object[]> result;
         try {
             result = this.queryService.executeQuery(this.queryService.runReportRows(startDate, endDate));
+        } catch (RequestRefused refused) {
+            // The person's mistake, in the validator's words (MIG-103) -- not an error to log.
+            return new ResponseDto(ERROR, refused.getMessage());
         } catch (Exception ex) {
             logger.error("Report: could not read run rows", ex);
             return new ResponseDto(ERROR, "Could not read the runs for that range.");

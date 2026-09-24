@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import process.util.RequestRefused;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -132,18 +134,14 @@ public class UserStatisticsQueryTest {
     }
 
     @Test
-    @DisplayName("a malformed range is dropped rather than interpolated into the report query")
+    @DisplayName("a malformed range is refused, never interpolated into the report query (MIG-103: refused, no longer silently dropped)")
     void reportRejectsMalformedDates() {
-        String sql = queryService.runReportRows("2026-01-01'; drop table job_queue; --", "x");
-        assertFalse(sql.contains("drop table"), sql);
-        assertFalse(sql.contains("date(q.start_time)"), sql);
+        assertThrows(RequestRefused.class, () -> queryService.runReportRows("2026-01-01'; drop table job_queue; --", "x"));
     }
 
     @Test
-    @DisplayName("a malformed date is dropped rather than interpolated")
+    @DisplayName("a malformed date is refused, never interpolated (MIG-103: refused, no longer silently dropped)")
     void rejectsMalformedDates() {
-        String sql = queryService.userStatistics("2026-08-01'; drop table app_user; --", "nonsense");
-        assertFalse(sql.contains("drop table"), sql);
-        assertFalse(sql.contains("date(jq.date_created)"), sql);
+        assertThrows(RequestRefused.class, () -> queryService.userStatistics("2026-08-01'; drop table app_user; --", "nonsense"));
     }
 }
