@@ -42,8 +42,12 @@ public class PageAccessCache {
         }
     }
 
-    /** A profile's pages changed, so every holder's answer did. */
-    public void forgetAll() {
+    /**
+     * A profile's pages changed, so every holder's answer did -- on THIS instance. Other process
+     * instances and the gateway's page gate keep their own answers until the 15-second TTL ends
+     * them; that bound, not this method, is the cross-instance guarantee (ADR-019, MIG-99).
+     */
+    public void forgetAllHere() {
         this.entries.clear();
     }
 

@@ -128,4 +128,26 @@ public class PageAccessInterceptorTest {
         this.call("/sourceJob.json/c", new MockHttpServletResponse());
         verify(this.pageAccessService, times(2)).effectivePages(any());
     }
+
+    /** MIG-12: a tenant user's token with no appUserId claim is refused on every gated page, not waved through. */
+    @Test
+    void aTenantUserWithNoUserIdIsRefusedOnEveryGatedPage() throws Exception {
+        TenantContext.set(1001L, "TENANT_USER", null, "olivia@a.example");
+        for (String path : new String[] {"/sourceJob.json/listSourceJob", "/report.json/fetchReports", "/documentConverter.json/list",
+                "/analytics.json/run", "/billing.json/summary"}) {
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            assertThat(this.call(path, response)).as(path).isFalse();
+            assertThat(response.getStatus()).as(path).isEqualTo(403);
+        }
+    }
+
+    /** MIG-12: a valid token whose user row is gone holds no pages, rather than every page. */
+    @Test
+    void aTenantUserWhoseRowIsGoneHoldsNoPages() throws Exception {
+        when(this.appUserRepository.findById(USER)).thenReturn(Optional.empty());
+        TenantContext.set(1001L, "TENANT_USER", USER, "olivia@a.example");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertThat(this.call("/sourceJob.json/listSourceJob", response)).isFalse();
+        assertThat(response.getStatus()).isEqualTo(403);
+    }
 }
