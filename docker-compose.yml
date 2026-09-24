@@ -217,15 +217,17 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-test}
       AWS_SECRET_KEY: ${AWS_SECRET_KEY:-test}
-      # Base64-encoded 256-bit AES key for encrypted lookup values (openssl rand -base64 32).
-      # Rotating this makes any already-encrypted lookup values undecryptable -- override via
-      # a real LOOKUP_ENCRYPTION_KEY env var rather than editing this fallback once real
-      # encrypted data exists.
-      LOOKUP_ENCRYPTION_KEY: ${LOOKUP_ENCRYPTION_KEY:-RACT0Saglm5Lastgky0Z3RgMXiZbSjxiNvgbnQDtMwc=}
+      # MIG-5: secrets are sealed under PROCESS_ENCRYPTION_KEY, tagged with PROCESS_ENCRYPTION_KEY_ID
+      # (openssl rand -base64 32), from process/.env -- never from here: the key this file once held
+      # as a fallback was committed, so it was retired. LOOKUP_ENCRYPTION_KEY is that retired key, set
+      # only while EncryptionReseal still reports values under it.
+      PROCESS_ENCRYPTION_KEY_ID: ${PROCESS_ENCRYPTION_KEY_ID:?PROCESS_ENCRYPTION_KEY_ID is not set in process/.env}
+      PROCESS_ENCRYPTION_KEY: ${PROCESS_ENCRYPTION_KEY:?PROCESS_ENCRYPTION_KEY is not set in process/.env}
+      LOOKUP_ENCRYPTION_KEY: ${LOOKUP_ENCRYPTION_KEY:-}
       # Base64-encoded 256-bit HMAC key for signing JWTs (openssl rand -base64 32). Rotating
-      # this invalidates every already-issued token (everyone gets logged out) -- override via
-      # a real JWT_SECRET_KEY env var in any environment with real users.
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-4z8qN3vW9pT2xR7mK5jL1sC6bF0yH8dQ4nE9tV2rU7w=}
+      # this invalidates every already-issued token (everyone gets logged out). From process/.env;
+      # no fallback here (MIG-5): the one this file held was committed.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is not set in process/.env}
       # The metering service (job-search's etl_meter): usage is reported there and read back
       # for Cost & usage. Empty METER_URL means the console runs without metering.
       METER_URL: ${METER_URL:-http://host.docker.internal:8200}

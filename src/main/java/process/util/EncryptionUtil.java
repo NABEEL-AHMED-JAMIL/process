@@ -21,10 +21,28 @@ public class EncryptionUtil {
     private static final int GCM_TAG_LENGTH_BITS = 128;
     private static final int GCM_IV_LENGTH_BYTES = 12;
 
+    /**
+     * The key everything was sealed under before MIG-5, in process's untagged format. It was committed
+     * as a fallback in git, so it only OPENS what it sealed -- nothing new is sealed under it once a
+     * current key is configured -- and it is removed from the environment after EncryptionReseal has
+     * re-sealed every value.
+     */
     @Value("${lookup.encryption.key:}")
     private String base64Key;
 
+    /** MIG-5: the current key and its id. Values it seals are tagged "k<id>:" (platform-commons' format). */
+    @Value("${process.encryption.key-id:}")
+    private String currentKeyId;
+
+    @Value("${process.encryption.key:}")
+    private String currentKey;
+
+    private volatile KeyringSeal keyring;
+
     public String encrypt(String plainText) {
+        if (this.hasCurrentKey()) {
+            return this.keyring().encrypt(plainText);
+        }
         try {
             byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
             new SecureRandom().nextBytes(iv);
@@ -41,6 +59,13 @@ public class EncryptionUtil {
     }
 
     public String decrypt(String cipherTextBase64) {
+        if (this.hasCurrentKey() && this.isCurrent(cipherTextBase64)) {
+            try {
+                return this.keyring().decrypt(cipherTextBase64);
+            } catch (RuntimeException ex) {
+                throw new IllegalStateException("Failed to decrypt lookup value: " + ex.getMessage(), ex);
+            }
+        }
         try {
             byte[] ivAndCipherText = Base64.getDecoder().decode(cipherTextBase64);
             byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
@@ -54,6 +79,27 @@ public class EncryptionUtil {
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to decrypt lookup value: " + ex.getMessage(), ex);
         }
+    }
+
+    /** Whether a stored value is sealed under the current key, so needs no re-seal. */
+    public boolean isCurrent(String sealed) {
+        return this.hasCurrentKey() && sealed != null && sealed.startsWith("k" + this.currentKeyId.trim() + ":");
+    }
+
+    public boolean hasCurrentKey() {
+        return this.currentKeyId != null && !this.currentKeyId.trim().isEmpty()
+            && this.currentKey != null && !this.currentKey.trim().isEmpty();
+    }
+
+    private KeyringSeal keyring() {
+        if (this.keyring == null) {
+            synchronized (this) {
+                if (this.keyring == null) {
+                    this.keyring = new KeyringSeal(this.currentKeyId.trim(), this.currentKey.trim());
+                }
+            }
+        }
+        return this.keyring;
     }
 
     private SecretKey secretKey() {
