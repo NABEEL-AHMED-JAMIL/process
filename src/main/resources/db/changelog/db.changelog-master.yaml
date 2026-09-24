@@ -58,3 +58,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V81.0-refused-callback-on-run.yaml
   - include:
       file: db/changelog/yaml/V82.0-job-queue-correlation-id.yaml
+  - include:
+      file: db/changelog/yaml/V83.0-one-in-flight-run-per-job.yaml

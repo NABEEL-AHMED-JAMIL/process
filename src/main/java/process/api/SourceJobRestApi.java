@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
+import process.engine.OneRunInFlight;
 import process.model.dto.ResponseDto;
 import process.model.dto.JobAssistantRequestDto;
 import process.model.service.impl.JobAssistantServiceImpl;
@@ -145,6 +146,12 @@ public class SourceJobRestApi {
         try {
             return new ResponseEntity<>(this.sourceJobService.runSourceJob(tempSourceJob), HttpStatus.OK);
         } catch (Exception ex) {
+            if (OneRunInFlight.isViolation(ex)) {
+                // Past the service's own in-flight check, and refused at commit by the index (P12): the
+                // enqueuer or another Run now took the slot first. The same answer the check gives.
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR,
+                    "A job can't be run while its last run is still in flight ('Queue', 'Start', 'Running')."), HttpStatus.OK);
+            }
             logger.error("An error occurred while runSourceJob.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }

@@ -202,12 +202,28 @@ public class ProducerBulkEngine {
                     .forEach(scheduler -> {
                         try {
                             Thread.sleep(50);
-                            JobQueue jobQueue;
+                            JobQueue jobQueue = null;
                             // Whether this pass moved the job's own running status. The skip
                             // branch does not, and the announcement below reads that status to
                             // decide what to say -- see skipManualJobInQueue for the full story.
                             boolean jobStatusMoved;
-                            if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
+                            // The count is the cheap pre-filter; the index is the enforcement (P12).
+                            // Another enqueuer, or an operator's Run now, can take the slot between
+                            // the two, and the index then refuses this insert: that is the same
+                            // "already in queue" as a positive count, not an error. The run row is
+                            // written BEFORE the job is marked Queue, so a refused insert leaves the
+                            // job's status belonging to the run that won.
+                            if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) == 0) {
+                                try {
+                                    jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+                                } catch (RuntimeException ex) {
+                                    if (!OneRunInFlight.isViolation(ex)) {
+                                        throw ex;
+                                    }
+                                    logger.info("addJobInQueue --> job {} was enqueued elsewhere first; recording the slot as a skip.", scheduler.getJobId());
+                                }
+                            }
+                            if (jobQueue == null) {
 
                                 jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
                                 this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
@@ -218,7 +234,6 @@ public class ProducerBulkEngine {
                                 jobStatusMoved = false;
                             } else {
                                 this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
-                                jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
                                 this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
                                 this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
                                 jobStatusMoved = true;
