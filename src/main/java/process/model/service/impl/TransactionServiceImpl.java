@@ -158,8 +158,9 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findById(jobQueueId);
     }
 
-    public List<Scheduler> findDueSchedulers(LocalDateTime now) {
-        return this.schedulerRepository.findDueSchedulers(now);
+    /** For the caller's transaction: see SchedulerRepository.claimNextDueScheduler. */
+    public Optional<Scheduler> claimNextDueScheduler(LocalDateTime now, List<Long> passed) {
+        return this.schedulerRepository.claimNextDueScheduler(now, passed);
     }
 
     public List<JobQueue> findAllJobForTodayWithLimit(Long limit, LocalDateTime eligibleAt) {

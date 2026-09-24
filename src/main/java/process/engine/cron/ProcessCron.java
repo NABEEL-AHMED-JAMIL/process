@@ -38,8 +38,12 @@ public class ProcessCron {
         this.producerBulkEngine = producerBulkEngine;
     }
 
+    /**
+     * No ShedLock (MIG-152): every replica runs the enqueuer, and they share its work by claiming due
+     * slots FOR UPDATE SKIP LOCKED, one local transaction per slot. ShedLock stays on the crons that are
+     * genuinely single-instance.
+     */
     @Scheduled(initialDelay = 5000, fixedDelay = 60 * ProcessCron.SCHEDULER_CRON_TIME_IN_ONE_MINUTES * 1000)
-    @SchedulerLock(name = "addJobInQueue", lockAtLeastFor = "5S", lockAtMostFor = "10M")
     public void addJobInQueue() {
         try {
             logger.info("++++++++++++++++++++++++Start-AddJobInQueue++++++++++++++++++++++++++++++++");

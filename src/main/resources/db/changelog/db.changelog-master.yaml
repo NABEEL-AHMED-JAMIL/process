@@ -60,3 +60,5 @@ databaseChangeLog:
       file: db/changelog/yaml/V82.0-job-queue-correlation-id.yaml
   - include:
       file: db/changelog/yaml/V83.0-one-in-flight-run-per-job.yaml
+  - include:
+      file: db/changelog/yaml/V84.0-scheduler-dispatch-eligible.yaml

@@ -2,11 +2,15 @@ package process.engine;
 
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
-import org.barco.platform.correlation.CorrelationId;
 import org.apache.logging.log4j.Logger;
+import org.barco.platform.correlation.CorrelationId;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
 import process.notifications.JobMail;
@@ -47,6 +51,8 @@ public class ProducerBulkEngine {
     private final JobMail jobMail;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
+    /** One local transaction per enqueued slot (MIG-152); none at all for an engine built by hand in a test. */
+    private final TransactionOperations transactions;
 
     public ProducerBulkEngine(BulkAction bulkAction,
         TransactionServiceImpl transactionService,
@@ -54,6 +60,30 @@ public class ProducerBulkEngine {
         KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
         RunCallbackTokens runCallbackTokens, AiStepService aiStepService) {
+        this(bulkAction, transactionService, jobMail, kafkaTemplateProvider, kafkaConnectionResolver,
+            runCallbackTokens, aiStepService, TransactionOperations.withoutTransaction());
+    }
+
+    @Autowired
+    public ProducerBulkEngine(BulkAction bulkAction,
+        TransactionServiceImpl transactionService,
+        JobMail jobMail,
+        KafkaTemplateProvider kafkaTemplateProvider,
+        KafkaConnectionResolver kafkaConnectionResolver,
+        RunCallbackTokens runCallbackTokens, AiStepService aiStepService,
+        PlatformTransactionManager transactionManager) {
+        this(bulkAction, transactionService, jobMail, kafkaTemplateProvider, kafkaConnectionResolver,
+            runCallbackTokens, aiStepService, new TransactionTemplate(transactionManager));
+    }
+
+    ProducerBulkEngine(BulkAction bulkAction,
+        TransactionServiceImpl transactionService,
+        JobMail jobMail,
+        KafkaTemplateProvider kafkaTemplateProvider,
+        KafkaConnectionResolver kafkaConnectionResolver,
+        RunCallbackTokens runCallbackTokens, AiStepService aiStepService,
+        TransactionOperations transactions) {
+        this.transactions = transactions;
         this.runCallbackTokens = runCallbackTokens;
         this.aiStepService = aiStepService;
         this.bulkAction = bulkAction;
@@ -190,67 +220,94 @@ public class ProducerBulkEngine {
         }
     }
 
+    /**
+     * The enqueuer: claims due slots one at a time until none is left (MIG-152).
+     *
+     * Each slot is its own local transaction: claim the scheduler row (FOR UPDATE SKIP LOCKED), enqueue
+     * or skip, advance next_run_at -- together or not at all. Any number of replicas run this at once
+     * with no ShedLock and no coordinator, each on slots no other holds, and a replica that dies part-way
+     * leaves its slot exactly as it was for the next tick to enqueue once. (A claim that advanced the
+     * cursor in a statement of its own, before the work, would have lost the slot instead.)
+     *
+     * The run row, not the busy count, is the last word (P12): if another enqueuer or a Run now takes the
+     * job between the count and the insert, the index refuses this insert at commit and the whole slot
+     * rolls back -- cursor included -- so it is simply claimed again, finds the winner's run, and is
+     * recorded as the ordinary "skip, already in queue". A slot that fails for any other reason is left
+     * for the next tick rather than retried here, so one bad schedule cannot hold the loop.
+     */
     public void addJobInQueue() {
         try {
-            logger.info("addJobInQueue --> FETCH due schedulers STARTED ");
             LocalDateTime now = LocalDateTime.now();
-            List<Scheduler> dueSchedulers = this.transactionService.findDueSchedulers(now);
-            logger.info("addJobInQueue --> FETCHED due schedulers: size {} ", dueSchedulers.size());
-            if (!dueSchedulers.isEmpty()) {
-
-                dueSchedulers.stream()
-                    .forEach(scheduler -> {
-                        try {
-                            Thread.sleep(50);
-                            JobQueue jobQueue = null;
-                            // Whether this pass moved the job's own running status. The skip
-                            // branch does not, and the announcement below reads that status to
-                            // decide what to say -- see skipManualJobInQueue for the full story.
-                            boolean jobStatusMoved;
-                            // The count is the cheap pre-filter; the index is the enforcement (P12).
-                            // Another enqueuer, or an operator's Run now, can take the slot between
-                            // the two, and the index then refuses this insert: that is the same
-                            // "already in queue" as a positive count, not an error. The run row is
-                            // written BEFORE the job is marked Queue, so a refused insert leaves the
-                            // job's status belonging to the run that won.
-                            if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) == 0) {
-                                try {
-                                    jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
-                                } catch (RuntimeException ex) {
-                                    if (!OneRunInFlight.isViolation(ex)) {
-                                        throw ex;
-                                    }
-                                    logger.info("addJobInQueue --> job {} was enqueued elsewhere first; recording the slot as a skip.", scheduler.getJobId());
-                                }
-                            }
-                            if (jobQueue == null) {
-
-                                jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
-                                this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
-                                Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(scheduler.getJobId());
-                                if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
-                                    this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
-                                }
-                                jobStatusMoved = false;
-                            } else {
-                                this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
-                                this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
-                                this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
-                                jobStatusMoved = true;
-                            }
-
-                            this.bulkAction.updateNextScheduler(scheduler);
-                            this.bulkAction.sendJobStatusNotification(scheduler.getJobId(), jobStatusMoved);
-                        } catch (Exception ex) {
-                            logger.error("Error in addJobInQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
-                        }
-                });
-                return;
+            // The slots this pass has given up on; -1 always, because NOT IN () is not SQL.
+            List<Long> passed = new ArrayList<>(Collections.singletonList(-1L));
+            Set<Long> raced = new HashSet<>();
+            int handled = 0;
+            while (true) {
+                Long[] slot = new Long[1];
+                try {
+                    Optional<Scheduler> claimed = this.transactions.execute(status -> {
+                        Optional<Scheduler> next = this.transactionService.claimNextDueScheduler(now, passed);
+                        next.ifPresent(scheduler -> {
+                            slot[0] = scheduler.getSchedulerId();
+                            this.enqueueSlot(scheduler);
+                        });
+                        return next;
+                    });
+                    if (claimed == null || !claimed.isPresent()) {
+                        break;
+                    }
+                    handled++;
+                } catch (RuntimeException ex) {
+                    if (slot[0] == null) {
+                        throw ex;
+                    }
+                    if (OneRunInFlight.isViolation(ex) && raced.add(slot[0])) {
+                        logger.info("addJobInQueue --> scheduler {} lost its job to another enqueuer; claiming it "
+                            + "again to record the slot as a skip.", slot[0]);
+                        continue;
+                    }
+                    passed.add(slot[0]);
+                    logger.error("Error in addJobInQueue for scheduler {}: {}.", slot[0], ExceptionUtil.getRootCauseMessage(ex));
+                }
+                Thread.sleep(50);
             }
-            logger.info("addJobInQueue --> NO scheduler is due at this timestamp");
+            if (handled == 0) {
+                logger.info("addJobInQueue --> NO scheduler is due at this timestamp");
+            } else {
+                logger.info("addJobInQueue --> {} due slot(s) enqueued or skipped.", handled);
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
         } catch (Exception ex) {
             logger.error("Error in addJobInQueue: {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
+    }
+
+    /** One claimed slot: a run, or a skip when the job already has one in flight; then the cursor moves on. */
+    private void enqueueSlot(Scheduler scheduler) {
+        JobQueue jobQueue;
+        // Whether this pass moved the job's own running status. The skip branch does not, and the
+        // announcement below reads that status to decide what to say -- see skipManualJobInQueue.
+        boolean jobStatusMoved;
+        if (this.bulkAction.getCountForInQueueJobByJobId(scheduler.getJobId()) > 0) {
+            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Skip, "Job %s skip, already in queue.", true);
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s skip, already in queue.", scheduler.getJobId()));
+            Optional<SourceJob> sourceJobForSkipMail = this.transactionService.findByJobId(scheduler.getJobId());
+            if (sourceJobForSkipMail.isPresent() && sourceJobForSkipMail.get().isSkipJob()) {
+                this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue), JobStatus.Skip);
+            }
+            jobStatusMoved = false;
+        } else {
+            // The run row BEFORE the job is marked Queue: should the index refuse it, nothing of this
+            // attempt -- the job's status included -- survives the rollback.
+            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+            this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
+            this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
+            this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
+            jobStatusMoved = true;
+        }
+        this.bulkAction.updateNextScheduler(scheduler);
+        this.bulkAction.sendJobStatusNotification(scheduler.getJobId(), jobStatusMoved);
     }
 
     /**

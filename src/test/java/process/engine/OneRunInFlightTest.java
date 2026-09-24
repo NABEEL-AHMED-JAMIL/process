@@ -26,7 +26,8 @@ import process.security.RunCallbackTokens;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,8 +36,10 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -79,10 +82,20 @@ class OneRunInFlightTest {
             new ConstraintViolationException("could not execute statement", root, "ux_job_queue_one_in_flight_per_job"));
     }
 
+    /**
+     * One due slot, claimable until the pass gives up on it or advances it -- as the SKIP LOCKED claim
+     * behaves: a slot whose transaction rolled back is still due, and is claimed again.
+     */
     private Scheduler due() {
         Scheduler scheduler = new Scheduler();
+        scheduler.setSchedulerId(501L);
         scheduler.setJobId(JOB_ID);
-        when(this.transactionService.findDueSchedulers(any())).thenReturn(Collections.singletonList(scheduler));
+        boolean[] advanced = {false};
+        lenient().doAnswer(inv -> advanced[0] = true).when(this.bulkAction).updateNextScheduler(scheduler);
+        when(this.transactionService.claimNextDueScheduler(any(), any())).thenAnswer(inv -> {
+            List<Long> passed = inv.getArgument(1);
+            return advanced[0] || passed.contains(501L) ? Optional.empty() : Optional.of(scheduler);
+        });
         return scheduler;
     }
 
@@ -101,11 +114,15 @@ class OneRunInFlightTest {
 
     // ---- the enqueuer ----------------------------------------------------------------------------------------
 
-    /** The count saw nothing, the index saw the other enqueuer's row: the outcome is the count's "busy". */
+    /**
+     * The count saw nothing, the index saw the other enqueuer's row. The slot's transaction rolls back
+     * whole, and the slot is claimed again: this time the count sees the winner, and the outcome is the
+     * count's "busy" -- a Skip, not an error.
+     */
     @Test
     void anEnqueuerThatLosesTheRaceToTheIndexRecordsASkipNotAnError() {
         Scheduler scheduler = this.due();
-        when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
+        when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0, 1);
         when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false)))
             .thenThrow(refusedByTheIndex());
         JobQueue skip = new JobQueue();
@@ -121,6 +138,20 @@ class OneRunInFlightTest {
         verify(this.bulkAction, never()).changeJobLastJobRun(anyLong(), any());
         verify(this.bulkAction).updateNextScheduler(scheduler);
         verify(this.bulkAction).sendJobStatusNotification(JOB_ID, false);
+    }
+
+    /** A slot the index refuses twice in one pass is left for the next tick: the loop never spins on it. */
+    @Test
+    void aSlotRefusedAgainIsLeftForTheNextTick() {
+        this.due();
+        when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
+        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false)))
+            .thenThrow(refusedByTheIndex());
+
+        this.engine.addJobInQueue();
+
+        verify(this.bulkAction, times(2)).createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false));
+        verify(this.bulkAction, never()).updateNextScheduler(any());
     }
 
     /**
@@ -146,7 +177,7 @@ class OneRunInFlightTest {
         order.verify(this.bulkAction).sendJobStatusNotification(JOB_ID, true);
     }
 
-    /** Anything else the insert throws is still an error for this slot, not a quiet skip. */
+    /** Anything else the insert throws is an error for this slot, not a quiet skip -- and not retried in this pass. */
     @Test
     void anyOtherFailureIsNotMistakenForBusy() {
         this.due();
@@ -156,6 +187,7 @@ class OneRunInFlightTest {
 
         this.engine.addJobInQueue();
 
+        verify(this.bulkAction, times(1)).createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false));
         verify(this.bulkAction, never()).createJobQueue(anyLong(), any(), eq(JobStatus.Skip), anyString(), anyBoolean());
     }
 
