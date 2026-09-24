@@ -12,46 +12,34 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.concurrent.SettableListenableFuture;
-import process.ai.AiProviderGateway;
+import process.ai.AiPort;
 import process.ai.AiStepService;
-import process.ai.PromptRunner;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import process.model.pojo.AiModelConnection;
-import process.model.pojo.AiPrompt;
-import process.model.pojo.AiPromptRun;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Pipeline;
 import process.model.pojo.PipelineField;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.pojo.SourceTaskType;
-import process.model.repository.AiModelConnectionRepository;
-import process.model.repository.AiPromptRepository;
-import process.model.repository.AiPromptRunRepository;
 import process.model.repository.PipelineRepository;
 import process.model.service.impl.TransactionServiceImpl;
 import process.notifications.JobMail;
 import process.security.RunCallbackTokens;
 import process.security.TenantContext;
-import process.util.EncryptionUtil;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.SocketTimeoutException;
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.Collections;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -64,16 +52,17 @@ import static org.mockito.Mockito.when;
  * MIG-133, the AI half: the real AiStepService inside the real dispatch pass.
  *
  * DispatchDecisionTreeTest pins the tree with the AI steps as a stand-in. This class runs the actual
- * AiStepService -- and, where it matters, the actual PromptRunner -- so what is pinned is what the
- * migration will move: onError=fail aborts the dispatch and nothing reaches Kafka; onError=continue
- * empties the tag and dispatch proceeds; a model call that throws is a failed step (row 5, final),
- * never a dispatch failure (row 6, retried); and apply reads no TenantContext, because the scheduler
- * thread has none -- the tenant is passed in, and must keep being passed in.
+ * AiStepService, with the AI service behind {@link AiPort} as it is since ADR-020, so what is pinned
+ * is Core's half of the seam: onError=fail aborts the dispatch and nothing reaches Kafka;
+ * onError=continue empties the tag and dispatch proceeds; a step the AI service could not run --
+ * refused, failed, or unreachable -- is a failed step (row 5, final), never a dispatch failure (row 6,
+ * retried); and apply reads no TenantContext, because the scheduler thread has none.
  *
  * The business rule, verbatim: "PromptRunner.run never throws and AiStepService returns an Outcome
  * rather than raising, precisely because a throw at this seam silently reclassifies AI failures from
- * non-retryable to retryable." The two pinned-unreviewed tests show that the rule does not hold
- * today: apply throws on inputs it does not anticipate, and those runs are retried as broker trouble.
+ * non-retryable to retryable." Since the split, a malformed prompt variable list and a connection key
+ * that will not decrypt are the AI service's to report, and it reports them as a failed step: both
+ * former pins are closed. One remains in Core: a step whose variable map is not JSON.
  */
 @ExtendWith(MockitoExtension.class)
 class AiStepAtDispatchTest {
@@ -84,6 +73,7 @@ class AiStepAtDispatchTest {
     private static final long QUEUE_ID = 5073L;
     private static final long PROMPT_ID = 1000L;
     private static final String STORED = "<pipeline><claim_id>CLM-1</claim_id><document>notes here</document></pipeline>";
+    private static final String MAPPED = "{\"claim_id\":\"claim_id\",\"document_text\":\"document\"}";
 
     @Mock private BulkAction bulkAction;
     @Mock private TransactionServiceImpl transactionService;
@@ -94,24 +84,16 @@ class AiStepAtDispatchTest {
     @Mock private KafkaTemplate<String, String> template;
 
     @Mock private PipelineRepository pipelines;
-    @Mock private AiPromptRepository prompts;
-    @Mock private AiModelConnectionRepository connections;
-    @Mock private AiPromptRunRepository runs;
-    @Mock private PromptRunner runner;
-    @Mock private AiProviderGateway gateway;
+    @Mock private AiPort ai;
 
-    private EncryptionUtil encryptionUtil;
     private JobQueue run;
 
     @BeforeEach
     void setUp() {
-        this.encryptionUtil = keyed(randomKey());
         this.run = new JobQueue();
         this.run.setJobQueueId(QUEUE_ID);
         this.run.setJobId(JOB_ID);
         this.run.setJobStatus(JobStatus.Queue);
-        lenient().when(this.runs.save(any(AiPromptRun.class))).thenAnswer(inv -> inv.getArgument(0));
-        lenient().when(this.runs.findByJobQueueIdAndStepTag(anyLong(), anyString())).thenReturn(Optional.empty());
     }
 
     @AfterEach
@@ -119,20 +101,8 @@ class AiStepAtDispatchTest {
         TenantContext.clear();
     }
 
-    private static String randomKey() {
-        byte[] key = new byte[32];
-        new SecureRandom().nextBytes(key);
-        return Base64.getEncoder().encodeToString(key);
-    }
-
-    private static EncryptionUtil keyed(String base64Key) {
-        EncryptionUtil util = new EncryptionUtil();
-        ReflectionTestUtils.setField(util, "base64Key", base64Key);
-        return util;
-    }
-
-    private AiStepService steps(PromptRunner withRunner) {
-        return new AiStepService(this.pipelines, this.prompts, this.connections, this.runs, this.encryptionUtil, withRunner);
+    private AiStepService steps() {
+        return new AiStepService(this.pipelines, this.ai);
     }
 
     private ProducerBulkEngine engine(AiStepService aiSteps) {
@@ -160,43 +130,17 @@ class AiStepAtDispatchTest {
         return step;
     }
 
-    private AiPrompt activePrompt(Long tenantId, String variables) {
-        AiPrompt prompt = new AiPrompt();
-        prompt.setPromptId(PROMPT_ID);
-        prompt.setTenantId(tenantId);
-        prompt.setName("Summarise");
-        prompt.setStatus(Status.Active);
-        prompt.setVersion(3);
-        prompt.setUserTemplate("Claim {{claim_id}}: {{document_text}}");
-        prompt.setOutputMode("text");
-        prompt.setVariables(variables);
-        lenient().when(this.prompts.findById(PROMPT_ID)).thenReturn(Optional.of(prompt));
-        return prompt;
+    private void theAiServiceAnswers(AiPort.StepResult result) {
+        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap())).thenReturn(result);
     }
 
-    private AiModelConnection defaultConnection(String apiKey) {
-        AiModelConnection connection = new AiModelConnection();
-        connection.setConnectionId(7L);
-        connection.setTenantId(TENANT);
-        connection.setName("Ollama");
-        connection.setProvider("Ollama");
-        connection.setDefaultModel("gemma3:1b");
-        connection.setStatus(Status.Active);
-        connection.setIsDefault(true);
-        connection.setApiKey(apiKey);
-        lenient().when(this.connections.findFirstByTenantIdAndIsDefaultTrueAndStatus(TENANT, Status.Active))
-            .thenReturn(Optional.of(connection));
-        return connection;
-    }
-
-    private static final String MAPPED = "{\"claim_id\":\"claim_id\",\"document_text\":\"document\"}";
-    private static final String VARIABLES = "[{\"name\":\"claim_id\",\"required\":true},{\"name\":\"document_text\",\"required\":true}]";
-
-    private static AiPromptRun failedRun(String error) {
-        AiPromptRun failed = new AiPromptRun();
-        failed.setStatus("failed");
-        failed.setError(error);
-        return failed;
+    private static AiPort.StepResult answered(String output) {
+        AiPort.StepResult result = new AiPort.StepResult();
+        result.status = "ok";
+        result.output = output;
+        result.promptName = "Summarise";
+        result.promptVersion = 3;
+        return result;
     }
 
     private SourceJob dispatchableJob() {
@@ -245,11 +189,9 @@ class AiStepAtDispatchTest {
     @Test
     void withOnErrorFailAFailedStepClosesTheRunAndNothingReachesKafka() throws Exception {
         this.pipelineWithStep("fail", MAPPED);
-        this.activePrompt(TENANT, VARIABLES);
-        this.defaultConnection(null);
-        when(this.runner.run(any())).thenReturn(failedRun("Daily token budget reached"));
+        this.theAiServiceAnswers(AiPort.StepResult.failed("Daily token budget reached"));
 
-        this.push(this.engine(this.steps(this.runner)), this.dispatchableJob());
+        this.push(this.engine(this.steps()), this.dispatchableJob());
 
         this.assertClosedAsFailed("Job 1196: AI step <summary> failed: Daily token budget reached", false);
         verifyNoInteractions(this.kafkaTemplateProvider, this.runCallbackTokens);
@@ -258,12 +200,10 @@ class AiStepAtDispatchTest {
     @Test
     void withOnErrorContinueTheTagIsEmptiedAndTheRunIsStillSent() throws Exception {
         this.pipelineWithStep("continue", MAPPED);
-        this.activePrompt(TENANT, VARIABLES);
-        this.defaultConnection(null);
-        when(this.runner.run(any())).thenReturn(failedRun("Daily token budget reached"));
+        this.theAiServiceAnswers(AiPort.StepResult.failed("Daily token budget reached"));
         this.brokerIsReached();
 
-        this.push(this.engine(this.steps(this.runner)), this.dispatchableJob());
+        this.push(this.engine(this.steps()), this.dispatchableJob());
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(this.template).send(eq("etl.jobs"), anyString(), message.capture());
@@ -275,33 +215,45 @@ class AiStepAtDispatchTest {
     }
 
     /**
-     * PromptRunner.run never throws: a model call that blows up is a failed STEP, final, not broker
-     * trouble. Both of its catches: an I/O failure from the provider call, and a refusal it raised itself.
+     * A model call that blew up, a refusal, and an AI service that could not be reached all come back
+     * from AiPort as a failed step: final, not broker trouble.
      */
     @Test
     void aModelCallThatTimesOutIsAFailedStepNotARetryableDispatchFailure() throws Exception {
-        this.modelCallFails(new SocketTimeoutException("Read timed out"));
+        this.pipelineWithStep("fail", MAPPED);
+        this.theAiServiceAnswers(AiPort.StepResult.failed("Read timed out"));
+
+        this.push(this.engine(this.steps()), this.dispatchableJob());
 
         this.assertClosedAsFailed("Job 1196: AI step <summary> failed: Read timed out", false);
         verifyNoInteractions(this.kafkaTemplateProvider);
     }
 
     @Test
-    void aModelCallTheRunnerRefusesIsAFailedStepNotARetryableDispatchFailure() throws Exception {
-        this.modelCallFails(new IllegalStateException("The answer is not the JSON the prompt expects"));
+    void anUnreachableAiServiceIsAFailedStepNotARetryableDispatchFailure() throws Exception {
+        this.pipelineWithStep("fail", MAPPED);
+        this.theAiServiceAnswers(AiPort.StepResult.failed("The AI service could not be reached, so the step did not run."));
 
-        this.assertClosedAsFailed("Job 1196: AI step <summary> failed: The answer is not the JSON the prompt expects", false);
+        this.push(this.engine(this.steps()), this.dispatchableJob());
+
+        this.assertClosedAsFailed("Job 1196: AI step <summary> failed: The AI service could not be reached, so the step did not run.", false);
         verifyNoInteractions(this.kafkaTemplateProvider);
     }
 
-    private void modelCallFails(Exception thrown) throws Exception {
+    /**
+     * Formerly pinned (MIG-133): a connection key that will not decrypt made apply throw, and the run
+     * was retried as if the broker were down. Since ADR-020 the key is the AI service's, which reports
+     * it as a failed step, so the run fails once, as an AI-step failure.
+     */
+    @Test
+    void anUndecryptableConnectionKeyIsNowAFailedStepNotABrokerRetry() throws Exception {
         this.pipelineWithStep("fail", MAPPED);
-        this.activePrompt(TENANT, VARIABLES);
-        this.defaultConnection(null);
-        when(this.gateway.chat(any())).thenThrow(thrown);
-        PromptRunner realRunner = new PromptRunner(this.gateway, this.runs);
+        this.theAiServiceAnswers(AiPort.StepResult.failed("The model connection's key could not be opened."));
 
-        this.push(this.engine(this.steps(realRunner)), this.dispatchableJob());
+        this.push(this.engine(this.steps()), this.dispatchableJob());
+
+        this.assertClosedAsFailed("Job 1196: AI step <summary> failed: The model connection's key could not be opened.", false);
+        verifyNoInteractions(this.kafkaTemplateProvider);
     }
 
     // ---- the Outcome contract ---------------------------------------------------------------------------------
@@ -309,7 +261,7 @@ class AiStepAtDispatchTest {
     /** Every failure apply was written to expect comes back as an Outcome; none is thrown. */
     @Test
     void everyAnticipatedFailureComesBackAsAnOutcome() {
-        AiStepService service = this.steps(this.runner);
+        AiStepService service = this.steps();
         assertThat(service.apply(TENANT, null, QUEUE_ID, STORED).payload).as("no pipeline").isSameAs(STORED);
         assertThat(service.apply(TENANT, "F9", QUEUE_ID, STORED).payload).as("unknown pipeline").isSameAs(STORED);
 
@@ -317,15 +269,9 @@ class AiStepAtDispatchTest {
         assertThat(service.apply(TENANT, "F1", QUEUE_ID, "<pipeline><unclosed></pipeline>").failure)
             .startsWith("The task payload is not well-formed XML, so its AI step cannot read it: ");
 
-        when(this.prompts.findById(PROMPT_ID)).thenReturn(Optional.empty());
+        this.theAiServiceAnswers(AiPort.StepResult.failed("The prompt this step names is no longer active in this workspace."));
         assertThat(service.apply(TENANT, "F1", QUEUE_ID, STORED).failure)
             .isEqualTo("AI step <summary> failed: The prompt this step names is no longer active in this workspace.");
-
-        this.activePrompt(TENANT, VARIABLES);
-        when(this.connections.findFirstByTenantIdAndIsDefaultTrueAndStatus(TENANT, Status.Active)).thenReturn(Optional.empty());
-        assertThat(service.apply(TENANT, "F1", QUEUE_ID, STORED).failure).isEqualTo("AI step <summary> failed: "
-            + "No active model connection for this prompt: name one on it or set a workspace default.");
-        verifyNoInteractions(this.runner);
     }
 
     /** The tenant is the argument, never the context: another tenant's context changes nothing. */
@@ -333,69 +279,35 @@ class AiStepAtDispatchTest {
     void applyReadsNoTenantContext() {
         TenantContext.set(OTHER_TENANT, "TENANT_ADMIN", 1L, "someone@example.com");
         this.pipelineWithStep("fail", MAPPED);
-        this.activePrompt(TENANT, VARIABLES);
-        this.defaultConnection(null);
-        AiPromptRun answered = new AiPromptRun();
-        answered.setStatus("ok");
-        answered.setOutput("diabetes");
-        when(this.runner.run(any())).thenReturn(answered);
+        when(this.ai.runStep(eq(TENANT), eq(QUEUE_ID), eq("summary"), eq(PROMPT_ID), anyMap())).thenReturn(answered("diabetes"));
 
-        AiStepService.Outcome outcome = this.steps(this.runner).apply(TENANT, "F1", QUEUE_ID, STORED);
+        AiStepService.Outcome outcome = this.steps().apply(TENANT, "F1", QUEUE_ID, STORED);
 
         assertThat(outcome.failed()).isFalse();
         assertThat(outcome.payload).contains("<summary>diabetes</summary>");
         verify(this.pipelines).findAllByPipelineIdAndTenantIdAndStatusNot("F1", TENANT, Status.Delete);
-        verify(this.connections).findFirstByTenantIdAndIsDefaultTrueAndStatus(TENANT, Status.Active);
     }
 
     // ---- where the contract does not hold -------------------------------------------------------------------
 
     /**
-     * apply THROWS, rather than returning a failed Outcome, on three inputs it does not anticipate: a
-     * step whose variable map is not JSON, a prompt whose variable list is not JSON, and a connection
-     * whose API key will not decrypt (a rotated or missing LOOKUP_ENCRYPTION_KEY does that to every
-     * key at once). "A throw from apply is currently impossible" is not true of today's code.
+     * apply still THROWS, rather than returning a failed Outcome, on one input it does not anticipate:
+     * a step whose variable map is not JSON. That is Core's half, read before the AI service is asked,
+     * and the throw lands in pushMessageToQueue's outer catch: the run is retried as "could not be
+     * dispatched" (row 6) instead of failing once as an AI-step failure (row 5).
      */
     @Test
     @Tag("pinned-unreviewed")
-    void applyThrowsOnAMalformedVariableMapAMalformedVariableListOrAnUndecryptableKey() {
+    void aMalformedVariableMapThrowsAndIsRetriedAsIfTheBrokerWereDown() throws Exception {
         this.pipelineWithStep("fail", "{\"claim_id\": ");
-        this.activePrompt(TENANT, VARIABLES);
-        this.defaultConnection(null);
-        assertThatThrownBy(() -> this.steps(this.runner).apply(TENANT, "F1", QUEUE_ID, STORED))
-            .as("variable map").isInstanceOf(JsonSyntaxException.class);
+        assertThatThrownBy(() -> this.steps().apply(TENANT, "F1", QUEUE_ID, STORED)).isInstanceOf(JsonSyntaxException.class);
 
-        this.pipelineWithStep("fail", MAPPED);
-        this.activePrompt(TENANT, "claim_id, document_text");
-        assertThatThrownBy(() -> this.steps(this.runner).apply(TENANT, "F1", QUEUE_ID, STORED))
-            .as("prompt variables").isInstanceOf(JsonSyntaxException.class);
-
-        this.activePrompt(TENANT, VARIABLES);
-        this.defaultConnection(keyed(randomKey()).encrypt("sk-live-key"));
-        assertThatThrownBy(() -> this.steps(this.runner).apply(TENANT, "F1", QUEUE_ID, STORED))
-            .as("undecryptable key").isInstanceOf(IllegalStateException.class)
-            .hasMessageStartingWith("Failed to decrypt lookup value: ");
-        verifyNoInteractions(this.runner);
-    }
-
-    /**
-     * And what the dispatcher makes of it: row 6, not row 5. A connection key encrypted under a key the
-     * server no longer holds fails every attempt identically, yet the run is offered a retry and
-     * reported as "could not be dispatched" -- broker trouble -- for up to max_attempts attempts.
-     */
-    @Test
-    @Tag("pinned-unreviewed")
-    void anUndecryptableConnectionKeyIsRetriedAsIfTheBrokerWereDown() throws Exception {
-        this.pipelineWithStep("fail", MAPPED);
-        this.activePrompt(TENANT, VARIABLES);
-        this.defaultConnection(keyed(randomKey()).encrypt("sk-live-key"));
-
-        this.push(this.engine(this.steps(this.runner)), this.dispatchableJob());
+        this.push(this.engine(this.steps()), this.dispatchableJob());
 
         ArgumentCaptor<String> reason = ArgumentCaptor.forClass(String.class);
         verify(this.bulkAction).scheduleRetry(eq(this.run), reason.capture());
         assertThat(reason.getValue()).startsWith("Job 1196 could not be dispatched: ");
-        verify(this.bulkAction).changeJobQueueStatus(QUEUE_ID, JobStatus.Failed, reason.getValue());
-        verifyNoInteractions(this.runner, this.kafkaTemplateProvider);
+        verify(this.ai, never()).runStep(any(), any(), any(), any(), any());
+        verifyNoInteractions(this.kafkaTemplateProvider);
     }
 }

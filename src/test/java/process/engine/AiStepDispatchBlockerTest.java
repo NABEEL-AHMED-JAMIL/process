@@ -43,7 +43,6 @@ import static org.mockito.Mockito.when;
  * console claim the same queue rows. Pinned as it stands; the extracted AI service cannot keep
  * being called this way, which is why it blocks the move.
  */
-@Tag("pinned-unreviewed")
 class AiStepDispatchBlockerTest {
 
     private static final long JOB_ID = 1196L;
@@ -67,6 +66,7 @@ class AiStepDispatchBlockerTest {
     }
 
     @Test
+    @Tag("pinned-unreviewed")
     void theAiStepsRunOnTheSchedulersThreadBeforeTheSend() {
         JobQueue run = new JobQueue();
         run.setJobQueueId(JOB_QUEUE_ID); run.setJobId(JOB_ID); run.setJobStatus(JobStatus.Queue);
@@ -94,6 +94,7 @@ class AiStepDispatchBlockerTest {
      * ai-service, with PromptRunner.) Moving the step off the dispatch thread is MIG-25/134.
      */
     @Test
+    @Tag("pinned-unreviewed")
     void oneAiStepsWorstCaseIsLongerThanTheDispatchBudgetAndAsLongAsTheLock() throws Exception {
         long budgetMs = (Long) ReflectionTestUtils.getField(ProducerBulkEngine.class, "DISPATCH_BUDGET_MS");
         String lockAtMostFor = ProcessCron.class.getMethod("startJobInCurrentTimeSlot").getAnnotation(SchedulerLock.class).lockAtMostFor();
