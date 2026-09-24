@@ -48,6 +48,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -535,6 +536,121 @@ public class KafkaTemplateProvider {
 
     public Map<String, Object> defaultAdminProps() {
         return new HashMap<>(this.kafkaProperties.buildAdminProperties());
+    }
+
+    /** How AdminClients are made: the real factory, or a test's. */
+    private Function<Map<String, Object>, AdminClient> adminClients = AdminClient::create;
+
+    /** For the tests: an AdminClient of their own in place of a real broker's. */
+    void useAdminClients(Function<Map<String, Object>, AdminClient> adminClients) {
+        this.adminClients = adminClients;
+    }
+
+    /** How long one profile's broker may take to list its topics, and then to create the missing ones. */
+    static final long PROVISIONING_STEP_SECONDS = 10;
+
+    /** What provisioning one profile's topics did: reached (and how many created, how many already there), or not. */
+    public static final class TopicProvisioning {
+        private final boolean reached;
+        private final int created;
+        private final int existing;
+        private final String reason;
+
+        private TopicProvisioning(boolean reached, int created, int existing, String reason) {
+            this.reached = reached;
+            this.created = created;
+            this.existing = existing;
+            this.reason = reason;
+        }
+
+        public static TopicProvisioning reached(int created, int existing) {
+            return new TopicProvisioning(true, created, existing, null);
+        }
+
+        public static TopicProvisioning unreachable(String reason) {
+            return new TopicProvisioning(false, 0, 0, reason);
+        }
+
+        public boolean isReached() { return this.reached; }
+        public int getCreated() { return this.created; }
+        public int getExisting() { return this.existing; }
+        public String getReason() { return this.reason; }
+    }
+
+    /**
+     * Every topic one profile needs, with ONE AdminClient (startup provisioning): list once, create the missing ones
+     * in one request. A broker that answers gets exactly what ensureTopicExists gave it topic by topic -- the missing
+     * topics made with their partition count and the replication factor, an existing one left alone, a line per topic
+     * created and a warning per topic it refused. A profile whose client cannot be built, or whose broker does not
+     * list its topics within PROVISIONING_STEP_SECONDS, is answered as unreachable -- no line per topic: the caller
+     * says it once, for the profile.
+     */
+    public TopicProvisioning ensureTopicsExist(Optional<KafkaConnectionProfile> profile, Map<String, Integer> topics) {
+        if (topics == null || topics.isEmpty()) {
+            return TopicProvisioning.reached(0, 0);
+        }
+        AdminClient adminClient;
+        try {
+            Map<String, Object> adminProps = profile.map(this::commonClientProps).orElseGet(this::defaultAdminProps);
+            adminClient = this.adminClients.apply(adminProps);
+        } catch (Exception ex) {
+            return TopicProvisioning.unreachable(reasonOf(ex));
+        }
+        try {
+            Set<String> existingTopics;
+            try {
+                existingTopics = adminClient.listTopics().names().get(PROVISIONING_STEP_SECONDS, TimeUnit.SECONDS);
+            } catch (Exception ex) {
+                return TopicProvisioning.unreachable(reasonOf(ex));
+            }
+            List<NewTopic> missing = new ArrayList<>();
+            int existing = 0;
+            for (Map.Entry<String, Integer> topic : topics.entrySet()) {
+                if (existingTopics.contains(topic.getKey())) {
+                    existing++;
+                } else {
+                    missing.add(new NewTopic(topic.getKey(), topic.getValue(), this.defaultReplicationFactor));
+                }
+            }
+            if (missing.isEmpty()) {
+                return TopicProvisioning.reached(0, existing);
+            }
+            Map<String, org.apache.kafka.common.KafkaFuture<Void>> outcomes = adminClient.createTopics(missing).values();
+            int created = 0;
+            for (NewTopic topic : missing) {
+                try {
+                    outcomes.get(topic.name()).get(PROVISIONING_STEP_SECONDS, TimeUnit.SECONDS);
+                    created++;
+                    this.logger.info("Auto-created Kafka topic '{}' with {} partition(s).", topic.name(), topic.numPartitions());
+                } catch (ExecutionException ex) {
+                    if (ex.getCause() instanceof TopicExistsException) {
+                        existing++;
+                        continue;
+                    }
+                    this.logger.warn("Could not auto-create Kafka topic '{}': {}", topic.name(), ex.getMessage());
+                } catch (Exception ex) {
+                    this.logger.warn("Could not auto-create Kafka topic '{}': {}", topic.name(), ex.getMessage());
+                }
+            }
+            return TopicProvisioning.reached(created, existing);
+        } finally {
+            try {
+                // Bounded: close() with no timeout waits for whatever is still pending -- up to a minute against a
+                // broker that resolves but never answers, which is the wait this method exists to avoid.
+                adminClient.close(java.time.Duration.ofSeconds(1));
+            } catch (Exception ignored) {
+                // Closing a client that never connected can complain; there is nothing to do about it.
+            }
+        }
+    }
+
+    private static String reasonOf(Exception ex) {
+        Throwable root = ex;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String outer = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+        return root == ex || root.getMessage() == null ? outer : outer + " (" + root.getMessage() + ")";
     }
 
     public void ensureTopicExists(Optional<KafkaConnectionProfile> profile, String topic, int partitions) {
