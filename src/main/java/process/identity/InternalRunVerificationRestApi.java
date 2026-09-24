@@ -88,16 +88,24 @@ public class InternalRunVerificationRestApi {
             return new ResponseEntity<>(Collections.singletonMap("valid", false), HttpStatus.OK);
         }
         JobQueue run = this.runs.findById(jobQueueId).orElse(null);
+        // Owner rule "keep the bill" (2026-09-24): the run row and its token are the proof, not the job's current status.
+        // A run whose job was deleted (or switched off) after it started still names its workspace -- the one stamped on
+        // the run (V102) -- and its job is found whatever its status, so its usage report is billed and its callback
+        // lands. The job's own tenant only for a run row older than that stamp.
         Optional<SourceJob> job = run == null ? Optional.empty() : this.jobs.findByJobIdAndJobStatus(run.getJobId(), Status.Active);
+        if (run != null && !job.isPresent()) {
+            job = this.jobs.findById(run.getJobId());
+        }
+        Long tenantId = run != null && run.getTenantId() != null ? run.getTenantId() : job.map(SourceJob::getTenantId).orElse(null);
         String pipelineId = job.map(SourceJob::getTaskDetail).map(task -> task.getPipelineId()).orElse(null);
         Map<String, Object> verdict = new LinkedHashMap<>();
         verdict.put("valid", true);
         verdict.put("jobId", run == null ? jobId : run.getJobId());
         verdict.put("jobQueueId", jobQueueId);
-        verdict.put("tenantId", job.map(SourceJob::getTenantId).orElse(null));
+        verdict.put("tenantId", tenantId);
         verdict.put("pipelineId", pipelineId);
         verdict.put("terminal", run != null && RunCallbackTokens.isOver(run.getJobStatus()));
-        verdict.put("workerSteps", job.isPresent() && pipelineId != null ? this.workerSteps(pipelineId, job.get().getTenantId())
+        verdict.put("workerSteps", tenantId != null && pipelineId != null ? this.workerSteps(pipelineId, tenantId)
             : Collections.emptyList());
         return new ResponseEntity<>(verdict, HttpStatus.OK);
     }

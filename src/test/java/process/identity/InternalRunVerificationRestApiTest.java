@@ -169,4 +169,53 @@ class InternalRunVerificationRestApiTest {
         assertThat(this.api.countUsingPrompt(null, Collections.singletonMap("promptId", 6)).getStatusCodeValue()).isEqualTo(401);
         assertThat(this.api.countUsingPrompt(SERVICE, Collections.emptyMap()).getStatusCodeValue()).isEqualTo(400);
     }
+
+    /**
+     * Owner rule "keep the bill" (2026-09-24): a run whose job was deleted after it started still reports its usage.
+     * The run row and its token are the proof, not the job's current status: the workspace is the one stamped on the
+     * run (V102), and the job is found whatever its status now -- so AI's usage report for such a run is accepted
+     * with its tenant, never answered "valid" with no tenant (which the caller cannot bill).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRunWhoseJobWasDeletedMidRunStillNamesItsWorkspaceSoItsUsageIsBilled() {
+        JobQueue run = new JobQueue();
+        run.setJobQueueId(901L);
+        run.setJobId(78L);
+        run.setTenantId(2901L);
+        run.setJobStatus(JobStatus.Completed);
+        when(this.runs.findById(901L)).thenReturn(Optional.of(run));
+        SourceTask task = new SourceTask();
+        task.setPipelineId("F100001");
+        SourceJob deleted = new SourceJob();
+        deleted.setJobId(78L);
+        deleted.setTenantId(2901L);
+        deleted.setJobStatus(Status.Delete);
+        deleted.setTaskDetail(task);
+        when(this.jobs.findByJobIdAndJobStatus(78L, Status.Active)).thenReturn(Optional.empty());
+        when(this.jobs.findById(78L)).thenReturn(Optional.of(deleted));
+        when(this.tokens.verifyForReport(78L, 901L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 901L, body(78L, "w", "report")).getBody();
+
+        assertThat(verdict).containsEntry("valid", true).containsEntry("tenantId", 2901L).containsEntry("pipelineId", "F100001")
+            .containsEntry("terminal", true);
+    }
+
+    /** The run's own stamp holds even when its job's row cannot be found at all. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theRunsOwnWorkspaceHoldsWithoutItsJobRow() {
+        JobQueue run = new JobQueue();
+        run.setJobQueueId(902L);
+        run.setJobId(79L);
+        run.setTenantId(2902L);
+        run.setJobStatus(JobStatus.Completed);
+        when(this.runs.findById(902L)).thenReturn(Optional.of(run));
+        when(this.tokens.verifyForReport(79L, 902L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 902L, body(79L, "w", "report")).getBody();
+
+        assertThat(verdict).containsEntry("valid", true).containsEntry("tenantId", 2902L);
+    }
 }
