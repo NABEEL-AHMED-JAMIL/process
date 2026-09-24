@@ -1,5 +1,9 @@
 package process.api;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
 import org.barco.platform.correlation.CorrelationId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -108,14 +112,41 @@ class CallbackCorrelationTest {
         assertThat(this.boundDuringTheCall).containsExactly(DISPATCHED_UNDER, DISPATCHED_UNDER, DISPATCHED_UNDER);
     }
 
+    /**
+     * MIG-94: behind the gateway no callback arrives without an id -- the gateway mints one for a worker that sends
+     * none (job-search's Python workers) -- so "keep what arrived" meant MIG-95's fallback never ran live: every
+     * callback of run 7318 was logged under a fresh id of its own (seen 2026-09-24). A verified callback is about
+     * its run, so the run's own id is the one it is logged under, whatever arrived; a cooperating worker (the new
+     * runtime) sends that same id anyway.
+     */
     @Test
-    void aCooperatingWorkersEchoedIdIsKept() {
+    void aVerifiedCallbackIsLoggedUnderItsRunsIdWhateverArrived() {
         when(this.runCallbackTokens.verify(JOB_ID, QUEUE_ID, TOKEN)).thenReturn(Optional.empty());
 
-        this.everyEndpoint("corr-echoed-by-worker");
+        this.everyEndpoint("corr-minted-by-gateway");
 
-        assertThat(this.boundDuringTheCall)
-            .containsExactly("corr-echoed-by-worker", "corr-echoed-by-worker", "corr-echoed-by-worker");
+        assertThat(this.boundDuringTheCall).containsExactly(DISPATCHED_UNDER, DISPATCHED_UNDER, DISPATCHED_UNDER);
+    }
+
+    /** The id it arrived under is named on the callback's line, so the gateway's access line still leads here. */
+    @Test
+    void theIdTheCallbackArrivedUnderIsNamedOnItsLine() {
+        when(this.runCallbackTokens.verify(JOB_ID, QUEUE_ID, TOKEN)).thenReturn(Optional.empty());
+        Logger logger = (Logger) LoggerFactory.getLogger(NotifyResetApi.class);
+        ListAppender<ILoggingEvent> lines = new ListAppender<>();
+        lines.start();
+        logger.addAppender(lines);
+        try {
+            CorrelationId.set("corr-minted-by-gateway");
+            this.api.addLogs(JOB_ID, QUEUE_ID, TOKEN, null, "corr-minted-by-gateway", line());
+        } finally {
+            logger.detachAppender(lines);
+        }
+
+        assertThat(lines.list).anySatisfy(event -> {
+            assertThat(event.getFormattedMessage()).contains("arrived as corr-minted-by-gateway");
+            assertThat(event.getMDCPropertyMap()).containsEntry(CorrelationId.MDC_KEY, DISPATCHED_UNDER);
+        });
     }
 
     /** The answer carries the id the callback was logged under, as the filter's own answer would have. */

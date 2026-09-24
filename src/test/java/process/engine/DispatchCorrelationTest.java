@@ -1,5 +1,10 @@
 package process.engine;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
+import process.model.pojo.SourceJob;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Optional;
@@ -134,5 +139,32 @@ class DispatchCorrelationTest {
         ArgumentCaptor<JobQueue> saved = ArgumentCaptor.forClass(JobQueue.class);
         verify(this.transactionService).saveOrUpdateJobQueue(saved.capture());
         assertThat(saved.getValue().getCorrelationId()).as("one id per run, minted at dispatch").isNull();
+    }
+
+    /** X9's enqueue hop: "Run now" says which run it made, under the request's id. */
+    @Test
+    void runNowNamesTheRunItMadeUnderTheRequestsId() {
+        CorrelationId.set("console-7f3a9c21");
+        ProducerBulkEngine engine = new ProducerBulkEngine(this.bulkAction, this.transactionService, this.jobMail,
+            this.runCallbackTokens, null);
+        JobQueue made = new JobQueue();
+        made.setJobQueueId(7401L);
+        when(this.bulkAction.createJobQueueV1(any(), any(), any(), any(), any())).thenReturn(made);
+        SourceJob job = new SourceJob();
+        job.setJobId(JOB_ID);
+        Logger logger = (Logger) LoggerFactory.getLogger(ProducerBulkEngine.class);
+        ListAppender<ILoggingEvent> lines = new ListAppender<>();
+        lines.start();
+        logger.addAppender(lines);
+        try {
+            engine.addManualJobInQueue(job);
+        } finally {
+            logger.detachAppender(lines);
+        }
+
+        assertThat(lines.list).anySatisfy(event -> {
+            assertThat(event.getFormattedMessage()).isEqualTo("Run 7401 of job 1196 queued by request.");
+            assertThat(event.getMDCPropertyMap()).containsEntry("correlationId", "console-7f3a9c21");
+        });
     }
 }

@@ -109,6 +109,8 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
             BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+        // Under the request's id, which the run now carries (MIG-94): the trace's enqueue hop.
+        logger.info("Run {} of job {} queued by request.", jobQueue.getJobQueueId(), sourceJob.getJobId());
         this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
