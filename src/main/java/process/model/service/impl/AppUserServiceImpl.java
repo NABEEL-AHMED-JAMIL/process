@@ -719,15 +719,22 @@ public class AppUserServiceImpl implements AppUserService {
      *
      * The same shape the storage side allows a tenant user to write -- <appUserId>/profile/ --
      * with the file name required to be a plain one, so a key cannot climb back out of the
-     * folder it claims to be in.
+     * folder it claims to be in: no separator of either kind, and not "." or "..".
+     *
+     * Identity's and Storage's rule, over the case table all three repos share
+     * (ProfileKeyAgreementTest). This used to accept a backslash Storage refuses, and
+     * "null/profile/..." for a caller with no id.
      */
-    private static boolean isOwnProfileKey(Long appUserId, String key) {
+    static boolean isOwnProfileKey(Long appUserId, String key) {
+        if (appUserId == null || key == null) {
+            return false;
+        }
         String prefix = appUserId + "/profile/";
         if (!key.startsWith(prefix)) {
             return false;
         }
         String fileName = key.substring(prefix.length());
-        return !fileName.isEmpty() && fileName.indexOf('/') < 0
+        return !fileName.isEmpty() && fileName.indexOf('/') < 0 && fileName.indexOf('\\') < 0
             && !".".equals(fileName) && !"..".equals(fileName);
     }
 

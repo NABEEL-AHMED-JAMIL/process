@@ -1,0 +1,47 @@
+# MIG-175: one case table, committed byte-identical in identity-service and storage-service.
+# Identity's AppUserServiceImpl.isOwnProfileKey (which key a person may record as their picture) and
+# Storage's StorageBrowserService.isOwnProfileObject (which avatar-bucket object a non-admin may touch)
+# must give the same answer for every row. Each repo's ProfileKeyAgreementTest runs its own guard over
+# this file and pins its SHA-256, so an edit on one side without the other goes red.
+# Change it only in both repos in step, and update the pinned hash in both tests.
+# The rule: <appUserId>/profile/<file>, where <file> is non-empty, has no / or \ and is not . or ..
+# <null> is a null value; "" is the empty string.
+appUserId,key,expected
+7,7/profile/avatar.png,true
+7,7/profile/avatar.jpg,true
+7,7/profile/Avatar.PNG,true
+7,7/profile/avatar,true
+7,7/profile/.avatar.png,true
+7,7/profile/..avatar.png,true
+7,7/profile/%2e%2e,true
+1,1/profile/avatar.png,true
+12,12/profile/avatar.png,true
+7,9/profile/avatar.png,false
+1,12/profile/avatar.png,false
+12,1/profile/avatar.png,false
+1,11/profile/avatar.png,false
+1,01/profile/avatar.png,false
+7,17/profile/avatar.png,false
+7,7/profile/../../9/profile/avatar.png,false
+7,7/profile/../avatar.png,false
+7,7/profile/..,false
+7,7/profile/.,false
+7,7/profile/./avatar.png,false
+7,../7/profile/avatar.png,false
+7,/7/profile/avatar.png,false
+7,//7/profile/avatar.png,false
+7,7/profile/,false
+7,7/profile/avatar.png/,false
+7,7/profile//avatar.png,false
+7,7/profile/sub/avatar.png,false
+7,7/profile,false
+7,7/Profile/avatar.png,false
+7,7/PROFILE/avatar.png,false
+7,7\profile\avatar.png,false
+7,7/profile/..\..\9\avatar.png,false
+7,7/profile/a\b.png,false
+7," 7/profile/avatar.png",false
+7,"",false
+7,<null>,false
+<null>,7/profile/avatar.png,false
+<null>,null/profile/avatar.png,false
