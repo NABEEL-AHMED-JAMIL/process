@@ -47,6 +47,8 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/changeState/**", "/addLogs/**", "/addLogsBatch/**").permitAll()
                 // The meter asks whether a run's token is live; the token is the proof.
                 .antMatchers(HttpMethod.POST, "/meter.json/verifyRun").permitAll()
+                // MIG-167: a worker fetches its run's configuration with the run's token; RunConfigResolver checks it.
+                .antMatchers(HttpMethod.POST, "/runConfig.json/resolve").permitAll()
 
                 // Whoever is asking for a workspace has no account yet, which is the point of
                 // the request. Only submit is open; reading and deciding need a platform admin.

@@ -107,3 +107,14 @@ databaseChangeLog:
       file: db/changelog/yaml/V130.0-source-task-date-created.yaml
   - include:
       file: db/changelog/yaml/V131.0-scheduler-day-of-month-integer.yaml
+  # V140-V159: MIG-167 -- lookup_data decomposed and retired; the pipeline configuration store.
+  - include:
+      file: db/changelog/yaml/V140.0-lookup-data-test-residue.yaml
+  - include:
+      file: db/changelog/yaml/V141.0-task-reference.yaml
+  - include:
+      file: db/changelog/yaml/V142.0-orchestration-setting-watermarks.yaml
+  - include:
+      file: db/changelog/yaml/V143.0-pipeline-config.yaml
+  - include:
+      file: db/changelog/yaml/V144.0-lookup-data-read-only.yaml

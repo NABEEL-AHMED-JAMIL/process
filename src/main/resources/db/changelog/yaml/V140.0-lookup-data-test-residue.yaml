@@ -1,0 +1,70 @@
+databaseChangeLog:
+  - changeSet:
+      id: 140.0-lookup-data-test-residue
+      author: nabeel.amd93
+      description: "Delete the three lookup_data rows no destination takes, and halt on any other (MIG-167, owner's D2)"
+      # MIG-167 decomposes lookup_data by kind of row, and every row has to land somewhere:
+      #   top-level SCHEDULER_LAST_RUN_TIME, AUDIT_LOG_SYNC_LAST_RUN_TIME  -> orchestration_setting (V142)
+      #   top-level QUEUE_FETCH_LIMIT                                      -> already there (V88)
+      #   top-level PIPELINE_HOME_PAGES, TASK_GROUPS                       -> the families themselves, nothing to move
+      #   their children, each owned by a workspace                       -> task_reference, ids kept (V141)
+      #   top-level BUCKET_LIST, with no children                         -> nothing: buckets are storage-service's
+      # Neither destination has an is_encrypted column (an engine dial cannot be decrypted by the engine, and a home
+      # page is a URL), so an ENCRYPTED row of any of these kinds has no destination either: it would arrive as
+      # ciphertext nobody reads. Such a row halts the migration rather than travelling without its flag.
+      #
+      # dev on 2026-09-24 has exactly three rows that fit nowhere, all left by end-to-end runs, and the owner decided
+      # (D2) they are deleted here by id -- and only when each is still the row it was:
+      #   1279 'Encrypt probe'  a TASK_GROUPS child, encrypted, with no workspace
+      #   1283 E2E_CONFIGURATION_FAMILY_825949          a family the generic Lookups screen created; nothing reads it
+      #   1284 E2E_CONFIGURATION_FAMILY_825949_child    its one child
+      # Anything else that fits nowhere stops the deploy with the query that finds it; decide what it is, and deploy
+      # again. A database built from this changelog has none of these ids and deletes nothing.
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            lookup_data has rows that no destination takes (MIG-167). Find them with
+            SELECT l.lookup_id, l.lookup_type, l.parent_lookup_id, l.tenant_id, l.is_encrypted FROM lookup_data l
+            LEFT JOIN lookup_data p ON p.lookup_id = l.parent_lookup_id
+            WHERE NOT ((l.parent_lookup_id IS NULL AND l.lookup_type IN ('SCHEDULER_LAST_RUN_TIME',
+            'AUDIT_LOG_SYNC_LAST_RUN_TIME', 'QUEUE_FETCH_LIMIT', 'PIPELINE_HOME_PAGES', 'TASK_GROUPS', 'BUCKET_LIST')
+            AND NOT l.is_encrypted) OR (p.parent_lookup_id IS NULL AND p.lookup_type IN ('PIPELINE_HOME_PAGES',
+            'TASK_GROUPS') AND l.tenant_id IS NOT NULL AND NOT l.is_encrypted AND btrim(coalesce(l.lookup_type, '')) <> ''
+            AND NOT EXISTS (SELECT 1 FROM lookup_data g WHERE g.parent_lookup_id = l.lookup_id))
+            OR (l.lookup_id = 1279 AND l.lookup_type = 'Encrypt probe')
+            OR (l.lookup_id = 1283 AND l.lookup_type = 'E2E_CONFIGURATION_FAMILY_825949')
+            OR (l.lookup_id = 1284 AND l.lookup_type = 'E2E_CONFIGURATION_FAMILY_825949_child'));
+            An encrypted row cannot move (neither destination stores ciphertext): enter it again as a configuration
+            secret, or delete it; then deploy again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >
+              SELECT count(*) FROM lookup_data l
+              LEFT JOIN lookup_data p ON p.lookup_id = l.parent_lookup_id
+              WHERE NOT (
+                (l.parent_lookup_id IS NULL
+                  AND l.lookup_type IN ('SCHEDULER_LAST_RUN_TIME', 'AUDIT_LOG_SYNC_LAST_RUN_TIME', 'QUEUE_FETCH_LIMIT',
+                                        'PIPELINE_HOME_PAGES', 'TASK_GROUPS', 'BUCKET_LIST')
+                  AND NOT l.is_encrypted)
+                OR (p.parent_lookup_id IS NULL
+                  AND p.lookup_type IN ('PIPELINE_HOME_PAGES', 'TASK_GROUPS')
+                  AND l.tenant_id IS NOT NULL
+                  AND NOT l.is_encrypted
+                  AND btrim(coalesce(l.lookup_type, '')) <> ''
+                  AND NOT EXISTS (SELECT 1 FROM lookup_data g WHERE g.parent_lookup_id = l.lookup_id))
+                OR (l.lookup_id = 1279 AND l.lookup_type = 'Encrypt probe')
+                OR (l.lookup_id = 1283 AND l.lookup_type = 'E2E_CONFIGURATION_FAMILY_825949')
+                OR (l.lookup_id = 1284 AND l.lookup_type = 'E2E_CONFIGURATION_FAMILY_825949_child'))
+      changes:
+        # Child first: 1284's parent is 1283. A task pointing at 1279 would lose it (ON DELETE SET NULL); none does.
+        - sql:
+            sql: DELETE FROM lookup_data WHERE lookup_id = 1284 AND lookup_type = 'E2E_CONFIGURATION_FAMILY_825949_child'
+        - sql:
+            sql: DELETE FROM lookup_data WHERE lookup_id = 1283 AND lookup_type = 'E2E_CONFIGURATION_FAMILY_825949'
+        - sql:
+            sql: DELETE FROM lookup_data WHERE lookup_id = 1279 AND lookup_type = 'Encrypt probe'
+      # Test residue, deleted on the owner's decision: nothing brings it back. A rollback of this changeset only
+      # un-records it.
+      rollback:
+        - sql:
+            sql: SELECT 1

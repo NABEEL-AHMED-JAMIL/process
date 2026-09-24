@@ -52,8 +52,8 @@ class EncryptionResealPostgresTest {
         dataSource.setJdbcUrl(serverUrl.replaceAll("/[^/?]+(\\?.*)?$", "/" + scratch + "$1"));
         dataSource.setUsername(System.getenv("NOTIFICATIONS_TEST_DB_USER"));
         dataSource.setPassword(System.getenv("NOTIFICATIONS_TEST_DB_PASSWORD"));
-        new JdbcTemplate(dataSource).execute("CREATE TABLE lookup_data (lookup_id bigint PRIMARY KEY, lookup_value text, "
-            + "is_encrypted boolean NOT NULL DEFAULT false); CREATE TABLE kafka_connection_profile (kafka_connection_profile_id "
+        new JdbcTemplate(dataSource).execute("CREATE TABLE pipeline_config (id bigint PRIMARY KEY, kind varchar(8) NOT NULL, value text, "
+            + "value_sealed text); CREATE TABLE kafka_connection_profile (kafka_connection_profile_id "
             + "bigint PRIMARY KEY, sasl_password varchar(1000), ssl_keystore_password_enc varchar(1000), "
             + "ssl_key_password_enc varchar(1000), ssl_truststore_password_enc varchar(1000))");
     }
@@ -92,10 +92,12 @@ class EncryptionResealPostgresTest {
     @BeforeEach
     void seed() {
         this.sql = new JdbcTemplate(dataSource);
-        this.sql.execute("TRUNCATE lookup_data, kafka_connection_profile");
+        this.sql.execute("TRUNCATE pipeline_config, kafka_connection_profile");
         this.before = util(this.oldKey, null, null);
         this.rotated = util(this.oldKey, "p2026a", this.currentKey);
-        this.sql.update("INSERT INTO lookup_data VALUES (1, ?, true), (2, 'plain-setting', false), (3, NULL, true)", this.before.encrypt("lookup-secret"));
+        // MIG-167: a workspace's secrets (pipeline_config) are sealed like the Kafka passwords; lookup_data is retired.
+        this.sql.update("INSERT INTO pipeline_config VALUES (1, 'SECRET', NULL, ?), (2, 'VALUE', 'plain-setting', NULL), "
+            + "(3, 'SECRET', NULL, NULL)", this.before.encrypt("config-secret"));
         this.sql.update("INSERT INTO kafka_connection_profile VALUES (10, ?, NULL, NULL, ?), (11, ?, ?, ?, '')",
             this.before.encrypt("sasl-10"), this.before.encrypt("trust-10"),
             this.before.encrypt("sasl-11"), this.before.encrypt("keystore-11"), this.before.encrypt("key-11"));
@@ -114,7 +116,7 @@ class EncryptionResealPostgresTest {
         assertThat(report.unreadable).isZero();
         // With the old key gone, every secret still opens: the leak is void and nothing was lost.
         EncryptionUtil afterRotation = util(null, "p2026a", this.currentKey);
-        assertThat(afterRotation.decrypt(this.at("lookup_data", "lookup_value", "lookup_id", 1))).isEqualTo("lookup-secret");
+        assertThat(afterRotation.decrypt(this.at("pipeline_config", "value_sealed", "id", 1))).isEqualTo("config-secret");
         String p = "kafka_connection_profile_id";
         assertThat(afterRotation.decrypt(this.at("kafka_connection_profile", "sasl_password", p, 10))).isEqualTo("sasl-10");
         assertThat(afterRotation.decrypt(this.at("kafka_connection_profile", "ssl_truststore_password_enc", p, 10))).isEqualTo("trust-10");
@@ -122,8 +124,8 @@ class EncryptionResealPostgresTest {
         assertThat(afterRotation.decrypt(this.at("kafka_connection_profile", "ssl_keystore_password_enc", p, 11))).isEqualTo("keystore-11");
         assertThat(afterRotation.decrypt(this.at("kafka_connection_profile", "ssl_key_password_enc", p, 11))).isEqualTo("key-11");
         // What is not a secret, or holds nothing, is not touched.
-        assertThat(this.at("lookup_data", "lookup_value", "lookup_id", 2)).isEqualTo("plain-setting");
-        assertThat(this.at("lookup_data", "lookup_value", "lookup_id", 3)).isNull();
+        assertThat(this.at("pipeline_config", "value", "id", 2)).isEqualTo("plain-setting");
+        assertThat(this.at("pipeline_config", "value_sealed", "id", 3)).isNull();
         assertThat(this.at("kafka_connection_profile", "ssl_key_password_enc", p, 10)).isNull();
         assertThat(this.at("kafka_connection_profile", "ssl_truststore_password_enc", p, 11)).isEmpty();
     }
@@ -131,13 +133,13 @@ class EncryptionResealPostgresTest {
     @Test
     void aSecondRunChangesNothing() {
         this.reseal(this.rotated).reseal();
-        String sealed = this.at("lookup_data", "lookup_value", "lookup_id", 1);
+        String sealed = this.at("pipeline_config", "value_sealed", "id", 1);
 
         EncryptionReseal.Report again = this.reseal(this.rotated).reseal();
 
         assertThat(again.resealed).isZero();
         assertThat(again.current).isEqualTo(6);
-        assertThat(this.at("lookup_data", "lookup_value", "lookup_id", 1)).isEqualTo(sealed);
+        assertThat(this.at("pipeline_config", "value_sealed", "id", 1)).isEqualTo(sealed);
     }
 
     /** A value no key opens is counted and left as it is; the rest are still re-sealed. */
@@ -151,7 +153,7 @@ class EncryptionResealPostgresTest {
         assertThat(report.unreadable).isEqualTo(1);
         assertThat(report.resealed).isEqualTo(5);
         assertThat(this.at("kafka_connection_profile", "sasl_password", "kafka_connection_profile_id", 10)).isEqualTo(stranger);
-        assertThat(this.rotated.isCurrent(this.at("lookup_data", "lookup_value", "lookup_id", 1))).isTrue();
+        assertThat(this.rotated.isCurrent(this.at("pipeline_config", "value_sealed", "id", 1))).isTrue();
     }
 
     /**

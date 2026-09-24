@@ -9,27 +9,22 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
-import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.enums.Status;
 import process.model.pojo.KafkaConnectionProfile;
-import process.model.pojo.LookupData;
 import process.model.pojo.SourceTaskType;
 import process.model.projection.SourceTaskTypeProjection;
 import process.model.projection.TopicOptionProjection;
 import process.model.pojo.TenantTaskTypeKafkaRoute;
 import process.model.repository.KafkaConnectionProfileRepository;
-import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceJobRepository;
-import process.model.repository.SourceTaskRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.identity.IdentityPort;
 import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.service.SettingService;
 import org.barco.platform.tenancy.TenantScope;
 import process.security.TenantContext;
-import process.util.EncryptionUtil;
 import process.util.KafkaTopicPartitionUtil;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -47,233 +42,43 @@ public class SettingServiceImpl implements SettingService {
 
     private Logger logger = LoggerFactory.getLogger(SettingServiceImpl.class);
 
-    private final String PARENT_LOOKUP_DATA = "parentLookupData";
-    private final String LOOKUP_DATA = "lookupDatas";
     private final String SOURCE_TASK_TYPE = "sourceTaskTypes";
 
-    private final String BUCKET_LIST = "BUCKET_LIST";
-
-    /**
-     * Lookup families each tenant owns outright.
-     *
-     * A tenant admin may add to these and sees only their own entries; nothing in these families
-     * is shared between tenants. Buckets always worked this way; home pages and task groups now
-     * do too.
-     *
-     * PIPELINE_IDS used to live here as well, until Task Forms took over as the source of truth
-     * for which pipelines exist: a pipeline is now defined by creating its form (Configuration ->
-     * Pipeline Forms), not by adding a lookup row, and Source Task picks from that list instead.
-     * See the V28 migration for the removal of the old lookup rows.
-     *
-     * The rows that used to be shared were removed rather than split, so every tenant starts
-     * with an empty list and fills it in. Tasks created before that still hold the id of a row
-     * that no longer exists -- they keep running, since the id is stored on the task, but their
-     * pipeline no longer resolves to a name.
-     *
-     * Still platform-level: SCHEDULER_LAST_RUN_TIME, QUEUE_FETCH_LIMIT and
-     * AUDIT_LOG_SYNC_LAST_RUN_TIME are single-instance engine state -- per-tenant copies would
-     * give the scheduler several different ideas of when it last ran -- and AI_PROVIDER names
-     * the providers the platform can reach at all.
-     */
-    private static final Set<String> TENANT_OWNED_LOOKUPS =
-        new HashSet<>(Arrays.asList(
-            "BUCKET_LIST", "PIPELINE_HOME_PAGES", "TASK_GROUPS"));
-
-    /**
-     * Families a tenant may add to without owning what is already there: the platform's rows
-     * are reachable by everyone and belong to nobody's workspace; a tenant admin's addition is
-     * stamped with their tenant and only they see, change or remove it. This is the difference
-     * from TENANT_OWNED_LOOKUPS above: there a tenant sees only its own rows.
-     *
-     * Empty since V46. AI_PROVIDER was the one family here, and it went when providers became
-     * a fixed set on a model connection (Assistants > Model connections). The rule stays for
-     * the next family that needs it.
-     */
-    private static final Set<String> TENANT_EXTENDABLE_LOOKUPS = Collections.emptySet();
-
-    /**
-     * Lookup families only a platform admin may see or touch.
-     *
-     * These are the engine's own dials and bookmarks, not settings anybody's workspace should
-     * be reading: two of them are the timestamps the scheduler and the audit sync resume from,
-     * one caps how much the dispatcher pulls per cycle, and one names where system mail goes.
-     * A tenant admin has no use for them and every reason not to be able to edit them.
-     */
-    private static final Set<String> PLATFORM_ONLY_LOOKUPS =
-        new HashSet<>(Arrays.asList(
-            "QUEUE_FETCH_LIMIT", "SCHEDULER_LAST_RUN_TIME",
-            "AUDIT_LOG_SYNC_LAST_RUN_TIME"));
-
-    /**
-     * The family a row belongs to: its parent's type for a child, its own for a top-level row.
-     * Children carry their own descriptive type, so asking the row alone gives the wrong answer.
-     */
-    private static String familyOf(LookupData lookupData) {
-        if (lookupData == null) {
-            return null;
-        }
-        return lookupData.getParent() != null
-            ? lookupData.getParent().getLookupType()
-            : lookupData.getLookupType();
-    }
-
-    private static boolean isPlatformOnly(LookupData lookupData) {
-        return PLATFORM_ONLY_LOOKUPS.contains(familyOf(lookupData));
-    }
-
-    /**
-     * Whether this row may be DELETED, on top of whether it may be changed.
-     *
-     * The engine reads these by name and has no default: ProducerBulkEngine calls
-     * findByLookupType(QUEUE_FETCH_LIMIT) and then getLookupValue() on the result, so with the
-     * row gone every dispatch cycle throws an NPE that is caught and logged, and job dispatch
-     * stops platform-wide with nothing on screen to say why. A platform admin passes every
-     * other check, so this was one click on /settings/lookup. Changing the VALUE stays allowed
-     * -- raising the limit is ordinary administration; removing the row is not.
-     */
-    private static String refuseDeletion(LookupData lookupData) {
-        if (isPlatformOnly(lookupData) && lookupData.getParent() == null) {
-            return String.format("%s is engine configuration and cannot be deleted -- the "
-                + "scheduler reads it by name every cycle. Change its value instead.",
-                lookupData.getLookupType());
-        }
-        return null;
-    }
-
-    /**
-     * Engine dials whose value the engine parses as a number.
-     *
-     * Refusing deletion of these rows was only half the guard. The engine looks the row up by
-     * name and reads its value, so renaming it or storing something it cannot parse breaks
-     * dispatch exactly as thoroughly as deleting it did -- and both were one keystroke on
-     * /settings/lookup with no warning. The two resume-timestamp settings are excluded on
-     * purpose: they hold timestamps, not numbers.
-     */
-    private static final Set<String> NUMERIC_PLATFORM_LOOKUPS =
-        new HashSet<>(Collections.singletonList("QUEUE_FETCH_LIMIT"));
-
-    /**
-     * Whether an edit would leave an engine setting in a state the engine cannot read.
-     *
-     * Three ways in, all reachable by a platform admin who passes every other check, and all
-     * with the same consequence -- job dispatch stops platform-wide, logged once on the server
-     * and nowhere on screen. A rename takes the row out from under findByLookupType. A value
-     * like "5,000" or a stray trailing space fails to parse. And ticking "Store encrypted"
-     * stores ciphertext that the engine never decrypts, while the list then serves the value
-     * back masked, so the next edit of the description writes the mask string in as the value.
-     * The dispatcher now falls back rather than dying, but it should not have to: an edit that
-     * cannot work is better refused where the operator can still see what they typed.
-     */
-    private static String refuseUnreadableEngineSetting(LookupData lookupData, LookupDataDto tempLookupData) {
-        if (!isPlatformOnly(lookupData) || lookupData.getParent() != null) {
-            return null;
-        }
-        String currentType = lookupData.getLookupType();
-        if (!isNull(tempLookupData.getLookupType()) && !currentType.equals(tempLookupData.getLookupType())) {
-            return String.format("%s cannot be renamed -- the scheduler looks it up by that exact "
-                + "name every cycle. Change its value instead.", currentType);
-        }
-        if (Boolean.TRUE.equals(tempLookupData.getEncrypted())) {
-            return String.format("%s cannot be stored encrypted -- the scheduler reads it directly "
-                + "and would get the ciphertext.", currentType);
-        }
-        if (NUMERIC_PLATFORM_LOOKUPS.contains(currentType)
-            && !isNull(tempLookupData.getLookupValue())
-            && parseLongOrNull(tempLookupData.getLookupValue()) == null) {
-            return String.format("%s must be a whole number -- the scheduler parses it as one. "
-                + "Got \"%s\".", currentType, tempLookupData.getLookupValue());
-        }
-        return null;
-    }
-
-    /**
-     * Whether the caller may change this row.
-     *
-     * Update and delete took an id and did as they were told -- no role check at all -- so a
-     * tenant admin could edit SCHEDULER_LAST_RUN_TIME, or delete another tenant's bucket, by
-     * calling the endpoint directly. Hiding rows from a list is decoration while that is true.
-     */
-    private static String refuseModification(LookupData lookupData) {
-        if (TenantContext.isPlatformAdmin()) {
-            return null;
-        }
-        if (isPlatformOnly(lookupData)) {
-            return "Only a platform administrator can change this entry -- it is engine configuration.";
-        }
-        boolean owned = isTenantOwned(lookupData.getParent());
-        boolean extendable = isTenantExtendable(lookupData.getParent());
-        if (!owned && !extendable) {
-            return "Only a platform administrator can change this entry -- it is platform reference data.";
-        }
-        if (extendable && lookupData.getTenantId() == null) {
-            // The platform's own providers. Visible to everyone, removable by nobody but a
-            // platform admin -- deleting one would take it away from every other tenant too.
-            return "This provider belongs to the platform and is shared with every workspace. "
-                + "You can add your own, but not change this one.";
-        }
-        if (!Objects.equals(lookupData.getTenantId(), TenantContext.getTenantId())) {
-            return "That entry belongs to another workspace.";
-        }
-        return null;
-    }
-
-    private static boolean isTenantOwned(LookupData parent) {
-        return parent != null && TENANT_OWNED_LOOKUPS.contains(parent.getLookupType());
-    }
-
-    private static boolean isTenantExtendable(LookupData parent) {
-        return parent != null && TENANT_EXTENDABLE_LOOKUPS.contains(parent.getLookupType());
-    }
-
-    private final String MASKED_LOOKUP_VALUE = "••••••••";
-
-    private final LookupDataRepository lookupDataRepository;
     private final SourceJobRepository sourceJobRepository;
     private final SourceTaskTypeRepository sourceTaskTypeRepository;
     private final KafkaConnectionProfileRepository kafkaConnectionProfileRepository;
     private final TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository;
     private final IdentityPort identity;
-    private final EncryptionUtil encryptionUtil;
 
     /**
      * Field-injected and optional: the guard on deleting a topic is the only thing here that
-     * reads pipelines, and the eleven-argument constructor is built by hand in six tests.
+     * reads pipelines, and the constructor is built by hand in several tests.
      */
     @Autowired(required = false)
     private PipelineRepository pipelineRepository;
 
-    /** Optional for the same reason: only the in-use check on deleting a home page or group reads tasks. */
-    @Autowired(required = false)
-    private SourceTaskRepository sourceTaskRepository;
     private final KafkaTemplateProvider kafkaTemplateProvider;
     private final KafkaConnectionResolver kafkaConnectionResolver;
-    private final LookupDataCacheService lookupDataCacheService;
 
     private final UserNameResolver userNameResolver;
 
 
-    public SettingServiceImpl(LookupDataRepository lookupDataRepository,
-        SourceJobRepository sourceJobRepository,
+    public SettingServiceImpl(SourceJobRepository sourceJobRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
         KafkaConnectionProfileRepository kafkaConnectionProfileRepository,
         TenantTaskTypeKafkaRouteRepository tenantTaskTypeKafkaRouteRepository,
         IdentityPort identity,
-        EncryptionUtil encryptionUtil,
         KafkaTemplateProvider kafkaTemplateProvider,
         KafkaConnectionResolver kafkaConnectionResolver,
-        LookupDataCacheService lookupDataCacheService,
         UserNameResolver userNameResolver) {
         this.userNameResolver = userNameResolver;
         this.identity = identity;
-        this.lookupDataRepository = lookupDataRepository;
         this.sourceJobRepository = sourceJobRepository;
         this.sourceTaskTypeRepository = sourceTaskTypeRepository;
         this.kafkaConnectionProfileRepository = kafkaConnectionProfileRepository;
         this.tenantTaskTypeKafkaRouteRepository = tenantTaskTypeKafkaRouteRepository;
-        this.encryptionUtil = encryptionUtil;
         this.kafkaTemplateProvider = kafkaTemplateProvider;
         this.kafkaConnectionResolver = kafkaConnectionResolver;
-        this.lookupDataCacheService = lookupDataCacheService;
     }
 
     @Override
@@ -281,7 +86,6 @@ public class SettingServiceImpl implements SettingService {
         key = "T(process.security.TenantContext).isPlatformAdmin() ? 'platform' : T(process.security.TenantContext).getTenantId()")
     public ResponseDto appSetting() throws Exception {
         Map<String, Object> appSettingDetail = new HashMap<>();
-        appSettingDetail.put(LOOKUP_DATA, this.parentLookups());
 
         List<SourceTaskTypeProjection> sourceTaskTypeProjections = TenantContext.isPlatformAdmin()
             ? this.sourceTaskTypeRepository.fetchAllSourceTaskType()
@@ -302,37 +106,6 @@ public class SettingServiceImpl implements SettingService {
             SourceTaskType::getSourceTaskTypeId);
         appSettingDetail.put(SOURCE_TASK_TYPE, sourceTaskTypeList);
         return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
-    }
-
-    /** The parent lookups the caller may see -- the platform-only ones stay with the platform admin. */
-    private List<LookupDataDto> parentLookups() {
-        List<LookupDataDto> lookupDataList = new ArrayList<>();
-        boolean callerIsPlatformAdmin = TenantContext.isPlatformAdmin();
-        for (LookupData lookup: this.lookupDataRepository.findByParentLookupIdIsNull()) {
-            if (!callerIsPlatformAdmin && isPlatformOnly(lookup)) {
-                continue;
-            }
-            LookupDataDto lookupDataDto = new LookupDataDto();
-            this.fillLookupDateDto(lookup, lookupDataDto);
-            if (!isNull(lookup.getParent())) {
-                LookupDataDto lookupDataDto2 = new LookupDataDto();
-                this.fillLookupDateDto(lookup.getParent(), lookupDataDto2);
-                lookupDataDto.setParent(lookupDataDto2);
-            }
-            lookupDataList.add(lookupDataDto);
-        }
-        this.userNameResolver.attachToDtos(lookupDataList, this.lookupDataRepository,
-            LookupData::getLookupId);
-        return lookupDataList;
-    }
-
-    /**
-     * Just the parent lookups. The Lookups screen, the task editor and the agents screen used
-     * to read appSetting for these and throw its topics away -- at ten thousand topics that was
-     * several megabytes per page open for six rows.
-     */
-    public ResponseDto lookups() throws Exception {
-        return new ResponseDto(SUCCESS, "Data fetch successfully.", this.parentLookups());
     }
 
     /**
@@ -620,242 +393,6 @@ public class SettingServiceImpl implements SettingService {
         }
         this.tenantTaskTypeKafkaRouteRepository.deleteByTenantIdAndSourceTaskTypeId(TenantContext.getTenantId(), sourceTaskTypeId);
         return new ResponseDto(SUCCESS, "Kafka routing override removed -- back to the type's own default.");
-    }
-
-    @Override
-    /**
-     * Transactional so the save and the cache refresh share one flush.
-     *
-     * Without it the row was written by save(), and then the refresh -- which opens its own
-     * transaction over the same request-scoped session -- flushed the still-managed entity a
-     * second time and hit the unique constraint on lookup_type. The caller saw an error while
-     * the row had in fact been created, so a retry then failed forever on a duplicate key.
-     */
-    @Transactional
-    @CacheEvict(value = "appSetting", allEntries = true)
-    public ResponseDto addLookupData(LookupDataDto tempLookupData) throws Exception {
-        if (isNull(tempLookupData.getLookupValue()) || tempLookupData.getLookupValue().trim().isEmpty()) {
-            return new ResponseDto(ERROR, "LookupData value missing.");
-        } else if (isNull(tempLookupData.getLookupType())) {
-            return new ResponseDto(ERROR, "LookupData type missing.");
-        }
-        Optional<LookupData> parentLookupData = !isNull(tempLookupData.getParentLookupId())
-            ? this.lookupDataRepository.findById(tempLookupData.getParentLookupId()) : Optional.empty();
-        boolean isTenantOwnedChild = parentLookupData.isPresent()
-            && (isTenantOwned(parentLookupData.get()) || isTenantExtendable(parentLookupData.get()));
-
-        if (!isTenantOwnedChild && !TenantContext.isPlatformAdmin()) {
-            return new ResponseDto(ERROR, "Only a platform administrator can add this kind of lookup entry -- it is platform reference data other tenants depend on.");
-        }
-        /*
-         * Checked here rather than left to the unique index on lookup_type.
-         *
-         * This method is @Transactional, so the constraint fires at commit -- after this method
-         * has already returned SUCCESS -- and the caller got a raw HTTP 500 with no message for
-         * what is an ordinary, explainable situation: a name somebody else already used.
-         */
-        if (!isNull(this.lookupDataRepository.findByLookupType(tempLookupData.getLookupType()))) {
-            return new ResponseDto(ERROR, String.format(
-                "A lookup entry named %s already exists. Lookup names are unique across the platform.",
-                tempLookupData.getLookupType()));
-        }
-        boolean encrypted = Boolean.TRUE.equals(tempLookupData.getEncrypted());
-        LookupData lookupData = new LookupData();
-        lookupData.setLookupValue(encrypted
-            ? this.encryptionUtil.encrypt(tempLookupData.getLookupValue())
-            : tempLookupData.getLookupValue());
-        lookupData.setEncrypted(encrypted);
-        lookupData.setLookupType(tempLookupData.getLookupType());
-        if (!isNull(tempLookupData.getDescription())) {
-            lookupData.setDescription(tempLookupData.getDescription());
-        }
-        parentLookupData.ifPresent(lookupData::setParent);
-        if (isTenantOwnedChild) {
-            lookupData.setTenantId(TenantContext.getTenantId());
-        }
-        this.lookupDataRepository.save(lookupData);
-
-        this.lookupDataCacheService.changed();
-        return new ResponseDto(SUCCESS, String.format("LookupData save with %d.", lookupData.getLookupId()));
-    }
-
-    @Override
-    @CacheEvict(value = "appSetting", allEntries = true)
-    public ResponseDto updateLookupData(LookupDataDto tempLookupData) throws Exception {
-        if (isNull(tempLookupData.getLookupId())) {
-            return new ResponseDto(ERROR, "LookupData id missing.");
-        } else if (isNull(tempLookupData.getLookupType())) {
-            return new ResponseDto(ERROR, "LookupData type missing.");
-        }
-        Optional<LookupData> lookupDataOpt = this.lookupDataRepository.findById(tempLookupData.getLookupId());
-        if (!lookupDataOpt.isPresent() || !this.isLookupOwnedByCaller(lookupDataOpt.get())) {
-            return new ResponseDto(ERROR, String.format("LookupData not found with %d.", tempLookupData.getLookupId()));
-        }
-        LookupData lookupData = lookupDataOpt.get();
-        String refusal = refuseModification(lookupData);
-        if (refusal != null) {
-            return new ResponseDto(ERROR, refusal);
-        }
-        String unreadable = refuseUnreadableEngineSetting(lookupData, tempLookupData);
-        if (unreadable != null) {
-            return new ResponseDto(ERROR, unreadable);
-        }
-        boolean wasEncrypted = Boolean.TRUE.equals(lookupData.getEncrypted());
-        boolean nowEncrypted = !isNull(tempLookupData.getEncrypted()) ? tempLookupData.getEncrypted() : wasEncrypted;
-        /*
-         * The mask the console shows for an encrypted value is NOT a value. It came back here
-         * whenever an encrypted row was edited for any other reason -- the form was pre-filled
-         * with what the list had shown -- and was taken as a new secret: encrypted, the row
-         * then held "••••••••"; unticked, the row held it in the clear. Either way the real
-         * secret was gone after the first edit.
-         */
-        String presented = isNull(tempLookupData.getLookupValue()) ? "" : tempLookupData.getLookupValue().trim();
-        boolean hasNewValue = !presented.isEmpty() && !MASKED_LOOKUP_VALUE.equals(presented);
-
-        if (!wasEncrypted && !hasNewValue) {
-            return new ResponseDto(ERROR, "LookupData value missing.");
-        }
-        if (hasNewValue) {
-            lookupData.setLookupValue(nowEncrypted
-                ? this.encryptionUtil.encrypt(tempLookupData.getLookupValue())
-                : tempLookupData.getLookupValue());
-        } else if (wasEncrypted && !nowEncrypted) {
-
-            lookupData.setLookupValue(this.encryptionUtil.decrypt(lookupData.getLookupValue()));
-        }
-
-        lookupData.setEncrypted(nowEncrypted);
-        lookupData.setLookupType(tempLookupData.getLookupType());
-        if (!isNull(tempLookupData.getDescription())) {
-            lookupData.setDescription(tempLookupData.getDescription());
-        }
-        if (!isNull(tempLookupData.getParentLookupId())) {
-            Optional<LookupData> parentLookupData = this.lookupDataRepository.findById(tempLookupData.getParentLookupId());
-            parentLookupData.ifPresent(lookupData::setParent);
-        }
-        this.lookupDataRepository.save(lookupData);
-        this.lookupDataCacheService.changed();
-        return new ResponseDto(SUCCESS, String.format("LookupData update with %d.", tempLookupData.getLookupId()));
-    }
-
-    @Override
-    public ResponseDto fetchSubLookupByParentId(Long parentLookUpId) throws Exception {
-        if (isNull(parentLookUpId)) {
-            return new ResponseDto(ERROR, "LookupData id missing.");
-        }
-        Map<String, Object> appSettingDetail = new HashMap<>();
-        List<LookupDataDto> lookupDataList = new ArrayList<>();
-        Optional<LookupData> parentLookup = this.lookupDataRepository.findById(parentLookUpId);
-        // Refused outright, not just left out of the list: hiding a row from the index while
-        // this endpoint still serves it by id protects nothing.
-        if (parentLookup.isPresent() && !TenantContext.isPlatformAdmin()
-            && isPlatformOnly(parentLookup.get())) {
-            return new ResponseDto(ERROR, "Only a platform administrator can view this lookup.");
-        }
-        if (parentLookup.isPresent()) {
-            LookupDataDto lookupDataDto = new LookupDataDto();
-            this.fillLookupDateDto(parentLookup.get(), lookupDataDto);
-            appSettingDetail.put(PARENT_LOOKUP_DATA, lookupDataDto);
-
-            boolean isTenantOwnedList = isTenantOwned(parentLookup.get());
-            boolean isTenantExtendableList = isTenantExtendable(parentLookup.get());
-            boolean isPlatformAdmin = TenantContext.isPlatformAdmin();
-            Long callerTenantId = TenantContext.getTenantId();
-            // Read by query, not through the parent's lazy collection (MIG-67): nothing here is
-            // transactional, and the collection only loaded while enable_lazy_load_no_trans let it.
-            List<LookupData> children = this.lookupDataRepository.findChildrenOf(parentLookUpId);
-            if (!isNull(children)) {
-                for (LookupData lookup: children) {
-                    // Owned: only the caller's own rows. Extendable: the platform's shared rows
-                    // as well, since those are what a tenant points its models at.
-                    if (!isPlatformAdmin && isTenantOwnedList
-                        && !Objects.equals(lookup.getTenantId(), callerTenantId)) {
-                        continue;
-                    }
-                    if (!isPlatformAdmin && isTenantExtendableList && lookup.getTenantId() != null
-                        && !Objects.equals(lookup.getTenantId(), callerTenantId)) {
-                        continue;
-                    }
-                    LookupDataDto lookupDataDto2 = new LookupDataDto();
-                    this.fillLookupDateDto(lookup, lookupDataDto2);
-                    lookupDataList.add(lookupDataDto2);
-                }
-            }
-            // Children are built here rather than by the list endpoint, so they need the same
-            // author lookup -- without it every sub-entry showed a dash whoever made it.
-            this.userNameResolver.attachToDtos(lookupDataList, this.lookupDataRepository,
-                LookupData::getLookupId);
-            appSettingDetail.put(LOOKUP_DATA, lookupDataList);
-            return new ResponseDto(SUCCESS, "Data fetch successfully.", appSettingDetail);
-        }
-        return new ResponseDto(ERROR, String.format("LookupData not found with %d.", parentLookUpId));
-    }
-
-    @Override
-    @CacheEvict(value = "appSetting", allEntries = true)
-    public ResponseDto deleteLookupData(LookupDataDto tempLookupData) throws Exception {
-        if (isNull(tempLookupData.getLookupId())) {
-            return new ResponseDto(ERROR, "LookupData id missing.");
-        }
-        Optional<LookupData> lookupDataOpt = this.lookupDataRepository.findById(tempLookupData.getLookupId());
-        if (!lookupDataOpt.isPresent()) {
-            return new ResponseDto(ERROR, String.format("LookupData not found with %d.", tempLookupData.getLookupId()));
-        }
-        // Says which rule stopped it. This used to answer "not found" for a row the caller could
-        // plainly see listed, which reads as a bug rather than a refusal.
-        String deleteRefusal = refuseModification(lookupDataOpt.get());
-        if (deleteRefusal == null) {
-            deleteRefusal = refuseDeletion(lookupDataOpt.get());
-        }
-        if (deleteRefusal == null) {
-            deleteRefusal = this.refuseDeletionInUse(lookupDataOpt.get());
-        }
-        if (deleteRefusal != null) {
-            return new ResponseDto(ERROR, deleteRefusal);
-        }
-        this.lookupDataRepository.deleteById(tempLookupData.getLookupId());
-        this.lookupDataCacheService.changed();
-        return new ResponseDto(SUCCESS, String.format("LookupData delete with %d.", tempLookupData.getLookupId()));
-    }
-
-    /**
-     * A home page or group a live task still names (MIG-165). Tasks hold these as foreign keys since V70.3;
-     * the key would null a tombstoned task's reference, but a live task silently losing its home page is
-     * what used to happen by accident, and is refused here instead, with the count.
-     */
-    private String refuseDeletionInUse(LookupData lookupData) {
-        if (this.sourceTaskRepository == null) {
-            return null;
-        }
-        long tasks = this.sourceTaskRepository.countLiveTasksReferencing(lookupData.getLookupId());
-        if (tasks == 0) {
-            return null;
-        }
-        return String.format("%d task%s still use%s \"%s\". Change %s first.", tasks, tasks == 1 ? "" : "s",
-            tasks == 1 ? "s" : "", lookupData.getLookupType(), tasks == 1 ? "that task" : "those tasks");
-    }
-
-    private boolean isLookupOwnedByCaller(LookupData lookupData) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        if (lookupData.getTenantId() == null) {
-            return false;
-        }
-        return Objects.equals(lookupData.getTenantId(), TenantContext.getTenantId());
-    }
-
-    private void fillLookupDateDto(LookupData lookupData, LookupDataDto lookupDataDto) {
-        lookupDataDto.setLookupId(lookupData.getLookupId());
-        lookupDataDto.setEncrypted(lookupData.getEncrypted());
-
-        lookupDataDto.setLookupValue(Boolean.TRUE.equals(lookupData.getEncrypted())
-            ? MASKED_LOOKUP_VALUE
-            : lookupData.getLookupValue());
-        lookupDataDto.setLookupType(lookupData.getLookupType());
-        lookupDataDto.setDescription(lookupData.getDescription());
-        lookupDataDto.setDateCreated(lookupData.getDateCreated());
-        lookupDataDto.setTenantId(lookupData.getTenantId());
     }
 
     private SourceTaskType getSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) {

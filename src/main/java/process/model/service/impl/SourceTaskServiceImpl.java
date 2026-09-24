@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.settings.ConfigReferences;
 import org.apache.poi.ss.usermodel.Row;
 import process.util.BusinessTime;
 import process.util.UserNameResolver;
@@ -18,11 +19,12 @@ import process.model.enums.Status;
 import process.model.pojo.SourceTaskPayload;
 import process.util.XmlOutTagInfoUtil;
 import java.util.List;
-import process.model.pojo.LookupData;
+import process.model.pojo.TaskReference;
 import process.model.pojo.SourceTaskType;
 import process.model.pojo.SourceTask;
 import process.model.projection.SourceTaskProjection;
-import process.model.repository.LookupDataRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.settings.TaskConfigRules;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.model.repository.SourceTaskRepository;
@@ -75,17 +77,23 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private final UserNameResolver userNameResolver;
 
     /**
-     * Field-injected and optional, like SettingServiceImpl's pipelines: only the home page and group check
-     * reads lookups, and the constructor is built by hand in several tests. Unwired, an id is still held to
-     * existing by the foreign key; wired, as it always is in the application, it is also held to its family
-     * and its workspace.
+     * Field-injected and optional: only the home page and group check reads task references, and the constructor is
+     * built by hand in several tests. Unwired, an id is still held to existing by the foreign key; wired, as it always
+     * is in the application, it is also held to its kind and its workspace.
      */
     @Autowired(required = false)
-    private LookupDataRepository lookupDataRepository;
+    private TaskReferenceRepository taskReferenceRepository;
 
-    private static final String HOME_PAGES = "PIPELINE_HOME_PAGES";
+    /**
+     * The configuration rules (MIG-167). Optional for the same reason, but fails closed: unwired, a payload that
+     * references configuration at all is refused, since whether the entry exists cannot be checked.
+     */
+    @Autowired(required = false)
+    private TaskConfigRules taskConfigRules;
 
-    private static final String TASK_GROUPS = "TASK_GROUPS";
+    private static final String HOME_PAGES = TaskReference.HOME_PAGE;
+
+    private static final String TASK_GROUPS = TaskReference.TASK_GROUP;
 
 
     public SourceTaskServiceImpl(BulkExcel bulkExcel,
@@ -111,37 +119,48 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     }
 
     /**
-     * A home page or group id as the caller sent it, as the lookup row it has to be (MIG-165).
+     * A home page or group id as the caller sent it, as the task_reference row it has to be (MIG-165, MIG-167).
      *
-     * The columns are bigint foreign keys to lookup_data since V70.3. Nothing checked them before: any
-     * string was stored, a non-number simply never resolved, and an id from another workspace's family
-     * was accepted -- and a home page is resolved to its URL at dispatch, so that put one workspace's URL
-     * into another's job payload. Blank is "none". Anything else must be a row of the named family that
-     * belongs to the task's workspace (or to no workspace, the platform's own); every other case gets the
-     * same refusal, so the answer does not confirm that another workspace's id exists.
+     * The columns are bigint foreign keys (to lookup_data since V70.3, to task_reference since V141). Nothing checked
+     * them before: any string was stored, a non-number simply never resolved, and an id from another workspace was
+     * accepted -- and a home page is resolved to its URL at dispatch, so that put one workspace's URL into another's
+     * job payload. Blank is "none". Anything else must be a row of the named kind that belongs to the task's
+     * workspace; every other case gets the same refusal, so the answer does not confirm that another workspace's id
+     * exists.
      */
-    private String refuseReference(String raw, String family, String what, Long taskTenantId, Consumer<Long> onResolved) {
+    private String refuseReference(String raw, String kind, String what, Long taskTenantId, Consumer<Long> onResolved) {
         if (raw == null || raw.trim().isEmpty()) {
             onResolved.accept(null);
             return null;
         }
         Long id = ProcessUtil.parseLongOrNull(raw);
         String refusal = String.format("%s %s is not one of this workspace's %s.", what, raw.trim(),
-            HOME_PAGES.equals(family) ? "home pages" : "task groups");
+            HOME_PAGES.equals(kind) ? "home pages" : "task groups");
         if (id == null) {
             return refusal;
         }
-        if (this.lookupDataRepository != null) {
-            Optional<LookupData> row = this.lookupDataRepository.findById(id);
-            boolean fits = row.isPresent() && row.get().getParent() != null
-                && family.equals(row.get().getParent().getLookupType())
-                && (row.get().getTenantId() == null || row.get().getTenantId().equals(taskTenantId));
+        if (this.taskReferenceRepository != null) {
+            Optional<TaskReference> row = this.taskReferenceRepository.findById(id);
+            boolean fits = row.isPresent() && kind.equals(row.get().getKind())
+                && row.get().getTenantId() != null && row.get().getTenantId().equals(taskTenantId);
             if (!fits) {
                 return refusal;
             }
         }
         onResolved.accept(id);
         return null;
+    }
+
+    /** The configuration rules for a payload saved into this workspace (MIG-167), failing closed when unwired. */
+    private Optional<String> refuseConfiguration(String payload, Long taskTenantId) {
+        if (this.taskConfigRules != null) {
+            return this.taskConfigRules.refusal(payload, taskTenantId);
+        }
+        Optional<String> refused = TaskConfigRules.payloadRefusal(payload);
+        if (refused.isPresent() || ConfigReferences.in(payload).isEmpty()) {
+            return refused;
+        }
+        return Optional.of("Configuration references cannot be checked right now; the task was not saved.");
     }
 
     private static String idText(Long id) {
@@ -256,6 +275,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         if (referenceError != null) {
             return new ResponseDto(ERROR, referenceError);
         }
+        Optional<String> configuration = this.refuseConfiguration(sourceTaskDto.getTaskPayload(), sourceTask.getTenantId());
+        if (configuration.isPresent()) {
+            return new ResponseDto(ERROR, configuration.get());
+        }
         sourceTask.setTaskName(sourceTaskDto.getTaskName());
         sourceTask.setTaskPayload(sourceTaskDto.getTaskPayload());
         sourceTask.setPipelineId(sourceTaskDto.getPipelineId());
@@ -322,6 +345,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             }
             if (referenceError != null) {
                 return new ResponseDto(ERROR, referenceError);
+            }
+            Optional<String> configuration = this.refuseConfiguration(sourceTaskDto.getTaskPayload(), sourceTask.get().getTenantId());
+            if (configuration.isPresent()) {
+                return new ResponseDto(ERROR, configuration.get());
             }
         }
         if (sourceTask.isPresent()) {
@@ -793,6 +820,11 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                 id -> homePageByRow.put(row, id));
             if (referenceError != null) {
                 errors.add(String.format("%s at row %d.%n", referenceError.substring(0, referenceError.length() - 1), row.getRowCounter()));
+            }
+            // The payload-only rules ran in isValidSourceTask; what needs the workspace runs here, now it is known.
+            Optional<String> configuration = this.refuseConfiguration(row.getTaskPayload(), uploadTenantId);
+            if (configuration.isPresent()) {
+                errors.add(String.format("%s (row %d)%n", configuration.get(), row.getRowCounter()));
             }
         }
         if (!errors.isEmpty()) {

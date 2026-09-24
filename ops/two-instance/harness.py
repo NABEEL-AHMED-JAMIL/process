@@ -439,48 +439,36 @@ class Harness:
         return None
 
     def check_t6(self):
+        # MIG-167 retired lookup_data and, with it, the in-memory lookup copy and its shared cache version. What T6
+        # held for lookups now holds for the configuration store that replaced the generic Lookups screen: a value
+        # added and then edited through A is what B answers at once. pipeline_config is read from the table on every
+        # request -- there is no cache left to go stale -- so the bound is a request's worth of slack.
         pa = self.platform
-        lookup_type = "MIG132_T6_%s" % self.run_id.upper()
+        key = "MIG132_T6_%s" % re.sub(r"[^A-Z0-9_]", "_", self.run_id.upper())
 
         def seen_on_b(value):
-            s1, lookups, _ = self.http("GET", self.ports["b"], "/setting.json/lookups", pa)
-            s2, app_setting, _ = self.http("GET", self.ports["b"], "/setting.json/appSetting", pa)
-            return (lookup_type in lookups and value in lookups), (lookup_type in app_setting and value in app_setting)
+            s, listed, _ = self.http("GET", self.ports["b"], "/setting.json/pipelineConfig?tenantId=%d" % TENANT, pa)
+            return s == 200 and key in listed and value in listed
 
-        def rebuilt_on_b(since):
-            return "Cache-Lookup-Start" in self.logs("mig132-process-b", since=since)
-
-        # Warm B: its appSetting answer is cached and its lookup copy built, before the change.
-        seen_on_b("-")
         timings = []
-        lookup_id = None
+        entry_id = None
         for step, value in (("add", "v1-%s" % self.run_id), ("edit", "v2-%s" % self.run_id)):
-            since = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            time.sleep(0.2)
             t0 = time.time()
             if step == "add":
-                s, raw, _ = self.http("POST", self.ports["a"], "/setting.json/addLookupData", pa,
-                                      {"lookupType": lookup_type, "lookupValue": value, "description": "MIG-132 T6"})
-                m = re.search(r"save with (\d+)", raw)
-                lookup_id = int(m.group(1)) if m else None
+                s, raw, _ = self.http("POST", self.ports["a"], "/setting.json/pipelineConfig", pa,
+                                      {"key": key, "kind": "VALUE", "value": value, "description": "MIG-132 T6", "tenantId": TENANT})
+                m = re.search(r'"id"\s*:\s*(\d+)', raw)
+                entry_id = int(m.group(1)) if m else None
             else:
-                s, raw, _ = self.http("PUT", self.ports["a"], "/setting.json/updateLookupData", pa,
-                                      {"lookupId": lookup_id, "lookupType": lookup_type, "lookupValue": value, "description": "MIG-132 T6"})
+                s, raw, _ = self.http("PUT", self.ports["a"], "/setting.json/pipelineConfig", pa, {"id": entry_id, "value": value})
             if s != 200 or '"ERROR"' in raw:
                 record("T6", False, "%s on A refused: %s %s" % (step, s, raw[:200]))
                 return
-            read = self.poll(lambda: seen_on_b(value)[0], 10)
-            cached = self.poll(lambda: seen_on_b(value)[1], 10)
-            copy = self.poll(lambda: rebuilt_on_b(since), 10, step=0.25)
-            timings.append((step, read, cached, copy))
-        bound = 2.0 + 1.5
-        # What a caller reads -- the table behind /lookups and the shared appSetting cache -- decides.
-        # B's in-memory copy is reported, not asserted: nothing reads it any more, and its 30 s MAX_AGE
-        # refresh can land inside the window and look like the version's.
-        ok = all(x is not None and x <= bound for _, a, b, _c in timings for x in (a, b))
-        record("T6", ok, "lookup %s on A seen on B -- " % lookup_type + "; ".join(
-            "%s: lookups %s, appSetting %s (B's in-memory copy rebuilt %s)" % (s, fmt(a), fmt(b), fmt(c)) for s, a, b, c in timings)
-            + " (bound %.1fs)" % bound)
+            timings.append((step, self.poll(lambda: seen_on_b(value), 10)))
+        bound = 1.5
+        ok = all(x is not None and x <= bound for _, x in timings)
+        record("T6", ok, "configuration %s on A seen on B -- " % key + "; ".join(
+            "%s: %s" % (step, fmt(x)) for step, x in timings) + " (bound %.1fs; no cache since MIG-167)" % bound)
 
     def check_t7(self):
         # A run stranded seven hours ago, which the sweep must close exactly once.
@@ -774,7 +762,7 @@ class Harness:
         suites run against this harness's server, each in a database of its own."""
         tests = ",".join([
             "ReconcileOncePerTickTest", "DispatchBudgetInsideLockTest", "DispatchTimingTest",
-            "PageAccessCacheAcrossInstancesTest", "LookupDataCacheAcrossInstancesTest",
+            "PageAccessCacheAcrossInstancesTest",
             "LoginAttemptGuardAcrossInstancesTest", "TokenRevocationAcrossInstancesTest",
             "EnqueuerReplicasPostgresTest", "OneRunInFlightPostgresTest", "DueSchedulerClaimPostgresTest",
             "StalledRunSweepPostgresTest", "SchedulingDisabledTest"])

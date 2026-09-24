@@ -21,6 +21,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -54,7 +56,8 @@ class EntityTimeRoundTripPostgresTest {
     /** "table.column" -> the fixture rows that set it: {key, instant}. */
     private static final Map<String, List<String[]>> SET = new LinkedHashMap<>();
     /** Written by a @PreUpdate on every update, whatever the attribute held. */
-    private static final Set<String> STAMPED_ON_UPDATE = Collections.singleton("Scheduler.dateUpdated");
+    private static final Set<String> STAMPED_ON_UPDATE = new HashSet<>(Arrays.asList(
+        "Scheduler.dateUpdated", "TaskReference.updatedAt", "PipelineConfig.updatedAt"));
 
     @BeforeAll
     static void build() throws Exception {
@@ -63,12 +66,28 @@ class EntityTimeRoundTripPostgresTest {
         JdbcTemplate sql = db.jdbc();
         TimestamptzMigrationPostgresTest.seedBaseRows(sql, false);
         for (String[] row : TimestamptzMigrationPostgresTest.fixture()) {
-            if (!TimestampColumns.exists(sql, row[0], row[2])) {
+            // lookup_data is retired and read-only since MIG-167 (V144); no entity maps it.
+            if (!TimestampColumns.exists(sql, row[0], row[2]) || "lookup_data".equals(row[0])) {
                 continue;
             }
             sql.update(String.format("UPDATE public.%s SET %s = ?::timestamptz WHERE %s", row[0], row[2],
                 TimestamptzMigrationPostgresTest.whereKey(sql, row[0], row[1])), row[4]);
             SET.computeIfAbsent(row[0] + "." + row[2], k -> new ArrayList<>()).add(new String[] {row[1], row[4]});
+        }
+        // MIG-167's tables are born timestamptz (V141, V143), after V100, so the before-fixture cannot name them: a row
+        // each, at the fixture's DST edges.
+        sql.update("INSERT INTO task_reference (id, tenant_id, kind, name, value) VALUES (900971, 900, 'HOME_PAGE', 'fixture', 'https://f.test')");
+        sql.update("INSERT INTO pipeline_config (id, tenant_id, config_key, kind, value) VALUES (900981, 900, 'V100_FIXTURE', 'VALUE', 'x')");
+        String[][] born = {
+            {"task_reference", "900971", "created_at", "2026-11-01T07:30:00Z"},
+            {"task_reference", "900971", "updated_at", "2026-03-08T08:30:00Z"},
+            {"pipeline_config", "900981", "created_at", "2026-01-15T14:00:00Z"},
+            {"pipeline_config", "900981", "updated_at", "2026-07-04T13:00:00Z"},
+            {"pipeline_config", "900981", "value_set_at", "2026-01-16T05:45:10.123456Z"}};
+        for (String[] row : born) {
+            sql.update(String.format("UPDATE public.%s SET %s = ?::timestamptz WHERE %s", row[0], row[2],
+                TimestamptzMigrationPostgresTest.whereKey(sql, row[0], row[1])), row[3]);
+            SET.computeIfAbsent(row[0] + "." + row[2], k -> new ArrayList<>()).add(new String[] {row[1], row[3]});
         }
         for (File source : new File("src/main/java/process/model/pojo").listFiles((dir, name) -> name.endsWith(".java"))) {
             Class<?> type = Class.forName("process.model.pojo." + source.getName().replace(".java", ""));

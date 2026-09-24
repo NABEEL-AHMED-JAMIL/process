@@ -1,6 +1,7 @@
 package process.util.validation;
 
 import process.util.PlatformDatabases;
+import process.settings.TaskConfigRules;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -128,6 +129,9 @@ public class SourceTaskValidation {
         }
         // The same rule as a task saved one at a time: no pipeline data in a platform database.
         PlatformDatabases.refusal(this.taskPayload).ifPresent(refusal ->
+            this.setErrorMsg(String.format("%s (row %s)<br>", refusal, rowCounter)));
+        // And the same configuration rules (MIG-167): no credential as plain text, no malformed ${...} reference.
+        TaskConfigRules.payloadRefusal(this.taskPayload).ifPresent(refusal ->
             this.setErrorMsg(String.format("%s (row %s)<br>", refusal, rowCounter)));
         try {
             if (!isNull(this.taskPayload)) {

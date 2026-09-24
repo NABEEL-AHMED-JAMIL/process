@@ -61,7 +61,7 @@ public class SettingServiceTaskTypeTenantTest {
      * describe nothing about the rule.
      */
     private SettingServiceImpl newServiceWithoutDependencies() {
-        return new SettingServiceImpl(null, null, null, null, null, null, null, null, null, null, null);
+        return new SettingServiceImpl(null, null, null, null, null, null, null, null);
     }
 
     @Test

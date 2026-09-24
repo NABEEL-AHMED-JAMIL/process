@@ -37,14 +37,15 @@ class SourceTaskReferencesPostgresTest {
             List<Map<String, Object>> tasks = sql.queryForList("SELECT task_detail_id, home_page_id, group_id FROM source_task ORDER BY 1");
             assertThat(tasks).extracting(row -> row.get("home_page_id")).containsExactly(1275L, null, null);
             assertThat(tasks).extracting(row -> row.get("group_id")).containsExactly(1280L, null, null);
+            // MIG-167 (V141) re-pointed both keys at task_reference, the rows' new home, with the ids unchanged.
             assertThat(sql.queryForList("SELECT conname FROM pg_constraint WHERE conrelid = 'source_task'::regclass "
-                + "AND confrelid = 'lookup_data'::regclass ORDER BY 1", String.class))
+                + "AND confrelid = 'task_reference'::regclass ORDER BY 1", String.class))
                 .containsExactly("fk_source_task_group", "fk_source_task_home_page");
-            // The foreign key holds: an id that is no lookup row is refused by the database itself.
+            // The foreign key holds: an id that is no home page or group is refused by the database itself.
             assertThatThrownBy(() -> sql.update("UPDATE source_task SET home_page_id = 99999 WHERE task_detail_id = 7301"))
                 .hasMessageContaining("fk_source_task_home_page");
 
-            // The task list's join, planned with scans ruled out: it can use lookup_data's key only now that
+            // The task list's join, planned with scans ruled out: it can use the key (task_reference's since V141) only now that
             // nothing is cast. Before, the best it could do was walk the whole index and filter.
             TenantContext.set(null, "PLATFORM_ADMIN", 1000L, "admin@platform.local");
             try {
@@ -54,7 +55,7 @@ class SourceTaskReferencesPostgresTest {
                 sql.execute("SET enable_seqscan = off");
                 String plan = String.join("\n", sql.queryForList("EXPLAIN " + new QueryService().listSourceTaskQuery(
                     false, null, null, null, null, null), String.class));
-                assertThat(plan).contains("Index Cond: (lookup_id = st.home_page_id)").contains("Index Cond: (lookup_id = st.group_id)");
+                assertThat(plan).contains("Index Cond: (id = st.home_page_id)").contains("Index Cond: (id = st.group_id)");
             } finally {
                 sql.execute("RESET enable_seqscan");
                 TenantContext.clear();

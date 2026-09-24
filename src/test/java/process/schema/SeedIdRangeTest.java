@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 
@@ -27,9 +28,17 @@ class SeedIdRangeTest {
      * Changesets whose INSERT moves a value that already exists, into a table with no sequence -- so
      * there is no id to hide, which is what the rule guards. Each with its reason.
      */
-    private static final Map<String, String> MOVES_NOT_SEEDS = Collections.singletonMap(
-        "db/changelog/yaml/V88.0-orchestration-setting.yaml",
-        "moves QUEUE_FETCH_LIMIT's value out of lookup_data (MIG-136); orchestration_setting is keyed by name, no sequence");
+    private static final Map<String, String> MOVES_NOT_SEEDS = new HashMap<>();
+
+    static {
+        MOVES_NOT_SEEDS.put("db/changelog/yaml/V88.0-orchestration-setting.yaml",
+            "moves QUEUE_FETCH_LIMIT's value out of lookup_data (MIG-136); orchestration_setting is keyed by name, no sequence");
+        MOVES_NOT_SEEDS.put("db/changelog/yaml/V141.0-task-reference.yaml",
+            "moves the home pages and groups out of lookup_data with the ids lookup_id_seq gave them (MIG-167), and starts "
+                + "task_reference_id_seq past the highest; no id is chosen by the changeset");
+        MOVES_NOT_SEEDS.put("db/changelog/yaml/V142.0-orchestration-setting-watermarks.yaml",
+            "moves the two watermarks' values out of lookup_data (MIG-167); orchestration_setting is keyed by name, no sequence");
+    }
 
     @Test
     @SuppressWarnings("unchecked")

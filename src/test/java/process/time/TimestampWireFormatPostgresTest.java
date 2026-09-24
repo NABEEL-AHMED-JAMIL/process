@@ -21,7 +21,7 @@ import process.model.projection.PipelineRowProjection;
 import process.model.projection.SourceJobProjection;
 import process.model.repository.JobAuditLogRepository;
 import process.model.repository.JobQueueRepository;
-import process.model.repository.LookupDataRepository;
+import process.model.repository.TaskReferenceRepository;
 import process.model.repository.PipelineRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
@@ -170,7 +170,7 @@ class TimestampWireFormatPostgresTest {
         SourceJobRepository jobs = jpa.repository(SourceJobRepository.class);
         SchedulerRepository schedulers = jpa.repository(SchedulerRepository.class);
         DashboardServiceImpl dashboard = new DashboardServiceImpl(queries, jobs, jpa.repository(JobQueueRepository.class),
-            schedulers, jpa.repository(LookupDataRepository.class), null);
+            schedulers, jpa.repository(TaskReferenceRepository.class), null);
         String sent = wire(jpa.transactions().execute(status -> {
             try {
                 return dashboard.weeklyHrRunningStatisticsDimensionDetail("2026-01-15", 23L, "Completed", JOB).getData();

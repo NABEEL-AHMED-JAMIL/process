@@ -18,7 +18,7 @@ import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.model.pojo.SourceTaskType;
 import process.model.repository.JobQueueRepository;
-import process.model.repository.LookupDataRepository;
+import process.model.repository.TaskReferenceRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardService;
@@ -42,7 +42,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final SourceJobRepository sourceJobRepository;
     private final JobQueueRepository jobQueueRepository;
     private final SchedulerRepository schedulerRepository;
-    private final LookupDataRepository lookupDataRepository;
+    private final TaskReferenceRepository taskReferenceRepository;
 
     private final IdentityPort identity;
 
@@ -50,13 +50,13 @@ public class DashboardServiceImpl implements DashboardService {
         SourceJobRepository sourceJobRepository,
         JobQueueRepository jobQueueRepository,
         SchedulerRepository schedulerRepository,
-        LookupDataRepository lookupDataRepository, IdentityPort identity) {
+        TaskReferenceRepository taskReferenceRepository, IdentityPort identity) {
         this.identity = identity;
         this.queryService = queryService;
         this.sourceJobRepository = sourceJobRepository;
         this.jobQueueRepository = jobQueueRepository;
         this.schedulerRepository = schedulerRepository;
-        this.lookupDataRepository = lookupDataRepository;
+        this.taskReferenceRepository = taskReferenceRepository;
     }
 
     @Override
@@ -360,27 +360,14 @@ public class DashboardServiceImpl implements DashboardService {
         sourceTaskDto.setBucket(sourceTask.getBucket());
         sourceTaskDto.setInputFolder(sourceTask.getInputFolder());
         sourceTaskDto.setOutputFolder(sourceTask.getOutputFolder());
-        Long homePageLookupId = sourceTask.getHomePageId();
-        if (homePageLookupId != null) {
-            this.lookupDataRepository.findById(homePageLookupId)
-                .ifPresent(lookupData -> sourceTaskDto.setHomePageId(lookupData.getLookupType()));
+        Long homePageId = sourceTask.getHomePageId();
+        if (homePageId != null) {
+            this.taskReferenceRepository.findById(homePageId)
+                .ifPresent(homePage -> sourceTaskDto.setHomePageId(homePage.getName()));
         }
-        /*
-         * pipeline_id is the raw id the worker routes on ("F768930") since the PIPELINE_IDS
-         * lookup family was dropped (changeset V28) and Pipeline Forms became the catalogue.
-         * parseLongOrNull returns null for it, so the guarded block below was skipped and the
-         * field was left unset entirely -- which is why the console showed "Pipeline --" on
-         * every task. A numeric value is still resolved, for rows written before that change,
-         * and falls back to the raw value when it resolves to nothing.
-         */
-        String pipelineId = sourceTask.getPipelineId();
-        Long pipelineLookupId = ProcessUtil.parseLongOrNull(pipelineId);
-        if (pipelineLookupId != null) {
-            sourceTaskDto.setPipelineId(this.lookupDataRepository.findById(pipelineLookupId)
-                .map(lookupData -> lookupData.getLookupType()).orElse(pipelineId));
-        } else {
-            sourceTaskDto.setPipelineId(pipelineId);
-        }
+        // pipeline_id is the raw id the worker routes on ("F768930"); the PIPELINE_IDS lookup family it once named
+        // was dropped by V28, and lookup_data is retired (MIG-167), so it is shown as it is stored.
+        sourceTaskDto.setPipelineId(sourceTask.getPipelineId());
         if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
             sourceTaskDto.setSourceTaskType(getSourceTaskTypeDto(sourceTask));
         }

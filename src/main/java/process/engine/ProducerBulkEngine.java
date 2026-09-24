@@ -555,9 +555,9 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         dto.setAttempt(Math.max(1, jobQueue.getAttempt()));
         dto.setCorrelationId(jobQueue.getCorrelationId());
         if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
-            Long homePageLookupId = sourceJob.getTaskDetail().getHomePageId();
-            if (homePageLookupId != null) {
-                dto.setHomePageId(this.transactionService.findLookupValueByLookupId(homePageLookupId));
+            Long homePageId = sourceJob.getTaskDetail().getHomePageId();
+            if (homePageId != null) {
+                dto.setHomePageId(this.transactionService.findHomePageUrl(homePageId));
             }
             // pipelineId is no longer a PIPELINE_IDS lookup row id -- Task Forms now define a
             // pipeline directly by its own id string, so it goes straight through.

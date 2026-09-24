@@ -6,12 +6,12 @@ import java.time.LocalDateTime;
 import java.util.TimeZone;
 import process.util.BusinessTime;
 import process.util.ProcessUtil;
-import process.model.pojo.LookupData;
 import javax.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import process.model.service.impl.TransactionServiceImpl;
+import process.settings.OrchestrationSettings;
+import process.settings.Watermark;
 
 /**
  * @author Nabeel Ahmed
@@ -22,7 +22,7 @@ public class ModelApplication {
     private Logger logger = LoggerFactory.getLogger(ModelApplication.class);
 
     @Autowired
-    private TransactionServiceImpl transactionService;
+    private OrchestrationSettings orchestrationSettings;
 
     /**
      * A start that fails must exit non-zero (MIG-5): catching it here once made a refused boot exit 0.
@@ -45,15 +45,12 @@ public class ModelApplication {
         try {
             LocalDateTime now = BusinessTime.now();
             logger.info("=========Current Chicago Time: {} ==========", now);
-            LookupData lookupData = this.transactionService.findByLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
-            if (ProcessUtil.isNull(lookupData)) {
-                LookupData newLookupData = new LookupData();
-                newLookupData.setLookupType(ProcessUtil.SCHEDULER_LAST_RUN_TIME);
-                newLookupData.setLookupValue(now.toString());
-                this.transactionService.updateLookupDate(newLookupData);
+            // The enqueuer's watermark, in orchestration_setting since MIG-167; set only when there is none.
+            if (this.orchestrationSettings.writeWatermarkIfAbsent(Watermark.SCHEDULER_LAST_RUN_TIME, now.toString())) {
                 logger.info("=========Initialized SCHEDULER_LAST_RUN_TIME to {} ==========", now);
             } else {
-                logger.info("=========SCHEDULER_LAST_RUN_TIME already exists: {} (not overwriting on restart) ==========", lookupData.getLookupValue());
+                logger.info("=========SCHEDULER_LAST_RUN_TIME already exists: {} (not overwriting on restart) ==========",
+                    this.orchestrationSettings.value(ProcessUtil.SCHEDULER_LAST_RUN_TIME).orElse(null));
             }
         } catch (Exception e) {
             logger.error("=========Error in @PostConstruct started() method: {} ==========", e.getMessage(), e);

@@ -1,0 +1,44 @@
+databaseChangeLog:
+  - changeSet:
+      id: 142.0-orchestration-setting-watermarks
+      author: nabeel.amd93
+      description: "The two resume watermarks join QUEUE_FETCH_LIMIT in orchestration_setting (MIG-167)"
+      # SCHEDULER_LAST_RUN_TIME (the enqueuer's) and AUDIT_LOG_SYNC_LAST_RUN_TIME (AuditLogSyncCron's) were top-level
+      # lookup_data rows that the generic Lookups screen could edit. They move with their values unchanged -- the
+      # first is a Chicago wall-clock LocalDateTime, the second an ISO instant, and each is parsed only by its own
+      # writer. Only those writers write them now (owner's D4: enforced in the application, pinned by
+      # WatermarkWritersTest); the settings API edits QUEUE_FETCH_LIMIT and nothing else. A watermark that is absent
+      # (a new database) is created by its writer on first use, as before.
+      #
+      # updated_at and updated_by record the last write; NULL for a moved row, whose last writer is not known.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              ALTER TABLE orchestration_setting
+                ADD COLUMN updated_at TIMESTAMPTZ,
+                ADD COLUMN updated_by BIGINT;
+        - sql:
+            splitStatements: false
+            sql: >
+              INSERT INTO orchestration_setting (setting_key, setting_value, description)
+              SELECT l.lookup_type, l.lookup_value,
+                     CASE l.lookup_type
+                       WHEN 'SCHEDULER_LAST_RUN_TIME' THEN 'Where the enqueuer resumes from after a restart. Written only by the enqueuer.'
+                       ELSE 'Where the OpenSearch audit-log sync resumes from. Written only by AuditLogSyncCron.'
+                     END
+              FROM lookup_data l
+              WHERE l.parent_lookup_id IS NULL
+                AND l.lookup_type IN ('SCHEDULER_LAST_RUN_TIME', 'AUDIT_LOG_SYNC_LAST_RUN_TIME')
+                AND NOT l.is_encrypted
+                AND l.lookup_value IS NOT NULL
+              ON CONFLICT (setting_key) DO NOTHING;
+        - sql:
+            sql: >
+              COMMENT ON TABLE orchestration_setting IS 'Core''s engine dials and watermarks (MIG-136, MIG-167). The settings
+              API edits QUEUE_FETCH_LIMIT only; each watermark is written only by its own cron. No encryption column.'
+      rollback:
+        - sql:
+            sql: DELETE FROM orchestration_setting WHERE setting_key IN ('SCHEDULER_LAST_RUN_TIME', 'AUDIT_LOG_SYNC_LAST_RUN_TIME')
+        - sql:
+            sql: ALTER TABLE orchestration_setting DROP COLUMN IF EXISTS updated_by, DROP COLUMN IF EXISTS updated_at

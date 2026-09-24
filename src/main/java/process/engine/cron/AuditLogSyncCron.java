@@ -6,12 +6,12 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import process.model.pojo.LookupData;
 import process.model.projection.OpenSearchJobAuditLogProjection;
 import process.model.repository.JobAuditLogRepository;
-import process.model.service.impl.TransactionServiceImpl;
 import process.util.OpenSearchAuditLogClient;
 import process.util.ProcessUtil;
+import process.settings.OrchestrationSettings;
+import process.settings.Watermark;
 
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -47,14 +47,14 @@ public class AuditLogSyncCron {
 
     private final OpenSearchAuditLogClient openSearchAuditLogClient;
     private final JobAuditLogRepository jobAuditLogRepository;
-    private final TransactionServiceImpl transactionService;
+    private final OrchestrationSettings orchestrationSettings;
 
     public AuditLogSyncCron(OpenSearchAuditLogClient openSearchAuditLogClient,
         JobAuditLogRepository jobAuditLogRepository,
-        TransactionServiceImpl transactionService) {
+        OrchestrationSettings orchestrationSettings) {
+        this.orchestrationSettings = orchestrationSettings;
         this.openSearchAuditLogClient = openSearchAuditLogClient;
         this.jobAuditLogRepository = jobAuditLogRepository;
-        this.transactionService = transactionService;
     }
 
     @Scheduled(initialDelay = 15000, fixedDelay = 4 * 60 * 60 * 1000)
@@ -65,10 +65,11 @@ public class AuditLogSyncCron {
         }
         try {
             logger.info("~~~~~~~~~~~~~~~~~~~~~~~~Start-SyncAuditLogsFromOpenSearch~~~~~~~~~~~~~~~~~~~~~~~~");
-            LookupData bookmark = this.transactionService.findByLookupType(ProcessUtil.AUDIT_LOG_SYNC_LAST_RUN_TIME);
+            // Its own watermark, in orchestration_setting since MIG-167, and written by nothing else (D4).
+            String bookmark = this.orchestrationSettings.value(ProcessUtil.AUDIT_LOG_SYNC_LAST_RUN_TIME).orElse(null);
             Instant lastRun = bookmark == null
                 ? Instant.now().minus(Duration.ofDays(this.initialLookbackDays))
-                : Instant.parse(bookmark.getLookupValue());
+                : Instant.parse(bookmark);
             Instant scanFrom = lastRun.minus(OVERLAP);
 
             List<OpenSearchJobAuditLogProjection> hits = this.openSearchAuditLogClient.searchSince(scanFrom);
@@ -114,14 +115,8 @@ public class AuditLogSyncCron {
                     missingJobQueueIds.stream().limit(SKIPPED_ID_SAMPLE).collect(Collectors.toList()));
             }
 
-            LookupData newBookmark = bookmark == null ? new LookupData() : bookmark;
-            newBookmark.setLookupType(ProcessUtil.AUDIT_LOG_SYNC_LAST_RUN_TIME);
             Instant newBookmarkValue = hadParseFailure ? lastRun : (hits.isEmpty() ? Instant.now().minus(OVERLAP) : maxSeen);
-            newBookmark.setLookupValue(newBookmarkValue.toString());
-            if (bookmark == null) {
-                newBookmark.setDescription("Watermark for the OpenSearch -> job_audit_logs sync cron (AuditLogSyncCron).");
-            }
-            this.transactionService.updateLookupDate(newBookmark);
+            this.orchestrationSettings.writeWatermark(Watermark.AUDIT_LOG_SYNC_LAST_RUN_TIME, newBookmarkValue.toString());
 
             logger.info("~~~~~~~~~~~~~~~~~~~~~~~~End-SyncAuditLogsFromOpenSearch scanned={} upserted={} skipped={}~~~~~~~~~~~~~~~~~~~~~~~~",
                 hits.size(), upserted, skipped);

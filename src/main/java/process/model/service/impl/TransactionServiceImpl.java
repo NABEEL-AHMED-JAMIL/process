@@ -29,7 +29,7 @@ public class TransactionServiceImpl {
     private final SourceJobRepository sourceJobRepository;
     private final SchedulerRepository schedulerRepository;
     private final JobQueueRepository jobQueueRepository;
-    private final LookupDataRepository lookupDataRepository;
+    private final TaskReferenceRepository taskReferenceRepository;
     private final JobAuditLogRepository jobAuditLogRepository;
     private final SourceTaskRepository sourceTaskRepository;
     private final OpenSearchAuditLogClient openSearchAuditLogClient;
@@ -37,14 +37,14 @@ public class TransactionServiceImpl {
     public TransactionServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         JobQueueRepository jobQueueRepository,
-        LookupDataRepository lookupDataRepository,
+        TaskReferenceRepository taskReferenceRepository,
         JobAuditLogRepository jobAuditLogRepository,
         SourceTaskRepository sourceTaskRepository,
         OpenSearchAuditLogClient openSearchAuditLogClient) {
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.jobQueueRepository = jobQueueRepository;
-        this.lookupDataRepository = lookupDataRepository;
+        this.taskReferenceRepository = taskReferenceRepository;
         this.jobAuditLogRepository = jobAuditLogRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.openSearchAuditLogClient = openSearchAuditLogClient;
@@ -154,10 +154,6 @@ public class TransactionServiceImpl {
         this.jobQueueRepository.save(jobQueue);
     }
 
-    public void updateLookupDate(LookupData lookupData) {
-        this.lookupDataRepository.save(lookupData);
-    }
-
     public Optional<SourceJob> findByJobIdAndJobStatus(Long jobId, Status status) {
         return this.sourceJobRepository.findByJobIdAndJobStatus(jobId, status);
     }
@@ -222,14 +218,9 @@ public class TransactionServiceImpl {
         this.jobQueueRepository.save(jobQueue);
     }
 
-    public LookupData findByLookupType(String lookupType) {
-        return this.lookupDataRepository.findByLookupType(lookupType);
-    }
-
-    public String findLookupValueByLookupId(Long lookupId) {
-        return this.lookupDataRepository.findById(lookupId)
-            .map(LookupData::getLookupValue)
-            .orElse(null);
+    /** A home page's URL, which the dispatcher hands to the worker (MIG-167: task_reference, same ids as before). */
+    public String findHomePageUrl(Long taskReferenceId) {
+        return this.taskReferenceRepository.findHomePageUrl(taskReferenceId).orElse(null);
     }
 
     public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId) {

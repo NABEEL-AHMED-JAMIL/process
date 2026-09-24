@@ -9,12 +9,8 @@ import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import process.model.dto.LookupDataDto;
-import process.model.pojo.LookupData;
 import process.model.pojo.SourceTask;
-import process.model.repository.LookupDataRepository;
 import process.model.repository.SourceTaskRepository;
-import process.model.service.impl.LookupDataCacheService;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
@@ -42,19 +38,13 @@ class LazyLoadOutsideTransactionPostgresTest {
 
     private static ScratchEtlJob db;
     private static LocalContainerEntityManagerFactoryBean factoryBean;
-    private static LookupDataRepository lookups;
     private static SourceTaskRepository tasks;
-    private static Long homePages;
 
     @BeforeAll
     static void build() throws Exception {
         db = ScratchEtlJob.build("lazy_load");
         JdbcTemplate sql = db.sql();
         sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (2905, 'Active', 'MCN', 'MedAxis')");
-        // PIPELINE_HOME_PAGES and QUEUE_FETCH_LIMIT are the ones V70.5 seeds; a workspace's home page goes under the family.
-        homePages = sql.queryForObject("SELECT lookup_id FROM lookup_data WHERE lookup_type = 'PIPELINE_HOME_PAGES'", Long.class);
-        sql.update("INSERT INTO lookup_data (lookup_id, lookup_type, lookup_value, parent_lookup_id, tenant_id, date_created) "
-            + "VALUES (1275, 'MedAxis Home', 'https://console.medaxiscare.demo', ?, 2905, now())", homePages);
         sql.update("INSERT INTO source_task_type (source_task_type_id, service_name, description, queue_topic_partition, tenant_id) "
             + "VALUES (7300, 'worker', 'd', 'topic=scrapping-topic&partitions=[*]', 2905)");
         sql.update("INSERT INTO source_task (task_detail_id, task_name, task_status, source_task_type_id, tenant_id) "
@@ -75,7 +65,6 @@ class LazyLoadOutsideTransactionPostgresTest {
         EntityManagerFactory factory = factoryBean.getObject();
         EntityManager shared = SharedEntityManagerCreator.createSharedEntityManager(factory);
         JpaRepositoryFactory repositories = new JpaRepositoryFactory(shared);
-        lookups = repositories.getRepository(LookupDataRepository.class);
         tasks = repositories.getRepository(SourceTaskRepository.class);
     }
 
@@ -89,35 +78,15 @@ class LazyLoadOutsideTransactionPostgresTest {
         }
     }
 
-    /** The condition itself: the old read, detached, fails the moment it touches a lazy collection. */
+    /**
+     * The condition itself: the old read, detached, fails the moment it touches a lazy collection. (This was shown on
+     * lookup_data's children until MIG-167 retired the table; a task's tag rows are the same kind of collection.)
+     */
     @Test
     void aDetachedLazyCollectionNoLongerLoads() {
-        LookupData homePages = lookups.findByLookupType("PIPELINE_HOME_PAGES");
+        SourceTask task = tasks.findById(7301L).get();
 
-        assertThatThrownBy(() -> homePages.getChildren().size()).isInstanceOf(LazyInitializationException.class);
-    }
-
-    /** LookupDataCacheService's startup rebuild runs from @PostConstruct, with no transaction around it. */
-    @Test
-    void theLookupCacheRebuildsWithItsChildrenOutsideATransaction() {
-        LookupDataCacheService cache = new LookupDataCacheService(lookups, null);
-
-        cache.initialize();
-
-        LookupDataDto homePages = cache.getParentLookupById("PIPELINE_HOME_PAGES");
-        assertThat(homePages).as("the rebuild failed and left the cache empty").isNotNull();
-        assertThat(homePages.getChildren()).extracting(LookupDataDto::getLookupType).containsExactly("MedAxis Home");
-        assertThat(cache.getParentLookupById("TASK_GROUPS")).as("a family with no children yet").isNotNull();
-        // QUEUE_FETCH_LIMIT left lookup_data for orchestration_setting (V88, MIG-136).
-        assertThat(cache.getParentLookupById("QUEUE_FETCH_LIMIT")).isNull();
-    }
-
-    /** SettingServiceImpl.fetchSubLookupByParentId: the children of one family, read by query, not by association. */
-    @Test
-    void aFamilysChildrenAreReadWithoutTheAssociation() {
-        List<LookupData> children = lookups.findChildrenOf(homePages);
-
-        assertThat(children).extracting(LookupData::getLookupType).containsExactly("MedAxis Home");
+        assertThatThrownBy(() -> task.getSourceTaskPayload().size()).isInstanceOf(LazyInitializationException.class);
     }
 
     /** SourceTaskServiceImpl.fetchSourceTaskWithSourceTaskId: the task and its tag rows in one read. */

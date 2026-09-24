@@ -10,7 +10,7 @@ import process.model.pojo.JobAuditLogs;
 import process.model.pojo.JobQueue;
 import process.model.repository.JobAuditLogRepository;
 import process.model.repository.JobQueueRepository;
-import process.model.repository.LookupDataRepository;
+import process.model.repository.TaskReferenceRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
@@ -54,7 +54,7 @@ public class TransactionServiceImplAuditLogTest {
     @Mock private SourceJobRepository sourceJobRepository;
     @Mock private SchedulerRepository schedulerRepository;
     @Mock private JobQueueRepository jobQueueRepository;
-    @Mock private LookupDataRepository lookupDataRepository;
+    @Mock private TaskReferenceRepository taskReferenceRepository;
     @Mock private JobAuditLogRepository jobAuditLogRepository;
     @Mock private SourceTaskRepository sourceTaskRepository;
     @Mock private OpenSearchAuditLogClient openSearchAuditLogClient;
@@ -64,7 +64,7 @@ public class TransactionServiceImplAuditLogTest {
     @BeforeEach
     void setUp() {
         this.service = new TransactionServiceImpl(this.sourceJobRepository, this.schedulerRepository,
-            this.jobQueueRepository, this.lookupDataRepository, this.jobAuditLogRepository,
+            this.jobQueueRepository, this.taskReferenceRepository, this.jobAuditLogRepository,
             this.sourceTaskRepository, this.openSearchAuditLogClient);
     }
 

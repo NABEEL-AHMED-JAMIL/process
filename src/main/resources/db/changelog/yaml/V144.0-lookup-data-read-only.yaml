@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 144.0-lookup-data-read-only
+      author: nabeel.amd93
+      description: "lookup_data is retired (MIG-167): kept read-only for its retention period"
+      # Every row has a new home (V88, V140-V142) and nothing in process reads or writes lookup_data any more: the
+      # engine's dials and watermarks are orchestration_setting's, home pages and groups task_reference's, and
+      # buckets storage-service's. As with storage_connection (V57) and the billing, analytics and AI copies
+      # (V61-V63), the table is kept, not dropped, and a trigger refuses every write so nothing can quietly start
+      # using it again. Dropping it is a later changeset, after an explicit yes.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE OR REPLACE FUNCTION lookup_data_read_only() RETURNS trigger AS $$
+              BEGIN
+                RAISE EXCEPTION 'lookup_data is read-only: it was retired by MIG-167 (engine settings are in orchestration_setting, home pages and task groups in task_reference, configuration in pipeline_config)';
+              END;
+              $$ LANGUAGE plpgsql;
+        - sql:
+            sql: >
+              CREATE TRIGGER lookup_data_read_only BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON lookup_data
+              FOR EACH STATEMENT EXECUTE PROCEDURE lookup_data_read_only();
+        - sql:
+            sql: COMMENT ON TABLE lookup_data IS 'Retired by MIG-167 and read-only; kept for its retention period.'
+      rollback:
+        - sql:
+            sql: >
+              DROP TRIGGER IF EXISTS lookup_data_read_only ON lookup_data;
+              DROP FUNCTION IF EXISTS lookup_data_read_only();
