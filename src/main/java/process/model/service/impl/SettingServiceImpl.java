@@ -666,7 +666,7 @@ public class SettingServiceImpl implements SettingService {
         }
         this.lookupDataRepository.save(lookupData);
 
-        this.lookupDataCacheService.initializeCache();
+        this.lookupDataCacheService.changed();
         return new ResponseDto(SUCCESS, String.format("LookupData save with %d.", lookupData.getLookupId()));
     }
 
@@ -725,7 +725,7 @@ public class SettingServiceImpl implements SettingService {
             parentLookupData.ifPresent(lookupData::setParent);
         }
         this.lookupDataRepository.save(lookupData);
-        this.lookupDataCacheService.initializeCache();
+        this.lookupDataCacheService.changed();
         return new ResponseDto(SUCCESS, String.format("LookupData update with %d.", tempLookupData.getLookupId()));
     }
 
@@ -799,7 +799,7 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, deleteRefusal);
         }
         this.lookupDataRepository.deleteById(tempLookupData.getLookupId());
-        this.lookupDataCacheService.initializeCache();
+        this.lookupDataCacheService.changed();
         return new ResponseDto(SUCCESS, String.format("LookupData delete with %d.", tempLookupData.getLookupId()));
     }
 

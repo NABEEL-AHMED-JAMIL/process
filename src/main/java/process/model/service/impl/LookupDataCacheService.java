@@ -1,5 +1,12 @@
 package process.model.service.impl;
 
+import org.barco.platform.cache.SharedCacheVersion;
+import org.barco.platform.cache.VersionStore;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import javax.annotation.PreDestroy;
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,20 +35,94 @@ public class LookupDataCacheService {
      */
     private volatile Map<String, LookupDataDto> lookupCacheMap = new HashMap<>();
 
+    /** How often an instance checks the shared version; a change elsewhere lands within this. */
+    static final Duration POLL = Duration.ofSeconds(2);
+
+    /** However the shared version fares, no instance serves a cache older than this. */
+    static final Duration MAX_AGE = Duration.ofSeconds(30);
+
     private final LookupDataRepository lookupDataRepository;
     private final EncryptionUtil encryptionUtil;
+    private final SharedCacheVersion version;
+    private final TransactionTemplate readOnly;
 
+    /** One instance on its own: nothing shared, as in unit tests that exercise the rebuild. */
     public LookupDataCacheService(LookupDataRepository lookupDataRepository, EncryptionUtil encryptionUtil) {
+        this(lookupDataRepository, encryptionUtil, null, null);
+    }
+
+    /**
+     * MIG-66 / MIG-110: every instance keeps its own copy, and one version in Redis says when the
+     * table changed -- a lookup edited on one instance is served by every other within POLL, and by
+     * MAX_AGE whatever Redis does (SharedCacheVersion). QUEUE_FETCH_LIMIT and SCHEDULER_LAST_RUN_TIME,
+     * the two that steer dispatch, are read from the table on every use and never from here.
+     */
+    @Autowired
+    public LookupDataCacheService(LookupDataRepository lookupDataRepository, EncryptionUtil encryptionUtil,
+        VersionStore versions, PlatformTransactionManager transactions) {
         this.lookupDataRepository = lookupDataRepository;
         this.encryptionUtil = encryptionUtil;
+        this.readOnly = transactions == null ? null : readOnly(transactions);
+        this.version = versions == null ? null : new SharedCacheVersion(versions, "lookup-data", this::rebuild, MAX_AGE);
+    }
+
+    private static TransactionTemplate readOnly(PlatformTransactionManager transactions) {
+        TransactionTemplate template = new TransactionTemplate(transactions);
+        template.setReadOnly(true);
+        return template;
     }
 
     @PostConstruct
     public void initialize() {
+        this.initialise(true);
+    }
+
+    void initialise(boolean poll) {
         try {
-            initializeCache();
+            if (this.version == null) {
+                this.rebuild();
+            } else {
+                this.version.initialise();
+            }
         } catch (Exception ex) {
             logger.error("Failed to initialize lookup cache: {}", ex.getMessage());
+        }
+        if (poll && this.version != null) {
+            this.version.start(POLL);
+        }
+    }
+
+    @PreDestroy
+    public void stop() {
+        if (this.version != null) {
+            this.version.close();
+        }
+    }
+
+    /**
+     * The table changed: rebuild here and tell every other instance. Inside a transaction both wait
+     * for the commit, so nobody rebuilds from the rows before it.
+     */
+    public void changed() {
+        if (this.version == null) {
+            this.rebuild();
+        } else {
+            this.version.changed();
+        }
+    }
+
+    /** One check of the shared version; the poller calls it every POLL. */
+    void poll() {
+        if (this.version != null) {
+            this.version.poll();
+        }
+    }
+
+    private void rebuild() {
+        if (this.readOnly == null) {
+            this.initializeCache();
+        } else {
+            this.readOnly.executeWithoutResult(status -> this.initializeCache());
         }
     }
 
