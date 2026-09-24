@@ -235,10 +235,13 @@ services:
       PROCESS_ENCRYPTION_KEY_ID: ${PROCESS_ENCRYPTION_KEY_ID:?PROCESS_ENCRYPTION_KEY_ID is not set in process/.env}
       PROCESS_ENCRYPTION_KEY: ${PROCESS_ENCRYPTION_KEY:?PROCESS_ENCRYPTION_KEY is not set in process/.env}
       LOOKUP_ENCRYPTION_KEY: ${LOOKUP_ENCRYPTION_KEY:-}
-      # Base64-encoded 256-bit HMAC key for signing JWTs (openssl rand -base64 32). Rotating
-      # this invalidates every already-issued token (everyone gets logged out). From process/.env;
-      # no fallback here (MIG-5): the one this file held was committed.
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is not set in process/.env}
+      # The shared HS256 secret of the transition to RS256 (MIG-92). From process/.env, never a value
+      # here (MIG-5: the one this file held was committed). Optional now: tokens are Identity's, verified
+      # against its JWKS, and HS256 is read only while JWT_ACCEPT_HS256 is on AND this is set. The owner
+      # sets JWT_ACCEPT_HS256=false in process/.env (identity-service reads the same file), then removes
+      # JWT_SECRET_KEY -- and process must still come up, so it is no longer required here.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      JWT_ACCEPT_HS256: ${JWT_ACCEPT_HS256:-true}
       # The metering service (job-search's etl_meter): usage is reported there and read back
       # for Cost & usage. Empty METER_URL means the console runs without metering.
       METER_URL: ${METER_URL:-http://host.docker.internal:8200}
