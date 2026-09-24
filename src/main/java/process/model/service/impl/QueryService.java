@@ -7,8 +7,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.SearchTextDto;
+import process.model.enums.JobAuditMarker;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
+import process.util.SqlLogRedaction;
 import javax.persistence.*;
 import javax.transaction.Transactional;
 import java.util.Arrays;
@@ -26,23 +28,37 @@ public class QueryService {
 
     private Logger logger = LoggerFactory.getLogger(QueryService.class);
 
+    /**
+     * What the executors log (MIG-74, DEF-142). Every query here is string-built, so the composed text
+     * carries the caller's tenant id and search terms; it went out at INFO. The shape, literals redacted,
+     * goes to DEBUG -- which logback.xml enables everywhere, so it must be safe to ship -- and the
+     * composed query only to TRACE, for a developer who turns it on locally.
+     */
+    private void logQuery(String queryStr) {
+        if (this.logger.isTraceEnabled()) {
+            this.logger.trace("Execute Query :- {}.", queryStr);
+        } else if (this.logger.isDebugEnabled()) {
+            this.logger.debug("Execute Query :- {}.", SqlLogRedaction.redact(queryStr));
+        }
+    }
+
     @PersistenceContext
     private EntityManager _em;
 
     public Object executeQueryForSingleResult(String queryStr) {
-        logger.info("Execute Query :- {}.", queryStr);
+        this.logQuery(queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getSingleResult();
     }
 
     public List<Object[]> executeQuery(String queryStr) {
-        logger.info("Execute Query :- {}.", queryStr);
+        this.logQuery(queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getResultList();
     }
 
     public List<Object[]> executeQuery(String queryStr, Pageable paging) {
-        logger.info("Execute Query :- {}.", queryStr);
+        this.logQuery(queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         if (paging != null) {
             query.setFirstResult(paging.getPageNumber() * paging.getPageSize());
@@ -356,7 +372,9 @@ public class QueryService {
             + "left join tenant t on t.tenant_id = sj.tenant_id "
             + "left join app_user u on u.app_user_id = sj.assigned_user_id "
             + "left join (select job_queue_id, min(date_created) as exec_start "
-            + "from job_audit_logs where log_detail = 'Job started' group by job_queue_id) x "
+            // The marker is JobAuditMarker.JOB_STARTED, one constant with the worker's literal behind it
+            // (MIG-77): matched exactly, never with LIKE.
+            + "from job_audit_logs where log_detail = '" + JobAuditMarker.JOB_STARTED.logDetail() + "' group by job_queue_id) x "
             + "on x.job_queue_id = q.job_queue_id "
             // A deleted job's runs are not history any more, and every other statistic here
             // already leaves them out -- a report that counted them would disagree with the
