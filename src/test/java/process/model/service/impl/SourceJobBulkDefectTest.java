@@ -136,7 +136,7 @@ public class SourceJobBulkDefectTest {
 
     /** A numeric id that names no task still gets its own, different, row-numbered message. */
     @Test
-    void anUnknownNumericTaskIdStillReportsTheDeletedTaskMessage() throws Exception {
+    void anUnknownNumericTaskIdIsNamedAsNoActiveTask() throws Exception {
         when(this.transactionService.findByTaskDetailIdAndTaskStatus(9999L))
             .thenReturn(Optional.empty());
 
@@ -144,7 +144,7 @@ public class SourceJobBulkDefectTest {
 
         assertThat(response.getStatus()).isEqualTo("ERROR");
         assertThat(String.valueOf(((List<?>) response.getData()).get(0)))
-            .contains("Deleted sourceTask");
+            .contains("Task 9999 at row 2 is not an active task in this workspace.");
     }
 
     /** A good sheet is still saved -- the parse guard must not have narrowed what is accepted. */

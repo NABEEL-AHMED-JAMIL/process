@@ -245,7 +245,8 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
                         jobDetailValidation.setErrorMsg("Task Id must be the numeric id at row "
                             + (currentRow.getRowNum() + 1) + "; got \"" + jobDetailValidation.getTaskId() + "\".\n");
                     } else if (!this.transactionService.findByTaskDetailIdAndTaskStatus(taskId).isPresent()) {
-                        jobDetailValidation.setErrorMsg("Deleted sourceTask is not linked with source job at row " + (currentRow.getRowNum() + 1) + ".\n");
+                        jobDetailValidation.setErrorMsg("Task " + taskId + " at row " + (currentRow.getRowNum() + 1)
+                            + " is not an active task in this workspace.");
                     }
                 }
                 /*
@@ -280,7 +281,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             }
         }
         if (!errors.isEmpty()) {
-            return new ResponseDto(ERROR, String.format("Total %d source jobs invalid.", errors.size()), errors);
+            return new ResponseDto(ERROR, ProcessUtil.rejectedRowsMessage(errors.size()), errors);
         }
         for (JobDetailValidation jobDetailValidation : jobDetailValidations) {
             SourceJob sourceJob = new SourceJob();

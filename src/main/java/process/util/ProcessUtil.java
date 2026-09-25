@@ -54,4 +54,10 @@ public class ProcessUtil {
         }
     }
 
+
+    /** The summary of a rejected bulk sheet: the rows are refused together, so nothing was saved. */
+    public static String rejectedRowsMessage(int rows) {
+        return String.format("%d %s could not be imported, so nothing was saved. Fix %s and upload the sheet again.",
+            rows, rows == 1 ? "row" : "rows", rows == 1 ? "it" : "them");
+    }
 }

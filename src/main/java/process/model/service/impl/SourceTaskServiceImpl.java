@@ -802,7 +802,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             }
         }
         if (!errors.isEmpty()) {
-            return new ResponseDto(ERROR, String.format("Total %d source task invalid.", errors.size()), errors);
+            return new ResponseDto(ERROR, ProcessUtil.rejectedRowsMessage(errors.size()), errors);
         }
         final Long[] uploadTenantIdHolder = new Long[1];
         ResponseDto tenantError = this.resolveTenantIdForCreate(object.getTenantId(), id -> uploadTenantIdHolder[0] = id);
@@ -824,7 +824,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             }
         }
         if (!errors.isEmpty()) {
-            return new ResponseDto(ERROR, String.format("Total %d source task invalid.", errors.size()), errors);
+            return new ResponseDto(ERROR, ProcessUtil.rejectedRowsMessage(errors.size()), errors);
         }
         sourceTaskValidations.forEach(sourceTaskValidation -> {
             SourceTask sourceTask = new SourceTask();
