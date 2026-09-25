@@ -19,6 +19,7 @@ import process.engine.dto.JobPayloadDTO;
 import process.security.RunCallbackTokens;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
+import process.model.enums.RunEnd;
 import process.model.enums.Status;
 import process.model.pojo.*;
 import process.model.service.impl.TransactionServiceImpl;
@@ -212,7 +213,10 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     boolean refused = jobQueue.getRefusedCallbackAt() != null;
                     String reported = "log".equals(jobQueue.getRefusedCallbackStatus())
                         || jobQueue.getRefusedCallbackStatus() == null ? "a log line" : jobQueue.getRefusedCallbackStatus();
+                    JobStatus before = jobQueue.getJobStatus();
+                    RunEnd reason = refused ? RunEnd.TOKEN_EXPIRED : RunEnd.STALLED;
                     jobQueue.setJobStatus(JobStatus.Interrupt);
+                    jobQueue.setEndReason(reason);
                     jobQueue.setEndTime(BusinessTime.now());
                     jobQueue.setJobStatusMessage(refused
                         ? String.format("Job %s's worker reported %s at %s, but its callback token had expired, "
@@ -223,6 +227,8 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                         + "have finished the work -- check the output before running it again.",
                         jobQueue.getJobId(), STALLED_AFTER_MINUTES / 60));
                     this.transactionService.saveJobQueue(jobQueue);
+                    // C4: the sweep writes Interrupt, never Failed -- and it is a bad run for the SLI (MIG-196).
+                    this.bulkAction.countRunEnd(before, JobStatus.Interrupt, reason);
                     // Quote the time it actually has. A run that was never dispatched has no
                     // start_time, and "no update since null" reads as "we lost track of it" when
                     // what happened is "it was never picked up" -- two different incidents, told

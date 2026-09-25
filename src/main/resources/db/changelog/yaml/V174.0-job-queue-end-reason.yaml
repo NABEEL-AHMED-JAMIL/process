@@ -1,0 +1,48 @@
+databaseChangeLog:
+  - changeSet:
+      id: 174.0-job-queue-end-reason
+      author: nabeel.amd93
+      description: "job_queue.end_reason: the path that closed a run, so the pipeline execution SLI is computable for any past window from stored rows (MIG-196)"
+      # Written with every terminal status by the path that writes it (process.model.enums.RunEnd): the worker's
+      # callback, a decline, the dispatch side, the stall sweep, a person at the console, a skip or a missed slot.
+      # Null while the run is in flight, and on every run that ended before this -- nothing is back-filled; the SLO
+      # report infers those from their status line (process.slo.RunSloReport). The CHECK is V164's rule for every
+      # @Enumerated column: only the enum's exact spellings (EnumStatusSpellingsPostgresTest).
+      changes:
+        - sql:
+            splitStatements: true
+            sql: >
+              ALTER TABLE job_queue ADD COLUMN IF NOT EXISTS end_reason VARCHAR(16);
+              ALTER TABLE job_queue DROP CONSTRAINT IF EXISTS ck_job_queue_end_reason_enum;
+              ALTER TABLE job_queue ADD CONSTRAINT ck_job_queue_end_reason_enum CHECK (end_reason IN ('WORKER', 'DECLINED',
+                'DISPATCH', 'REFUSED', 'AI_STEP', 'STALLED', 'TOKEN_EXPIRED', 'OPERATOR', 'SKIPPED', 'MISSED'));
+              COMMENT ON COLUMN job_queue.end_reason IS 'Why the run''s current terminal status was written (RunEnd, MIG-196): WORKER, DECLINED, DISPATCH, REFUSED, AI_STEP, STALLED, TOKEN_EXPIRED, OPERATOR, SKIPPED, MISSED. Null in flight and before V174.';
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: >
+              ALTER TABLE job_queue DROP CONSTRAINT IF EXISTS ck_job_queue_end_reason_enum;
+              ALTER TABLE job_queue DROP COLUMN IF EXISTS end_reason;
+  - changeSet:
+      id: 174.1-job-queue-ended-at-index
+      author: nabeel.amd93
+      description: "An index on when a run ended, coalesce(end_time, skip_time): the SLO report and its monitor read a window of it (MIG-196)"
+      # The expression the report's WHERE uses, so the planner can take it. CONCURRENTLY, outside a transaction, for
+      # the reason V70.1 gives (job_queue takes inserts every dispatch cycle); an INVALID leftover is dropped first.
+      runInTransaction: false
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+                    WHERE c.relname = 'idx_job_queue_ended_at' AND NOT i.indisvalid) THEN
+                  DROP INDEX public.idx_job_queue_ended_at;
+                END IF;
+              END $$;
+        - sql:
+            sql: CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_job_queue_ended_at ON public.job_queue ((COALESCE(end_time, skip_time)))
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS public.idx_job_queue_ended_at

@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.JobStatus;
+import process.model.enums.RunEnd;
 import process.model.enums.Status;
 
 import javax.persistence.*;
@@ -156,6 +157,16 @@ public class JobQueue {
 
     @Column(name = "dispatch_payload", columnDefinition = "TEXT")
     private String dispatchPayload;
+
+    /**
+     * Why the run's current terminal status was written: the path that closed it (V174, MIG-196). Null while the run
+     * is in flight, and on runs that ended before V174. What the SLO report classifies a stored run by
+     * (process.slo.RunSlo). Not on the wire.
+     */
+    @JsonIgnore
+    @Column(name = "end_reason", length = 16)
+    @Enumerated(EnumType.STRING)
+    private RunEnd endReason;
 
     @Column(name = "status",
         nullable = false)
@@ -334,6 +345,8 @@ public class JobQueue {
     public void setPreparedAt(LocalDateTime preparedAt) { this.preparedAt = preparedAt; }
     public String getDispatchPayload() { return dispatchPayload; }
     public void setDispatchPayload(String dispatchPayload) { this.dispatchPayload = dispatchPayload; }
+    public RunEnd getEndReason() { return endReason; }
+    public void setEndReason(RunEnd endReason) { this.endReason = endReason; }
 
     public Long getTenantId() {
         return tenantId;

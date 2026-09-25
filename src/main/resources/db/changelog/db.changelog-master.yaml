@@ -132,3 +132,6 @@ databaseChangeLog:
   # V164: every enum-backed status column takes only its enum's exact spellings (task 7, 2026-09-24).
   - include:
       file: db/changelog/yaml/V164.0-enum-status-spellings.yaml
+  # V174: MIG-196 -- the path that closed a run, and an index on when it ended, for the pipeline execution SLO.
+  - include:
+      file: db/changelog/yaml/V174.0-job-queue-end-reason.yaml

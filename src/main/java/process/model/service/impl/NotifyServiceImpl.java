@@ -21,6 +21,7 @@ import process.engine.BulkAction;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
+import process.model.enums.RunEnd;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
@@ -250,7 +251,9 @@ public class NotifyServiceImpl implements NotifyService {
         }
         logger.info("Updating status for job {} to {}", jobQueue.getJobId(), newStatus);
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), newStatus);
-        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());
+        JobStatus runBefore = this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());
+        // The pipeline execution SLI (MIG-196): the worker's own outcome, or its decline if it never reported Running.
+        this.bulkAction.runEnded(jobQueue.getJobQueueId(), runBefore, newStatus, RunEnd.reportedBy(runBefore, newStatus));
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), jobQueue.getJobStatusMessage());
         this.bulkAction.sendJobStatusNotification(jobQueue.getJobId(), jobQueue.getJobQueueId(), currentStatus != newStatus);
         if (newStatus == JobStatus.Failed || newStatus == JobStatus.Completed) {

@@ -1,5 +1,6 @@
 package process.engine;
 
+import process.model.enums.RunEnd;
 import process.util.BusinessTime;
 import org.barco.platform.correlation.CorrelationId;
 import org.barco.platform.correlation.CorrelationScope;
@@ -65,20 +66,28 @@ public class PreDispatchPhase {
         final String refusal;
         final boolean retryable;
         final List<String> notes;
+        /** What a refusal that is not retried counts as for the SLI (MIG-196): configuration, or an AI step. */
+        final RunEnd refusedAs;
 
-        private Decision(String payload, String refusal, boolean retryable, List<String> notes) {
+        private Decision(String payload, String refusal, boolean retryable, List<String> notes, RunEnd refusedAs) {
             this.payload = payload;
             this.refusal = refusal;
             this.retryable = retryable;
             this.notes = notes;
+            this.refusedAs = refusedAs;
         }
 
         static Decision prepared(String payload, List<String> notes) {
-            return new Decision(payload, null, false, notes);
+            return new Decision(payload, null, false, notes, null);
         }
 
         static Decision refused(String refusal, boolean retryable, List<String> notes) {
-            return new Decision(null, refusal, retryable, notes);
+            return new Decision(null, refusal, retryable, notes, RunEnd.REFUSED);
+        }
+
+        /** An AI step failed and its rule fails the run: never retried, and not the dispatcher's refusal. */
+        static Decision aiStepFailed(String refusal, List<String> notes) {
+            return new Decision(null, refusal, false, notes, RunEnd.AI_STEP);
         }
 
         boolean isPrepared() {
@@ -222,7 +231,7 @@ public class PreDispatchPhase {
         AiStepService.Outcome steps = this.aiStepService.apply(job.get().getTenantId(),
             job.get().getTaskDetail().getPipelineId(), run.getJobQueueId(), job.get().getTaskDetail().getTaskPayload());
         if (steps.failed()) {
-            return Decision.refused(String.format("Job %s: %s", run.getJobId(), steps.failure), false, steps.notes);
+            return Decision.aiStepFailed(String.format("Job %s: %s", run.getJobId(), steps.failure), steps.notes);
         }
         return Decision.prepared(steps.payload, steps.notes);
     }
@@ -241,7 +250,7 @@ public class PreDispatchPhase {
                     logger.info("Run {} was closed or dispatched while it was being prepared; left as it is.", run.getJobQueueId());
                 }
             } else {
-                this.failures.close(run, decision.refusal, decision.retryable);
+                this.failures.close(run, decision.refusal, decision.retryable, decision.refusedAs);
             }
             return null;
         });

@@ -7,6 +7,7 @@ import process.notifications.JobMail;
 import process.engine.BulkAction;
 import process.model.dto.*;
 import process.model.enums.JobStatus;
+import process.model.enums.RunEnd;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
@@ -174,7 +175,8 @@ public class MessageQServiceImpl implements MessageQService {
             }
             String failMessage = String.format("Job %s fail by manual.", jobQueue.get().getJobId());
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
-            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed, failMessage);
+            JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed, failMessage);
+            this.bulkAction.runEnded(jobQueue.get().getJobQueueId(), before, JobStatus.Failed, RunEnd.OPERATOR);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), failMessage);
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), BusinessTime.now());
 
@@ -205,7 +207,8 @@ public class MessageQServiceImpl implements MessageQService {
         if (jobQueue.isPresent()) {
             String interruptMessage = String.format("Job %s interrupted.", jobQueue.get().getJobId());
             this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
-            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt, interruptMessage);
+            JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt, interruptMessage);
+            this.bulkAction.runEnded(jobQueue.get().getJobQueueId(), before, JobStatus.Interrupt, RunEnd.OPERATOR);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), interruptMessage);
             this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), BusinessTime.now());
             return new ResponseDto(SUCCESS, "JobQueue successfully updated.", jobQId);
@@ -253,7 +256,10 @@ public class MessageQServiceImpl implements MessageQService {
                 return new ResponseDto(SUCCESS, "Run failed and has been queued for another attempt.");
             }
             this.bulkAction.changeJobStatus(jobId, queueMessageStatus.getJobStatus());
-            this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), queueMessageStatus.getJobStatus(), queueMessageStatus.getLogsDetail());
+            JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), queueMessageStatus.getJobStatus(),
+                queueMessageStatus.getLogsDetail());
+            // A signed-in user's request (TENANT_USER), not the worker's callback: whatever it sets, a person set it.
+            this.bulkAction.runEnded(jobQueue.get().getJobQueueId(), before, queueMessageStatus.getJobStatus(), RunEnd.OPERATOR);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), queueMessageStatus.getLogsDetail());
             if (!isNull(queueMessageStatus.getEndTime())) {
                 this.bulkAction.changeJobQueueEndDate(jobQueue.get().getJobQueueId(), queueMessageStatus.getEndTime());

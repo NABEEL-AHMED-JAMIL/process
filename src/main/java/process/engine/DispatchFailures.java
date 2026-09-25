@@ -4,6 +4,7 @@ import process.util.BusinessTime;
 import org.springframework.transaction.support.TransactionOperations;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
+import process.model.enums.RunEnd;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.service.impl.TransactionServiceImpl;
@@ -53,18 +54,28 @@ public class DispatchFailures {
      * front of somebody for a run that is about to be attempted again.
      */
     public void close(JobQueue jobQueue, String statusMessage, boolean retryable) {
+        this.close(jobQueue, statusMessage, retryable, RunEnd.REFUSED);
+    }
+
+    /**
+     * As above, naming what a refusal is (MIG-196): a run closed here after its retries is a dispatch failure; one
+     * closed without a retry is refused on its configuration -- RunEnd.REFUSED -- unless the caller knows better
+     * (an AI step, RunEnd.AI_STEP).
+     */
+    public void close(JobQueue jobQueue, String statusMessage, boolean retryable, RunEnd refusedAs) {
         this.transactions.execute(status -> {
-            this.closeNow(jobQueue, statusMessage, retryable);
+            this.closeNow(jobQueue, statusMessage, retryable, refusedAs);
             return null;
         });
     }
 
-    private void closeNow(JobQueue jobQueue, String statusMessage, boolean retryable) {
+    private void closeNow(JobQueue jobQueue, String statusMessage, boolean retryable, RunEnd refusedAs) {
         if (retryable && this.bulkAction.scheduleRetry(jobQueue, statusMessage)) {
             return;
         }
         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
-        this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);
+        JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);
+        this.bulkAction.runEnded(jobQueue.getJobQueueId(), before, JobStatus.Failed, retryable ? RunEnd.DISPATCH : refusedAs);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), statusMessage);
         this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), BusinessTime.now());
         // The run is named so the Failed notice is sent once for this run and attempt.
