@@ -75,6 +75,9 @@ frontend build sending these fields in a request body won't break; the backend j
 
 ### SQL migration (Liquibase — matches this project's existing convention)
 
+(Superseded by MIG-129: every profile now runs `ddl-auto=validate`, so every schema change, additive or not, is a
+Liquibase changeset. The paragraph below is the design as written.)
+
 This project uses Hibernate `ddl-auto=update` for additive schema changes but Liquibase for
 **drops** (Hibernate never removes a column on its own, so an explicit migration is required or
 the columns become permanent orphans). Follow the existing pattern

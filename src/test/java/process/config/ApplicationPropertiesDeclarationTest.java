@@ -150,13 +150,21 @@ public class ApplicationPropertiesDeclarationTest {
         }
     }
 
+    /**
+     * MIG-129: only Liquibase changes etl_job's schema, and a changeset runs once -- in every profile, dev included.
+     * dev ran update until then, which is how sixteen tables and most sequences came to exist without a changeset
+     * (see the V50 header). Hibernate checks the schema against the entities and never writes it; the base
+     * properties set nothing that could win over a profile, and the end-to-end suite's profile validates too.
+     */
     @Test
-    void liquibaseOwnsTheSchemaWhereverItCannotBeDropped() throws IOException {
-        List<String> managed = Arrays.asList("application-stage.properties", "application-prod.properties");
-        for (String profile : managed) {
+    void liquibaseOwnsTheSchemaInEveryProfile() throws IOException {
+        for (String profile : PROFILES) {
             Properties properties = this.load(profile);
             assertEquals("validate", properties.getProperty("spring.jpa.hibernate.ddl-auto"),
                 profile + " runs Liquibase, so Hibernate must not issue schema changes of its own");
         }
+        assertEquals(null, this.load("application.properties").getProperty("spring.jpa.hibernate.ddl-auto"));
+        assertEquals("validate", this.load("application-e2e.properties").getProperty("spring.jpa.hibernate.ddl-auto"),
+            "the end-to-end suite boots against the dev database: it checks the schema and never writes it");
     }
 }
