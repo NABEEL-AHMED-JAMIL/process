@@ -2,7 +2,6 @@ package process.model.pojo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.google.gson.Gson;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
@@ -320,7 +319,7 @@ public class KafkaConnectionProfile implements Audited {
 
     @Override
     public String toString() {
-        return new Gson().toJson(this);
+        return EntityStrings.of(this);
     }
 
     @Override

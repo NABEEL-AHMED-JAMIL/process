@@ -6,13 +6,10 @@ import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.Filter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import process.util.LocalDateTimeAdapter;
 
 import javax.persistence.*;
 import java.sql.Timestamp;
@@ -317,10 +314,7 @@ public class JobQueue {
 
     @Override
     public String toString() {
-        Gson gson = new GsonBuilder()
-        .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
-        .create();
-        return gson.toJson(this);
+        return EntityStrings.of(this);
     }
 
 
