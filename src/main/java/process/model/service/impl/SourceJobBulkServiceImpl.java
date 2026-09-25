@@ -17,6 +17,7 @@ import process.model.pojo.Scheduler;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.SourceJobBulkService;
+import process.security.JobOwnership;
 import process.security.TenantContext;
 import process.util.BusinessTime;
 import process.util.ProcessTimeUtil;
@@ -98,6 +99,8 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             ? this.sourceJobRepository.findAll()
             : this.sourceJobRepository.findByTenantId(TenantContext.getTenantId())).stream()
             .filter(sourceJob -> sourceJob.getJobStatus() != Status.Delete)
+            // A tenant user exports the jobs that name them, as their job list shows them (JobOwnership).
+            .filter(JobOwnership::isVisibleToCaller)
             .collect(Collectors.toList());
         /*
          * One query for every schedule in the export, not one per row.

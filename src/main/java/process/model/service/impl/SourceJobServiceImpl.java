@@ -21,6 +21,7 @@ import process.model.repository.*;
 import process.identity.IdentityPort;
 import process.model.service.SourceJobService;
 import process.security.TenantContext;
+import process.security.JobOwnership;
 import process.security.TenantFilterHelper;
 import process.security.TenantOwnership;
 import process.util.OpenSearchAuditLogClient;
@@ -97,8 +98,12 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.notifications.notificationCreated(sourceJob.getTenantId(), Notices.notice(newAssignedUserId, NotificationType.TASK_ASSIGNED, NotificationSeverity.INFO, "Task assigned to you", sourceJob.getJobName() + " was assigned to you by " + TenantContext.getUsername() + ".", "/jobList"));
     }
 
+    /**
+     * Every by-id read and write of a job here asks this: the caller's tenant, and for a tenant user that the
+     * job names them (JobOwnership, owner decision 2026-09-24). A job that fails it is answered as not found.
+     */
     private boolean isOwnedByCaller(SourceJob sourceJob) {
-        return sourceJob != null && TenantOwnership.isOwnedByCaller(sourceJob.getTenantId());
+        return JobOwnership.isVisibleToCaller(sourceJob);
     }
 
     private boolean isOwnedByCaller(SourceTask sourceTask) {

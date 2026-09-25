@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 178.0-source-job-created-by-index
+      author: nabeel.amd93
+      description: "An index on source_job.created_by: a tenant user's job reads are cut to created_by or assigned_user_id = them (owner decision 2026-09-24)"
+      # process.security.JobOwnership: every list, statistic and export of jobs a TENANT_USER makes carries
+      # "created_by = me or assigned_user_id = me" beside the tenant predicate. assigned_user_id has had its index since
+      # V70.1; this is the other half, so the OR can be answered from two indexes. The entity declares it too
+      # (SourceJob's @Index), which DashboardIndexPostgresTest checks exists. source_job is small and not written per
+      # dispatch cycle, so a plain CREATE, as V70.1 made its neighbours.
+      changes:
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_source_job_created_by ON public.source_job (created_by)
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS public.idx_source_job_created_by

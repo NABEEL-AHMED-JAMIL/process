@@ -14,6 +14,7 @@ import process.model.dto.MessageQSearchDto;
 import process.model.dto.SearchTextDto;
 import process.model.enums.JobAuditMarker;
 import org.barco.platform.tenancy.TenantScope;
+import process.security.JobOwnership;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
 import process.util.SqlLogRedaction;
@@ -87,7 +88,9 @@ public class QueryService {
         }
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n";
         if (!isCount) {
-            query += "left join source_job sj on sj.task_detail_id = st.task_detail_id and sj.job_status in ('Active', 'Inactive')\n";
+            // A tenant user's count is of their own jobs (JobOwnership): the task is shared, its jobs are not.
+            query += "left join source_job sj on sj.task_detail_id = st.task_detail_id and sj.job_status in ('Active', 'Inactive')"
+                + JobOwnership.sqlPredicate("sj") + "\n";
             // home_page_id and group_id are task_reference ids (MIG-167; lookup_data ids before, kept as they
             // were) -- the Home page and Group fields. pipeline_id is NOT, and used to be
             // joined the same way here: since the PIPELINE_IDS lookup family was dropped
@@ -165,7 +168,7 @@ public class QueryService {
                 "sj.date_created ";
         }
         String query = selectPortion + "from source_task st inner join source_job sj on sj.task_detail_id = st.task_detail_id ";
-        query += "where st.task_status in ('Active', 'Inactive') and sj.job_status in ('Active', 'Inactive') " + this.tenantClause("sj");
+        query += "where st.task_status in ('Active', 'Inactive') and sj.job_status in ('Active', 'Inactive') " + this.jobClause("sj");
         if (taskDetailId != null) {
             query += String.format(" and st.task_detail_id = %d ", taskDetailId);
         }
@@ -313,10 +316,20 @@ public class QueryService {
         return String.format(" and %s.tenant_id = %d ", tableAlias, tenantId);
     }
 
+    /**
+     * The predicate for a read of jobs, or of anything read through its job: the tenant's, and then the
+     * job-ownership rule's (owner decision 2026-09-24, JobOwnership) -- a tenant user reads the jobs that
+     * name them, their runs and their counts, and nobody else's. An admin's is the tenant clause alone.
+     * The alias is source_job's.
+     */
+    private String jobClause(String sourceJobAlias) {
+        return this.tenantClause(sourceJobAlias) + JobOwnership.sqlPredicate(sourceJobAlias);
+    }
+
     public String jobStatusStatistics(String startDate, String endDate) {
 
         String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
-        String tenantFilter = this.tenantClause("source_job");
+        String tenantFilter = this.jobClause("source_job");
         return "select job_status, count(job_id) as total_count from source_job\n" +
             "where job_status in ('Active','Inactive') " + dateFilter + tenantFilter + "group by job_status\n" +
             "union all\n" +
@@ -394,7 +407,7 @@ public class QueryService {
             // dashboard beside it, on the same data.
             + "where (q.start_time is not null or q.skip_time is not null) "
             + "and upper(sj.job_status) <> 'DELETE' "
-            + dateFilter + this.tenantClause("sj")
+            + dateFilter + this.jobClause("sj")
             + "order by q.job_queue_id desc";
     }
 
@@ -426,6 +439,8 @@ public class QueryService {
             + "count(jq.job_queue_id) filter (where jq.job_status = 'Failed') as failed_count "
             + "from source_job sj "
             + "left join job_queue jq on jq.job_id = sj.job_id " + dateFilter
+            // The tenant clause alone, not jobClause: a tenant user is listed as their own row only (DashboardServiceImpl),
+            // and their row counts the jobs assigned to them -- theirs under the ownership rule too.
             + "where sj.job_status in ('Active','Inactive') " + people + this.tenantClause("sj")
             + "group by sj.assigned_user_id";
     }
@@ -436,7 +451,7 @@ public class QueryService {
         return "select UPPER(job_running_status) as job_running_status, count(job_id) as total_count\n" +
             "from source_job\n" +
             "where UPPER(job_running_status) in ('START', 'RUNNING', 'FAILED', 'COMPLETED')\n" +
-            "and UPPER(job_status) in ('ACTIVE','INACTIVE') " + dateFilter + this.tenantClause("source_job") + "\n" +
+            "and UPPER(job_status) in ('ACTIVE','INACTIVE') " + dateFilter + this.jobClause("source_job") + "\n" +
             "group by UPPER(job_running_status)";
     }
 
@@ -450,7 +465,7 @@ public class QueryService {
             "select job_queue_id, to_char(cast(jq.date_created AT TIME ZONE 'America/Chicago' as date), 'Dy') as daycode,\n" +
             "cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) as runDate\n" +
             "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created AT TIME ZONE 'America/Chicago') between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')" +
-            this.tenantClause("sj") + ") as weekData\n" +
+            this.jobClause("sj") + ") as weekData\n" +
             "group by weekData.runDate, weekData.daycode\n" +
             "order by weekData.runDate", this.requireValidDate(startDate), this.requireValidDate(endDate));
     }
@@ -462,14 +477,14 @@ public class QueryService {
             "cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) as date, cast(jq.date_created AT TIME ZONE 'America/Chicago' as time) as time, \n" +
             "extract(hour from cast(jq.date_created AT TIME ZONE 'America/Chicago' as time)) as hr\n" +
             "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id where date(jq.date_created AT TIME ZONE 'America/Chicago') between '%s' and '%s' and UPPER(sj.job_status) in ('ACTIVE','INACTIVE')" +
-            this.tenantClause("sj") + ") as weekData\n" +
+            this.jobClause("sj") + ") as weekData\n" +
             "group by weekData.daycode, weekData.hr, weekData.date", this.requireValidDate(startDate), this.requireValidDate(endDate));
     }
 
     public String weeklyHrRunningStatisticsDimension(String targetDate, Long targetHr) {
 
         targetDate = this.requireValidDate(targetDate);
-        String tenantFilter = this.tenantClause("source_job");
+        String tenantFilter = this.jobClause("source_job");
         return String.format(
             "SELECT job_id, job_name, queue, start, running, failed, completed, stop, skip, interrupt, missed, total, " +
                 "tenant_id FROM (\n" +
@@ -539,7 +554,7 @@ public class QueryService {
             "COUNT(*) AS total\n" +
             "from job_queue\n" +
             "inner join source_job on source_job.job_id = job_queue.job_id\n" +
-            "where source_job.job_id = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')" + this.tenantClause("source_job"), jobId
+            "where source_job.job_id = %d and UPPER(source_job.job_status) in ('ACTIVE','INACTIVE')" + this.jobClause("source_job"), jobId
         );
     }
 
@@ -551,7 +566,7 @@ public class QueryService {
                 "job_queue.job_send, job_queue.job_status, job_queue.job_status_message, job_queue.run_manual, " +
                 "job_queue.skip_manual, job_queue.skip_time, job_queue.start_time from job_queue\n" +
                 "inner join source_job on source_job.job_id = job_queue.job_id where 1=1\n" +
-                this.tenantClause("source_job") + "\n";
+                this.jobClause("source_job") + "\n";
         if (!ProcessUtil.isNull(targetDate)) {
             query += String.format(" and date(job_queue.date_created AT TIME ZONE 'America/Chicago') = '%s' \n", this.requireValidDate(targetDate));
         }
@@ -584,7 +599,7 @@ public class QueryService {
             query += String.format("where cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) between '%s' and '%s' \n",
                     this.requireValidDate(messageQSearch.getFromDate()), this.requireValidDate(messageQSearch.getToDate()));
             query += "and UPPER(sj.job_status) <> 'DELETE' and UPPER(jq.status) <> 'DELETE' \n";
-            query += this.tenantClause("sj") + "\n";
+            query += this.jobClause("sj") + "\n";
             if (!ProcessUtil.isNull(messageQSearch.getJobId()) && !messageQSearch.getJobId().isEmpty()) {
                 String jobId = messageQSearch.getJobId().toString();
                 query += String.format("and jq.job_id in (%s) \n", jobId.substring(1, jobId.length()-1));
@@ -601,7 +616,7 @@ public class QueryService {
         }
         if (isState) {
 
-            query += "where UPPER(sj.job_status) in ('ACTIVE','INACTIVE') " + this.tenantClause("sj") + "\n";
+            query += "where UPPER(sj.job_status) in ('ACTIVE','INACTIVE') " + this.jobClause("sj") + "\n";
             query += "\ngroup by UPPER(jq.job_status)";
         }
         if (!isState) {

@@ -135,3 +135,6 @@ databaseChangeLog:
   # V174: MIG-196 -- the path that closed a run, and an index on when it ended, for the pipeline execution SLO.
   - include:
       file: db/changelog/yaml/V174.0-job-queue-end-reason.yaml
+  # V178: a tenant user sees their own jobs only (owner decision 2026-09-24) -- the index behind created_by.
+  - include:
+      file: db/changelog/yaml/V178.0-source-job-created-by-index.yaml

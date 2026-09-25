@@ -50,6 +50,7 @@ public class TenantFilterHelper {
             if (session.getEnabledFilter(FILTER_NAME) != null) {
                 session.disableFilter(FILTER_NAME);
             }
+            this.applyJobOwnership(session);
             return;
         }
         tenantId = ((TenantScope.Scoped) scope).tenantId();
@@ -63,6 +64,28 @@ public class TenantFilterHelper {
             this.logger.error("Refusing the read: could not enable the tenant filter for tenantId {}: {}", tenantId,
                 ex.getMessage(), ex);
             throw new TenantIsolationException("Could not enable the tenant filter for tenantId " + tenantId + ".", ex);
+        }
+        this.applyJobOwnership(session);
+    }
+
+    /**
+     * The job-ownership filter beside the tenant filter (owner decision 2026-09-24, JobOwnership): on for a
+     * caller who sees only their own jobs, off for an admin. Fails the request, like the tenant filter, when it
+     * cannot be turned on -- a tenant user's job list read without it is every colleague's jobs.
+     */
+    private void applyJobOwnership(Session session) {
+        if (!JobOwnership.isRestrictedToOwnJobs()) {
+            if (session.getEnabledFilter(JobOwnership.FILTER_NAME) != null) {
+                session.disableFilter(JobOwnership.FILTER_NAME);
+            }
+            return;
+        }
+        try {
+            session.enableFilter(JobOwnership.FILTER_NAME).setParameter(JobOwnership.FILTER_PARAMETER, JobOwnership.ownerId());
+        } catch (Exception ex) {
+            this.logger.error("Refusing the read: could not enable the job-ownership filter (tenant filter's companion): {}",
+                ex.getMessage(), ex);
+            throw new TenantIsolationException("Could not enable the job-ownership filter.", ex);
         }
     }
 

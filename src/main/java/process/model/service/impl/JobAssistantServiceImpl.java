@@ -16,7 +16,7 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.AiAgentService;
-import process.security.TenantContext;
+import process.security.JobOwnership;
 import process.security.TenantFilterHelper;
 import process.util.ProcessUtil;
 
@@ -116,11 +116,9 @@ public class JobAssistantServiceImpl {
         }
     }
 
+    /** The job's tenant, and a tenant user's own job (JobOwnership): another's is answered as not found. */
     private boolean isOwnedByCaller(SourceJob job) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return job != null && Objects.equals(job.getTenantId(), TenantContext.getTenantId());
+        return JobOwnership.isVisibleToCaller(job);
     }
 
     /**

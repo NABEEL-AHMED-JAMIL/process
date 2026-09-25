@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.FilterDefs;
+import org.hibernate.annotations.Filters;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import org.hibernate.annotations.ParamDef;
@@ -19,13 +21,23 @@ import java.time.LocalDateTime;
 
     @Index(name = "idx_source_job_tenant_id", columnList = "tenant_id"),
 
-    @Index(name = "idx_source_job_assigned_user_id", columnList = "assigned_user_id")
+    @Index(name = "idx_source_job_assigned_user_id", columnList = "assigned_user_id"),
+
+    @Index(name = "idx_source_job_created_by", columnList = "created_by")
 })
 /**
  * @author Nabeel Ahmed
  * */
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
-@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+// jobOwnerFilter: a TENANT_USER's JPQL reads of jobs, cut to the jobs that name them (process.security.JobOwnership,
+// owner decision 2026-09-24). TenantFilterHelper turns it on beside tenantFilter, for a restricted caller only.
+@FilterDefs({
+    @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long")),
+    @FilterDef(name = "jobOwnerFilter", parameters = @ParamDef(name = "appUserId", type = "long"))
+})
+@Filters({
+    @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId"),
+    @Filter(name = "jobOwnerFilter", condition = "(created_by = :appUserId or assigned_user_id = :appUserId)")
+})
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)

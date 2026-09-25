@@ -13,7 +13,7 @@ import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQService;
-import process.security.TenantContext;
+import process.security.JobOwnership;
 import process.util.BusinessTime;
 import process.util.EnumUtils;
 import process.util.ProcessUtil;
@@ -151,13 +151,9 @@ public class MessageQServiceImpl implements MessageQService {
         return responseDto;
     }
 
+    /** A run is the caller's to act on when its job is (JobOwnership: the tenant, and a tenant user's own job). */
     private boolean isJobOwnedByCaller(Long jobId) {
-        if (TenantContext.isPlatformAdmin()) {
-            return true;
-        }
-        return this.sourceJobRepository.findById(jobId)
-            .map(job -> Objects.equals(job.getTenantId(), TenantContext.getTenantId()))
-            .orElse(false);
+        return jobId != null && JobOwnership.isVisibleToCaller(this.sourceJobRepository.findById(jobId).orElse(null));
     }
 
     @Override

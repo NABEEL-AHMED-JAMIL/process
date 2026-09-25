@@ -22,6 +22,7 @@ import process.model.repository.TaskReferenceRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.DashboardService;
+import process.security.JobOwnership;
 import process.security.TenantContext;
 import process.util.BusinessTime;
 import process.util.ProcessTimeUtil;
@@ -309,7 +310,7 @@ public class DashboardServiceImpl implements DashboardService {
             if (!ProcessUtil.isNull(jobId)) {
 
                 Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(jobId)
-                    .filter(job -> TenantContext.isPlatformAdmin() || Objects.equals(job.getTenantId(), TenantContext.getTenantId()));
+                    .filter(JobOwnership::isVisibleToCaller);
                 if (sourceJob.isPresent()) {
                     SourceJobDto sourceJobDto = getSourceJobDto(sourceJob.get());
                     if (!ProcessUtil.isNull(sourceJob.get().getTaskDetail())) {
