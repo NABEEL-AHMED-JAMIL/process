@@ -199,6 +199,16 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         // One lookup for the page rather than one per row.
         this.userNameResolver.attachToDtos(profiles, this.profileRepository,
             KafkaConnectionProfile::getKafkaConnectionProfileId);
+        // A workspace with no Kafka of its own -- nothing listed, since the listing is every row of
+        // its own that is not deleted, the resolver's own test (hasProfilesOfItsOwn) -- sends its
+        // runs through the platform default. Its admin is shown that connection, so the task editor
+        // and the Kafka screen can name what the runs use; shown after the names were attached, so
+        // the platform admin who created it is not named to a tenant.
+        if (!TenantContext.isPlatformAdmin() && visible.isEmpty()) {
+            this.profileRepository.findByTenantIdIsNullAndIsDefaultTrueAndStatus(Status.Active)
+                .map(this::getProfileDto)
+                .ifPresent(profiles::add);
+        }
         return new ResponseDto(SUCCESS, "Kafka connection profiles fetched successfully.", profiles);
     }
 
@@ -785,31 +795,37 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         dto.setTenantId(profile.getTenantId());
         dto.setProfileName(profile.getProfileName());
         dto.setEnvironmentLabel(profile.getEnvironmentLabel());
-        dto.setBootstrapServers(profile.getBootstrapServers());
         dto.setSecurityProtocol(profile.getSecurityProtocol());
         dto.setSaslMechanism(profile.getSaslMechanism());
-        dto.setSaslUsername(profile.getSaslUsername());
         dto.setSaslPasswordConfigured(!isNull(profile.getSaslPassword()));
         dto.setSslKeystorePasswordConfigured(!isNull(profile.getSslKeystorePasswordEnc()));
         dto.setSslKeyPasswordConfigured(!isNull(profile.getSslKeyPasswordEnc()));
         dto.setSslTruststorePasswordConfigured(!isNull(profile.getSslTruststorePasswordEnc()));
+        boolean owned = this.callerOwns(profile);
+        dto.setPlatform(profile.getTenantId() == null);
+        dto.setReadOnly(!owned);
         // Where the key material sits is as good as the key material: the object browser hands the file
-        // to anyone who can name the bucket and key, and a platform profile is listed to every tenant.
-        // A caller who does not own the profile is never told where its stores live.
-        if (this.callerOwns(profile)) {
+        // to anyone who can name the bucket and key. A caller who does not own the profile -- a
+        // workspace shown the platform default its runs use -- is never told where its stores live,
+        // nor where its brokers are, which account it logs in as, what its extra properties say (a
+        // JAAS line is a password) or what its last test reported about the cluster. It is told
+        // which connection it is, and that it is not theirs to change.
+        if (owned) {
+            dto.setBootstrapServers(profile.getBootstrapServers());
+            dto.setSaslUsername(profile.getSaslUsername());
             dto.setSslKeystoreBucket(profile.getSslKeystoreBucket());
             dto.setSslKeystoreLocation(profile.getSslKeystoreLocation());
             dto.setSslTruststoreBucket(profile.getSslTruststoreBucket());
             dto.setSslTruststoreLocation(profile.getSslTruststoreLocation());
+            dto.setAdditionalProperties(profile.getAdditionalProperties());
+            dto.setLastTestMessage(profile.getLastTestMessage());
         }
         dto.setSslEndpointIdentificationAlgorithm(profile.getSslEndpointIdentificationAlgorithm());
-        dto.setAdditionalProperties(profile.getAdditionalProperties());
         dto.setIsDefault(profile.getIsDefault());
         dto.setStatus(profile.getStatus());
 
         dto.setConnectionStatus(!isNull(profile.getConnectionStatus()) ? profile.getConnectionStatus() : "UNTESTED");
         dto.setLastTestedAt(profile.getLastTestedAt());
-        dto.setLastTestMessage(profile.getLastTestMessage());
         dto.setDateCreated(profile.getDateCreated());
         return dto;
     }

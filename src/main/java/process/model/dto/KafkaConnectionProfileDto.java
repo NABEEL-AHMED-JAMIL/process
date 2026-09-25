@@ -71,6 +71,13 @@ public class KafkaConnectionProfileDto implements AuditNamed {
 
     private String additionalProperties;
     private Boolean isDefault;
+    /** The platform's own profile: no workspace owns it. */
+    private Boolean platform;
+    /**
+     * Shown, not the caller's to change: the platform default as a workspace with no Kafka of its
+     * own sees it. Every write and probe on it is refused on the server regardless of this flag.
+     */
+    private Boolean readOnly;
     private Status status;
     private String connectionStatus;
     private Timestamp lastTestedAt;
@@ -309,6 +316,22 @@ public class KafkaConnectionProfileDto implements AuditNamed {
 
     public void setAdditionalProperties(String additionalProperties) {
         this.additionalProperties = additionalProperties;
+    }
+
+    public Boolean getPlatform() {
+        return platform;
+    }
+
+    public void setPlatform(Boolean platform) {
+        this.platform = platform;
+    }
+
+    public Boolean getReadOnly() {
+        return readOnly;
+    }
+
+    public void setReadOnly(Boolean readOnly) {
+        this.readOnly = readOnly;
     }
 
     public Boolean getIsDefault() {

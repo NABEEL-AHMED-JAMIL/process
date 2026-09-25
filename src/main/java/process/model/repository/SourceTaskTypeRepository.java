@@ -49,6 +49,16 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
     public List<TopicOptionProjection> fetchTopicOptionsForProfile(@Param("profileId") long profileId,
         @Param("includeUnrouted") boolean includeUnrouted, @Param("tenantId") long tenantId);
 
+    /**
+     * The platform default profile's topics as picker rows: those that name it, plus the unrouted
+     * topics of every workspace with no Kafka profile of its own -- the resolver sends those here
+     * (KafkaConnectionResolver tier 4). See {@link #PLATFORM_DEFAULT_SCOPE}.
+     */
+    @Query(value = TOPIC_OPTION_SELECT + "and " + PLATFORM_DEFAULT_SCOPE +
+        "order by service_name asc", nativeQuery = true)
+    public List<TopicOptionProjection> fetchTopicOptionsForPlatformDefault(@Param("profileId") long profileId,
+        @Param("allTenants") boolean allTenants, @Param("tenantId") Long tenantId);
+
     public Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
 
     long countByTenantIdAndStatusNot(Long tenantId, Status status);
@@ -124,5 +134,32 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "order by source_task_type.service_name asc", nativeQuery = true)
     public List<SourceTaskTypeProjection> fetchTopicsForProfile(@Param("profileId") Long profileId,
         @Param("includeUnrouted") boolean includeUnrouted, @Param("tenantId") Long tenantId);
+
+    /**
+     * Which topics publish through the platform default profile, as a condition on source_task_type.
+     *
+     * Those that name it, and those that name no profile in a workspace that has no Kafka profile
+     * of its own -- "of its own" as the resolver reads it: any row not deleted, inactive included,
+     * since a workspace that brought its own brokers is refused rather than put on the platform's.
+     * allTenants is a platform admin's view; a tenant caller sees its own workspace's topics only,
+     * including the ones that name the platform profile explicitly.
+     *
+     * tenantId is null for a platform admin, so it goes through text for the same reason as in
+     * fetchTopicsForProfile: Hibernate binds an untyped null as bytea.
+     */
+    String PLATFORM_DEFAULT_SCOPE =
+        "(:allTenants = true or source_task_type.tenant_id = cast(cast(:tenantId as text) as bigint))\n"
+        + "and (source_task_type.kafka_connection_profile_id = :profileId\n"
+        + "     or (source_task_type.kafka_connection_profile_id is null and not exists (\n"
+        + "         select 1 from kafka_connection_profile own where own.tenant_id = source_task_type.tenant_id\n"
+        + "         and own.status <> 'Delete')))\n";
+
+    /** The platform default profile's topics for the Kafka pane; see {@link #PLATFORM_DEFAULT_SCOPE}. */
+    @Query(value = FETCH_ALL_SOURCE_TASK_TYPE_SELECT +
+        "where source_task_type.task_type_status <> 'Delete' and " + PLATFORM_DEFAULT_SCOPE +
+        "group by source_task_type.source_task_type_id\n" +
+        "order by source_task_type.service_name asc", nativeQuery = true)
+    public List<SourceTaskTypeProjection> fetchTopicsForPlatformDefault(@Param("profileId") Long profileId,
+        @Param("allTenants") boolean allTenants, @Param("tenantId") Long tenantId);
 
 }

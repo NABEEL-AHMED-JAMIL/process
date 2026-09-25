@@ -129,14 +129,18 @@ public class SettingServiceImpl implements SettingService {
                 .collect(Collectors.toList());
         } else if (kafkaConnectionProfileId != null) {
             Optional<KafkaConnectionProfile> profile = this.kafkaConnectionProfileRepository.findById(kafkaConnectionProfileId)
-                .filter(p -> p.getStatus() != Status.Delete)
-                .filter(p -> admin || (p.getTenantId() != null && p.getTenantId().equals(mine)));
+                .filter(this::visibleForTopics);
             if (!profile.isPresent()) {
                 return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
             }
-            boolean isDefault = Boolean.TRUE.equals(profile.get().getIsDefault()) && profile.get().getTenantId() != null;
-            topics = this.sourceTaskTypeRepository.fetchTopicOptionsForProfile(kafkaConnectionProfileId, isDefault,
-                profile.get().getTenantId() == null ? 0L : profile.get().getTenantId());
+            if (this.isPlatformDefault(profile.get())) {
+                topics = this.sourceTaskTypeRepository.fetchTopicOptionsForPlatformDefault(kafkaConnectionProfileId,
+                    admin, admin ? null : mine);
+            } else {
+                boolean isDefault = Boolean.TRUE.equals(profile.get().getIsDefault()) && profile.get().getTenantId() != null;
+                topics = this.sourceTaskTypeRepository.fetchTopicOptionsForProfile(kafkaConnectionProfileId, isDefault,
+                    profile.get().getTenantId() == null ? 0L : profile.get().getTenantId());
+            }
         } else {
             String term = isNull(q) || q.trim().isEmpty() ? "" : "%" + q.trim().toLowerCase() + "%";
             int cap = limit == null || limit < 1 ? 50 : Math.min(limit, 500);
@@ -159,16 +163,17 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, "kafkaConnectionProfileId missing.");
         }
         Optional<KafkaConnectionProfile> profileOpt = this.kafkaConnectionProfileRepository.findById(kafkaConnectionProfileId)
-            .filter(p -> p.getStatus() != Status.Delete)
-            .filter(p -> TenantContext.isPlatformAdmin()
-                || (p.getTenantId() != null && p.getTenantId().equals(TenantContext.getTenantId())));
+            .filter(this::visibleForTopics);
         if (!profileOpt.isPresent()) {
             return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
         }
         KafkaConnectionProfile profile = profileOpt.get();
         boolean isDefault = Boolean.TRUE.equals(profile.getIsDefault());
-        List<SourceTaskTypeProjection> projections = this.sourceTaskTypeRepository.fetchTopicsForProfile(
-            kafkaConnectionProfileId, isDefault && profile.getTenantId() != null, profile.getTenantId());
+        List<SourceTaskTypeProjection> projections = this.isPlatformDefault(profile)
+            ? this.sourceTaskTypeRepository.fetchTopicsForPlatformDefault(kafkaConnectionProfileId,
+                TenantContext.isPlatformAdmin(), TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId())
+            : this.sourceTaskTypeRepository.fetchTopicsForProfile(
+                kafkaConnectionProfileId, isDefault && profile.getTenantId() != null, profile.getTenantId());
         Map<Long, String> profileNameById = Collections.singletonMap(kafkaConnectionProfileId, profile.getProfileName());
         List<SourceTaskTypeDto> topics = projections.stream()
             .map(projection -> this.mapSourceTaskTypeProjectionToDto(projection, profileNameById))
@@ -185,6 +190,36 @@ public class SettingServiceImpl implements SettingService {
         }
         topics.forEach(t -> t.setPipelines(byTopic.getOrDefault(t.getSourceTaskTypeId(), Collections.emptyList())));
         return new ResponseDto(SUCCESS, String.format("%d topic(s).", topics.size()), topics);
+    }
+
+    /**
+     * Whether the caller may list a profile's topics: a platform admin any profile; a tenant its
+     * own workspace's, and the platform default when its workspace has no Kafka profile of its own
+     * -- the one its runs resolve to, and the one fetchAllProfiles shows it (read-only).
+     */
+    private boolean visibleForTopics(KafkaConnectionProfile profile) {
+        if (profile.getStatus() == Status.Delete) {
+            return false;
+        }
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        Long mine = TenantContext.getTenantId();
+        if (mine == null) {
+            return false;
+        }
+        if (profile.getTenantId() != null) {
+            return profile.getTenantId().equals(mine);
+        }
+        // "Of its own" as the resolver reads it: any row not deleted, inactive included.
+        return this.isPlatformDefault(profile)
+            && this.kafkaConnectionProfileRepository.countByTenantIdAndStatusNot(mine, Status.Delete) == 0;
+    }
+
+    /** The platform's default profile: where every workspace with no Kafka of its own publishes. */
+    private boolean isPlatformDefault(KafkaConnectionProfile profile) {
+        return profile.getTenantId() == null && Boolean.TRUE.equals(profile.getIsDefault())
+            && profile.getStatus() == Status.Active;
     }
 
     private SourceTaskTypeDto mapSourceTaskTypeProjectionToDto(SourceTaskTypeProjection projection, Map<Long, String> profileNameById) {
