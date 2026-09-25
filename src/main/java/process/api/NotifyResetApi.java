@@ -12,6 +12,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import process.callback.CallbackKeys;
 import process.callback.ReplayedResponse;
+import process.callback.TransitionConflict;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
@@ -95,7 +96,7 @@ public class NotifyResetApi {
             if (answered.isPresent()) {
                 this.logger.info("Answered a redelivered {} for finished run {} of job {} from its receipt.",
                     request, jobQueueId, jobId);
-                return new ResponseEntity<>(answered.get(), HttpStatus.OK);
+                return new ResponseEntity<>(answered.get(), statusOf(answered.get()));
             }
         }
         if (refusal.isPresent() && refusal.get() == RunCallbackTokens.Refusal.EXPIRED) {
@@ -146,6 +147,22 @@ public class NotifyResetApi {
             run.map(found -> found.tenantId).orElse(null), renamed ? " (arrived as " + arrivedAs + ")" : "");
     }
 
+    /**
+     * 409 for a refused transition (MIG-201), 200 for every other answer -- a business refusal included, with
+     * {"status":"ERROR"} in the body as the platform's envelope contract has it.
+     *
+     * Why a transition refusal alone breaks from 200 + ERROR: the envelope contract's 200 is ErrorCategory.REFUSAL
+     * at the console edge -- a business answer for a person. This caller is a machine, and the answer is not a
+     * business rule but ErrorCategory.CONFLICT, "the state has moved on since the caller looked" (the run was
+     * interrupted, retried or closed while the worker held it), which the platform already maps to 409 at the edge
+     * and between services. The body is unchanged, so a client that reads bodies loses nothing; one that reads
+     * statuses no longer has to parse a 200 to learn it was refused. The 409 is only ever given past the token
+     * check -- to the run's own worker -- so it tells no stranger anything the 401 did not.
+     */
+    private static HttpStatus statusOf(ResponseDto outcome) {
+        return TransitionConflict.is(outcome) ? HttpStatus.CONFLICT : HttpStatus.OK;
+    }
+
     @RequestMapping(value = "/changeState/jobId/{jobId}/jobQueueId/{jobQueueId}/jobStatus/{jobStatus}", method = RequestMethod.POST)
     public ResponseEntity<?> changeState(
         @PathVariable("jobId") Long jobId,
@@ -183,7 +200,7 @@ public class NotifyResetApi {
                 && !ProcessUtil.ERROR.equals(outcome.getStatus()) && !(outcome instanceof ReplayedResponse)) {
                 this.runCallbackTokens.retire(jobQueueId);
             }
-            return new ResponseEntity<>(outcome, HttpStatus.OK);
+            return new ResponseEntity<>(outcome, statusOf(outcome));
         } catch (Exception ex) {
             logger.error("An error occurred while changeState ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

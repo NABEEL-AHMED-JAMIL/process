@@ -28,6 +28,12 @@ public class JobPayloadDTO {
      * on its callbacks; one that does not is still logged under it, resolved from the run.
      */
     private String correlationId;
+    /**
+     * The run's workspace, source_job.tenant_id (MIG-201; worker-runtime contract section 2). A claim for the
+     * worker to route and log by before it asks Core: the worker still proves it with verifyRun, and refuses a
+     * run whose dispatch names another workspace. Absent for a job with no workspace.
+     */
+    private Long tenantId;
 
     public JobPayloadDTO() {
     }
@@ -97,4 +103,6 @@ public class JobPayloadDTO {
     public void setCallbackToken(String callbackToken) { this.callbackToken = callbackToken; }
     public Integer getAttempt() { return attempt; }
     public void setAttempt(Integer attempt) { this.attempt = attempt; }
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 }

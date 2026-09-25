@@ -1,7 +1,6 @@
 package process.model.service.impl;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -47,19 +46,22 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * C7 (MIG-139): the job state machine a worker callback is held to. Start -> Failed is ILLEGAL.
+ * C7 (MIG-139), as MIG-201 changed it: the run state machine a worker callback is held to.
  *
- * The natural state machine lets a worker fail straight from Start; this one does not -- a worker
- * must pass through Running. The table, NotifyServiceImpl.isValidStatusTransition:
+ * MIG-201 (worker-runtime contract, section 16 items 2, 6 and 8) made three changes to what C7 first
+ * pinned: Start -> Failed is LEGAL (a worker declines a run it will not start -- an unknown pipeline, the
+ * wrong topic -- instead of leaving it in Start for the stall sweep); the verdict is read off the RUN row
+ * (job_queue.job_status), not the job row; and a missing status is a refusal, not a NullPointerException.
+ * The table, NotifyServiceImpl.isValidStatusTransition:
  *
  *   Queue     -> Start
- *   Start     -> Start | Running              (Start -> Start is an idempotent re-report)
+ *   Start     -> Start | Running | Failed     (Start -> Start is an idempotent re-report; -> Failed declines)
  *   Running   -> Running | Failed | Completed (Running -> Running is the heartbeat)
  *   Failed    -> Failed
  *   Completed -> Completed
- *   otherwise -> refused
+ *   otherwise -> refused, a missing status included
  *
- * Six edges leave the three in-flight states; with the two terminal self-loops that is EIGHT
+ * Seven edges leave the three in-flight states; with the two terminal self-loops that is NINE
  * accepted cells out of the 64 the enum makes. Every cell is asserted, the refusals included, and
  * the enum itself is pinned so that a new status cannot be added without deciding its row and
  * column here.
@@ -71,8 +73,10 @@ import static org.mockito.Mockito.when;
  * lastJobRun -- NOT source_job.last_job_run: the analysis said it advanced that column, and source
  * does not (see runningToRunningIsAcceptedEveryTimeAndRepublished).
  *
- * The verdict is read off the JOB row (SourceJob.jobRunningStatus), not the run row, so a callback's
- * legality can depend on a transition some other run wrote.
+ * The verdict is read off the RUN row (JobQueue.jobStatus). It used to be the job row
+ * (SourceJob.jobRunningStatus), so a callback's legality could depend on a transition some other run
+ * wrote, and a job whose running status was null answered the worker 500 (a NullPointerException), which a
+ * worker reads as "Core unavailable" and redelivers without limit.
  */
 @ExtendWith(MockitoExtension.class)
 class JobStatusTransitionTableTest {
@@ -84,7 +88,7 @@ class JobStatusTransitionTableTest {
     /** The accepted cells, and only those. */
     private static final Set<String> LEGAL = new HashSet<>(Arrays.asList(
         "Queue>Start",
-        "Start>Start", "Start>Running",
+        "Start>Start", "Start>Running", "Start>Failed",
         "Running>Running", "Running>Failed", "Running>Completed",
         "Failed>Failed",
         "Completed>Completed"));
@@ -143,20 +147,23 @@ class JobStatusTransitionTableTest {
     }
 
     @Test
-    void exactlyEightCellsAreAccepted() throws Throwable {
+    void exactlyNineCellsAreAccepted() throws Throwable {
         int accepted = 0;
         for (JobStatus current : JobStatus.values()) {
             for (JobStatus requested : JobStatus.values()) {
                 accepted += this.verdict(current, requested) ? 1 : 0;
             }
         }
-        assertThat(accepted).isEqualTo(8);
+        assertThat(accepted).isEqualTo(9);
     }
 
-    /** C7's headline: a worker cannot finish, either way, without having said it was Running. */
+    /**
+     * MIG-201: a worker may decline a run it has not started (Start -> Failed), but it still cannot complete one
+     * without having said it was Running.
+     */
     @Test
-    void aRunStillInStartCanNeitherFailNorComplete() throws Throwable {
-        assertThat(this.verdict(JobStatus.Start, JobStatus.Failed)).isFalse();
+    void aRunStillInStartMayBeDeclinedButNotCompleted() throws Throwable {
+        assertThat(this.verdict(JobStatus.Start, JobStatus.Failed)).isTrue();
         assertThat(this.verdict(JobStatus.Start, JobStatus.Completed)).isFalse();
     }
 
@@ -170,29 +177,49 @@ class JobStatusTransitionTableTest {
     }
 
     /**
-     * "null to anything is rejected, because a job that never ran cannot be driven by a callback" --
-     * true, but not by the table: the switch dereferences the null and throws. Through changeState
-     * that is a NullPointerException before any write, which NotifyResetApi's catch turns into a 500,
-     * not a refusal the worker can read. Pinned, not endorsed: whether a never-run job should answer
-     * the worker 500 or a clean ERROR is undecided.
+     * "null to anything is rejected, because a run that never ran cannot be driven by a callback" -- now by the
+     * table itself. It used to be a NullPointerException before any write, which NotifyResetApi turned into a
+     * 500 that a worker reads as Core being down (MIG-201, contract section 16 item 6).
      */
     @Test
-    @Tag("pinned-unreviewed")
-    void aJobThatNeverRanIsRefusedByANullPointerNotByTheTable() {
+    void noStatusIsARefusalByTheTableNotANullPointer() throws Throwable {
         for (JobStatus requested : JobStatus.values()) {
-            assertThatThrownBy(() -> this.verdict(null, requested)).isInstanceOf(NullPointerException.class);
+            assertThat(this.verdict(null, requested)).as("null -> %s", requested).isFalse();
         }
-        assertThatThrownBy(() -> this.verdict(null, null)).isInstanceOf(NullPointerException.class);
+        assertThat(this.verdict(null, null)).isFalse();
+    }
 
-        this.givenJobRow(null);
-        assertThatThrownBy(() -> this.service.changeState(this.callback(JobStatus.Running)))
-            .isInstanceOf(NullPointerException.class);
+    /** Through the live callback: a run row with no status is the transition refusal (409 at the API), no write. */
+    @Test
+    void aRunWithNoStatusIsRefusedCleanlyAndNothingIsWritten() {
+        this.given(JobStatus.Running, null);
+
+        ResponseDto response = this.service.changeState(this.callback(JobStatus.Running));
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        assertThat(response.getMessage()).isEqualTo("Invalid status transition from no status to Running");
         verifyNoInteractions(this.bulkAction, this.jobMail);
+    }
+
+    /** And a JOB row with no running status no longer matters at all: the run row decides. */
+    @Test
+    void aJobThatNeverRanNoLongerStopsItsRunFromReporting() {
+        this.given(null, JobStatus.Start);
+
+        ResponseDto response = this.service.changeState(this.callback(JobStatus.Running));
+
+        assertThat(response.getStatus()).isNotEqualTo("ERROR");
+        verify(this.bulkAction).changeJobQueueStatus(QUEUE_ID, JobStatus.Running, "worker says Running");
     }
 
     // ---- the table as the live callback applies it ----------------------------------------------------
 
-    private void givenJobRow(JobStatus jobRunningStatus) {
+    /** The job row and the run row agreeing, as they do for a job's one in-flight run (V83). */
+    private void givenRunRow(JobStatus status) {
+        this.given(status, status);
+    }
+
+    private void given(JobStatus jobRunningStatus, JobStatus runStatus) {
         SourceJob job = new SourceJob();
         job.setJobId(JOB_ID);
         job.setTenantId(TENANT);
@@ -200,10 +227,10 @@ class JobStatusTransitionTableTest {
         job.setFailJob(true);
         job.setCompleteJob(true);
         when(this.transactionService.findByJobIdAndJobStatus(JOB_ID, Status.Active)).thenReturn(Optional.of(job));
-        this.givenRunRow(JobStatus.Running);
+        this.runRow(runStatus);
     }
 
-    private void givenRunRow(JobStatus status) {
+    private void runRow(JobStatus status) {
         JobQueue run = new JobQueue();
         run.setJobQueueId(QUEUE_ID);
         run.setJobId(JOB_ID);
@@ -220,16 +247,15 @@ class JobStatusTransitionTableTest {
         return dto;
     }
 
-    /** Refused before anything else is considered -- including a retry: an illegal Failed is not a failure. */
+    /** Refused before anything else is considered: a run in Start cannot be Completed without Running. */
     @Test
-    void aFailedCallbackFromStartIsRefusedBeforeAnyRetryOrWrite() {
-        this.givenJobRow(JobStatus.Start);
+    void aCompletedCallbackFromStartIsRefusedBeforeAnyWrite() {
+        this.givenRunRow(JobStatus.Start);
 
-        ResponseDto response = this.service.changeState(this.callback(JobStatus.Failed));
+        ResponseDto response = this.service.changeState(this.callback(JobStatus.Completed));
 
         assertThat(response.getStatus()).isEqualTo("ERROR");
-        assertThat(response.getMessage()).isEqualTo("Invalid status transition from Start to Failed");
-        verify(this.bulkAction, never()).scheduleRetry(anyLong(), anyLong(), any());
+        assertThat(response.getMessage()).isEqualTo("Invalid status transition from Start to Completed");
         verify(this.bulkAction, never()).changeJobStatus(anyLong(), any());
         verify(this.bulkAction, never()).changeJobQueueStatus(anyLong(), any(), any());
         verify(this.bulkAction, never()).saveJobAuditLogs(anyLong(), anyString());
@@ -244,7 +270,7 @@ class JobStatusTransitionTableTest {
      */
     @Test
     void runningToRunningIsAcceptedEveryTimeAndRepublished() {
-        this.givenJobRow(JobStatus.Running);
+        this.givenRunRow(JobStatus.Running);
 
         ResponseDto first = this.service.changeState(this.callback(JobStatus.Running));
         ResponseDto second = this.service.changeState(this.callback(JobStatus.Running));
@@ -260,38 +286,37 @@ class JobStatusTransitionTableTest {
     /** Start -> Start is the idempotent re-report, accepted the same way. */
     @Test
     void startToStartIsAcceptedAsARepeat() {
-        this.givenJobRow(JobStatus.Start);
+        this.givenRunRow(JobStatus.Start);
 
         assertThat(this.service.changeState(this.callback(JobStatus.Start)).getStatus()).isNotEqualTo("ERROR");
         verify(this.bulkAction).sendJobStatusNotification(JOB_ID, QUEUE_ID, false);
     }
 
     /**
-     * The JOB row decides, not the run's own row. Here the run reporting is itself Running, but a
-     * different run has since written Start to the job row -- so this run's Completed is refused as
-     * "Start to Completed", and its Running is accepted as "Start to Running".
+     * The RUN row decides (MIG-201), not the job row. Here the run reporting is Running while the job row
+     * says Start (another writer moved it): the run's Completed is accepted as "Running to Completed". Before
+     * MIG-201 it was refused as "Start to Completed" and the run was left for the stall sweep.
      */
     @Test
-    void theVerdictReadsTheJobRowWhichAnotherRunMayHaveWritten() {
-        this.givenJobRow(JobStatus.Start);
-        this.givenRunRow(JobStatus.Running);
+    void theVerdictReadsTheRunRowNotTheJobRow() {
+        this.given(JobStatus.Start, JobStatus.Running);
 
         ResponseDto completed = this.service.changeState(this.callback(JobStatus.Completed));
-        assertThat(completed.getStatus()).isEqualTo("ERROR");
-        assertThat(completed.getMessage()).isEqualTo("Invalid status transition from Start to Completed");
 
-        ResponseDto running = this.service.changeState(this.callback(JobStatus.Running));
-        assertThat(running.getStatus()).isNotEqualTo("ERROR");
+        assertThat(completed.getStatus()).isNotEqualTo("ERROR");
+        verify(this.bulkAction).changeJobQueueStatus(QUEUE_ID, JobStatus.Completed, "worker says Completed");
     }
 
-    /** And the other way about: a run row still in Queue does not stop a job row in Running from finishing. */
+    /** And the other way about: a job row in Running does not let a run still in Queue finish. */
     @Test
-    void aRunRowThatDisagreesWithTheJobRowIsNotConsulted() {
-        this.givenJobRow(JobStatus.Running);
-        this.givenRunRow(JobStatus.Queue);
+    void aJobRowThatDisagreesWithTheRunRowIsNotConsulted() {
+        this.given(JobStatus.Running, JobStatus.Queue);
 
-        assertThat(this.service.changeState(this.callback(JobStatus.Completed)).getStatus()).isNotEqualTo("ERROR");
-        verify(this.bulkAction).changeJobStatus(eq(JOB_ID), eq(JobStatus.Completed));
+        ResponseDto completed = this.service.changeState(this.callback(JobStatus.Completed));
+
+        assertThat(completed.getStatus()).isEqualTo("ERROR");
+        assertThat(completed.getMessage()).isEqualTo("Invalid status transition from Queue to Completed");
+        verify(this.bulkAction, never()).changeJobStatus(anyLong(), any());
     }
 
     // ---- how a status is stored and read -----------------------------------------------------------------
