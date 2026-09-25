@@ -1,5 +1,7 @@
 package process.model.pojo;
 
+import java.util.regex.Pattern;
+
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
 import com.google.gson.Gson;
@@ -37,7 +39,8 @@ final class EntityStrings {
             @Override
             public boolean shouldSkipField(FieldAttributes field) {
                 return field.getAnnotation(ManyToOne.class) != null || field.getAnnotation(OneToMany.class) != null
-                    || field.getAnnotation(OneToOne.class) != null || field.getAnnotation(ManyToMany.class) != null;
+                    || field.getAnnotation(OneToOne.class) != null || field.getAnnotation(ManyToMany.class) != null
+                    || isSecret(field);
             }
 
             @Override
@@ -49,6 +52,18 @@ final class EntityStrings {
         .registerTypeAdapter(LocalDate.class, (JsonSerializer<LocalDate>) (value, type, context) -> new JsonPrimitive(value.toString()))
         .registerTypeAdapter(LocalTime.class, (JsonSerializer<LocalTime>) (value, type, context) -> new JsonPrimitive(value.toString()))
         .create();
+
+    /**
+     * A toString() is what a log line or an exception message shows, so a secret-bearing text column is never written:
+     * a password hash, a SASL password, an encrypted key password, a callback-token hash. Only String fields -- a flag
+     * or a counter named after a password or token (mustChangePassword, tokenVersion, callbackTokenAttempt) says what
+     * happened and gives nothing away, so it stays.
+     */
+    private static final Pattern SECRET_NAME = Pattern.compile("(?i).*(password|secret|hash|credential|apikey).*");
+
+    static boolean isSecret(FieldAttributes field) {
+        return field.getDeclaredClass() == String.class && SECRET_NAME.matcher(field.getName()).matches();
+    }
 
     private EntityStrings() {}
 
