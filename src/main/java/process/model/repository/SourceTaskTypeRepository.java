@@ -116,7 +116,10 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "where source_task_type.task_type_status <> 'Delete' and ("
         + "source_task_type.kafka_connection_profile_id = :profileId "
         + "or (:includeUnrouted = true and source_task_type.kafka_connection_profile_id is null "
-        + "    and source_task_type.tenant_id = :tenantId))\n" +
+        // The platform's own profile has no workspace, and Hibernate binds that null as bytea, which
+        // Postgres will neither compare with nor cast to a bigint (the Kafka connections screen got a
+        // 500). Through text, a null stays null and a real id stays itself.
+        + "    and source_task_type.tenant_id = cast(cast(:tenantId as text) as bigint)))\n" +
         "group by source_task_type.source_task_type_id\n" +
         "order by source_task_type.service_name asc", nativeQuery = true)
     public List<SourceTaskTypeProjection> fetchTopicsForProfile(@Param("profileId") Long profileId,
