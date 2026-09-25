@@ -91,6 +91,8 @@ public class SourceJobServiceImplTenantIsolationTest {
         job.setJobId(JOB_OWNED_BY_B);
         job.setJobName("Tenant B's nightly export");
         job.setTenantId(tenantId);
+        // The caller's own job (user 1): a TENANT_USER acts only on the jobs that name them (JobOwnership).
+        job.setAssignedUserId(1L);
         job.setJobStatus(Status.Active);
         return job;
     }

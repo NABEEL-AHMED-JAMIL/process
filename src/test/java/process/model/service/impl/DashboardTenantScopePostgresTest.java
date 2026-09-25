@@ -65,9 +65,10 @@ class DashboardTenantScopePostgresTest {
         TenantContext.clear();
     }
 
+    /** A workspace admin: a tenant user's counts are their own jobs' only (JobOwnershipPostgresTest). */
     @Test
     void aWorkspaceCountsItsOwnJobsAndRunsOnly() {
-        TenantContext.set(2901L, "TENANT_USER", 42L, "ops@carebridge.test");
+        TenantContext.set(2901L, "TENANT_ADMIN", 42L, "ops@carebridge.test");
         assertThat(totals()).containsOnly(every(2));
 
         TenantContext.set(2902L, "TENANT_ADMIN", 43L, "ops@northwind.test");
@@ -93,7 +94,7 @@ class DashboardTenantScopePostgresTest {
     /** The drill-down on one job: another workspace's job id reads as no runs, not as its runs. */
     @Test
     void anotherWorkspacesJobReadsAsEmpty() {
-        TenantContext.set(2901L, "TENANT_USER", 42L, "ops@carebridge.test");
+        TenantContext.set(2901L, "TENANT_ADMIN", 42L, "ops@carebridge.test");
         QueryService query = new QueryService();
 
         assertThat(count(db.sql().queryForList(query.statisticsBySourceJobId(201L)).get(0), "total")).isZero();

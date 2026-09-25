@@ -51,7 +51,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
+import java.util.stream.Collector;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -658,7 +658,7 @@ class JobOwnershipPostgresTest {
         return new TreeSet<>(Arrays.asList(ids));
     }
 
-    private static java.util.stream.Collector<Long, ?, Set<Long>> toIds() {
+    private static Collector<Long, ?, Set<Long>> toIds() {
         return Collectors.toCollection(TreeSet::new);
     }
 }

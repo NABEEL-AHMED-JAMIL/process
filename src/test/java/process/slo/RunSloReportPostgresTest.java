@@ -81,8 +81,9 @@ class RunSloReportPostgresTest {
         sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (?, 'Active', 'SLO', 'Slo')", TENANT);
         for (long[] job : new long[][] {{JOB, 3}, {ONE_SHOT, 1}}) {
             sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, tenant_id, "
-                + "complete_job, fail_job, skip_job, max_attempts, retry_backoff_seconds) "
-                + "VALUES (?, now(), 'Auto', 'slo', 'Active', 1, ?, false, false, false, ?, 60)", job[0], TENANT, job[1]);
+                + "complete_job, fail_job, skip_job, max_attempts, retry_backoff_seconds, assigned_user_id) "
+                // Assigned to user 1, the person who fails a run by hand below: a TENANT_USER acts on their own jobs only.
+                + "VALUES (?, now(), 'Auto', 'slo', 'Active', 1, ?, false, false, false, ?, 60, 1)", job[0], TENANT, job[1]);
         }
         store = new TransactionServiceImpl(jpa.repository(SourceJobRepository.class), jpa.repository(SchedulerRepository.class),
             jpa.repository(JobQueueRepository.class), null, jpa.repository(JobAuditLogRepository.class),

@@ -79,6 +79,8 @@ public class MessageQFailInFlightRunTest {
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobId(JOB_ID);
         sourceJob.setTenantId(TENANT_A);
+        // The caller's own job (user 1): a TENANT_USER acts only on the jobs that name them (JobOwnership).
+        sourceJob.setAssignedUserId(1L);
         sourceJob.setJobStatus(Status.Active);
         when(this.jobQueueRepository.findById(QUEUE_ID)).thenReturn(Optional.of(jobQueue));
         when(this.sourceJobRepository.findById(JOB_ID)).thenReturn(Optional.of(sourceJob));

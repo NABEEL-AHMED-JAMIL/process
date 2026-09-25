@@ -57,6 +57,7 @@ public class TenantlessListerFailsClosedTest {
     void aTenantUserWithNoTenantIsFilteredToNothingRatherThanEverything() {
         TenantContext.set(null, "TENANT_USER", 1L, "orphan@example.com");
         when(this.session.enableFilter("tenantFilter")).thenReturn(this.filter);
+        when(this.session.enableFilter(JobOwnership.FILTER_NAME)).thenReturn(this.filter);
 
         this.helper.enableIfNeeded(this.entityManager);
 
@@ -70,10 +71,13 @@ public class TenantlessListerFailsClosedTest {
     void aTenantUserWithATenantIsFilteredToIt() {
         TenantContext.set(2002L, "TENANT_USER", 1L, "b@example.com");
         when(this.session.enableFilter("tenantFilter")).thenReturn(this.filter);
+        when(this.session.enableFilter(JobOwnership.FILTER_NAME)).thenReturn(this.filter);
 
         this.helper.enableIfNeeded(this.entityManager);
 
         verify(this.filter).setParameter("tenantId", 2002L);
+        // And, beside it, to the jobs that name them (owner decision 2026-09-24).
+        verify(this.filter).setParameter("appUserId", 1L);
     }
 
     /** The one role that legitimately crosses tenants still does. */

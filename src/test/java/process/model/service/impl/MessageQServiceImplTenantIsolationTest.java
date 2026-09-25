@@ -74,6 +74,8 @@ public class MessageQServiceImplTenantIsolationTest {
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobId(jobId);
         sourceJob.setTenantId(tenantId);
+        // The caller's own job (user 1): a TENANT_USER acts only on the jobs that name them (JobOwnership).
+        sourceJob.setAssignedUserId(1L);
         sourceJob.setJobStatus(Status.Active);
         return sourceJob;
     }
@@ -180,6 +182,9 @@ public class MessageQServiceImplTenantIsolationTest {
     void aPlatformAdminReachesEveryTenantsRun() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "root@example.com");
         when(this.jobQueueRepository.findById(QUEUE_OF_B)).thenReturn(Optional.of(queueFor(JOB_OWNED_BY_B)));
+        // The run's job is read for everyone now (JobOwnership), a platform admin included: a run is reached through it.
+        when(this.sourceJobRepository.findById(JOB_OWNED_BY_B))
+            .thenReturn(Optional.of(jobOwnedBy(JOB_OWNED_BY_B, TENANT_B)));
 
         ResponseDto response = this.service.changeJobStatus(auditLogFor(JOB_OWNED_BY_B, QUEUE_OF_B));
 

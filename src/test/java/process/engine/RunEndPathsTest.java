@@ -65,6 +65,8 @@ class RunEndPathsTest {
         this.job = new SourceJob();
         this.job.setJobId(JOB_ID);
         this.job.setTenantId(TENANT);
+        // The caller's own job (user 1): a TENANT_USER acts only on the jobs that name them (JobOwnership).
+        this.job.setAssignedUserId(1L);
         this.job.setJobStatus(Status.Active);
         this.job.setMaxAttempts(1);
         this.job.setRetryBackoffSeconds(60);
