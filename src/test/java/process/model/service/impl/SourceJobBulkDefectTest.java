@@ -22,6 +22,7 @@ import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceJobRepository;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
+import process.util.excel.UploadedSheet;
 import process.util.excel.BulkExcel;
 
 import java.io.ByteArrayOutputStream;
@@ -260,4 +261,20 @@ public class SourceJobBulkDefectTest {
         assertThatCode(() -> this.service.downloadListSourceJob()).doesNotThrowAnyException();
     }
 
+
+    /**
+     * A file that claims to be .xlsx but is not one (a renamed CSV, a text file) threw out of POI: the
+     * task page got an HTTP 500 and "Some internal error occurred", the job page a generic "contact
+     * support". It is a refused file like any other, and says what to do.
+     */
+    @Test
+    void aFileThatIsNotReallyASpreadsheetIsRefusedWithAReason() throws Exception {
+        FileUploadDto dto = new FileUploadDto();
+        dto.setFile(new MockMultipartFile("file", "sheet.xlsx", ProcessUtil.SHEET_NAME, "id,name\n1,orders\n".getBytes()));
+
+        ResponseDto response = this.service.uploadSourceJob(dto);
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        assertThat(response.getMessage()).isEqualTo(UploadedSheet.UNREADABLE);
+    }
 }

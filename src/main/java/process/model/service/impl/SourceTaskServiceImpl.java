@@ -38,6 +38,7 @@ import process.util.ProcessUtil;
 import process.util.EnumConverter;
 import process.util.TaskPayloadLocationUtil;
 import process.util.excel.BulkExcel;
+import process.util.excel.UploadedSheet;
 import process.util.validation.SourceTaskValidation;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
@@ -736,7 +737,11 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(ERROR, "You can upload only .xlsx extension file.");
         }
 
-        try (XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream())) {
+        XSSFWorkbook opened = UploadedSheet.openOrNull(object.getFile());
+        if (opened == null) {
+            return new ResponseDto(ERROR, UploadedSheet.UNREADABLE);
+        }
+        try (XSSFWorkbook workbook = opened) {
         if (isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
         }

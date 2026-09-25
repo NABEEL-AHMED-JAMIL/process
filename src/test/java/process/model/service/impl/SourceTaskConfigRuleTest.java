@@ -24,6 +24,7 @@ import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.settings.TaskConfigRules;
 import process.util.ProcessUtil;
+import process.util.excel.UploadedSheet;
 import process.util.TaskPayloadLocationUtil;
 import process.util.excel.BulkExcel;
 
@@ -192,5 +193,21 @@ class SourceTaskConfigRuleTest {
         entry.setConfigKey(key);
         entry.setKind(kind);
         return entry;
+    }
+
+    /**
+     * A file that claims to be .xlsx but is not one (a renamed CSV, a text file) threw out of POI: the
+     * task page got an HTTP 500 and "Some internal error occurred", the job page a generic "contact
+     * support". It is a refused file like any other, and says what to do.
+     */
+    @Test
+    void aFileThatIsNotReallyASpreadsheetIsRefusedWithAReason() throws Exception {
+        FileUploadDto dto = new FileUploadDto();
+        dto.setFile(new MockMultipartFile("file", "sheet.xlsx", ProcessUtil.SHEET_NAME, "id,name\n1,orders\n".getBytes()));
+
+        ResponseDto response = this.service.uploadSourceTask(dto);
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        assertThat(response.getMessage()).isEqualTo(UploadedSheet.UNREADABLE);
     }
 }

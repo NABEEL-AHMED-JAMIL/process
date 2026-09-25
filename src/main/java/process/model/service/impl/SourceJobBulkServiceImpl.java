@@ -23,6 +23,7 @@ import process.util.BusinessTime;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
+import process.util.excel.UploadedSheet;
 import process.util.validation.JobDetailValidation;
 import java.io.*;
 import java.time.LocalDate;
@@ -177,7 +178,11 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             return new ResponseDto(ERROR, "You can upload only .xlsx extension file.");
         }
 
-        try (XSSFWorkbook workbook = new XSSFWorkbook(object.getFile().getInputStream())) {
+        XSSFWorkbook opened = UploadedSheet.openOrNull(object.getFile());
+        if (opened == null) {
+            return new ResponseDto(ERROR, UploadedSheet.UNREADABLE);
+        }
+        try (XSSFWorkbook workbook = opened) {
         if (ProcessUtil.isNull(workbook) || workbook.getNumberOfSheets() == 0) {
             return new ResponseDto(ERROR,  "You uploaded an empty file.");
         }
