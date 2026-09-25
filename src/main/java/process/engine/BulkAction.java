@@ -3,9 +3,11 @@ package process.engine;
 import process.correlation.RunCorrelation;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.JobStatus;
+import process.model.enums.RunEnd;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.pojo.JobQueue;
@@ -19,6 +21,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 import org.barco.notifications.contract.JobStatusChanged;
 import process.notifications.NotificationPort;
+import process.slo.RunOutcomes;
+import process.slo.RunSlo;
 
 /**
  * @author Nabeel Ahmed
@@ -32,10 +36,18 @@ public class BulkAction {
     private final TransactionServiceImpl transactionService;
     /** Every push, notice and mail leaves through here (MIG-20). */
     private final NotificationPort notifications;
+    /** The pipeline execution SLI's counter (MIG-196). */
+    private final RunOutcomes outcomes;
 
     public BulkAction(TransactionServiceImpl transactionService, NotificationPort notifications) {
+        this(transactionService, notifications, RunOutcomes.detached());
+    }
+
+    @Autowired
+    public BulkAction(TransactionServiceImpl transactionService, NotificationPort notifications, RunOutcomes outcomes) {
         this.transactionService = transactionService;
         this.notifications = notifications;
+        this.outcomes = outcomes;
     }
 
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
@@ -74,17 +86,44 @@ public class BulkAction {
         this.changeJobQueueStatus(jobQueueId, jobStatus, null);
     }
 
-    public void changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus, String message) {
+    /** @return the run's status before this write, for runEnded; null when there is no such run */
+    public JobStatus changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus, String message) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
         if (!jobQueue.isPresent()) {
             this.logger.warn("changeJobQueueStatus: JobQueue not found with jobQueueId {}, skipping.", jobQueueId);
-            return;
+            return null;
         }
+        JobStatus before = jobQueue.get().getJobStatus();
         jobQueue.get().setJobStatus(jobStatus);
         if (!ProcessUtil.isNull(message)) {
             jobQueue.get().setJobStatusMessage(message);
         }
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
+        return before;
+    }
+
+    /**
+     * The other half of a terminal write (MIG-196): records why the run ended and counts it for the pipeline
+     * execution SLI. {@code before} is what changeJobQueueStatus returned. A status still in flight (a heartbeat)
+     * does nothing. The reason is written with every terminal status, so it always explains the current one; the run
+     * is counted only when it leaves flight (RunOutcomes).
+     */
+    public void runEnded(Long jobQueueId, JobStatus before, JobStatus status, RunEnd reason) {
+        if (!RunSlo.isTerminal(status) || before == null) {
+            return;
+        }
+        Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (!jobQueue.isPresent()) {
+            return;
+        }
+        jobQueue.get().setEndReason(reason);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
+        this.outcomes.ended(before, status, reason);
+    }
+
+    /** Counts a run whose row the caller closed and saved itself, end reason included (the stall sweep). */
+    public void countRunEnd(JobStatus before, JobStatus status, RunEnd reason) {
+        this.outcomes.ended(before, status, reason);
     }
 
     public void changeJobQueueEndDate(Long jobQueueId, LocalDateTime endTime) {
@@ -152,7 +191,10 @@ public class BulkAction {
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatusMessage(String.format(message, jobId));
         this.applyJobSnapshot(jobQueue, jobId);
+        RunEnd born = bornEnded(jobStatus);
+        jobQueue.setEndReason(born);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        this.outcomes.born(jobStatus, born);
         return jobQueue;
     }
 
@@ -172,8 +214,19 @@ public class BulkAction {
         // Made by a request (Run now, Skip next): the run is worked and called back under that request's id.
         RunCorrelation.stamp(jobQueue);
         this.applyJobSnapshot(jobQueue, jobId);
+        RunEnd born = bornEnded(jobStatus);
+        jobQueue.setEndReason(born);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        this.outcomes.born(jobStatus, born);
         return jobQueue;
+    }
+
+    /** The reason a run made already over carries: Skip and Missed are the only ones the engine makes. */
+    private static RunEnd bornEnded(JobStatus status) {
+        if (status == JobStatus.Skip) {
+            return RunEnd.SKIPPED;
+        }
+        return status == JobStatus.Missed ? RunEnd.MISSED : null;
     }
 
     /** What the run takes from its job when it is made: the job's tenant (V102, MIG-29), its bucket and output folder. */
@@ -305,6 +358,8 @@ public class BulkAction {
         // the AI service hands back any answer it already recorded for this run.
         row.setPreparedAt(null);
         row.setDispatchPayload(null);
+        // Not ended: the same row goes round again and is counted once, when its last attempt ends (MIG-196, C7c).
+        row.setEndReason(null);
         row.setJobStatusMessage(String.format(
             "Attempt %s of %s failed: %s Retrying at %s.", attempt, maxAttempts, endWithStop(reason), dueAt));
         this.transactionService.saveOrUpdateJobQueue(row);
