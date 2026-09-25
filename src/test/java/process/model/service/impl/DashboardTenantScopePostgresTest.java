@@ -153,4 +153,23 @@ class DashboardTenantScopePostgresTest {
         Object value = row.get(column);
         return value == null ? 0 : ((Number) value).longValue();
     }
+
+    /**
+     * The KPI tiles are the workspace as it is now. They counted jobs by the day they were created, so a
+     * week after a busy workspace made its jobs the default view read 0 jobs, 0 running, while its jobs
+     * kept running. A range that holds none of the jobs' creation days still counts them all.
+     */
+    @Test
+    void theTilesCountEveryJobNotOnlyTheOnesCreatedInTheRange() {
+        TenantContext.set(2902L, "TENANT_ADMIN", 43L, "ops@northwind.test");
+        QueryService query = new QueryService();
+        JdbcTemplate sql = db.sql();
+
+        long all = 0;
+        for (Map<String, Object> row : sql.queryForList(query.jobStatusStatistics("2026-10-01", "2026-10-07"))) {
+            if ("All".equals(row.get("job_status"))) all = count(row, "total_count");
+        }
+        assertThat(all).isEqualTo(3);
+        assertThat(sum(sql.queryForList(query.jobRunningStatistics("2026-10-01", "2026-10-07")), "total_count")).isEqualTo(3);
+    }
 }

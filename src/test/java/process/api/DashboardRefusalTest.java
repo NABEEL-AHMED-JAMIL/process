@@ -71,7 +71,9 @@ class DashboardRefusalTest {
         assertThatThrownBy(() -> queries.jobStatusStatistics("2026-02-30", "2026-03-01")).as("the shape of a date, not a date")
             .isInstanceOf(RequestRefused.class);
         assertThat(queries.jobStatusStatistics(null, null)).as("no dates is all time").doesNotContain("between");
-        assertThat(queries.jobStatusStatistics("2026-09-01", "2026-09-24")).contains("between '2026-09-01' and '2026-09-24'");
+        // The dates are checked but not applied: the job tiles are the workspace now, not jobs created in the range.
+        assertThat(queries.jobStatusStatistics("2026-09-01", "2026-09-24")).doesNotContain("between").doesNotContain("date_created");
+        assertThatThrownBy(() -> queries.jobRunningStatistics("2026-02-30", "2026-03-01")).isInstanceOf(RequestRefused.class);
         assertThatThrownBy(() -> queries.weeklyHrRunningStatisticsDimensionDetail("2026-09-24", 3L, "Nonsense", 1L))
             .isInstanceOf(RequestRefused.class).hasMessageContaining("jobStatus");
     }

@@ -212,11 +212,7 @@ public class QueryService {
      * a filter on job_queue.date_created still uses it (DashboardIndexPostgresTest).
      */
     private String dateRangeFilter(String column, String startDate, String endDate) {
-        for (String date : new String[] {startDate, endDate}) {
-            if (date != null && !date.trim().isEmpty()) {
-                this.requireValidDate(date);
-            }
-        }
+        this.checkDates(startDate, endDate);
         if (!isValidDate(startDate) || !isValidDate(endDate)) {
             return "";
         }
@@ -236,6 +232,15 @@ public class QueryService {
             return true;
         } catch (DateTimeParseException impossible) {
             return false;
+        }
+    }
+
+    /** Refuses a malformed date (MIG-103) without applying either: for a figure that is "now", whatever the range. */
+    private void checkDates(String startDate, String endDate) {
+        for (String date : new String[] {startDate, endDate}) {
+            if (date != null && !date.trim().isEmpty()) {
+                this.requireValidDate(date);
+            }
         }
     }
 
@@ -326,14 +331,19 @@ public class QueryService {
         return this.tenantClause(sourceJobAlias) + JobOwnership.sqlPredicate(sourceJobAlias);
     }
 
+    /**
+     * The workspace's jobs now, by status. Not scoped to the range: it counted jobs CREATED in the range,
+     * so a week after a workspace made its jobs the dashboard's default view read 0 jobs while they ran.
+     * The dates are still checked, so a malformed one is refused as before.
+     */
     public String jobStatusStatistics(String startDate, String endDate) {
 
-        String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
+        this.checkDates(startDate, endDate);
         String tenantFilter = this.jobClause("source_job");
         return "select job_status, count(job_id) as total_count from source_job\n" +
-            "where job_status in ('Active','Inactive') " + dateFilter + tenantFilter + "group by job_status\n" +
+            "where job_status in ('Active','Inactive') " + tenantFilter + "group by job_status\n" +
             "union all\n" +
-            "select 'All' as job_status, count(job_id) as total_count from source_job where job_status in ('Active','Inactive') " + dateFilter + tenantFilter;
+            "select 'All' as job_status, count(job_id) as total_count from source_job where job_status in ('Active','Inactive') " + tenantFilter;
     }
 
     /**
@@ -445,13 +455,17 @@ public class QueryService {
             + "group by sj.assigned_user_id";
     }
 
+    /**
+     * Each job's current or last state (running now, last run completed, last run failed): a live figure,
+     * so, like jobStatusStatistics, not scoped to jobs created in the range. The charts are the runs in it.
+     */
     public String jobRunningStatistics(String startDate, String endDate) {
 
-        String dateFilter = this.dateRangeFilter("date_created", startDate, endDate);
+        this.checkDates(startDate, endDate);
         return "select UPPER(job_running_status) as job_running_status, count(job_id) as total_count\n" +
             "from source_job\n" +
             "where UPPER(job_running_status) in ('START', 'RUNNING', 'FAILED', 'COMPLETED')\n" +
-            "and UPPER(job_status) in ('ACTIVE','INACTIVE') " + dateFilter + this.jobClause("source_job") + "\n" +
+            "and UPPER(job_status) in ('ACTIVE','INACTIVE') " + this.jobClause("source_job") + "\n" +
             "group by UPPER(job_running_status)";
     }
 
