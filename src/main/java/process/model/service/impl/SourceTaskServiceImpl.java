@@ -601,7 +601,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return responseDto;
     }
 
-    @Transactional(readOnly = true)
     /**
      * The tag rows for a task, taken from the caller's own tags or derived from its XML.
      *
@@ -633,9 +632,18 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         }).collect(Collectors.toList());
     }
 
+    /**
+     * Read-only transactional for the tenant filter, not for a lazy load (MIG-261). The filter is enabled on the
+     * transaction's session and the read below has to run on that same session. This annotation was added with the
+     * filter call (f4c9cab) and later stranded above tagRowsFor, a private method, where it did nothing; the read
+     * then worked only because open-in-view held one session for the whole request. With open-in-view off,
+     * enableIfNeeded found no session to unwrap and the endpoint answered 500 (OpenInViewOffWebPostgresTest).
+     */
+    @Override
+    @Transactional(readOnly = true)
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId) {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        // With its tag rows (MIG-67): they are mapped below, outside any transaction.
+        // With its tag rows (MIG-67): one read, so the mapping below touches no lazy collection.
         Optional<SourceTask> sourceTask = this.sourceTaskRepository.findWithPayloadByTaskDetailId(sourceTaskId);
         // The by-id read has to agree with the list the caller came from: a soft-deleted task
         // reads as absent, exactly like one belonging to another tenant.
