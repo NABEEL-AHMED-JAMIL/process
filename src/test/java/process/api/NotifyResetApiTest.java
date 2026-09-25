@@ -156,6 +156,83 @@ public class NotifyResetApiTest {
         verify(this.runCallbackTokens, never()).retire(anyLong());
     }
 
+    // ---- MIG-201: an illegal transition is 409 Conflict ---------------------------------------------------------
+
+    /**
+     * The run's state has moved on since its worker looked (it was interrupted, retried, or the worker skipped a
+     * step): ErrorCategory.CONFLICT, 409 -- with the same envelope body as before, so a client that reads
+     * bodies still finds {"status":"ERROR"} and Core's sentence.
+     */
+    @Test
+    void anIllegalTransitionIsAConflictWithTheSameBody() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
+            .thenReturn(new ResponseDto(ProcessUtil.ERROR, "Invalid status transition from Start to Completed"));
+
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, null, callback());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(((ResponseDto) response.getBody()).getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(((ResponseDto) response.getBody()).getMessage()).isEqualTo("Invalid status transition from Start to Completed");
+        verify(this.runCallbackTokens, never()).retire(anyLong());
+    }
+
+    /** A run with no status at all is the same conflict (it used to be a NullPointerException and a 500). */
+    @Test
+    void aRunWithNoStatusIsTheSameConflict() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
+            .thenReturn(new ResponseDto(ProcessUtil.ERROR, "Invalid status transition from no status to Running"));
+
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Running, TOKEN, null, null, callback());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    /** A redelivery answered from the receipt of a refused transition is refused the same way: 409 again. */
+    @Test
+    void aReplayedRefusalIsTheSameConflict() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), eq("done-7f3a9c2e")))
+            .thenReturn(new ReplayedResponse(new CallbackReceipts.Receipt("changeState:Completed", ProcessUtil.ERROR,
+                "Invalid status transition from Start to Completed"), null));
+
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, "done-7f3a9c2e", null, callback());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    /** And from the receipt a finished run answers with (RUN_OVER): the first answer, with its first status. */
+    @Test
+    void aFinishedRunsReplayedRefusalIsTheSameConflict() {
+        tokenIsRefused(RunCallbackTokens.Refusal.RUN_OVER);
+        when(this.notifyService.replay(QUEUE_ID, JobStatus.Completed, CallbackKeys.changeState(JobStatus.Completed), null))
+            .thenReturn(Optional.of(new ReplayedResponse(new CallbackReceipts.Receipt("changeState:Completed",
+                ProcessUtil.ERROR, "Invalid status transition from Queue to Completed"), null)));
+
+        ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Completed, TOKEN, null, null, callback());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    /**
+     * Only the transition refusal changed. Every other business refusal on this path keeps the platform's
+     * envelope contract, 200 with {"status":"ERROR"}.
+     */
+    @Test
+    void everyOtherRefusalIsStill200WithError() {
+        tokenIsGood();
+        when(this.notifyService.changeState(any(SourceJobQueueDto.class), isNull()))
+            .thenReturn(new ResponseDto(ProcessUtil.ERROR, "Job with id 1196 not found or not active"))
+            .thenReturn(new ResponseDto(ProcessUtil.ERROR, "Queue with id 91422 does not belong to job 1196"))
+            .thenReturn(new ResponseDto(ProcessUtil.SUCCESS, "Invalid status transition from Start to Completed"));
+
+        for (int i = 0; i < 3; i++) {
+            ResponseEntity<?> response = this.api.changeState(JOB_ID, QUEUE_ID, JobStatus.Running, TOKEN, null, null, callback());
+            assertThat(response.getStatusCode()).as("answer %s", i).isEqualTo(HttpStatus.OK);
+        }
+    }
+
     @Test
     void aBadRequestIsCaughtAfterTheTokenCheckAndSpendsNothing() {
         tokenIsGood();

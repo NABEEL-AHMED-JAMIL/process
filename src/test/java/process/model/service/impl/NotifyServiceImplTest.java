@@ -82,6 +82,8 @@ public class NotifyServiceImplTest {
         JobQueue queue = new JobQueue();
         queue.setJobQueueId(QUEUE_ID);
         queue.setJobId(jobId);
+        // Mid-run: the run row is what a transition is checked against (MIG-201).
+        queue.setJobStatus(JobStatus.Running);
         return queue;
     }
 

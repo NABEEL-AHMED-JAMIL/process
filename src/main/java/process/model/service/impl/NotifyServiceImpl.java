@@ -16,6 +16,7 @@ import org.barco.notifications.contract.JobLogAppended;
 import process.callback.CallbackKeys;
 import process.callback.CallbackReceipts;
 import process.callback.ReplayedResponse;
+import process.callback.TransitionConflict;
 import process.engine.BulkAction;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
@@ -186,7 +187,8 @@ public class NotifyServiceImpl implements NotifyService {
             logger.warn("Job {} not found", jobQueue.getJobId());
             return new ResponseDto(ERROR, String.format("Job with id %s not found or not active", jobQueue.getJobId()), jobQueue);
         }
-        if (!this.queueBelongsToJob(jobQueue.getJobId(), jobQueue.getJobQueueId())) {
+        Optional<JobQueue> run = this.runOfJob(jobQueue.getJobId(), jobQueue.getJobQueueId());
+        if (!run.isPresent()) {
             logger.warn("Queue {} does not belong to job {}", jobQueue.getJobQueueId(), jobQueue.getJobId());
             return new ResponseDto(ERROR, String.format("Queue with id %s does not belong to job %s",
                 jobQueue.getJobQueueId(), jobQueue.getJobId()), jobQueue);
@@ -195,21 +197,35 @@ public class NotifyServiceImpl implements NotifyService {
             logger.info("Run {} of job {} reports {} after its job was {}; recording it and its usage (keep the bill).",
                 jobQueue.getJobQueueId(), jobQueue.getJobId(), jobQueue.getJobStatus(), job.get().getJobStatus());
         }
-        JobStatus currentStatus = job.get().getJobRunningStatus();
+        // The RUN's own status decides (MIG-201), not the job's running status: that one is the job's summary of
+        // its latest run, written by other paths too, and a job whose running status was null threw here.
+        JobStatus currentStatus = run.get().getJobStatus();
         JobStatus newStatus = jobQueue.getJobStatus();
         // The hand-off race (run 7309): the relay publishes, and the run and the job only move to Start
-        // in the transaction after the broker's ack. A worker quicker than that ack reports Running while
-        // the job still says Queue. A run latched as sent IS handed off from any worker's side -- its
-        // message and the token proving this callback exist only in what was published -- so for that
-        // run, and only that run, Running is read against Start.
-        if (currentStatus == JobStatus.Queue && newStatus == JobStatus.Running && this.latchedAsSent(jobQueue.getJobQueueId())) {
-            logger.info("Run {} reported Running before its hand-off was recorded; taking it as handed off.", jobQueue.getJobQueueId());
+        // in the transaction after the broker's ack. A worker quicker than that ack reports while the run
+        // still says Queue. A run latched as sent IS handed off from any worker's side -- its message and
+        // the token proving this callback exist only in what was published -- so for that run, and only
+        // that run, the callback is read against Start: Running, or a decline (Failed).
+        if (currentStatus == JobStatus.Queue && run.get().isJobSend()) {
+            logger.info("Run {} reported {} before its hand-off was recorded; taking it as handed off.",
+                jobQueue.getJobQueueId(), newStatus);
             currentStatus = JobStatus.Start;
         }
-        logger.info("Job {} current status: {}, requested status: {}", jobQueue.getJobId(), currentStatus, newStatus);
+        logger.info("Run {} of job {} current status: {}, requested status: {}", jobQueue.getJobQueueId(),
+            jobQueue.getJobId(), currentStatus, newStatus);
         if (!this.isValidStatusTransition(currentStatus, newStatus)) {
-            logger.warn("Invalid status transition for job {} from {} to {}", jobQueue.getJobId(), currentStatus, newStatus);
-            return new ResponseDto(ERROR, String.format("Invalid status transition from %s to %s", currentStatus, newStatus), jobQueue);
+            logger.warn("Invalid status transition for run {} of job {} from {} to {}", jobQueue.getJobQueueId(),
+                jobQueue.getJobId(), currentStatus, newStatus);
+            return TransitionConflict.refusal(currentStatus, newStatus, jobQueue);
+        }
+        // A worker DECLINING a run it will not start -- a pipeline it does not have, a record on the wrong topic
+        // (MIG-201): Failed straight from Start. Closed now rather than left for the stall sweep, but never
+        // retried (another attempt meets the same configuration, as an unrouted run does, MIG-45) and never
+        // metered (no work was done).
+        boolean declined = newStatus == JobStatus.Failed && currentStatus == JobStatus.Start;
+        if (declined) {
+            logger.info("Run {} of job {} was declined by its worker before it started: {}; not retried.",
+                jobQueue.getJobQueueId(), jobQueue.getJobId(), jobQueue.getJobStatusMessage());
         }
         // The live worker callback, and so the retry decision's real home. A task that reports it
         // could not finish -- a source briefly unreachable, an object store that refused one
@@ -224,7 +240,7 @@ public class NotifyServiceImpl implements NotifyService {
         //
         // scheduleRetry writes the worker's own explanation into the audit log, so returning early
         // loses nothing it reported.
-        if (newStatus == JobStatus.Failed && jobLive
+        if (newStatus == JobStatus.Failed && jobLive && !declined
             && this.bulkAction.scheduleRetry(jobQueue.getJobQueueId(), jobQueue.getJobId(),
                 jobQueue.getJobStatusMessage())) {
             logger.info("Job {} run {} failed and has been queued for another attempt.",
@@ -240,8 +256,8 @@ public class NotifyServiceImpl implements NotifyService {
         if (newStatus == JobStatus.Failed || newStatus == JobStatus.Completed) {
             logger.info("Setting end date for job {}", jobQueue.getJobId());
             this.bulkAction.changeJobQueueEndDate(jobQueue.getJobQueueId(), jobQueue.getEndTime());
-            // One run, once: Completed and Failed both did the work; the run id is the key.
-            if (this.meter != null && job.get().getTenantId() != null) {
+            // One run, once: Completed and Failed both did the work (a decline did none); the run id is the key.
+            if (this.meter != null && job.get().getTenantId() != null && !declined) {
                 this.meter.report(UsageEvent.of(job.get().getTenantId(), Meter.PIPELINE_RUNS, 1, "run#" + jobQueue.getJobQueueId())
                     .subject("job", String.valueOf(jobQueue.getJobId())).run(jobQueue.getJobQueueId()).source("console")
                     .note(newStatus.name()));
@@ -332,20 +348,35 @@ public class NotifyServiceImpl implements NotifyService {
      * to and any other tenant's queue id, and the write landed on the latter. The queue row is
      * the only thing that knows which job it belongs to, so it is what decides.
      */
-    private boolean latchedAsSent(Long jobQueueId) {
-        Optional<JobQueue> run = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
-        return run.isPresent() && run.get().getJobStatus() == JobStatus.Queue && run.get().isJobSend();
+    private boolean queueBelongsToJob(Long jobId, Long jobQueueId) {
+        return this.runOfJob(jobId, jobQueueId).isPresent();
     }
 
-    private boolean queueBelongsToJob(Long jobId, Long jobQueueId) {
+    /** The run, when it exists and is this job's; empty otherwise. */
+    private Optional<JobQueue> runOfJob(Long jobId, Long jobQueueId) {
         if (jobId == null || jobQueueId == null) {
+            return Optional.empty();
+        }
+        return this.transactionService.findJobQueueByJobQueueId(jobQueueId)
+            .filter(run -> jobId.equals(run.getJobId()));
+    }
+
+    /**
+     * The run state machine a worker callback is held to (C7, MIG-139), read off the run row since MIG-201.
+     *
+     * Before MIG-201, six edges left the in-flight states -- Queue->Start, Start->Start, Start->Running,
+     * Running->Running, Running->Failed, Running->Completed -- plus the self-loops Failed->Failed and
+     * Completed->Completed: eight accepted cells. MIG-201 adds ONE edge, Start->Failed, deliberately: a worker
+     * DECLINING a run it will not start (a pipelineId it does not have, a record on the wrong topic), which
+     * otherwise sat in Start until the stall sweep. Seven edges, nine cells (JobStatusTransitionTableTest).
+     * A decline is a failure of the run, not a refusal: the run ends Failed, not retried and not metered.
+     * Start->Completed stays illegal, and the stall sweep is untouched: it still writes Interrupt, never Failed (C4).
+     * No status at all is a refusal, never a NullPointerException.
+     */
+    private boolean isValidStatusTransition(JobStatus currentStatus, JobStatus newStatus) {
+        if (currentStatus == null) {
             return false;
         }
-        Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
-        return jobQueue.isPresent() && jobId.equals(jobQueue.get().getJobId());
-    }
-
-    private boolean isValidStatusTransition(JobStatus currentStatus, JobStatus newStatus) {
         switch (currentStatus) {
             case Queue:
 
@@ -353,7 +384,8 @@ public class NotifyServiceImpl implements NotifyService {
 
             case Start:
                 return newStatus == JobStatus.Start
-                        || newStatus == JobStatus.Running;
+                        || newStatus == JobStatus.Running
+                        || newStatus == JobStatus.Failed;
 
             case Running:
                 return newStatus == JobStatus.Running

@@ -115,6 +115,9 @@ class WorkerCallbackIdempotencyTest {
         job.setFailJob(true);
         job.setCompleteJob(true);
         lenient().when(this.transactionService.findByJobIdAndJobStatus(JOB_ID, Status.Active)).thenReturn(Optional.of(job));
+        // The run row decides a transition's legality (MIG-201); it agrees with the job row, as a job's one
+        // in-flight run does.
+        this.run.setJobStatus(runningStatus);
     }
 
     private static SourceJobQueueDto reports(JobStatus status, String message) {

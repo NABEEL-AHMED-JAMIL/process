@@ -73,6 +73,7 @@ public class NotifyServiceRetryTest {
         JobQueue queue = new JobQueue();
         queue.setJobQueueId(QUEUE_ID);
         queue.setJobId(JOB_ID);
+        queue.setJobStatus(JobStatus.Running);
         lenient().when(this.transactionService.findJobQueueByJobQueueId(QUEUE_ID))
             .thenReturn(Optional.of(queue));
     }

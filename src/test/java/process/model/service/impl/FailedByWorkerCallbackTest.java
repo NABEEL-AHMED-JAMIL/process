@@ -44,8 +44,9 @@ import static org.mockito.Mockito.when;
  * NotifyResetApi, authenticated by the run's own X-Worker-Token rather than a JWT, so there is no
  * TenantContext; the job is looked up by id and Active status alone.
  *
- * Validation: YES, and first -- the C7 table, read off the job row. An illegal Failed (from Start,
- * say) is refused before a retry is even considered.
+ * Validation: YES, and first -- the C7 table, read off the RUN row since MIG-201 (the job row before). An
+ * illegal Failed (from Queue, say) is refused before a retry is even considered. Failed from Start is legal
+ * since MIG-201 -- the worker declining the run -- and is never retried (WorkerDeclinesRunTest).
  *
  * Retry: ALWAYS offered for a legal Failed, and BEFORE any write. Verbatim: "Offered before any of the
  * writes below ... Making them first and retrying afterwards would tell everyone the run had failed
@@ -91,6 +92,7 @@ class FailedByWorkerCallbackTest {
         JobQueue run = new JobQueue();
         run.setJobQueueId(QUEUE_ID);
         run.setJobId(JOB_ID);
+        run.setJobStatus(runningStatus);
         when(this.transactionService.findJobQueueByJobQueueId(QUEUE_ID)).thenReturn(Optional.of(run));
     }
 
@@ -178,10 +180,13 @@ class FailedByWorkerCallbackTest {
         verify(this.jobMail, times(1)).send(any(SourceJobQueueDto.class), eq(JobStatus.Failed));
     }
 
-    /** Validation first: an illegal Failed is not a failure, so it is not retried either. */
+    /**
+     * Validation first: an illegal Failed is not a failure, so it is not retried either. (From a run still in
+     * Queue and never handed off; from Start it is a decline since MIG-201.)
+     */
     @Test
     void anIllegalFailedIsRefusedBeforeTheRetryIsConsidered() {
-        this.givenJobRow(JobStatus.Start);
+        this.givenJobRow(JobStatus.Queue);
 
         ResponseDto response = this.service.changeState(this.workerReportsFailed());
 

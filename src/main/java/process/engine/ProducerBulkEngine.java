@@ -495,9 +495,10 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                 String payload = this.getSourceJobDetail(sourceJob, jobQueue, jobQueue.getDispatchPayload());
                 jobQueue.setJobSend(true);
                 this.transactionService.updateJobQueue(jobQueue);
+                // Keyed by the run (MIG-201): every redelivery and every attempt of one run lands on one partition.
                 this.dispatchOutbox.write(new DispatchOutbox.Record(jobQueue.getJobQueueId(), Math.max(1, jobQueue.getAttempt()),
                     sourceJob.getTenantId(), route.taskType.getSourceTaskTypeId(), route.topic, route.partition,
-                    UUID.randomUUID().toString(), payload, this.headersFor(sourceJob, jobQueue)));
+                    String.valueOf(jobQueue.getJobQueueId()), payload, this.headersFor(sourceJob, jobQueue)));
                 return null;
             });
             logger.info("Run {} of job {} written to the dispatch outbox for {}.", jobQueue.getJobQueueId(),
@@ -513,9 +514,10 @@ public class ProducerBulkEngine implements DispatchOutcomes {
 
     /**
      * The record headers every dispatch carries (MIG-26): the tenant and the user the run belongs to,
-     * the names service-1/2/3's TaskHeaders already parse, and the correlation id (MIG-95). A job with
-     * no tenant or owner simply has no such header -- the workers' platform-branch fallback for
-     * genuinely tenant-less executions stays theirs.
+     * the names service-1/2/3's TaskHeaders already parse, the correlation id (MIG-95) and the pipeline
+     * (MIG-201), so a worker can route and log before it parses the value. A job with no tenant, owner or
+     * pipeline simply has no such header -- the workers' platform-branch fallback for genuinely tenant-less
+     * executions stays theirs. The pipeline header is exactly the payload's pipelineId.
      */
     private Map<String, String> headersFor(SourceJob sourceJob, JobQueue jobQueue) {
         Map<String, String> headers = new LinkedHashMap<>();
@@ -524,6 +526,10 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         }
         if (sourceJob.getAssignedUserId() != null) {
             headers.put("x-user-id", String.valueOf(sourceJob.getAssignedUserId()));
+        }
+        String pipelineId = pipelineIdOf(sourceJob);
+        if (pipelineId != null) {
+            headers.put("x-pipeline-id", pipelineId);
         }
         if (jobQueue.getCorrelationId() != null) {
             headers.put(CorrelationId.HEADER, jobQueue.getCorrelationId());
@@ -643,16 +649,23 @@ public class ProducerBulkEngine implements DispatchOutcomes {
             }
             // pipelineId is no longer a PIPELINE_IDS lookup row id -- Task Forms now define a
             // pipeline directly by its own id string, so it goes straight through.
-            String pipelineId = sourceJob.getTaskDetail().getPipelineId();
-            if (!ProcessUtil.isNull(pipelineId)) {
-                dto.setPipelineId(pipelineId.trim());
-            }
+            dto.setPipelineId(pipelineIdOf(sourceJob));
             // The document the pre-dispatch phase prepared, with any AI step's answers in it -- not
             // the task's stored one.
             dto.setTaskPayload(taskPayload);
         }
         dto.setPriority(sourceJob.getPriority());
+        dto.setTenantId(sourceJob.getTenantId());
         return dto.toString();
+    }
+
+    /** The task's pipelineId as the payload and the x-pipeline-id header carry it: trimmed, or null when blank. */
+    private static String pipelineIdOf(SourceJob sourceJob) {
+        if (ProcessUtil.isNull(sourceJob.getTaskDetail())) {
+            return null;
+        }
+        String pipelineId = sourceJob.getTaskDetail().getPipelineId();
+        return ProcessUtil.isNull(pipelineId) || pipelineId.trim().isEmpty() ? null : pipelineId.trim();
     }
 
     @Override
