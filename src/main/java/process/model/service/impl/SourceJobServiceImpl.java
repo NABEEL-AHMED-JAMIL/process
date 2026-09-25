@@ -214,6 +214,18 @@ public class SourceJobServiceImpl implements SourceJobService {
      * side came to be missing the branch that creates a row at all; sharing them means the two
      * cannot drift again.
      */
+    /** Whether a posted timetable is the stored one; an empty interval means "unchanged", as applySchedulerFields reads it. */
+    static boolean sameTimetable(Scheduler stored, SchedulerDto posted) {
+        return java.util.Objects.equals(stored.getStartDate(), posted.getStartDate())
+            && java.util.Objects.equals(stored.getEndDate(), posted.getEndDate())
+            && java.util.Objects.equals(stored.getStartTime(), posted.getStartTime())
+            && java.util.Objects.equals(stored.getFrequency(), posted.getFrequency())
+            && java.util.Objects.equals(stored.getDaysOfWeek(), posted.getDaysOfWeek())
+            && java.util.Objects.equals(stored.getDayOfMonth(), posted.getDayOfMonth())
+            && (StringUtils.isEmpty(posted.getIntervalValue())
+                || java.util.Objects.equals(stored.getIntervalValue(), posted.getIntervalValue()));
+    }
+
     private void applySchedulerFields(Scheduler scheduler, SchedulerDto schedulerDto, Long jobId) {
         scheduler.setStartDate(schedulerDto.getStartDate());
         /*
@@ -388,6 +400,15 @@ public class SourceJobServiceImpl implements SourceJobService {
                          * findDueSchedulers to find: it never ran, the list showed no schedule
                          * against it, and Skip next answered that it had none.
                          */
+                        /*
+                         * An unchanged timetable is left alone. Every save re-posts it -- Email notifications,
+                         * a priority change, the editor -- and re-applying it re-seeds next_run_at from the start
+                         * date, which brought back a run the operator had skipped while the Skip row stayed in
+                         * the history (UI review 2026-09-24).
+                         */
+                        if (scheduler.isPresent() && sameTimetable(scheduler.get(), schedulerDto)) {
+                            return;
+                        }
                         Scheduler target = scheduler.isPresent() ? scheduler.get() : new Scheduler();
                         if (target.getTenantId() == null) {
                             target.setTenantId(sourceJob.get().getTenantId());

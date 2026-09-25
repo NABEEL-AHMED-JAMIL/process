@@ -283,6 +283,54 @@ public class SourceJobLifecycleDefectTest {
         assertThat(captor.getValue().getFrequency()).isEqualTo("Daily");
     }
 
+    // ---- re-posting an unchanged timetable keeps a skipped run skipped ----------------------------
+
+    /**
+     * UI review, 2026-09-24 (verified, high): every save re-posts the job's timetable (Email notifications, a priority
+     * change, the editor), and the update re-seeded next_run_at from the start date -- bringing back the run the
+     * operator had skipped, while the Skip row stayed in the history. An unchanged timetable now leaves the row alone.
+     */
+    @Test
+    void reSavingAnUnchangedTimetableKeepsTheSkippedNextRun() throws Exception {
+        SchedulerDto posted = dailyAtTwo();
+        Scheduler stored = new Scheduler();
+        stored.setSchedulerId(9001L);
+        stored.setJobId(JOB_ID);
+        stored.setStartDate(posted.getStartDate());
+        stored.setStartTime(posted.getStartTime());
+        stored.setFrequency(posted.getFrequency());
+        stored.setIntervalValue(posted.getIntervalValue());
+        LocalDateTime skippedTo = LocalDateTime.now().plusDays(2).withHour(2).withMinute(0).withSecond(0).withNano(0);
+        stored.setNextRunAt(skippedTo);
+        this.updateCollaboratorsResolve(stored);
+
+        SourceJobDto sourceJobDto = creationDto();
+        sourceJobDto.setJobId(JOB_ID);
+        sourceJobDto.setSchedulers(new LinkedHashSet<>(Collections.singletonList(posted)));
+        this.service.updateSourceJob(sourceJobDto);
+
+        assertThat(stored.getNextRunAt()).isEqualTo(skippedTo);
+    }
+
+    @Test
+    void aChangedTimetableIsStillReseeded() throws Exception {
+        Scheduler stored = new Scheduler();
+        stored.setSchedulerId(9001L);
+        stored.setJobId(JOB_ID);
+        stored.setFrequency("Weekly");
+        stored.setNextRunAt(LocalDateTime.now().plusDays(9));
+        this.updateCollaboratorsResolve(stored);
+
+        SourceJobDto sourceJobDto = creationDto();
+        sourceJobDto.setJobId(JOB_ID);
+        sourceJobDto.setSchedulers(new LinkedHashSet<>(Collections.singletonList(dailyAtTwo())));
+        this.service.updateSourceJob(sourceJobDto);
+
+        Scheduler saved = this.savedScheduler();
+        assertThat(saved.getFrequency()).isEqualTo("Daily");
+        assertThat(saved.getNextRunAt()).isBefore(LocalDateTime.now().plusDays(2));
+    }
+
     // ---- an end date can be taken off a schedule ----------------------------------------------
 
     private SourceJob existingAutoJob() {
