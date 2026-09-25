@@ -168,7 +168,7 @@ class IdentityTenantFilterPostgresTest {
         assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> users.findById(USER_B))).isPresent();
 
         AppUserServiceImpl service = new AppUserServiceImpl(users, db.repository(TenantRepository.class),
-            mock(PasswordEncoder.class), TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class),
+            mock(PasswordEncoder.class), TestNotifications.recording(null, mock(TestNotifications.NoticeSink.class),
                 mock(TestNotifications.MailSink.class)), new UserNameResolver(TestIdentity.over(users, null)), mock(TrustedStorageOperations.class),
             mock(PageAccessService.class), this.filter, mock(TokenRevocations.class));
         ReflectionTestUtils.setField(service, "entityManager", db.entityManager());

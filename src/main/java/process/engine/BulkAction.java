@@ -1,7 +1,6 @@
 package process.engine;
 
 import process.correlation.RunCorrelation;
-import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.stereotype.Component;
@@ -397,8 +396,7 @@ public class BulkAction {
 
     /**
      * The owner's side of a status change. The tenant's live feed was already told by
-     * changeJobStatus; this adds the old console's per-user push and, for a NEW Completed or
-     * Failed, the owner's notice.
+     * changeJobStatus; this adds, for a NEW Completed or Failed, the owner's notice.
      *
      * {@code isNewTransition} is decided here in Core and only carried: skip and missed pass false
      * because the job's running status still holds the previous run's outcome. Nothing is published
@@ -414,9 +412,6 @@ public class BulkAction {
             return;
         }
         SourceJobProjection jobEvent = sourceJob.get(0);
-        if (jobEvent.getAssignedUsername() != null) {
-            this.notifications.legacyOwnerPush(jobEvent.getAssignedUsername(), this.getSourceJobDetail(jobEvent));
-        }
         JobStatus runningStatus = jobEvent.getJobRunningStatus();
         boolean outcome = runningStatus == JobStatus.Completed || runningStatus == JobStatus.Failed;
         if (!isNewTransition || !outcome) {
@@ -435,21 +430,5 @@ public class BulkAction {
 
     private Integer attemptOf(Long jobQueueId) {
         return this.transactionService.findJobQueueByJobQueueId(jobQueueId).map(JobQueue::getAttempt).orElse(1);
-    }
-
-    /** The live job event's JSON. lastJobRun and nextRunAt are Chicago wall-clock, as the consoles have always had them. */
-    public static String getSourceJobDetail(SourceJobProjection sourceJobProjection) {
-        HashMap<String, Object> jsonObject = new HashMap<>();
-        jsonObject.put("jobId", sourceJobProjection.getJobId());
-        jsonObject.put("jobStatus", sourceJobProjection.getJobStatus());
-        jsonObject.put("jobRunningStatus", sourceJobProjection.getJobRunningStatus());
-        if (!ProcessUtil.isNull(sourceJobProjection.getLastJobRun())) {
-            jsonObject.put("lastJobRun", BusinessTime.wallClockOf(sourceJobProjection.getLastJobRun()).toString());
-        }
-        if (!ProcessUtil.isNull(sourceJobProjection.getNextRunAt())) {
-            jsonObject.put("nextRunAt", sourceJobProjection.getNextRunAt().toString());
-        }
-        jsonObject.put("execution", sourceJobProjection.getExecution());
-        return new Gson().toJson(jsonObject);
     }
 }

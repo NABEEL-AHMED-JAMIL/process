@@ -102,13 +102,13 @@ class IdentityCrossTenantProbePostgresTest {
         storage = mock(TrustedStorageOperations.class);
         TenantFilterHelper filter = new TenantFilterHelper();
         PageAccessServiceImpl pageAccess = new PageAccessServiceImpl(db.repository(PageAccessProfileRepository.class), appUsers,
-            TestNotifications.recording(null, null, notices, null), new UserNameResolver(TestIdentity.over(appUsers, tenants)), new PageAccessCache(),
+            TestNotifications.recording(null, notices, null), new UserNameResolver(TestIdentity.over(appUsers, tenants)), new PageAccessCache(),
             tenants, db.repository(UserPageAccessRepository.class));
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         when(encoder.encode(any())).thenReturn("hash");
         when(encoder.matches(any(), any())).thenReturn(true);
         AppUserServiceImpl appUserService = new AppUserServiceImpl(appUsers, tenants, encoder,
-            TestNotifications.recording(null, null, notices, mock(TestNotifications.MailSink.class)), new UserNameResolver(TestIdentity.over(appUsers, tenants)),
+            TestNotifications.recording(null, notices, mock(TestNotifications.MailSink.class)), new UserNameResolver(TestIdentity.over(appUsers, tenants)),
             storage, pageAccess, filter, mock(TokenRevocations.class));
         ReflectionTestUtils.setField(appUserService, "entityManager", db.entityManager());
         ReflectionTestUtils.setField(appUserService, "consoleUrl", "http://localhost:4400");

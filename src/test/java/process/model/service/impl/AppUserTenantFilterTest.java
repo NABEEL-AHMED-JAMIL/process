@@ -61,7 +61,7 @@ class AppUserTenantFilterTest {
     @BeforeEach
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
-            TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
+            TestNotifications.recording(null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
             mock(UserNameResolver.class), mock(TrustedStorageOperations.class), this.pageAccessService, this.tenantFilterHelper, mock(TokenRevocations.class));
         ReflectionTestUtils.setField(this.service, "entityManager", this.entityManager);
         lenient().when(this.pageAccessService.accessSummaryFor(any())).thenReturn(Collections.emptyMap());

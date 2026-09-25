@@ -158,7 +158,7 @@ class Harness:
             return os.environ["LB_IMAGE"]
         # Anything with nginx will do; the official image first. Offline machines fall back to a local
         # image built on nginx:alpine rather than pulling one.
-        for image in ("nginx:1.27-alpine", "nginx:alpine", "nginx:latest", "scheduler1-app:latest", "next-app:latest"):
+        for image in ("nginx:1.27-alpine", "nginx:alpine", "nginx:latest", "next-app:latest"):
             if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode == 0:
                 return image
         return "nginx:1.27-alpine"

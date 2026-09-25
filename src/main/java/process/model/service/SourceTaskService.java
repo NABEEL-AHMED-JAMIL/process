@@ -26,8 +26,6 @@ public interface SourceTaskService {
 
     public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId);
 
-    public ResponseDto fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId) throws Exception;
-
     public ByteArrayOutputStream downloadListSourceTask() throws Exception;
 
     public ByteArrayOutputStream downloadSourceTaskTemplate() throws Exception;

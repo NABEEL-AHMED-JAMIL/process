@@ -55,7 +55,7 @@ public class NotifyServiceImplTest {
     @BeforeEach
     void setUp() {
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail,
-            this.transactionService, TestNotifications.recording(this.jobEventPublisher, null, null, null));
+            this.transactionService, TestNotifications.recording(this.jobEventPublisher, null, null));
     }
 
     /** A job mid-run, so both Failed and Completed are valid next states. */

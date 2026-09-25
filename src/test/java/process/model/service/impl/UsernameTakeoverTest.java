@@ -74,13 +74,13 @@ class UsernameTakeoverTest {
 
     private AppUserServiceImpl users() {
         return new AppUserServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
-            TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
+            TestNotifications.recording(null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
             mock(UserNameResolver.class), mock(TrustedStorageOperations.class), this.pageAccessService, mock(TenantFilterHelper.class), mock(TokenRevocations.class));
     }
 
     private TenantRequestServiceImpl requests() {
         TenantRequestServiceImpl service = new TenantRequestServiceImpl(this.tenantRequestRepository, this.tenantRepository,
-            this.appUserRepository, this.passwordEncoder, TestNotifications.recording(null, null, null,
+            this.appUserRepository, this.passwordEncoder, TestNotifications.recording(null, null,
                 mock(TestNotifications.MailSink.class)));
         ReflectionTestUtils.setField(service, "consoleUrl", "http://localhost:4400");
         return service;

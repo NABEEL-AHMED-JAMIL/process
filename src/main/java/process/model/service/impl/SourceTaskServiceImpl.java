@@ -200,8 +200,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
      * Delete is a soft delete -- the row stays in source_task and findById keeps returning it,
      * because findById knows nothing about task_status. Every list a user can reach a task from
      * does know: listSourceTaskQuery selects only ('Active', 'Inactive'), and
-     * downloadListSourceTask and fetchAllLinkSourceTaskWithSourceTaskTypeId both exclude
-     * 'Delete'. So a task the list said was gone still opened in the editor when its id was
+     * downloadListSourceTask excludes 'Delete'. So a task the list said was gone still opened in the editor when its id was
      * known, and saving from that screen wrote it back to Active -- while the jobs
      * deleteSourceTask had already cascaded to Delete stayed deleted, leaving a live task
      * pointing at a set of dead jobs that no screen shows. A deleted task has to read as absent
@@ -674,22 +673,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(SUCCESS, String.format("SourceTask found with %d.", sourceTaskId), sourceTaskDto);
         }
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskId));
-    }
-
-    @Override
-    public ResponseDto fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId) throws Exception {
-        // No type names no linked task. The parameter is optional at the door, and a null reached the query bound as
-        // bytea -- a 500 for every caller (MIG-259, the api-check suite).
-        if (isNull(sourceTaskTypeId)) {
-            return new ResponseDto(ERROR, "Source task type missing.");
-        }
-        Long tenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
-
-        List<SourceTaskProjection> sourceTasks = tenantId == null
-            ? this.sourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId)
-            : this.sourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeIdForTenant(sourceTaskTypeId, tenantId);
-        return new ResponseDto(SUCCESS, String.format("SourceTask fetch with SourceTaskTypeId %d.", sourceTaskTypeId),
-            sourceTasks);
     }
 
     @Override

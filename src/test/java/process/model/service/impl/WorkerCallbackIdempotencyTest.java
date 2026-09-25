@@ -98,7 +98,7 @@ class WorkerCallbackIdempotencyTest {
     @BeforeEach
     void setUp() {
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail, this.transactionService,
-            TestNotifications.recording(this.feed, null, null, null), this.receipts);
+            TestNotifications.recording(this.feed, null, null), this.receipts);
         this.run = new JobQueue();
         this.run.setJobQueueId(QUEUE_ID);
         this.run.setJobId(JOB_ID);

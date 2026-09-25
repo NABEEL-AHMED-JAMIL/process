@@ -104,18 +104,6 @@ public class SourceTaskRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_USER')")
-    @RequestMapping(value = "/fetchAllLinkSourceTaskWithSourceTaskTypeId", method = RequestMethod.GET)
-    public ResponseEntity<?> fetchAllLinkSourceTaskWithSourceTaskTypeId(
-        @RequestParam(value = "sourceTaskTypeId", required = false) Long sourceTaskTypeId) {
-        try {
-            return new ResponseEntity<>(this.sourceTaskService.fetchAllLinkSourceTaskWithSourceTaskTypeId(sourceTaskTypeId), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while fetchAllLinkSourceTaskWithSourceTaskTypeId :- {}.", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fetchSourceTaskWithSourceTaskId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSourceTaskWithSourceTaskId(@RequestParam(value = "sourceTaskId") Long sourceTaskId) {
         try {

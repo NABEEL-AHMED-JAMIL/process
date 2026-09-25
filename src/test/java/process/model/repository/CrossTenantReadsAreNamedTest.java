@@ -93,12 +93,12 @@ class CrossTenantReadsAreNamedTest {
             "JobQueueRepository.findRunsWithRefusedCallbacks", "SchedulerRepository.claimNextDueScheduler"}) {
             NOT_TENANT_ROWS.put(name, engine);
         }
-        // FOLLOW-UP for Core: these four are a platform admin's all-tenant lists, chosen by an
+        // FOLLOW-UP for Core: these three are a platform admin's all-tenant lists, chosen by an
         // isPlatformAdmin() branch beside a ...ForTenant twin -- the pattern MIG-92 replaced with
         // ...AcrossTenants and TenantScope in Identity. Renaming them is Core's change to make.
         String platformBranch = "the platform-admin branch of an isPlatformAdmin() choice; the tenant twin is ...ForTenant";
         for (String name : new String[] {"SourceTaskRepository.findAllSourceTask", "SourceTaskRepository.downloadListSourceTask",
-            "SourceTaskRepository.fetchAllLinkSourceTaskWithSourceTaskTypeId", "SourceTaskTypeRepository.fetchAllSourceTaskType"}) {
+            "SourceTaskTypeRepository.fetchAllSourceTaskType"}) {
             NOT_TENANT_ROWS.put(name, platformBranch);
         }
         NOT_TENANT_ROWS.put("PipelineRepository.countUsingPrompt", "ai-service's internal question about one prompt id, service token only");

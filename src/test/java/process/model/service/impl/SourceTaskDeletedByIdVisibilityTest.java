@@ -35,7 +35,7 @@ import process.notifications.TestNotifications;
 /**
  * Delete on a source task is a soft delete, and findById does not look at task_status. Every
  * list does -- listSourceTaskQuery selects only ('Active', 'Inactive'), downloadListSourceTask
- * and fetchAllLinkSourceTaskWithSourceTaskTypeId exclude 'Delete' -- so the by-id paths were
+ * excludes 'Delete' -- so the by-id paths were
  * the one place a deleted task was still reachable: it opened in the editor and saving from
  * there put it back to Active, while the jobs deleteSourceTask had cascaded to Delete stayed
  * deleted and invisible.
@@ -69,7 +69,7 @@ public class SourceTaskDeletedByIdVisibilityTest {
         this.service = new SourceTaskServiceImpl(this.bulkExcel, this.queryService,
             this.sourceJobRepository, this.sourceTaskRepository, this.sourceTaskTypeRepository,
             this.tenantFilterHelper, new TaskPayloadLocationUtil(), TestIdentity.over(null, this.tenantRepository),
-            TestNotifications.recording(null, null, this.notificationCenterService, null), this.userNameResolver);
+            TestNotifications.recording(null, this.notificationCenterService, null), this.userNameResolver);
         // entityManager is injected, not constructor-supplied.
         Field em = SourceTaskServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);

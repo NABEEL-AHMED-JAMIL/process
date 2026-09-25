@@ -12,13 +12,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.ScratchJpa;
-import process.engine.BulkAction;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.PipelineRowDto;
 import process.model.dto.ResponseDto;
 import process.model.projection.JobAuditLogProjection;
 import process.model.projection.PipelineRowProjection;
-import process.model.projection.SourceJobProjection;
 import process.model.repository.JobAuditLogRepository;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.TaskReferenceRepository;
@@ -35,7 +33,6 @@ import process.security.TenantContext;
 
 import javax.persistence.EntityManager;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -215,20 +212,6 @@ class TimestampWireFormatPostgresTest {
         }));
         System.out.println("WIRE activity " + sent);
         assertThat(sent).isEqualTo("{\"jobsAssigned\":1,\"activeJobs\":1,\"recentRuns\":1,\"recentFailures\":0,\"windowDays\":100000,\"runs\":[{\"jobQueueId\":310001,\"jobId\":31001,\"jobName\":\"wire job\",\"jobStatus\":\"Completed\",\"startTime\":\"2026-01-15T23:30:00\",\"endTime\":\"2026-01-15T23:45:10.5\"}],\"outcomes\":[{\"name\":\"Completed\",\"value\":1}]}");
-    }
-
-    /**
-     * The live job event pushed over the socket: lastJobRun and nextRunAt as strings. Recorded at e39381d from the
-     * projection, whose LocalDateTime lastJobRun BulkAction printed with toString; asserted now on the event itself.
-     */
-    @Test
-    void theRunningJobEventCarriesWallClockStrings() throws Exception {
-        List<SourceJobProjection> events = jpa.repository(SourceJobRepository.class).fetchRunningJobEvent(Collections.singletonList(JOB));
-        assertThat(events).hasSize(1);
-        String event = BulkAction.getSourceJobDetail(events.get(0));
-        System.out.println("WIRE runningEvent " + event);
-        assertThat(json.readTree(event).get("lastJobRun").asText()).isEqualTo("2026-01-15T23:30");
-        assertThat(json.readTree(event).get("nextRunAt").asText()).isEqualTo("2026-01-16 09:00:00.0");
     }
 
     /** A run's audit trail, read back from job_audit_logs. */

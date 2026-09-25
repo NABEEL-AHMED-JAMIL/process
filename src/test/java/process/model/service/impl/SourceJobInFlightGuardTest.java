@@ -80,7 +80,7 @@ class SourceJobInFlightGuardTest {
             this.sourceTaskRepository, this.jobAuditLogRepository,
             this.jobQueueRepository, this.taskReferenceRepository, TestIdentity.over(this.appUserRepository, null),
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
-            TestNotifications.recording(this.jobEventPublisher, null, this.notificationCenterService, null), this.userNameResolver);
+            TestNotifications.recording(this.jobEventPublisher, this.notificationCenterService, null), this.userNameResolver);
         Field em = SourceJobServiceImpl.class.getDeclaredField("entityManager");
         em.setAccessible(true);
         em.set(this.service, this.entityManager);

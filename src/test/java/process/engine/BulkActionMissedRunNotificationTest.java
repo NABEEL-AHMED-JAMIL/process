@@ -17,8 +17,6 @@ import java.util.Collections;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -44,7 +42,6 @@ class BulkActionMissedRunNotificationTest {
     private static final long JOB_ID = 1196L;
 
     @Mock private TransactionServiceImpl transactionService;
-    @Mock private TestNotifications.LegacySink notificationService;
     @Mock private TestNotifications.NoticeSink notificationCenterService;
     @Mock private TestNotifications.FeedSink jobEventPublisher;
 
@@ -52,8 +49,7 @@ class BulkActionMissedRunNotificationTest {
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.jobEventPublisher,
-            this.notificationService, this.notificationCenterService, null));
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.jobEventPublisher, this.notificationCenterService, null));
         SourceJobProjection job = mock(SourceJobProjection.class);
         lenient().when(job.getJobId()).thenReturn(JOB_ID);
         lenient().when(job.getTenantId()).thenReturn(2905L);
@@ -81,12 +77,5 @@ class BulkActionMissedRunNotificationTest {
         this.bulkAction.updateNextScheduler(hourlyThreeHoursBehind());
 
         verify(this.notificationCenterService, never()).create(any(), any(), any(), any(), anyString(), anyString(), anyString());
-    }
-
-    @Test
-    void aMissedSlotStillUpdatesTheOwnersLiveView() {
-        this.bulkAction.updateNextScheduler(hourlyThreeHoursBehind());
-
-        verify(this.notificationService, atLeastOnce()).sendNotificationToSpecificUser(eq("ops@medaxis.example"), anyString());
     }
 }

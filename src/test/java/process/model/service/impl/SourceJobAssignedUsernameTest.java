@@ -62,7 +62,7 @@ public class SourceJobAssignedUsernameTest {
             this.sourceTaskRepository, this.jobAuditLogRepository,
             this.jobQueueRepository, this.taskReferenceRepository, TestIdentity.over(this.appUserRepository, null),
             this.producerBulkEngine, this.tenantFilterHelper, this.openSearchAuditLogClient,
-            TestNotifications.recording(null, null, null, null), this.userNameResolver);
+            TestNotifications.recording(null, null, null), this.userNameResolver);
     }
 
     @Test

@@ -36,7 +36,7 @@ class NoteRefusedCallbackTest {
     @BeforeEach
     void setUp() {
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail, this.transactionService,
-            TestNotifications.recording(null, null, null, null));
+            TestNotifications.recording(null, null, null));
     }
 
     @Test

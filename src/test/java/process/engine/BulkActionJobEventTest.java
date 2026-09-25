@@ -42,7 +42,6 @@ public class BulkActionJobEventTest {
     private static final long JOB_ID = 1196L;
 
     @Mock private TransactionServiceImpl transactionService;
-    @Mock private TestNotifications.LegacySink notificationService;
     @Mock private TestNotifications.NoticeSink notificationCenterService;
     @Mock private TestNotifications.FeedSink jobEventPublisher;
 
@@ -50,8 +49,7 @@ public class BulkActionJobEventTest {
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.jobEventPublisher,
-            this.notificationService, this.notificationCenterService, null));
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.jobEventPublisher, this.notificationCenterService, null));
     }
 
     private SourceJob job(JobStatus held) {

@@ -98,5 +98,6 @@ Python 3, the sibling images built first, and then one command whose exit status
 - run: for m in unlocked-enqueuer split-login-guard split-redis unaligned-reconcile split-broadcast unaligned-close; do ops/two-instance/run.sh --no-build --no-unit --mutate "$m"; done
 ```
 
-`LB_IMAGE` defaults to the first local image with nginx in it (`nginx:1.27-alpine`, then `scheduler1-app`,
-`next-app`), so an offline machine does not pull one.
+`LB_IMAGE` defaults to the first local image with nginx in it (`nginx:1.27-alpine`, `nginx:alpine`, `nginx:latest`,
+then the console's `next-app`, itself built on `nginx:1.27-alpine`), so an offline machine does not pull one. The
+old console's `scheduler1-app` was the fallback until it was retired and its image deleted (MIG-260).

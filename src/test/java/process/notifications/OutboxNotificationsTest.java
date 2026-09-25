@@ -45,10 +45,9 @@ class OutboxNotificationsTest {
     private final AppUserRepository users = mock(AppUserRepository.class);
     private final OneTimeSecrets secrets = mock(OneTimeSecrets.class);
     private final MailAttachmentStaging staging = mock(MailAttachmentStaging.class);
-    private final LegacyConsolePush legacyConsole = mock(LegacyConsolePush.class);
     private final UnreadBadges badges = mock(UnreadBadges.class);
     private final OutboxNotifications port = new OutboxNotifications(this.outbox, TestIdentity.over(this.users, null), this.secrets, this.staging,
-        this.legacyConsole, this.badges, "http://host.docker.internal:4566");
+        this.badges, "http://host.docker.internal:4566");
 
     @BeforeEach
     void recipients() {
@@ -185,13 +184,11 @@ class OutboxNotificationsTest {
         verify(this.outbox, never()).write(anyString(), anyString(), anyString(), anyString());
     }
 
-    /** Part 5: nothing is left in-process. The old console's push rides the bridge; the badge is dropped in Redis. */
+    /** Part 5: nothing is left in-process. The badge is dropped in Redis. */
     @Test
-    void theOldConsolesPushAndTheBadgeNeedNoDeliveryCodeHere() {
-        this.port.legacyOwnerPush("ops@medaxis.example", "{}");
+    void theBadgeNeedsNoDeliveryCodeHere() {
         this.port.forgetRecipient(10L);
 
-        verify(this.legacyConsole).toOwner("ops@medaxis.example", "{}");
         verify(this.badges).forget(10L);
     }
 
@@ -199,7 +196,7 @@ class OutboxNotificationsTest {
     @Test
     void anEmulatorEndpointMeansNoRealInboxes() {
         assertThat(this.port.deliversMailToRealInboxes()).isFalse();
-        assertThat(new OutboxNotifications(this.outbox, TestIdentity.over(this.users, null), this.secrets, this.staging, this.legacyConsole,
+        assertThat(new OutboxNotifications(this.outbox, TestIdentity.over(this.users, null), this.secrets, this.staging,
             this.badges, "").deliversMailToRealInboxes()).isTrue();
     }
 
@@ -262,7 +259,7 @@ class OutboxNotificationsTest {
     private OutboxNotifications withIdentityDown() {
         IdentityPort down = mock(IdentityPort.class);
         when(down.person(any())).thenThrow(new IdentityPort.Unavailable("identity down", null));
-        return new OutboxNotifications(this.outbox, down, this.secrets, this.staging, this.legacyConsole, this.badges,
+        return new OutboxNotifications(this.outbox, down, this.secrets, this.staging, this.badges,
             "http://host.docker.internal:4566");
     }
 

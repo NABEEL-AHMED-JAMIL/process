@@ -53,12 +53,4 @@ public interface NotificationPort {
 
     /** A deleted user's cached unread counter, dropped (see NotificationCenterServiceImpl). */
     void forgetRecipient(Long appUserId);
-
-    /**
-     * LEGACY: the old webpack console's per-user /user/queue/reply push. The current console never
-     * subscribes to it. Removed together with that console (decided 2026-09-23; blocked until the
-     * new console has Agents and Ollama screens).
-     */
-    @Deprecated
-    void legacyOwnerPush(String username, String jobDetailJson);
 }

@@ -92,7 +92,7 @@ class TokenRevocationAcrossInstancesTest {
                 mock(LoginAttemptGuard.class), revocations);
             ReflectionTestUtils.setField(this.auth, "singleUseRefreshTokens", singleUseRefresh);
             this.people = new AppUserServiceImpl(users, tenantRepository(), encoder,
-                TestNotifications.recording(null, null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
+                TestNotifications.recording(null, mock(TestNotifications.NoticeSink.class), mock(TestNotifications.MailSink.class)),
                 mock(UserNameResolver.class), mock(TrustedStorageOperations.class), mock(PageAccessService.class),
                 mock(TenantFilterHelper.class), revocations);
             this.tenants = new TenantServiceImpl(tenantRepository(), users, null, null, null, null, null,

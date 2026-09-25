@@ -72,7 +72,7 @@ class ScopedFindCharacterisationTest {
     @BeforeEach
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository, this.passwordEncoder,
-            TestNotifications.recording(null, null, this.notices, this.mails), this.userNameResolver, this.storage,
+            TestNotifications.recording(null, this.notices, this.mails), this.userNameResolver, this.storage,
             this.pageAccessService, mock(TenantFilterHelper.class), mock(TokenRevocations.class));
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }

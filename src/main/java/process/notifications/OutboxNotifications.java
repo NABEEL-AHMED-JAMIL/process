@@ -28,9 +28,6 @@ import java.util.Optional;
  * tenant); attachment bytes are staged and a temporary password is kept by Identity, and both travel
  * by reference.
  *
- * The one non-event left is the old console's /user/queue/reply push (LegacyConsolePush), deleted
- * with that console.
- *
  * @author Nabeel Ahmed
  */
 @Component
@@ -46,19 +43,17 @@ public class OutboxNotifications implements NotificationPort {
     private final IdentityPort users;
     private final OneTimeSecrets secrets;
     private final MailAttachmentStaging staging;
-    private final LegacyConsolePush legacyConsole;
     private final UnreadBadges badges;
     /** Mail goes to an emulator (LocalStack) when an endpoint is set: stored, not delivered. */
     private final boolean realInboxes;
 
     public OutboxNotifications(OutboxWriter outbox, IdentityPort users, OneTimeSecrets secrets,
-        MailAttachmentStaging staging, LegacyConsolePush legacyConsole, UnreadBadges badges,
+        MailAttachmentStaging staging, UnreadBadges badges,
         @Value("${aws.endpoint:}") String awsEndpoint) {
         this.outbox = outbox;
         this.users = users;
         this.secrets = secrets;
         this.staging = staging;
-        this.legacyConsole = legacyConsole;
         this.badges = badges;
         this.realInboxes = awsEndpoint == null || awsEndpoint.trim().isEmpty();
     }
@@ -190,11 +185,5 @@ public class OutboxNotifications implements NotificationPort {
     @Override
     public void forgetRecipient(Long appUserId) {
         this.badges.forget(appUserId);
-    }
-
-    @Override
-    @Deprecated
-    public void legacyOwnerPush(String username, String jobDetailJson) {
-        this.legacyConsole.toOwner(username, jobDetailJson);
     }
 }

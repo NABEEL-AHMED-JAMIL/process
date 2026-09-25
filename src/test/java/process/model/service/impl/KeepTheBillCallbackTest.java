@@ -61,7 +61,7 @@ class KeepTheBillCallbackTest {
     @BeforeEach
     void setUp() {
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail, this.transactionService,
-            TestNotifications.recording(this.feed, null, null, null));
+            TestNotifications.recording(this.feed, null, null));
         ReflectionTestUtils.setField(this.service, "meter", this.meter);
     }
 

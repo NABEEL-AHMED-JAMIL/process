@@ -49,29 +49,22 @@ public final class TestNotifications {
             Map<String, Object> bodyMap, byte[] attachment, String attachmentFilename, String attachmentContentType);
     }
 
-    /** The old console's /user/queue/reply push. */
-    public interface LegacySink {
-        void sendNotificationToSpecificUser(String username, String message);
-    }
-
     private TestNotifications() {
     }
 
-    public static NotificationPort recording(FeedSink feed, LegacySink legacy, NoticeSink notices, MailSink mail) {
-        return new Recording(feed != null ? feed : mock(FeedSink.class), legacy != null ? legacy : mock(LegacySink.class),
+    public static NotificationPort recording(FeedSink feed, NoticeSink notices, MailSink mail) {
+        return new Recording(feed != null ? feed : mock(FeedSink.class),
             notices != null ? notices : mock(NoticeSink.class), mail != null ? mail : mock(MailSink.class));
     }
 
     private static final class Recording implements NotificationPort {
 
         private final FeedSink feed;
-        private final LegacySink legacy;
         private final NoticeSink notices;
         private final MailSink mail;
 
-        Recording(FeedSink feed, LegacySink legacy, NoticeSink notices, MailSink mail) {
+        Recording(FeedSink feed, NoticeSink notices, MailSink mail) {
             this.feed = feed;
-            this.legacy = legacy;
             this.notices = notices;
             this.mail = mail;
         }
@@ -145,11 +138,6 @@ public final class TestNotifications {
 
         @Override
         public void forgetRecipient(Long appUserId) {
-        }
-
-        @Override
-        public void legacyOwnerPush(String username, String jobDetailJson) {
-            this.legacy.sendNotificationToSpecificUser(username, jobDetailJson);
         }
     }
 }

@@ -67,7 +67,7 @@ public class PageAccessProfileScopeTest {
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            TestNotifications.recording(null, null, this.notificationCenterService, null), this.userNameResolver, new PageAccessCache(), this.tenantRepository,
+            TestNotifications.recording(null, this.notificationCenterService, null), this.userNameResolver, new PageAccessCache(), this.tenantRepository,
             this.exceptionRepository);
         lenient().when(this.profileRepository.save(any())).thenAnswer(inv -> {
             PageAccessProfile p = inv.getArgument(0);

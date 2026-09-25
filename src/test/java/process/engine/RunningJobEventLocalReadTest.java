@@ -23,11 +23,9 @@ import java.util.Locale;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -46,7 +44,6 @@ class RunningJobEventLocalReadTest {
     private static final long JOB_ID = 1196L;
 
     @Mock private TransactionServiceImpl transactionService;
-    @Mock private TestNotifications.LegacySink legacy;
     @Mock private TestNotifications.FeedSink feed;
 
     private BulkAction bulkAction;
@@ -54,7 +51,7 @@ class RunningJobEventLocalReadTest {
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.feed, this.legacy, null, null));
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.feed, null, null));
         this.job = mock(SourceJobProjection.class);
         lenient().when(this.job.getJobId()).thenReturn(JOB_ID);
         lenient().when(this.job.getTenantId()).thenReturn(2905L);
@@ -73,7 +70,7 @@ class RunningJobEventLocalReadTest {
         assertThat(sql).contains("sj.assigned_username as assignedusername");
     }
 
-    /** No username to address the old per-user push to: the tenant's event still goes out, with the id. */
+    /** No username on the job: the tenant's event still goes out, with the id. */
     @Test
     void aJobWithNoUsernameStillPublishesItsEventByUserId() {
         lenient().when(this.job.getAssignedUsername()).thenReturn(null);
@@ -81,11 +78,10 @@ class RunningJobEventLocalReadTest {
 
         this.bulkAction.sendJobStatusNotification(JOB_ID, 5705L, true);
 
-        verify(this.legacy, never()).sendNotificationToSpecificUser(anyString(), anyString());
         verify(this.feed).publishStatusAfterCommit(eq(2905L), eq(JOB_ID), eq(5705L), eq("Completed"), any());
     }
 
-    /** The fifty-slot catch-up: one read of the job, one push -- not one per missed slot. */
+    /** The fifty-slot catch-up: one read of the job -- not one per missed slot. */
     @Test
     void fiftyMissedSlotsReadTheJobOnce() {
         lenient().when(this.job.getAssignedUsername()).thenReturn("ops@medaxis.example");
@@ -103,6 +99,5 @@ class RunningJobEventLocalReadTest {
         ArgumentCaptor<List<Long>> read = ArgumentCaptor.forClass(List.class);
         verify(this.transactionService, times(1)).fetchRunningJobEvent(read.capture());
         assertThat(read.getValue()).containsExactly(JOB_ID);
-        verify(this.legacy, times(1)).sendNotificationToSpecificUser(eq("ops@medaxis.example"), anyString());
     }
 }

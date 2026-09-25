@@ -56,7 +56,6 @@ class DispatchCorrelationTest {
     @Mock private JobMail jobMail;
     @Mock private AiStepService aiStepService;
     @Mock private RunCallbackTokens runCallbackTokens;
-    @Mock private TestNotifications.LegacySink legacy;
     @Mock private TestNotifications.NoticeSink notices;
     @Mock private TestNotifications.FeedSink feed;
 
@@ -120,7 +119,7 @@ class DispatchCorrelationTest {
     void runNowMakesTheRunUnderTheRequestsId() {
         CorrelationId.set("console-7f3a9c21");
         BulkAction real = new BulkAction(this.transactionService,
-            TestNotifications.recording(this.feed, this.legacy, this.notices, null));
+            TestNotifications.recording(this.feed, this.notices, null));
 
         real.createJobQueueV1(JOB_ID, LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
 
@@ -132,7 +131,7 @@ class DispatchCorrelationTest {
     @Test
     void aScheduledRunIsLeftForDispatchToName() {
         BulkAction real = new BulkAction(this.transactionService,
-            TestNotifications.recording(this.feed, this.legacy, this.notices, null));
+            TestNotifications.recording(this.feed, this.notices, null));
 
         real.createJobQueue(JOB_ID, LocalDateTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
 

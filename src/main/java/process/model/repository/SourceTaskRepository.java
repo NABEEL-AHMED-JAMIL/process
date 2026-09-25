@@ -92,22 +92,4 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
         "where st.task_status != 'Delete' and st.tenant_id = :tenantId", nativeQuery = true)
     public List<SourceTaskProjection> downloadListSourceTaskForTenant(@Param("tenantId") Long tenantId);
 
-    @Query(value = "select st.task_detail_id as taskDetailId, st.task_name as taskName, st.task_status as taskStatus,\n" +
-        "ldg.name as groupLabel\n" +
-        "from source_task st\n" +
-        "left join task_reference ldg on ldg.id = st.group_id\n" +
-
-        "where st.source_task_type_id = :sourceTaskTypeId and st.task_status != 'Delete'", nativeQuery = true)
-    public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeId(
-        @Param("sourceTaskTypeId") Long sourceTaskTypeId);
-
-    @Query(value = "select st.task_detail_id as taskDetailId, st.task_name as taskName, st.task_status as taskStatus,\n" +
-        "ldg.name as groupLabel\n" +
-        "from source_task st\n" +
-        "left join task_reference ldg on ldg.id = st.group_id\n" +
-        "where st.source_task_type_id = :sourceTaskTypeId and st.task_status != 'Delete' " +
-        "and st.tenant_id = :tenantId", nativeQuery = true)
-    public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeIdForTenant(
-        @Param("sourceTaskTypeId") Long sourceTaskTypeId, @Param("tenantId") Long tenantId);
-
 }

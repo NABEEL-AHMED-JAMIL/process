@@ -54,7 +54,7 @@ class EffectivePagesCharacterisationTest {
     @BeforeEach
     void setUp() {
         this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            TestNotifications.recording(null, null, this.notices, null), this.userNameResolver, new PageAccessCache(),
+            TestNotifications.recording(null, this.notices, null), this.userNameResolver, new PageAccessCache(),
             this.tenantRepository, this.exceptionRepository);
         lenient().when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(TENANT_A, Status.Active))
             .thenReturn(Optional.of(this.profile(1L, TENANT_A, Status.Active, "reports")));

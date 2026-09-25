@@ -99,7 +99,7 @@ class JobStatusTransitionTableTest {
     @BeforeEach
     void setUp() {
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail, this.transactionService,
-            TestNotifications.recording(this.feed, null, null, null));
+            TestNotifications.recording(this.feed, null, null));
     }
 
     /** The private verdict itself; a throw comes back as the throw. */

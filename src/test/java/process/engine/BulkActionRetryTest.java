@@ -48,7 +48,6 @@ public class BulkActionRetryTest {
     private static final long QUEUE_ID = 77L;
 
     @Mock private TransactionServiceImpl transactionService;
-    @Mock private TestNotifications.LegacySink notificationService;
     @Mock private TestNotifications.NoticeSink notificationCenterService;
     @Mock private TestNotifications.FeedSink jobEventPublisher;
 
@@ -56,8 +55,7 @@ public class BulkActionRetryTest {
 
     @BeforeEach
     void setUp() {
-        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.jobEventPublisher,
-            this.notificationService, this.notificationCenterService, null));
+        this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(this.jobEventPublisher, this.notificationCenterService, null));
     }
 
     private SourceJob job(int maxAttempts, int backoffSeconds) {

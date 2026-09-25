@@ -80,7 +80,7 @@ public class AppUserServiceImplRoleScopeTest {
     @BeforeEach
     void setUp() {
         this.service = new AppUserServiceImpl(this.appUserRepository, this.tenantRepository,
-            this.passwordEncoder, TestNotifications.recording(null, null, this.notificationCenterService, this.emailMessagesFactory),
+            this.passwordEncoder, TestNotifications.recording(null, this.notificationCenterService, this.emailMessagesFactory),
             this.userNameResolver, this.storageBrowserService, this.pageAccessService, mock(TenantFilterHelper.class), mock(TokenRevocations.class));
         lenient().when(this.passwordEncoder.encode(any())).thenReturn("hashed");
     }

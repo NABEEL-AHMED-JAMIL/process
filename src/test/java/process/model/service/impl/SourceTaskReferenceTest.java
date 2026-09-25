@@ -49,7 +49,7 @@ class SourceTaskReferenceTest {
     @BeforeEach
     void setUp() {
         this.service = new SourceTaskServiceImpl(null, null, null, this.tasks, this.types, mock(TenantFilterHelper.class),
-            new TaskPayloadLocationUtil(), null, TestNotifications.recording(null, null, null, null), null);
+            new TaskPayloadLocationUtil(), null, TestNotifications.recording(null, null, null), null);
         ReflectionTestUtils.setField(this.service, "taskReferenceRepository", this.references);
         TenantContext.set(MINE, "TENANT_ADMIN", 42L, "ops@medaxis.test");
         SourceTaskType type = new SourceTaskType();

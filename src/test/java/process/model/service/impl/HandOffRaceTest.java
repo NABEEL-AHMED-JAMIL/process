@@ -47,7 +47,7 @@ class HandOffRaceTest {
     @BeforeEach
     void setUp() {
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail, this.transactionService,
-            TestNotifications.recording(this.feed, null, null, null));
+            TestNotifications.recording(this.feed, null, null));
     }
 
     private void jobAtQueueWithRun(boolean latchedAsSent) {

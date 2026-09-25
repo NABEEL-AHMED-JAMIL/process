@@ -58,7 +58,7 @@ public class NotifyServiceRetryTest {
     @BeforeEach
     void setUp() {
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail,
-            this.transactionService, TestNotifications.recording(this.jobEventPublisher, null, null, null));
+            this.transactionService, TestNotifications.recording(this.jobEventPublisher, null, null));
     }
 
     /** A job mid-run that wants failure mail, so a suppressed one is visible as suppressed. */

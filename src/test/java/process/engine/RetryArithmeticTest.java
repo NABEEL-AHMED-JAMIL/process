@@ -59,7 +59,7 @@ class RetryArithmeticTest {
     @BeforeEach
     void setUp() {
         this.bulkAction = new BulkAction(this.transactionService, TestNotifications.recording(
-            mock(TestNotifications.FeedSink.class), null, null, null));
+            mock(TestNotifications.FeedSink.class), null, null));
     }
 
     private JobQueue storedRun(int attempt) {

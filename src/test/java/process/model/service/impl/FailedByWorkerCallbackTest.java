@@ -73,7 +73,7 @@ class FailedByWorkerCallbackTest {
     void setUp() {
         TenantContext.clear();
         this.service = new NotifyServiceImpl(this.bulkAction, this.jobMail, this.transactionService,
-            TestNotifications.recording(this.feed, null, null, null));
+            TestNotifications.recording(this.feed, null, null));
     }
 
     @AfterEach

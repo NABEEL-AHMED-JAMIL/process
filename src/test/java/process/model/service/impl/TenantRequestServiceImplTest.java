@@ -57,7 +57,7 @@ public class TenantRequestServiceImplTest {
     void setUp() {
         this.service = new TenantRequestServiceImpl(this.tenantRequestRepository,
             this.tenantRepository, this.appUserRepository, this.passwordEncoder,
-            TestNotifications.recording(null, null, null, this.emailMessagesFactory));
+            TestNotifications.recording(null, null, this.emailMessagesFactory));
         ReflectionTestUtils.setField(this.service, "consoleUrl", "http://localhost:4400");
     }
 
