@@ -24,7 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * left. The classes below are Identity -- authentication, people, workspaces, workspace requests and page
  * access, over the six tables that stay together (app_user, tenant, tenant_request, page_access_profile,
  * page_access_profile_page, user_page_access). Nothing else in process names one of them: it asks the
- * port. When Identity leaves (MIG-107) this list is what goes, and the port's implementation changes.
+ * port. Identity left with MIG-107; its endpoints, services and tenant_request's entity went with MIG-108,
+ * and what is listed now is the read side LocalIdentity answers the port from (identity.mode=local).
  */
 class IdentityPortBoundaryTest {
 
@@ -34,20 +35,14 @@ class IdentityPortBoundaryTest {
 
     /** Identity, by path under process/. */
     static final List<String> IDENTITY = Arrays.asList(
-        "model/pojo/AppUser.java", "model/pojo/Tenant.java", "model/pojo/TenantRequest.java",
+        "model/pojo/AppUser.java", "model/pojo/Tenant.java",
         "model/pojo/PageAccessProfile.java", "model/pojo/UserPageAccess.java",
         "model/repository/AppUserRepository.java", "model/repository/TenantRepository.java",
-        "model/repository/TenantRequestRepository.java", "model/repository/PageAccessProfileRepository.java",
+        "model/repository/PageAccessProfileRepository.java",
         "model/repository/UserPageAccessRepository.java", "model/repository/ScopedAppUserReads.java",
-        "model/service/AppUserService.java", "model/service/AuthService.java", "model/service/PageAccessService.java",
-        "model/service/TenantService.java",
-        "model/service/impl/AppUserServiceImpl.java", "model/service/impl/AuthServiceImpl.java",
-        "model/service/impl/PageAccessServiceImpl.java", "model/service/impl/TenantServiceImpl.java",
-        "model/service/impl/TenantRequestServiceImpl.java",
-        "api/AppUserRestApi.java", "api/AuthRestApi.java", "api/PageAccessRestApi.java", "api/TenantRestApi.java",
-        "api/TenantRequestRestApi.java",
+        "model/service/PageAccessService.java", "model/service/impl/PageAccessServiceImpl.java",
         "security/PageGate.java", "security/PageAccessCache.java", "security/TokenRevocations.java",
-        "security/signing/", "util/JwtUtil.java", "config/LoginGuardConfig.java",
+        "security/signing/", "util/JwtUtil.java",
         "identity/LocalIdentity.java", "identity/InternalJwksRestApi.java", "identity/InternalPageAccessRestApi.java");
 
     /** What the rest of process may name of Identity: the port. */
@@ -68,7 +63,7 @@ class IdentityPortBoundaryTest {
      */
     @Test
     void theSixTablesAndTheirCycleStayOnOneSide() {
-        for (String entity : new String[] {"AppUser", "Tenant", "TenantRequest", "PageAccessProfile", "UserPageAccess"}) {
+        for (String entity : new String[] {"AppUser", "Tenant", "PageAccessProfile", "UserPageAccess"}) {
             assertThat(IDENTITY).contains("model/pojo/" + entity + ".java");
         }
         // page_access_profile_page is PageAccessProfile's element collection, so it moves with it.

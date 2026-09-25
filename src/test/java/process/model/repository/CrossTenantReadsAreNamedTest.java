@@ -39,32 +39,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CrossTenantReadsAreNamedTest {
 
     private static final List<Class<?>> IDENTITY_REPOSITORIES = Arrays.asList(AppUserRepository.class,
-        UserPageAccessRepository.class, PageAccessProfileRepository.class, TenantRepository.class,
-        TenantRequestRepository.class);
+        UserPageAccessRepository.class, PageAccessProfileRepository.class, TenantRepository.class);
 
     /** Every cross-tenant read, with why it must cross. */
     private static final Map<String, String> REVIEWED = new HashMap<>();
 
     static {
-        REVIEWED.put("AppUserRepository.findLiveByUsernameAcrossTenants",
-            "sign-in: there is no tenant yet, and a name is unique across the platform (MIG-17)");
-        REVIEWED.put("AppUserRepository.isUsernameTakenAcrossTenants",
-            "whether a name is free is a platform-wide fact (MIG-17)");
         REVIEWED.put("AppUserRepository.findAllByIdAcrossTenants",
             "names for ids: a tenant's row may have been made by a platform admin (MIG-13)");
-        REVIEWED.put("AppUserRepository.findAllLiveAcrossTenants", "the platform admin's users screen, through TenantScope.AllTenants");
-        REVIEWED.put("AppUserRepository.findActiveByRoleAcrossTenants",
-            "telling the platform's admins about a new one; they belong to no tenant");
+        REVIEWED.put("AppUserRepository.findAllLiveAcrossTenants", "IdentityPort.members for TenantScope.AllTenants");
     }
 
     /** Native statements keyed by a person's id, or over a table with no tenant, not reads of a tenant's rows. */
     private static final Map<String, String> BY_ID = new HashMap<>();
 
     static {
-        BY_ID.put("AppUserRepository.bumpTokenVersion", "ends one person's tokens; the caller scoped the person first");
         BY_ID.put("AppUserRepository.findTokenVersion", "a number, for the token check; returns no row");
-        BY_ID.put("TenantRequestRepository.findOpenByEmail",
-            "tenant_request rows belong to no tenant: a request is for a workspace that does not exist yet");
     }
 
     /** Native queries in process's other repositories that read no tenant's rows, and why. */

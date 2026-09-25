@@ -210,7 +210,7 @@ public class KafkaSecretServiceImpl implements KafkaSecretService {
      * tenant rather than the key, because the key names a user and says nothing about which tenant
      * that user is in.
      *
-     * That reach stops at tenant users, the same line AppUserServiceImpl draws on the users
+     * That reach stops at tenant users, the same line Identity draws on the users
      * screen: an administrator's authority runs over the people it manages, not over its peers.
      * Sharing a tenant was enough on its own here, so one administrator could attach another's
      * client private key to a profile of its own and speak to a broker as them.

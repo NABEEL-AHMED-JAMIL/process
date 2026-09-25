@@ -11,13 +11,9 @@ import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.pojo.PageAccessProfile;
-import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
-import process.model.repository.TenantRepository;
 import process.model.repository.UserPageAccessRepository;
-import process.security.PageAccessCache;
 import process.security.TenantContext;
-import process.util.UserNameResolver;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,12 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
-import java.util.Map;
-import org.assertj.core.api.Assertions;
 import org.mockito.Mockito;
 import process.model.pojo.UserPageAccess;
-import process.model.service.PageAccessService;
-import process.notifications.TestNotifications;
 
 /**
  * Who may open what: the one rule, from the top.
@@ -51,23 +43,16 @@ public class PageAccessResolutionTest {
     private static final long TENANT_B = 1002L;
 
     @Mock private PageAccessProfileRepository profileRepository;
-    @Mock private AppUserRepository appUserRepository;
-    @Mock private TestNotifications.NoticeSink notificationCenterService;
-    @Mock private UserNameResolver userNameResolver;
-    @Mock private TenantRepository tenantRepository;
     @Mock private UserPageAccessRepository exceptionRepository;
 
     private PageAccessServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            TestNotifications.recording(null, this.notificationCenterService, null), this.userNameResolver, new PageAccessCache(), this.tenantRepository,
-            this.exceptionRepository);
+        this.service = new PageAccessServiceImpl(this.profileRepository, this.exceptionRepository);
         lenient().when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(any(), any()))
             .thenReturn(Optional.empty());
         lenient().when(this.exceptionRepository.findByIdAppUserId(any())).thenReturn(Collections.emptyList());
-        lenient().when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Collections.emptyList());
     }
 
     @AfterEach
@@ -156,20 +141,6 @@ public class PageAccessResolutionTest {
         assertThat(this.service.effectivePages(user(UserRole.TENANT_USER, TENANT_A, 503L))).isEmpty();
     }
 
-    /** The user list asks for every name at once; nulls and unknown ids fall out quietly. */
-    @Test
-    void profileNamesAreResolvedInOneReadForAWholeList() {
-        PageAccessProfile a = profile(500L, TENANT_A, Status.Active, "jobs"); a.setProfileName("Operator");
-        PageAccessProfile gone = profile(501L, TENANT_A, Status.Delete, "jobs"); gone.setProfileName("Old");
-        when(this.profileRepository.findAllById(any())).thenReturn(Arrays.asList(a, gone));
-
-        Map<Long, String> names = this.service.profileNamesFor(Arrays.asList(500L, null, 501L, 500L));
-
-        assertThat(names).containsExactly(Assertions.entry(500L, "Operator"));
-        assertThat(this.service.profileNamesFor(Arrays.asList((Long) null))).isEmpty();
-        assertThat(this.service.profileNamesFor(null)).isEmpty();
-    }
-
     /** Exceptions sit on top of the profile: an allowed one opens, a withheld one closes. */
     @Test
     void exceptionsAdjustTheProfileInBothDirections() {
@@ -189,30 +160,5 @@ public class PageAccessResolutionTest {
     void exceptionsNeverTouchAnAdmin() {
         assertThat(this.service.effectivePages(user(UserRole.TENANT_ADMIN, TENANT_A, null))).isEqualTo(PageKey.all());
         Mockito.verify(this.exceptionRepository, Mockito.never()).findByIdAppUserId(any());
-    }
-
-    /** The user list's summary: three reads for the whole page, admins read as everything. */
-    @Test
-    void accessSummaryCoversAListInThreeReads() {
-        PageAccessProfile operator = profile(500L, TENANT_A, Status.Active, "jobs", "queue"); operator.setProfileName("Operator");
-        when(this.profileRepository.findAllById(any())).thenReturn(Arrays.asList(operator));
-        when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(TENANT_A, Status.Active)).thenReturn(Optional.of(operator));
-        AppUser olivia = user(UserRole.TENANT_USER, TENANT_A, 500L); olivia.setAppUserId(44L);
-        AppUser ava = user(UserRole.TENANT_USER, TENANT_A, null); ava.setAppUserId(45L);
-        AppUser daniel = user(UserRole.TENANT_ADMIN, TENANT_A, null); daniel.setAppUserId(9L);
-        when(this.exceptionRepository.findByIdAppUserIdIn(any())).thenReturn(Arrays.asList(
-            new UserPageAccess(44L, TENANT_A, "reports", true, 9L)));
-
-        Map<Long, PageAccessService.AccessSummary> summary =
-            this.service.accessSummaryFor(Arrays.asList(olivia, ava, daniel));
-
-        assertThat(summary.get(44L).profileName).isEqualTo("Operator");
-        assertThat(summary.get(44L).pageCount).isEqualTo(3);
-        assertThat(summary.get(44L).exceptionCount).isEqualTo(1);
-        assertThat(summary.get(45L).profileName).isNull();
-        assertThat(summary.get(45L).defaultProfileName).isEqualTo("Operator");
-        assertThat(summary.get(45L).pageCount).isEqualTo(2);
-        assertThat(summary.get(9L).pageCount).isEqualTo(PageKey.values().length);
-        Mockito.verify(this.profileRepository, Mockito.never()).findById(any());
     }
 }

@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import process.model.service.StorageBrowserService;
 import process.model.service.impl.KafkaConnectionProfileServiceImpl;
-import process.model.service.impl.TenantServiceImpl;
 import process.storage.TrustedStorageOperations;
 import process.util.EncryptionUtil;
 
@@ -33,8 +32,7 @@ class StorageRemoteConfigTest {
 
     @Test
     void theConsumersOfConnectionFactsRequireStoragesDirectory() {
-        for (Class<?> consumer : Arrays.asList(TenantServiceImpl.class,
-            KafkaConnectionProfileServiceImpl.class)) {
+        for (Class<?> consumer : Arrays.asList(KafkaConnectionProfileServiceImpl.class)) {
             Constructor<?>[] constructors = consumer.getConstructors();
             assertThat(constructors).as(consumer.getSimpleName()).hasSize(1);
             assertThat(constructors[0].getParameterTypes()).as(consumer.getSimpleName()).contains(RemoteStorageDirectory.class);

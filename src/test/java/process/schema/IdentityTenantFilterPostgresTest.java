@@ -5,24 +5,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.util.ReflectionTestUtils;
 import process.identity.TestIdentity;
-import process.model.dto.AppUserDto;
-import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.AppUser;
 import process.model.pojo.UserPageAccess;
 import process.model.repository.AppUserRepository;
-import process.model.repository.TenantRepository;
 import process.model.repository.UserPageAccessRepository;
-import process.model.service.PageAccessService;
-import process.model.service.impl.AppUserServiceImpl;
-import process.notifications.TestNotifications;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
-import process.security.TokenRevocations;
-import process.storage.TrustedStorageOperations;
 import process.util.UserNameResolver;
 
 import java.util.Arrays;
@@ -33,15 +23,14 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 
 /**
  * MIG-13 (DEF-012, P5) against a real Postgres: the Hibernate tenant filter on app_user and
  * user_page_access, the reads that are deliberately outside it, and V65's tenant_id on
  * user_page_access.
  *
- * The filter is defence in depth. The hand-written guards -- listUsers' tenant query, scopedFind,
- * refusalFor -- keep their semantics and are exercised here with the filter on. Opt-in, like every
+ * The filter is defence in depth. (The hand-written guards it backed -- listUsers' tenant query,
+ * scopedFind, refusalFor -- left process with the identity endpoints, MIG-108.) Opt-in, like every
  * IdentityPostgres test.
  */
 class IdentityTenantFilterPostgresTest {
@@ -123,9 +112,9 @@ class IdentityTenantFilterPostgresTest {
     void aDerivedQueryNamingAnotherTenantStillReturnsNothing() {
         assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A,
             () -> users.findByTenantIdAndStatusNotOrderByAppUserIdDesc(B, Status.Delete))).isEmpty();
-        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A,
-            () -> exceptions.findByIdAppUserIdIn(Arrays.asList(USER_A, USER_B)))).extracting(UserPageAccess::getAppUserId)
-            .containsExactly(USER_A);
+        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> exceptions.findByIdAppUserId(USER_B))).isEmpty();
+        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> exceptions.findByIdAppUserId(USER_A)))
+            .extracting(UserPageAccess::getAppUserId).containsExactly(USER_A);
     }
 
     @Test
@@ -146,10 +135,6 @@ class IdentityTenantFilterPostgresTest {
 
     @Test
     void theReadsThatCrossTenantsStillCrossThemWithTheFilterOn() {
-        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> users.findLiveByUsernameAcrossTenants("BRIAN@b.example")))
-            .as("sign-in").isPresent();
-        assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> users.isUsernameTakenAcrossTenants("brian@b.example")))
-            .as("is the name taken").isTrue();
         assertThat(ids(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A,
             () -> users.findAllByIdAcrossTenants(Arrays.asList(PLATFORM_ADMIN, USER_B))))).as("names")
             .containsExactly(PLATFORM_ADMIN, USER_B);
@@ -161,39 +146,11 @@ class IdentityTenantFilterPostgresTest {
 
     /**
      * Hibernate filters reach queries, not loads by id: findById returns another tenant's row with the
-     * filter on. That is why scopedFind's hand-written check stays the guard for every by-id write.
+     * filter on. That is why a by-id read is never a tenant check on its own.
      */
     @Test
-    void findByIdIsNotFilteredSoTheHandWrittenGuardsStillDecide() throws Exception {
+    void findByIdIsNotFiltered() {
         assertThat(this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> users.findById(USER_B))).isPresent();
-
-        AppUserServiceImpl service = new AppUserServiceImpl(users, db.repository(TenantRepository.class),
-            mock(PasswordEncoder.class), TestNotifications.recording(null, mock(TestNotifications.NoticeSink.class),
-                mock(TestNotifications.MailSink.class)), new UserNameResolver(TestIdentity.over(users, null)), mock(TrustedStorageOperations.class),
-            mock(PageAccessService.class), this.filter, mock(TokenRevocations.class));
-        ReflectionTestUtils.setField(service, "entityManager", db.entityManager());
-        AppUserDto reset = new AppUserDto();
-        reset.setAppUserId(USER_B);
-        reset.setPassword("Passw0rd!");
-
-        ResponseDto refused = this.filteredAs(A, "TENANT_ADMIN", ADMIN_A, () -> {
-            try {
-                return service.resetPassword(reset);
-            } catch (Exception ex) {
-                throw new IllegalStateException(ex);
-            }
-        });
-        assertThat(refused.getMessage()).isEqualTo("User not found.");
-
-        TenantContext.set(A, "TENANT_ADMIN", ADMIN_A, "admin@a.example");
-        ResponseDto listed = db.transaction().execute(tx -> {
-            try {
-                return service.listUsers();
-            } catch (Exception ex) {
-                throw new IllegalStateException(ex);
-            }
-        });
-        assertThat((List<?>) listed.getData()).hasSize(2);
     }
 
     // -- V65 ----------------------------------------------------------------------------

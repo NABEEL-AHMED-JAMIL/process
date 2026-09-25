@@ -11,13 +11,8 @@ import process.model.enums.Status;
 import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.pojo.PageAccessProfile;
-import process.model.repository.AppUserRepository;
 import process.model.repository.PageAccessProfileRepository;
-import process.model.repository.TenantRepository;
 import process.model.repository.UserPageAccessRepository;
-import process.notifications.TestNotifications;
-import process.security.PageAccessCache;
-import process.util.UserNameResolver;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -43,19 +38,13 @@ class EffectivePagesCharacterisationTest {
     private static final long TENANT_A = 1001L;
 
     @Mock private PageAccessProfileRepository profileRepository;
-    @Mock private AppUserRepository appUserRepository;
-    @Mock private TestNotifications.NoticeSink notices;
-    @Mock private UserNameResolver userNameResolver;
-    @Mock private TenantRepository tenantRepository;
     @Mock private UserPageAccessRepository exceptionRepository;
 
     private PageAccessServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        this.service = new PageAccessServiceImpl(this.profileRepository, this.appUserRepository,
-            TestNotifications.recording(null, this.notices, null), this.userNameResolver, new PageAccessCache(),
-            this.tenantRepository, this.exceptionRepository);
+        this.service = new PageAccessServiceImpl(this.profileRepository, this.exceptionRepository);
         lenient().when(this.profileRepository.findByTenantIdAndDefaultProfileTrueAndStatus(TENANT_A, Status.Active))
             .thenReturn(Optional.of(this.profile(1L, TENANT_A, Status.Active, "reports")));
         lenient().when(this.exceptionRepository.findByIdAppUserId(any())).thenReturn(Collections.emptyList());

@@ -72,15 +72,6 @@ public class JwtUtil {
         return this.buildToken(user, TYPE_REFRESH, this.refreshTokenExpiryDays * 24 * 60 * 60 * 1000);
     }
 
-    /**
-     * The refresh token handed back by a refresh (MIG-14): a new id, the person's current version,
-     * and the same expiry as the token it replaces -- rotating must not turn seven days from sign-in
-     * into seven days from the last refresh.
-     */
-    public String rotateRefreshToken(AppUser user, Date expiresAt) {
-        return this.buildToken(user, TYPE_REFRESH, new Date(), expiresAt);
-    }
-
     private String buildToken(AppUser user, String type, long expiryMillis) {
         Date now = new Date();
         return this.buildToken(user, type, now, new Date(now.getTime() + expiryMillis));

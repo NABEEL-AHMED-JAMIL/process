@@ -3,14 +3,13 @@ package process.schema;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import process.model.repository.AppUserRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * MIG-17 against a real Postgres: the index V64 adds, the migration's refusal to run over existing
- * collisions, and the two repository queries every new account and every sign-in now go through.
+ * MIG-17 against a real Postgres: the index V64 adds, and the migration's refusal to run over existing
+ * collisions. (The two finders that went through it left process with sign-in and account creation, MIG-108.)
  *
  * Opt-in: NOTIFICATIONS_TEST_DB_URL / _USER / _PASSWORD (see IdentityPostgres).
  */
@@ -53,30 +52,6 @@ class UsernameUniquenessPostgresTest {
                 Integer.class)).isZero();
             assertThat(sql.queryForObject("SELECT count(*) FROM app_user WHERE lower(username) = 'carol@x.com'",
                 Integer.class)).as("nothing was deleted to make room").isEqualTo(2);
-        }
-    }
-
-    @Test
-    void theFindersIgnoreCaseAndTheTakenCheckCountsDeletedRows() throws Exception {
-        try (IdentityPostgres db = IdentityPostgres.create("mig17_finders").migrate().withJpa()) {
-            JdbcTemplate sql = db.sql();
-            user(sql, 9001, "Dana@X.com", "Active");
-            user(sql, 9002, "erin@x.com", "Delete");
-            user(sql, 9003, "fay@x.com", "Inactive");
-            AppUserRepository users = db.repository(AppUserRepository.class);
-
-            db.transaction().executeWithoutResult(tx -> {
-                assertThat(users.findLiveByUsernameAcrossTenants("DANA@x.COM")).get()
-                    .extracting(u -> u.getAppUserId()).isEqualTo(9001L);
-                // Inactive is still an account -- login must find it to say so after the password.
-                assertThat(users.findLiveByUsernameAcrossTenants("Fay@X.com")).isPresent();
-                assertThat(users.findLiveByUsernameAcrossTenants("erin@x.com")).isEmpty();
-                assertThat(users.findLiveByUsernameAcrossTenants("nobody@x.com")).isEmpty();
-
-                assertThat(users.isUsernameTakenAcrossTenants("dana@X.COM")).isTrue();
-                assertThat(users.isUsernameTakenAcrossTenants("ERIN@x.com")).as("a deleted row still holds its name").isTrue();
-                assertThat(users.isUsernameTakenAcrossTenants("nobody@x.com")).isFalse();
-            });
         }
     }
 }

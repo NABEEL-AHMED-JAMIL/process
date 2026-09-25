@@ -36,12 +36,13 @@ TENANT = 9132001
 PLATFORM_ADMIN = 9132100
 TENANT_ADMIN = 9132101
 TENANT_USER = 9132102
-T5_USER = 9132103
 T1_JOBS = 200
 T1_FIRST_JOB = 9133000
 T7_JOB = 9134001
 
-ALL_CHECKS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"]
+# T4 (page access across instances) and T5 (the sign-in lockout) left with Identity's endpoints (MIG-108):
+# process no longer grants a page or signs anyone in, so there is nothing of its own left for them to prove.
+ALL_CHECKS = ["T1", "T2", "T3", "T6", "T7", "T8", "T9", "T10"]
 
 # Mutations: each gives a replica per-instance state back (or unaligns a schedule) through
 # configuration alone, so the image under test is the real one. "expect" is what must go red.
@@ -52,16 +53,6 @@ MUTATIONS = {
         "sql": "DROP INDEX IF EXISTS ux_job_queue_one_in_flight_per_job;",
         "expect": ["T1"],
         "about": "the enqueuer's claim without FOR UPDATE SKIP LOCKED and without the V83 one-run-per-job index",
-    },
-    "split-login-guard": {
-        "env": {"H_LOGIN_GUARD_PREFIX_A": "identity:login-guard:a:", "H_LOGIN_GUARD_PREFIX_B": "identity:login-guard:b:"},
-        "expect": ["T5"],
-        "about": "A and B count failed sign-ins under different keys: the per-JVM guard, back",
-    },
-    "split-redis": {
-        "env": {"H_REDIS_HOST_B": "redis2"},
-        "expect": ["T4", "T5", "T6"],
-        "about": "process B on a Redis of its own: every shared cache version and counter is per instance again",
     },
     "unaligned-reconcile": {
         # Every other minute, 40 s after A's tick: past A's 30 s lock, so both sweep in that minute --
@@ -275,10 +266,6 @@ class Harness:
             self.check_t9(boot_fresh, boot_again)
             if "T1" in checks:
                 self.check_t1()
-        if "T5" in checks:
-            self.check_t5()
-        if "T4" in checks:
-            self.check_t4()
         if "T6" in checks:
             self.check_t6()
         if "T7" in checks:
@@ -379,56 +366,6 @@ class Harness:
                "%d with none; slots taken by A=%d B=%d, index refusals %d"
                % (T1_JOBS, T1_JOBS - len(dupes) - missing, len(dupes), dict(list(dupes.items())[:5]), missing,
                   per_instance["A"], per_instance["B"], raced))
-
-    def login(self, port, username, password):
-        status, raw, _ = self.http("POST", port, "/auth.json/login", body={"username": username, "password": password})
-        try:
-            return status, json.loads(raw).get("message", raw)
-        except ValueError:
-            return status, raw
-
-    def check_t5(self):
-        # A throwaway account made for this and nothing else; every password tried is made up here.
-        username = "t5-%s@mig132.invalid" % self.run_id
-        self.psql("""INSERT INTO app_user (app_user_id, date_created, full_name, password, status, tenant_id, user_role, username, uuid)
-                     VALUES ({id}, now(), 'T5 throwaway', '$2a$10$' || md5(random()::text) || md5(random()::text), 'Active', {t},
-                             'TENANT_USER', '{u}', '{uu}') ON CONFLICT (app_user_id) DO UPDATE SET username = EXCLUDED.username;"""
-                  .format(id=T5_USER, t=TENANT, u=username, uu=uuid.uuid4()))
-        sides = [("A", self.ports["a"]), ("B", self.ports["b"])] * 3
-        answers = []
-        for side, port in sides[:5]:
-            status, message = self.login(port, username, "wrong-" + secrets.token_hex(8))
-            answers.append("%s:%s" % (side, message))
-        status6, sixth = self.login(self.ports["b"], username, "wrong-" + secrets.token_hex(8))
-        status7, seventh = self.login(self.ports["lb"], username, "wrong-" + secrets.token_hex(8))
-        wrong = all("Invalid username or password" in a for a in answers)
-        locked = "Too many sign-in attempts" in sixth and "Too many sign-in attempts" in seventh
-        record("T5", wrong and locked, "five wrong passwords A,B,A,B,A for a throwaway user -> 6th on B: %r; 7th via the "
-               "balancer: %r" % (sixth, seventh))
-
-    def check_t4(self):
-        admin, user = self.admin, self.user
-        grant = "/pageAccess.json/setPageAccess?appUserId=%d&pageKey=reports&allowed=%s"
-        s, raw, _ = self.http("PUT", self.ports["a"], grant % (TENANT_USER, "true"), admin)
-        if s != 200:
-            record("T4", False, "could not grant the page on A: %s %s" % (s, raw[:200]))
-            return
-        time.sleep(3)
-        gated = "/report.json/runs"
-        before = self.http("GET", self.ports["b"], gated, user)[0]
-        # B now holds "allowed" in its per-JVM copy for the next 15 s. Revoke through A, then ask B.
-        t0 = time.time()
-        s, raw, _ = self.http("PUT", self.ports["a"], grant % (TENANT_USER, "false"), admin)
-        revoked_in = self.poll(lambda: self.http("GET", self.ports["b"], gated, user)[0] == 403, 20)
-        time.sleep(1)
-        self.http("GET", self.ports["b"], gated, user)
-        t1 = time.time()
-        self.http("PUT", self.ports["a"], grant % (TENANT_USER, "true"), admin)
-        granted_in = self.poll(lambda: self.http("GET", self.ports["b"], gated, user)[0] == 200, 20)
-        fast = 2.0 + 1.5  # the 2 s poll, plus a request's worth of slack
-        ok = before == 200 and revoked_in is not None and granted_in is not None and revoked_in <= fast and granted_in <= fast
-        record("T4", ok, "page 'reports' revoked through A, refused by B after %s; granted through A, open on B after %s "
-               "(bound: %.1fs by the shared version, 15 s by the TTL)" % (fmt(revoked_in), fmt(granted_in), fast))
 
     def poll(self, condition, limit, step=0.1):
         t0 = time.time()
@@ -762,8 +699,7 @@ class Harness:
         suites run against this harness's server, each in a database of its own."""
         tests = ",".join([
             "ReconcileOncePerTickTest", "DispatchBudgetInsideLockTest", "DispatchTimingTest",
-            "PageAccessCacheAcrossInstancesTest",
-            "LoginAttemptGuardAcrossInstancesTest", "TokenRevocationAcrossInstancesTest",
+            "PageAccessCacheAcrossInstancesTest", "TokenRevocationAcrossInstancesTest",
             "EnqueuerReplicasPostgresTest", "OneRunInFlightPostgresTest", "DueSchedulerClaimPostgresTest",
             "StalledRunSweepPostgresTest", "SchedulingDisabledTest"])
         env = self.test_env()
@@ -924,7 +860,7 @@ class Stomp:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--only", help="comma-separated checks, e.g. T1,T4 (default: all; with --mutate, the ones it breaks)")
+    parser.add_argument("--only", help="comma-separated checks, e.g. T1,T6 (default: all; with --mutate, the ones it breaks)")
     parser.add_argument("--image", default=os.environ.get("PROCESS_IMAGE", "process-two-instance:harness"))
     parser.add_argument("--mutate", choices=sorted(MUTATIONS), help="run against a deliberately broken mechanism")
     parser.add_argument("--keep", action="store_true", help="leave the harness running afterwards")
@@ -955,7 +891,7 @@ def main():
     if args.attach:
         h.seed_people()
         for c in checks:
-            if c in ("T1", "T4", "T5", "T6", "T7"):
+            if c in ("T1", "T6", "T7"):
                 getattr(h, "check_" + c.lower())()
         if "T2" in checks or "T3" in checks:
             h.phase_notifications(checks)
@@ -971,8 +907,8 @@ def main():
         h.up_infra()
         if not args.no_unit and not args.mutate:
             h.unit_gate()
-        if any(c in checks for c in ("T1", "T4", "T5", "T6", "T7", "T9", "T2", "T3", "T8", "T10")):
-            h.phase_process([c for c in checks if c in ("T1", "T4", "T5", "T6", "T7", "T9")])
+        if any(c in checks for c in ("T1", "T6", "T7", "T9", "T2", "T3", "T8", "T10")):
+            h.phase_process([c for c in checks if c in ("T1", "T6", "T7", "T9")])
             ok, seen = h.lb_evidence
             record("LB", ok, "round-robin with no stickiness: consecutive requests answered by %s" % seen)
         if "T2" in checks or "T3" in checks:

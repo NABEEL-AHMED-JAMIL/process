@@ -12,18 +12,18 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 public class HarnessSmokeIT extends E2ESupport {
 
     @Test
-    void aSignedInUserReachesTheirOwnProfile() throws Exception {
+    void aSignedInUserReachesTheirDashboard() throws Exception {
         Tenant tenant = this.newTenant("smoke");
         AppUser user = this.newUser(UserRole.TENANT_USER, tenant);
 
-        this.mvc.perform(this.getAs(user, "/appUser.json/me"))
+        this.mvc.perform(this.getAs(user, "/dashboard.json/jobStatusStatistics"))
             .andExpect(status().isOk());
     }
 
     @Test
     void noTokenIsRefused() throws Exception {
         this.mvc.perform(MockMvcRequestBuilders
-                .get("/appUser.json/me"))
+                .get("/dashboard.json/jobStatusStatistics"))
             .andExpect(status().isUnauthorized());
     }
 
@@ -32,7 +32,7 @@ public class HarnessSmokeIT extends E2ESupport {
         Tenant tenant = this.newTenant("smoke");
         AppUser user = this.newUser(UserRole.TENANT_USER, tenant);
 
-        this.mvc.perform(this.getAs(user, "/tenant.json/listTenants"))
+        this.mvc.perform(this.getAs(user, "/setting.json/engineSettings"))
             .andExpect(status().isForbidden());
     }
 }

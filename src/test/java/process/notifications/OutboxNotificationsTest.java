@@ -128,7 +128,7 @@ class OutboxNotificationsTest {
     @Test
     void aWelcomeMailsPasswordTravelsAsAOneTimeReference() throws Exception {
         when(this.secrets.keep("Tmp-9f2c!")).thenReturn("ref-7c1d");
-        MailRequested welcome = StandardMails.userWelcome("new.user@medaxis.example", "New User", "Acme",
+        MailRequested welcome = userWelcome("new.user@medaxis.example", "New User", "Acme",
             "new.user@medaxis.example", "tenant user", "Ada King", "http://localhost:4400/login");
 
         assertThat(this.port.mailRequested(TENANT, welcome, MailExtras.secret("Tmp-9f2c!"))).isEqualTo(OutboxNotifications.QUEUED);
@@ -146,7 +146,7 @@ class OutboxNotificationsTest {
         when(this.staging.stage(zip, "q3.zip", "application/zip")).thenReturn(new MailRequested.AttachmentRef()
             .setBucket("etl-mail-attachments").setKey("2026/09/23/abc/q3.zip").setFilename("q3.zip")
             .setContentType("application/zip").setSizeBytes(3L));
-        MailRequested share = StandardMails.fileShare("colleague@medaxis.example", "Ada King", "q3", "Folder",
+        MailRequested share = fileShare("colleague@medaxis.example", "Ada King", "q3", "Folder",
             true, "3 B (1 file)", "fyi", "q3.zip", "application/zip", zip.length);
 
         assertThat(this.port.mailRequested(TENANT, share, MailExtras.attachment(zip))).isEqualTo(OutboxNotifications.QUEUED);
@@ -294,5 +294,36 @@ class OutboxNotificationsTest {
 
         assertThat(port.mailRequested(TENANT, mail, MailExtras.NONE)).isEqualTo(OutboxNotifications.QUEUED);
         assertThat(mail.getFailureNotice()).isNull();
+    }
+
+    /** A welcome mail as identity-service relays it (/internal/notifications/mail): the password is not in the body. */
+    private static MailRequested userWelcome(String recipient, String fullName, String organisationName,
+        String username, String roleLabel, String createdByName, String signInUrl) {
+        return new MailRequested().setTemplate(MailRequested.Template.USER_WELCOME).setRecipient(recipient)
+            .setSubject("Your ETL Console account")
+            .put("full_name", fullName)
+            .put("organisation_name", organisationName)
+            .put("username", username)
+            .put("role_label", roleLabel)
+            .put("created_by_name", createdByName)
+            .put("sign_in_url", signInUrl);
+    }
+
+    /** A file-share mail whose attachment still travels as bytes in MailExtras, until it is staged. */
+    private static MailRequested fileShare(String recipient, String senderName, String itemName, String itemType,
+        boolean zipped, String sizeLabel, String message, String attachmentFilename, String attachmentContentType,
+        long attachmentSize) {
+        return new MailRequested().setTemplate(MailRequested.Template.FILE_SHARE).setRecipient(recipient)
+            .setSubject(senderName + " shared \"" + itemName + "\" with you")
+            .put("sender_name", senderName)
+            .put("item_name", itemName)
+            .put("item_type", itemType)
+            .put("item_label", "Folder".equals(itemType) ? "a folder" : "Selection".equals(itemType) ? "a selection" : "a file")
+            .put("size_label", sizeLabel)
+            .put("message", message)
+            .put("attachment_note", zipped ? "It's attached below as a ZIP file." : "It's attached below.")
+            .setAttachmentRef(new MailRequested.AttachmentRef().setBucket("in-process")
+                .setKey("in-process/" + attachmentFilename).setFilename(attachmentFilename)
+                .setContentType(attachmentContentType).setSizeBytes(attachmentSize));
     }
 }

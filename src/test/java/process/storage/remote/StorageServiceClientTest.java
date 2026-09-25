@@ -74,7 +74,7 @@ class StorageServiceClientTest {
     @Test
     void aTrustedUploadStreamsTheBytesWithTheirTypeAndLength() throws Exception {
         try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage/object", 200, "{\"status\":\"SUCCESS\"}")) {
-            new StorageServiceClient(storage.url(), TOKEN).trustedUpload(TrustedAccess.of(TrustedCaller.IDENTITY_AVATAR, "picture"),
+            new StorageServiceClient(storage.url(), TOKEN).trustedUpload(TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "certificate"),
                 "etl-avatar", "61/profile/a.png", new ByteArrayInputStream(new byte[] {1, 2, 3}), 3, "image/png");
 
             StorageServiceStub.Seen call = storage.last();
@@ -91,13 +91,13 @@ class StorageServiceClientTest {
         try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage/object", 404,
             "{\"status\":\"ERROR\",\"message\":\"No object at b/k.\"}")) {
             Throwable missing = catchThrowable(() -> new StorageServiceClient(storage.url(), TOKEN)
-                .trustedRead(TrustedAccess.of(TrustedCaller.IDENTITY_AVATAR, "avatar"), "b", "k"));
+                .trustedRead(TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "truststore"), "b", "k"));
             assertThat(StorageNotFound.isNotFound(missing)).isTrue();
         }
         try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage/object", 400,
             "{\"status\":\"ERROR\",\"message\":\"Unknown bucket: b. Add a storage connection for it first.\"}")) {
             assertThatThrownBy(() -> new StorageServiceClient(storage.url(), TOKEN)
-                .trustedRead(TrustedAccess.of(TrustedCaller.IDENTITY_AVATAR, "avatar"), "b", "k"))
+                .trustedRead(TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "truststore"), "b", "k"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Unknown bucket: b. Add a storage connection for it first.");
         }
     }

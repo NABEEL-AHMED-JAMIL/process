@@ -17,7 +17,6 @@ import process.model.repository.AppUserRepository;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -37,11 +36,13 @@ import java.util.List;
  * The check is one Redis round trip (MGET of both keys). The version is kept per person for
  * {@link #VERSION_TTL} -- longer than any token lives, because the other services read the same key
  * through platform-commons' RevocationCheck and have no database to fall back on: to them a missing
- * key has to mean "no change a live token could predate". process reads the database on a miss; a
- * bump publishes the new number straight away, and a publish never lowers what is there (a Lua max),
- * so a reader racing a bump cannot put the old number back. If publishing fails, access tokens minted
- * before the bump live out their thirty minutes (refresh checks the database, so they are not renewed);
- * the failure is logged at ERROR.
+ * key has to mean "no change a live token could predate". process reads the database on a miss and
+ * publishes what it read, and a publish never lowers what is there (a Lua max), so a reader racing a
+ * bump cannot put the old number back.
+ *
+ * Only the read side is left in process (identity.mode=local). Writing -- a sign-out's denial, a bump on
+ * every change of a person's standing -- is identity-service's since MIG-107; the process code that did it
+ * left with the identity endpoints (MIG-108).
  *
  * Redis unreachable fails closed: {@link #isRevoked} throws {@link Unavailable} and the filter
  * treats the token as unusable. That is every signed-in request refused for the length of an
@@ -144,69 +145,6 @@ public class TokenRevocations {
             this.raise(appUserId, current);
         }
         return mintedUnder(claims) < current;
-    }
-
-    /** Whether this token's id is on the denylist -- a spent single-use refresh token, or one signed out. */
-    public boolean isDenied(Claims claims) {
-        if (claims.getId() == null) {
-            return false;
-        }
-        try {
-            return this.redis.hasKey(this.deniedKey(claims.getId()));
-        } catch (DataAccessException ex) {
-            throw new Unavailable(ex);
-        }
-    }
-
-    /** Denies this one token until it would have expired anyway: logout, a spent refresh token. */
-    public void deny(Claims claims) {
-        if (claims.getId() == null) {
-            return;
-        }
-        Date expires = claims.getExpiration();
-        long seconds = expires == null ? 1 : Math.max(1, (expires.getTime() - System.currentTimeMillis() + 999) / 1000);
-        try {
-            this.redis.opsForValue().set(this.deniedKey(claims.getId()), "1", Duration.ofSeconds(seconds));
-        } catch (DataAccessException ex) {
-            throw new Unavailable(ex);
-        }
-    }
-
-    /** Ends every token the person holds, on every instance, from the next request. */
-    public void revokeSessionsOf(Long appUserId) {
-        if (appUserId == null) {
-            return;
-        }
-        this.users.bumpTokenVersion(appUserId);
-        Integer version = this.users.findTokenVersion(appUserId);
-        if (version != null) {
-            this.publish(appUserId, version);
-        }
-    }
-
-    /** The same for everybody in a tenant: a suspended tenant's people stop at their next request. */
-    public void revokeSessionsInTenant(Long tenantId) {
-        if (tenantId == null) {
-            return;
-        }
-        this.users.bumpTokenVersionsInTenant(tenantId);
-        for (Number id : this.users.findIdsInTenant(tenantId)) {
-            Integer version = this.users.findTokenVersion(id.longValue());
-            if (version != null) {
-                this.publish(id.longValue(), version);
-            }
-        }
-    }
-
-    private void publish(Long appUserId, int version) {
-        try {
-            this.raise(appUserId, version);
-        } catch (Unavailable ex) {
-            // The database holds the new version: refresh reads it there, so old access tokens are not
-            // renewed, but other services may accept one until it expires.
-            this.logger.error("Token version {} for user {} is saved but not published; access tokens minted before "
-                + "it may be accepted elsewhere until they expire", version, appUserId);
-        }
     }
 
     private void raise(Long appUserId, int version) {

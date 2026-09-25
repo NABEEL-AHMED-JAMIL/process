@@ -134,7 +134,6 @@ services:
       <<: *process-env
       SPRING_REDIS_HOST: redis
       PROCESS_RECONCILE_CRON: ${H_RECONCILE_CRON_A:-0 * * * * *}
-      IDENTITY_LOGIN_GUARD_KEY_PREFIX: ${H_LOGIN_GUARD_PREFIX_A:-identity:login-guard:}
 
   process-b:
     <<: *process
@@ -143,9 +142,8 @@ services:
     ports: ["127.0.0.1:${H_PORT_B:-19102}:9098"]
     environment:
       <<: *process-env
-      SPRING_REDIS_HOST: ${H_REDIS_HOST_B:-redis}
+      SPRING_REDIS_HOST: redis
       PROCESS_RECONCILE_CRON: ${H_RECONCILE_CRON_B:-0 * * * * *}
-      IDENTITY_LOGIN_GUARD_KEY_PREFIX: ${H_LOGIN_GUARD_PREFIX_B:-identity:login-guard:}
 
   # Round-robin, no ip_hash, no cookie, no sticky anything. Answers as "process" on the harness
   # network, so the other services reach process the way they do in production: through one name

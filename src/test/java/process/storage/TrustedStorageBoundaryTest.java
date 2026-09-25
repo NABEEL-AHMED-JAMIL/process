@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * It used to be one boolean: resolveService(bucket, trusted). The *ForWorkflow methods sat on the
  * same StorageBrowserService every other caller -- the REST controller included -- was handed, so any
  * code that could reach Storage could assert trust. Now the guarded operations and the trusted ones
- * are two interfaces; the trusted one has exactly four named callers, each of which builds its bucket
+ * are two interfaces; the trusted one has a short list of named callers, each of which builds its bucket
  * and key from a row or its own configuration; and no controller can reach it.
  */
 class TrustedStorageBoundaryTest {
@@ -30,14 +30,13 @@ class TrustedStorageBoundaryTest {
     private static final Path MAIN = Paths.get("src", "main", "java", "process");
 
     /**
-     * The three left in process: MIG-52 named four, and the fourth -- Billing's documents -- left with
-     * billing-service (MIG-88/89), which is storage-service's own caller now. Adding one is a decision,
-     * and this test is where it is made.
+     * The two left in process: MIG-52 named four. Billing's documents left with billing-service (MIG-88/89)
+     * and Identity's avatars with identity-service (MIG-108), each storage-service's own caller now. Adding
+     * one is a decision, and this test is where it is made.
      */
     private static final List<String> TRUSTED_CALLERS = Arrays.asList(
         "config/KafkaTemplateProvider.java",
-        "model/service/impl/KafkaSecretServiceImpl.java",
-        "model/service/impl/AppUserServiceImpl.java");
+        "model/service/impl/KafkaSecretServiceImpl.java");
 
     private static List<Path> sources() throws IOException {
         try (Stream<Path> files = Files.walk(MAIN)) {
@@ -97,6 +96,5 @@ class TrustedStorageBoundaryTest {
     void eachTrustedCallerPresentsItsOwnNamedPrincipal() throws IOException {
         assertThat(source(MAIN.resolve("config/KafkaTemplateProvider.java"))).contains("TrustedCaller.KAFKA_TEMPLATE_PROVIDER");
         assertThat(source(MAIN.resolve("model/service/impl/KafkaSecretServiceImpl.java"))).contains("TrustedCaller.KAFKA_SECRETS");
-        assertThat(source(MAIN.resolve("model/service/impl/AppUserServiceImpl.java"))).contains("TrustedCaller.IDENTITY_AVATAR");
     }
 }

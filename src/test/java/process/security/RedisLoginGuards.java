@@ -1,6 +1,5 @@
 package process.security;
 
-import org.barco.platform.security.LoginAttemptGuard;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -8,16 +7,16 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import java.net.Socket;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.LongSupplier;
 
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * LoginAttemptGuards against the Redis on localhost:6379, each test under a prefix of its own and
- * cleaned up after, so tests never share a count with each other or with a running console.
+ * The Redis on localhost:6379, each test under a prefix of its own and cleaned up after, so tests never
+ * share a key with each other or with a running console. Named for the sign-in guards it was made for;
+ * those left process with Identity's endpoints (MIG-108), and TokenRevocationAcrossInstancesTest uses it now.
  *
- * Skips the calling test when Redis is not there, like OneTimeSecretsRedisTest: the guard's rule is
- * one Lua script, and only a real Redis runs it.
+ * Skips the calling test when Redis is not there, like OneTimeSecretsRedisTest: the revocation check's
+ * version publish is one Lua script, and only a real Redis runs it.
  */
 public final class RedisLoginGuards implements AutoCloseable {
 
@@ -51,11 +50,6 @@ public final class RedisLoginGuards implements AutoCloseable {
         redis.setHashValueSerializer(new StringRedisSerializer());
         redis.afterPropertiesSet();
         return redis;
-    }
-
-    /** One instance's guard. Two from the same fixture share every count, as two replicas do. */
-    public LoginAttemptGuard guard(LongSupplier clock) {
-        return new LoginAttemptGuard(this.redis, this.prefix, clock);
     }
 
     public RedisTemplate<String, String> redis() {

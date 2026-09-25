@@ -8,7 +8,6 @@ import process.config.GlobalExceptionHandler;
 import process.filechat.FileIndexLock;
 import process.identity.IdentityPort;
 import process.media.UnreadableFileException;
-import org.barco.platform.security.LoginAttemptGuard;
 import process.security.TenantIsolationException;
 import process.security.TokenRevocations;
 import process.model.dto.ResponseDto;
@@ -64,8 +63,7 @@ class EnvelopeContractTest extends EnvelopeContract {
         internal.put(FileIndexLock.Unavailable.class, "caught in FileChatServiceImpl: answered from the raw file, nothing indexed (MIG-111)");
         internal.put(UnreadableFileException.class, "caught in FileChatServiceImpl and answered in words");
         internal.put(declared("process.model.service.impl.FileChatServiceImpl$UnsupportedFileTypeException"), "caught in FileChatServiceImpl and answered in words");
-        internal.put(LoginAttemptGuard.Unavailable.class, "caught in AuthServiceImpl: sign-in refused with one sentence before any lookup (MIG-109)");
-        internal.put(TokenRevocations.Unavailable.class, "caught in LocalIdentity.authenticate and AuthServiceImpl: fails closed (MIG-14)");
+        internal.put(TokenRevocations.Unavailable.class, "caught in LocalIdentity.authenticate: fails closed (MIG-14)");
         internal.put(IdentityPort.Unavailable.class, "identity.mode=remote and Identity cannot be asked: a request that needs "
             + "a person or a workspace answers the fixed 500; the outbox and the name resolver catch it and carry on (MIG-107)");
         internal.put(TenantIsolationException.class, "an infrastructure fault -- the tenant filter could not be turned on -- so the "

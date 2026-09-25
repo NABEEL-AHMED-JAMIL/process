@@ -2,8 +2,8 @@
 # MIG-132: the two-instance harness, one command. See README.md.
 #
 #   ops/two-instance/run.sh                      build process, then every check (T1-T10) and the unit gate
-#   ops/two-instance/run.sh --only T1,T4         some checks
-#   ops/two-instance/run.sh --mutate split-redis prove a check goes red when its mechanism is broken
+#   ops/two-instance/run.sh --only T1,T6         some checks
+#   ops/two-instance/run.sh --mutate split-broadcast prove a check goes red when its mechanism is broken
 #   ops/two-instance/run.sh --no-build ...       reuse the process-two-instance:harness image as it is
 #
 # Exit status 0 only when every selected check passed (or, with --mutate, when the expected ones failed).

@@ -11,8 +11,7 @@ public enum TrustedCaller {
     /** Reads a Kafka profile's key material off the profile row, on dispatch threads with no principal. */
     KAFKA_TEMPLATE_PROVIDER,
     /** Stores and reads Kafka certificates under paths it builds for the caller's own profile. */
-    KAFKA_SECRETS,
-    /** Reads a user's picture from the avatar fields of that user's own row. */
-    IDENTITY_AVATAR
+    KAFKA_SECRETS
     // BILLING_DOCUMENTS left with Billing (MIG-88/89): billing-service is storage-service's caller now.
+    // IDENTITY_AVATAR left with Identity's endpoints (MIG-108): identity-service reads its pictures itself.
 }

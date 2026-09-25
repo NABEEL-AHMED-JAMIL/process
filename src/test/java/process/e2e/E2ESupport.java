@@ -6,6 +6,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -61,7 +62,8 @@ public abstract class E2ESupport {
     @Autowired protected JwtUtil jwtUtil;
     @Autowired protected AppUserRepository appUserRepository;
     @Autowired protected TenantRepository tenantRepository;
-    @Autowired protected PasswordEncoder passwordEncoder;
+    /** process no longer hashes passwords (sign-in is identity-service's, MIG-108); the column still wants a hash. */
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     /**
      * The filter sets the context per request and clears it, but a test that calls a service

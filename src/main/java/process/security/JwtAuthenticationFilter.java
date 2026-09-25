@@ -39,7 +39,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // The gate the browser draws is now also drawn here. A one-time password
                 // used to open a full API session: the console kept the person on the
                 // profile page, and nothing kept a script anywhere.
-                if (caller.owesPasswordChange() && !allowedWhileOwingPassword(request.getRequestURI())) {
+                // The change itself, and the profile screen it is on, are Identity's (MIG-108): nothing
+                // process answers is open to a person who still owes it.
+                if (caller.owesPasswordChange()) {
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json");
                     response.setCharacterEncoding("UTF-8");
@@ -58,19 +60,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } finally {
             TenantContext.clear();
         }
-    }
-
-    /**
-     * What a person who still owes a password change may reach: the change itself, their own
-     * profile (the screen the change is on), and the session endpoints. Nothing that reads or
-     * writes the workspace.
-     */
-    static boolean allowedWhileOwingPassword(String uri) {
-        if (uri == null) return false;
-        return uri.contains("/auth.json/")
-            || uri.endsWith("/appUser.json/changeOwnPassword")
-            || uri.endsWith("/appUser.json/me")
-            || uri.contains("/appUser.json/avatar");
     }
 
 }

@@ -188,23 +188,24 @@ class JwtClaimsCharacterisationTest {
         assertThat(seen.get().authorities).isNull();
     }
 
+    /**
+     * The change itself and the profile screen it is on are identity-service's (MIG-108): the gateway sends
+     * them there, so nothing process answers is open to a person who still owes the change.
+     */
     @Test
-    void aTokenOwingAPasswordReachesOnlyTheChangeItselfAndIsToldSoInTheEnvelope() throws Exception {
+    void aTokenOwingAPasswordReachesNothingHereAndIsToldSoInTheEnvelope() throws Exception {
         String token = this.jwtUtil.generateAccessToken(this.user(true));
         AtomicReference<Seen> seen = new AtomicReference<>();
 
-        MockHttpServletResponse refused = this.run("/api/v1/sourceJob.json/listSourceJob", token, seen);
-
-        assertThat(seen.get()).as("the chain never ran").isNull();
-        assertThat(refused.getStatus()).isEqualTo(403);
-        assertThat(refused.getContentAsString())
-            .isEqualTo("{\"status\":\"ERROR\",\"message\":\"Change your temporary password before using anything else.\"}");
-
-        for (String open : new String[] {"/api/v1/appUser.json/changeOwnPassword", "/api/v1/appUser.json/me",
-                "/api/v1/appUser.json/avatar", "/api/v1/auth.json/refresh"}) {
+        for (String path : new String[] {"/api/v1/sourceJob.json/listSourceJob", "/api/v1/appUser.json/changeOwnPassword",
+                "/api/v1/appUser.json/me", "/api/v1/auth.json/refresh"}) {
             seen.set(null);
-            assertThat(this.run(open, token, seen).getStatus()).as(open).isEqualTo(200);
-            assertThat(seen.get().appUserId).as(open).isEqualTo(1234L);
+            MockHttpServletResponse refused = this.run(path, token, seen);
+
+            assertThat(seen.get()).as(path + ": the chain never ran").isNull();
+            assertThat(refused.getStatus()).as(path).isEqualTo(403);
+            assertThat(refused.getContentAsString()).as(path)
+                .isEqualTo("{\"status\":\"ERROR\",\"message\":\"Change your temporary password before using anything else.\"}");
         }
     }
 
