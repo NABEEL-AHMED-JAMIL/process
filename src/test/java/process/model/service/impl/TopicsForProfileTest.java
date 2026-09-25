@@ -177,4 +177,105 @@ public class TopicsForProfileTest {
 
         verify(this.sourceTaskTypeRepository).fetchTopicOptionsForProfile(eq(8L), eq(true), eq(MINE));
     }
+
+    // ---- the platform default: what a workspace with no Kafka of its own publishes through ----
+
+    private static final long PLATFORM_DEFAULT = 1009L;
+
+    private void platformDefaultIs(long id) {
+        when(this.kafkaConnectionProfileRepository.findById(id)).thenReturn(Optional.of(profile(id, null, true)));
+    }
+
+    @Test
+    void aWorkspaceWithNoKafkaReadsThePlatformDefaultsTopicsInItsOwnWorkspace() throws Exception {
+        this.platformDefaultIs(PLATFORM_DEFAULT);
+        when(this.kafkaConnectionProfileRepository.countByTenantIdAndStatusNot(MINE, Status.Delete)).thenReturn(0L);
+        when(this.sourceTaskTypeRepository.fetchTopicsForPlatformDefault(PLATFORM_DEFAULT, false, MINE)).thenReturn(Collections.emptyList());
+
+        ResponseDto response = this.service.topicsForProfile(PLATFORM_DEFAULT);
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        verify(this.sourceTaskTypeRepository).fetchTopicsForPlatformDefault(eq(PLATFORM_DEFAULT), eq(false), eq(MINE));
+        verify(this.sourceTaskTypeRepository, never()).fetchTopicsForProfile(anyLong(), anyBoolean(), any());
+    }
+
+    @Test
+    void aWorkspaceWithKafkaOfItsOwnCannotReadThePlatformDefault() throws Exception {
+        this.platformDefaultIs(PLATFORM_DEFAULT);
+        when(this.kafkaConnectionProfileRepository.countByTenantIdAndStatusNot(MINE, Status.Delete)).thenReturn(1L);
+
+        ResponseDto response = this.service.topicsForProfile(PLATFORM_DEFAULT);
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        assertThat(response.getMessage()).contains("Profile not found");
+        verify(this.sourceTaskTypeRepository, never()).fetchTopicsForPlatformDefault(any(), anyBoolean(), any());
+    }
+
+    @Test
+    void aPlatformProfileThatIsNotTheDefaultStaysHiddenFromATenant() throws Exception {
+        when(this.kafkaConnectionProfileRepository.findById(1010L)).thenReturn(Optional.of(profile(1010L, null, false)));
+
+        ResponseDto response = this.service.topicsForProfile(1010L);
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        verify(this.sourceTaskTypeRepository, never()).fetchTopicsForProfile(anyLong(), anyBoolean(), any());
+        verify(this.sourceTaskTypeRepository, never()).fetchTopicsForPlatformDefault(any(), anyBoolean(), any());
+    }
+
+    @Test
+    void aPlatformAdminReadsThePlatformDefaultAcrossEveryWorkspaceWithNoKafka() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        this.platformDefaultIs(PLATFORM_DEFAULT);
+        when(this.sourceTaskTypeRepository.fetchTopicsForPlatformDefault(PLATFORM_DEFAULT, true, null)).thenReturn(Collections.emptyList());
+
+        this.service.topicsForProfile(PLATFORM_DEFAULT);
+
+        verify(this.sourceTaskTypeRepository).fetchTopicsForPlatformDefault(eq(PLATFORM_DEFAULT), eq(true), eq(null));
+    }
+
+    @Test
+    void aPlatformAdminsOtherPlatformProfilesCarryOnlyTheTopicsThatNameThem() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        when(this.kafkaConnectionProfileRepository.findById(1010L)).thenReturn(Optional.of(profile(1010L, null, false)));
+        when(this.sourceTaskTypeRepository.fetchTopicsForProfile(1010L, false, null)).thenReturn(Collections.emptyList());
+
+        this.service.topicsForProfile(1010L);
+
+        verify(this.sourceTaskTypeRepository).fetchTopicsForProfile(eq(1010L), eq(false), eq(null));
+    }
+
+    @Test
+    void thePickerOffersThePlatformDefaultsTopicsToAWorkspaceWithNoKafka() throws Exception {
+        this.platformDefaultIs(PLATFORM_DEFAULT);
+        when(this.kafkaConnectionProfileRepository.countByTenantIdAndStatusNot(MINE, Status.Delete)).thenReturn(0L);
+        when(this.sourceTaskTypeRepository.fetchTopicOptionsForPlatformDefault(PLATFORM_DEFAULT, false, MINE)).thenReturn(Collections.emptyList());
+
+        ResponseDto response = this.service.topics(null, null, null, PLATFORM_DEFAULT);
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        verify(this.sourceTaskTypeRepository).fetchTopicOptionsForPlatformDefault(eq(PLATFORM_DEFAULT), eq(false), eq(MINE));
+        verify(this.sourceTaskTypeRepository, never()).fetchTopicOptionsForProfile(anyLong(), anyBoolean(), anyLong());
+    }
+
+    @Test
+    void thePickerRefusesThePlatformDefaultToAWorkspaceWithKafkaOfItsOwn() throws Exception {
+        this.platformDefaultIs(PLATFORM_DEFAULT);
+        when(this.kafkaConnectionProfileRepository.countByTenantIdAndStatusNot(MINE, Status.Delete)).thenReturn(2L);
+
+        ResponseDto response = this.service.topics(null, null, null, PLATFORM_DEFAULT);
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        verify(this.sourceTaskTypeRepository, never()).fetchTopicOptionsForPlatformDefault(anyLong(), anyBoolean(), any());
+    }
+
+    @Test
+    void aPlatformAdminsPickerOnThePlatformDefaultSpansEveryWorkspace() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+        this.platformDefaultIs(PLATFORM_DEFAULT);
+        when(this.sourceTaskTypeRepository.fetchTopicOptionsForPlatformDefault(PLATFORM_DEFAULT, true, null)).thenReturn(Collections.emptyList());
+
+        this.service.topics(null, null, null, PLATFORM_DEFAULT);
+
+        verify(this.sourceTaskTypeRepository).fetchTopicOptionsForPlatformDefault(eq(PLATFORM_DEFAULT), eq(true), eq(null));
+    }
 }
