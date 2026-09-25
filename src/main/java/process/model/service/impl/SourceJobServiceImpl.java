@@ -216,14 +216,14 @@ public class SourceJobServiceImpl implements SourceJobService {
      */
     /** Whether a posted timetable is the stored one; an empty interval means "unchanged", as applySchedulerFields reads it. */
     static boolean sameTimetable(Scheduler stored, SchedulerDto posted) {
-        return java.util.Objects.equals(stored.getStartDate(), posted.getStartDate())
-            && java.util.Objects.equals(stored.getEndDate(), posted.getEndDate())
-            && java.util.Objects.equals(stored.getStartTime(), posted.getStartTime())
-            && java.util.Objects.equals(stored.getFrequency(), posted.getFrequency())
-            && java.util.Objects.equals(stored.getDaysOfWeek(), posted.getDaysOfWeek())
-            && java.util.Objects.equals(stored.getDayOfMonth(), posted.getDayOfMonth())
+        return Objects.equals(stored.getStartDate(), posted.getStartDate())
+            && Objects.equals(stored.getEndDate(), posted.getEndDate())
+            && Objects.equals(stored.getStartTime(), posted.getStartTime())
+            && Objects.equals(stored.getFrequency(), posted.getFrequency())
+            && Objects.equals(stored.getDaysOfWeek(), posted.getDaysOfWeek())
+            && Objects.equals(stored.getDayOfMonth(), posted.getDayOfMonth())
             && (StringUtils.isEmpty(posted.getIntervalValue())
-                || java.util.Objects.equals(stored.getIntervalValue(), posted.getIntervalValue()));
+                || Objects.equals(stored.getIntervalValue(), posted.getIntervalValue()));
     }
 
     private void applySchedulerFields(Scheduler scheduler, SchedulerDto schedulerDto, Long jobId) {
