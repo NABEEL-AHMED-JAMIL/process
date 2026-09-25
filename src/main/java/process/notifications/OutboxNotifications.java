@@ -3,6 +3,7 @@ package process.notifications;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.barco.notifications.contract.ContractViolation;
+import org.barco.notifications.contract.JobEvent;
 import org.barco.notifications.contract.JobLifecycleChanged;
 import org.barco.notifications.contract.JobLogAppended;
 import org.barco.notifications.contract.JobStatusChanged;
@@ -71,7 +72,7 @@ public class OutboxNotifications implements NotificationPort {
             }
         }
         try {
-            this.write(NotificationTopics.JOB_STATUS, event.validatedForDelivery().partitionKey(), tenantId, event);
+            this.publish(JobEvent.STATUS, event.validatedForDelivery().partitionKey(), tenantId, event);
         } catch (ContractViolation violation) {
             this.logger.warn("Dropped a job status event for job {}: {}", event.getJobId(), violation.getMessage());
         }
@@ -80,7 +81,7 @@ public class OutboxNotifications implements NotificationPort {
     @Override
     public void jobLogAppended(Long tenantId, JobLogAppended line) {
         try {
-            this.write(NotificationTopics.JOB_LOG, String.valueOf(line.validated().getJobQueueId()), tenantId, line);
+            this.publish(JobEvent.LOG, String.valueOf(line.validated().getJobQueueId()), tenantId, line);
         } catch (ContractViolation violation) {
             this.logger.warn("Dropped a log line for job {}: {}", line.getJobId(), violation.getMessage());
         }
@@ -89,7 +90,7 @@ public class OutboxNotifications implements NotificationPort {
     @Override
     public void jobLifecycleChanged(Long tenantId, JobLifecycleChanged change) {
         try {
-            this.write(NotificationTopics.JOB_LIFECYCLE, String.valueOf(change.validated().getJobId()), tenantId, change);
+            this.publish(change.validated().getChange().event(), String.valueOf(change.getJobId()), tenantId, change);
         } catch (ContractViolation violation) {
             this.logger.warn("Dropped a lifecycle event for job {}: {}", change.getJobId(), violation.getMessage());
         }
@@ -166,6 +167,11 @@ public class OutboxNotifications implements NotificationPort {
     /** The recipient's home tenant, or the platform scope for a platform admin -- written, never left out (1.3.0). */
     private static long scopeOf(IdentityPort.Person recipient) {
         return recipient.getTenantId() != null ? recipient.getTenantId() : Recipients.PLATFORM_SCOPE;
+    }
+
+    /** A job event goes out on its JobEvent's topic, never a topic named by hand (MIG-76). */
+    private void publish(JobEvent job, String key, Long tenantId, Object payload) {
+        this.write(job.topic(), key, tenantId, payload);
     }
 
     private void write(String topic, String key, Long tenantId, Object payload) {

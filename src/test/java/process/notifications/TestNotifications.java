@@ -1,6 +1,7 @@
 package process.notifications;
 
 import org.barco.notifications.contract.ContractViolation;
+import org.barco.notifications.contract.JobEvent;
 import org.barco.notifications.contract.JobLifecycleChanged;
 import org.barco.notifications.contract.JobLogAppended;
 import org.barco.notifications.contract.JobStatusChanged;
@@ -38,7 +39,7 @@ public final class TestNotifications {
     public interface FeedSink {
         void publishStatusAfterCommit(Long tenantId, Long jobId, Long jobQueueId, String runningStatus, String message);
 
-        void publishChangedAfterCommit(Long tenantId, Long jobId, String changeType);
+        void publishChangedAfterCommit(Long tenantId, Long jobId, JobEvent change);
 
         void publishLog(Long tenantId, Long jobId, Long jobQueueId, String message);
     }
@@ -97,7 +98,7 @@ public final class TestNotifications {
             } catch (ContractViolation dropped) {
                 return;
             }
-            this.feed.publishChangedAfterCommit(tenantId, change.getJobId(), change.getChange().socketType());
+            this.feed.publishChangedAfterCommit(tenantId, change.getJobId(), change.getChange().event());
         }
 
         @Override

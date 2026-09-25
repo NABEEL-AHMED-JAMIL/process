@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import org.barco.notifications.contract.JobEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -139,7 +140,7 @@ public class SourceJobAnnouncementTest {
 
         this.service.addSourceJob(sourceJobDto);
 
-        verify(this.jobEventPublisher).publishChangedAfterCommit(TENANT_A, JOB_ID, "job.updated");
+        verify(this.jobEventPublisher).publishChangedAfterCommit(TENANT_A, JOB_ID, JobEvent.UPDATED);
     }
 
     @Test
@@ -148,7 +149,7 @@ public class SourceJobAnnouncementTest {
 
         this.service.toggleSourceJobStatus(byId());
 
-        verify(this.jobEventPublisher).publishChangedAfterCommit(TENANT_A, JOB_ID, "job.toggled");
+        verify(this.jobEventPublisher).publishChangedAfterCommit(TENANT_A, JOB_ID, JobEvent.TOGGLED);
     }
 
     @Test
@@ -157,7 +158,7 @@ public class SourceJobAnnouncementTest {
 
         this.service.deleteSourceJob(byId());
 
-        verify(this.jobEventPublisher).publishChangedAfterCommit(TENANT_A, JOB_ID, "job.deleted");
+        verify(this.jobEventPublisher).publishChangedAfterCommit(TENANT_A, JOB_ID, JobEvent.DELETED);
     }
 
     /** A refused call changed nothing, so it must not claim it did. */

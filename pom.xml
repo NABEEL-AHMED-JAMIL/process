@@ -43,6 +43,8 @@
         <!--
           The Notifications contract (MIG-191) and, through it, platform-commons 1.1.0. Exact versions,
           never ranges: a range lets two services disagree about a payload without anything failing.
+          JobEvent (MIG-76) was added to 1.5.0 without a bump (additive, wire unchanged), so this
+          needs a 1.5.0 built from notifications-contract at or after its MIG-76 commit.
         -->
         <dependency>
             <groupId>org.barco</groupId>
