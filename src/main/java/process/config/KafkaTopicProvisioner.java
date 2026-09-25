@@ -84,12 +84,12 @@ public class KafkaTopicProvisioner implements ApplicationRunner {
         thread.start();
     }
 
-    /** One profile's share: the profile (empty for the application's default brokers) and its topics, first come first. */
+    /** One profile's share: the profile and its topics, first come first. */
     private static final class ProfileTopics {
-        private final Optional<KafkaConnectionProfile> profile;
+        private final KafkaConnectionProfile profile;
         private final Map<String, Integer> topics = new LinkedHashMap<>();
 
-        private ProfileTopics(Optional<KafkaConnectionProfile> profile) {
+        private ProfileTopics(KafkaConnectionProfile profile) {
             this.profile = profile;
         }
     }
@@ -98,9 +98,12 @@ public class KafkaTopicProvisioner implements ApplicationRunner {
         List<SourceTaskType> activeSourceTaskTypes = this.sourceTaskTypeRepository.findByStatus(Status.Active);
         this.logger.info("KafkaTopicProvisioner -- provisioning topics for {} active Source TaskType(s), in the background.",
             activeSourceTaskTypes.size());
-        // Keyed by profile id; the default brokers under null. The first task type naming a topic decides its
-        // partitions -- as the per-topic loop did, where the first call created it and the rest found it there.
+        // Keyed by profile id. The first task type naming a topic decides its partitions -- as the per-topic
+        // loop did, where the first call created it and the rest found it there. A task type no profile
+        // resolves for is not provisioned anywhere: its topics are not made on the application's own brokers,
+        // where its runs will never be sent (MIG-45). One line says which, after the loop.
         Map<Long, ProfileTopics> byProfile = new LinkedHashMap<>();
+        List<Long> unrouted = new ArrayList<>();
         for (SourceTaskType sourceTaskType : activeSourceTaskTypes) {
             Optional<KafkaTopicPartitionUtil.Parsed> parsed = KafkaTopicPartitionUtil.parse(sourceTaskType.getQueueTopicPartition());
             if (!parsed.isPresent()) {
@@ -114,9 +117,17 @@ public class KafkaTopicProvisioner implements ApplicationRunner {
                     sourceTaskType.getSourceTaskTypeId(), ex.getMessage());
                 continue;
             }
-            Long key = profile.map(KafkaConnectionProfile::getKafkaConnectionProfileId).orElse(null);
-            byProfile.computeIfAbsent(key, k -> new ProfileTopics(profile)).topics
+            if (!profile.isPresent()) {
+                unrouted.add(sourceTaskType.getSourceTaskTypeId());
+                continue;
+            }
+            byProfile.computeIfAbsent(profile.get().getKafkaConnectionProfileId(), k -> new ProfileTopics(profile.get())).topics
                 .putIfAbsent(parsed.get().getTopic(), parsed.get().minimumPartitionCount());
+        }
+        if (!unrouted.isEmpty()) {
+            this.logger.warn("KafkaTopicProvisioner -- {} task type(s) resolve to no Kafka connection, so their topics "
+                + "were not provisioned anywhere: {}. Set a route or a default connection for their workspace.",
+                unrouted.size(), unrouted);
         }
         AtomicInteger created = new AtomicInteger();
         AtomicInteger existing = new AtomicInteger();
@@ -164,8 +175,8 @@ public class KafkaTopicProvisioner implements ApplicationRunner {
             unreachable.get(), skipped.get());
     }
 
-    private static String describe(Optional<KafkaConnectionProfile> profile) {
-        return profile.map(p -> String.format("Kafka profile %s ('%s', %s)", p.getKafkaConnectionProfileId(), p.getProfileName(),
-            p.getBootstrapServers())).orElse("the default Kafka brokers");
+    private static String describe(KafkaConnectionProfile p) {
+        return String.format("Kafka profile %s ('%s', %s)", p.getKafkaConnectionProfileId(), p.getProfileName(),
+            p.getBootstrapServers());
     }
 }

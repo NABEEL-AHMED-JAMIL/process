@@ -6,6 +6,7 @@ import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.enums.Status;
+import process.model.pojo.KafkaConnectionProfile;
 import process.model.pojo.SourceTaskType;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
@@ -51,7 +52,7 @@ public class SettingServiceTopicStatusCascadeTest {
 
     private SettingServiceImpl service() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1000L, "admin@platform.local");
-        when(this.resolver.resolve(any(), anyLong())).thenReturn(Optional.empty());
+        when(this.resolver.resolve(any(), anyLong())).thenReturn(Optional.of(new KafkaConnectionProfile()));
         return new SettingServiceImpl(this.jobs, this.taskTypes, null, null, null, this.kafka, this.resolver, null);
     }
 
@@ -85,6 +86,18 @@ public class SettingServiceTopicStatusCascadeTest {
         verify(this.jobs, never()).statusChangeSourceJobLinkWithSourceTaskTypeId(anyLong(), anyString());
         assertThat(row.getServiceName()).isEqualTo("Object pipelines (worker), renamed");
         verify(this.kafka).ensureTopicExists(any(), eq("scrapping-topic"), anyInt());
+    }
+
+    /** MIG-45: no connection resolves for the topic -- it is made nowhere, not on the application's own brokers; the save stands. */
+    @Test
+    void aTopicThatResolvesToNoConnectionIsNotCreatedAnywhere() throws Exception {
+        this.existing(Status.Active, 1271L);
+        SettingServiceImpl service = this.service();
+        when(this.resolver.resolve(any(), anyLong())).thenReturn(Optional.empty());
+
+        assertThat(service.updateSourceTaskType(this.edit(Status.Active, 1271L)).getStatus()).isEqualTo("SUCCESS");
+
+        verify(this.kafka, never()).ensureTopicExists(any(), any(), anyInt());
     }
 
     @Test

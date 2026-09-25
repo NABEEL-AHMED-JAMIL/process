@@ -14,4 +14,11 @@ public interface DispatchOutcomes {
 
     /** The broker would not take it: closed, or offered another attempt, as a transient failure. */
     void publishFailed(long jobQueueId, int attempt, Throwable cause);
+
+    /**
+     * No Kafka connection resolves for the run's workspace and task type, so it was sent nowhere (MIG-45).
+     * Closed as Failed and not retried -- another attempt cannot set a route -- with this reason, written
+     * for a person, as its status line.
+     */
+    void unrouted(long jobQueueId, int attempt, String reason);
 }

@@ -55,7 +55,7 @@ public class KafkaTemplateProviderSecretCacheTest {
 
     @BeforeEach
     void setUp() {
-        this.provider = new KafkaTemplateProvider(this.encryptionUtil, null, null, this.storageBrowserService);
+        this.provider = new KafkaTemplateProvider(this.encryptionUtil, this.storageBrowserService);
     }
 
     /** Every object answers with its own key as its content, so a served file names where it came from. */

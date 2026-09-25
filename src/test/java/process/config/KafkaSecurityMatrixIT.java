@@ -149,7 +149,7 @@ public class KafkaSecurityMatrixIT {
         ReflectionTestUtils.setField(encryption, "base64Key",
             Base64.getEncoder().encodeToString(generator.generateKey().getEncoded()));
 
-        KafkaTemplateProvider provider = new KafkaTemplateProvider(encryption, null, null, storage);
+        KafkaTemplateProvider provider = new KafkaTemplateProvider(encryption, storage);
         ReflectionTestUtils.setField(provider, "secretCacheDir", cacheDir.toString());
         ReflectionTestUtils.setField(provider, "localStoreDir", "");
         ReflectionTestUtils.setField(provider, "defaultReplicationFactor", (short) 1);

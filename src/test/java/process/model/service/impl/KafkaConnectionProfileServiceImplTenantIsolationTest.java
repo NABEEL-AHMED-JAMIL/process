@@ -8,6 +8,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.config.KafkaConnectionResolver;
+import process.config.KafkaRouteUnresolvedException;
 import process.config.KafkaTemplateProvider;
 import process.model.dto.KafkaConnectionProfileDto;
 import process.model.dto.ResponseDto;
@@ -533,7 +534,7 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
     @Test
     void theTopicTestSaysNothingAboutTheClusterItAskedFor() throws Exception {
         KafkaConnectionProfile platform = this.profileOwnedBy(null);
-        when(this.kafkaConnectionResolver.resolve(TENANT_A, null)).thenReturn(Optional.of(platform));
+        when(this.kafkaConnectionResolver.require(TENANT_A, null)).thenReturn(platform);
 
         this.actAsTenant(TENANT_A);
         ResponseDto response = this.service.testTopicConnection("orders-in");
@@ -556,6 +557,23 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
         assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
         assertThat(response.getMessage()).contains("Profile not found");
         verify(this.kafkaConnectionResolver, never()).resolve(any(), any());
+        verify(this.kafkaConnectionResolver, never()).require(any(), any());
+    }
+
+    /**
+     * MIG-45: nothing resolves for the workspace -- the test says so, rather than describing the topic on the
+     * application's own brokers, which say nothing about where this workspace's runs go.
+     */
+    @Test
+    void theTopicTestWithNoResolvedConnectionSaysWhatToSet() throws Exception {
+        when(this.kafkaConnectionResolver.require(TENANT_A, null)).thenThrow(new KafkaRouteUnresolvedException(
+            "No Kafka connection is set for this workspace: set a default connection."));
+
+        this.actAsTenant(TENANT_A);
+        ResponseDto response = this.service.testTopicConnection("orders-in");
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(response.getMessage()).isEqualTo("No Kafka connection is set for this workspace: set a default connection.");
     }
 
     @Test

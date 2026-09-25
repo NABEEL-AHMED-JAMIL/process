@@ -558,6 +558,23 @@ public class ProducerBulkEngine implements DispatchOutcomes {
     }
 
     /**
+     * DispatchRelay: no Kafka connection resolves for the run, so it was sent nowhere (MIG-45). Failed, not
+     * retried -- another attempt meets the same configuration -- with the relay's reason as the status line.
+     */
+    @Override
+    public void unrouted(long jobQueueId, int attempt, String reason) {
+        this.transactions.execute(status -> {
+            Optional<JobQueue> run = this.awaitingHandOff(jobQueueId, attempt);
+            if (run.isPresent()) {
+                logger.error("Run {} was not handed to the worker queue: {}", jobQueueId, reason);
+                run.get().setJobSend(false);
+                this.changeStatusForLastJob(run.get(), reason);
+            }
+            return null;
+        });
+    }
+
+    /**
      * The run, if it is still the hand-off the relay is reporting on: queued, latched as sent, same
      * attempt. A run an operator failed meanwhile, or one already moved on, is left as it is.
      */

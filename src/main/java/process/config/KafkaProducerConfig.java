@@ -27,8 +27,9 @@ public class KafkaProducerConfig {
 
     @Bean
     public Map<String, Object> producerConfigs() {
-        // Same durability as a profile-based template. A job that falls back to this one because
-        // no profile resolved must not silently send with a different retry policy.
+        // Same durability as a profile-based template. This is the platform's own producer -- the
+        // outbox relay's platform.* events and the platform topics -- and never a workspace's: a
+        // workspace send that resolves to no profile is refused, not sent here (MIG-45).
         return KafkaTemplateProvider.applyProducerDefaults(new HashMap<>(kafkaProperties.buildProducerProperties()));
     }
 

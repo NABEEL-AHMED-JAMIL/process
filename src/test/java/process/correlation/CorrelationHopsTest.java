@@ -29,6 +29,7 @@ import org.springframework.kafka.support.SendResult;
 import org.springframework.util.concurrent.SettableListenableFuture;
 import process.ai.HttpAi;
 import process.config.KafkaConnectionResolver;
+import process.model.pojo.KafkaConnectionProfile;
 import process.config.KafkaTemplateProvider;
 import process.identity.InternalKafkaPublishRestApi;
 import process.media.HttpMedia;
@@ -154,7 +155,7 @@ class CorrelationHopsTest {
         KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
         when(templates.getTemplate(any())).thenReturn(kafka);
         KafkaConnectionResolver resolver = mock(KafkaConnectionResolver.class);
-        when(resolver.resolve(any(), any())).thenReturn(Optional.empty());
+        when(resolver.require(any(), any())).thenReturn(new KafkaConnectionProfile());
         Map<String, Object> body = new HashMap<>();
         body.put("tenantId", 2905);
         body.put("topic", "analytics.query.completed");

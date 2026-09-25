@@ -83,6 +83,12 @@ final class DispatchPipeline {
         this.engine.publishFailed(run.getJobQueueId(), Math.max(1, run.getAttempt()), cause);
     }
 
+    /** DispatchRelay's report that no Kafka connection resolves for the run, so it was sent nowhere (MIG-45). */
+    void unrouted(JobQueue run, String reason) {
+        lenient().when(this.transactionService.findJobQueueByJobQueueId(run.getJobQueueId())).thenReturn(Optional.of(run));
+        this.engine.unrouted(run.getJobQueueId(), Math.max(1, run.getAttempt()), reason);
+    }
+
     DispatchOutbox.Record lastWritten() {
         return this.written.get(this.written.size() - 1);
     }

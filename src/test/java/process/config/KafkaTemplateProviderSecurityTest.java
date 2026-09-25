@@ -63,7 +63,7 @@ public class KafkaTemplateProviderSecurityTest {
 
     @BeforeEach
     void setUp() {
-        this.provider = new KafkaTemplateProvider(this.encryptionUtil, null, null, this.storageBrowserService);
+        this.provider = new KafkaTemplateProvider(this.encryptionUtil, this.storageBrowserService);
         lenient().when(this.encryptionUtil.decrypt(anyString())).thenAnswer(call -> call.getArgument(0));
     }
 

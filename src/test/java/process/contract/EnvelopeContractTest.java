@@ -1,5 +1,6 @@
 package process.contract;
 
+import process.config.KafkaRouteUnresolvedException;
 import org.barco.platform.contract.EnvelopeContract;
 import org.springframework.dao.DataIntegrityViolationException;
 import process.ai.AiPort;
@@ -69,6 +70,8 @@ class EnvelopeContractTest extends EnvelopeContract {
             + "a person or a workspace answers the fixed 500; the outbox and the name resolver catch it and carry on (MIG-107)");
         internal.put(TenantIsolationException.class, "an infrastructure fault -- the tenant filter could not be turned on -- so the "
             + "request fails closed with the fixed 500 sentence and nothing of the cause (MIG-11)");
+        internal.put(KafkaRouteUnresolvedException.class, "caught where require() is called: DispatchRelay fails the run "
+            + "with its sentence, the internal publish answers 422 with it, the topic test answers it in words (MIG-45)");
         return internal;
     }
 

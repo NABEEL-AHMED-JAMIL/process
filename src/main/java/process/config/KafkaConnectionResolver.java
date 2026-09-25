@@ -1,7 +1,9 @@
 package process.config;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.model.enums.Status;
 import process.model.pojo.KafkaConnectionProfile;
@@ -31,6 +33,17 @@ public class KafkaConnectionResolver {
         this.profileRepository = profileRepository;
     }
 
+    /** Counts sends refused because no Kafka connection resolved for them (MIG-45). There is no fallback to count. */
+    public static final String UNRESOLVED_METER = "process.kafka.route.unresolved";
+
+    private MeterRegistry meterRegistry;
+
+    /** Optional, so the tests that build this by hand need not supply one; the refusal is thrown either way. */
+    @Autowired(required = false)
+    public void setMeterRegistry(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+
     /**
      * Which brokers a dispatch should go to, most specific binding first.
      *
@@ -41,10 +54,14 @@ public class KafkaConnectionResolver {
      * travels with the data instead, which is available on every one of those threads.
      *
      * A null scope means the platform rather than "any tenant", so a dispatch that names no tenant
-     * reaches platform-owned rows only. Nothing here fails hard on a mismatch: a binding that does
-     * not belong to the scope is ignored and the next fallback applies, so a mis-bound row
-     * degrades to the tenant or platform default instead of silently borrowing another tenant's
-     * brokers -- and instead of stopping the dispatch.
+     * reaches platform-owned rows only. A binding that does not belong to the scope is ignored and
+     * the next tier applies, so a mis-bound row never borrows another tenant's brokers.
+     *
+     * The platform default (tier 4) is for a workspace with no Kafka of its own -- that is
+     * resolution, not a fallback. A workspace with ANY profile of its own (inactive included; only a
+     * deleted one does not count) has brought its own brokers, and is never put on the platform's
+     * because a route or a default is missing: it resolves to nothing, and the send is refused
+     * (MIG-45, owner decision 2026-09-24). Empty means refuse -- there is no template behind it.
      */
     public Optional<KafkaConnectionProfile> resolve(Long tenantId, Long sourceTaskTypeId) {
         if (tenantId != null && sourceTaskTypeId != null) {
@@ -77,8 +94,47 @@ public class KafkaConnectionResolver {
             if (viaTenantDefault.isPresent()) {
                 return viaTenantDefault;
             }
+            if (this.hasProfilesOfItsOwn(tenantId)) {
+                return Optional.empty();
+            }
         }
         return this.profileRepository.findByTenantIdIsNullAndIsDefaultTrueAndStatus(Status.Active);
+    }
+
+    /**
+     * The profile a send must use, or a refusal: KafkaRouteUnresolvedException, its message the
+     * sentence the run's status line shows. Every refusal is counted on UNRESOLVED_METER.
+     */
+    public KafkaConnectionProfile require(Long tenantId, Long sourceTaskTypeId) {
+        Optional<KafkaConnectionProfile> resolved = this.resolve(tenantId, sourceTaskTypeId);
+        if (resolved.isPresent()) {
+            return resolved.get();
+        }
+        if (this.meterRegistry != null) {
+            this.meterRegistry.counter(UNRESOLVED_METER).increment();
+        }
+        throw new KafkaRouteUnresolvedException(this.unresolvedMessage(tenantId, sourceTaskTypeId));
+    }
+
+    /** What a person is told when nothing resolves: what is missing, and what to set. */
+    String unresolvedMessage(Long tenantId, Long sourceTaskTypeId) {
+        if (tenantId == null) {
+            return "No platform default Kafka connection is set: set one on Kafka connections.";
+        }
+        if (sourceTaskTypeId == null) {
+            return "No Kafka connection is set for this workspace: set a default connection.";
+        }
+        String taskType = this.sourceTaskTypeRepository.findById(sourceTaskTypeId)
+            .map(SourceTaskType::getServiceName)
+            .filter(name -> !name.trim().isEmpty())
+            .map(name -> "'" + name.trim() + "'")
+            .orElse(String.valueOf(sourceTaskTypeId));
+        return "No Kafka connection is set for task type " + taskType
+            + " in this workspace: set a route or a default connection.";
+    }
+
+    private boolean hasProfilesOfItsOwn(Long tenantId) {
+        return this.profileRepository.countByTenantIdAndStatusNot(tenantId, Status.Delete) > 0;
     }
 
     private Optional<KafkaConnectionProfile> activeProfile(Long tenantId, Long profileId) {

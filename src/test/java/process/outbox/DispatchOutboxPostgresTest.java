@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -310,13 +309,71 @@ class DispatchOutboxPostgresTest {
             + "VALUES (96020, ?, 'Workspace brokers', 'ws-kafka:9092', 'PLAINTEXT', ?, 'Active', now())", TENANT, isDefault);
     }
 
-    /** Characterisation (MIG-45, before): a workspace with Kafka of its own but no route still dispatches -- on the platform's. */
+    /**
+     * MIG-45, the owner's rule: a workspace with Kafka of its own but no route for this task type (and no
+     * default of its own) is not put on the platform's brokers. The run fails, not retried -- trying again
+     * cannot set a route -- with a status line that says what to do, and nothing is sent anywhere.
+     */
     @Test
     @SuppressWarnings("unchecked")
-    void today_aWorkspaceWithItsOwnProfileButNoRouteIsDispatchedOnThePlatformDefault() {
+    void aWorkspaceWithItsOwnProfileButNoRouteFailsTheRunAndSendsNothing() {
         this.aProfileOfTheWorkspacesOwn(false);
         this.queuedRun(96004);
-        when(this.broker.send(any(ProducerRecord.class))).thenReturn(tookItAt(9L));
+        KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
+        when(templates.getTemplate(any())).thenReturn(this.broker);
+
+        this.phase.runPass();
+        this.dispatcher.startJobInCurrentTimeSlot();
+        assertThat(this.relayOverTheRealResolver(templates).drain()).isZero();
+
+        verify(this.broker, never()).send(any(ProducerRecord.class));
+        Map<String, Object> closed = this.run(96004);
+        assertThat(closed.get("job_status")).isEqualTo("Failed");
+        assertThat(closed.get("job_status_message")).isEqualTo(
+            "No Kafka connection is set for task type 'etl' in this workspace: set a route or a default connection.");
+        Map<String, Object> row = this.sql.queryForMap("SELECT * FROM dispatch_outbox WHERE job_queue_id = 96004");
+        assertThat(row.get("abandoned_at")).isNotNull();
+        assertThat(row.get("payload")).as("the token does not outlive the refusal").isNull();
+        assertThat((String) row.get("last_error")).startsWith("No Kafka connection is set for task type 'etl'");
+    }
+
+    /** Every unrouted row of a connection is refused in the one drain -- none is left to wait out a lease. */
+    @Test
+    void unroutedRowsDoNotWaitOutTheirLease() {
+        this.aProfileOfTheWorkspacesOwn(false);
+        this.sql.update("INSERT INTO dispatch_outbox (job_queue_id, attempt, tenant_id, source_task_type_id, topic, message_key, "
+            + "payload, headers) VALUES (98011, 1, ?, 96012, 'etl.jobs', 'a', '{}', '{}'), "
+            + "(98012, 1, ?, 96012, 'etl.jobs', 'b', '{}', '{}')", TENANT, TENANT);
+
+        assertThat(this.relayOverTheRealResolver(mock(KafkaTemplateProvider.class)).drain()).isZero();
+
+        assertThat(this.sql.queryForObject("SELECT count(*) FROM dispatch_outbox WHERE job_queue_id IN (98011, 98012) "
+            + "AND abandoned_at IS NOT NULL AND claimed_until IS NULL", Integer.class)).isEqualTo(2);
+    }
+
+    /** An inactive profile is still Kafka of the workspace's own: it does not put the workspace back on the platform's. */
+    @Test
+    void anInactiveProfileOfItsOwnStillKeepsTheWorkspaceOffThePlatformBrokers() {
+        this.aProfileOfTheWorkspacesOwn(false);
+        this.sql.update("UPDATE kafka_connection_profile SET status = 'Inactive' WHERE kafka_connection_profile_id = 96020");
+        this.queuedRun(96006);
+        KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
+
+        this.phase.runPass();
+        this.dispatcher.startJobInCurrentTimeSlot();
+        assertThat(this.relayOverTheRealResolver(templates).drain()).isZero();
+
+        assertThat(this.run(96006).get("job_status")).isEqualTo("Failed");
+        assertThat((String) this.run(96006).get("job_status_message")).startsWith("No Kafka connection is set");
+    }
+
+    /** Its own default is resolution: the run goes out on the workspace's brokers. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aWorkspaceWithItsOwnDefaultIsDispatchedOnIt() {
+        this.aProfileOfTheWorkspacesOwn(true);
+        this.queuedRun(96007);
+        when(this.broker.send(any(ProducerRecord.class))).thenReturn(tookItAt(11L));
         KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
         when(templates.getTemplate(any())).thenReturn(this.broker);
 
@@ -324,10 +381,10 @@ class DispatchOutboxPostgresTest {
         this.dispatcher.startJobInCurrentTimeSlot();
         assertThat(this.relayOverTheRealResolver(templates).drain()).isEqualTo(1);
 
-        ArgumentCaptor<Optional<KafkaConnectionProfile>> used = ArgumentCaptor.forClass(Optional.class);
+        ArgumentCaptor<KafkaConnectionProfile> used = ArgumentCaptor.forClass(KafkaConnectionProfile.class);
         verify(templates).getTemplate(used.capture());
-        assertThat(used.getValue().map(KafkaConnectionProfile::getTenantId)).as("a platform profile").isEmpty();
-        assertThat(this.run(96004).get("job_status")).isEqualTo("Start");
+        assertThat(used.getValue().getKafkaConnectionProfileId()).isEqualTo(96020L);
+        assertThat(this.run(96007).get("job_status")).isEqualTo("Start");
     }
 
     /** Tier 4 proper: a workspace with no Kafka of its own is dispatched on the platform default (V70.2's row). */
@@ -343,11 +400,10 @@ class DispatchOutboxPostgresTest {
         this.dispatcher.startJobInCurrentTimeSlot();
         assertThat(this.relayOverTheRealResolver(templates).drain()).isEqualTo(1);
 
-        ArgumentCaptor<Optional<KafkaConnectionProfile>> used = ArgumentCaptor.forClass(Optional.class);
+        ArgumentCaptor<KafkaConnectionProfile> used = ArgumentCaptor.forClass(KafkaConnectionProfile.class);
         verify(templates).getTemplate(used.capture());
-        assertThat(used.getValue()).as("V70.2's platform default").isPresent();
-        assertThat(used.getValue().get().getTenantId()).isNull();
-        assertThat(used.getValue().get().getIsDefault()).isTrue();
+        assertThat(used.getValue().getTenantId()).as("V70.2's platform default").isNull();
+        assertThat(used.getValue().getIsDefault()).isTrue();
         assertThat(this.run(96005).get("job_status")).isEqualTo("Start");
     }
 

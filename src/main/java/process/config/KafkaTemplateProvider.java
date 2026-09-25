@@ -2,7 +2,6 @@ package process.config;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -14,9 +13,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -51,7 +48,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,8 +66,6 @@ public class KafkaTemplateProvider {
     private final Gson gson = new Gson();
 
     private final EncryptionUtil encryptionUtil;
-    private final KafkaTemplate<String, String> fallbackTemplate;
-    private final KafkaProperties kafkaProperties;
     private final TrustedStorageOperations storageBrowserService;
 
     /**
@@ -103,38 +97,24 @@ public class KafkaTemplateProvider {
 
     private final Map<Long, CachedProducer> cache = new ConcurrentHashMap<>();
 
-    public KafkaTemplateProvider(EncryptionUtil encryptionUtil,
-        KafkaTemplate<String, String> fallbackTemplate, KafkaProperties kafkaProperties,
-        TrustedStorageOperations storageBrowserService) {
+    /**
+     * Templates, admin clients and key material for workspace Kafka connection profiles -- for a
+     * profile only. There is no template here for "no profile": the application's own brokers
+     * (spring.kafka.*) carry the platform's events through their own KafkaTemplate bean, and a
+     * workspace send that resolves to no profile is refused before it reaches this class (MIG-45).
+     */
+    public KafkaTemplateProvider(EncryptionUtil encryptionUtil, TrustedStorageOperations storageBrowserService) {
         this.encryptionUtil = encryptionUtil;
-        this.fallbackTemplate = fallbackTemplate;
-        this.kafkaProperties = kafkaProperties;
         this.storageBrowserService = storageBrowserService;
     }
 
-    /** Counts dispatches that no profile resolved for and so went out on the fallback template (MIG-45). */
-    public static final String FALLBACK_METER = "process.kafka.fallback.template";
-
-    private MeterRegistry meterRegistry;
-
-    /** Optional, so the tests that build this by hand need not supply one; the log line is written either way. */
-    @Autowired(required = false)
-    public void setMeterRegistry(MeterRegistry meterRegistry) {
-        this.meterRegistry = meterRegistry;
-    }
-
-    public KafkaTemplate<String, String> getTemplate(Optional<KafkaConnectionProfile> profile) {
-        if (!profile.isPresent()) {
-            // The deliberate degrade-never-fail path, no longer a silent one (MIG-45, DEF-127): a fresh
-            // database used to reach it on every dispatch with nothing to show for it.
-            this.logger.warn("Dispatching on the fallback template: no Kafka connection profile resolved, so this goes to "
-                + "spring.kafka.bootstrap-servers. Set a platform default Kafka connection if this is not intended.");
-            if (this.meterRegistry != null) {
-                this.meterRegistry.counter(FALLBACK_METER).increment();
-            }
-            return this.fallbackTemplate;
+    public KafkaTemplate<String, String> getTemplate(KafkaConnectionProfile profile) {
+        if (profile == null) {
+            // The fallback template that used to answer here is gone (MIG-45): resolve with
+            // KafkaConnectionResolver.require, which refuses with a reason, before asking for one.
+            throw new KafkaRouteUnresolvedException("No Kafka connection resolved for this send.");
         }
-        KafkaConnectionProfile p = profile.get();
+        KafkaConnectionProfile p = profile;
         CachedProducer cached = this.cache.computeIfAbsent(p.getKafkaConnectionProfileId(), id -> {
             this.logger.info("Building KafkaTemplate for profile '{}' ({}), tenantId={}.",
                 p.getProfileName(), p.getBootstrapServers(), p.getTenantId());
@@ -536,10 +516,6 @@ public class KafkaTemplateProvider {
         }
     }
 
-    public Map<String, Object> defaultAdminProps() {
-        return new HashMap<>(this.kafkaProperties.buildAdminProperties());
-    }
-
     /** How AdminClients are made: the real factory, or a test's. */
     private Function<Map<String, Object>, AdminClient> adminClients = AdminClient::create;
 
@@ -587,14 +563,16 @@ public class KafkaTemplateProvider {
      * list its topics within PROVISIONING_STEP_SECONDS, is answered as unreachable -- no line per topic: the caller
      * says it once, for the profile.
      */
-    public TopicProvisioning ensureTopicsExist(Optional<KafkaConnectionProfile> profile, Map<String, Integer> topics) {
+    public TopicProvisioning ensureTopicsExist(KafkaConnectionProfile profile, Map<String, Integer> topics) {
         if (topics == null || topics.isEmpty()) {
             return TopicProvisioning.reached(0, 0);
         }
+        if (profile == null) {
+            return TopicProvisioning.unreachable("no Kafka connection resolved");
+        }
         AdminClient adminClient;
         try {
-            Map<String, Object> adminProps = profile.map(this::commonClientProps).orElseGet(this::defaultAdminProps);
-            adminClient = this.adminClients.apply(adminProps);
+            adminClient = this.adminClients.apply(this.commonClientProps(profile));
         } catch (Exception ex) {
             return TopicProvisioning.unreachable(reasonOf(ex));
         }
@@ -655,15 +633,15 @@ public class KafkaTemplateProvider {
         return root == ex || root.getMessage() == null ? outer : outer + " (" + root.getMessage() + ")";
     }
 
-    public void ensureTopicExists(Optional<KafkaConnectionProfile> profile, String topic, int partitions) {
-        if (topic == null || topic.trim().isEmpty()) {
+    public void ensureTopicExists(KafkaConnectionProfile profile, String topic, int partitions) {
+        if (topic == null || topic.trim().isEmpty() || profile == null) {
             return;
         }
         try {
             // Building the client properties can fail on its own -- an undecryptable password, a
             // store that will not download -- and that is as much a provisioning failure as a
             // broker that will not answer, so it is handled here rather than thrown at the caller.
-            Map<String, Object> adminProps = profile.map(this::commonClientProps).orElseGet(this::defaultAdminProps);
+            Map<String, Object> adminProps = this.commonClientProps(profile);
             try (AdminClient adminClient = AdminClient.create(adminProps)) {
                 Set<String> existingTopics = adminClient.listTopics().names().get(10, TimeUnit.SECONDS);
                 if (existingTopics.contains(topic)) {
@@ -685,9 +663,8 @@ public class KafkaTemplateProvider {
     }
 
     /**
-     * The one place a producer's durability is decided. KafkaProducerConfig builds the fallback
-     * template through here too, so a job does not quietly change its retry behaviour depending on
-     * whether a connection profile happened to resolve for it.
+     * The one place a producer's durability is decided. KafkaProducerConfig builds the platform's own
+     * template through here too, so platform events and workspace dispatch send with one retry policy.
      */
     static Map<String, Object> applyProducerDefaults(Map<String, Object> props) {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);

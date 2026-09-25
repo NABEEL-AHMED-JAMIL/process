@@ -20,7 +20,9 @@ import static org.mockito.Mockito.when;
 
 /**
  * MIG-45: where a workspace's dispatch goes when neither a route nor a task-type default names a
- * connection -- characterised as it stands before the fallback is removed.
+ * connection. A workspace with no Kafka of its own is on the platform default (tier 4 -- resolution,
+ * not fallback); a workspace with any profile of its own gets its route, its task-type default or its
+ * own default, and otherwise nothing: it is never put on the platform's brokers.
  */
 @ExtendWith(MockitoExtension.class)
 class KafkaRouteResolutionTest {
@@ -47,13 +49,42 @@ class KafkaRouteResolutionTest {
             .thenReturn(Optional.of(profile(PLATFORM_DEFAULT, null)));
     }
 
-    /** Characterisation (before MIG-45's rule): a workspace with a profile of its own, but no route, lands on the platform's. */
+    /**
+     * The owner's rule (2026-09-24): a workspace that has brought Kafka of its own is never put on the
+     * platform's brokers because a route is missing. Nothing resolves, and the dispatch is refused.
+     */
     @Test
-    void today_aTenantWithItsOwnProfileButNoRouteTakesThePlatformDefault() {
-        lenient().when(this.profileRepository.countByTenantIdAndStatusNot(TENANT, Status.Delete)).thenReturn(1L);
+    void aTenantWithItsOwnProfileButNoRouteResolvesToNothing() {
+        when(this.profileRepository.countByTenantIdAndStatusNot(TENANT, Status.Delete)).thenReturn(1L);
+
+        assertThat(this.resolver.resolve(TENANT, TASK_TYPE_ID)).isEmpty();
+    }
+
+    /** Without a task type either (a workspace event): the same rule. */
+    @Test
+    void aTenantWithItsOwnProfileButNoDefaultResolvesToNothingForAWorkspaceEvent() {
+        when(this.profileRepository.countByTenantIdAndStatusNot(TENANT, Status.Delete)).thenReturn(2L);
+
+        assertThat(this.resolver.resolve(TENANT, null)).isEmpty();
+    }
+
+    /** The platform's own scope never asks whether a workspace has profiles: it is the platform default or nothing. */
+    @Test
+    void thePlatformScopeTakesThePlatformDefault() {
+        assertThat(this.resolver.resolve(null, null))
+            .map(KafkaConnectionProfile::getKafkaConnectionProfileId).contains(PLATFORM_DEFAULT);
+    }
+
+    /** Tiers 1-3 are unchanged for a workspace with profiles: its task-type default still resolves. */
+    @Test
+    void aTenantWithItsOwnProfilesStillGetsItsTaskTypeDefault() {
+        SourceTaskType bound = taskType();
+        bound.setKafkaConnectionProfileId(OWN_PROFILE);
+        when(this.sourceTaskTypeRepository.findById(TASK_TYPE_ID)).thenReturn(Optional.of(bound));
+        when(this.profileRepository.findById(OWN_PROFILE)).thenReturn(Optional.of(profile(OWN_PROFILE, TENANT)));
 
         assertThat(this.resolver.resolve(TENANT, TASK_TYPE_ID))
-            .map(KafkaConnectionProfile::getKafkaConnectionProfileId).contains(PLATFORM_DEFAULT);
+            .map(KafkaConnectionProfile::getKafkaConnectionProfileId).contains(OWN_PROFILE);
     }
 
     /** Tier 4 proper: a workspace with no Kafka of its own is on the platform's brokers. That is resolution, not fallback. */

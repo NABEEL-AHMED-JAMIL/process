@@ -118,7 +118,7 @@ class KafkaTopicProvisioningTest {
     @Test
     @Timeout(30)
     void anUnreachableProfileIsOneWarningWithItsCountAndNoLinePerTopic() {
-        KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null, null, null);
+        KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null);
         KafkaConnectionProfile nowhere = profile(41L, "MCN test cluster", "broker-1.medaxiscare.demo:9092,broker-2.medaxiscare.demo:9092");
         List<SourceTaskType> types = new ArrayList<>();
         Map<Long, Optional<KafkaConnectionProfile>> profileOf = new HashMap<>();
@@ -148,7 +148,9 @@ class KafkaTopicProvisioningTest {
             provisioned.countDown();
             return KafkaTemplateProvider.TopicProvisioning.reached(0, 1);
         });
-        KafkaTopicProvisioner provisioner = provisioner(provider, Arrays.asList(taskType(1L, "slow", "0")), new HashMap<>(), null);
+        Map<Long, Optional<KafkaConnectionProfile>> profileOf = new HashMap<>();
+        profileOf.put(1L, Optional.of(profile(1L, "slow", "slow:9092")));
+        KafkaTopicProvisioner provisioner = provisioner(provider, Arrays.asList(taskType(1L, "slow", "0")), profileOf, null);
 
         long started = System.nanoTime();
         provisioner.run(null);
@@ -176,19 +178,36 @@ class KafkaTopicProvisioningTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Integer>> topics = ArgumentCaptor.forClass(Map.class);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Optional<KafkaConnectionProfile>> profiles = ArgumentCaptor.forClass(Optional.class);
-        verify(provider, Mockito.times(3)).ensureTopicsExist(profiles.capture(), topics.capture());
+        ArgumentCaptor<KafkaConnectionProfile> profiles = ArgumentCaptor.forClass(KafkaConnectionProfile.class);
+        verify(provider, Mockito.times(2)).ensureTopicsExist(profiles.capture(), topics.capture());
         Map<String, Map<String, Integer>> byProfile = new HashMap<>();
-        for (int i = 0; i < 3; i++) {
-            byProfile.put(profiles.getAllValues().get(i).map(KafkaConnectionProfile::getProfileName).orElse("default"),
-                topics.getAllValues().get(i));
+        for (int i = 0; i < 2; i++) {
+            byProfile.put(profiles.getAllValues().get(i).getProfileName(), topics.getAllValues().get(i));
         }
         // The first task type naming a topic decides its partitions, as the per-topic loop did (the first created it).
         assertThat(byProfile.get("a")).containsOnly(Map.entry("a1", 1), Map.entry("a2", 4));
         assertThat(byProfile.get("b")).containsOnly(Map.entry("b1", 1));
-        assertThat(byProfile.get("default")).containsOnly(Map.entry("d1", 2));
         verify(provider, never()).ensureTopicExists(any(), any(), ArgumentMatchers.anyInt());
+    }
+
+    /**
+     * MIG-45: a task type no connection resolves for is provisioned nowhere -- not on the application's own
+     * brokers, where its runs will never be sent -- and one line says which, not one per topic.
+     */
+    @Test
+    void aTaskTypeThatResolvesToNoConnectionIsNotProvisionedAnywhere() {
+        KafkaTemplateProvider provider = mock(KafkaTemplateProvider.class);
+        when(provider.ensureTopicsExist(any(), any())).thenReturn(KafkaTemplateProvider.TopicProvisioning.reached(0, 0));
+        Map<Long, Optional<KafkaConnectionProfile>> profileOf = new HashMap<>();
+        profileOf.put(10L, Optional.of(profile(1L, "a", "a:9092")));
+
+        provisioner(provider, Arrays.asList(taskType(10L, "a1", "*"), taskType(13L, "d1", "1"), taskType(15L, "d2", "0")),
+            profileOf, Runnable::run).run(null);
+
+        verify(provider, Mockito.times(1)).ensureTopicsExist(any(), any());
+        verify(provider, never()).ensureTopicsExist(ArgumentMatchers.isNull(), any());
+        assertThat(this.warnings()).hasSize(1);
+        assertThat(this.warnings().get(0)).contains("2 task type(s) resolve to no Kafka connection").contains("[13, 15]");
     }
 
     // ---- a broker that answers: the same outcome as the per-topic loop ------------------------------------------
@@ -220,7 +239,7 @@ class KafkaTopicProvisioningTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<NewTopic>> asked = ArgumentCaptor.forClass(Collection.class);
         when(admin.createTopics(asked.capture())).thenReturn(created);
-        KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null, null, null);
+        KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null);
         List<Map<String, Object>> clientsMadeWith = new ArrayList<>();
         provider.useAdminClients(props -> {
             clientsMadeWith.add(props);
@@ -232,8 +251,7 @@ class KafkaTopicProvisioningTest {
         topics.put("raced", 1);
         topics.put("refused", 2);
 
-        KafkaTemplateProvider.TopicProvisioning outcome = provider.ensureTopicsExist(
-            Optional.of(profile(7L, "dev", "localhost:9092")), topics);
+        KafkaTemplateProvider.TopicProvisioning outcome = provider.ensureTopicsExist(profile(7L, "dev", "localhost:9092"), topics);
 
         assertThat(clientsMadeWith).as("one client for the profile").hasSize(1);
         assertThat(asked.getValue()).extracting(NewTopic::name).containsExactlyInAnyOrder("new-one", "raced", "refused");
@@ -251,7 +269,7 @@ class KafkaTopicProvisioningTest {
 
     @Test
     void aProfileWhoseClientCannotBeBuiltIsUnreachableNotAThrow() {
-        KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null, null, null);
+        KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null);
         provider.useAdminClients(props -> {
             throw new KafkaException("Failed to create new KafkaAdminClient");
         });
@@ -259,7 +277,7 @@ class KafkaTopicProvisioningTest {
         topics.put("x", 1);
         topics.put("y", 1);
 
-        KafkaTemplateProvider.TopicProvisioning outcome = provider.ensureTopicsExist(Optional.of(profile(9L, "gone", "gone:9092")), topics);
+        KafkaTemplateProvider.TopicProvisioning outcome = provider.ensureTopicsExist(profile(9L, "gone", "gone:9092"), topics);
 
         assertThat(outcome.isReached()).isFalse();
         assertThat(outcome.getReason()).contains("Failed to create new KafkaAdminClient");
@@ -276,13 +294,12 @@ class KafkaTopicProvisioningTest {
         try (ServerSocket closed = new ServerSocket(0)) {
             int port = closed.getLocalPort();
             closed.close();
-            KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null, null, null);
+            KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null);
             Map<String, Integer> topics = new HashMap<>();
             topics.put("t", 1);
 
             long started = System.nanoTime();
-            KafkaTemplateProvider.TopicProvisioning outcome = provider.ensureTopicsExist(
-                Optional.of(profile(3L, "silent", "127.0.0.1:" + port)), topics);
+            KafkaTemplateProvider.TopicProvisioning outcome = provider.ensureTopicsExist(profile(3L, "silent", "127.0.0.1:" + port), topics);
 
             assertThat(outcome.isReached()).isFalse();
             assertThat(TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started))
@@ -295,15 +312,15 @@ class KafkaTopicProvisioningTest {
     void againstARealBrokerTheMissingTopicIsCreatedWithItsPartitions() throws Exception {
         String bootstrap = System.getenv("PROCESS_TEST_KAFKA");
         Assumptions.assumeTrue(bootstrap != null && !bootstrap.isEmpty(), "PROCESS_TEST_KAFKA not set");
-        KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null, null, null);
+        KafkaTemplateProvider provider = new KafkaTemplateProvider(null, null);
         // What kafka.topic.replication-factor gives the application; a provider built by hand has none.
         ReflectionTestUtils.setField(provider, "defaultReplicationFactor", (short) 1);
         String topic = "process-provisioning-test-" + System.nanoTime();
         Map<String, Integer> topics = new HashMap<>();
         topics.put(topic, 3);
 
-        KafkaTemplateProvider.TopicProvisioning outcome = provider.ensureTopicsExist(Optional.of(profile(1L, "dev", bootstrap)), topics);
-        KafkaTemplateProvider.TopicProvisioning again = provider.ensureTopicsExist(Optional.of(profile(1L, "dev", bootstrap)), topics);
+        KafkaTemplateProvider.TopicProvisioning outcome = provider.ensureTopicsExist(profile(1L, "dev", bootstrap), topics);
+        KafkaTemplateProvider.TopicProvisioning again = provider.ensureTopicsExist(profile(1L, "dev", bootstrap), topics);
 
         assertThat(outcome.getCreated()).isEqualTo(1);
         assertThat(again.getCreated()).isZero();

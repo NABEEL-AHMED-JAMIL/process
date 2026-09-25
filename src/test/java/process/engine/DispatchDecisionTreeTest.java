@@ -270,6 +270,24 @@ class DispatchDecisionTreeTest {
         this.assertClosedAsFailed("Job 1196 could not be handed to the worker queue: Failed to construct kafka producer", true);
     }
 
+    // ---- MIG-45: no Kafka connection resolves -- not transient, and not sent anywhere else --------------------
+
+    /**
+     * The relay found no Kafka connection for the run's workspace and task type. Another attempt meets the
+     * same configuration, so it is closed as Failed straight away, with the relay's sentence as it stands.
+     */
+    @Test
+    void anUnresolvedKafkaRouteIsFailedAndNotRetried() throws Exception {
+        this.aiSteps(answered());
+        this.push(dispatchable());
+        String reason = "No Kafka connection is set for task type 'etl' in this workspace: set a route or a default connection.";
+
+        this.pipeline.unrouted(this.run, reason);
+
+        this.assertClosedAsFailed(reason, false);
+        assertThat(this.run.isJobSend()).isFalse();
+    }
+
     // ---- row 8: sent ------------------------------------------------------------------------------------------
 
     @Test

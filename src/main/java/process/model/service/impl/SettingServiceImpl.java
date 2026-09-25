@@ -229,10 +229,23 @@ public class SettingServiceImpl implements SettingService {
         this.sourceTaskTypeRepository.save(sourceTaskType);
 
         Long ownerTenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
-        this.kafkaTemplateProvider.ensureTopicExists(
-            this.kafkaConnectionResolver.resolve(ownerTenantId, sourceTaskType.getSourceTaskTypeId()),
-            parsedTopic.get().getTopic(), parsedTopic.get().minimumPartitionCount());
+        this.ensureTopicOnItsConnection(ownerTenantId, sourceTaskType.getSourceTaskTypeId(), parsedTopic.get());
         return new ResponseDto(SUCCESS, String.format("Topic saved with %s.", sourceTaskType.getSourceTaskTypeId()));
+    }
+
+    /**
+     * Creates the task type's topic on the connection its runs will be sent to. When none resolves the
+     * topic is made nowhere -- not on the application's own brokers, where its runs will never go (MIG-45)
+     * -- and the save itself still stands: a route or a default set later is what makes it dispatchable.
+     */
+    private void ensureTopicOnItsConnection(Long ownerTenantId, Long sourceTaskTypeId, KafkaTopicPartitionUtil.Parsed topic) {
+        Optional<KafkaConnectionProfile> profile = this.kafkaConnectionResolver.resolve(ownerTenantId, sourceTaskTypeId);
+        if (!profile.isPresent()) {
+            logger.warn("Topic '{}' of task type {} was not created: no Kafka connection resolves for it in workspace {}.",
+                topic.getTopic(), sourceTaskTypeId, ownerTenantId);
+            return;
+        }
+        this.kafkaTemplateProvider.ensureTopicExists(profile.get(), topic.getTopic(), topic.minimumPartitionCount());
     }
 
     @Override
@@ -280,9 +293,7 @@ public class SettingServiceImpl implements SettingService {
             this.sourceTaskTypeRepository.save(sourceTaskType.get());
 
             Long ownerTenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
-            this.kafkaTemplateProvider.ensureTopicExists(
-                this.kafkaConnectionResolver.resolve(ownerTenantId, sourceTaskTypeDto.getSourceTaskTypeId()),
-                parsedTopic.get().getTopic(), parsedTopic.get().minimumPartitionCount());
+            this.ensureTopicOnItsConnection(ownerTenantId, sourceTaskTypeDto.getSourceTaskTypeId(), parsedTopic.get());
             return new ResponseDto(SUCCESS, String.format("Topic saved with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));
         }
         return new ResponseDto(ERROR, String.format("Topic not found with %s.", sourceTaskTypeDto.getSourceTaskTypeId()));

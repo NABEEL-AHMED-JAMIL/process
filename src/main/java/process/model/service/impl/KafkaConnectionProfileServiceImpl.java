@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.config.KafkaConnectionResolver;
+import process.config.KafkaRouteUnresolvedException;
 import process.config.KafkaTemplateProvider;
 import process.model.dto.KafkaConnectionProfileDto;
 import process.model.dto.ResponseDto;
@@ -421,18 +422,24 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         if (isNull(topicName) || topicName.trim().isEmpty()) {
             return new ResponseDto(ERROR, "Topic name missing.");
         }
-        Optional<KafkaConnectionProfile> resolved;
+        KafkaConnectionProfile resolved;
         if (!isNull(kafkaConnectionProfileId)) {
-            resolved = this.scopedFind(kafkaConnectionProfileId);
-            if (!resolved.isPresent()) {
+            Optional<KafkaConnectionProfile> named = this.scopedFind(kafkaConnectionProfileId);
+            if (!named.isPresent()) {
                 return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
             }
+            resolved = named.get();
         } else {
             Long tenantId = TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId();
-            resolved = this.kafkaConnectionResolver.resolve(tenantId, null);
+            try {
+                resolved = this.kafkaConnectionResolver.require(tenantId, null);
+            } catch (KafkaRouteUnresolvedException unresolved) {
+                // Not the application's own brokers instead: a topic found there says nothing about
+                // where this workspace's runs go (MIG-45).
+                return new ResponseDto(ERROR, unresolved.getMessage());
+            }
         }
-        Map<String, Object> adminProps = resolved.map(this.kafkaTemplateProvider::commonClientProps)
-            .orElseGet(this.kafkaTemplateProvider::defaultAdminProps);
+        Map<String, Object> adminProps = this.kafkaTemplateProvider.commonClientProps(resolved);
         try (AdminClient adminClient = AdminClient.create(adminProps)) {
             DescribeTopicsResult result = adminClient.describeTopics(Collections.singleton(topicName));
             TopicDescription description = result.values().get(topicName).get(10, TimeUnit.SECONDS);

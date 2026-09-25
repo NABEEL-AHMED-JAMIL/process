@@ -1,6 +1,5 @@
 package process.outbox;
 
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -15,6 +14,7 @@ import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.util.concurrent.SettableListenableFuture;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
+import process.model.pojo.KafkaConnectionProfile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,7 +54,7 @@ class DispatchRelayCorrelationTest {
         KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
         when(templates.getTemplate(any())).thenReturn(kafka);
         KafkaConnectionResolver resolver = mock(KafkaConnectionResolver.class);
-        when(resolver.resolve(any(), any())).thenReturn(Optional.empty());
+        when(resolver.require(any(), any())).thenReturn(new KafkaConnectionProfile());
         DispatchOutcomes outcomes = mock(DispatchOutcomes.class);
         AtomicReference<String> atStart = new AtomicReference<>();
         doAnswer(call -> {
@@ -65,7 +65,8 @@ class DispatchRelayCorrelationTest {
             resolver, templates);
         relay.setOutcomes(outcomes);
 
-        assertThat(relay.publish(row("{\"x-tenant-id\":\"2905\",\"X-Correlation-Id\":\"" + RUN + "\"}"))).isTrue();
+        assertThat(relay.publish(row("{\"x-tenant-id\":\"2905\",\"X-Correlation-Id\":\"" + RUN + "\"}")))
+            .isEqualTo(DispatchRelay.Outcome.PUBLISHED);
 
         assertThat(atSend.get()).isEqualTo(RUN);
         assertThat(atStart.get()).isEqualTo(RUN);

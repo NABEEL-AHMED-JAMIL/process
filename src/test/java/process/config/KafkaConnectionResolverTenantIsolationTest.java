@@ -146,13 +146,12 @@ public class KafkaConnectionResolverTenantIsolationTest {
         when(this.profileRepository.findById(PROFILE_OF_A)).thenReturn(Optional.of(inactive));
         when(this.profileRepository.findByTenantIdAndIsDefaultTrueAndStatus(TENANT_A, Status.Active))
             .thenReturn(Optional.empty());
-        when(this.profileRepository.findByTenantIdIsNullAndIsDefaultTrueAndStatus(Status.Active))
-            .thenReturn(Optional.of(profile(PLATFORM_PROFILE, null)));
+        // The inactive profile is still tenant A's own, so A is not put on the platform's brokers (MIG-45).
+        when(this.profileRepository.countByTenantIdAndStatusNot(TENANT_A, Status.Delete)).thenReturn(1L);
 
         Optional<KafkaConnectionProfile> resolved = this.resolver.resolve(TENANT_A, TASK_TYPE_ID);
 
-        assertThat(resolved).isPresent();
-        assertThat(resolved.get().getKafkaConnectionProfileId()).isEqualTo(PLATFORM_PROFILE);
+        assertThat(resolved).isEmpty();
     }
 
     private static SourceTaskType taskType(Long tenantId, Long kafkaConnectionProfileId) {

@@ -15,7 +15,9 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.transaction.support.TransactionOperations;
 import process.config.KafkaConnectionResolver;
+import process.config.KafkaRouteUnresolvedException;
 import process.config.KafkaTemplateProvider;
+import process.model.pojo.KafkaConnectionProfile;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -38,7 +40,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * with its headers -- x-tenant-id, x-user-id and X-Correlation-Id (MIG-26, MIG-95). The outcome is
  * recorded in one transaction with the row: published (the run moves to Start, and the payload -- which
  * carries the run's callback token -- is wiped), or refused (the run is closed as a transient failure,
- * or offered another attempt, exactly as the in-pass send's failure callback did).
+ * or offered another attempt, exactly as the in-pass send's failure callback did), or unrouted (no Kafka
+ * connection resolves for the run's workspace and task type: the run fails with a reason a person can act
+ * on, and nothing is sent -- there is no fallback broker behind the resolver any more, MIG-45).
  *
  * Rows are claimed with a short lease, FOR UPDATE SKIP LOCKED, so any number of instances drain
  * together without sending a row twice. A broker that refuses one row leaves that connection's other
@@ -81,6 +85,16 @@ public class DispatchRelay implements SmartLifecycle {
         this.pollMillis = pollMillis;
     }
 
+    /** What became of one row. */
+    enum Outcome {
+        /** The broker took it. */
+        PUBLISHED,
+        /** The broker would not: the rest of this connection's rows wait out their lease. */
+        BROKER_REFUSED,
+        /** No connection resolves for it: refused without asking any broker, so the next row is not held up. */
+        UNROUTED
+    }
+
     /** One claimed row. */
     static final class Row {
 
@@ -114,9 +128,10 @@ public class DispatchRelay implements SmartLifecycle {
                     // Left claimed: its lease runs out and a later drain tries the broker again.
                     continue;
                 }
-                if (this.publish(row)) {
+                Outcome outcome = this.publish(row);
+                if (outcome == Outcome.PUBLISHED) {
                     published++;
-                } else {
+                } else if (outcome == Outcome.BROKER_REFUSED) {
                     refused.add(row.connection());
                 }
                 if (Thread.currentThread().isInterrupted()) {
@@ -152,8 +167,8 @@ public class DispatchRelay implements SmartLifecycle {
         return ordered;
     }
 
-    /** True when the broker took the row. Either way the outcome is recorded before this returns. */
-    boolean publish(Row row) {
+    /** Whatever the outcome, it is recorded before this returns. */
+    Outcome publish(Row row) {
         // The run's own id (its X-Correlation-Id header, MIG-95): the hand-over, its outcome and any failure are
         // logged and audited under the id the worker and every callback will carry (MIG-94).
         try (CorrelationScope scope = CorrelationScope.open(correlationIdOf(row.headers))) {
@@ -170,10 +185,10 @@ public class DispatchRelay implements SmartLifecycle {
         }
     }
 
-    private boolean publishUnderItsId(Row row) {
+    private Outcome publishUnderItsId(Row row) {
         try {
-            KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(
-                this.kafkaConnectionResolver.resolve(row.tenantId, row.sourceTaskTypeId));
+            KafkaConnectionProfile profile = this.kafkaConnectionResolver.require(row.tenantId, row.sourceTaskTypeId);
+            KafkaTemplate<String, String> template = this.kafkaTemplateProvider.getTemplate(profile);
             SendResult<String, String> sent = template.send(new ProducerRecord<>(row.topic, row.partition, row.messageKey,
                 row.payload, headersOf(row.headers))).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             long offset = sent.getRecordMetadata().offset();
@@ -183,10 +198,12 @@ public class DispatchRelay implements SmartLifecycle {
                 this.outcomes.published(row.jobQueueId, row.attempt, offset);
                 return null;
             });
-            return true;
+            return Outcome.PUBLISHED;
+        } catch (KafkaRouteUnresolvedException unresolved) {
+            return this.unrouted(row, unresolved.getMessage());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            return false;
+            return Outcome.BROKER_REFUSED;
         } catch (Exception failed) {
             Throwable cause = failed instanceof ExecutionException && failed.getCause() != null ? failed.getCause() : failed;
             String reason = cause.getClass().getSimpleName() + ": " + cause.getMessage();
@@ -198,8 +215,20 @@ public class DispatchRelay implements SmartLifecycle {
                 this.outcomes.publishFailed(row.jobQueueId, row.attempt, cause);
                 return null;
             });
-            return false;
+            return Outcome.BROKER_REFUSED;
         }
+    }
+
+    /** Sent nowhere: the row is abandoned with the reason, and the run is failed with it (MIG-45). */
+    private Outcome unrouted(Row row, String reason) {
+        this.logger.warn("Did not hand run {} (attempt {}) to {}: {}", row.jobQueueId, row.attempt, row.topic, reason);
+        this.transactions.execute(status -> {
+            this.jdbc.update("UPDATE dispatch_outbox SET abandoned_at = now(), payload = NULL, claimed_until = NULL, "
+                + "attempts = attempts + 1, last_error = ? WHERE outbox_id = ?", reason, row.outboxId);
+            this.outcomes.unrouted(row.jobQueueId, row.attempt, reason);
+            return null;
+        });
+        return Outcome.UNROUTED;
     }
 
     static List<Header> headersOf(String json) {

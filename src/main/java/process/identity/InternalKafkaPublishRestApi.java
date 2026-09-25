@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.barco.platform.correlation.CorrelationId;
 import process.config.KafkaConnectionResolver;
+import process.config.KafkaRouteUnresolvedException;
+import process.model.pojo.KafkaConnectionProfile;
 import process.outbox.OutboxRelay;
 import process.config.KafkaTemplateProvider;
 
@@ -28,7 +30,8 @@ import java.util.Set;
  * the workspace's own Kafka profile, so the profile's credentials never leave Core. The topic must be
  * on the allow list -- today only Analytics' analytics.query.completed -- so this is not a way to
  * write to any topic at all. Accepted (202) once handed to the producer: best-effort, as the
- * in-process publish was.
+ * in-process publish was. A workspace that resolves to no Kafka connection is answered 422 with the
+ * reason, and nothing is published (MIG-45).
  */
 @RestController
 @RequestMapping("/internal/kafka")
@@ -65,9 +68,18 @@ public class InternalKafkaPublishRestApi {
         Long tenantId = tenant instanceof Number ? ((Number) tenant).longValue() : null;
         String key = body.get("key") == null ? null : body.get("key").toString();
         String payload = body.get("payload") == null ? null : body.get("payload").toString();
-        // No source task type: the event belongs to a workspace, not a job, so the resolver falls
-        // through to the tenant's default profile and then to the platform's.
-        KafkaTemplate<String, String> template = this.templates.getTemplate(this.resolver.resolve(tenantId, null));
+        // No source task type: the event belongs to a workspace, not a job, so the resolver enters at the
+        // workspace's default profile -- and, for a workspace with no Kafka of its own, the platform's.
+        // Nothing resolving is a refusal, never the application's own brokers (MIG-45).
+        KafkaConnectionProfile profile;
+        try {
+            profile = this.resolver.require(tenantId, null);
+        } catch (KafkaRouteUnresolvedException unresolved) {
+            this.logger.warn("Did not publish an event on {} for workspace {}: {}", topic, tenantId, unresolved.getMessage());
+            return new ResponseEntity<>(Collections.singletonMap("message", unresolved.getMessage()),
+                HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+        KafkaTemplate<String, String> template = this.templates.getTemplate(profile);
         // The asking request's id travels as the record's X-Correlation-Id (MIG-94), so the consumer logs under it.
         template.send(OutboxRelay.recordOf(topic, key, payload, CorrelationId.current())).addCallback(
             sent -> this.logger.debug("Published an event on {} for workspace {}.", topic, tenantId),
