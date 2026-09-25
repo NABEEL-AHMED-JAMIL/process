@@ -72,4 +72,19 @@ class InternalKafkaPublishRestApiTest {
         assertThat(sent.getValue().key()).isEqualTo("2905");
         assertThat(sent.getValue().value()).isEqualTo("{\"event\":\"analytics.query.completed\"}");
     }
+
+    /** Characterisation (MIG-45, before): a workspace that resolves to nothing has the event put on the fallback brokers. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void today_anUnresolvedWorkspaceIsPublishedOnTheFallbackTemplate() {
+        KafkaTemplate<String, String> fallback = mock(KafkaTemplate.class);
+        when(fallback.send(any(ProducerRecord.class))).thenReturn(new SettableListenableFuture<>());
+        when(this.resolver.resolve(2905L, null)).thenReturn(Optional.empty());
+        InternalKafkaPublishRestApi real = new InternalKafkaPublishRestApi(this.resolver,
+            new KafkaTemplateProvider(null, fallback, null, null), TOKEN);
+
+        assertThat(real.publish(TOKEN, event("analytics.query.completed")).getStatusCodeValue()).isEqualTo(202);
+
+        verify(fallback).send(any(ProducerRecord.class));
+    }
 }

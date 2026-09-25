@@ -24,7 +24,11 @@ import process.config.KafkaTemplateProvider;
 import process.engine.BulkAction;
 import process.engine.PreDispatchPhase;
 import process.engine.ProducerBulkEngine;
+import process.model.pojo.KafkaConnectionProfile;
 import process.model.repository.JobAuditLogRepository;
+import process.model.repository.KafkaConnectionProfileRepository;
+import process.model.repository.SourceTaskTypeRepository;
+import process.model.repository.TenantTaskTypeKafkaRouteRepository;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.TaskReferenceRepository;
 import process.model.repository.SchedulerRepository;
@@ -43,6 +47,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -106,6 +111,8 @@ class DispatchOutboxPostgresTest {
     void wire() {
         this.sql = db.jdbc();
         this.sql.update("DELETE FROM dispatch_outbox");
+        this.sql.update("DELETE FROM tenant_task_type_kafka_route WHERE tenant_id = ?", TENANT);
+        this.sql.update("DELETE FROM kafka_connection_profile WHERE tenant_id = ?", TENANT);
         this.sql.update("DELETE FROM job_audit_logs");
         this.sql.update("DELETE FROM job_queue WHERE job_id = ?", JOB_ID);
         this.sql.update("DELETE FROM source_job WHERE job_id = ?", JOB_ID);
@@ -285,6 +292,63 @@ class DispatchOutboxPostgresTest {
         assertThat(waiting.get("claimed_until")).as("left to its lease").isNotNull();
         assertThat(this.sql.queryForObject("SELECT published_at FROM dispatch_outbox WHERE job_queue_id = 98003", Timestamp.class))
             .isNotNull();
+    }
+
+    /** A relay over the real resolver, on this database's routes and profiles; the templates stay stubbed. */
+    @SuppressWarnings("unchecked")
+    private DispatchRelay relayOverTheRealResolver(KafkaTemplateProvider templates) {
+        KafkaConnectionResolver resolver = new KafkaConnectionResolver(jpa.repository(TenantTaskTypeKafkaRouteRepository.class),
+            jpa.repository(SourceTaskTypeRepository.class), jpa.repository(KafkaConnectionProfileRepository.class));
+        DispatchRelay relay = new DispatchRelay(this.sql, new TransactionTemplate(jpa.transactionManager()), resolver, templates);
+        relay.setOutcomes(this.dispatcher);
+        return relay;
+    }
+
+    private void aProfileOfTheWorkspacesOwn(boolean isDefault) {
+        this.sql.update("INSERT INTO kafka_connection_profile (kafka_connection_profile_id, tenant_id, profile_name, "
+            + "bootstrap_servers, security_protocol, is_default, status, date_created) "
+            + "VALUES (96020, ?, 'Workspace brokers', 'ws-kafka:9092', 'PLAINTEXT', ?, 'Active', now())", TENANT, isDefault);
+    }
+
+    /** Characterisation (MIG-45, before): a workspace with Kafka of its own but no route still dispatches -- on the platform's. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void today_aWorkspaceWithItsOwnProfileButNoRouteIsDispatchedOnThePlatformDefault() {
+        this.aProfileOfTheWorkspacesOwn(false);
+        this.queuedRun(96004);
+        when(this.broker.send(any(ProducerRecord.class))).thenReturn(tookItAt(9L));
+        KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
+        when(templates.getTemplate(any())).thenReturn(this.broker);
+
+        this.phase.runPass();
+        this.dispatcher.startJobInCurrentTimeSlot();
+        assertThat(this.relayOverTheRealResolver(templates).drain()).isEqualTo(1);
+
+        ArgumentCaptor<Optional<KafkaConnectionProfile>> used = ArgumentCaptor.forClass(Optional.class);
+        verify(templates).getTemplate(used.capture());
+        assertThat(used.getValue().map(KafkaConnectionProfile::getTenantId)).as("a platform profile").isEmpty();
+        assertThat(this.run(96004).get("job_status")).isEqualTo("Start");
+    }
+
+    /** Tier 4 proper: a workspace with no Kafka of its own is dispatched on the platform default (V70.2's row). */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aWorkspaceWithNoProfilesOfItsOwnIsDispatchedOnThePlatformDefault() {
+        this.queuedRun(96005);
+        when(this.broker.send(any(ProducerRecord.class))).thenReturn(tookItAt(10L));
+        KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
+        when(templates.getTemplate(any())).thenReturn(this.broker);
+
+        this.phase.runPass();
+        this.dispatcher.startJobInCurrentTimeSlot();
+        assertThat(this.relayOverTheRealResolver(templates).drain()).isEqualTo(1);
+
+        ArgumentCaptor<Optional<KafkaConnectionProfile>> used = ArgumentCaptor.forClass(Optional.class);
+        verify(templates).getTemplate(used.capture());
+        assertThat(used.getValue()).as("V70.2's platform default").isPresent();
+        assertThat(used.getValue().get().getTenantId()).isNull();
+        assertThat(used.getValue().get().getIsDefault()).isTrue();
+        assertThat(this.run(96005).get("job_status")).isEqualTo("Start");
     }
 
     /** Two instances' relays draining at once: every row goes out exactly once. */
