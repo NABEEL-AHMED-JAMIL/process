@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.identity.WorkspaceNames;
 import org.slf4j.Logger;
 import process.util.BusinessTime;
 import process.util.UserNameResolver;
@@ -724,6 +725,10 @@ public class SourceJobServiceImpl implements SourceJobService {
                 }
                 return dto;
             }).collect(Collectors.toList());
+        // Whose job each row is, for a platform administrator's list of every workspace (MIG-296).
+        Map<Long, String> workspaceNames = WorkspaceNames.forCaller(this.identity,
+            jobs.stream().map(SourceJob::getTenantId).collect(Collectors.toList()));
+        sourceJobDtoList.forEach(dto -> dto.setTenantName(workspaceNames.get(dto.getTenantId())));
         return new ResponseDto(SUCCESS, "Fetch source jobs.", sourceJobDtoList);
     }
 
@@ -794,6 +799,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         Map<Long, String> usernameByUserId, Map<Long, String> lookupTypeByLookupId) {
         SourceJobDto dto = new SourceJobDto();
         dto.setJobId(sourceJob.getJobId());
+        dto.setTenantId(sourceJob.getTenantId());
         dto.setJobStatus(sourceJob.getJobStatus());
         dto.setJobRunningStatus(sourceJob.getJobRunningStatus());
         dto.setLastJobRun(sourceJob.getLastJobRun());

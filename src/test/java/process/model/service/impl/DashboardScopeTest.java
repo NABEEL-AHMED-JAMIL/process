@@ -29,6 +29,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
+import static org.mockito.ArgumentMatchers.anyCollection;
 
 /**
  * MIG-46 (DEF-128): the Dashboard said nothing about whose numbers it showed. A platform admin's
@@ -116,6 +118,35 @@ class DashboardScopeTest {
         assertThat(jobs).extracting(WeeklyHrJobDimensionStatisticsDto::getTotal).containsExactly(3L, 5L, 8L);
         assertThat(jobs.get(2).getAllWorkspaces()).as("the platform total spans workspaces").isTrue();
         assertThat(jobs.get(0).getAllWorkspaces()).as("a job is in one workspace").isFalse();
+    }
+
+    /** MIG-296: a platform administrator's hour says whose each job is, by name, in one Identity call. */
+    @Test
+    void aPlatformAdminsHourNamesEachJobsWorkspace() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1000L, "admin@platform.local");
+        when(this.identity.workspaces(anyCollection())).thenReturn(Arrays.asList(
+            new IdentityPort.Workspace(1004L, "MedAxis", "MED", "Active"),
+            new IdentityPort.Workspace(1007L, "CareBridge", "CARE", "Active")));
+        rows(new Object[] {11, "orders", 0, 0, 0, 1, 2, 0, 0, 0, 0, 3, 1004},
+            new Object[] {12, "claims", 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 1007},
+            new Object[] {null, "TOTAL", 0, 0, 0, 1, 7, 0, 0, 0, 0, 8, null});
+
+        List<WeeklyHrJobDimensionStatisticsDto> jobs = data(this.dashboard.weeklyHrRunningStatisticsDimension("2026-09-21", 9L));
+
+        assertThat(jobs).extracting(WeeklyHrJobDimensionStatisticsDto::getTenantName).containsExactly("MedAxis", "CareBridge", null);
+        verify(this.identity, times(1)).workspaces(anyCollection());
+    }
+
+    /** A workspace admin's hour is their own workspace: no names, and Identity is not asked. */
+    @Test
+    void aWorkspaceAdminsHourIsNotNamed() throws Exception {
+        TenantContext.set(1004L, "TENANT_ADMIN", 61L, "admin@medaxis.test");
+        rows(new Object[] {11, "orders", 0, 0, 0, 1, 2, 0, 0, 0, 0, 3, 1004});
+
+        List<WeeklyHrJobDimensionStatisticsDto> jobs = data(this.dashboard.weeklyHrRunningStatisticsDimension("2026-09-21", 9L));
+
+        assertThat(jobs.get(0).getTenantName()).isNull();
+        verify(this.identity, never()).workspaces(anyCollection());
     }
 
     @Test

@@ -84,7 +84,7 @@ public class QueryService {
                 "st.pipeline_id, ld3.name as group_id, st.task_status, stt.source_task_type_id, stt.service_name, " +
                 "stt.description, stt.queue_topic_partition, stt.task_type_status, stt.kafka_connection_profile_id, " +
                 "st.bucket, st.input_folder, st.output_folder, " +
-                "count(sj.job_id) as total_link_jobs\n";
+                "count(sj.job_id) as total_link_jobs, st.tenant_id\n";
         }
         String query = selectPortion + " from source_task st inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n";
         if (!isCount) {

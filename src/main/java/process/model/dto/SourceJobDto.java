@@ -25,6 +25,9 @@ public class SourceJobDto implements AuditNamed {
 
 
     private Long jobId;
+    /** Whose job this is, and (for a platform administrator's list of every workspace) its name (MIG-296). */
+    private Long tenantId;
+    private String tenantName;
     private String jobName;
     private SourceTaskDto taskDetail;
 
@@ -253,5 +256,21 @@ public class SourceJobDto implements AuditNamed {
     @Override
     public void setCreatedBy(Long createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getTenantName() {
+        return tenantName;
+    }
+
+    public void setTenantName(String tenantName) {
+        this.tenantName = tenantName;
     }
 }

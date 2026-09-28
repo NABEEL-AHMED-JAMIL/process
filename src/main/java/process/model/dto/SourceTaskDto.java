@@ -19,6 +19,8 @@ public class SourceTaskDto implements AuditNamed {
 
     private Long taskDetailId;
     private Long tenantId;
+    /** The workspace's name, for a platform administrator's list of every workspace (MIG-296). */
+    private String tenantName;
     private String taskName;
     private Status taskStatus;
     private String homePageId;
@@ -48,6 +50,14 @@ public class SourceTaskDto implements AuditNamed {
 
     public void setTenantId(Long tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public String getTenantName() {
+        return tenantName;
+    }
+
+    public void setTenantName(String tenantName) {
+        this.tenantName = tenantName;
     }
 
     public String getTaskName() {

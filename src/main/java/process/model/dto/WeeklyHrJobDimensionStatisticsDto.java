@@ -24,6 +24,8 @@ public class WeeklyHrJobDimensionStatisticsDto {
     private Long missed;
     private Long total;
     private Long tenantId;
+    /** The job's workspace name, for a platform administrator's all-workspaces hour (MIG-296). */
+    private String tenantName;
     private Boolean allWorkspaces;
 
     public WeeklyHrJobDimensionStatisticsDto() {}
@@ -177,5 +179,13 @@ public class WeeklyHrJobDimensionStatisticsDto {
     @Override
     public String toString() {
         return new Gson().toJson(this);
+    }
+
+    public String getTenantName() {
+        return tenantName;
+    }
+
+    public void setTenantName(String tenantName) {
+        this.tenantName = tenantName;
     }
 }

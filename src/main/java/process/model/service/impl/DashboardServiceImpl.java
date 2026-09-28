@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.identity.WorkspaceNames;
 import java.util.stream.Collectors;
 import java.util.Map;
 import java.util.Locale;
@@ -245,6 +246,11 @@ public class DashboardServiceImpl implements DashboardService {
                 row.setAllWorkspaces(totalRow && TenantContext.isPlatformAdmin());
                 weeklyJobStatistics.add(row);
             }
+            // Whose job each row is, for a platform administrator's all-workspaces hour (MIG-296).
+            Map<Long, String> workspaceNames = WorkspaceNames.forCaller(this.identity, weeklyJobStatistics.stream()
+                .filter(row -> row.getJobId() != null).map(WeeklyHrJobDimensionStatisticsDto::getTenantId)
+                .collect(Collectors.toList()));
+            weeklyJobStatistics.forEach(row -> row.setTenantName(row.getJobId() == null ? null : workspaceNames.get(row.getTenantId())));
             responseDto = new ResponseDto(SUCCESS, "Data found.", weeklyJobStatistics);
         }
         return responseDto;

@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.identity.WorkspaceNames;
 import process.settings.ConfigReferences;
 import org.apache.poi.ss.usermodel.Row;
 import process.util.BusinessTime;
@@ -519,11 +520,19 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     if (!ProcessUtil.isNull(obj[index])) {
                         sourceTaskDto.setTotalLinksJobs(Long.valueOf(obj[index].toString()));
                     }
+                    index++;
+                    if (obj.length > index && !ProcessUtil.isNull(obj[index])) {
+                        sourceTaskDto.setTenantId(Long.valueOf(obj[index].toString()));
+                    }
                     sourceTaskDto.setSourceTaskType(sourceTaskTypeDto);
                     sourceTaskDtoList.add(sourceTaskDto);
                 }
                 this.userNameResolver.attachToDtos(sourceTaskDtoList, this.sourceTaskRepository,
                     SourceTask::getTaskDetailId);
+                // Whose task each row is, for a platform administrator's list of every workspace (MIG-296).
+                Map<Long, String> workspaceNames = WorkspaceNames.forCaller(this.identity,
+                    sourceTaskDtoList.stream().map(SourceTaskDto::getTenantId).collect(Collectors.toList()));
+                sourceTaskDtoList.forEach(dto -> dto.setTenantName(workspaceNames.get(dto.getTenantId())));
                 responseDto = new ResponseDto(SUCCESS, "SourceTask successfully ", sourceTaskDtoList,
                     PagingUtil.convertEntityToPagingDTO(Long.valueOf(countQueryResult.toString()), paging));
             } else {
