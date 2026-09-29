@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,6 +88,10 @@ class StepEnginePostgresTest {
     private static Path datasetDir;
 
     private ThreadPoolExecutor runThreads;
+
+    private final AtomicLong submitted = new AtomicLong();
+
+    private final AtomicLong finished = new AtomicLong();
     private PreDispatchPhase phase;
     private static long nextRun = 785100;
 
@@ -175,7 +180,21 @@ class StepEnginePostgresTest {
         BulkAction bulkAction = new BulkAction(store, mock(NotificationPort.class));
         NotifyService notify = transactional(new NotifyServiceImpl(bulkAction, mock(JobMail.class), store, mock(NotificationPort.class)));
         StepTasks tasks = Definitions.builtInTasks(new Refuses());
-        this.runThreads = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
+        // Counted here, exactly: ThreadPoolExecutor's own getTaskCount() is approximate, and a run handed over during the
+        // pass could read as not yet scheduled -- the wait below then returned early (a flake, 1 run in 3 or so).
+        this.runThreads = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>()) {
+            @Override
+            public void execute(Runnable command) {
+                submitted.incrementAndGet();
+                super.execute(command);
+            }
+
+            @Override
+            protected void afterExecute(Runnable r, Throwable t) {
+                super.afterExecute(r, t);
+                finished.incrementAndGet();
+            }
+        };
         StepEngine engine = new StepEngine(new PipelineDefinitionStore(db.appJdbc()), new JdbcStepStore(db.appJdbc()), tasks,
             new DefinitionValidator(tasks), new FileDatasetStore(datasetDir.toString()), notify, store,
             new TransactionTemplate(jpa.transactionManager()), this.runThreads,
@@ -198,10 +217,10 @@ class StepEnginePostgresTest {
     private void pass() throws Exception {
         this.phase.runPass();
         long deadline = System.currentTimeMillis() + 30000;
-        while (this.runThreads.getCompletedTaskCount() < this.runThreads.getTaskCount() && System.currentTimeMillis() < deadline) {
+        while (this.finished.get() < this.submitted.get() && System.currentTimeMillis() < deadline) {
             Thread.sleep(50);
         }
-        assertThat(this.runThreads.getCompletedTaskCount()).as("the engine finished its runs").isEqualTo(this.runThreads.getTaskCount());
+        assertThat(this.finished.get()).as("the engine finished its runs").isEqualTo(this.submitted.get());
     }
 
     private Map<String, Object> run(long id) {
