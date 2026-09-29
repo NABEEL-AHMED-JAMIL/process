@@ -173,7 +173,11 @@ class CoreRowSecurityPostgresTest {
         }
     }
 
-    /** process_app reads and writes rows and owns nothing; Liquibase's own tables are not its. */
+    /**
+     * process_app reads and writes rows and owns nothing; Liquibase's own tables are not its. The one exception is an
+     * audit trail it may add to and never change: a run review's decisions (V189, MIG-237), and the run's review status,
+     * which moves on but is never removed. Each withheld right is listed, so another is a reviewed change.
+     */
     @Test
     void processAppHasTheApplicationsGrantsAndNoMore() {
         JdbcTemplate login = world.db.jdbc();
@@ -187,7 +191,11 @@ class CoreRowSecurityPostgresTest {
                 }
             }
         }
-        assertThat(missing).isEmpty();
+        Map<String, Boolean> withheld = new TreeMap<>();
+        withheld.put("run_review DELETE", false);
+        withheld.put("run_review_decision DELETE", false);
+        withheld.put("run_review_decision UPDATE", false);
+        assertThat(missing).isEqualTo(withheld);
         assertThat(login.queryForObject("SELECT has_table_privilege(?, 'public.databasechangelog', 'INSERT')", Boolean.class, APP)).isFalse();
         assertThat(login.queryForObject("SELECT count(*) FROM pg_class c JOIN pg_roles r ON r.oid = c.relowner WHERE r.rolname = ?",
             Long.class, APP)).isZero();

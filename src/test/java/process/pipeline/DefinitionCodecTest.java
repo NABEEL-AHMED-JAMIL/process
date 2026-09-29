@@ -50,6 +50,8 @@ class DefinitionCodecTest {
         "    onError: skip_rest",
         "settings:",
         "  datasetRetentionHours: 12",
+        "  review:",
+        "    required: [internal, customer]",
         "");
 
     @Test
@@ -73,6 +75,7 @@ class DefinitionCodecTest {
         assertThat(definition.getSteps().get(1).getConfig().get("columns")).isEqualTo(config("id", "patient_id", "name", "name: first"));
         assertThat(definition.getSteps().get(0).getRetry().getMaxAttempts()).isEqualTo(2);
         assertThat(definition.getSettings().getDatasetRetentionHours()).isEqualTo(12);
+        assertThat(definition.getSettings().getReview().getRequired()).containsExactly("internal", "customer");
     }
 
     @Test

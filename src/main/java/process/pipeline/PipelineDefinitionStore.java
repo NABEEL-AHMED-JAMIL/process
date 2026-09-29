@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -74,6 +75,20 @@ public class PipelineDefinitionStore {
         return first(this.jdbc.query("SELECT " + COLUMNS + " FROM pipeline_definition d WHERE d.pipeline_key = ("
             + "SELECT p.pipeline_key FROM pipeline p WHERE p.tenant_id = ? AND p.pipeline_id = ? AND p.status <> 'Delete' "
             + "ORDER BY p.pipeline_key LIMIT 1) ORDER BY d.version DESC LIMIT 1", PipelineDefinitionStore::row, tenantId, pipelineId.trim()));
+    }
+
+    /**
+     * MIG-237: the latest definition of a workspace's pipeline as it stood at {@code asOf} -- the one a run made then
+     * followed when nothing pinned it (a run a worker ran). Empty when the pipeline had none yet.
+     */
+    public Optional<Stored> latestFor(long tenantId, String pipelineId, Timestamp asOf) {
+        if (pipelineId == null || pipelineId.trim().isEmpty() || asOf == null) {
+            return Optional.empty();
+        }
+        return first(this.jdbc.query("SELECT " + COLUMNS + " FROM pipeline_definition d WHERE d.pipeline_key = ("
+            + "SELECT p.pipeline_key FROM pipeline p WHERE p.tenant_id = ? AND p.pipeline_id = ? AND p.status <> 'Delete' "
+            + "ORDER BY p.pipeline_key LIMIT 1) AND d.date_created <= ? ORDER BY d.version DESC LIMIT 1", PipelineDefinitionStore::row,
+            tenantId, pipelineId.trim(), asOf));
     }
 
     public Optional<Stored> byId(long pipelineDefinitionId) {

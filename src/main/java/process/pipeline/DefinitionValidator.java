@@ -30,8 +30,9 @@ import java.util.regex.Pattern;
  *   <li>{@code input} names an earlier step.</li>
  *   <li>{@code retry.maxAttempts} 1 to 10, {@code retry.delaySeconds} 0 to 3600, {@code timeoutSeconds} 1 to 86400,
  *       {@code onError} fail, continue or skip_rest.</li>
- *   <li>{@code settings}: datasetRetentionHours 1 to 720, defaultTimeoutSeconds 1 to 86400, defaultOnError as onError,
- *       sensitivity public, internal or sensitive (MIG-243).</li>
+ *   <li>{@code settings}: datasetRetentionHours 1 to 720, defaultTimeoutSeconds 1 to 86400, defaultOnError as onError;
+ *       review.required (MIG-237) each of internal and customer at most once; sensitivity public, internal or sensitive
+ *       (MIG-243).</li>
  * </ul>
  */
 @Component
@@ -135,6 +136,19 @@ public class DefinitionValidator {
         }
         if (settings.getDefaultOnError() != null && !OnError.of(settings.getDefaultOnError()).isPresent()) {
             problems.add(new DefinitionProblem("settings.defaultOnError", "one of " + OnError.words()));
+        }
+        if (settings.getReview() != null && settings.getReview().getRequired() != null) {
+            List<String> required = settings.getReview().getRequired();
+            Set<String> named = new HashSet<>();
+            for (int i = 0; i < required.size(); i++) {
+                String word = required.get(i);
+                String at = "settings.review.required[" + i + "]";
+                if (!PipelineDefinition.Review.partyOf(word).isPresent()) {
+                    problems.add(new DefinitionProblem(at, "one of " + PipelineDefinition.Review.PARTIES));
+                } else if (!named.add(word)) {
+                    problems.add(new DefinitionProblem(at, String.format("'%s' is already required", word)));
+                }
+            }
         }
     }
 

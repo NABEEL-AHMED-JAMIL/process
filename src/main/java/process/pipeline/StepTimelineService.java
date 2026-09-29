@@ -7,14 +7,12 @@ import org.springframework.transaction.annotation.Transactional;
 import process.ai.ModelChoiceStore;
 import process.ai.RunAiStep;
 import process.model.dto.ResponseDto;
-import process.model.enums.Status;
 import process.model.pojo.JobQueue;
-import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
-import process.security.JobOwnership;
 import process.pipeline.data.FileFormats;
 import process.pipeline.data.RowCollector;
+import process.pipeline.review.RunReviews;
 import process.util.BusinessTime;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
@@ -26,7 +24,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -101,23 +98,26 @@ public class StepTimelineService {
     private final StepStore steps;
     private final ModelChoiceStore aiSteps;
     private final DatasetStore datasets;
+    private final RunReviews reviews;
 
     public StepTimelineService(JobQueueRepository runs, SourceJobRepository jobs, StepStore steps, ModelChoiceStore aiSteps,
-                               DatasetStore datasets) {
+                               DatasetStore datasets, RunReviews reviews) {
         this.runs = runs;
         this.jobs = jobs;
         this.steps = steps;
         this.aiSteps = aiSteps;
         this.datasets = datasets;
+        this.reviews = reviews;
     }
 
     /** The timeline of one attempt of a run: the latest when none is named. */
     @Transactional(readOnly = true)
     public ResponseDto timeline(Long jobQueueId, Integer attempt) {
-        Optional<JobQueue> run = this.owned(jobQueueId);
-        if (!run.isPresent()) {
+        Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+        if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
         }
+        Optional<JobQueue> run = Optional.of(owned.get().run);
         List<StepStore.StepRow> rows = this.steps.stepsOfRun(run.get().getJobQueueId());
         List<RunAiStep> ai = this.aiSteps.stepsOfRun(run.get().getJobQueueId());
         TreeSet<Integer> attempts = new TreeSet<>();
@@ -148,6 +148,7 @@ public class StepTimelineService {
                 Collections.emptyList()))).collect(Collectors.toList()));
         }
         timeline.put("aiSteps", ai.stream().filter(step -> (step.attempt == null ? 1 : step.attempt) == shown).collect(Collectors.toList()));
+        this.putReview(timeline, owned.get());
         return new ResponseDto(SUCCESS, String.format("%d step(s) in attempt %d.", ((List<?>) timeline.get("steps")).size(), shown),
             timeline);
     }
@@ -217,10 +218,11 @@ public class StepTimelineService {
      */
     @Transactional(readOnly = true)
     public ResponseDto outputs(Long jobQueueId, Integer attempt) {
-        Optional<JobQueue> run = this.owned(jobQueueId);
-        if (!run.isPresent()) {
+        Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+        if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
         }
+        Optional<JobQueue> run = Optional.of(owned.get().run);
         Instant now = Instant.now();
         List<Map<String, Object>> outputs = this.steps.outputsOfRun(run.get().getJobQueueId()).stream()
             .filter(row -> attempt == null || row.attempt == attempt)
@@ -253,6 +255,7 @@ public class StepTimelineService {
         manifest.put("jobId", run.get().getJobId());
         manifest.put("attempt", attempt);
         manifest.put("outputs", outputs);
+        this.putReview(manifest, owned.get());
         return new ResponseDto(SUCCESS, String.format("%d file(s).", outputs.size()), manifest);
     }
 
@@ -288,17 +291,18 @@ public class StepTimelineService {
         return columns;
     }
 
+    /**
+     * MIG-237: where the run's review stands -- reviewStatus (NOT_REQUIRED, PENDING, APPROVED, REJECTED) and the review
+     * itself (required parties, decisions, decidedAt, rerunJobQueueId) -- on the timeline and the manifest alike.
+     */
+    private void putReview(Map<String, Object> read, RunOwnership.Owned owned) {
+        Map<String, Object> review = this.reviews.summary(owned.run, owned.job);
+        read.put("reviewStatus", review.get("reviewStatus"));
+        read.put("review", review);
+    }
+
     private Optional<JobQueue> owned(Long jobQueueId) {
-        if (jobQueueId == null) {
-            return Optional.empty();
-        }
-        Optional<JobQueue> run = this.runs.findById(jobQueueId);
-        Optional<SourceJob> job = run.flatMap(r -> r.getJobId() == null ? Optional.empty() : this.jobs.findById(r.getJobId()));
-        if (!run.isPresent() || !job.isPresent() || !JobOwnership.isVisibleToCaller(job.get())
-            || Status.Delete.equals(job.get().getJobStatus()) || !Objects.equals(run.get().getTenantId(), job.get().getTenantId())) {
-            return Optional.empty();
-        }
-        return run;
+        return RunOwnership.owned(this.runs, this.jobs, jobQueueId).map(owned -> owned.run);
     }
 
     /** A legacy run as its one step: the run's own status, times and status line; its log is the run's. */
