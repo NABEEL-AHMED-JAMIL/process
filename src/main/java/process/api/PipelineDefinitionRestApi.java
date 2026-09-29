@@ -20,7 +20,9 @@ import process.pipeline.PipelineDefinitionService;
  *       pipeline without one runs as -- as the object, JSON and YAML, with its versions;</li>
  *   <li>POST pipeline.json/steps/validate: a draft's problems, each at its path, and its JSON and YAML;</li>
  *   <li>POST pipeline.json/steps/save: the draft as the next version (tenant admins, as the pipeline's form);</li>
- *   <li>GET pipeline.json/steps/tasks: the tasks a step may run.</li>
+ *   <li>GET pipeline.json/steps/tasks: the Task Registry as the caller's workspace sees it (MIG-231) -- each task's
+ *       entry with its config schema and enabled, and one Legacy entry per pipeline of the workspace;</li>
+ *   <li>POST pipeline.json/steps/tasks/enabled: a workspace admin switches a task on, off, or back to its default.</li>
  * </ul>
  *
  * A missing pipelineKey is Spring's 400; a pipeline of another workspace, or none, is the envelope's
@@ -56,5 +58,11 @@ public class PipelineDefinitionRestApi {
     @RequestMapping(value = "/pipeline.json/steps/tasks", method = RequestMethod.GET)
     public ResponseEntity<?> tasks() {
         return new ResponseEntity<>(this.service.tasks(), HttpStatus.OK);
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/pipeline.json/steps/tasks/enabled", method = RequestMethod.POST)
+    public ResponseEntity<?> switchTask(@RequestBody PipelineDefinitionService.TaskSwitchRequest request) {
+        return new ResponseEntity<>(this.service.switchTask(request), HttpStatus.OK);
     }
 }

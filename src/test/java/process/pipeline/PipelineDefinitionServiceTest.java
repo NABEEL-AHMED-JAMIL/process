@@ -8,6 +8,8 @@ import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
 import process.model.repository.PipelineRepository;
+import process.pipeline.registry.InMemoryTaskOverrideStore;
+import process.pipeline.registry.TaskRegistry;
 import process.security.TenantContext;
 
 import java.util.Collections;
@@ -34,8 +36,10 @@ class PipelineDefinitionServiceTest {
     private final PipelineRepository pipelines = mock(PipelineRepository.class);
     private final PipelineDefinitionStore store = mock(PipelineDefinitionStore.class);
     private final StepTasks tasks = Definitions.builtInTasks();
+    private final InMemoryTaskOverrideStore overrides = new InMemoryTaskOverrideStore();
+    private final TaskRegistry registry = new TaskRegistry(this.tasks, this.overrides);
     private final PipelineDefinitionService service = new PipelineDefinitionService(this.pipelines, this.store,
-        new DefinitionValidator(this.tasks), this.tasks);
+        new DefinitionValidator(this.registry), this.registry, this.overrides);
 
     @BeforeEach
     void signIn() {
@@ -131,9 +135,48 @@ class PipelineDefinitionServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void theTaskListNamesEachTaskAndWhetherTheEngineRunsIt() {
-        List<Map<String, Object>> list = (List<Map<String, Object>>) this.service.tasks().getData();
-        assertThat(list).extracting(entry -> entry.get("code")).containsExactly("legacy", "sample", "select");
-        assertThat(list.get(0)).containsEntry("runsInEngine", false);
+    void theTaskListIsTheRegistryAsMyWorkspaceSeesItWithALegacyEntryPerPipeline() {
+        Pipeline claims = new Pipeline();
+        claims.setPipelineKey(KEY);
+        claims.setPipelineId("F768927");
+        claims.setPipelineName("Claims intake");
+        when(this.pipelines.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(TENANT, Status.Delete))
+            .thenReturn(Collections.singletonList(claims));
+        this.overrides.set(TENANT, "select", false, 7L);
+
+        ResponseDto answer = this.service.tasks();
+        List<Map<String, Object>> list = (List<Map<String, Object>>) answer.getData();
+
+        assertThat(answer.getMessage()).isEqualTo("3 step task(s) and 1 legacy pipeline(s).");
+        assertThat(list).extracting(entry -> entry.get("code")).containsExactly("legacy", "sample", "select", "legacy");
+        assertThat(list.get(0)).containsEntry("runsInEngine", false).containsEntry("kind", "Legacy").containsEntry("enabled", true)
+            .containsEntry("overridable", false).containsEntry("aiToolName", "run_legacy_pipeline").containsKey("configSchema");
+        assertThat(list.get(2)).containsEntry("enabled", false).containsEntry("disabledReason", "Switched off in this workspace.");
+        assertThat(list.get(3)).containsEntry("name", "Legacy: Claims intake").containsEntry("pipelineId", "F768927")
+            .containsEntry("pipelineKey", KEY).containsEntry("config", Collections.singletonMap("pipelineId", "F768927"));
+    }
+
+    @Test
+    void anAdminSwitchesATaskForTheWorkspaceButNeverLegacy() {
+        PipelineDefinitionService.TaskSwitchRequest off = new PipelineDefinitionService.TaskSwitchRequest();
+        off.setCode("sample");
+        off.setEnabled(false);
+        assertThat(this.service.switchTask(off).getMessage()).isEqualTo("'sample' is switched off in this workspace.");
+        assertThat(this.overrides.overrides(TENANT)).containsEntry("sample", false);
+        assertThat(this.service.validate(draft(GOOD)).getMessage()).contains("the task 'sample' is disabled in this workspace");
+        assertThat(this.service.save(draft(GOOD)).getMessage()).contains("the task 'sample' is disabled in this workspace");
+
+        off.setEnabled(null);
+        assertThat(this.service.switchTask(off).getMessage()).isEqualTo("'sample' is back to its default.");
+        assertThat(this.overrides.overrides(TENANT)).isEmpty();
+
+        PipelineDefinitionService.TaskSwitchRequest legacy = new PipelineDefinitionService.TaskSwitchRequest();
+        legacy.setCode("legacy");
+        legacy.setEnabled(false);
+        assertThat(this.service.switchTask(legacy).getMessage()).isEqualTo("'legacy' cannot be switched: existing pipelines always stay runnable.");
+        legacy.setCode("nosuch");
+        assertThat(this.service.switchTask(legacy).getMessage()).isEqualTo("No task 'nosuch' is registered.");
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "root@example");
+        assertThat(this.service.switchTask(off).getMessage()).isEqualTo("Tasks are switched in a workspace; this caller has none.");
     }
 }

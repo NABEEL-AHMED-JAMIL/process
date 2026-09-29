@@ -13,9 +13,13 @@ import process.model.pojo.SourceTask;
 import process.model.service.NotifyService;
 import process.model.service.impl.NotifyServiceImpl;
 import process.model.service.impl.TransactionServiceImpl;
+import process.pipeline.registry.InMemoryTaskOverrideStore;
+import process.pipeline.registry.TaskRegistry;
+import process.pipeline.data.Values;
 import org.springframework.transaction.support.TransactionOperations;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -62,6 +66,8 @@ class StepEngineTest {
     private final ExecutorService tryThreads = Executors.newCachedThreadPool();
     private final Map<String, AtomicInteger> tries = new ConcurrentHashMap<>();
 
+    private final AllTasks all = new AllTasks();
+    private final InMemoryTaskOverrideStore switches = new InMemoryTaskOverrideStore();
     private StepTasks tasks;
     private StepEngine engine;
     private JobQueue run;
@@ -69,8 +75,11 @@ class StepEngineTest {
 
     @BeforeEach
     void setUp() {
-        this.tasks = Definitions.builtInTasks(new Flaky(), new Slow(), new Counts());
-        this.engine = new StepEngine(this.definitions, this.steps, this.tasks, new DefinitionValidator(this.tasks), this.datasets,
+        List<StepTask> registered = this.all.list();
+        registered.addAll(Arrays.asList(new Flaky(), new Slow(), new Counts()));
+        this.tasks = new StepTasks(registered);
+        this.engine = new StepEngine(this.definitions, this.steps, this.tasks,
+            new DefinitionValidator(new TaskRegistry(this.tasks, this.switches)), this.datasets,
             this.worker, this.transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(),
             this.tryThreads, this.waited::add);
         this.run = new JobQueue();
@@ -492,6 +501,79 @@ class StepEngineTest {
         this.job.setTaskDetail(null);
         assertThat(this.engine.planFor(this.job, this.run)).isEmpty();
         assertThat(this.engine.planFor(null, this.run)).isEmpty();
+    }
+
+    // ---- MIG-231: the Task Registry's tasks in the engine -----------------------------------------------------
+
+    /** The acceptance's pipeline: read -> validate -> transform -> save, end to end on the engine, with a small dataset. */
+    @Test
+    void aPipelineReadsValidatesTransformsAndSaves() {
+        this.all.buckets.objects.put("lake/in/claims.csv",
+            "claim_id,name,amount\nC-1,acme,10.50\nC-2,beta,oops\nC-3,gamma,7\n".getBytes(StandardCharsets.UTF_8));
+        this.all.contracts.holds = candidate -> Values.number(candidate.get("amount")) != null;
+        this.runs(Definitions.of(
+            step("read", "read_file", config("bucket", "lake", "key", "in/claims.csv")),
+            step("check", "validate", config("contractName", "claims", "onInvalid", "drop")),
+            step("shape", "transform", config("mappings", Arrays.asList(
+                config("target", "claim", "source", "claim_id"),
+                config("target", "customer", "op", "upper", "source", "name"),
+                config("target", "amount", "op", "cast", "source", "amount", "to", "number")))),
+            step("save", "save_file", config("fileName", "claims-clean.csv"))));
+
+        assertThat(this.worker.statuses()).containsExactly(JobStatus.Start, JobStatus.Running, JobStatus.Completed);
+        assertThat(this.worker.last()).isEqualTo("Completed: 4 of 4 step(s) completed.");
+        assertThat(this.steps.row(RUN_ID, 1, "read").recordsOut).isEqualTo(3L);
+        assertThat(this.steps.row(RUN_ID, 1, "check").recordsOut).isEqualTo(2L);
+        assertThat(this.steps.row(RUN_ID, 1, "save").recordsOut).isEqualTo(2L);
+        assertThat(this.datasets.stored.get("datasets/7401/1/shape/output.json").getRows())
+            .containsExactly(row("claim", "C-1", "customer", "ACME", "amount", 10.5), row("claim", "C-3", "customer", "GAMMA", "amount", 7L));
+        assertThat(new String(this.datasets.files.get("datasets/7401/1/save/files/claims-clean.csv"), StandardCharsets.UTF_8))
+            .isEqualTo("claim,customer,amount\r\nC-1,ACME,10.5\r\nC-3,GAMMA,7\r\n");
+        assertThat(this.steps.datasets).extracting(d -> d.name + ":" + d.rowCount)
+            .containsExactly("output:3", "output:2", "output:2", "claims-clean.csv:2");
+        assertThat(this.all.buckets.lastTenant).as("the bucket is read as the run's workspace").isEqualTo(TENANT);
+        assertThat(this.all.contracts.calls.get(0).tenantId).isEqualTo(TENANT);
+        assertThat(this.steps.logText(RUN_ID, 1, "check")).contains("WARN 1 row(s) dropped: they do not hold to claims v3.");
+    }
+
+    @Test
+    void aJoinReadsAnEarlierStepsOutputByItsKey() {
+        this.runs(Definitions.of(
+            sample("customers", row("id", 1, "name", "Acme")),
+            sample("orders", row("order", "A1", "customer_id", "1"), row("order", "A2", "customer_id", "2")),
+            step("joined", "join", config("with", "customers", "type", "left", "on",
+                Collections.singletonList(config("left", "customer_id", "right", "id"))))));
+
+        assertThat(this.worker.last()).isEqualTo("Completed: 3 of 3 step(s) completed.");
+        assertThat(this.datasets.stored.get("datasets/7401/1/joined/output.json").getRows())
+            .containsExactly(row("order", "A1", "customer_id", "1", "name", "Acme"), row("order", "A2", "customer_id", "2", "name", null));
+    }
+
+    /** A task switched off in the run's workspace after the definition was saved: the run is declined, as a task gone. */
+    @Test
+    void aRunNamingATaskSwitchedOffInItsWorkspaceIsDeclined() {
+        this.switches.set(TENANT, "select", false, 7L);
+        this.runs(Definitions.of(sample("read", row("id", 1)), step("keep", "select", config("columns", Collections.singletonList("id")))));
+
+        assertThat(this.worker.statuses()).containsExactly(JobStatus.Start, JobStatus.Failed);
+        assertThat(this.worker.last()).isEqualTo("Failed: Declined by the step engine: definition version 3 no longer validates: "
+            + "steps[1].task: the task 'select' is disabled in this workspace");
+        assertThat(this.statuses()).containsExactly(entry("read", "Skip"), entry("keep", "Skip"));
+    }
+
+    /** A step that says nothing of retry takes its task's registry default: Read API is tried three times, 10 s apart. */
+    @Test
+    void aStepWithoutItsOwnRetryTakesItsTasksDefault() {
+        this.all.api.outcome = "FAILED";
+        PipelineDefinition.Step once = step("once", "read_api", config("requestId", 4));
+        once.setRetry(PipelineDefinition.Retry.of(1, 0));
+        once.setOnError("continue");
+        this.runs(Definitions.of(step("fetch", "read_api", config("requestId", 4)), once));
+
+        assertThat(this.steps.row(RUN_ID, 1, "fetch").tries).isEqualTo(3);
+        assertThat(this.waited).containsExactly(Duration.ofSeconds(10), Duration.ofSeconds(10));
+        assertThat(this.all.api.calls).hasSize(3);
+        assertThat(this.worker.last()).startsWith("Failed: Step 1 <fetch> failed: The API request failed (HTTP 500)");
     }
 
     private static Map.Entry<String, String> entry(String key, String value) {

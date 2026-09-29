@@ -6,6 +6,9 @@ import process.pipeline.DefinitionProblem;
 import process.pipeline.StepContext;
 import process.pipeline.StepResult;
 import process.pipeline.StepTask;
+import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.TaskKind;
+import process.pipeline.registry.TaskSpec;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -21,6 +24,20 @@ import java.util.Map;
 public class SampleStepTask implements StepTask {
 
     public static final int MAX_ROWS = 1000;
+
+    static final TaskSpec SPEC = TaskSpec.builder("sample", "Sample rows", TaskKind.READ)
+        .description("Rows written in the step itself: a sample to build and test a pipeline on.")
+        .output(TaskSpec.rows("The rows as written."))
+        .config(JsonSchema.object()
+            .required("rows", JsonSchema.array(JsonSchema.map(JsonSchema.scalar())).maxItems(MAX_ROWS).title("Rows")
+                .description("Each row an object of column: value (text, a number, true/false or null).")))
+        .aiToolName("sample_rows")
+        .build();
+
+    @Override
+    public TaskSpec spec() {
+        return SPEC;
+    }
 
     @Override
     public String code() {

@@ -7,6 +7,7 @@ import java.util.Map;
 public class InMemoryDatasetStore implements DatasetStore {
 
     public final Map<String, Dataset> stored = new LinkedHashMap<>();
+    public final Map<String, byte[]> files = new LinkedHashMap<>();
     public int reads;
     public RuntimeException failWrites;
 
@@ -29,7 +30,22 @@ public class InMemoryDatasetStore implements DatasetStore {
     }
 
     @Override
+    public synchronized void writeFile(String storageKey, byte[] content) {
+        this.files.put(storageKey, content);
+    }
+
+    @Override
+    public synchronized byte[] readFile(String storageKey) {
+        byte[] content = this.files.get(storageKey);
+        if (content == null) {
+            throw new IllegalStateException("no file " + storageKey);
+        }
+        return content;
+    }
+
+    @Override
     public synchronized void delete(String storageKey) {
         this.stored.remove(storageKey);
+        this.files.remove(storageKey);
     }
 }

@@ -8,6 +8,9 @@ import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
 import process.model.repository.PipelineRepository;
+import process.pipeline.registry.TaskOverrideStore;
+import process.pipeline.registry.TaskRegistry;
+import process.pipeline.registry.TaskSpec;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
 
@@ -26,6 +29,11 @@ import static process.util.ProcessUtil.SUCCESS;
  * latest, or the legacy wrap every pipeline without one has), check a draft, save it as the next version, and list
  * the tasks a step may run. A pipeline is the caller's workspace's or not found -- the same rule, and the same words,
  * as the pipeline's own form (PipelineServiceImpl.fieldsFor).
+ *
+ * MIG-231: the task list is the Task Registry as the caller's workspace sees it -- every entry with its config schema
+ * and whether it is enabled here -- and one Legacy entry per pipeline of the workspace. A draft is checked in the
+ * caller's workspace for the caller's role: a disabled or unavailable task, or one above the caller's role, is a
+ * problem at its step. A workspace admin switches an overridable task on or off for the workspace.
  */
 @Service
 public class PipelineDefinitionService {
@@ -37,14 +45,16 @@ public class PipelineDefinitionService {
     private final PipelineRepository pipelines;
     private final PipelineDefinitionStore store;
     private final DefinitionValidator validator;
-    private final StepTasks tasks;
+    private final TaskRegistry registry;
+    private final TaskOverrideStore overrides;
 
     public PipelineDefinitionService(PipelineRepository pipelines, PipelineDefinitionStore store, DefinitionValidator validator,
-        StepTasks tasks) {
+        TaskRegistry registry, TaskOverrideStore overrides) {
         this.pipelines = pipelines;
         this.store = store;
         this.validator = validator;
-        this.tasks = tasks;
+        this.registry = registry;
+        this.overrides = overrides;
     }
 
     /** A draft to check or save: the definition's text, as JSON or YAML ("json", "yaml", or null to tell by its shape). */
@@ -101,7 +111,7 @@ public class PipelineDefinitionService {
         } catch (DefinitionException ex) {
             return invalid(ex.getProblems(), null);
         }
-        List<DefinitionProblem> problems = this.validator.problems(definition);
+        List<DefinitionProblem> problems = this.validator.problems(definition, TenantContext.getTenantId(), TenantContext.getUserRole());
         if (!problems.isEmpty()) {
             return invalid(problems, definition);
         }
@@ -129,7 +139,8 @@ public class PipelineDefinitionService {
         }
         PipelineDefinition definition;
         try {
-            definition = this.validator.require(DefinitionCodec.read(request.getText(), request.getFormat()));
+            definition = this.validator.require(DefinitionCodec.read(request.getText(), request.getFormat()), pipeline.get().getTenantId(),
+                TenantContext.getUserRole());
         } catch (DefinitionException ex) {
             return invalid(ex.getProblems(), null);
         }
@@ -159,16 +170,80 @@ public class PipelineDefinitionService {
         return new ResponseDto(SUCCESS, String.format("Saved as version %d.", saved.version), payload);
     }
 
-    /** The tasks a step may run, for "Add step". */
+    /** A workspace admin's switch on one task: on, off, or (null) back to its default. */
+    public static class TaskSwitchRequest {
+        private String code;
+        private Boolean enabled;
+
+        public String getCode() { return code; }
+        public void setCode(String code) { this.code = code; }
+
+        public Boolean getEnabled() { return enabled; }
+        public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+    }
+
+    /**
+     * The Task Registry as the caller's workspace sees it, for "Add step" and the step's form: every registered task's
+     * entry (its config schema, enabled here or why not), then one Legacy entry per pipeline of the workspace -- the
+     * {@code legacy} entry with that pipeline's pipelineId, pipelineKey and name, and the config a step runs it with.
+     */
     public ResponseDto tasks() {
-        List<Map<String, Object>> list = this.tasks.all().stream().map(task -> {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("code", task.code());
-            entry.put("description", task.description());
-            entry.put("runsInEngine", task.runsInEngine());
-            return entry;
-        }).collect(Collectors.toList());
-        return new ResponseDto(SUCCESS, String.format("%d step task(s).", list.size()), list);
+        Long tenantId = TenantContext.getTenantId();
+        List<Map<String, Object>> list = new ArrayList<>(this.registry.entries(tenantId));
+        Optional<Map<String, Object>> legacy = list.stream().filter(entry -> PipelineDefinition.LEGACY_TASK.equals(entry.get("code"))).findFirst();
+        int pipelines = 0;
+        if (tenantId != null && legacy.isPresent()) {
+            for (Pipeline pipeline : this.pipelines.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(tenantId, Status.Delete)) {
+                Map<String, Object> entry = new LinkedHashMap<>(legacy.get());
+                entry.put("name", "Legacy: " + pipeline.getPipelineName());
+                entry.put("pipelineKey", pipeline.getPipelineKey());
+                entry.put("pipelineId", pipeline.getPipelineId());
+                Map<String, Object> config = new LinkedHashMap<>();
+                config.put("pipelineId", pipeline.getPipelineId());
+                entry.put("config", config);
+                list.add(entry);
+                pipelines++;
+            }
+        }
+        return new ResponseDto(SUCCESS, String.format("%d step task(s) and %d legacy pipeline(s).", list.size() - pipelines, pipelines), list);
+    }
+
+    /**
+     * Switches a task on or off for the caller's workspace (tenant admins), or back to its default. Legacy is never
+     * switched (every existing pipeline stays runnable), and a task that is not available here cannot be switched on.
+     * Switching a task off does not change a saved definition: a run whose definition names it is declined until it is
+     * on again.
+     */
+    public ResponseDto switchTask(TaskSwitchRequest request) {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            return new ResponseDto(ERROR, "Tasks are switched in a workspace; this caller has none.");
+        }
+        if (request == null || request.getCode() == null || request.getCode().trim().isEmpty()) {
+            return new ResponseDto(ERROR, "Which task to switch is required.");
+        }
+        Optional<StepTask> task = this.registry.tasks().find(request.getCode());
+        if (!task.isPresent()) {
+            return new ResponseDto(ERROR, String.format("No task '%s' is registered.", request.getCode().trim()));
+        }
+        TaskSpec spec = task.get().spec();
+        if (!spec.overridable()) {
+            return new ResponseDto(ERROR, String.format("'%s' cannot be switched: existing pipelines always stay runnable.", spec.code()));
+        }
+        if (Boolean.TRUE.equals(request.getEnabled()) && task.get().unavailable().isPresent()) {
+            return new ResponseDto(ERROR, String.format("'%s' is not available here: %s.", spec.code(), task.get().unavailable().get()));
+        }
+        if (request.getEnabled() == null) {
+            this.overrides.clear(tenantId, spec.code());
+        } else {
+            this.overrides.set(tenantId, spec.code(), request.getEnabled(), TenantContext.getAppUserId());
+        }
+        this.logger.info("Task {} switched {} in workspace {}.", spec.code(), request.getEnabled() == null ? "to its default"
+            : request.getEnabled() ? "on" : "off", tenantId);
+        Map<String, Object> entry = this.registry.entries(tenantId).stream().filter(one -> spec.code().equals(one.get("code")))
+            .findFirst().orElse(null);
+        return new ResponseDto(SUCCESS, request.getEnabled() == null ? String.format("'%s' is back to its default.", spec.code())
+            : String.format("'%s' is switched %s in this workspace.", spec.code(), request.getEnabled() ? "on" : "off"), entry);
     }
 
     private Optional<Pipeline> owned(Long pipelineKey) {

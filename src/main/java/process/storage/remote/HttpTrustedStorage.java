@@ -32,6 +32,12 @@ public class HttpTrustedStorage implements TrustedStorageOperations {
         return this.storage.trustedRead(access, bucket, key);
     }
 
+    @Override
+    public ObjectListing listForWorkflow(TrustedAccess access, String bucket, String prefix, int limit) {
+        requireAccess(access);
+        return this.storage.trustedList(access, bucket, prefix, limit);
+    }
+
     private static void requireAccess(TrustedAccess access) {
         if (access == null) {
             throw new IllegalStateException("A trusted storage call presents its principal.");

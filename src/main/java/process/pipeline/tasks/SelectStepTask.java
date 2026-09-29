@@ -6,6 +6,9 @@ import process.pipeline.DefinitionProblem;
 import process.pipeline.StepContext;
 import process.pipeline.StepResult;
 import process.pipeline.StepTask;
+import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.TaskKind;
+import process.pipeline.registry.TaskSpec;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,6 +25,23 @@ import java.util.Map;
  */
 @Component
 public class SelectStepTask implements StepTask {
+
+    static final TaskSpec SPEC = TaskSpec.builder("select", "Select columns", TaskKind.PROCESS)
+        .description("Keeps the columns it names, in that order, optionally renamed.")
+        .input(TaskSpec.rows("Any rows."))
+        .output(TaskSpec.rows("The named columns only, in that order, renamed where asked."))
+        .config(JsonSchema.object()
+            .required("columns", JsonSchema.anyOf("array", "object").title("Columns")
+                .description("A list of column names to keep, or an object {from: to} to keep and rename."))
+            .property("required", JsonSchema.bool().title("Fail on a missing column").defaultValue(false)
+                .description("Fail the step when the input has no such column; otherwise the column is empty.")))
+        .aiToolName("select_columns")
+        .build();
+
+    @Override
+    public TaskSpec spec() {
+        return SPEC;
+    }
 
     @Override
     public String code() {

@@ -21,6 +21,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import process.model.dto.ObjectContentDto;
 import process.storage.TrustedAccess;
+import process.storage.TrustedStorageOperations;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
@@ -29,6 +30,8 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -131,6 +134,26 @@ public class StorageServiceClient {
     public void trustedUpload(TrustedAccess access, String bucket, String key, InputStream content, long size, String contentType) {
         this.call(new Request.Builder().url(this.trustedUrl(access, bucket, key)).header("X-Internal-Token", this.serviceToken)
             .put(streamBody(content, size, contentType == null ? "application/octet-stream" : contentType)).build());
+    }
+
+    /** GET /internal/storage/objects: {"objects":[{"key","size"}],"truncated"} -- a plain answer, not an envelope. */
+    public TrustedStorageOperations.ObjectListing trustedList(TrustedAccess access, String bucket, String prefix, int limit) {
+        HttpUrl.Builder url = HttpUrl.get(this.base + "/internal/storage/objects").newBuilder()
+            .addQueryParameter("caller", access.getCaller().name()).addQueryParameter("reason", access.getReason())
+            .addQueryParameter("bucket", bucket).addQueryParameter("prefix", prefix == null ? "" : prefix)
+            .addQueryParameter("limit", String.valueOf(limit));
+        if (access.getTenantId() != null) {
+            url.addQueryParameter("tenantId", String.valueOf(access.getTenantId()));
+        }
+        JsonNode answer = this.call(new Request.Builder().url(url.build()).header("X-Internal-Token", this.serviceToken)
+            .header("Accept", "application/json").get().build());
+        List<TrustedStorageOperations.ListedObject> objects = new ArrayList<>();
+        if (answer != null) {
+            for (JsonNode object : answer.path("objects")) {
+                objects.add(new TrustedStorageOperations.ListedObject(object.path("key").asText(), object.path("size").asLong()));
+            }
+        }
+        return new TrustedStorageOperations.ObjectListing(objects, answer != null && answer.path("truncated").asBoolean());
     }
 
     private HttpUrl trustedUrl(TrustedAccess access, String bucket, String key) {

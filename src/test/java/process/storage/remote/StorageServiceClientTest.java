@@ -71,6 +71,23 @@ class StorageServiceClientTest {
         }
     }
 
+    /** MIG-231: a pipeline's Read S3 lists a prefix in its run's workspace; Storage answers plain JSON, not an envelope. */
+    @Test
+    void aTrustedListingNamesItsCallerWorkspaceAndPrefix() throws Exception {
+        try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage/objects", 200,
+            "{\"objects\":[{\"key\":\"in/a.csv\",\"size\":19},{\"key\":\"in/b.csv\",\"size\":4}],\"truncated\":true}")) {
+            process.storage.TrustedStorageOperations.ObjectListing listing = new StorageServiceClient(storage.url(), TOKEN).trustedList(
+                TrustedAccess.of(TrustedCaller.CORE_PIPELINES, "pipeline read s3").forTenant(2901L), "lake", "in/", 2);
+
+            assertThat(listing.objects).extracting(object -> object.key + ":" + object.size).containsExactly("in/a.csv:19", "in/b.csv:4");
+            assertThat(listing.truncated).isTrue();
+            StorageServiceStub.Seen call = storage.last();
+            assertThat(call.token).isEqualTo(TOKEN);
+            assertThat(call.uri).contains("caller=CORE_PIPELINES").contains("tenantId=2901").contains("bucket=lake")
+                .contains("prefix=in%2F").contains("limit=2");
+        }
+    }
+
     @Test
     void aTrustedUploadStreamsTheBytesWithTheirTypeAndLength() throws Exception {
         try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage/object", 200, "{\"status\":\"SUCCESS\"}")) {

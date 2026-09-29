@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import process.pipeline.PipelineDefinitionService;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static process.tenancy.CoreProbeFixture.*;
 
@@ -39,6 +41,8 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
         bStep = step(sql, B_RUN, bDefinition, "bravo run message marker");
         colleagueStep = step(sql, COLLEAGUE_RUN, null, "colleague run message");
         aStep = step(sql, A_RUN, null, "acme step line");
+        // MIG-231: B has switched 'select' off in its workspace.
+        sql.update("INSERT INTO task_registry_override (tenant_id, task_code, enabled) VALUES (?, 'select', false)", B);
     }
 
     private static long step(JdbcTemplate sql, long run, Long definition, String line) {
@@ -152,6 +156,53 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
         }
         assertThat(fx.leaks).isEmpty();
         assertThat(fx.foreignRows()).isEqualTo(before);
+    }
+
+    private static PipelineDefinitionService.TaskSwitchRequest switchOf(String code, Boolean enabled) {
+        PipelineDefinitionService.TaskSwitchRequest request = new PipelineDefinitionService.TaskSwitchRequest();
+        request.setCode(code);
+        request.setEnabled(enabled);
+        return request;
+    }
+
+    private static List<String> switches(long workspace) {
+        return fx.db.jdbc().queryForList("SELECT task_code || '=' || enabled FROM task_registry_override WHERE tenant_id = ? ORDER BY 1",
+            String.class, workspace);
+    }
+
+    /**
+     * MIG-231: the Task Registry as a workspace sees it lists that workspace's pipelines as Legacy entries and its own
+     * task switches -- never B's pipeline, never B's switch -- and a switch an admin of A makes is A's row alone.
+     */
+    @Test
+    void theTaskRegistryIsMyWorkspacesAndMySwitchIsMine() {
+        String before = fx.foreignRows();
+        for (Caller caller : new Caller[] {USER_OF_A, ADMIN_OF_A}) {
+            assertThat(fx.probe("GET pipeline.json/steps/tasks", caller, () -> fx.pipelineSteps.tasks()))
+                .contains(SUCCEEDED).contains(A_PIPELINE_ID).doesNotContain(B_PIPELINE_ID).doesNotContain("Bravo Secret Pipeline")
+                .doesNotContain("Switched off in this workspace");
+        }
+        try {
+            assertThat(fx.probe("POST pipeline.json/steps/tasks/enabled(mine)", ADMIN_OF_A,
+                () -> fx.pipelineSteps.switchTask(switchOf("select", false)))).contains(SUCCEEDED).contains("switched off");
+            assertThat(switches(A)).containsExactly("select=false");
+            assertThat(fx.probe("GET pipeline.json/steps/tasks(after my switch)", USER_OF_A, () -> fx.pipelineSteps.tasks()))
+                .contains("Switched off in this workspace");
+        } finally {
+            assertThat(fx.probe("POST pipeline.json/steps/tasks/enabled(mine, back to default)", ADMIN_OF_A,
+                () -> fx.pipelineSteps.switchTask(switchOf("select", null)))).contains(SUCCEEDED);
+        }
+        assertThat(switches(A)).isEmpty();
+        assertThat(switches(B)).containsExactly("select=false");
+        for (Long none : NO_WORKSPACE) {
+            Caller caller = tenantlessUser(none);
+            assertThat(fx.probe("GET pipeline.json/steps/tasks", caller, () -> fx.pipelineSteps.tasks()))
+                .doesNotContain(B_PIPELINE_ID).doesNotContain(A_PIPELINE_ID);
+            assertThat(fx.probe("POST pipeline.json/steps/tasks/enabled", caller, () -> fx.pipelineSteps.switchTask(switchOf("select", false))))
+                .contains(REFUSED);
+        }
+        assertThat(fx.leaks).isEmpty();
+        assertThat(fx.foreignRows()).as("B's switch and pipeline untouched").isEqualTo(before);
     }
 
     /** The control: A's admin reads A's run's step, its dataset (never its storage key) and its log; the colleague's too. */

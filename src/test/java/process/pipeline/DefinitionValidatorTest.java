@@ -120,13 +120,16 @@ class DefinitionValidatorTest {
             step("read", "sample", config("rows", Arrays.asList(row("x", 1), "not a row", row("y", Arrays.asList(1))), "extra", 1)),
             step("keep", "select", config("columns", Collections.emptyList(), "required", "yes")),
             step("old", "sample"));
+        // MIG-231: the task's config schema first, each problem at its path; the task's own checks only once it holds.
         assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("steps[0].config.rows[1]", "must be an object"),
+            new DefinitionProblem("steps[0].config.rows[2].y", "must be text, a number, true/false or null"),
             new DefinitionProblem("steps[0].config.extra", "unknown setting 'extra'"),
-            new DefinitionProblem("steps[0].config.rows[1]", "a row is an object of column: value"),
-            new DefinitionProblem("steps[0].config.rows[2].y", "a value is text, a number, true/false or null"),
-            new DefinitionProblem("steps[1].config.columns", "name at least one column"),
-            new DefinitionProblem("steps[1].config.required", "true or false"),
-            new DefinitionProblem("steps[2].config.rows", "a list of rows (objects) is required"));
+            new DefinitionProblem("steps[1].config.required", "must be true or false"),
+            new DefinitionProblem("steps[2].config.rows", "required"));
+        PipelineDefinition schemaHolds = Definitions.of(step("keep", "select", config("columns", Collections.emptyList())));
+        assertThat(this.validator.problems(schemaHolds)).containsExactly(
+            new DefinitionProblem("steps[0].config.columns", "name at least one column"));
     }
 
     @Test

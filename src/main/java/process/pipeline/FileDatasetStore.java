@@ -66,6 +66,20 @@ public class FileDatasetStore implements DatasetStore {
     }
 
     @Override
+    public void writeFile(String storageKey, byte[] content) throws IOException {
+        Path file = this.resolve(storageKey);
+        Files.createDirectories(file.getParent());
+        Path partial = file.resolveSibling(file.getFileName() + ".partial");
+        Files.write(partial, content);
+        Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    @Override
+    public byte[] readFile(String storageKey) throws IOException {
+        return Files.readAllBytes(this.resolve(storageKey));
+    }
+
+    @Override
     public void delete(String storageKey) throws IOException {
         Files.deleteIfExists(this.resolve(storageKey));
     }

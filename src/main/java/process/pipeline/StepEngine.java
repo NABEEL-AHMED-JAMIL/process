@@ -280,6 +280,9 @@ public class StepEngine {
         private final PipelineDefinition definition;
         private final PipelineDefinition.Settings settings;
         private final List<PipelineDefinition.Step> stepList;
+        /** Each step's output by its key: the dataset key it wrote, or the one it passed on. */
+        private final Map<String, String> outputs = new HashMap<>();
+        private Dataset sourceRows;
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -305,7 +308,8 @@ public class StepEngine {
                     this.plan.stored.version, this.plan.unreadable));
                 return;
             }
-            List<DefinitionProblem> problems = validator.problems(this.definition);
+            // In the run's workspace (its task switches, MIG-231); no role -- an admin saved it.
+            List<DefinitionProblem> problems = validator.problems(this.definition, this.tenantId, null);
             List<StepStore.Planned> planned = new ArrayList<>();
             for (int i = 0; i < this.stepList.size(); i++) {
                 PipelineDefinition.Step step = this.stepList.get(i);
@@ -348,10 +352,11 @@ public class StepEngine {
         private Outcome steps(List<Long> rows) {
             Outcome outcome = new Outcome();
             Dataset source = this.source();
+            this.sourceRows = source;
             // What a step reads is a reference: the dataset key of the output it reads (run_dataset.storage_key), or
             // null for the source. A step that makes no dataset passes on the reference it read.
             String latest = null;
-            Map<String, String> outputs = new HashMap<>();
+            Map<String, String> outputs = this.outputs;
             int total = this.stepList.size();
             for (int i = 0; i < total; i++) {
                 PipelineDefinition.Step step = this.stepList.get(i);
@@ -431,8 +436,10 @@ public class StepEngine {
         /** Every try of one step, each bounded by its timeout; the first success, or the last failure. */
         private Tried tryStep(PipelineDefinition.Step step, long row, Dataset input, StepLog log) {
             Optional<StepTask> task = tasks.find(step.getTask());
-            int maxTries = step.effectiveMaxAttempts();
-            int timeout = step.effectiveTimeoutSeconds(this.settings);
+            // The step's own retry and timeout, else its task's registry defaults (MIG-231).
+            int maxTries = task.map(found -> step.effectiveMaxAttempts(found.spec().maxAttempts())).orElse(step.effectiveMaxAttempts());
+            int delay = task.map(found -> step.effectiveDelaySeconds(found.spec().delaySeconds())).orElse(step.effectiveDelaySeconds());
+            int timeout = step.effectiveTimeoutSeconds(this.settings, task.map(found -> found.spec().timeoutSeconds()).orElse(null));
             Tried tried = new Tried();
             for (int t = 1; t <= maxTries; t++) {
                 tried.tries = t;
@@ -440,7 +447,7 @@ public class StepEngine {
                 if (maxTries > 1) {
                     log.line("INFO", String.format("Try %d of %d.", t, maxTries));
                 }
-                Context context = new Context(this, step, input, t, log);
+                Context context = new Context(this, step, row, input, t, log);
                 Future<StepResult> future = tryThreads.submit(() -> RowSecurity.forTenant(this.tenantId, () -> {
                     try {
                         return task.get().run(context);
@@ -471,9 +478,9 @@ public class StepEngine {
                     return tried;
                 }
                 log.line(t < maxTries ? "WARN" : "ERROR", String.format("Try %d of %d failed: %s", t, maxTries, tried.error));
-                if (t < maxTries && step.effectiveDelaySeconds() > 0) {
+                if (t < maxTries && delay > 0) {
                     try {
-                        sleeper.sleep(Duration.ofSeconds(step.effectiveDelaySeconds()));
+                        sleeper.sleep(Duration.ofSeconds(delay));
                     } catch (InterruptedException ex) {
                         Thread.currentThread().interrupt();
                         tried.error = "the step engine was stopped";
@@ -517,6 +524,28 @@ public class StepEngine {
                 throw new IllegalStateException("The task payload is not well-formed XML, so it cannot be the pipeline's source: "
                     + reasonOf(ex), ex);
             }
+        }
+
+        /** An earlier step's output, for a step that reads a second one (a join). */
+        private Dataset outputOf(String stepKey) {
+            if (!this.outputs.containsKey(stepKey)) {
+                throw new IllegalStateException(String.format("step <%s> has no output to read: it is not an earlier step, or it failed",
+                    stepKey));
+            }
+            return this.load(this.outputs.get(stepKey), this.sourceRows);
+        }
+
+        /** A file a step made, beside the run's datasets, and its run_dataset row. */
+        private void keepFile(long row, String stepKey, String fileName, byte[] content, long rows, List<String> columns) throws Exception {
+            String key = DatasetStore.fileKeyOf(this.run.getJobQueueId(), this.attempt, stepKey, fileName);
+            datasets.writeFile(key, content);
+            String columnsJson;
+            try {
+                columnsJson = JSON.writeValueAsString(columns == null ? Collections.emptyList() : columns);
+            } catch (JsonProcessingException ex) {
+                columnsJson = "[]";
+            }
+            steps.dataset(row, fileName, key, rows, columnsJson, Instant.now().plus(Duration.ofHours(this.settings.effectiveRetentionHours())));
         }
 
         private boolean stillRunning() {
@@ -627,13 +656,15 @@ public class StepEngine {
     private static final class Context implements StepContext {
         private final Execution execution;
         private final PipelineDefinition.Step step;
+        private final long row;
         private final Dataset input;
         private final int tryNumber;
         private final StepLog log;
 
-        Context(Execution execution, PipelineDefinition.Step step, Dataset input, int tryNumber, StepLog log) {
+        Context(Execution execution, PipelineDefinition.Step step, long row, Dataset input, int tryNumber, StepLog log) {
             this.execution = execution;
             this.step = step;
+            this.row = row;
             this.input = input;
             this.tryNumber = tryNumber;
             this.log = log;
@@ -672,6 +703,31 @@ public class StepEngine {
         @Override
         public Dataset input() {
             return this.input;
+        }
+
+        @Override
+        public Long jobId() {
+            return this.execution.run.getJobId();
+        }
+
+        @Override
+        public String pipelineId() {
+            return this.execution.plan.job.getTaskDetail() == null ? null : this.execution.plan.job.getTaskDetail().getPipelineId();
+        }
+
+        @Override
+        public Long jobOwnerUserId() {
+            return this.execution.plan.job.getCreatedBy();
+        }
+
+        @Override
+        public Dataset dataset(String stepKey) {
+            return this.execution.outputOf(stepKey);
+        }
+
+        @Override
+        public void keepFile(String fileName, byte[] content, long rows, List<String> columns) throws Exception {
+            this.execution.keepFile(this.row, this.step.getKey(), fileName, content, rows, columns);
         }
 
         @Override

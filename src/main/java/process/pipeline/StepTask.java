@@ -1,7 +1,10 @@
 package process.pipeline;
 
+import process.pipeline.registry.TaskSpec;
+
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * What a step can run (MIG-230): a task registered under a code, which a definition's step names in {@code task}.
@@ -30,8 +33,27 @@ public interface StepTask {
     }
 
     /**
-     * What is wrong with this step's config, each problem at a path relative to the config ({@code "rows[0]"}, or
-     * {@code "$"} for the config as a whole). Empty when it is fine. Unknown keys are problems.
+     * The task's Task Registry entry (MIG-231): its name, kind, schemas -- the config schema the console builds the
+     * step's form from and the validator checks the config against -- backing service, default retry and timeout,
+     * required role, enabled default and AI tool name. Every built-in declares its own; the fallback is for tests.
+     */
+    default TaskSpec spec() {
+        return TaskSpec.minimal(this.code(), this.description(), this.runsInEngine());
+    }
+
+    /**
+     * Why the task cannot run here now -- the other service's side it calls is not there yet, or is switched off in
+     * this Core's configuration -- or empty when it can. An unavailable task is listed, disabled, with this reason, and
+     * cannot be added to a pipeline or run.
+     */
+    default Optional<String> unavailable() {
+        return Optional.empty();
+    }
+
+    /**
+     * What is wrong with this step's config beyond its config schema (which the validator checks first, and only when
+     * that holds is this asked), each problem at a path relative to the config ({@code "rows[0]"}, or {@code "$"} for
+     * the config as a whole). Empty when it is fine.
      */
     List<DefinitionProblem> check(Map<String, Object> config);
 

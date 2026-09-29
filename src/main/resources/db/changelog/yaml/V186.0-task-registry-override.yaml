@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 186.0-task-registry-override
+      author: nabeel.amd93
+      description: "MIG-231: the Task Registry's per-workspace switches -- task_registry_override, one row per task a workspace has turned on or off against its default; expand-only, row-level security as V181"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V186.0-task-registry-override/V186__task_registry_override.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V186.0-task-registry-override/V186__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

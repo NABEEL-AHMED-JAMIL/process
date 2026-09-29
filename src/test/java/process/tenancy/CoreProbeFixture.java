@@ -38,6 +38,8 @@ import process.pipeline.Definitions;
 import process.pipeline.PipelineDefinitionService;
 import process.pipeline.PipelineDefinitionStore;
 import process.pipeline.StepTasks;
+import process.pipeline.registry.JdbcTaskOverrideStore;
+import process.pipeline.registry.TaskRegistry;
 import process.api.ReportRestApi;
 import process.api.SettingRestApi;
 import process.api.SourceJobRestApi;
@@ -443,8 +445,10 @@ final class CoreProbeFixture implements AutoCloseable {
 
         this.pipelines = new PipelineRestApi(new PipelineServiceImpl(pipelineRows, this.identity, names, typeRows));
         StepTasks stepTasks = Definitions.builtInTasks();
+        JdbcTaskOverrideStore taskSwitches = new JdbcTaskOverrideStore(this.db.appJdbc());
+        TaskRegistry registry = new TaskRegistry(stepTasks, taskSwitches);
         this.pipelineSteps = new PipelineDefinitionRestApi(new PipelineDefinitionService(pipelineRows,
-            new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(stepTasks), stepTasks));
+            new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(registry), registry, taskSwitches));
         this.stepTimeline = new StepTimelineRestApi(new StepTimelineService(runRows, jobRows, new JdbcStepStore(this.db.appJdbc()),
             new JdbcModelChoiceStore(this.db.appJdbc())));
 

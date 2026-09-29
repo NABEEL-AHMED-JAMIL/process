@@ -33,10 +33,14 @@ class TrustedStorageBoundaryTest {
      * The two left in process: MIG-52 named four. Billing's documents left with billing-service (MIG-88/89)
      * and Identity's avatars with identity-service (MIG-108), each storage-service's own caller now. Adding
      * one is a decision, and this test is where it is made.
+     *
+     * MIG-231 adds the pipeline's bucket steps (CORE_PIPELINES): list, read and upload in the run's own workspace,
+     * the workspace named from the run the step engine runs, the bucket and key from the definition an admin saved.
      */
     private static final List<String> TRUSTED_CALLERS = Arrays.asList(
         "config/KafkaTemplateProvider.java",
-        "model/service/impl/KafkaSecretServiceImpl.java");
+        "model/service/impl/KafkaSecretServiceImpl.java",
+        "pipeline/backing/TrustedBucketStore.java");
 
     private static List<Path> sources() throws IOException {
         try (Stream<Path> files = Files.walk(MAIN)) {
@@ -96,5 +100,7 @@ class TrustedStorageBoundaryTest {
     void eachTrustedCallerPresentsItsOwnNamedPrincipal() throws IOException {
         assertThat(source(MAIN.resolve("config/KafkaTemplateProvider.java"))).contains("TrustedCaller.KAFKA_TEMPLATE_PROVIDER");
         assertThat(source(MAIN.resolve("model/service/impl/KafkaSecretServiceImpl.java"))).contains("TrustedCaller.KAFKA_SECRETS");
+        assertThat(source(MAIN.resolve("pipeline/backing/TrustedBucketStore.java"))).contains("TrustedCaller.CORE_PIPELINES")
+            .contains(".forTenant(tenantId)");
     }
 }

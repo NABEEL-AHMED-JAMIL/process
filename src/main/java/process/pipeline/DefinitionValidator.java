@@ -1,8 +1,12 @@
 package process.pipeline;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import process.pipeline.registry.ConfigSchemaValidator;
+import process.pipeline.registry.TaskRegistry;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -18,8 +22,10 @@ import java.util.regex.Pattern;
  *   <li>{@code version} is 1.</li>
  *   <li>{@code source.type} is none or task.</li>
  *   <li>1 to {@value #MAX_STEPS} steps; each has a unique {@code key} of lower case letters, digits and '_' (it names
- *       the step's rows and datasets), a {@code task} that is registered ({@link StepTasks}), and a config its task
- *       accepts.</li>
+ *       the step's rows and datasets), a {@code task} that is registered ({@link StepTasks}) and usable here (MIG-231:
+ *       available, enabled in the workspace, and within the caller's role -- {@link TaskRegistry#refusal}), and a
+ *       config that holds to its task's config schema ({@link ConfigSchemaValidator}) and then to the task's own
+ *       checks.</li>
  *   <li>A {@code legacy} step is the only step: it is the whole of an existing pipeline, run by its worker.</li>
  *   <li>{@code input} names an earlier step.</li>
  *   <li>{@code retry.maxAttempts} 1 to 10, {@code retry.delaySeconds} 0 to 3600, {@code timeoutSeconds} 1 to 86400,
@@ -39,12 +45,30 @@ public class DefinitionValidator {
     private static final Pattern KEY = Pattern.compile("^[a-z][a-z0-9_]{0,63}$");
 
     private final StepTasks tasks;
+    private final TaskRegistry registry;
 
+    /** Every task at its default: no workspace's switches (tests, and a definition read outside any workspace). */
     public DefinitionValidator(StepTasks tasks) {
-        this.tasks = tasks;
+        this(TaskRegistry.defaults(tasks));
     }
 
+    @Autowired
+    public DefinitionValidator(TaskRegistry registry) {
+        this.registry = registry;
+        this.tasks = registry.tasks();
+    }
+
+    /** The definition's problems with every task at its default and no role to check. */
     public List<DefinitionProblem> problems(PipelineDefinition definition) {
+        return this.problems(definition, null, null);
+    }
+
+    /**
+     * The definition's problems in this workspace (its task switches) for a caller of this role; {@code role} null
+     * checks no role -- the step engine, running what an admin saved.
+     */
+    public List<DefinitionProblem> problems(PipelineDefinition definition, Long tenantId, String role) {
+        Map<String, Boolean> switches = definition == null ? Collections.<String, Boolean>emptyMap() : this.registry.overridesOf(tenantId);
         List<DefinitionProblem> problems = new ArrayList<>();
         if (definition == null) {
             problems.add(new DefinitionProblem("$", "the definition is empty"));
@@ -65,7 +89,7 @@ public class DefinitionValidator {
         }
         Set<String> earlier = new HashSet<>();
         for (int i = 0; i < steps.size(); i++) {
-            this.step(steps.get(i), "steps[" + i + "]", steps.size(), earlier, problems);
+            this.step(steps.get(i), "steps[" + i + "]", steps.size(), earlier, switches, role, problems);
             if (steps.get(i) != null && steps.get(i).getKey() != null) {
                 earlier.add(steps.get(i).getKey());
             }
@@ -75,7 +99,12 @@ public class DefinitionValidator {
 
     /** The definition, or every problem with it. */
     public PipelineDefinition require(PipelineDefinition definition) throws DefinitionException {
-        List<DefinitionProblem> problems = this.problems(definition);
+        return this.require(definition, null, null);
+    }
+
+    /** The definition, or every problem with it in this workspace for this role. */
+    public PipelineDefinition require(PipelineDefinition definition, Long tenantId, String role) throws DefinitionException {
+        List<DefinitionProblem> problems = this.problems(definition, tenantId, role);
         if (!problems.isEmpty()) {
             throw new DefinitionException(problems);
         }
@@ -105,7 +134,8 @@ public class DefinitionValidator {
         }
     }
 
-    private void step(PipelineDefinition.Step step, String at, int stepCount, Set<String> earlier, List<DefinitionProblem> problems) {
+    private void step(PipelineDefinition.Step step, String at, int stepCount, Set<String> earlier, Map<String, Boolean> switches,
+        String role, List<DefinitionProblem> problems) {
         if (step == null) {
             problems.add(new DefinitionProblem(at, "a step is an object"));
             return;
@@ -128,8 +158,16 @@ public class DefinitionValidator {
                 problems.add(new DefinitionProblem(at + ".task", String.format(
                     "a '%s' step is the whole of an existing pipeline and must be the only step", step.getTask())));
             }
+            Optional<String> refused = this.registry.refusal(task.get(), switches, role);
+            if (refused.isPresent()) {
+                problems.add(new DefinitionProblem(at + ".task", refused.get()));
+            }
             Map<String, Object> config = step.effectiveConfig();
-            for (DefinitionProblem problem : task.get().check(config)) {
+            List<DefinitionProblem> configProblems = ConfigSchemaValidator.problems(task.get().spec().configSchema(), config, earlier);
+            if (configProblems.isEmpty()) {
+                configProblems = task.get().check(config);
+            }
+            for (DefinitionProblem problem : configProblems) {
                 problems.add(new DefinitionProblem(at + ".config" + ("$".equals(problem.getPath()) ? ""
                     : (problem.getPath().startsWith("[") ? "" : ".") + problem.getPath()), problem.getMessage()));
             }

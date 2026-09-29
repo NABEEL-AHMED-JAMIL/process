@@ -6,6 +6,9 @@ import process.pipeline.PipelineDefinition;
 import process.pipeline.StepContext;
 import process.pipeline.StepResult;
 import process.pipeline.StepTask;
+import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.TaskKind;
+import process.pipeline.registry.TaskSpec;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +26,27 @@ import java.util.Map;
  */
 @Component
 public class LegacyStepTask implements StepTask {
+
+    /**
+     * The registry's Legacy entry (MIG-231): not overridable, never unavailable -- every existing pipeline stays
+     * runnable. Its retry and timeout are the job's and the worker's, not the engine's.
+     */
+    static final TaskSpec SPEC = TaskSpec.builder(PipelineDefinition.LEGACY_TASK, "Legacy pipeline", TaskKind.LEGACY)
+        .description("An existing pipeline, run by its worker exactly as before (the task's XML payload over Kafka).")
+        .input(TaskSpec.rows("The job's task payload, handed to the worker as it is today."))
+        .output(null)
+        .config(JsonSchema.object()
+            .property("pipelineId", JsonSchema.string().title("Pipeline").format("pipeline")
+                .description("The existing pipeline (its pipelineId on the worker) this step is.")))
+        .backing(TaskSpec.WORKER)
+        .overridable(false)
+        .aiToolName("run_legacy_pipeline")
+        .build();
+
+    @Override
+    public TaskSpec spec() {
+        return SPEC;
+    }
 
     @Override
     public String code() {

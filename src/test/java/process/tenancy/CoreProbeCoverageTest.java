@@ -131,12 +131,11 @@ class CoreProbeCoverageTest {
         NOTHING_TO_AIM.put("POST fileChat.json/emailExport", "the same conversion, mailed to the address the caller types; "
             + "names nothing stored");
 
-        // MIG-230: checking a draft definition reads the text posted and the registered tasks; the task list is the same
-        // for every caller. Neither names a pipeline, a run or a workspace.
+        // MIG-230: checking a draft definition reads the text posted and the registered tasks; it names no pipeline, run or
+        // workspace. (MIG-231: it reads the caller's own workspace's task switches -- from the token, never the body. The
+        // task list reads them and the workspace's pipelines too, so it is probed.)
         NOTHING_TO_AIM.put("POST pipeline.json/steps/validate", "parses and checks the definition text in the request body; "
             + "names no stored pipeline, definition or workspace");
-        NOTHING_TO_AIM.put("GET pipeline.json/steps/tasks", "the registered step tasks, the same list for every caller; names "
-            + "nothing stored");
 
         // /internal: the gateway answers 404 for /internal from outside, and each checks X-Internal-Token first.
         String service = "service token only (X-Internal-Token); no tenant reaches it -- the calling service names the tenant";

@@ -162,6 +162,33 @@ public class PipelineDefinition {
             return settings == null ? Settings.DEFAULT_TIMEOUT_SECONDS : settings.effectiveTimeoutSeconds();
         }
 
+        /** Its own retry.maxAttempts, else its task's default (MIG-231's registry entry). */
+        @JsonIgnore
+        public int effectiveMaxAttempts(int taskDefault) {
+            return this.retry == null || this.retry.getMaxAttempts() == null ? Math.max(1, taskDefault) : this.retry.getMaxAttempts();
+        }
+
+        /** Its own retry.delaySeconds, else its task's default. */
+        @JsonIgnore
+        public int effectiveDelaySeconds(int taskDefault) {
+            return this.retry == null || this.retry.getDelaySeconds() == null ? Math.max(0, taskDefault) : this.retry.getDelaySeconds();
+        }
+
+        /**
+         * Its own timeoutSeconds, else the pipeline's settings.defaultTimeoutSeconds when set, else its task's default,
+         * else {@value Settings#DEFAULT_TIMEOUT_SECONDS}: what a person wrote wins over what the task suggests.
+         */
+        @JsonIgnore
+        public int effectiveTimeoutSeconds(Settings settings, Integer taskDefault) {
+            if (this.timeoutSeconds != null) {
+                return this.timeoutSeconds;
+            }
+            if (settings != null && settings.getDefaultTimeoutSeconds() != null) {
+                return settings.getDefaultTimeoutSeconds();
+            }
+            return taskDefault != null ? taskDefault : Settings.DEFAULT_TIMEOUT_SECONDS;
+        }
+
         @JsonIgnore
         public OnError effectiveOnError(Settings settings) {
             if (this.onError != null) {
