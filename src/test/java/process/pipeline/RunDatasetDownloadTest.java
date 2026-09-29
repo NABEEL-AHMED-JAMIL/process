@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
@@ -247,6 +248,6 @@ class RunDatasetDownloadTest {
             .andExpect(request().asyncStarted()).andReturn();
         this.mvc().perform(asyncDispatch(started))
             .andExpect(status().isNotFound())
-            .andExpect(content().string(org.hamcrest.Matchers.containsString("\"status\":\"ERROR\"")));
+            .andExpect(content().string(containsString("\"status\":\"ERROR\"")));
     }
 }
