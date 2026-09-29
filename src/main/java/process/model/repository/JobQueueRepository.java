@@ -135,9 +135,10 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     /**
      * The most recent runs of the jobs assigned to one person.
      *
-     * Scoped by assigned_user_id, which is the caller's own id, so this cannot reach anybody
-     * else's work whatever the tenant filter is doing -- a user belongs to one tenant and the
-     * join only ever reaches jobs bearing their id.
+     * Scoped by assigned_user_id, which is the caller's own id, and by the caller's workspace: a user
+     * belongs to one workspace, but nothing in the schema ties a job's assignee to the job's workspace,
+     * so the id alone would also reach another workspace's job that names them (MIG-166). allTenants
+     * is a platform admin's grant.
      *
      * Ordered by start_time with the nulls last: a queued run that has not begun has no start
      * time, and it belongs at the bottom rather than sorted as though it were the oldest thing
@@ -149,9 +150,11 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         // A deleted job's runs are not the person's activity any more: the job tiles beside this
         // list already leave them out, and so does the report. Without the clause a deleted job
         // kept appearing here, with a link to a job that no longer opens.
-        + "where j.assigned_user_id = ?1 and j.job_status <> 'Delete' "
-        + "order by q.start_time desc nulls last, q.job_queue_id desc limit ?2", nativeQuery = true)
-    List<Object[]> findRecentRunsForAssignee(Long appUserId, int limit);
+        + "where j.assigned_user_id = :appUserId and j.job_status <> 'Delete' "
+        + "and (:allTenants = true or j.tenant_id = :tenantId) "
+        + "order by q.start_time desc nulls last, q.job_queue_id desc limit :limit", nativeQuery = true)
+    List<Object[]> findRecentRunsForAssignee(@Param("appUserId") Long appUserId, @Param("allTenants") boolean allTenants,
+        @Param("tenantId") long tenantId, @Param("limit") int limit);
 
     /** How many of that person's runs started inside the window, and how many of those failed. */
     // Aliased for the same reason as countAssignedTo: two unaliased count(*) columns both come
@@ -160,7 +163,9 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "select count(*) as total_count, "
         + "count(*) filter (where UPPER(q.job_status) = 'FAILED') as failed_count "
         + "from job_queue q join source_job j on j.job_id = q.job_id "
-        + "where j.assigned_user_id = ?1 and j.job_status <> 'Delete' and q.start_time >= ?2", nativeQuery = true)
-    List<Object[]> countRecentRunsForAssignee(Long appUserId, Timestamp since);
+        + "where j.assigned_user_id = :appUserId and j.job_status <> 'Delete' and q.start_time >= :since "
+        + "and (:allTenants = true or j.tenant_id = :tenantId)", nativeQuery = true)
+    List<Object[]> countRecentRunsForAssignee(@Param("appUserId") Long appUserId, @Param("allTenants") boolean allTenants,
+        @Param("tenantId") long tenantId, @Param("since") Timestamp since);
 
 }

@@ -1,5 +1,6 @@
 package process.settings;
 
+import org.barco.platform.tenancy.TenantScope;
 import process.identity.IdentityPort;
 import process.security.TenantContext;
 
@@ -38,9 +39,18 @@ final class ActingWorkspace {
         return null;
     }
 
-    /** The workspace a list shows: a tenant admin's own; a platform admin's choice, or every one (null). */
+    /**
+     * The workspace a list shows: a tenant admin's own; a platform admin's choice, or every one (null). Null means
+     * "every workspace" to the callers, so it is a platform admin's answer only: a caller with no workspace of their
+     * own gets {@link TenantScope#NO_TENANT_MATCHES}, which no row carries, and an empty list (MIG-166). It used to be
+     * handed their null, and with it every workspace's configuration values and home pages.
+     */
     static Long forList(Long requested) {
-        return TenantContext.isPlatformAdmin() ? requested : TenantContext.getTenantId();
+        if (TenantContext.isPlatformAdmin()) {
+            return requested;
+        }
+        Long mine = TenantContext.getTenantId();
+        return mine == null ? TenantScope.NO_TENANT_MATCHES : mine;
     }
 
     static boolean mayTouch(Long rowTenantId) {

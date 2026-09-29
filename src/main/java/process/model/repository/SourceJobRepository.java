@@ -4,6 +4,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
@@ -108,10 +109,16 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     // "count", so two of them collide and Hibernate's auto-discovery throws
     // NonUniqueDiscoveredSqlAliasException. The profile activity panel returned an error on
     // every single call because of it.
+    //
+    // And scoped to the caller's workspace as well as to their id (MIG-166): nothing in the schema ties an assignee's
+    // workspace to the job's, so a job of another workspace naming this person -- by direct SQL, a user moved
+    // between workspaces, a restored backup -- is still that workspace's job. allTenants is a platform admin's grant.
     @Query(value = "select count(*) as total_count, "
         + "count(*) filter (where job_status = 'Active') as active_count "
-        + "from source_job where assigned_user_id = ?1 and job_status <> 'Delete'", nativeQuery = true)
-    List<Object[]> countAssignedTo(Long appUserId);
+        + "from source_job where assigned_user_id = :appUserId and job_status <> 'Delete' "
+        + "and (:allTenants = true or tenant_id = :tenantId)", nativeQuery = true)
+    List<Object[]> countAssignedTo(@Param("appUserId") Long appUserId, @Param("allTenants") boolean allTenants,
+        @Param("tenantId") long tenantId);
 
 
     /**
@@ -123,8 +130,10 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      * chart should be showing.
      */
     @Query(value = "select coalesce(job_running_status, 'Not run') as outcome, count(*) "
-        + "from source_job where assigned_user_id = ?1 and job_status <> 'Delete' "
+        + "from source_job where assigned_user_id = :appUserId and job_status <> 'Delete' "
+        + "and (:allTenants = true or tenant_id = :tenantId) "
         + "group by 1 order by 2 desc", nativeQuery = true)
-    List<Object[]> outcomesForAssignee(Long appUserId);
+    List<Object[]> outcomesForAssignee(@Param("appUserId") Long appUserId, @Param("allTenants") boolean allTenants,
+        @Param("tenantId") long tenantId);
 
 }

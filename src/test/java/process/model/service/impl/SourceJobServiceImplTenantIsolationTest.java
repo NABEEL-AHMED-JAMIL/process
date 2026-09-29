@@ -30,6 +30,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
 import java.util.Arrays;
 import process.notifications.TestNotifications;
@@ -238,15 +241,15 @@ public class SourceJobServiceImplTenantIsolationTest {
     @Test
     void myActivityAsksOnlyAboutTheCallersOwnId() throws Exception {
         TenantContext.set(5L, "TENANT_USER", 1000L, "someone@tenant.example");
-        when(this.sourceJobRepository.countAssignedTo(1000L))
+        when(this.sourceJobRepository.countAssignedTo(1000L, false, 5L))
             .thenReturn(Collections.singletonList(new Object[] { 7L, 0L }));
-        when(this.jobQueueRepository.countRecentRunsForAssignee(eq(1000L), any()))
+        when(this.jobQueueRepository.countRecentRunsForAssignee(eq(1000L), eq(false), eq(5L), any()))
             .thenReturn(Collections.singletonList(new Object[] { 2L, 0L }));
-        when(this.jobQueueRepository.findRecentRunsForAssignee(1000L, 8))
+        when(this.jobQueueRepository.findRecentRunsForAssignee(1000L, false, 5L, 8))
             .thenReturn(Collections.singletonList(new Object[] {
                 5073L, 2004L, "Pacific hurricanes 2000-2004", "Completed",
                 Timestamp.valueOf("2026-08-27 12:25:03"), Timestamp.valueOf("2026-08-27 12:26:09"), "ok" }));
-        when(this.sourceJobRepository.outcomesForAssignee(1000L))
+        when(this.sourceJobRepository.outcomesForAssignee(1000L, false, 5L))
             .thenReturn(Collections.singletonList(new Object[] { "Completed", 2L }));
 
         ResponseDto response = this.service.fetchMyActivity(8, 7);
@@ -260,14 +263,16 @@ public class SourceJobServiceImplTenantIsolationTest {
         assertThat(activity.getRuns().get(0).getStartTime()).isNotNull();
         assertThat(activity.getOutcomes()).hasSize(1);
         // No other id was ever asked about.
-        verify(this.sourceJobRepository, never()).countAssignedTo(argThat(id -> !Long.valueOf(1000L).equals(id)));
+        verify(this.sourceJobRepository, never()).countAssignedTo(argThat(id -> !Long.valueOf(1000L).equals(id)), anyBoolean(), anyLong());
+        // ...nor about any workspace but the caller's own (MIG-166).
+        verify(this.sourceJobRepository, never()).countAssignedTo(anyLong(), eq(true), anyLong());
     }
 
     /** A completed run's message is noise on a profile; only a failure has something to explain. */
     @Test
     void onlyAFailedRunCarriesItsMessage() throws Exception {
         TenantContext.set(5L, "TENANT_USER", 1000L, "someone@tenant.example");
-        when(this.jobQueueRepository.findRecentRunsForAssignee(1000L, 8)).thenReturn(Arrays.asList(
+        when(this.jobQueueRepository.findRecentRunsForAssignee(1000L, false, 5L, 8)).thenReturn(Arrays.asList(
             new Object[] { 1L, 2L, "Fine job", "Completed", Timestamp.valueOf("2026-08-27 12:00:00"),
                 Timestamp.valueOf("2026-08-27 12:01:00"), "finished cleanly" },
             new Object[] { 2L, 3L, "Broken job", "Failed", Timestamp.valueOf("2026-08-27 13:00:00"),
