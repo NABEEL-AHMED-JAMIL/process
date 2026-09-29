@@ -37,6 +37,9 @@ class CoreCrossTenantProbeRunReviewPostgresTest {
         }
         sql.update("UPDATE job_queue SET job_status = 'Completed' WHERE job_queue_id IN (?, ?, ?, ?)", A_RUN, COLLEAGUE_RUN, B_RUN,
             B_RUN_NAMING_USER_A);
+        for (long run : new long[] {A_RUN, B_RUN}) {
+            sql.update("INSERT INTO result_record (job_queue_id, result) VALUES (?, '{\"total\": 3}'::jsonb)", run);
+        }
     }
 
     @AfterAll
@@ -119,6 +122,10 @@ class CoreCrossTenantProbeRunReviewPostgresTest {
         JdbcTemplate sql = fx.db.jdbc();
         assertThat(sql.queryForObject("SELECT tenant_id FROM run_review_decision WHERE job_queue_id = ?", Long.class, A_RUN)).isEqualTo(A);
         assertThat(sql.queryForObject("SELECT status FROM run_review WHERE job_queue_id = ?", String.class, A_RUN)).isEqualTo("APPROVED");
+        assertThat(sql.queryForObject("SELECT review_status FROM result_record WHERE job_queue_id = ?", String.class, A_RUN))
+            .as("the run's results take its decision").isEqualTo("APPROVED");
+        assertThat(sql.queryForObject("SELECT review_status FROM result_record WHERE job_queue_id = ?", String.class, B_RUN))
+            .isEqualTo("PENDING");
         assertThat(sql.queryForObject("SELECT count(*) FROM job_audit_logs WHERE job_queue_id = ? AND log_detail LIKE "
             + "'Result review: internal APPROVED by alice@acme.example%'", Long.class, A_RUN)).isEqualTo(1);
         assertThat(fx.leaks).isEmpty();
