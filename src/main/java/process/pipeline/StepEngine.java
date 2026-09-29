@@ -94,13 +94,16 @@ public class StepEngine {
         public final SourceJob job;
         public final JobQueue run;
         public final PipelineDefinitionStore.Stored stored;
+        /** Null when the stored version cannot be read any more: the run is declined with {@link #unreadable}. */
         public final PipelineDefinition definition;
+        public final String unreadable;
 
-        StepPlan(SourceJob job, JobQueue run, PipelineDefinitionStore.Stored stored, PipelineDefinition definition) {
+        StepPlan(SourceJob job, JobQueue run, PipelineDefinitionStore.Stored stored, PipelineDefinition definition, String unreadable) {
             this.job = job;
             this.run = run;
             this.stored = stored;
             this.definition = definition;
+            this.unreadable = unreadable;
         }
     }
 
@@ -184,11 +187,18 @@ public class StepEngine {
         if (!stored.isPresent()) {
             return Optional.empty();
         }
-        PipelineDefinition definition = stored.get().definition();
+        PipelineDefinition definition;
+        try {
+            definition = stored.get().definition();
+        } catch (IllegalStateException unreadable) {
+            // A stored version this build cannot read (the model changed under it): the engine's to decline, never
+            // today's path -- the run must not be handed to a worker that has no such pipeline, nor left claimed.
+            return Optional.of(new StepPlan(job, run, stored.get(), null, reasonOf(unreadable)));
+        }
         if (definition.isLegacy()) {
             return Optional.empty();
         }
-        return Optional.of(new StepPlan(job, run, stored.get(), definition));
+        return Optional.of(new StepPlan(job, run, stored.get(), definition, null));
     }
 
     /** Runs the plan on the engine's threads, in the run's workspace; {@code done} runs afterwards, whatever happened. */
@@ -277,8 +287,8 @@ public class StepEngine {
             this.tenantId = plan.job.getTenantId();
             this.attempt = Math.max(1, plan.run.getAttempt());
             this.definition = plan.definition;
-            this.settings = plan.definition.effectiveSettings();
-            this.stepList = plan.definition.getSteps();
+            this.settings = plan.definition == null ? new PipelineDefinition.Settings() : plan.definition.effectiveSettings();
+            this.stepList = plan.definition == null ? Collections.emptyList() : plan.definition.getSteps();
         }
 
         void go() {
@@ -286,6 +296,13 @@ public class StepEngine {
             ResponseDto started = report(this.run, JobStatus.Start, String.format("Taken by the step engine: pipeline %s, definition "
                 + "version %d, %d step(s).", pipelineId, this.plan.stored.version, this.stepList.size()));
             if (refused(started)) {
+                logger.error("Run {} was taken by the step engine but its Start was refused; the stall sweep will close it.",
+                    this.run.getJobQueueId());
+                return;
+            }
+            if (this.definition == null) {
+                report(this.run, JobStatus.Failed, String.format("Declined by the step engine: definition version %d cannot be read: %s",
+                    this.plan.stored.version, this.plan.unreadable));
                 return;
             }
             List<DefinitionProblem> problems = validator.problems(this.definition);
@@ -296,10 +313,17 @@ public class StepEngine {
             }
             if (!problems.isEmpty()) {
                 // The version the run is pinned to no longer runs here (a task it names is gone): declined, as a worker
-                // declines a pipeline it does not have -- Start -> Failed, never retried, never metered.
-                report(this.run, JobStatus.Failed, String.format("Declined by the step engine: definition version %d no longer "
-                    + "validates: %s", this.plan.stored.version, problems.stream().limit(3).map(DefinitionProblem::toString)
-                    .collect(Collectors.joining("; "))));
+                // declines a pipeline it does not have -- Start -> Failed, never retried, never metered. Its steps are
+                // shown, not run, so the timeline says why.
+                String declined = String.format("Declined by the step engine: definition version %d no longer validates: %s",
+                    this.plan.stored.version, problems.stream().limit(3).map(DefinitionProblem::toString).collect(Collectors.joining("; ")));
+                try {
+                    this.stopAll(steps.plan(this.run.getJobQueueId(), this.attempt, this.plan.stored.id, planned), 0,
+                        JobStatus.Skip.name(), "Not run: " + declined);
+                } catch (RuntimeException unrecorded) {
+                    logger.warn("Run {}: its declined steps could not be recorded: {}", this.run.getJobQueueId(), reasonOf(unrecorded));
+                }
+                report(this.run, JobStatus.Failed, declined);
                 return;
             }
             List<Long> rows = steps.plan(this.run.getJobQueueId(), this.attempt, this.plan.stored.id, planned);

@@ -425,7 +425,24 @@ class StepEngineTest {
             .containsExactly(JobStatus.Start, JobStatus.Failed);
         assertThat(this.worker.last()).isEqualTo("Failed: Declined by the step engine: definition version 3 no longer validates: "
             + "steps[0].task: no task 'flaky' is registered");
-        assertThat(this.steps.rows).isEmpty();
+        assertThat(this.statuses()).as("shown, not run, so the timeline says why").containsExactly(entry("gone", "Skip"));
+        assertThat(this.steps.row(RUN_ID, 1, "gone").statusMessage).startsWith("Not run: Declined by the step engine");
+    }
+
+    @Test
+    void aStoredVersionThisBuildCannotReadIsDeclinedNotHandedToAWorker() {
+        PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
+        stored.id = DEFINITION_ID;
+        stored.version = 4;
+        stored.json = "{\"version\":1,\"steps\":[{\"key\":\"read\",\"task\":\"sample\",\"parallel\":true}]}";
+        when(this.definitions.latestFor(TENANT, "CLAIMS")).thenReturn(Optional.of(stored));
+        Optional<StepEngine.StepPlan> plan = this.engine.planFor(this.job, this.run);
+        assertThat(plan).as("the engine's, never today's path").isPresent();
+        this.run.setJobSend(true);
+        this.engine.run(plan.get());
+        assertThat(this.worker.statuses()).containsExactly(JobStatus.Start, JobStatus.Failed);
+        assertThat(this.worker.last()).startsWith("Failed: Declined by the step engine: definition version 4 cannot be read: ")
+            .contains("unknown field 'parallel'");
     }
 
     @Test

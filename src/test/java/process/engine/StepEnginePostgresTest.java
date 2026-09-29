@@ -234,6 +234,8 @@ class StepEnginePostgresTest {
         Map<String, Object> stepRun = this.run(steps);
         assertThat(stepRun.get("job_status")).isEqualTo("Completed");
         assertThat(stepRun.get("job_send")).as("handed to the engine, as a dispatched run is to its worker").isEqualTo(true);
+        assertThat(login.queryForObject("SELECT length(callback_token_hash) FROM job_queue WHERE job_queue_id = ?", Integer.class, steps))
+            .as("sealed: no worker token, and the shared legacy secret no longer opens it").isEqualTo(64);
         assertThat(stepRun.get("end_reason")).isEqualTo("WORKER");
         assertThat(stepRun.get("end_time")).isNotNull();
         assertThat(stepRun.get("job_status_message")).isEqualTo("2 of 2 step(s) completed.");

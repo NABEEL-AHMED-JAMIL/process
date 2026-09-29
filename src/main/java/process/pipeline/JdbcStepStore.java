@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import process.util.BusinessTime;
 
+import java.security.SecureRandom;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -30,17 +31,35 @@ public class JdbcStepStore implements StepStore {
     private static final String STEP_COLUMNS = "step_execution_id, job_queue_id, attempt, step_index, step_key, task_code, status, "
         + "started_at, ended_at, records_in, records_out, tries, on_error, status_message, error::text AS error, pipeline_definition_id";
 
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private final JdbcTemplate jdbc;
 
     public JdbcStepStore(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
+    /**
+     * Also seals the run's callbacks: a run with no token hash would accept the shared legacy worker secret
+     * (RunCallbackTokens), and no worker has any business reporting on a run the engine runs. The hash is of nothing
+     * anyone holds, so every worker callback on the run is refused as a mismatch.
+     */
     @Override
     public boolean claimForEngine(long jobQueueId, String correlationId) {
         return this.jdbc.update("UPDATE job_queue SET job_send = true, prepared_at = now(), prepare_lease_until = NULL, "
-            + "correlation_id = COALESCE(correlation_id, ?) WHERE job_queue_id = ? AND UPPER(job_status) = 'QUEUE' "
-            + "AND job_send = false AND prepared_at IS NULL", correlationId, jobQueueId) == 1;
+            + "correlation_id = COALESCE(correlation_id, ?), callback_token_hash = ?, callback_token_attempt = GREATEST(attempt, 1), "
+            + "callback_token_expires_at = NULL WHERE job_queue_id = ? AND UPPER(job_status) = 'QUEUE' "
+            + "AND job_send = false AND prepared_at IS NULL", correlationId, unheldHash(), jobQueueId) == 1;
+    }
+
+    private static String unheldHash() {
+        byte[] random = new byte[32];
+        RANDOM.nextBytes(random);
+        StringBuilder hex = new StringBuilder(64);
+        for (byte b : random) {
+            hex.append(String.format("%02x", b));
+        }
+        return hex.toString();
     }
 
     @Override
