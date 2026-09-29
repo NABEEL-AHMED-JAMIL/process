@@ -27,6 +27,11 @@ class TenantForeignKeysDemotedPostgresTest {
             + " ORDER BY 1", String.class);
     }
 
+    private static List<String> coreKeys(JdbcTemplate sql) {
+        return sql.queryForList("SELECT conrelid::regclass || '.' || conname FROM pg_constraint WHERE contype = 'f' "
+            + "AND confrelid::regclass::text NOT IN " + SIX + " ORDER BY 1", String.class);
+    }
+
     private static long count(JdbcTemplate sql, String where) {
         return sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND " + where, Long.class);
     }
@@ -38,6 +43,7 @@ class TenantForeignKeysDemotedPostgresTest {
             List<String> before = intoIdentity(sql);
             long insideIdentity = count(sql, "conrelid::regclass::text IN " + SIX);
             long insideCore = count(sql, "confrelid::regclass::text NOT IN " + SIX);
+            List<String> coreKeys = coreKeys(sql);
             System.out.println("MIG-166 inventory, fresh build before V161: " + before.size() + " foreign keys onto Identity's tables "
                 + before + "; " + insideIdentity + " inside Identity, " + insideCore + " inside Core");
             assertThat(before).as("the cutover (V69.1) has not run: the build still carries them").isNotEmpty();
@@ -46,7 +52,8 @@ class TenantForeignKeysDemotedPostgresTest {
 
             assertThat(intoIdentity(sql)).isEmpty();
             assertThat(count(sql, "conrelid::regclass::text IN " + SIX)).as("Identity's own keys stay").isEqualTo(insideIdentity);
-            assertThat(count(sql, "confrelid::regclass::text NOT IN " + SIX)).as("Core's own keys stay").isEqualTo(insideCore);
+            // Every one stays; changesets after V161 may add their own (V180's four, MIG-225), so the set only grows.
+            assertThat(coreKeys(sql)).as("Core's own keys stay").containsAll(coreKeys).hasSizeGreaterThanOrEqualTo((int) insideCore);
             // A row can name a workspace and a person that exist only in identity_db.
             sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, tenant_id, "
                 + "created_by, assigned_user_id) VALUES (61, now(), 'Auto', 'j', 'Active', 1, 424242, 919191, 919191)");

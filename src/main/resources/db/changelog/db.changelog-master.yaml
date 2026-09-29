@@ -138,3 +138,6 @@ databaseChangeLog:
   # V178: a tenant user sees their own jobs only (owner decision 2026-09-24) -- the index behind created_by.
   - include:
       file: db/changelog/yaml/V178.0-source-job-created-by-index.yaml
+  # V180: MIG-225 -- Core's round-trip and execution tables (steps, run datasets, results, reviews). V179 left free.
+  - include:
+      file: db/changelog/yaml/V180.0-round-trip-execution.yaml
