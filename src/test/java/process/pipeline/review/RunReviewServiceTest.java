@@ -211,7 +211,8 @@ class RunReviewServiceTest {
     void aTenantUserCannotDecide() {
         this.requires("internal");
         TenantContext.set(TENANT, "TENANT_USER", USER, "uma@acme.example");
-        refused(this.service.consoleDecide(request("APPROVED", null, null)), "Only a tenant administrator can approve or reject a run's results.");
+        refused(this.service.consoleDecide(request("APPROVED", null, null)),
+            "Only a tenant administrator can approve or reject a run's results.");
         assertThat(this.store.decisions).isEmpty();
     }
 
@@ -253,7 +254,8 @@ class RunReviewServiceTest {
         assertThat(this.store.settledResults).isEmpty();
 
         TenantContext.set(TENANT, ReviewParties.API_CLIENT_ROLE, null, "client-7");
-        assertThat(data(this.service.decide(request("APPROVED", null, null), ReviewParty.CUSTOMER))).containsEntry("reviewStatus", "APPROVED");
+        assertThat(data(this.service.decide(request("APPROVED", null, null), ReviewParty.CUSTOMER)))
+            .containsEntry("reviewStatus", "APPROVED");
         assertThat(this.store.settledResults).containsEntry(RUN, RunReviewStatus.APPROVED);
     }
 

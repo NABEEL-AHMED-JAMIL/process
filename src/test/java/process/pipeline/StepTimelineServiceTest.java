@@ -12,10 +12,13 @@ import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
+import process.pipeline.review.InMemoryRunReviewStore;
+import process.pipeline.review.RunReviews;
 import process.security.TenantContext;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,7 +40,7 @@ class StepTimelineServiceTest {
     private final InMemoryModelChoiceStore ai = new InMemoryModelChoiceStore();
     private final InMemoryDatasetStore datasets = new InMemoryDatasetStore();
     private final StepTimelineService service = new StepTimelineService(this.runs, this.jobs, this.steps, this.ai,
-        this.datasets);
+        this.datasets, new RunReviews(this.steps, mock(PipelineDefinitionStore.class), new InMemoryRunReviewStore()));
     private JobQueue run;
     private SourceJob job;
 
@@ -87,7 +90,9 @@ class StepTimelineServiceTest {
 
         Map<String, Object> timeline = this.timeline(null);
 
-        assertThat(timeline).containsEntry("legacy", true).containsEntry("attempt", 1).containsEntry("runStatus", JobStatus.Completed);
+        assertThat(timeline).containsEntry("legacy", true).containsEntry("attempt", 1).containsEntry("runStatus", JobStatus.Completed)
+            .containsEntry("reviewStatus", "NOT_REQUIRED");
+        assertThat((Map<String, Object>) timeline.get("review")).containsEntry("required", Collections.emptyList());
         List<Map<String, Object>> list = (List<Map<String, Object>>) timeline.get("steps");
         assertThat(list).hasSize(1);
         assertThat(list.get(0)).containsEntry("key", "legacy").containsEntry("task", "legacy").containsEntry("status", "Completed")

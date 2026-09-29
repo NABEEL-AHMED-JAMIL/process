@@ -14,10 +14,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /** {@link RunReviewStore} in memory, with the table's one-decision-per-party rule, for unit tests. */
-class InMemoryRunReviewStore implements RunReviewStore {
+public class InMemoryRunReviewStore implements RunReviewStore {
 
-    final List<Decision> decisions = new ArrayList<>();
-    final Map<Long, Status> statuses = new HashMap<>();
+    public final List<Decision> decisions = new ArrayList<>();
+    public final Map<Long, Status> statuses = new HashMap<>();
     final Map<Long, RunReviewStatus> settledResults = new HashMap<>();
     private long nextId = 1000;
 

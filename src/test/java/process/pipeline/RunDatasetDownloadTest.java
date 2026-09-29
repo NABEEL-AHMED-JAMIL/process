@@ -10,11 +10,16 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import process.model.dto.ResponseDto;
 import process.model.enums.JobStatus;
+import process.model.enums.ReviewDecision;
+import process.model.enums.ReviewParty;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
+import process.pipeline.review.InMemoryRunReviewStore;
+import process.pipeline.review.RunReviewStore;
+import process.pipeline.review.RunReviews;
 import process.security.TenantContext;
 
 import java.io.ByteArrayOutputStream;
@@ -22,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,8 +58,10 @@ class RunDatasetDownloadTest {
     private final SourceJobRepository jobs = mock(SourceJobRepository.class);
     private final InMemoryStepStore steps = new InMemoryStepStore();
     private final InMemoryDatasetStore datasets = new InMemoryDatasetStore();
+    private final PipelineDefinitionStore definitions = mock(PipelineDefinitionStore.class);
+    private final InMemoryRunReviewStore reviews = new InMemoryRunReviewStore();
     private final StepTimelineService service = new StepTimelineService(this.runs, this.jobs, this.steps, new InMemoryModelChoiceStore(),
-        this.datasets);
+        this.datasets, new RunReviews(this.steps, this.definitions, this.reviews));
     private long shape;
     private long keep;
     private long send;
@@ -206,6 +214,37 @@ class RunDatasetDownloadTest {
             .containsEntry("name", "7383.json").containsEntry("format", "json").doesNotContainKey("runDatasetId");
         assertThat(String.valueOf(outputs)).doesNotContain("datasets/");
         assertThat(((List<?>) ((Map<String, Object>) this.service.outputs(RUN, 2).getData()).get("outputs"))).isEmpty();
+    }
+
+    /** MIG-237: the manifest says where the run's review stands -- its status, who must approve, and who has. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theManifestCarriesTheRunsReview() {
+        Map<String, Object> manifest = (Map<String, Object>) this.service.outputs(RUN, null).getData();
+        assertThat(manifest).containsEntry("reviewStatus", "NOT_REQUIRED");
+
+        PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
+        stored.id = 1001L;
+        stored.json = "{\"version\":1,\"steps\":[{\"key\":\"shape\",\"task\":\"select\"}],"
+            + "\"settings\":{\"review\":{\"required\":[\"internal\",\"customer\"]}}}";
+        when(this.definitions.byId(1001L)).thenReturn(Optional.of(stored));
+        this.reviews.lockPending(RUN, EnumSet.of(ReviewParty.INTERNAL, ReviewParty.CUSTOMER));
+        RunReviewStore.Decision approved = new RunReviewStore.Decision();
+        approved.jobQueueId = RUN;
+        approved.attempt = 1;
+        approved.party = ReviewParty.INTERNAL;
+        approved.decision = ReviewDecision.APPROVED;
+        approved.reviewerName = "ada@acme.example";
+        this.reviews.record(approved);
+
+        manifest = (Map<String, Object>) this.service.outputs(RUN, null).getData();
+        assertThat(manifest).containsEntry("reviewStatus", "PENDING");
+        Map<String, Object> review = (Map<String, Object>) manifest.get("review");
+        assertThat(review).containsEntry("required", Arrays.asList("internal", "customer"));
+        List<Map<String, Object>> decisions = (List<Map<String, Object>>) review.get("decisions");
+        assertThat(decisions).hasSize(1);
+        assertThat(decisions.get(0)).containsEntry("party", "internal").containsEntry("decision", "APPROVED")
+            .containsEntry("reviewer", "ada@acme.example");
     }
 
     @Test
