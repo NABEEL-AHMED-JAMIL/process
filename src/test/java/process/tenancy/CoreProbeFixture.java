@@ -4,6 +4,9 @@ import process.ai.AiModelChoiceService;
 import process.ai.AiPort;
 import process.ai.JdbcModelChoiceStore;
 import process.api.AiModelChoiceRestApi;
+import process.api.InboxTriggerRestApi;
+import process.inbox.InboxTriggerService;
+import process.inbox.JdbcInboxTriggerStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
@@ -374,6 +377,7 @@ final class CoreProbeFixture implements AutoCloseable {
     final ReportRestApi reports;
     final FileChatRestApi fileChat;
     final AiModelChoiceRestApi modelChoice;
+    final InboxTriggerRestApi inboxTriggers;
 
     private CoreProbeFixture(String prefix) throws Exception {
         this.db = ScratchPostgres.create(prefix);
@@ -453,6 +457,8 @@ final class CoreProbeFixture implements AutoCloseable {
             this.indexLock));
         this.modelChoice = new AiModelChoiceRestApi(new AiModelChoiceService(jobRows, taskRows, runRows, pipelineRows, this.ai,
             new JdbcModelChoiceStore(this.db.appJdbc()), jobs));
+        this.inboxTriggers = new InboxTriggerRestApi(new InboxTriggerService(new JdbcInboxTriggerStore(this.db.appJdbc()), this.engine,
+            transactions, this.jpa.transactionManager()));
     }
 
     /** Skips the calling class when no database is configured, as every ScratchPostgres test does. */

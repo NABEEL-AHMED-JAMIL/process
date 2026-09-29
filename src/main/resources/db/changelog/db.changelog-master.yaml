@@ -148,3 +148,7 @@ databaseChangeLog:
   # MIG-258's (row-level security).
   - include:
       file: db/changelog/yaml/V182.0-ai-model-choice.yaml
+  # V185: MIG-239 -- the inbox: a job's trigger on a file arriving in its workspace's inbox, each arrival's outcome, and
+  # the file on the run. V183-V184 are MIG-230's (the step engine).
+  - include:
+      file: db/changelog/yaml/V185.0-inbox-trigger.yaml

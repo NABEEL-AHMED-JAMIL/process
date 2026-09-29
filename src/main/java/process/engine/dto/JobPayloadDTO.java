@@ -34,6 +34,13 @@ public class JobPayloadDTO {
      * run whose dispatch names another workspace. Absent for a job with no workspace.
      */
     private Long tenantId;
+    /**
+     * The file this run was started for (MIG-239): a file that arrived in the workspace's inbox -- the inbox
+     * connection's storage alias and the object's key under intake/. Absent on every other run, so a worker that does
+     * not know them sees its old shape. The pipeline reads the file named here rather than its task's input folder.
+     */
+    private String inputBucket;
+    private String inputKey;
 
     public JobPayloadDTO() {
     }
@@ -105,4 +112,8 @@ public class JobPayloadDTO {
     public void setAttempt(Integer attempt) { this.attempt = attempt; }
     public Long getTenantId() { return tenantId; }
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+    public String getInputBucket() { return inputBucket; }
+    public void setInputBucket(String inputBucket) { this.inputBucket = inputBucket; }
+    public String getInputKey() { return inputKey; }
+    public void setInputKey(String inputKey) { this.inputKey = inputKey; }
 }

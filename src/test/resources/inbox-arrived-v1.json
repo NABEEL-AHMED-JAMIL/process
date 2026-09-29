@@ -1,0 +1,19 @@
+{
+  "eventId": "6f1c0f3e-8a4b-4d7e-9a53-2b8f1e0c9d11",
+  "eventType": "platform.storage.inbox-arrived.v1",
+  "occurredAt": "2026-09-28T19:04:05.123Z",
+  "tenantId": 4597,
+  "producer": "storage",
+  "traceId": "c0ffee00-1234-4abc-9def-000000000001",
+  "payload": {
+    "arrivalId": "0b8f6a52-3f5e-4c1a-9d7e-5a4b3c2d1e0f",
+    "tenantId": 4597,
+    "alias": "acme-inbox",
+    "key": "intake/2026/09/28/0b8f6a52-3f5e-4c1a-9d7e-5a4b3c2d1e0f-invoices_q3.csv",
+    "fileName": "invoices_q3.csv",
+    "bytes": 2048,
+    "contentType": "text/csv",
+    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "uploadedBy": 61
+  }
+}
