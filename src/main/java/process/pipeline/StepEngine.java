@@ -721,6 +721,16 @@ public class StepEngine {
         }
 
         @Override
+        public String inputBucket() {
+            return this.execution.run.getInputBucket();
+        }
+
+        @Override
+        public String inputKey() {
+            return this.execution.run.getInputKey();
+        }
+
+        @Override
         public Dataset dataset(String stepKey) {
             return this.execution.outputOf(stepKey);
         }

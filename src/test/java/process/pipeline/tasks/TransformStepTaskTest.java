@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
 
+import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -46,8 +48,8 @@ class TransformStepTaskTest {
             .containsEntry("amount", null).containsEntry("active", false).containsEntry("code", null);
     }
 
-    private static java.util.Map.Entry<String, Object> entry(String key, Object value) {
-        return new java.util.AbstractMap.SimpleEntry<>(key, value);
+    private static Map.Entry<String, Object> entry(String key, Object value) {
+        return new AbstractMap.SimpleEntry<>(key, value);
     }
 
     @Test

@@ -54,7 +54,7 @@ class RegistryValidationTest {
             "the task 'upload_bucket' is not available: storage-service does not accept CORE_PIPELINES yet"));
         this.all.buckets.unavailable = null;
         assertThat(this.validator.problems(definition, TENANT, "TENANT_USER")).containsExactly(
-            new DefinitionProblem("steps[1].task", "the task 'upload_bucket' needs the TENANT_ADMIN role"));
+            new DefinitionProblem("steps[1].task", "the task 'upload_bucket' needs the tenant administrator role"));
     }
 
     @Test

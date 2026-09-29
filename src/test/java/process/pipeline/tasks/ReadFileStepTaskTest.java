@@ -2,6 +2,7 @@ package process.pipeline.tasks;
 
 import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
+import process.pipeline.DefinitionProblem;
 import process.pipeline.backing.Fakes;
 
 import java.nio.charset.StandardCharsets;
@@ -52,6 +53,21 @@ class ReadFileStepTaskTest {
         assertThatThrownBy(() -> this.read("bad.jsonl", "{\"id\":1}\nnot json\n".getBytes(StandardCharsets.UTF_8)))
             .hasMessage("Line 2 is not JSON.");
         assertThatThrownBy(() -> this.read("notes.txt", new byte[0])).hasMessageContaining("set the format");
+    }
+
+    /** MIG-239: a run an inbox arrival started reads its own file when the step names none. */
+    @Test
+    void withNoFileNamedItReadsTheFileTheRunWasStartedFor() throws Exception {
+        this.buckets.objects.put("inbox/intake/2026/claims.csv", "id\n1\n".getBytes(StandardCharsets.UTF_8));
+        TaskContext context = TaskContext.of(config(), Collections.emptyList());
+        context.inputBucket = "inbox";
+        context.inputKey = "intake/2026/claims.csv";
+        assertThat(this.task.run(context).getOutput().getRows()).containsExactly(row("id", "1"));
+        assertThat(context.lines).contains("INFO Reading the file the run was started for: inbox/intake/2026/claims.csv.");
+        assertThatThrownBy(() -> this.task.run(TaskContext.of(config(), Collections.emptyList())))
+            .hasMessage("This run was not started by a file; name the bucket and the file to read.");
+        assertThat(this.task.check(config("bucket", "lake"))).containsExactly(new DefinitionProblem("key",
+            "name both the bucket and the file, or neither (the file the run was started for)"));
     }
 
     @Test

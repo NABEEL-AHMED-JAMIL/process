@@ -64,7 +64,7 @@ public final class TaskSpec {
             throw new IllegalStateException("An AI tool name is snake_case: " + this.aiToolName);
         }
         if (!ROLE_USER.equals(this.requiredRole) && !ROLE_ADMIN.equals(this.requiredRole)) {
-            throw new IllegalStateException("A task needs TENANT_USER or TENANT_ADMIN: " + this.requiredRole);
+            throw new IllegalStateException("A task's required role is the tenant user's or the tenant administrator's: " + this.requiredRole);
         }
     }
 

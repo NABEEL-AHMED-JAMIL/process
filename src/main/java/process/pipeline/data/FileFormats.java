@@ -60,11 +60,11 @@ public final class FileFormats {
     public static String contentType(String format) {
         switch (format) {
             case "csv":
-                return "text/csv";
+                return "text/csv; charset=utf-8";
             case "json":
                 return "application/json";
             case "jsonl":
-                return "application/x-ndjson";
+                return "application/x-ndjson; charset=utf-8";
             default:
                 return "application/octet-stream";
         }

@@ -3,6 +3,7 @@ package process.pipeline.tasks;
 import org.junit.jupiter.api.Test;
 import process.pipeline.DefinitionProblem;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -24,7 +25,7 @@ class FilterStepTaskTest {
 
     private List<Object> kept(Object... config) throws Exception {
         TaskContext context = TaskContext.of(config(config), this.rows);
-        List<Object> ids = new java.util.ArrayList<>();
+        List<Object> ids = new ArrayList<>();
 
         for (Map<String, Object> row : this.task.run(context).getOutput().getRows()) {
             ids.add(row.get("id"));

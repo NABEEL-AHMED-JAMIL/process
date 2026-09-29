@@ -5,7 +5,9 @@ import process.pipeline.AllTasks;
 import process.pipeline.StepTask;
 import process.pipeline.StepTasks;
 
+import java.util.AbstractMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,7 +29,7 @@ class TaskRegistryTest {
 
     @Test
     void theCoreReusableTasksAreRegisteredEachWithItsKind() {
-        Map<String, String> kinds = new java.util.LinkedHashMap<>();
+        Map<String, String> kinds = new LinkedHashMap<>();
         for (StepTask task : this.tasks.all()) {
             kinds.put(task.code(), task.spec().kind().label());
         }
@@ -40,7 +42,7 @@ class TaskRegistryTest {
     }
 
     private static Map.Entry<String, String> entry(String key, String value) {
-        return new java.util.AbstractMap.SimpleEntry<>(key, value);
+        return new AbstractMap.SimpleEntry<>(key, value);
     }
 
     /** The console generates each step's form from its config schema: every field has a title and a type. */
@@ -102,7 +104,7 @@ class TaskRegistryTest {
         assertThat(this.registry.refusal(this.tasks.find("write_database").get(), mine, "TENANT_ADMIN"))
             .contains("the task 'write_database' is disabled in this workspace");
         assertThat(this.registry.refusal(this.tasks.find("upload_bucket").get(), mine, "TENANT_USER"))
-            .contains("the task 'upload_bucket' needs the TENANT_ADMIN role");
+            .contains("the task 'upload_bucket' needs the tenant administrator role");
         assertThat(this.registry.refusal(this.tasks.find("upload_bucket").get(), mine, "TENANT_ADMIN")).isEmpty();
         assertThat(this.registry.refusal(this.tasks.find("upload_bucket").get(), mine, null)).as("the engine checks no role").isEmpty();
         this.all.buckets.unavailable = "storage has no CORE_PIPELINES";

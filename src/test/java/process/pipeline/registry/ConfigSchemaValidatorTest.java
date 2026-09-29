@@ -6,6 +6,7 @@ import process.pipeline.DefinitionProblem;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +26,7 @@ class ConfigSchemaValidatorTest {
         .required("items", JsonSchema.array(JsonSchema.object().required("target", JsonSchema.string())).minItems(1).maxItems(3))
         .toMap();
 
-    private static java.util.List<DefinitionProblem> problems(Object config) {
+    private static List<DefinitionProblem> problems(Object config) {
         return ConfigSchemaValidator.problems(SCHEMA, config, new HashSet<>(Collections.singletonList("read")));
     }
 

@@ -11,6 +11,7 @@ import process.model.dto.ObjectMetadataDto;
 import process.model.pojo.StorageConnection;
 import process.storage.TrustedAccess;
 import process.storage.TrustedCaller;
+import process.storage.TrustedStorageOperations;
 import process.util.StorageNotFound;
 
 import java.io.ByteArrayInputStream;
@@ -76,7 +77,7 @@ class StorageServiceClientTest {
     void aTrustedListingNamesItsCallerWorkspaceAndPrefix() throws Exception {
         try (StorageServiceStub storage = StorageServiceStub.json("/api/v1/internal/storage/objects", 200,
             "{\"objects\":[{\"key\":\"in/a.csv\",\"size\":19},{\"key\":\"in/b.csv\",\"size\":4}],\"truncated\":true}")) {
-            process.storage.TrustedStorageOperations.ObjectListing listing = new StorageServiceClient(storage.url(), TOKEN).trustedList(
+            TrustedStorageOperations.ObjectListing listing = new StorageServiceClient(storage.url(), TOKEN).trustedList(
                 TrustedAccess.of(TrustedCaller.CORE_PIPELINES, "pipeline read s3").forTenant(2901L), "lake", "in/", 2);
 
             assertThat(listing.objects).extracting(object -> object.key + ":" + object.size).containsExactly("in/a.csv:19", "in/b.csv:4");

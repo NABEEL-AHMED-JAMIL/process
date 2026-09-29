@@ -20,6 +20,8 @@ final class TaskContext implements StepContext {
     final List<String> lines = new ArrayList<>();
     final Map<String, byte[]> files = new LinkedHashMap<>();
     Long owner = 7L;
+    String inputBucket;
+    String inputKey;
 
     TaskContext(Map<String, Object> config, Dataset input) {
         this.config = config;
@@ -78,6 +80,16 @@ final class TaskContext implements StepContext {
     @Override
     public Long jobOwnerUserId() {
         return this.owner;
+    }
+
+    @Override
+    public String inputBucket() {
+        return this.inputBucket;
+    }
+
+    @Override
+    public String inputKey() {
+        return this.inputKey;
     }
 
     @Override

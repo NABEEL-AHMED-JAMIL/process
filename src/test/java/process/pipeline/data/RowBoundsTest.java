@@ -1,8 +1,11 @@
 package process.pipeline.data;
 
 import org.junit.jupiter.api.Test;
+import process.pipeline.Dataset;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -53,12 +56,12 @@ class RowBoundsTest {
         assertThat(Values.compare("b", "a")).isPositive();
         assertThat(Values.compare(null, 1)).isNegative();
         assertThat(Values.text(12.50)).isEqualTo("12.5");
-        assertThat(Values.plain(new java.math.BigDecimal("7.00"))).isEqualTo(7L);
+        assertThat(Values.plain(new BigDecimal("7.00"))).isEqualTo(7L);
     }
 
     @Test
     void writtenFilesReadBackAsTheSameRows() throws Exception {
-        process.pipeline.Dataset rows = process.pipeline.Dataset.of(java.util.Arrays.asList(row("id", "1", "name", "Acme \"A\""),
+        Dataset rows = Dataset.of(Arrays.asList(row("id", "1", "name", "Acme \"A\""),
             row("id", "2", "name", null)));
         RowCollector back = new RowCollector("x", null);
         FileFormats.read(FileFormats.write(rows, "csv"), "csv", new FileFormats.ReadOptions(), back);

@@ -9,8 +9,10 @@ import process.pipeline.registry.JdbcTaskOverrideStore;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,8 +63,8 @@ class TaskRegistryOverrideSchemaPostgresTest {
         assertThat(sql.queryForObject("SELECT min(task_registry_override_id) FROM task_registry_override", Long.class)).isGreaterThanOrEqualTo(1000L);
     }
 
-    private static java.util.Map.Entry<String, Boolean> entry(String key, Boolean value) {
-        return new java.util.AbstractMap.SimpleEntry<>(key, value);
+    private static Map.Entry<String, Boolean> entry(String key, Boolean value) {
+        return new AbstractMap.SimpleEntry<>(key, value);
     }
 
     @Test

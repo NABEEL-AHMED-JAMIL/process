@@ -38,6 +38,16 @@ public interface StepContext {
         return null;
     }
 
+    /** The storage alias of the file this run was started for (an inbox arrival, MIG-239); null for any other run. */
+    default String inputBucket() {
+        return null;
+    }
+
+    /** The key of the file this run was started for (an inbox arrival, MIG-239); null for any other run. */
+    default String inputKey() {
+        return null;
+    }
+
     /**
      * The output of an earlier step of this run, by its key (a join's other side, MIG-231). An exception when that step
      * made none (it failed and continued, or only acted) or is not earlier.

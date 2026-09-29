@@ -75,7 +75,8 @@ public class TaskRegistry {
             return Optional.of(String.format("the task '%s' is disabled in this workspace", task.code()));
         }
         if (role != null && rank(role) < rank(task.spec().requiredRole())) {
-            return Optional.of(String.format("the task '%s' needs the %s role", task.code(), task.spec().requiredRole()));
+            return Optional.of(String.format("the task '%s' needs the %s role", task.code(),
+                TaskSpec.ROLE_ADMIN.equals(task.spec().requiredRole()) ? "tenant administrator" : "tenant user"));
         }
         return Optional.empty();
     }
