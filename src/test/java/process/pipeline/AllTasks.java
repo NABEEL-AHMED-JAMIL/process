@@ -1,7 +1,10 @@
 package process.pipeline;
 
+import process.ai.AiPort;
+
 import process.pipeline.backing.Fakes;
 import process.pipeline.tasks.AggregateStepTask;
+import process.pipeline.tasks.AiPromptStepTask;
 import process.pipeline.tasks.EnrichStepTask;
 import process.pipeline.tasks.FilterStepTask;
 import process.pipeline.tasks.JoinStepTask;
@@ -23,6 +26,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.mockito.Mockito.mock;
+
 /** Every task the application registers (MIG-231), on fakes of the services they call. */
 public final class AllTasks {
 
@@ -31,13 +36,15 @@ public final class AllTasks {
     public final Fakes.Database database = new Fakes.Database();
     public final Fakes.Buckets buckets = new Fakes.Buckets();
     public final Fakes.Notifier notifier = new Fakes.Notifier();
+    public final AiPort ai = mock(AiPort.class);
 
     public List<StepTask> list() {
         return new ArrayList<>(Arrays.asList(new LegacyStepTask(), new SampleStepTask(), new SelectStepTask(),
             new ReadApiStepTask(this.api), new ReadS3StepTask(this.buckets), new ReadFileStepTask(this.buckets),
             new ReadDatabaseStepTask(this.database), new ValidateStepTask(this.contracts), new TransformStepTask(), new FilterStepTask(),
             new JoinStepTask(), new EnrichStepTask(this.api), new AggregateStepTask(), new SaveFileStepTask(),
-            new UploadBucketStepTask(this.buckets), new WriteDatabaseStepTask(this.database), new SendNotificationStepTask(this.notifier)));
+            new UploadBucketStepTask(this.buckets), new WriteDatabaseStepTask(this.database), new SendNotificationStepTask(this.notifier),
+            new AiPromptStepTask(this.ai, this.buckets)));
     }
 
     public StepTasks tasks() {

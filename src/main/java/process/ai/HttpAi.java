@@ -75,6 +75,12 @@ public class HttpAi implements AiPort {
     @Override
     public StepResult runStep(Long tenantId, Long jobQueueId, String stepTag, Long promptId, Map<String, String> values,
         String modelProfile, Long sourceTaskId) {
+        return this.runRowStep(tenantId, jobQueueId, stepTag, null, promptId, values, null, modelProfile, sourceTaskId);
+    }
+
+    @Override
+    public StepResult runRowStep(Long tenantId, Long jobQueueId, String stepTag, String item, Long promptId, Map<String, String> values,
+        List<Image> images, String modelProfile, Long sourceTaskId) {
         ObjectNode body = this.json.createObjectNode();
         body.put("tenantId", tenantId);
         body.put("jobQueueId", jobQueueId);
@@ -87,6 +93,16 @@ public class HttpAi implements AiPort {
         }
         if (sourceTaskId != null) {
             body.put("sourceTaskId", sourceTaskId);
+        }
+        // MIG-245: an engine step's row and its images (the bytes go to ai-service only, never into a log).
+        if (item != null) {
+            body.put("item", item);
+        }
+        if (images != null && !images.isEmpty()) {
+            ArrayNode sent = body.putArray("images");
+            for (Image image : images) {
+                sent.addObject().put("mediaType", image.mediaType).put("base64", image.base64);
+            }
         }
         try (Response response = this.send("/steps/run", body, false)) {
             JsonNode answer = this.readJson(response);

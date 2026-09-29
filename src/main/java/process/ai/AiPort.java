@@ -80,6 +80,27 @@ public interface AiPort {
     StepResult runStep(Long tenantId, Long jobQueueId, String stepTag, Long promptId, Map<String, String> values,
         String modelProfile, Long sourceTaskId);
 
+    /** MIG-245: one image for a vision model, as its media type and base64 bytes. */
+    final class Image {
+        public final String mediaType;
+        public final String base64;
+
+        public Image(String mediaType, String base64) {
+            this.mediaType = mediaType;
+            this.base64 = base64;
+        }
+    }
+
+    /**
+     * MIG-245: one row of an engine AI step. ai-service keys the run on stepTag#item, so a retried run reuses that row's
+     * answer; the images (null for a text step) go to a vision model with the prompt and are never stored. Never throws,
+     * as {@link #runStep}.
+     */
+    default StepResult runRowStep(Long tenantId, Long jobQueueId, String stepTag, String item, Long promptId, Map<String, String> values,
+        List<Image> images, String modelProfile, Long sourceTaskId) {
+        return StepResult.failed("This AI service cannot run an engine step.");
+    }
+
     /** One model an AI step may run on (ai-service's AiModelOptionDto): its id is what a run asks for. */
     final class ModelOption {
         public Long modelOptionId;
