@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 189.0-run-review
+      author: nabeel.amd93
+      description: "MIG-237: two-party result review -- run_review (the run's review status) and run_review_decision (one decision per party per run, insert-only for process_app); expand-only, row-level security as V181"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V189.0-run-review/V189__run_review.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V189.0-run-review/V189__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
