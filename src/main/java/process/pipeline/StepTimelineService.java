@@ -7,12 +7,9 @@ import org.springframework.transaction.annotation.Transactional;
 import process.ai.ModelChoiceStore;
 import process.ai.RunAiStep;
 import process.model.dto.ResponseDto;
-import process.model.enums.Status;
 import process.model.pojo.JobQueue;
-import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
-import process.security.JobOwnership;
 import process.pipeline.data.FileFormats;
 import process.pipeline.data.RowCollector;
 import process.util.BusinessTime;
@@ -26,7 +23,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -272,16 +268,7 @@ public class StepTimelineService {
     }
 
     private Optional<JobQueue> owned(Long jobQueueId) {
-        if (jobQueueId == null) {
-            return Optional.empty();
-        }
-        Optional<JobQueue> run = this.runs.findById(jobQueueId);
-        Optional<SourceJob> job = run.flatMap(r -> r.getJobId() == null ? Optional.empty() : this.jobs.findById(r.getJobId()));
-        if (!run.isPresent() || !job.isPresent() || !JobOwnership.isVisibleToCaller(job.get())
-            || Status.Delete.equals(job.get().getJobStatus()) || !Objects.equals(run.get().getTenantId(), job.get().getTenantId())) {
-            return Optional.empty();
-        }
-        return run;
+        return RunOwnership.owned(this.runs, this.jobs, jobQueueId).map(owned -> owned.run);
     }
 
     /** A legacy run as its one step: the run's own status, times and status line; its log is the run's. */
