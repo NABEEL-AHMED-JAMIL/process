@@ -1,5 +1,6 @@
 package process.directory;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -89,6 +90,7 @@ public class UserDirectoryReconciliation {
         return columns;
     }
 
+    @AcrossTenants("the nightly reconciliation checks every person in the directory, platform administrators included")
     public Report run() {
         Report report = new Report();
         report.oldestUpdatedAt = this.directory.oldestUpdatedAt();

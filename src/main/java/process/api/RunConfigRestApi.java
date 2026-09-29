@@ -1,5 +1,9 @@
 package process.api;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import java.util.function.Supplier;
+import process.security.RunWorkspace;
+import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -40,6 +44,23 @@ public class RunConfigRestApi {
         this.resolver = resolver;
     }
 
+    /**
+     * Set by Spring (RunWorkspace is a component). Without it -- a test that builds this by hand, or a slice context
+     * without the component -- the work runs unscoped: on the application's own pool that is no workspace at all, so the
+     * callback is refused, never widened.
+     */
+    private RunWorkspace runWorkspace;
+
+    @Autowired(required = false)
+    public void setRunWorkspace(RunWorkspace runWorkspace) {
+        this.runWorkspace = runWorkspace;
+    }
+
+    /** The work as the run's workspace, and only it (MIG-258): a worker's callback names nothing else. */
+    private <T> T asTheRunsWorkspace(Long jobQueueId, Supplier<T> work) {
+        return this.runWorkspace == null ? work.get() : RowSecurity.forTenant(this.runWorkspace.of(jobQueueId), work);
+    }
+
     @PostMapping(value = "/resolve")
     public ResponseEntity<ResponseDto> resolve(@RequestHeader(value = "X-Worker-Token", required = false) String token,
         @RequestBody(required = false) ResolveRequest request) {
@@ -47,7 +68,8 @@ public class RunConfigRestApi {
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "A body is required."), HttpStatus.BAD_REQUEST);
         }
         try {
-            return this.resolver.resolve(token, request.jobId, request.jobQueueId, request.config, request.secrets);
+            return this.asTheRunsWorkspace(request.jobQueueId,
+                () -> this.resolver.resolve(token, request.jobId, request.jobQueueId, request.config, request.secrets));
         } catch (RuntimeException failed) {
             // The class and the run only: an exception's message could carry what was being read.
             this.logger.error("Configuration request for run {} failed: {}", request.jobQueueId, failed.getClass().getSimpleName());

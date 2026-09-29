@@ -1,5 +1,6 @@
 package process.identity;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,6 +49,7 @@ public class InternalTenantDirectoryRestApi {
 
     /** Body {ids: [...]}; anything that is not a number is ignored, and duplicates count once. */
     @PostMapping(value = "/resolve", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("services resolve workspaces by id or code, any workspace (service token)")
     public ResponseEntity<?> resolve(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody(required = false) Map<String, Object> body) {
         if (!this.admits(presented)) {

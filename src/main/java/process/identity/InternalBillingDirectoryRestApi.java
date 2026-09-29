@@ -1,5 +1,7 @@
 package process.identity;
 
+import org.barco.platform.tenancy.RowSecurity;
+import org.barco.platform.tenancy.AcrossTenants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,6 +57,7 @@ public class InternalBillingDirectoryRestApi {
      * /internal lookup is: SecurityConfig admits /internal/** for POST only, and the token is checked here.
      */
     @PostMapping(value = "/tenants", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("billing lists every live workspace to invoice (service token)")
     public ResponseEntity<?> tenants(@RequestHeader(value = "X-Internal-Token", required = false) String presented) {
         if (!this.admits(presented)) {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
@@ -77,15 +80,19 @@ public class InternalBillingDirectoryRestApi {
         if (!this.admits(presented)) {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
         }
+        // One named workspace (service token): the session works for it alone (MIG-258).
         Map<String, Object> facts = new LinkedHashMap<>();
-        facts.put("tenantId", tenantId);
-        facts.put("seats", this.identity.seats(tenantId));
-        facts.put("topicsInUse", this.taskTypes.countTopicsInUse(tenantId));
+        RowSecurity.forTenant(tenantId == null ? 0L : tenantId, () -> {
+            facts.put("tenantId", tenantId);
+            facts.put("seats", this.identity.seats(tenantId));
+            facts.put("topicsInUse", this.taskTypes.countTopicsInUse(tenantId));
+        });
         return new ResponseEntity<>(facts, HttpStatus.OK);
     }
 
     /** Body {"ids": [..]}; answers {"<id>": "<display name>"} for the ids that are still people. */
     @PostMapping(value = "/userNames", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("billing names the people on its invoices by id, whichever workspace they are in (service token)")
     public ResponseEntity<?> userNames(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody Map<String, Object> body) {
         if (!this.admits(presented)) {

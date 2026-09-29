@@ -1,5 +1,7 @@
 package process.engine;
 
+import org.barco.platform.tenancy.RowSecurity;
+import org.barco.platform.tenancy.AcrossTenants;
 import process.model.enums.RunEnd;
 import process.util.BusinessTime;
 import org.barco.platform.correlation.CorrelationId;
@@ -139,6 +141,7 @@ public class PreDispatchPhase {
      * One pass: claims the runs waiting to be prepared, prepares those without AI steps here and hands
      * the rest to the AI threads. Returns how many it took.
      */
+    @AcrossTenants("pre-dispatch claims and prepares every workspace's queued runs")
     public int runPass() {
         LocalDateTime now = BusinessTime.now();
         List<Long> claimed;
@@ -166,7 +169,10 @@ public class PreDispatchPhase {
                 Optional<SourceJob> job = this.transactionService.findByJobIdAndJobStatus(run.get().getJobId(), Status.Active);
                 if (job.isPresent() && job.get().getTaskDetail() != null
                     && this.aiStepService.hasSteps(job.get().getTenantId(), job.get().getTaskDetail().getPipelineId())) {
-                    this.aiThreads.execute(() -> this.prepareAndRelease(job, run.get()));
+                    // Its own thread: the run's workspace, named (the pass's grant does not travel).
+                    Long tenant = run.get().getTenantId();
+                    long tenantId = tenant == null ? 0L : tenant;
+                    this.aiThreads.execute(() -> RowSecurity.forTenant(tenantId, () -> this.prepareAndRelease(job, run.get())));
                 } else {
                     this.prepareAndRelease(job, run.get());
                 }

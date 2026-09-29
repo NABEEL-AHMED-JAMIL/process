@@ -1,6 +1,8 @@
 package process;
 
 import com.zaxxer.hikari.HikariDataSource;
+import org.barco.platform.tenancy.RowSecurityDataSource;
+import process.config.RowSecurityConfig;
 import liquibase.integration.spring.SpringLiquibase;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -10,6 +12,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import javax.sql.DataSource;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -29,6 +32,8 @@ public final class ScratchPostgres implements AutoCloseable {
     private final String server;
     private final String name;
     private final HikariDataSource pool;
+    private HikariDataSource appPool;
+    private RowSecurityDataSource asApplication;
 
     private ScratchPostgres(String server, String name, HikariDataSource pool) {
         this.server = server;
@@ -67,6 +72,30 @@ public final class ScratchPostgres implements AutoCloseable {
         return this.pool;
     }
 
+    /**
+     * The database as the application reaches it since V181 (MIG-258): every connection SET ROLE process_app, so row
+     * security and process_app's grants apply, and the caller -- Core's TenantContext, or a RowSecurity grant -- written
+     * on each connection by platform-commons' RowSecurityDataSource, as RowSecurityConfig wires it. Seed through
+     * {@link #jdbc()} (the login, which row security never applies to); run the code under test on this.
+     */
+    public synchronized DataSource appPool() {
+        if (this.asApplication == null) {
+            this.appPool = new HikariDataSource();
+            this.appPool.setJdbcUrl(this.pool.getJdbcUrl());
+            this.appPool.setUsername(this.pool.getUsername());
+            this.appPool.setPassword(this.pool.getPassword());
+            this.appPool.setMaximumPoolSize(8);
+            this.appPool.setConnectionInitSql("SET ROLE process_app");
+            this.asApplication = new RowSecurityDataSource(this.appPool, () -> RowSecurityConfig.CORE_CALLER);
+        }
+        return this.asApplication;
+    }
+
+    /** A JdbcTemplate on {@link #appPool()}. */
+    public JdbcTemplate appJdbc() {
+        return new JdbcTemplate(this.appPool());
+    }
+
     public JdbcTemplate jdbc() {
         return new JdbcTemplate(this.pool);
     }
@@ -78,6 +107,9 @@ public final class ScratchPostgres implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        if (this.appPool != null) {
+            this.appPool.close();
+        }
         this.pool.close();
         try (Connection admin = admin(this.server); Statement statement = admin.createStatement()) {
             statement.execute("DROP DATABASE IF EXISTS " + this.name);

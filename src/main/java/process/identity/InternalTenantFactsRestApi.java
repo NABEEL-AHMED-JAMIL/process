@@ -1,5 +1,6 @@
 package process.identity;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -60,6 +61,7 @@ public class InternalTenantFactsRestApi {
     }
 
     @PostMapping(value = "/tenantFacts", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("Identity asks for the facts of the workspaces it names before a delete (service token)")
     public ResponseEntity<?> tenantFacts(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody(required = false) Map<String, Object> body) {
         if (!this.admits(presented)) return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);

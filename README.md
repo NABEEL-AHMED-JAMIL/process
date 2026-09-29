@@ -95,11 +95,47 @@ POST /api/v1/sourceTask.json/uploadSourceTask
 
 | Suite | Command | Count |
 |---|---|---|
-| Unit | `mvn -o test` | 516 |
+| Unit | `mvn -o test` | 1949 (Postgres suites need NOTIFICATIONS_TEST_DB_*) |
 | End-to-end, over real HTTP | `./run-e2e.sh` | 86 |
 | Kafka security matrix, real broker | `./run-kafka-matrix.sh` | 17 |
 
 `run-e2e.sh` reads the database credentials and the encryption key from the running `process_app` container, so the stack must be up. `run-kafka-matrix.sh` **must** run in a container — every listener on the test broker is advertised as `host.docker.internal`, which the host cannot resolve, and a host run fails with metadata timeouts that look nothing like the cause. Bring that broker up with `kafka-it/start.sh`.
+
+## Row-level security (MIG-258)
+
+Every table of etl_job with a `tenant_id` has Postgres row-level security (V181), as a second guard behind the tenant
+filter, `TenantScope` and the scoped queries: a query that forgets its tenant answers the caller's workspace and
+nothing else.
+
+- **Who the database sees.** Core connects as a superuser, which row security never applies to, so every pooled
+  connection says `SET ROLE process_app` (`spring.datasource.hikari.connection-init-sql`, from
+  `PROCESS_DB_SESSION_SQL`); Liquibase keeps the login on a connection of its own. `process_app` has no login, owns
+  nothing, and holds only row grants. `PROCESS_DB_SESSION_SQL=SELECT 1` is the way back without a rebuild.
+- **What each statement runs as** (platform-commons' `RowSecurityDataSource`, wired by `config/RowSecurityConfig`):
+  the token's workspace; every workspace for a platform administrator or inside an across-tenants grant; the run's
+  workspace for a worker's callback (`RowSecurity.forTenant`); nothing at all otherwise. A thread nobody set -- a
+  cron, a relay, a listener, an `/internal` call -- sees no tenant rows and can write none until the code says why
+  it may: `@AcrossTenants("why")` or `RowSecurity.acrossTenants("why", ...)`. `RowSecurityContractTest` lists every
+  one, with its reason.
+- **Platform rows.** `kafka_connection_profile`, `source_task_type`, `storage_connection`, `lookup_data` and
+  `user_directory` keep rows with `tenant_id` NULL that every workspace reads (and none may write); elsewhere a NULL
+  tenant is the platform's alone.
+- **Tests.** `CoreRowSecurityPostgresTest` (every tenant table guarded; a raw query as `process_app` sees nothing
+  without a workspace, only A's with A; writes into B refused; the parent-tenant trigger reads as the session;
+  `process_app`'s grants). The five `CoreCrossTenantProbe*PostgresTest` classes run every probed endpoint on
+  `ScratchPostgres.appPool()`, i.e. under row security. The system paths' own Postgres tests (enqueuer, dispatcher,
+  pre-dispatch, relay, orphan audit, reconciliation, Identity listener, write-back, SLO) run their code as
+  `process_app` behind `AcrossTenantsProxy`, nobody signed in; `WorkerCallbackRowSecurityPostgresTest` does the same for
+  the worker callbacks; `RowSecurityContextPostgresTest` wires the hooks in a Spring context; `RowSecurityChangesetPostgresTest`
+  rolls V181 back and applies it again.
+- **Performance.** `DashboardIndexPostgresTest` checks the per-day Dashboard reads still use the day index as
+  `process_app`: row security evaluates its policy before any condition that is not LEAKPROOF, so V181 marks
+  `timezone(text, timestamptz)` and `date(timestamp)` LEAKPROOF in etl_job -- re-run those two lines after any
+  pg_dump/restore (pg_catalog is not dumped). `DispatchClaimUnderRowSecurityPostgresTest`: the dispatcher's claim plans
+  on `idx_scheduler_due` under row security, 20,000 schedules over 40 workspaces.
+- **Trigger functions.** The four that keep a derived column (V84's dispatch_eligible, V85's assigned_username) run as
+  their owner (SECURITY DEFINER); `tenant_id_from_parent` stays the writer's, so a child filed under a parent the
+  session cannot see fails.
 
 ## Monitoring
 

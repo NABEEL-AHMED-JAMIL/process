@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.AcrossTenantsProxy;
 import process.ScratchPostgres;
 import process.identity.IdentityPort;
 
@@ -55,7 +56,9 @@ class TenantOrphanAuditPostgresTest {
         this.sql.update("DELETE FROM scheduler");
         this.sql.update("DELETE FROM source_job");
         this.sql.update("TRUNCATE user_directory");
-        this.audit = new TenantOrphanAudit(this.sql, this.identity, new WorkspaceRetirement(this.sql));
+        // As the application runs it since MIG-258: process_app under row security, nobody signed in, behind the
+        // proxy that gives run() its across-tenants grant. Seeding and checking stay on the login.
+        this.audit = AcrossTenantsProxy.of(new TenantOrphanAudit(db.appJdbc(), this.identity, new WorkspaceRetirement(db.appJdbc())));
     }
 
     private void job(long id, long tenantId, String status) {

@@ -1,5 +1,10 @@
 package process.identity;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import java.util.function.Supplier;
+import process.security.RunWorkspace;
+import org.barco.platform.tenancy.AcrossTenants;
+import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,6 +71,23 @@ public class InternalRunVerificationRestApi {
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
     }
 
+    /**
+     * Set by Spring (RunWorkspace is a component). Without it -- a test that builds this by hand, or a slice context
+     * without the component -- the work runs unscoped: on the application's own pool that is no workspace at all, so the
+     * callback is refused, never widened.
+     */
+    private RunWorkspace runWorkspace;
+
+    @Autowired(required = false)
+    public void setRunWorkspace(RunWorkspace runWorkspace) {
+        this.runWorkspace = runWorkspace;
+    }
+
+    /** The work as the run's workspace, and only it (MIG-258): a worker's callback names nothing else. */
+    private <T> T asTheRunsWorkspace(Long jobQueueId, Supplier<T> work) {
+        return this.runWorkspace == null ? work.get() : RowSecurity.forTenant(this.runWorkspace.of(jobQueueId), work);
+    }
+
     /** Body {jobId, token, variant: "callback" | "report"}. */
     @PostMapping(value = "/runs/{jobQueueId}/verify-callback", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> verifyCallback(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
@@ -73,45 +95,48 @@ public class InternalRunVerificationRestApi {
         if (!this.admits(presented)) {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
         }
-        Object variant = body == null ? null : body.get("variant");
-        boolean report = "report".equals(variant);
-        if (!report && !"callback".equals(variant)) {
-            return new ResponseEntity<>(Collections.singletonMap("message", "variant must be callback or report."), HttpStatus.BAD_REQUEST);
-        }
-        Long jobId = body.get("jobId") instanceof Number ? ((Number) body.get("jobId")).longValue() : null;
-        String workerToken = body.get("token") == null ? null : body.get("token").toString();
-        Optional<RunCallbackTokens.Refusal> refused = report
-            ? this.tokens.verifyForReport(jobId, jobQueueId, workerToken)
-            : this.tokens.verify(jobId, jobQueueId, workerToken);
-        if (refused.isPresent()) {
-            this.logger.warn("Refused a {} token for job {} run {}: {}.", variant, jobId, jobQueueId, refused.get());
-            return new ResponseEntity<>(Collections.singletonMap("valid", false), HttpStatus.OK);
-        }
-        JobQueue run = this.runs.findById(jobQueueId).orElse(null);
-        // Owner rule "keep the bill" (2026-09-24): the run row and its token are the proof, not the job's current status.
-        // A run whose job was deleted (or switched off) after it started still names its workspace -- the one stamped on
-        // the run (V102) -- and its job is found whatever its status, so its usage report is billed and its callback
-        // lands. The job's own tenant only for a run row older than that stamp.
-        Optional<SourceJob> job = run == null ? Optional.empty() : this.jobs.findByJobIdAndJobStatus(run.getJobId(), Status.Active);
-        if (run != null && !job.isPresent()) {
-            job = this.jobs.findById(run.getJobId());
-        }
-        Long tenantId = run != null && run.getTenantId() != null ? run.getTenantId() : job.map(SourceJob::getTenantId).orElse(null);
-        String pipelineId = job.map(SourceJob::getTaskDetail).map(task -> task.getPipelineId()).orElse(null);
-        Map<String, Object> verdict = new LinkedHashMap<>();
-        verdict.put("valid", true);
-        verdict.put("jobId", run == null ? jobId : run.getJobId());
-        verdict.put("jobQueueId", jobQueueId);
-        verdict.put("tenantId", tenantId);
-        verdict.put("pipelineId", pipelineId);
-        verdict.put("terminal", run != null && RunCallbackTokens.isOver(run.getJobStatus()));
-        verdict.put("workerSteps", tenantId != null && pipelineId != null ? this.workerSteps(pipelineId, tenantId)
-            : Collections.emptyList());
-        return new ResponseEntity<>(verdict, HttpStatus.OK);
+        return this.asTheRunsWorkspace(jobQueueId, () -> {
+            Object variant = body == null ? null : body.get("variant");
+            boolean report = "report".equals(variant);
+            if (!report && !"callback".equals(variant)) {
+                return new ResponseEntity<>(Collections.singletonMap("message", "variant must be callback or report."), HttpStatus.BAD_REQUEST);
+            }
+            Long jobId = body.get("jobId") instanceof Number ? ((Number) body.get("jobId")).longValue() : null;
+            String workerToken = body.get("token") == null ? null : body.get("token").toString();
+            Optional<RunCallbackTokens.Refusal> refused = report
+                ? this.tokens.verifyForReport(jobId, jobQueueId, workerToken)
+                : this.tokens.verify(jobId, jobQueueId, workerToken);
+            if (refused.isPresent()) {
+                this.logger.warn("Refused a {} token for job {} run {}: {}.", variant, jobId, jobQueueId, refused.get());
+                return new ResponseEntity<>(Collections.singletonMap("valid", false), HttpStatus.OK);
+            }
+            JobQueue run = this.runs.findById(jobQueueId).orElse(null);
+            // Owner rule "keep the bill" (2026-09-24): the run row and its token are the proof, not the job's current status.
+            // A run whose job was deleted (or switched off) after it started still names its workspace -- the one stamped on
+            // the run (V102) -- and its job is found whatever its status, so its usage report is billed and its callback
+            // lands. The job's own tenant only for a run row older than that stamp.
+            Optional<SourceJob> job = run == null ? Optional.empty() : this.jobs.findByJobIdAndJobStatus(run.getJobId(), Status.Active);
+            if (run != null && !job.isPresent()) {
+                job = this.jobs.findById(run.getJobId());
+            }
+            Long tenantId = run != null && run.getTenantId() != null ? run.getTenantId() : job.map(SourceJob::getTenantId).orElse(null);
+            String pipelineId = job.map(SourceJob::getTaskDetail).map(task -> task.getPipelineId()).orElse(null);
+            Map<String, Object> verdict = new LinkedHashMap<>();
+            verdict.put("valid", true);
+            verdict.put("jobId", run == null ? jobId : run.getJobId());
+            verdict.put("jobQueueId", jobQueueId);
+            verdict.put("tenantId", tenantId);
+            verdict.put("pipelineId", pipelineId);
+            verdict.put("terminal", run != null && RunCallbackTokens.isOver(run.getJobStatus()));
+            verdict.put("workerSteps", tenantId != null && pipelineId != null ? this.workerSteps(pipelineId, tenantId)
+                : Collections.emptyList());
+            return new ResponseEntity<>(verdict, HttpStatus.OK);
+        });
     }
 
     /** Body {promptId}. */
     @PostMapping(value = "/pipelines/countUsingPrompt", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("AI asks whether any workspace's pipeline still uses a prompt before it deletes it (service token)")
     public ResponseEntity<?> countUsingPrompt(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody(required = false) Map<String, Object> body) {
         if (!this.admits(presented)) {

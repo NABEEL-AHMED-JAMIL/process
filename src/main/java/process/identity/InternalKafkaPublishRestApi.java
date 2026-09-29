@@ -1,5 +1,6 @@
 package process.identity;
 
+import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -73,7 +74,9 @@ public class InternalKafkaPublishRestApi {
         // Nothing resolving is a refusal, never the application's own brokers (MIG-45).
         KafkaConnectionProfile profile;
         try {
-            profile = this.resolver.require(tenantId, null);
+            // The event's workspace, named (MIG-258): its own profile, or the platform default every session reads.
+            profile = tenantId == null ? this.resolver.require(null, null)
+                : RowSecurity.forTenant(tenantId, () -> this.resolver.require(tenantId, null));
         } catch (KafkaRouteUnresolvedException unresolved) {
             this.logger.warn("Did not publish an event on {} for workspace {}: {}", topic, tenantId, unresolved.getMessage());
             return new ResponseEntity<>(Collections.singletonMap("message", unresolved.getMessage()),

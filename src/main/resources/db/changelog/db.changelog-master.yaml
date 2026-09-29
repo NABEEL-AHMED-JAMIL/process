@@ -141,3 +141,6 @@ databaseChangeLog:
   # V180: MIG-225 -- Core's round-trip and execution tables (steps, run datasets, results, reviews). V179 left free.
   - include:
       file: db/changelog/yaml/V180.0-round-trip-execution.yaml
+  # V181: MIG-258 -- row-level security on every tenant table; the application works as process_app (SET ROLE).
+  - include:
+      file: db/changelog/yaml/V181.0-row-level-security.yaml

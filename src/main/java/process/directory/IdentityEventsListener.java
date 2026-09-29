@@ -1,5 +1,6 @@
 package process.directory;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -24,6 +25,8 @@ import java.time.Instant;
  * @author Nabeel Ahmed
  */
 @Component
+@AcrossTenants("Identity's people and workspace feeds span every workspace: a person moves between them, a platform "
+    + "administrator has none, and a deleted workspace's jobs are retired")
 public class IdentityEventsListener {
 
     private static final Logger logger = LoggerFactory.getLogger(IdentityEventsListener.class);

@@ -8,6 +8,7 @@ import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionOperations;
+import process.AcrossTenantsProxy;
 import process.ScratchJpa;
 import process.ScratchPostgres;
 import process.engine.BulkAction;
@@ -90,7 +91,8 @@ class RunSloReportPostgresTest {
             jpa.repository(SourceTaskRepository.class), mock(OpenSearchAuditLogClient.class));
         registry = new SimpleMeterRegistry();
         bulkAction = new BulkAction(store, mock(NotificationPort.class), new RunOutcomes(registry));
-        report = new RunSloReport(sql);
+        // As the application runs it since MIG-258: process_app, nobody signed in, the across-tenants proxy.
+        report = AcrossTenantsProxy.of(new RunSloReport(db.appJdbc()));
         try {
             drive();
         } finally {

@@ -1,5 +1,6 @@
 package process.engine.cron;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -131,6 +132,7 @@ public class RunStartMarkerMonitor {
     /** Every quarter-hour, off the other crons' minutes; a failure is logged and the gauges keep their last value. */
     @Scheduled(cron = "${process.run-start-marker.cron:0 5/15 * * * *}")
     @SchedulerLock(name = "measureRunStartMarkers", lockAtLeastFor = "30S", lockAtMostFor = "5M")
+    @AcrossTenants("a platform gauge over every workspace's runs")
     public void measure() {
         try {
             this.measureOnce();

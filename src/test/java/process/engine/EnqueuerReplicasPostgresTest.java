@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.AcrossTenantsProxy;
 import process.ScratchJpa;
 import process.ScratchPostgres;
 import process.model.repository.JobAuditLogRepository;
@@ -52,7 +53,8 @@ class EnqueuerReplicasPostgresTest {
     @BeforeAll
     static void build() throws Exception {
         db = ScratchPostgres.create("enqueuer_replicas");
-        jpa = new ScratchJpa(db);
+        // The application's own pool since MIG-258: process_app under row security, nobody signed in.
+        jpa = new ScratchJpa(db.appPool());
     }
 
     @AfterAll
@@ -81,7 +83,7 @@ class EnqueuerReplicasPostgresTest {
             jpa.repository(TaskReferenceRepository.class), jpa.repository(JobAuditLogRepository.class),
             jpa.repository(SourceTaskRepository.class), mock(OpenSearchAuditLogClient.class));
         BulkAction bulkAction = new BulkAction(store, mock(NotificationPort.class));
-        return new ProducerBulkEngine(bulkAction, store, mock(JobMail.class), null, null, jpa.transactionManager());
+        return AcrossTenantsProxy.of(new ProducerBulkEngine(bulkAction, store, mock(JobMail.class), null, null, jpa.transactionManager()));
     }
 
     private void dueSlot(long jobId, LocalDateTime nextRunAt) {

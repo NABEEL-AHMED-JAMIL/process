@@ -1,5 +1,6 @@
 package process.identity;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.barco.notifications.contract.MailRequested;
 import org.barco.notifications.contract.NotificationCreated;
@@ -44,6 +45,7 @@ public class InternalNotificationRelayRestApi {
 
     /** Body {tenantId, notice: NotificationCreated}. */
     @PostMapping(value = "/notice", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("a service's notice names its recipient by id; a platform administrator has no workspace (service token)")
     public ResponseEntity<?> notice(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody(required = false) Map<String, Object> body) {
         if (!this.admits(presented)) return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
@@ -62,6 +64,7 @@ public class InternalNotificationRelayRestApi {
 
     /** Body {tenantId, mail: MailRequested, secret?}. Answers {result}: the outbox's own sentence. */
     @PostMapping(value = "/mail", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("a service's mail names its recipient by id; a platform administrator has no workspace (service token)")
     public ResponseEntity<?> mail(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody(required = false) Map<String, Object> body) {
         if (!this.admits(presented)) return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);

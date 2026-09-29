@@ -1,5 +1,6 @@
 package process.engine;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import process.directory.WorkspaceDirectory;
 import process.util.BusinessTime;
 import com.google.gson.Gson;
@@ -185,6 +186,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      * managed before it went quiet is not knowable from here, and a run recorded as finished
      * when nobody knows whether it did is worse than one recorded as interrupted.
      */
+    @AcrossTenants("the stall sweep closes runs of every workspace that stopped reporting")
     public void reconcileStalledRuns() {
         try {
             LocalDateTime cutoff = BusinessTime.now().minusMinutes(STALLED_AFTER_MINUTES);
@@ -275,6 +277,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      * recorded as the ordinary "skip, already in queue". A slot that fails for any other reason is left
      * for the next tick rather than retried here, so one bad schedule cannot hold the loop.
      */
+    @AcrossTenants("the enqueuer claims every workspace's due schedule slots")
     public void addJobInQueue() {
         try {
             LocalDateTime now = BusinessTime.now();
@@ -428,6 +431,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      * starts ends inside the lock this runs under; the rest are picked up on the next run, in id order,
      * so nothing is skipped.
      */
+    @AcrossTenants("the dispatcher hands every workspace's prepared runs to their workers")
     public void startJobInCurrentTimeSlot() {
         try {
             logger.info("runJobInCurrentTimeSlot --> FETCH JobQueue of current day STARTED ");

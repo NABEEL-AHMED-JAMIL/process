@@ -13,6 +13,9 @@ import javax.persistence.Entity;
 import javax.persistence.Index;
 import javax.persistence.Table;
 import java.io.File;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -98,6 +101,34 @@ class DashboardIndexPostgresTest {
             }
         });
         assertThat(unindexed).as("per-day Dashboard reads not using the day index").isEmpty();
+    }
+
+    /**
+     * MIG-258's performance half: the same reads as the application makes them since V181 -- as process_app, under row
+     * security, with the caller's workspace on the session -- still plan on the day index. The policy's predicate is a
+     * filter beside the query's own tenant condition, never a reason to scan the table.
+     */
+    @Test
+    void theDashboardsPerDayReadsUseTheDayIndexUnderRowSecurity() throws Exception {
+        TenantContext.set(2901L, "TENANT_ADMIN", 42L, "ops@carebridge.test");
+        List<String> unindexed = new ArrayList<>();
+        try (Connection c = db.connect(); Statement s = c.createStatement()) {
+            s.execute("SET ROLE process_app");
+            s.execute("SELECT set_config('app.tenant_id', '2901', false), set_config('app.all_tenants', '', false)");
+            for (Map.Entry<String, Supplier<String>> query : perDayQueries().entrySet()) {
+                StringBuilder plan = new StringBuilder();
+                try (ResultSet rows = s.executeQuery("EXPLAIN " + query.getValue().get())) {
+                    while (rows.next()) {
+                        plan.append(rows.getString(1)).append('\n');
+                    }
+                }
+                System.out.println("-- " + query.getKey() + " as process_app\n" + plan);
+                if (!plan.toString().contains("idx_job_queue_date_created_day")) {
+                    unindexed.add(query.getKey());
+                }
+            }
+        }
+        assertThat(unindexed).as("per-day Dashboard reads not using the day index under row security").isEmpty();
     }
 
     @Test

@@ -1,5 +1,6 @@
 package process.storage;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,6 +53,7 @@ public class InternalStorageDirectoryRestApi {
 
     /** Body {"alias": "..."}; answers [{profileName, tenantId (null for a platform profile), alias}]. */
     @PostMapping(value = "/kafkaReferences", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("storage asks which Kafka profiles of any workspace name an object before it deletes it (service token)")
     public ResponseEntity<?> kafkaReferences(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody Map<String, Object> body) {
         if (!this.admits(presented)) {
@@ -77,6 +79,7 @@ public class InternalStorageDirectoryRestApi {
 
     /** Body {"ids": [..]}; answers {"<id>": "<display name>"} for the ids that are still people. */
     @PostMapping(value = "/userNames", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("storage names the people on its rows by id, whichever workspace they are in (service token)")
     public ResponseEntity<?> userNames(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody Map<String, Object> body) {
         if (!this.admits(presented)) {

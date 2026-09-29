@@ -1,5 +1,6 @@
 package process.config;
 
+import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,13 +69,13 @@ public class KafkaTopicProvisioner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        Runnable work = () -> {
+        Runnable work = () -> RowSecurity.acrossTenants("startup provisions the topics of every workspace's task types", () -> {
             try {
                 this.provisionAll();
             } catch (Exception ex) {
                 this.logger.warn("KafkaTopicProvisioner -- startup provisioning failed: {}", ex.getMessage());
             }
-        };
+        });
         if (this.background != null) {
             this.background.execute(work);
             return;
