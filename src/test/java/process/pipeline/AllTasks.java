@@ -12,6 +12,7 @@ import process.pipeline.tasks.EnrichStepTask;
 import process.pipeline.tasks.FilterStepTask;
 import process.pipeline.tasks.JoinStepTask;
 import process.pipeline.tasks.LegacyStepTask;
+import process.pipeline.tasks.MeasureImageStepTask;
 import process.pipeline.tasks.ReadApiStepTask;
 import process.pipeline.tasks.ReadDatabaseStepTask;
 import process.pipeline.tasks.ReadFileStepTask;
@@ -48,7 +49,7 @@ public final class AllTasks {
             new ReadDatabaseStepTask(this.database), new ValidateStepTask(this.contracts), new TransformStepTask(), new FilterStepTask(),
             new JoinStepTask(), new EnrichStepTask(this.api), new AggregateStepTask(), new SaveFileStepTask(),
             new UploadBucketStepTask(this.buckets), new WriteDatabaseStepTask(this.database), new SendNotificationStepTask(this.notifier),
-            new AiPromptStepTask(this.ai, this.buckets), new ComputeStepTask(),
+            new AiPromptStepTask(this.ai, this.buckets), new ComputeStepTask(), new MeasureImageStepTask(this.buckets),
             new RenderPdfStepTask(this.reports)));
     }
 
