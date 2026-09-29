@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.AcrossTenantsProxy;
 import process.ScratchPostgres;
 import process.identity.IdentityPort;
 
@@ -53,6 +54,11 @@ class UserDirectoryReconciliationPostgresTest {
         this.directory = new UserDirectory(this.sql);
     }
 
+    /** As the application runs it (MIG-258): process_app, nobody signed in, behind the across-tenants proxy. */
+    private UserDirectoryReconciliation reconciliation() {
+        return AcrossTenantsProxy.of(new UserDirectoryReconciliation(db.appJdbc(), this.identity, new UserDirectory(db.appJdbc())));
+    }
+
     private static IdentityPort.Person person(long id, String fullName, String status) {
         return new IdentityPort.Person(id, 2901L, "u" + id + "@a.example", fullName, "TENANT_USER", status);
     }
@@ -86,7 +92,7 @@ class UserDirectoryReconciliationPostgresTest {
             return answer;
         });
 
-        UserDirectoryReconciliation.Report report = new UserDirectoryReconciliation(this.sql, this.identity, this.directory).run();
+        UserDirectoryReconciliation.Report report = this.reconciliation().run();
 
         assertThat(report.isChecked()).isTrue();
         assertThat(report.getRepaired()).containsExactly(7L);
@@ -105,7 +111,7 @@ class UserDirectoryReconciliationPostgresTest {
         held(7, "Old Name", "2026-09-01T00:00:00Z");
         when(this.identity.people(any())).thenThrow(new IdentityPort.Unavailable("identity down", null));
 
-        UserDirectoryReconciliation.Report report = new UserDirectoryReconciliation(this.sql, this.identity, this.directory).run();
+        UserDirectoryReconciliation.Report report = this.reconciliation().run();
 
         assertThat(report.isChecked()).isFalse();
         assertThat(report.getReason()).contains("identity down");

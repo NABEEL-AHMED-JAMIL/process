@@ -1,5 +1,6 @@
 package process.directory;
 
+import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -107,7 +108,8 @@ public class UserDirectory {
         }
         List<Entry> copy = new ArrayList<>(entries);
         try {
-            this.writeBacks.execute(() -> {
+            this.writeBacks.execute(() -> RowSecurity.acrossTenants("caches Identity's answer for any person, platform "
+                + "administrators (no workspace) included, on the write-back thread", () -> {
                 for (Entry entry : copy) {
                     try {
                         this.apply(entry);
@@ -115,7 +117,7 @@ public class UserDirectory {
                         logger.debug("User {} was not written back to the directory: {}", entry.getAppUserId(), failed.getMessage());
                     }
                 }
-            });
+            }));
         } catch (RejectedExecutionException busy) {
             logger.debug("{} write-back(s) dropped: {}", copy.size(), busy.getMessage());
         }

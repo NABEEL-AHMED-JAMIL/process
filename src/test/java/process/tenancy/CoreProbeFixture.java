@@ -377,7 +377,9 @@ final class CoreProbeFixture implements AutoCloseable {
 
     private CoreProbeFixture(String prefix) throws Exception {
         this.db = ScratchPostgres.create(prefix);
-        this.jpa = new ScratchJpa(this.db);
+        // The application's own pool since V181 (MIG-258): SET ROLE process_app, the caller on every connection. Every
+        // probe runs under row-level security as well as the code's own scoping; the seed is the login's.
+        this.jpa = new ScratchJpa(this.db.appPool());
         seed(this.db.jdbc());
         this.storage = new FakeStorage();
 
@@ -450,7 +452,7 @@ final class CoreProbeFixture implements AutoCloseable {
         this.fileChat = new FileChatRestApi(new FileChatServiceImpl(asTheCaller, this.media, this.agents, this.rag, this.embeddings,
             this.indexLock));
         this.modelChoice = new AiModelChoiceRestApi(new AiModelChoiceService(jobRows, taskRows, runRows, pipelineRows, this.ai,
-            new JdbcModelChoiceStore(this.db.jdbc()), jobs));
+            new JdbcModelChoiceStore(this.db.appJdbc()), jobs));
     }
 
     /** Skips the calling class when no database is configured, as every ScratchPostgres test does. */

@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 181.0-row-level-security
+      author: nabeel.amd93
+      description: "MIG-258: row-level security on every tenant table -- process_app (the application, by SET ROLE) sees and writes the session's workspace only (app.tenant_id, or app.all_tenants for a platform administrator or an across-tenants path); five tables' platform rows stay readable by every workspace; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V181.0-row-level-security/V181__row_level_security.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V181.0-row-level-security/V181__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

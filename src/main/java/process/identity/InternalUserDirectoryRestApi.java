@@ -1,5 +1,6 @@
 package process.identity;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +44,7 @@ public class InternalUserDirectoryRestApi {
 
     /** POST, as every /internal lookup is. Body {ids: [...]}; anything that is not a number is ignored. */
     @PostMapping(value = "/resolve", produces = MediaType.APPLICATION_JSON_VALUE)
+    @AcrossTenants("services resolve people by id, whichever workspace they are in (service token)")
     public ResponseEntity<?> resolve(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
         @RequestBody Map<String, Object> body) {
         if (!this.admits(presented)) {

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.AcrossTenantsProxy;
 import process.ScratchPostgres;
 
 import java.util.Collections;
@@ -41,8 +42,9 @@ class IdentityEventsListenerPostgresTest {
         this.sql.update("TRUNCATE user_directory");
         this.sql.update("DELETE FROM scheduler");
         this.sql.update("DELETE FROM source_job");
-        this.listener = new IdentityEventsListener(new UserDirectory(this.sql), new WorkspaceRetirement(this.sql),
-            new WorkspaceDirectory(this.sql));
+        // As the application runs it (MIG-258): process_app, nobody signed in, behind the across-tenants proxy.
+        this.listener = AcrossTenantsProxy.of(new IdentityEventsListener(new UserDirectory(db.appJdbc()),
+            new WorkspaceRetirement(db.appJdbc()), new WorkspaceDirectory(db.appJdbc())));
     }
 
     private void job(long id, long tenantId, String status) {

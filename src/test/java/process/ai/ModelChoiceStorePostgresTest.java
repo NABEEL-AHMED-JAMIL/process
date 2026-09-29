@@ -2,7 +2,9 @@ package process.ai;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.barco.platform.tenancy.RowSecurity;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import process.ScratchJpa;
 import process.ScratchPostgres;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Core's model-choice rows against a real etl_job (V182): the schedule's setting is written in the job's own workspace
@@ -177,5 +180,45 @@ class ModelChoiceStorePostgresTest {
         assertThat(none.get("model")).isNull();
         assertThat(none.get("prompt_version")).isNull();
         assertThat(none.get("step_key")).isNull();
+    }
+
+    /**
+     * As the application reaches the database since V181 (process_app, MIG-258): run_ai_step is guarded like every tenant
+     * table. A's session sees A's steps only, cannot file a step under B's run, and cannot set B's schedule.
+     */
+    @Test
+    void asTheApplicationEachWorkspaceSeesAndWritesItsOwnStepsOnly() {
+        long runA = run(A_JOB, 782301);
+        long runB = run(B_JOB, 782302);
+        store.recordSteps(Arrays.asList(step(runA, 1, "summary", "llama3.1:8b", 1204L, "override", 3),
+            step(runB, 1, "summary", "bravo-secret-model", 2204L, "override", 3)));
+        JdbcModelChoiceStore app = new JdbcModelChoiceStore(db.appJdbc());
+
+        assertThat(RowSecurity.forTenant(A, () -> app.stepsOfRun(runA))).hasSize(1);
+        assertThat(RowSecurity.forTenant(A, () -> app.stepsOfRun(runB))).as("B's steps, read as A").isEmpty();
+        assertThatThrownBy(() -> RowSecurity.forTenant(A, () -> {
+            app.recordSteps(Collections.singletonList(step(runB, 2, "summary", "acme-model", 1204L, "override", 3)));
+            return null;
+        })).as("a step filed under B's run by A").isInstanceOf(DataAccessException.class);
+        assertThat(RowSecurity.forTenant(A, () -> app.saveScheduleProfiles(B_JOB, B, "{\"summary\":\"1204\"}", null)))
+            .as("B's schedule, set as A").isZero();
+        RowSecurity.forTenant(A, () -> {
+            app.recordSteps(Collections.singletonList(step(runA, 2, "summary", "gpt-4o-mini", 1300L, "override", 3)));
+            return null;
+        });
+        assertThat(sql.queryForObject("SELECT count(*) FROM run_ai_step WHERE job_queue_id = ?", Long.class, runB)).isEqualTo(1L);
+        assertThat(sql.queryForObject("SELECT count(*) FROM run_ai_step WHERE job_queue_id = ?", Long.class, runA)).isEqualTo(2L);
+    }
+
+    @Test
+    void runAiStepCarriesTheSamePolicyAsEveryTenantTable() {
+        assertThat(sql.queryForObject("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'public.run_ai_step'::regclass",
+            Boolean.class)).isTrue();
+        assertThat(sql.queryForList("SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'run_ai_step'",
+            String.class)).containsExactly("tenant_isolation");
+        assertThat(sql.queryForObject("SELECT qual FROM pg_policies WHERE tablename = 'run_ai_step'", String.class))
+            .isEqualTo(sql.queryForObject("SELECT qual FROM pg_policies WHERE tablename = 'step_execution'", String.class));
+        assertThat(sql.queryForObject("SELECT with_check FROM pg_policies WHERE tablename = 'run_ai_step'", String.class))
+            .isEqualTo(sql.queryForObject("SELECT with_check FROM pg_policies WHERE tablename = 'step_execution'", String.class));
     }
 }

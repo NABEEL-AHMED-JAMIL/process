@@ -1,5 +1,6 @@
 package process.slo;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import process.model.enums.JobStatus;
@@ -138,6 +139,7 @@ public class RunSloReport {
         }
     }
 
+    @AcrossTenants("the pipeline-execution SLO is measured over every workspace's runs")
     public Window measure(Instant from, Instant to) {
         if (!from.isBefore(to)) {
             throw new IllegalArgumentException("The window must start before it ends: " + from + " .. " + to);

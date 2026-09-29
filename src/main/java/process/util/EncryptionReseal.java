@@ -1,5 +1,6 @@
 package process.util;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -82,6 +83,7 @@ public class EncryptionReseal implements ApplicationRunner {
     }
 
     @Override
+    @AcrossTenants("re-seals every workspace's secrets, and the platform's, under the current key")
     public void run(ApplicationArguments args) {
         if (!this.encryption.hasCurrentKey()) {
             return;

@@ -1,5 +1,6 @@
 package process.directory;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -98,6 +99,7 @@ public class TenantOrphanAudit {
         return found;
     }
 
+    @AcrossTenants("the orphan audit counts every workspace's rows against Identity's workspaces")
     public Report run() {
         List<String> tables = this.tables();
         // tenant id -> table -> rows

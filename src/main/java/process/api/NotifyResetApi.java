@@ -1,5 +1,9 @@
 package process.api;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import java.util.function.Supplier;
+import process.security.RunWorkspace;
+import org.barco.platform.tenancy.RowSecurity;
 import process.util.BusinessTime;
 import org.barco.platform.correlation.CorrelationId;
 import org.slf4j.Logger;
@@ -50,6 +54,23 @@ public class NotifyResetApi {
     public NotifyResetApi(NotifyService notifyService, RunCallbackTokens runCallbackTokens) {
         this.notifyService = notifyService;
         this.runCallbackTokens = runCallbackTokens;
+    }
+
+    /**
+     * Set by Spring (RunWorkspace is a component). Without it -- a test that builds this by hand, or a slice context
+     * without the component -- the work runs unscoped: on the application's own pool that is no workspace at all, so the
+     * callback is refused, never widened.
+     */
+    private RunWorkspace runWorkspace;
+
+    @Autowired(required = false)
+    public void setRunWorkspace(RunWorkspace runWorkspace) {
+        this.runWorkspace = runWorkspace;
+    }
+
+    /** The work as the run's workspace, and only it (MIG-258): a worker's callback names nothing else. */
+    private <T> T asTheRunsWorkspace(Long jobQueueId, Supplier<T> work) {
+        return this.runWorkspace == null ? work.get() : RowSecurity.forTenant(this.runWorkspace.of(jobQueueId), work);
     }
 
     /**
@@ -172,39 +193,42 @@ public class NotifyResetApi {
         @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
         @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
         @RequestBody SourceJobQueueDto jobQueue) {
-        try {
-            ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, jobStatus,
-                CallbackKeys.changeState(jobStatus), idempotencyKey, correlationId);
-            if (rejected != null) {
-                return rejected;
-            }
-            jobQueue.setJobId(jobId);
-            jobQueue.setJobQueueId(jobQueueId);
-            jobQueue.setJobStatus(jobStatus);
+        // The run's workspace, and only it, for everything this callback does (MIG-258).
+        return this.asTheRunsWorkspace(jobQueueId, () -> {
+            try {
+                ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, jobStatus,
+                    CallbackKeys.changeState(jobStatus), idempotencyKey, correlationId);
+                if (rejected != null) {
+                    return rejected;
+                }
+                jobQueue.setJobId(jobId);
+                jobQueue.setJobQueueId(jobQueueId);
+                jobQueue.setJobStatus(jobStatus);
 
-            if (!EnumSet.of(JobStatus.Running, JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_INVALID, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
-            } else if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
-            }
+                if (!EnumSet.of(JobStatus.Running, JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
+                    return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_INVALID, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
+                } else if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
+                    return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
+                }
 
-            if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
-                jobQueue.setEndTime(BusinessTime.now());
+                if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)) {
+                    jobQueue.setEndTime(BusinessTime.now());
+                }
+                ResponseDto outcome = this.notifyService.changeState(jobQueue, idempotencyKey);
+                // The run is over: its token is spent. A retry, should one be scheduled, is a new
+                // dispatch and mints its own. Only on an accepted change -- a refused transition
+                // leaves the run, and its token, as they were -- and only the first time: a
+                // redelivery answered from its receipt changed nothing, so it spends nothing either.
+                if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)
+                    && !ProcessUtil.ERROR.equals(outcome.getStatus()) && !(outcome instanceof ReplayedResponse)) {
+                    this.runCallbackTokens.retire(jobQueueId);
+                }
+                return new ResponseEntity<>(outcome, statusOf(outcome));
+            } catch (Exception ex) {
+                logger.error("An error occurred while changeState ", ex);
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
             }
-            ResponseDto outcome = this.notifyService.changeState(jobQueue, idempotencyKey);
-            // The run is over: its token is spent. A retry, should one be scheduled, is a new
-            // dispatch and mints its own. Only on an accepted change -- a refused transition
-            // leaves the run, and its token, as they were -- and only the first time: a
-            // redelivery answered from its receipt changed nothing, so it spends nothing either.
-            if (EnumSet.of(JobStatus.Failed, JobStatus.Completed).contains(jobStatus)
-                && !ProcessUtil.ERROR.equals(outcome.getStatus()) && !(outcome instanceof ReplayedResponse)) {
-                this.runCallbackTokens.retire(jobQueueId);
-            }
-            return new ResponseEntity<>(outcome, statusOf(outcome));
-        } catch (Exception ex) {
-            logger.error("An error occurred while changeState ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        });
     }
 
     /**
@@ -222,24 +246,27 @@ public class NotifyResetApi {
             @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
             @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
             @RequestBody Map<String, List<String>> body) {
-        try {
-            ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, null,
-                CallbackKeys.ADD_LOGS_BATCH, idempotencyKey, correlationId);
-            if (rejected != null) {
-                return rejected;
-            }
-            List<String> messages = body == null ? null : body.get("messages");
-            if (messages == null || messages.isEmpty()) {
+        // The run's workspace, and only it, for everything this callback does (MIG-258).
+        return this.asTheRunsWorkspace(jobQueueId, () -> {
+            try {
+                ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, null,
+                    CallbackKeys.ADD_LOGS_BATCH, idempotencyKey, correlationId);
+                if (rejected != null) {
+                    return rejected;
+                }
+                List<String> messages = body == null ? null : body.get("messages");
+                if (messages == null || messages.isEmpty()) {
+                    return new ResponseEntity<>(
+                        new ResponseDto(ProcessUtil.ERROR_MESSAGE, "messages must not be empty."),
+                        HttpStatus.BAD_REQUEST);
+                }
                 return new ResponseEntity<>(
-                    new ResponseDto(ProcessUtil.ERROR_MESSAGE, "messages must not be empty."),
-                    HttpStatus.BAD_REQUEST);
+                    this.notifyService.addLogsBatch(jobId, jobQueueId, messages, idempotencyKey), HttpStatus.OK);
+            } catch (Exception ex) {
+                logger.error("An error occurred while addLogsBatch ", ex);
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
             }
-            return new ResponseEntity<>(
-                this.notifyService.addLogsBatch(jobId, jobQueueId, messages, idempotencyKey), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while addLogsBatch ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        });
     }
 
     @RequestMapping(value = "/addLogs/jobId/{jobId}/jobQueueId/{jobQueueId}", method = RequestMethod.POST)
@@ -250,23 +277,26 @@ public class NotifyResetApi {
             @RequestHeader(value = CallbackKeys.HEADER, required = false) String idempotencyKey,
             @RequestHeader(value = CorrelationId.HEADER, required = false) String correlationId,
             @RequestBody SourceJobQueueDto jobQueue) {
-        try {
-            ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, null,
-                CallbackKeys.ADD_LOGS, idempotencyKey, correlationId);
-            if (rejected != null) {
-                return rejected;
-            }
-            jobQueue.setJobId(jobId);
-            jobQueue.setJobQueueId(jobQueueId);
+        // The run's workspace, and only it, for everything this callback does (MIG-258).
+        return this.asTheRunsWorkspace(jobQueueId, () -> {
+            try {
+                ResponseEntity<?> rejected = this.admit(jobId, jobQueueId, workerToken, null,
+                    CallbackKeys.ADD_LOGS, idempotencyKey, correlationId);
+                if (rejected != null) {
+                    return rejected;
+                }
+                jobQueue.setJobId(jobId);
+                jobQueue.setJobQueueId(jobQueueId);
 
-            if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
-                return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
+                if (ProcessUtil.isNull(jobQueue.getJobStatusMessage())) {
+                    return new ResponseEntity<>(new ResponseDto(ProcessUtil.JOB_STATUS_MESSAGE_REQUIRED, ProcessUtil.BAD_REQUEST_400), HttpStatus.BAD_REQUEST);
+                }
+                return new ResponseEntity<>(this.notifyService.addLogs(jobQueue, idempotencyKey), HttpStatus.OK);
+            } catch (Exception ex) {
+                logger.error("An error occurred while addLogs ", ex);
+                return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
             }
-            return new ResponseEntity<>(this.notifyService.addLogs(jobQueue, idempotencyKey), HttpStatus.OK);
-        } catch (Exception ex) {
-            logger.error("An error occurred while addLogs ", ex);
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        });
     }
 
 }

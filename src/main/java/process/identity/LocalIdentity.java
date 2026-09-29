@@ -1,5 +1,6 @@
 package process.identity;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import org.barco.platform.security.CallerIdentity;
@@ -42,6 +43,8 @@ import java.util.stream.Collectors;
  */
 @IdentityInProcess
 @Component
+@AcrossTenants("identity.mode=local: Identity's own tables, read in-process -- sign-in and the token check run before "
+    + "any workspace is known, and people are looked up by id wherever they are")
 public class LocalIdentity implements IdentityPort {
 
     private static final Logger logger = LoggerFactory.getLogger(LocalIdentity.class);

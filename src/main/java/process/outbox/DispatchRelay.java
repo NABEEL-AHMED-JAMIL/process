@@ -1,5 +1,6 @@
 package process.outbox;
 
+import org.barco.platform.tenancy.RowSecurity;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -116,6 +117,10 @@ public class DispatchRelay implements SmartLifecycle {
 
     /** Publishes everything this instance can take now; answers how many went out. */
     public int drain() {
+        return RowSecurity.acrossTenants("the dispatch relay publishes every workspace's hand-offs", this::drainAll);
+    }
+
+    private int drainAll() {
         int published = 0;
         Set<String> refused = new HashSet<>();
         while (true) {

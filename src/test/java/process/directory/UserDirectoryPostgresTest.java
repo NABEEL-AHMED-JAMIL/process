@@ -86,12 +86,14 @@ class UserDirectoryPostgresTest {
     void writeBacksLandOnTheirOwnThreadAndNeverOverwriteANewerEvent() {
         UserDirectory direct = new UserDirectory(this.sql, Runnable::run);
         direct.apply(entry(7, "From the event", "Active", "2026-09-24T11:00:00Z"));
-        direct.writeBack(Arrays.asList(entry(7, "Asked earlier", "Active", "2026-09-24T10:00:00Z"),
+        // The write-back as the application makes it (MIG-258): process_app, nobody signed in -- its own grant.
+        UserDirectory asTheApplication = new UserDirectory(db.appJdbc(), Runnable::run);
+        asTheApplication.writeBack(Arrays.asList(entry(7, "Asked earlier", "Active", "2026-09-24T10:00:00Z"),
             entry(8, "Learned", "Active", "2026-09-24T10:00:00Z")));
         Map<Long, UserDirectory.Entry> held = direct.find(Arrays.asList(7L, 8L));
         assertThat(held.get(7L).getFullName()).isEqualTo("From the event");
         assertThat(held.get(8L).getFullName()).isEqualTo("Learned");
-        direct.writeBack(Collections.singletonList(new UserDirectory.Entry(9L, null, "x", null, "Active", Instant.now())));
+        asTheApplication.writeBack(Collections.singletonList(new UserDirectory.Entry(9L, null, "x", null, "Active", Instant.now())));
         assertThat(direct.find(Collections.singletonList(9L))).containsKey(9L);
     }
 

@@ -16,6 +16,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.concurrent.SettableListenableFuture;
+import process.AcrossTenantsProxy;
 import process.ScratchJpa;
 import process.ScratchPostgres;
 import process.ai.AiStepService;
@@ -93,7 +94,8 @@ class DispatchOutboxPostgresTest {
     @BeforeAll
     static void build() throws Exception {
         db = ScratchPostgres.create("dispatch_outbox");
-        jpa = new ScratchJpa(db);
+        // The application's own pool since MIG-258: process_app under row security, nobody signed in.
+        jpa = new ScratchJpa(db.appPool());
     }
 
     @AfterAll
@@ -139,15 +141,17 @@ class DispatchOutboxPostgresTest {
         BulkAction bulkAction = new BulkAction(store, mock(NotificationPort.class));
         AiStepService noAiSteps = mock(AiStepService.class);
         when(noAiSteps.apply(any(), anyString())).thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(1), null));
-        DispatchOutbox outbox = new DispatchOutbox(this.sql);
+        DispatchOutbox outbox = new DispatchOutbox(db.appJdbc());
         RunCallbackTokens tokens = new RunCallbackTokens(jpa.repository(JobQueueRepository.class), 24, "");
-        this.phase = new PreDispatchPhase(store, bulkAction, noAiSteps, new JdbcModelChoiceStore(this.sql), mock(JobMail.class), jpa.transactionManager());
-        this.dispatcher = new ProducerBulkEngine(bulkAction, store, mock(JobMail.class), tokens, outbox, jpa.transactionManager());
+        this.phase = AcrossTenantsProxy.of(new PreDispatchPhase(store, bulkAction, noAiSteps, new JdbcModelChoiceStore(db.appJdbc()),
+            mock(JobMail.class), jpa.transactionManager()));
+        this.dispatcher = AcrossTenantsProxy.of(new ProducerBulkEngine(bulkAction, store, mock(JobMail.class), tokens, outbox,
+            jpa.transactionManager()));
 
         this.broker = mock(KafkaTemplate.class);
         KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);
         when(templates.getTemplate(any())).thenReturn(this.broker);
-        this.relay = new DispatchRelay(this.sql, new TransactionTemplate(jpa.transactionManager()),
+        this.relay = new DispatchRelay(db.appJdbc(), new TransactionTemplate(jpa.transactionManager()),
             mock(KafkaConnectionResolver.class), templates);
         this.relay.setOutcomes(this.dispatcher);
     }
@@ -299,7 +303,7 @@ class DispatchOutboxPostgresTest {
     private DispatchRelay relayOverTheRealResolver(KafkaTemplateProvider templates) {
         KafkaConnectionResolver resolver = new KafkaConnectionResolver(jpa.repository(TenantTaskTypeKafkaRouteRepository.class),
             jpa.repository(SourceTaskTypeRepository.class), jpa.repository(KafkaConnectionProfileRepository.class));
-        DispatchRelay relay = new DispatchRelay(this.sql, new TransactionTemplate(jpa.transactionManager()), resolver, templates);
+        DispatchRelay relay = new DispatchRelay(db.appJdbc(), new TransactionTemplate(jpa.transactionManager()), resolver, templates);
         relay.setOutcomes(this.dispatcher);
         return relay;
     }

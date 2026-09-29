@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.AcrossTenantsProxy;
 import process.ScratchJpa;
 import process.ScratchPostgres;
 import process.directory.IdentityEventsListener;
@@ -59,7 +60,8 @@ class WorkspacePausePostgresTest {
     @BeforeAll
     static void build() throws Exception {
         db = ScratchPostgres.create("workspace_pause");
-        jpa = new ScratchJpa(db);
+        // The application's own pool since MIG-258: process_app under row security, nobody signed in.
+        jpa = new ScratchJpa(db.appPool());
     }
 
     @AfterAll
@@ -97,8 +99,8 @@ class WorkspacePausePostgresTest {
         BulkAction bulkAction = new BulkAction(store, mock(NotificationPort.class));
         ProducerBulkEngine engine = new ProducerBulkEngine(bulkAction, store, mock(JobMail.class), null, null,
             jpa.transactionManager());
-        engine.useWorkspaceDirectory(new WorkspaceDirectory(this.sql));
-        return engine;
+        engine.useWorkspaceDirectory(new WorkspaceDirectory(db.appJdbc()));
+        return AcrossTenantsProxy.of(engine);
     }
 
     private void dailyJob(long jobId, long tenantId, LocalDateTime due) {

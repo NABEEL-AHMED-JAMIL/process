@@ -1,5 +1,6 @@
 package process.engine.cron;
 
+import org.barco.platform.tenancy.AcrossTenants;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -59,6 +60,7 @@ public class AuditLogSyncCron {
 
     @Scheduled(initialDelay = 15000, fixedDelay = 4 * 60 * 60 * 1000)
     @SchedulerLock(name = "syncAuditLogsFromOpenSearch", lockAtLeastFor = "5S", lockAtMostFor = "5M")
+    @AcrossTenants("copies OpenSearch audit lines back for every workspace's runs")
     public void syncAuditLogsFromOpenSearch() {
         if (!this.openSearchAuditLogClient.isEnabled()) {
             return;
