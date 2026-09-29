@@ -2,6 +2,7 @@ package process.tenancy;
 
 import process.api.AiModelChoiceRestApi;
 import process.api.PipelineDefinitionRestApi;
+import process.api.StepTimelineRestApi;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
@@ -95,7 +96,7 @@ class CoreProbeCoverageTest {
         SourceJobRestApi.class, SourceTaskRestApi.class, PipelineRestApi.class, KafkaConnectionProfileRestApi.class,
         KafkaSecretRestApi.class, SettingRestApi.class, PipelineConfigRestApi.class, TaskReferenceRestApi.class,
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
-        AiModelChoiceRestApi.class, PipelineDefinitionRestApi.class,
+        AiModelChoiceRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
         // worker callbacks: a run's X-Worker-Token, no tenant principal
         MeterRestApi.class, RunConfigRestApi.class, NotifyResetApi.class,
         // /internal: service token only

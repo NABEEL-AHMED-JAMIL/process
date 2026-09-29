@@ -25,12 +25,30 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
         + "        - {id: 1, name: Acme row}\n  - key: keep\n    task: select\n    config: {columns: [id]}\n";
 
     private static CoreProbeFixture fx;
+    private static long bStep;
+    private static long colleagueStep;
+    private static long aStep;
 
     @BeforeAll
     static void build() throws Exception {
         fx = CoreProbeFixture.create("core_probe_pipeline_steps");
         JdbcTemplate sql = fx.db.jdbc();
-        sql.update("INSERT INTO pipeline_definition (pipeline_key, version, definition) VALUES (?, 1, ?::json)", B_PIPELINE, B_DEFINITION);
+        long bDefinition = sql.queryForObject("INSERT INTO pipeline_definition (pipeline_key, version, definition) VALUES (?, 1, ?::json) "
+            + "RETURNING pipeline_definition_id", Long.class, B_PIPELINE, B_DEFINITION);
+        // Steps of B's run, of A's colleague's run and of A's own run, each with a log line and a dataset.
+        bStep = step(sql, B_RUN, bDefinition, "bravo run message marker");
+        colleagueStep = step(sql, COLLEAGUE_RUN, null, "colleague run message");
+        aStep = step(sql, A_RUN, null, "acme step line");
+    }
+
+    private static long step(JdbcTemplate sql, long run, Long definition, String line) {
+        long id = sql.queryForObject("INSERT INTO step_execution (job_queue_id, step_index, task_code, step_key, status, status_message, "
+            + "pipeline_definition_id, records_in, records_out, tries, on_error) VALUES (?, 0, 'sample', 'read', 'Completed', ?, ?, 0, 1, 1, "
+            + "'fail') RETURNING step_execution_id", Long.class, run, line, definition);
+        sql.update("INSERT INTO step_log (step_execution_id, line_no, message) VALUES (?, 1, ?)", id, line);
+        sql.update("INSERT INTO run_dataset (step_execution_id, name, storage_key, row_count, columns) VALUES (?, 'output', ?, 1, "
+            + "'[\"note\"]'::jsonb)", id, "datasets/" + run + "/1/read/output.json");
+        return id;
     }
 
     @AfterAll
@@ -108,6 +126,46 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
             .contains(SUCCEEDED).contains("\"legacy\":false").contains("Acme row").contains("\"stored\":true");
         assertThat(fx.db.jdbc().queryForObject("SELECT tenant_id FROM pipeline_definition WHERE pipeline_key = ? ORDER BY version DESC "
             + "LIMIT 1", Long.class, mine)).isEqualTo(A);
+        assertThat(fx.leaks).isEmpty();
+    }
+
+    @Test
+    void noStepReadAnswersForAnotherWorkspacesOrAColleaguesRun() {
+        String before = fx.foreignRows();
+        for (Caller caller : new Caller[] {USER_OF_A, ADMIN_OF_A}) {
+            long[] runs = caller == USER_OF_A ? new long[] {B_RUN, COLLEAGUE_RUN} : new long[] {B_RUN};
+            for (long theirs : runs) {
+                assertThat(fx.probe("GET sourceJob.json/stepExecutions", caller, () -> fx.stepTimeline.stepExecutions(theirs, null)))
+                    .contains(REFUSED).contains("Run not found with jobQueueId.");
+            }
+            long[] steps = caller == USER_OF_A ? new long[] {bStep, colleagueStep} : new long[] {bStep};
+            for (long theirs : steps) {
+                assertThat(fx.probe("GET sourceJob.json/stepLogs", caller, () -> fx.stepTimeline.stepLogs(theirs)))
+                    .contains(REFUSED).contains("Step not found with stepExecutionId.");
+            }
+        }
+        for (Long none : NO_WORKSPACE) {
+            Caller caller = tenantlessUser(none);
+            assertThat(fx.probe("GET sourceJob.json/stepExecutions", caller, () -> fx.stepTimeline.stepExecutions(A_RUN, null)))
+                .contains(REFUSED);
+            assertThat(fx.probe("GET sourceJob.json/stepLogs", caller, () -> fx.stepTimeline.stepLogs(aStep))).contains(REFUSED);
+        }
+        assertThat(fx.leaks).isEmpty();
+        assertThat(fx.foreignRows()).isEqualTo(before);
+    }
+
+    /** The control: A's admin reads A's run's step, its dataset (never its storage key) and its log; the colleague's too. */
+    @Test
+    void myWorkspacesRunsReadTheirStepsAndLogs() {
+        assertThat(fx.probe("GET sourceJob.json/stepExecutions(mine)", ADMIN_OF_A, () -> fx.stepTimeline.stepExecutions(A_RUN, null)))
+            .contains(SUCCEEDED).contains("\"legacy\":false").contains("acme step line").contains("\"rowCount\":1")
+            .doesNotContain("datasets/");
+        assertThat(fx.probe("GET sourceJob.json/stepLogs(mine)", ADMIN_OF_A, () -> fx.stepTimeline.stepLogs(aStep)))
+            .contains(SUCCEEDED).contains("acme step line");
+        assertThat(fx.probe("GET sourceJob.json/stepExecutions(a colleague's, as admin)", ADMIN_OF_A,
+            () -> fx.stepTimeline.stepExecutions(COLLEAGUE_RUN, null))).contains(SUCCEEDED);
+        assertThat(fx.probe("GET sourceJob.json/stepExecutions(no such attempt)", ADMIN_OF_A,
+            () -> fx.stepTimeline.stepExecutions(A_RUN, 9))).contains(REFUSED).contains("no attempt 9");
         assertThat(fx.leaks).isEmpty();
     }
 }
