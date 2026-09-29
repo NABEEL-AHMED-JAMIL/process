@@ -40,6 +40,9 @@ import process.pipeline.StepEngine;
 import process.pipeline.StepResult;
 import process.pipeline.StepTask;
 import process.pipeline.StepTasks;
+import process.pipeline.backing.Fakes;
+import process.pipeline.tasks.SaveFileStepTask;
+import process.pipeline.tasks.UploadBucketStepTask;
 import process.util.OpenSearchAuditLogClient;
 
 import java.nio.file.Files;
@@ -80,6 +83,9 @@ class StepEnginePostgresTest {
     private static final long FAILING_JOB = 78517L;
     private static final long FAILING_TASK = 78518L;
     private static final long FAILING_PIPELINE = 78519L;
+    private static final long OUTPUT_PIPELINE = 78520L;
+    private static final long OUTPUT_TASK = 78521L;
+    private static final long OUTPUT_JOB = 78522L;
     private static final String PAYLOAD = "<pipeline><claim_id>C-17</claim_id><amount>250</amount></pipeline>";
 
     private static ScratchPostgres db;
@@ -127,6 +133,15 @@ class StepEnginePostgresTest {
         job(STEPS_JOB, STEPS_TASK, 1);
         job(LEGACY_JOB, LEGACY_TASK, 1);
         job(FAILING_JOB, FAILING_TASK, 2);
+        // Wave 4: a pipeline whose steps write files -- one kept with the run, one uploaded -- for the run's manifest.
+        pipeline(OUTPUT_PIPELINE, "OUTPUT-PIPE");
+        task(OUTPUT_TASK, "OUTPUT-PIPE");
+        job(OUTPUT_JOB, OUTPUT_TASK, 1);
+        login.update("INSERT INTO pipeline_definition (pipeline_key, version, definition) VALUES (?, 1, ?::json)", OUTPUT_PIPELINE,
+            "{\"version\":1,\"steps\":[{\"key\":\"read\",\"task\":\"sample\",\"config\":{\"rows\":[{\"id\":1},{\"id\":2}]}},"
+                + "{\"key\":\"keep\",\"task\":\"save_file\",\"config\":{\"fileName\":\"claims.csv\"}},"
+                + "{\"key\":\"send\",\"task\":\"upload_bucket\",\"config\":{\"bucket\":\"exports\",\"key\":\"out/{{run}}.json\","
+                + "\"format\":\"json\"}}]}");
         login.update("INSERT INTO pipeline_definition (pipeline_key, version, definition) VALUES (?, 1, ?::json)", STEPS_PIPELINE,
             "{\"version\":1,\"source\":{\"type\":\"task\"},\"steps\":[{\"key\":\"shape\",\"task\":\"select\",\"config\":{\"columns\":"
                 + "{\"claim_id\":\"claim\",\"amount\":\"amount\"}}},{\"key\":\"more\",\"task\":\"sample\",\"config\":{\"rows\":"
@@ -179,7 +194,7 @@ class StepEnginePostgresTest {
             jpa.repository(SourceTaskRepository.class), mock(OpenSearchAuditLogClient.class));
         BulkAction bulkAction = new BulkAction(store, mock(NotificationPort.class));
         NotifyService notify = transactional(new NotifyServiceImpl(bulkAction, mock(JobMail.class), store, mock(NotificationPort.class)));
-        StepTasks tasks = Definitions.builtInTasks(new Refuses());
+        StepTasks tasks = Definitions.builtInTasks(new Refuses(), new SaveFileStepTask(), new UploadBucketStepTask(new Fakes.Buckets()));
         // Counted here, exactly: ThreadPoolExecutor's own getTaskCount() is approximate, and a run handed over during the
         // pass could read as not yet scheduled -- the wait below then returned early (a flake, 1 run in 3 or so).
         this.runThreads = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>()) {
@@ -326,6 +341,25 @@ class StepEnginePostgresTest {
             "SELECT count(*) FROM step_execution WHERE job_queue_id = ?", Long.class, steps));
         assertThat(mine).isEqualTo(2);
         assertThat(theirs).isZero();
+    }
+
+    /** Wave 4: the run's manifest -- the kept file with its dataset, the upload with its bucket and key -- in its workspace. */
+    @Test
+    void theFilesARunsStepsWroteAreInItsManifest() throws Exception {
+        long run = this.queue(OUTPUT_JOB);
+        this.pass();
+
+        assertThat(this.run(run).get("job_status")).isEqualTo("Completed");
+        assertThat(login.queryForList("SELECT s.step_key || ':' || o.kind || ':' || o.name || ':' || o.format || ':' || o.row_count || ':' "
+            + "|| coalesce(o.bucket_alias, '-') || ':' || coalesce(o.object_key, '-') || ':' || o.tenant_id FROM run_output o "
+            + "JOIN step_execution s ON s.step_execution_id = o.step_execution_id WHERE s.job_queue_id = ? ORDER BY s.step_index",
+            String.class, run)).containsExactly("keep:file:claims.csv:csv:2:-:-:" + TENANT,
+            "send:bucket:" + run + ".json:json:2:exports:out/" + run + ".json:" + TENANT);
+        assertThat(login.queryForObject("SELECT d.name FROM run_output o JOIN run_dataset d ON d.run_dataset_id = o.run_dataset_id "
+            + "WHERE o.kind = 'file' AND o.expires_at = d.expires_at AND d.step_execution_id = o.step_execution_id AND o.step_execution_id IN "
+            + "(SELECT step_execution_id FROM step_execution WHERE job_queue_id = ?)", String.class, run)).isEqualTo("claims.csv");
+        JdbcTemplate app = db.appJdbc();
+        assertThat(RowSecurity.forTenant(OTHER, () -> app.queryForObject("SELECT count(*) FROM run_output", Long.class))).isZero();
     }
 
     /** A dataset past its retention is removed -- the file and its row -- by the sweep, across workspaces. */

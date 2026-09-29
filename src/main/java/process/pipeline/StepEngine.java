@@ -29,6 +29,7 @@ import process.util.exception.ExceptionUtil;
 import javax.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -536,7 +537,8 @@ public class StepEngine {
         }
 
         /** A file a step made, beside the run's datasets, and its run_dataset row. */
-        private long keepFile(long row, String stepKey, String fileName, byte[] content, long rows, List<String> columns) throws Exception {
+        /** Returns {run_dataset_id, expiry in epoch millis}: the manifest names the same dataset and expiry. */
+        private long[] keepFile(long row, String stepKey, String fileName, byte[] content, long rows, List<String> columns) throws Exception {
             String key = DatasetStore.fileKeyOf(this.run.getJobQueueId(), this.attempt, stepKey, fileName);
             datasets.writeFile(key, content);
             String columnsJson;
@@ -545,12 +547,13 @@ public class StepEngine {
             } catch (JsonProcessingException ex) {
                 columnsJson = "[]";
             }
-            return steps.dataset(row, fileName, key, rows, columnsJson, this.expiry());
+            Instant expires = this.expiry();
+            return new long[] {steps.dataset(row, fileName, key, rows, columnsJson, expires), expires.toEpochMilli()};
         }
 
         /** When a dataset written now expires: the pipeline's datasetRetentionHours on. */
         private Instant expiry() {
-            return Instant.now().plus(Duration.ofHours(this.settings.effectiveRetentionHours()));
+            return Instant.now().truncatedTo(ChronoUnit.MILLIS).plus(Duration.ofHours(this.settings.effectiveRetentionHours()));
         }
 
         /**
@@ -762,8 +765,7 @@ public class StepEngine {
 
         @Override
         public void keepFile(String fileName, byte[] content, long rows, List<String> columns) throws Exception {
-            long dataset = this.execution.keepFile(this.row, this.step.getKey(), fileName, content, rows, columns);
-            this.kept.put(fileName, new long[] {dataset, this.execution.expiry().toEpochMilli()});
+            this.kept.put(fileName, this.execution.keepFile(this.row, this.step.getKey(), fileName, content, rows, columns));
         }
 
         @Override
