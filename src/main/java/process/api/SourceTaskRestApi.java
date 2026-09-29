@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +35,7 @@ public class SourceTaskRestApi {
         this.sourceTaskService = sourceTaskService;
     }
 
+    @BuilderAction
     @RequestMapping(value = "/addSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
@@ -44,6 +46,7 @@ public class SourceTaskRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/updateSourceTask", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
@@ -54,6 +57,7 @@ public class SourceTaskRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/deleteSourceTask", method = RequestMethod.PUT)
     public ResponseEntity<?> deleteSourceTask(@RequestBody SourceTaskDto sourceTaskDto) {
         try {
@@ -140,6 +144,7 @@ public class SourceTaskRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/uploadSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSourceTask(FileUploadDto fileUploadDto) {
         try {

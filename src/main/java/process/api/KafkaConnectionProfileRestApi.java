@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -29,6 +30,7 @@ public class KafkaConnectionProfileRestApi {
         this.kafkaConnectionProfileService = kafkaConnectionProfileService;
     }
 
+    @BuilderAction
     @RequestMapping(value = "/addProfile", method = RequestMethod.POST)
     public ResponseEntity<?> addProfile(@RequestBody KafkaConnectionProfileDto dto) {
         try {
@@ -39,6 +41,7 @@ public class KafkaConnectionProfileRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/updateProfile", method = RequestMethod.PUT)
     public ResponseEntity<?> updateProfile(@RequestBody KafkaConnectionProfileDto dto) {
         try {
@@ -49,6 +52,7 @@ public class KafkaConnectionProfileRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/deleteProfile", method = RequestMethod.PUT)
     public ResponseEntity<?> deleteProfile(@RequestParam Long kafkaConnectionProfileId) {
         try {
@@ -69,6 +73,7 @@ public class KafkaConnectionProfileRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/setAsDefault", method = RequestMethod.POST)
     public ResponseEntity<?> setAsDefault(@RequestParam Long kafkaConnectionProfileId) {
         try {
@@ -78,6 +83,7 @@ public class KafkaConnectionProfileRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/clearDefault", method = RequestMethod.POST)
     public ResponseEntity<?> clearDefault() {
         try {

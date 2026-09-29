@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -113,6 +114,7 @@ public class PipelineRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @BuilderAction
     @RequestMapping(value = {"/save", "/saveForm"}, method = RequestMethod.POST)
     public ResponseEntity<?> saveForm(@RequestBody Pipeline form) {
         try {
@@ -124,6 +126,7 @@ public class PipelineRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @BuilderAction
     @RequestMapping(value = {"/delete", "/deleteForm"}, method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteForm(@RequestParam Long pipelineKey) {
         try {

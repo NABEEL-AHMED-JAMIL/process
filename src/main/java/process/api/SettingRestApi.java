@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -67,6 +68,7 @@ public class SettingRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/addSourceTaskType", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTaskType(
         @RequestBody SourceTaskTypeDto tempSourceTaskType) {
@@ -78,6 +80,7 @@ public class SettingRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/updateSourceTaskType", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceTaskType(
         @RequestBody SourceTaskTypeDto tempSourceTaskType) {
@@ -89,6 +92,7 @@ public class SettingRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/deleteSourceTaskType", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteSourceTaskType(
         @RequestParam Long sourceTaskTypeId) {
@@ -110,6 +114,7 @@ public class SettingRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/setKafkaRoute", method = RequestMethod.PUT)
     public ResponseEntity<?> setKafkaRoute(@RequestParam Long sourceTaskTypeId, @RequestParam Long kafkaConnectionProfileId) {
         try {
@@ -120,6 +125,7 @@ public class SettingRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/deleteKafkaRoute", method = RequestMethod.DELETE)
     public ResponseEntity<?> deleteKafkaRoute(@RequestParam Long sourceTaskTypeId) {
         try {

@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,7 @@ public class SourceJobRestApi {
         this.jobAssistantService = jobAssistantService;
     }
 
+    @BuilderAction
     @RequestMapping(value = "/addSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -53,6 +55,7 @@ public class SourceJobRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/updateSourceJob", method = RequestMethod.PUT)
     public ResponseEntity<?> updateSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -63,6 +66,7 @@ public class SourceJobRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/deleteSourceJob", method = RequestMethod.PUT)
     public ResponseEntity<?> deleteSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -74,6 +78,7 @@ public class SourceJobRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/toggleSourceJobStatus", method = RequestMethod.PUT)
     public ResponseEntity<?> toggleSourceJobStatus(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -137,6 +142,7 @@ public class SourceJobRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/runSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> runSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -154,6 +160,7 @@ public class SourceJobRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/skipNextSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> skipNextSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {
@@ -218,6 +225,7 @@ public class SourceJobRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/uploadSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSourceJob(
         FileUploadDto fileObject) {

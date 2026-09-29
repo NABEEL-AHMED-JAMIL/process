@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -46,11 +47,13 @@ public class AiModelChoiceRestApi {
         return new ResponseEntity<>(this.service.jobChoices(jobId), HttpStatus.OK);
     }
 
+    @BuilderAction
     @RequestMapping(value = "/sourceJob.json/aiModelChoice/save", method = RequestMethod.POST)
     public ResponseEntity<?> saveSchedule(@RequestBody AiModelChoiceDto request) {
         return new ResponseEntity<>(this.service.saveSchedule(request), HttpStatus.OK);
     }
 
+    @BuilderAction
     @RequestMapping(value = "/sourceJob.json/runSourceJobWith", method = RequestMethod.POST)
     public ResponseEntity<?> runWith(@RequestBody AiModelChoiceDto request) {
         try {
@@ -79,6 +82,7 @@ public class AiModelChoiceRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @BuilderAction
     @RequestMapping(value = "/sourceTask.json/aiStepModelOptions/save", method = RequestMethod.POST)
     public ResponseEntity<?> saveStepOptions(@RequestBody AiModelChoiceDto.StepOptions request) {
         return new ResponseEntity<>(this.service.saveStepOptions(request), HttpStatus.OK);

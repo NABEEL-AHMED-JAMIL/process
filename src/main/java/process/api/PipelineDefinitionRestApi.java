@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,6 +51,7 @@ public class PipelineDefinitionRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @BuilderAction
     @RequestMapping(value = "/pipeline.json/steps/save", method = RequestMethod.POST)
     public ResponseEntity<?> save(@RequestBody PipelineDefinitionService.DefinitionRequest request) {
         return new ResponseEntity<>(this.service.save(request), HttpStatus.OK);
@@ -61,6 +63,7 @@ public class PipelineDefinitionRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @BuilderAction
     @RequestMapping(value = "/pipeline.json/steps/tasks/enabled", method = RequestMethod.POST)
     public ResponseEntity<?> switchTask(@RequestBody PipelineDefinitionService.TaskSwitchRequest request) {
         return new ResponseEntity<>(this.service.switchTask(request), HttpStatus.OK);

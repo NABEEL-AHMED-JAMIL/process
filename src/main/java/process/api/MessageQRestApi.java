@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,7 @@ public class MessageQRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/failJobLogs", method = RequestMethod.DELETE)
     public ResponseEntity<?> failJobLogs(
         @RequestParam Long jobQId) {
@@ -51,6 +53,7 @@ public class MessageQRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/interruptJobLogs", method = RequestMethod.DELETE)
     public ResponseEntity<?> interruptJobLogs(
         @RequestParam Long jobQId) {
@@ -62,6 +65,7 @@ public class MessageQRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/changeJobStatus", method = RequestMethod.PUT)
     public ResponseEntity<?> changeJobStatus(
         @RequestBody QueueMessageStatusDto queueMessageStatus) {

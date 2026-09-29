@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -41,6 +42,7 @@ public class KafkaSecretRestApi {
         this.kafkaSecretService = kafkaSecretService;
     }
 
+    @BuilderAction
     @RequestMapping(value = "/uploadSecret", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSecret(@RequestParam("file") MultipartFile file,
         @RequestParam KafkaSecretKind kind) {
@@ -55,6 +57,7 @@ public class KafkaSecretRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/generateTruststore", method = RequestMethod.POST)
     public ResponseEntity<?> generateTruststore(@RequestBody List<String> caObjectKeys) {
         try {
@@ -66,6 +69,7 @@ public class KafkaSecretRestApi {
         }
     }
 
+    @BuilderAction
     @RequestMapping(value = "/generateKeystore", method = RequestMethod.POST)
     public ResponseEntity<?> generateKeystore(@RequestParam String certificateObjectKey,
         @RequestParam String privateKeyObjectKey) {

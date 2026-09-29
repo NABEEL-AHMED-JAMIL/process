@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -43,12 +44,14 @@ public class InboxTriggerRestApi {
         return new ResponseEntity<>(this.service.trigger(jobId), HttpStatus.OK);
     }
 
+    @BuilderAction
     @RequestMapping(value = "/sourceJob.json/inboxTrigger/save", method = RequestMethod.POST)
     public ResponseEntity<?> save(@RequestBody InboxTriggerRequest request) {
         return new ResponseEntity<>(request == null ? this.service.trigger(null)
             : this.service.save(request.getJobId(), request.getEnabled(), request.getFilePattern()), HttpStatus.OK);
     }
 
+    @BuilderAction
     @RequestMapping(value = "/sourceJob.json/inboxTrigger", method = RequestMethod.DELETE)
     public ResponseEntity<?> delete(@RequestParam Long jobId) {
         return new ResponseEntity<>(this.service.delete(jobId), HttpStatus.OK);
