@@ -142,7 +142,7 @@ public class SourceJobRestApi {
         }
     }
 
-    @BuilderAction
+    // Owner 2026-09-29: not a @BuilderAction -- a MANAGED workspace's customers run their existing schedules too.
     @RequestMapping(value = "/runSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> runSourceJob(
         @RequestBody SourceJobDto tempSourceJob) {

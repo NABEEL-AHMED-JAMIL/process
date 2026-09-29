@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.method.HandlerMethod;
+import process.api.AiModelChoiceRestApi;
 import process.api.PipelineRestApi;
 import process.identity.IdentityPort;
 import process.api.RunReviewRestApi;
@@ -50,7 +51,7 @@ class ManagementModeMatrixTest {
 
     /** Build or run: refused to the customer's own people in a MANAGED workspace. */
     static final Set<String> BUILDER_ACTIONS = new TreeSet<>(Arrays.asList(
-        "AiModelChoiceRestApi.runWith", "AiModelChoiceRestApi.saveSchedule", "AiModelChoiceRestApi.saveStepOptions",
+        "AiModelChoiceRestApi.saveSchedule", "AiModelChoiceRestApi.saveStepOptions",
         "InboxTriggerRestApi.delete", "InboxTriggerRestApi.save",
         "KafkaConnectionProfileRestApi.addProfile", "KafkaConnectionProfileRestApi.clearDefault",
         "KafkaConnectionProfileRestApi.deleteProfile", "KafkaConnectionProfileRestApi.setAsDefault",
@@ -62,7 +63,7 @@ class ManagementModeMatrixTest {
         "PipelineRestApi.deleteForm", "PipelineRestApi.saveForm",
         "SettingRestApi.addSourceTaskType", "SettingRestApi.deleteKafkaRoute", "SettingRestApi.deleteSourceTaskType",
         "SettingRestApi.setKafkaRoute", "SettingRestApi.updateSourceTaskType",
-        "SourceJobRestApi.addSourceJob", "SourceJobRestApi.deleteSourceJob", "SourceJobRestApi.runSourceJob",
+        "SourceJobRestApi.addSourceJob", "SourceJobRestApi.deleteSourceJob",
         "SourceJobRestApi.skipNextSourceJob", "SourceJobRestApi.toggleSourceJobStatus", "SourceJobRestApi.updateSourceJob",
         "SourceJobRestApi.uploadSourceJob",
         "SourceTaskRestApi.addSourceTask", "SourceTaskRestApi.deleteSourceTask", "SourceTaskRestApi.updateSourceTask",
@@ -76,6 +77,9 @@ class ManagementModeMatrixTest {
         String read = "a read sent as a POST: it changes nothing";
         CUSTOMERS_IN_EITHER_MODE.put("RunReviewRestApi.decide", "review: the customer approves or rejects a run's output (MIG-237)");
         CUSTOMERS_IN_EITHER_MODE.put("ReportRestApi.export", "download");
+        // Owner 2026-09-29: running an existing schedule is not building it; a managed customer reruns with a new file.
+        CUSTOMERS_IN_EITHER_MODE.put("SourceJobRestApi.runSourceJob", "running an existing schedule (Run now)");
+        CUSTOMERS_IN_EITHER_MODE.put("AiModelChoiceRestApi.runWith", "running an existing schedule once with other inputs (Run with)");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.prepareContext", "asking about their own files");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.sendMessage", "asking about their own files");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.endSession", "asking about their own files");
@@ -185,12 +189,14 @@ class ManagementModeMatrixTest {
     }
 
     @Test
-    void theCustomerStillViewsAndReviewsButDoesNotRunInAManagedWorkspace() throws Exception {
+    void theCustomerViewsReviewsAndRunsButDoesNotBuildInAManagedWorkspace() throws Exception {
         caller("TENANT_ADMIN", "MANAGED", false);
 
         assertThat(this.status("GET", SourceJobRestApi.class, "listSourceJob")).as("view").isEqualTo(200);
         assertThat(this.status("POST", RunReviewRestApi.class, "decide")).as("review").isEqualTo(200);
-        assertThat(this.status("POST", SourceJobRestApi.class, "runSourceJob")).as("run").isEqualTo(403);
+        assertThat(this.status("POST", SourceJobRestApi.class, "runSourceJob")).as("run now").isEqualTo(200);
+        assertThat(this.status("POST", AiModelChoiceRestApi.class, "runWith")).as("run with").isEqualTo(200);
+        assertThat(this.status("POST", SourceJobRestApi.class, "skipNextSourceJob")).as("skip next").isEqualTo(403);
         assertThat(this.status("PUT", SourceJobRestApi.class, "updateSourceJob")).as("schedule").isEqualTo(403);
     }
 

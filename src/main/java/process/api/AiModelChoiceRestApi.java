@@ -53,7 +53,7 @@ public class AiModelChoiceRestApi {
         return new ResponseEntity<>(this.service.saveSchedule(request), HttpStatus.OK);
     }
 
-    @BuilderAction
+    // Owner 2026-09-29: not a @BuilderAction -- a MANAGED workspace's customers run their existing schedules too.
     @RequestMapping(value = "/sourceJob.json/runSourceJobWith", method = RequestMethod.POST)
     public ResponseEntity<?> runWith(@RequestBody AiModelChoiceDto request) {
         try {
