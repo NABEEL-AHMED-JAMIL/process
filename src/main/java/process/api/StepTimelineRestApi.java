@@ -1,5 +1,7 @@
 package process.api;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import process.model.dto.ResponseDto;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import process.pipeline.StepTimelineService;
 
 /**
@@ -35,6 +38,8 @@ public class StepTimelineRestApi {
 
     private final StepTimelineService service;
 
+    private static final ObjectMapper REFUSALS = new ObjectMapper();
+
     public StepTimelineRestApi(StepTimelineService service) {
         this.service = service;
     }
@@ -50,10 +55,16 @@ public class StepTimelineRestApi {
      * workspace's included), 410 once it has expired.
      */
     @RequestMapping(value = "/sourceJob.json/runDataset", method = RequestMethod.GET)
-    public ResponseEntity<?> runDataset(@RequestParam Long runDatasetId, @RequestParam(required = false) String format) {
+    public ResponseEntity<StreamingResponseBody> runDataset(@RequestParam Long runDatasetId,
+        @RequestParam(required = false) String format) {
+        // Declared as ResponseEntity<StreamingResponseBody>: only then does Spring stream the body. A ResponseEntity<?>
+        // hands it to the message converters instead ("{}" for JSON, a 500 "No converter" for CSV -- live, run 7405).
+        // So a refusal is streamed too, as its JSON envelope.
         StepTimelineService.Download download = this.service.download(runDatasetId, format);
         if (download.refusal != null) {
-            return ResponseEntity.status(download.status).contentType(MediaType.APPLICATION_JSON).body(download.refusal);
+            ResponseDto refusal = download.refusal;
+            return ResponseEntity.status(download.status).contentType(MediaType.APPLICATION_JSON)
+                .body(out -> REFUSALS.writeValue(out, refusal));
         }
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + download.fileName + "\"")

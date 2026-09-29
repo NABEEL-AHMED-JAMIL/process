@@ -4,6 +4,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import process.ai.InMemoryModelChoiceStore;
+import process.api.StepTimelineRestApi;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import process.model.dto.ResponseDto;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -26,6 +30,12 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Wave 4: a run dataset downloads as a file, and a run's manifest lists the files its steps wrote -- for the caller whose
@@ -202,5 +212,41 @@ class RunDatasetDownloadTest {
         TenantContext.set(4242L, "TENANT_ADMIN", 8L, "other@example");
         assertThat(this.service.outputs(RUN, null).getMessage()).isEqualTo("Run not found with jobQueueId.");
         assertThat(this.service.outputs(null, null).getStatus()).isEqualTo("ERROR");
+    }
+
+    // Through Spring MVC, as the live endpoint answers: a ResponseEntity<?> holding a StreamingResponseBody is not
+    // streamed (Spring streams only a declared ResponseEntity<StreamingResponseBody>); JSON came back as "{}" and CSV
+    // as a 500 "No converter" (live, 2026-09-29, run 7405). Calling the service directly could not see that.
+
+    private MockMvc mvc() {
+        return MockMvcBuilders.standaloneSetup(new StepTimelineRestApi(this.service)).build();
+    }
+
+    @Test
+    void aKeptFileDownloadsOverHttpAsItsBytes() throws Exception {
+        MvcResult started = this.mvc().perform(get("/sourceJob.json/runDataset").param("runDatasetId", "" + this.file))
+            .andExpect(request().asyncStarted()).andReturn();
+        this.mvc().perform(asyncDispatch(started))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Disposition", "attachment; filename=\"claims.csv\""))
+            .andExpect(content().string("id,name\r\n1,Acme\r\n"));
+    }
+
+    @Test
+    void aStepOutputDownloadsOverHttpInTheAskedFormat() throws Exception {
+        MvcResult started = this.mvc().perform(get("/sourceJob.json/runDataset").param("runDatasetId", "" + this.output)
+            .param("format", "json")).andExpect(request().asyncStarted()).andReturn();
+        String body = this.mvc().perform(asyncDispatch(started)).andExpect(status().isOk()).andReturn().getResponse()
+            .getContentAsString(StandardCharsets.UTF_8);
+        assertThat(body).contains("Acme, Inc").contains("Beta").isNotEqualTo("{}");
+    }
+
+    @Test
+    void aRefusalOverHttpIsTheJsonEnvelope() throws Exception {
+        MvcResult started = this.mvc().perform(get("/sourceJob.json/runDataset").param("runDatasetId", "999999"))
+            .andExpect(request().asyncStarted()).andReturn();
+        this.mvc().perform(asyncDispatch(started))
+            .andExpect(status().isNotFound())
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("\"status\":\"ERROR\"")));
     }
 }
