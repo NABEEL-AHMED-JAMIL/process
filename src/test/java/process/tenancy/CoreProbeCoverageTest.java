@@ -2,6 +2,8 @@ package process.tenancy;
 
 import process.api.AiModelChoiceRestApi;
 import process.api.InboxTriggerRestApi;
+import process.api.PipelineDefinitionRestApi;
+import process.api.StepTimelineRestApi;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
@@ -95,7 +97,7 @@ class CoreProbeCoverageTest {
         SourceJobRestApi.class, SourceTaskRestApi.class, PipelineRestApi.class, KafkaConnectionProfileRestApi.class,
         KafkaSecretRestApi.class, SettingRestApi.class, PipelineConfigRestApi.class, TaskReferenceRestApi.class,
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
-        AiModelChoiceRestApi.class, InboxTriggerRestApi.class,
+        AiModelChoiceRestApi.class, InboxTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
         // worker callbacks: a run's X-Worker-Token, no tenant principal
         MeterRestApi.class, RunConfigRestApi.class, NotifyResetApi.class,
         // /internal: service token only
@@ -129,6 +131,13 @@ class CoreProbeCoverageTest {
             + "agent, job or workspace");
         NOTHING_TO_AIM.put("POST fileChat.json/emailExport", "the same conversion, mailed to the address the caller types; "
             + "names nothing stored");
+
+        // MIG-230: checking a draft definition reads the text posted and the registered tasks; the task list is the same
+        // for every caller. Neither names a pipeline, a run or a workspace.
+        NOTHING_TO_AIM.put("POST pipeline.json/steps/validate", "parses and checks the definition text in the request body; "
+            + "names no stored pipeline, definition or workspace");
+        NOTHING_TO_AIM.put("GET pipeline.json/steps/tasks", "the registered step tasks, the same list for every caller; names "
+            + "nothing stored");
 
         // /internal: the gateway answers 404 for /internal from outside, and each checks X-Internal-Token first.
         String service = "service token only (X-Internal-Token); no tenant reaches it -- the calling service names the tenant";

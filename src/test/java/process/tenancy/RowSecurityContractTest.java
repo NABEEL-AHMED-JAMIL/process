@@ -38,6 +38,8 @@ class RowSecurityContractTest extends RowSecurityContract {
             "copies OpenSearch audit lines back for every workspace's runs");
         paths.put("RunSloReport.measure",
             "the pipeline-execution SLO is measured over every workspace's runs");
+        paths.put("DatasetSweep.sweep",
+            "expired run datasets of every workspace are removed");
         paths.put("TenantOrphanAudit.run",
             "the orphan audit counts every workspace's rows against Identity's workspaces");
         paths.put("UserDirectoryReconciliation.run",

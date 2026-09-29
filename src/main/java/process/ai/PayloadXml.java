@@ -14,6 +14,7 @@ import javax.xml.transform.stream.StreamResult;
 import java.io.StringReader;
 import java.io.StringWriter;
 import org.xml.sax.InputSource;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -44,6 +45,31 @@ public final class PayloadXml {
     public String get(String tag) {
         NodeList found = this.doc.getElementsByTagName(tag);
         return found.getLength() == 0 ? null : found.item(0).getTextContent();
+    }
+
+    /**
+     * The root's leaf children as tag -> text, in document order; the first of a repeated tag wins, as {@link #get}.
+     * A pipeline definition's "task" source reads the task payload through this (MIG-230): one row, one column per tag,
+     * parsed exactly as the AI steps parse it.
+     */
+    public Map<String, String> fields() {
+        Map<String, String> fields = new LinkedHashMap<>();
+        NodeList children = this.doc.getDocumentElement().getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child.getNodeType() != Node.ELEMENT_NODE || fields.containsKey(child.getNodeName())) {
+                continue;
+            }
+            boolean leaf = true;
+            NodeList inner = child.getChildNodes();
+            for (int j = 0; j < inner.getLength() && leaf; j++) {
+                leaf = inner.item(j).getNodeType() != Node.ELEMENT_NODE;
+            }
+            if (leaf) {
+                fields.put(child.getNodeName(), child.getTextContent());
+            }
+        }
+        return fields;
     }
 
     /** Sets the tag's text, adding the element under the root when it is not there yet. */

@@ -1,5 +1,6 @@
 package process.contract;
 
+import process.pipeline.DefinitionException;
 import process.config.KafkaRouteUnresolvedException;
 import org.barco.platform.contract.EnvelopeContract;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -70,6 +71,10 @@ class EnvelopeContractTest extends EnvelopeContract {
             + "request fails closed with the fixed 500 sentence and nothing of the cause (MIG-11)");
         internal.put(KafkaRouteUnresolvedException.class, "caught where require() is called: DispatchRelay fails the run "
             + "with its sentence, the internal publish answers 422 with it, the topic test answers it in words (MIG-45)");
+        internal.put(DefinitionException.class, "caught in PipelineDefinitionService: a definition that does not read or "
+            + "validate is answered in words, every problem at its path (MIG-230)");
+        internal.put(declared("process.pipeline.StepEngine$StepFailure"), "carries a step task's checked exception off its try "
+            + "thread; the engine unwraps it into the step's error and never lets it out (MIG-230)");
         return internal;
     }
 

@@ -196,6 +196,14 @@
             <version>2.8.6</version>
         </dependency>
 
+        <!-- MIG-230: a pipeline definition is JSON; YAML is a view of the same definition, read and written with
+             snakeyaml (safe constructor, no timestamps, no aliases). Declared, not borrowed from the Spring Boot
+             starter, which brings it at runtime scope only; the version is the parent's. -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+        </dependency>
+
         <!-- OkHttp for process's own HTTP clients: Media (HttpMedia) and Storage (StorageServiceClient). -->
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>

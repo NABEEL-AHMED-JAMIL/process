@@ -32,6 +32,15 @@ import process.api.KafkaSecretRestApi;
 import process.api.MessageQRestApi;
 import process.api.PipelineConfigRestApi;
 import process.api.PipelineRestApi;
+import process.api.PipelineDefinitionRestApi;
+import process.api.StepTimelineRestApi;
+import process.pipeline.JdbcStepStore;
+import process.pipeline.StepTimelineService;
+import process.pipeline.DefinitionValidator;
+import process.pipeline.Definitions;
+import process.pipeline.PipelineDefinitionService;
+import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.StepTasks;
 import process.api.ReportRestApi;
 import process.api.SettingRestApi;
 import process.api.SourceJobRestApi;
@@ -367,6 +376,10 @@ final class CoreProbeFixture implements AutoCloseable {
     final SourceJobRestApi sourceJobs;
     final SourceTaskRestApi sourceTasks;
     final PipelineRestApi pipelines;
+    /** MIG-230: a pipeline's definition as ordered steps. */
+    final PipelineDefinitionRestApi pipelineSteps;
+    /** MIG-230: a run's steps, for the timeline. */
+    final StepTimelineRestApi stepTimeline;
     final KafkaConnectionProfileRestApi kafkaProfiles;
     final KafkaSecretRestApi kafkaSecrets;
     final SettingRestApi settings;
@@ -433,6 +446,11 @@ final class CoreProbeFixture implements AutoCloseable {
         this.sourceTasks = new SourceTaskRestApi(tasks);
 
         this.pipelines = new PipelineRestApi(new PipelineServiceImpl(pipelineRows, this.identity, names, typeRows));
+        StepTasks stepTasks = Definitions.builtInTasks();
+        this.pipelineSteps = new PipelineDefinitionRestApi(new PipelineDefinitionService(pipelineRows,
+            new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(stepTasks), stepTasks));
+        this.stepTimeline = new StepTimelineRestApi(new StepTimelineService(runRows, jobRows, new JdbcStepStore(this.db.appJdbc()),
+            new JdbcModelChoiceStore(this.db.appJdbc())));
 
         KafkaSecretServiceImpl secrets = new KafkaSecretServiceImpl(this.trustedStorage, this.identity, this.encryption, CONFIG_BUCKET);
         ReflectionTestUtils.setField(secrets, "maxFileSizeKb", 512);
