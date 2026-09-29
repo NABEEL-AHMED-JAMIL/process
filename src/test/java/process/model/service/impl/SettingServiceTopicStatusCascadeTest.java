@@ -8,6 +8,7 @@ import process.model.dto.SourceTaskTypeDto;
 import process.model.enums.Status;
 import process.model.pojo.KafkaConnectionProfile;
 import process.model.pojo.SourceTaskType;
+import process.model.repository.KafkaConnectionProfileRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskTypeRepository;
 import process.security.TenantContext;
@@ -44,6 +45,7 @@ public class SettingServiceTopicStatusCascadeTest {
     private final SourceTaskTypeRepository taskTypes = mock(SourceTaskTypeRepository.class);
     private final KafkaTemplateProvider kafka = mock(KafkaTemplateProvider.class);
     private final KafkaConnectionResolver resolver = mock(KafkaConnectionResolver.class);
+    private final KafkaConnectionProfileRepository profiles = mock(KafkaConnectionProfileRepository.class);
 
     @AfterEach
     void clearContext() {
@@ -53,7 +55,13 @@ public class SettingServiceTopicStatusCascadeTest {
     private SettingServiceImpl service() {
         TenantContext.set(null, "PLATFORM_ADMIN", 1000L, "admin@platform.local");
         when(this.resolver.resolve(any(), anyLong())).thenReturn(Optional.of(new KafkaConnectionProfile()));
-        return new SettingServiceImpl(this.jobs, this.taskTypes, null, null, null, this.kafka, this.resolver, null);
+        // The edit names profile 1271; even a platform administrator may only name a live one.
+        KafkaConnectionProfile live = new KafkaConnectionProfile();
+        live.setKafkaConnectionProfileId(1271L);
+        live.setTenantId(2905L);
+        live.setStatus(Status.Active);
+        when(this.profiles.findById(1271L)).thenReturn(Optional.of(live));
+        return new SettingServiceImpl(this.jobs, this.taskTypes, this.profiles, null, null, this.kafka, this.resolver, null);
     }
 
     private SourceTaskType existing(Status status, Long kafkaProfileId) {

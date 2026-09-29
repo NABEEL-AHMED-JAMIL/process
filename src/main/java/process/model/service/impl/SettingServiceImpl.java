@@ -482,18 +482,40 @@ public class SettingServiceImpl implements SettingService {
         return null;
     }
 
+    /**
+     * Whether the caller may name this Kafka profile as a topic's default or a route's target, or the
+     * sentence refusing it.
+     *
+     * A deleted profile is gone for everybody, platform administrators included -- this used to wave
+     * a platform admin straight through and accept any status from anyone. A tenant may name its own
+     * live profiles (inactive included: paused, not gone, as the resolver counts it) and the
+     * platform's live ones (tenant_id NULL), which are deliberately shared with every workspace --
+     * the resolver routes to them and CoreCrossTenantProbeSettingsAndKafkaPostgresTest pins "any
+     * workspace may USE the platform default". A caller with no workspace owns and uses nothing.
+     *
+     * Every refusal is the one sentence, so another workspace's profile, a deleted one and an id that
+     * never existed cannot be told apart.
+     */
     private String validateKafkaProfileOwnership(Long kafkaConnectionProfileId) {
         if (isNull(kafkaConnectionProfileId)) {
             return null;
         }
-        if (TenantContext.isPlatformAdmin()) {
-            return null;
-        }
-
-        boolean visible = this.kafkaConnectionProfileRepository.findById(kafkaConnectionProfileId)
-            .filter(profile -> isNull(profile.getTenantId()) || profile.getTenantId().equals(TenantContext.getTenantId()))
+        boolean usable = this.kafkaConnectionProfileRepository.findById(kafkaConnectionProfileId)
+            .filter(profile -> profile.getStatus() != Status.Delete)
+            .filter(this::usableByCaller)
             .isPresent();
-        return visible ? null : "Kafka connection profile not found.";
+        return usable ? null : "Kafka connection profile not found.";
+    }
+
+    private boolean usableByCaller(KafkaConnectionProfile profile) {
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        Long mine = TenantContext.getTenantId();
+        if (isNull(mine)) {
+            return false;
+        }
+        return isNull(profile.getTenantId()) || profile.getTenantId().equals(mine);
     }
 
 }
