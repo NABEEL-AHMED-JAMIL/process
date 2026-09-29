@@ -251,6 +251,10 @@ public class PipelineServiceImpl {
                     found = owned;
                 }
             }
+        } else if (TenantContext.getTenantId() == null) {
+            // A caller with no workspace owns no form. Asked with a null tenant, the derived query reads
+            // "tenant_id IS NULL" and hands out the platform's legacy tenantless rows (MIG-166).
+            found = Collections.emptyList();
         } else {
             found = this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(
                 trimmed, TenantContext.getTenantId(), Status.Delete);
@@ -293,6 +297,12 @@ public class PipelineServiceImpl {
             // pre-tenancy rows into) rather than left tenantless: only that tenant's users can
             // use it, and it stays reachable for anyone signed in as it to edit or delete.
             Long ownerTenantId = TenantContext.getTenantId();
+            if (ownerTenantId == null && !TenantContext.isPlatformAdmin()) {
+                // The default-tenant filing below is a platform admin's, who has no workspace by design. Anyone else
+                // with no workspace is a legacy or broken token, and filing their form under "default" put it in a
+                // workspace that is somebody's (MIG-166).
+                return new ResponseDto(ERROR, "Your account belongs to no workspace.");
+            }
             if (ownerTenantId == null) {
                 Optional<IdentityPort.Workspace> defaultTenant = this.identity
                     .workspaceByCode(IdentityPort.DEFAULT_WORKSPACE_CODE);

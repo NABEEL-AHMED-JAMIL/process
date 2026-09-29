@@ -96,6 +96,12 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
     @Override
     @Transactional
     public ResponseDto addProfile(KafkaConnectionProfileDto dto) throws Exception {
+        // A row with no tenant is the platform's (a platform admin's to make). Anyone else's new profile is their
+        // workspace's, so a caller with none -- a legacy or broken token -- has nowhere to file one (MIG-166); it
+        // used to be filed with tenant_id NULL, as a platform connection a tenant had made.
+        if (!TenantContext.isPlatformAdmin() && TenantContext.getTenantId() == null) {
+            return new ResponseDto(ERROR, "Your account belongs to no workspace.");
+        }
         ResponseDto validationError = this.validateProfile(dto, null);
         if (validationError == null) {
             validationError = this.validateSecretReferences(dto, null);
@@ -204,7 +210,9 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         // runs through the platform default. Its admin is shown that connection, so the task editor
         // and the Kafka screen can name what the runs use; shown after the names were attached, so
         // the platform admin who created it is not named to a tenant.
-        if (!TenantContext.isPlatformAdmin() && visible.isEmpty()) {
+        // Only for a workspace: a caller with no workspace has no runs to send anywhere, and is shown nothing of the
+        // platform's either (MIG-166), as visibleForTopics already decides for the same profile.
+        if (!TenantContext.isPlatformAdmin() && TenantContext.getTenantId() != null && visible.isEmpty()) {
             this.profileRepository.findByTenantIdIsNullAndIsDefaultTrueAndStatus(Status.Active)
                 .map(this::getProfileDto)
                 .ifPresent(profiles::add);

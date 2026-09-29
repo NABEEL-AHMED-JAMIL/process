@@ -68,11 +68,6 @@ class CrossTenantReadsAreNamedTest {
             "SourceJobRepository.statusChangeSourceJobWithSourceTaskId", "SourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId"}) {
             NOT_TENANT_ROWS.put(name, byParent);
         }
-        String self = "keyed by the caller's own app_user_id (the profile screen's own activity)";
-        for (String name : new String[] {"JobQueueRepository.countRecentRunsForAssignee", "JobQueueRepository.findRecentRunsForAssignee",
-            "SourceJobRepository.countAssignedTo", "SourceJobRepository.outcomesForAssignee"}) {
-            NOT_TENANT_ROWS.put(name, self);
-        }
         String engine = "the engine's own work across every tenant, run with no caller (scheduler, dispatch, sweeper)";
         for (String name : new String[] {"JobQueueRepository.findAllJobForTodayWithLimit", "JobQueueRepository.findStalledRuns",
             "SchedulerRepository.findDueSchedulers", "JobAuditLogRepository.upsertFromOpenSearch",

@@ -21,6 +21,7 @@ import process.model.projection.JobAuditLogProjection;
 import process.model.repository.*;
 import process.identity.IdentityPort;
 import process.model.service.SourceJobService;
+import org.barco.platform.tenancy.TenantScope;
 import process.security.TenantContext;
 import process.security.JobOwnership;
 import process.security.TenantFilterHelper;
@@ -907,10 +908,11 @@ public class SourceJobServiceImpl implements SourceJobService {
     /**
      * The profile screen's activity card, in one query pair instead of the whole job list.
      *
-     * Scoped to the caller's own appUserId rather than to their tenant, so it needs no tenant
-     * filter to be safe: a job is either assigned to them or it is not, and the id comes from the
-     * token rather than the request. Nothing here can be asked on somebody else's behalf, which is
-     * why the endpoint takes no user parameter.
+     * Scoped to the caller's own appUserId, which comes from the token rather than the request, so
+     * nothing here can be asked on somebody else's behalf -- which is why the endpoint takes no user
+     * parameter. And to the caller's workspace as well (MIG-166): the id alone also matched another
+     * workspace's job naming them as its assignee, which nothing in the schema forbids, and the card
+     * then showed that workspace's job by name. A caller scoped to no workspace has no activity.
      *
      * Returns an empty shape rather than an error when nobody is signed in or nothing has run --
      * this card is supplementary, and a profile that fails to load because a person has no jobs
@@ -926,20 +928,27 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(SUCCESS, "No activity.", activity);
         }
 
-        List<Object[]> assigned = this.sourceJobRepository.countAssignedTo(callerId);
+        TenantScope scope = TenantContext.scope();
+        boolean allTenants = scope.isAllTenants();
+        long tenantId = allTenants ? TenantScope.NO_TENANT_MATCHES : ((TenantScope.Scoped) scope).tenantId();
+        if (!allTenants && tenantId == TenantScope.NO_TENANT_MATCHES) {
+            return new ResponseDto(SUCCESS, "No activity.", activity);
+        }
+
+        List<Object[]> assigned = this.sourceJobRepository.countAssignedTo(callerId, allTenants, tenantId);
         if (!assigned.isEmpty() && assigned.get(0) != null) {
             activity.setJobsAssigned(this.asLong(assigned.get(0)[0]));
             activity.setActiveJobs(this.asLong(assigned.get(0)[1]));
         }
 
         List<Object[]> counts = this.jobQueueRepository.countRecentRunsForAssignee(
-            callerId, BusinessTime.timestampOf(BusinessTime.now().minusDays(windowDays)));
+            callerId, allTenants, tenantId, BusinessTime.timestampOf(BusinessTime.now().minusDays(windowDays)));
         if (!counts.isEmpty() && counts.get(0) != null) {
             activity.setRecentRuns(this.asLong(counts.get(0)[0]));
             activity.setRecentFailures(this.asLong(counts.get(0)[1]));
         }
 
-        for (Object[] row : this.jobQueueRepository.findRecentRunsForAssignee(callerId, limit)) {
+        for (Object[] row : this.jobQueueRepository.findRecentRunsForAssignee(callerId, allTenants, tenantId, limit)) {
             UserActivityDto.Run run = new UserActivityDto.Run();
             run.setJobQueueId(this.asLongOrNull(row[0]));
             run.setJobId(this.asLongOrNull(row[1]));
@@ -954,7 +963,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             }
             activity.getRuns().add(run);
         }
-        for (Object[] row : this.sourceJobRepository.outcomesForAssignee(callerId)) {
+        for (Object[] row : this.sourceJobRepository.outcomesForAssignee(callerId, allTenants, tenantId)) {
             activity.getOutcomes().add(new UserActivityDto.Outcome(
                 String.valueOf(row[0]), this.asLong(row[1])));
         }

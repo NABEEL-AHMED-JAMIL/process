@@ -21,14 +21,23 @@ public final class TenantContext {
 
     private TenantContext() {}
 
+    /**
+     * The caller as the token names them. A tenant id that is not a real one -- 0, or anything below it; tenant ids
+     * start at 1000 -- is stored as no tenant at all (MIG-166). {@link #scope()} already read it that way, but about
+     * forty places read {@link #getTenantId()} directly: to file a new row, to pick a list, to compare an owner. Taken
+     * at face value a 0 filed a row under a workspace that does not exist, and was the one value some of those paths
+     * had once meant as "every workspace". Deciding it here, once, puts every one of them on the no-workspace path,
+     * which fails closed.
+     */
     public static void set(Long tenantId, String userRole, Long appUserId, String username) {
-        TENANT_ID.set(tenantId);
+        Long workspace = tenantId == null || tenantId <= 0 ? null : tenantId;
+        TENANT_ID.set(workspace);
         USER_ROLE.set(userRole);
         APP_USER_ID.set(appUserId);
         USERNAME.set(username);
         SCOPE.remove();
         // On every log line while this caller is set (MIG-43), beside the correlation id.
-        putOrRemove(MDC_TENANT, tenantId);
+        putOrRemove(MDC_TENANT, workspace);
         putOrRemove(MDC_USER, appUserId);
     }
 
