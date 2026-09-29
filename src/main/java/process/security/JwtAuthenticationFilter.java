@@ -1,6 +1,7 @@
 package process.security;
 
 import org.barco.platform.security.CallerIdentity;
+import org.barco.platform.security.ManagementMode;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -50,6 +51,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
                 String userRole = caller.getUserRole();
                 TenantContext.set(caller.getTenantId(), userRole, caller.getAppUserId(), caller.getUsername());
+                // MIG-244: the workspace's management mode and whether this is our staff (platform-commons' own context;
+                // ManagementModeInterceptor enforces @BuilderAction and audits a managed-service session from it).
+                ManagementMode.set(caller);
                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                     caller.getUsername(), null, Collections.singletonList(() -> "ROLE_" + userRole));
                 SecurityContextHolder.getContext().setAuthentication(auth);
@@ -59,6 +63,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             TenantContext.clear();
+            ManagementMode.clear();
         }
     }
 
