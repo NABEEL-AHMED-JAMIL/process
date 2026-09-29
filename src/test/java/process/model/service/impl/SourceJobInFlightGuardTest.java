@@ -122,7 +122,7 @@ class SourceJobInFlightGuardTest {
 
         assertThat(response.getStatus()).isEqualTo("ERROR");
         assertThat(response.getMessage()).contains("in flight");
-        verify(this.producerBulkEngine, never()).addManualJobInQueue(any());
+        verify(this.producerBulkEngine, never()).addManualJobInQueue(any(), any());
     }
 
     @ParameterizedTest
@@ -152,7 +152,7 @@ class SourceJobInFlightGuardTest {
         ResponseDto response = this.service.runSourceJob(request());
 
         assertThat(response.getStatus()).isEqualTo("SUCCESS");
-        verify(this.producerBulkEngine).addManualJobInQueue(any());
+        verify(this.producerBulkEngine).addManualJobInQueue(any(), any());
         // MIG-67: a DTO, never the entity, whose lazy graph Jackson walked after the transaction closed.
         assertThat(response.getData()).isInstanceOf(SourceJobDto.class);
     }
@@ -189,6 +189,6 @@ class SourceJobInFlightGuardTest {
         ResponseDto response = this.service.runSourceJob(request());
 
         assertThat(response.getStatus()).isEqualTo("SUCCESS");
-        verify(this.producerBulkEngine).addManualJobInQueue(any());
+        verify(this.producerBulkEngine).addManualJobInQueue(any(), any());
     }
 }

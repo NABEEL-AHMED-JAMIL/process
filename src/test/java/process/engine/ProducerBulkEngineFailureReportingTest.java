@@ -209,7 +209,7 @@ public class ProducerBulkEngineFailureReportingTest {
         when(this.bulkAction.createJobQueueV1(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false)))
             .thenReturn(queueRow);
 
-        this.engine.addManualJobInQueue(activeJob());
+        this.engine.addManualJobInQueue(activeJob(), null);
 
         verify(this.bulkAction).sendJobStatusNotification(JOB_ID);
     }

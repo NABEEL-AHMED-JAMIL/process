@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionOperations;
 import process.ai.AiStepService;
+import process.ai.InMemoryModelChoiceStore;
 import process.ai.HttpAi;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
@@ -100,7 +101,7 @@ class AiStepDispatchBlockerTest {
     }
 
     private PreDispatchPhase phase() {
-        return new PreDispatchPhase(this.transactionService, this.bulkAction, this.aiStepService, mock(JobMail.class),
+        return new PreDispatchPhase(this.transactionService, this.bulkAction, this.aiStepService, new InMemoryModelChoiceStore(), mock(JobMail.class),
             TransactionOperations.withoutTransaction(), this.aiThreads);
     }
 
@@ -111,12 +112,12 @@ class AiStepDispatchBlockerTest {
     private void aStalledModelCallOnJobOne() {
         when(this.aiStepService.hasSteps(TENANT, "F1")).thenReturn(true);
         when(this.aiStepService.hasSteps(TENANT, "F2")).thenReturn(false);
-        when(this.aiStepService.apply(eq(TENANT), eq("F1"), anyLong(), any())).thenAnswer(inv -> {
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", null), any())).thenAnswer(inv -> {
             this.modelAnswers.await(8, TimeUnit.SECONDS);
             return new AiStepService.Outcome("<pipeline><summary>late</summary></pipeline>", null);
         });
-        when(this.aiStepService.apply(eq(TENANT), eq("F2"), anyLong(), any()))
-            .thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(3), null));
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F2", null), any()))
+            .thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(1), null));
         when(this.transactionService.markPrepared(anyLong(), any(), any(), any())).thenReturn(1);
     }
 
@@ -147,9 +148,9 @@ class AiStepDispatchBlockerTest {
         this.queued(501L, 1L, job(1L, "F1"));
         when(this.transactionService.claimRunsToPrepare(any(), anyInt(), any())).thenReturn(Collections.singletonList(501L));
         AtomicReference<Thread> ranOn = new AtomicReference<>();
-        when(this.aiStepService.apply(eq(TENANT), eq("F1"), eq(501L), any())).thenAnswer(inv -> {
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", 501L), any())).thenAnswer(inv -> {
             ranOn.set(Thread.currentThread());
-            return new AiStepService.Outcome(inv.getArgument(3), null);
+            return new AiStepService.Outcome(inv.getArgument(1), null);
         });
 
         this.phase().runPass();
@@ -172,7 +173,7 @@ class AiStepDispatchBlockerTest {
         dispatcher.startJobInCurrentTimeSlot();
 
         verify(this.outbox).write(any());
-        verify(this.aiStepService, never()).apply(any(), any(), any(), any());
+        verify(this.aiStepService, never()).apply(any(), any());
         verify(this.aiStepService, never()).hasSteps(any(), any());
     }
 
@@ -197,7 +198,7 @@ class AiStepDispatchBlockerTest {
         this.modelAnswers.countDown();
 
         verify(this.transactionService, timeout(5_000)).markPrepared(eq(501L), any(), any(), any());
-        verify(this.aiStepService, times(1)).apply(eq(TENANT), eq("F1"), eq(501L), any());
+        verify(this.aiStepService, times(1)).apply(StepRuns.of(TENANT, "F1", 501L), any());
     }
 
     /**

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionOperations;
 import process.ai.AiStepService;
+import process.ai.InMemoryModelChoiceStore;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.RunEnd;
@@ -290,10 +291,10 @@ class RunEndPathsTest {
         task.setTaskPayload("<pipeline><summary/></pipeline>");
         task.setSourceTaskType(broker);
         this.job.setTaskDetail(task);
-        lenient().when(steps.apply(eq(TENANT), eq("F1"), eq(7030L), any()))
+        lenient().when(steps.apply(StepRuns.of(TENANT, "F1", 7030L), any()))
             .thenReturn(new AiStepService.Outcome(null, "AI step <summary> failed: no active model connection"));
         JobQueue run = this.run(7030, JobStatus.Queue);
-        PreDispatchPhase phase = new PreDispatchPhase(this.store, this.bulkAction, steps, this.jobMail,
+        PreDispatchPhase phase = new PreDispatchPhase(this.store, this.bulkAction, steps, new InMemoryModelChoiceStore(), this.jobMail,
             TransactionOperations.withoutTransaction(), mock(ExecutorService.class));
         assertThat(phase.decide(Optional.of(this.job), run).refusedAs).isEqualTo(RunEnd.AI_STEP);
         assertThat(phase.decide(Optional.empty(), run).refusedAs).isEqualTo(RunEnd.REFUSED);

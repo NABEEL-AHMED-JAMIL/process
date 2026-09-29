@@ -1,5 +1,6 @@
 package process.model.pojo;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.Filter;
@@ -146,7 +147,25 @@ public class SourceJob implements Audited {
     @Column(name = "retry_backoff_seconds", nullable = false)
     private Integer retryBackoffSeconds = 60;
 
+    /**
+     * The schedule's AI model per step (V182, MIG-242): {"<step tag>": "<ai-service model option id>"}, read by the
+     * pre-dispatch phase (process.ai.ModelProfiles). Read-only here: written only through the model-choice endpoint
+     * (JdbcModelChoiceStore), so saving a job from its form never puts back a setting somebody has since changed. Not on
+     * the job's wire; the console reads it from aiModelChoice.json/job.
+     */
+    @JsonIgnore
+    @Column(name = "model_profiles", columnDefinition = "TEXT", insertable = false, updatable = false)
+    private String modelProfiles;
+
     public SourceJob() {}
+
+    public String getModelProfiles() {
+        return modelProfiles;
+    }
+
+    public void setModelProfiles(String modelProfiles) {
+        this.modelProfiles = modelProfiles;
+    }
 
     @PrePersist
     protected void onCreate() {

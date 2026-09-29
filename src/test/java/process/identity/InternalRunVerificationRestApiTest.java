@@ -1,5 +1,7 @@
 package process.identity;
 
+import process.ai.InMemoryModelChoiceStore;
+import process.ai.RunAiStep;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import process.model.enums.JobStatus;
@@ -48,8 +50,9 @@ class InternalRunVerificationRestApiTest {
     private final JobQueueRepository runs = mock(JobQueueRepository.class);
     private final SourceJobRepository jobs = mock(SourceJobRepository.class);
     private final PipelineRepository pipelines = mock(PipelineRepository.class);
+    private final InMemoryModelChoiceStore modelChoices = new InMemoryModelChoiceStore();
     private final InternalRunVerificationRestApi api = new InternalRunVerificationRestApi(this.tokens, this.runs, this.jobs,
-        this.pipelines, SERVICE);
+        this.pipelines, this.modelChoices, SERVICE);
 
     private static Map<String, Object> body(Long jobId, String token, String variant) {
         Map<String, Object> body = new HashMap<>();
@@ -217,5 +220,70 @@ class InternalRunVerificationRestApiTest {
         Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 902L, body(79L, "w", "report")).getBody();
 
         assertThat(verdict).containsEntry("valid", true).containsEntry("tenantId", 2902L);
+    }
+    // ---- MIG-242: the model each worker step runs on --------------------------------------------------------------
+
+    private static RunAiStep prepared(String stepKey, String profile, String source) {
+        RunAiStep step = new RunAiStep();
+        step.jobQueueId = 900L;
+        step.attempt = 1;
+        step.stepKey = stepKey;
+        step.runIn = RunAiStep.WORKER;
+        step.outcome = RunAiStep.HANDED;
+        step.modelProfile = profile;
+        step.profileSource = source;
+        return step;
+    }
+
+    /**
+     * Each worker step names the model the run was prepared with -- as run_ai_step recorded it -- and the pipeline's
+     * source task, so ai-service runs the worker's call on that model and that step's list. A schedule changed since
+     * does not move a running run; a step recorded on its default stays on it.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void workerStepsNameTheModelTheRunWasPreparedWith() {
+        aLiveRun(JobStatus.Running);
+        SourceJob job = this.jobs.findByJobIdAndJobStatus(77L, Status.Active).get();
+        job.getTaskDetail().setTaskDetailId(8801L);
+        job.setModelProfiles("{\"caption\":\"3100\",\"tags\":\"3200\"}");
+        this.modelChoices.recordSteps(Arrays.asList(prepared("caption", "2100", "run"), prepared("tags", null, null)));
+        when(this.tokens.verify(77L, 900L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback")).getBody();
+
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) verdict.get("workerSteps");
+        assertThat(steps.get(0)).containsEntry("stepTag", "caption").containsEntry("modelProfile", "2100").containsEntry("sourceTaskId", 8801L);
+        assertThat(steps.get(1)).containsEntry("stepTag", "tags").containsEntry("sourceTaskId", 8801L).doesNotContainKey("modelProfile");
+    }
+
+    /** A run prepared before V182 recorded nothing: its "Run with..." and its job's setting, as they are now. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRunWithNothingRecordedFallsBackToItsSettings() {
+        aLiveRun(JobStatus.Running);
+        this.jobs.findByJobIdAndJobStatus(77L, Status.Active).get().setModelProfiles("{\"caption\":\"3100\",\"tags\":\"3200\"}");
+        this.runs.findById(900L).get().setModelProfiles("{\"tags\":\"4200\"}");
+        when(this.tokens.verify(77L, 900L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback")).getBody();
+
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) verdict.get("workerSteps");
+        assertThat(steps).extracting(step -> step.get("modelProfile")).containsExactly("3100", "4200");
+        assertThat(steps.get(0)).as("no task id known: none said").doesNotContainKey("sourceTaskId");
+    }
+
+    /** Another attempt's record is not this attempt's: a retry is prepared afresh. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void anEarlierAttemptsRecordIsNotUsed() {
+        aLiveRun(JobStatus.Running);
+        this.runs.findById(900L).get().setAttempt(2);
+        this.modelChoices.recordSteps(Collections.singletonList(prepared("caption", "2100", "run")));
+        when(this.tokens.verify(77L, 900L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback")).getBody();
+
+        assertThat((List<Map<String, Object>>) verdict.get("workerSteps")).allSatisfy(step -> assertThat(step).doesNotContainKey("modelProfile"));
     }
 }

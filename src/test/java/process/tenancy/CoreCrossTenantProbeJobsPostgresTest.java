@@ -161,7 +161,7 @@ class CoreCrossTenantProbeJobsPostgresTest {
         assertThat(fx.leaks).isEmpty();
         assertThat(fx.foreignRows()).as("nothing of B's, the platform's or the colleague's changed").isEqualTo(before);
         for (long theirs : new long[] {B_JOB, B_JOB_NAMING_USER_A, COLLEAGUE_JOB}) {
-            verify(fx.engine, never()).addManualJobInQueue(argThat(job -> job != null && Long.valueOf(theirs).equals(job.getJobId())));
+            verify(fx.engine, never()).addManualJobInQueue(argThat(job -> job != null && Long.valueOf(theirs).equals(job.getJobId())), any());
         }
         verify(fx.engine, never()).workspacePause(eq(B));
         verify(fx.engine, never()).skipManualJobInQueue(any());

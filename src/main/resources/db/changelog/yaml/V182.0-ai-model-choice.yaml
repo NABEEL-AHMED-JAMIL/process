@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 182.0-ai-model-choice
+      author: nabeel.amd93
+      description: "Wave 4 (MIG-242, Core's part): the schedule's and the run's AI model per step, run_ai_step (what each AI step asked for and ran on), and the model on result_record; expand-only"
+      # V182, not V181: V181 is mig-258-rls's (row-level security), still in flight on its own branch.
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V182.0-ai-model-choice/V182__ai_model_choice.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V182.0-ai-model-choice/V182__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

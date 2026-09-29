@@ -121,7 +121,7 @@ class AiStepAtDispatchTest {
     }
 
     private void theAiServiceAnswers(AiPort.StepResult result) {
-        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap())).thenReturn(result);
+        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap(), any(), any())).thenReturn(result);
     }
 
     private static AiPort.StepResult answered(String output) {
@@ -264,7 +264,7 @@ class AiStepAtDispatchTest {
     void applyReadsNoTenantContext() {
         TenantContext.set(OTHER_TENANT, "TENANT_ADMIN", 1L, "someone@example.com");
         this.pipelineWithStep("fail", MAPPED);
-        when(this.ai.runStep(eq(TENANT), eq(QUEUE_ID), eq("summary"), eq(PROMPT_ID), anyMap())).thenReturn(answered("diabetes"));
+        when(this.ai.runStep(eq(TENANT), eq(QUEUE_ID), eq("summary"), eq(PROMPT_ID), anyMap(), any(), any())).thenReturn(answered("diabetes"));
 
         AiStepService.Outcome outcome = this.steps().apply(TENANT, "F1", QUEUE_ID, STORED);
 
@@ -293,7 +293,7 @@ class AiStepAtDispatchTest {
         ArgumentCaptor<String> reason = ArgumentCaptor.forClass(String.class);
         verify(this.bulkAction).scheduleRetry(eq(this.run), reason.capture());
         assertThat(reason.getValue()).startsWith("Job 1196 could not be dispatched: ");
-        verify(this.ai, never()).runStep(any(), any(), any(), any(), any());
+        verify(this.ai, never()).runStep(any(), any(), any(), any(), any(), any(), any());
         this.nothingWasWrittenForSending();
     }
 }

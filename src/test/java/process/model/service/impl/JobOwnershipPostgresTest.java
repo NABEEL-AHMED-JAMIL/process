@@ -508,7 +508,7 @@ class JobOwnershipPostgresTest {
             BOB_OWN, ADMIN_OWN, NOBODYS, OTHER_WORKSPACE)).containsExactly("Active");
         assertThat(db.jdbc().queryForList("SELECT DISTINCT fail_job FROM source_job WHERE job_id IN (?, ?, ?, ?)", Boolean.class,
             BOB_OWN, ADMIN_OWN, NOBODYS, OTHER_WORKSPACE)).containsExactly(false);
-        verify(this.engine, never()).addManualJobInQueue(any());
+        verify(this.engine, never()).addManualJobInQueue(any(), any());
         verify(this.engine, never()).skipManualJobInQueue(any());
     }
 

@@ -18,6 +18,12 @@ public interface SourceJobService {
 
     public ResponseDto runSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
+    /**
+     * Run now, with a "Run with..." (MIG-242): {@code modelProfiles} is a ModelProfiles value the caller has checked
+     * (process.ai.AiModelChoiceService), or null for the run's usual models. Every check Run now makes, it makes.
+     */
+    public ResponseDto runSourceJob(SourceJobDto sourceJobDto, String modelProfiles) throws Exception;
+
     public ResponseDto skipNextSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
     public ResponseDto findSourceJobAuditLog(Long jobQueueIdb, Long jobId) throws Exception;

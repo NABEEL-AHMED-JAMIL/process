@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import process.ai.AiStepService;
+import process.ai.ModelChoiceStore;
+import process.ai.ModelProfiles;
+import process.ai.RunAiStep;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Pipeline;
@@ -27,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,14 +59,16 @@ public class InternalRunVerificationRestApi {
     private final JobQueueRepository runs;
     private final SourceJobRepository jobs;
     private final PipelineRepository pipelines;
+    private final ModelChoiceStore modelChoices;
     private final byte[] token;
 
     public InternalRunVerificationRestApi(RunCallbackTokens tokens, JobQueueRepository runs, SourceJobRepository jobs,
-        PipelineRepository pipelines, @Value("${internal.service-token:}") String token) {
+        PipelineRepository pipelines, ModelChoiceStore modelChoices, @Value("${internal.service-token:}") String token) {
         this.tokens = tokens;
         this.runs = runs;
         this.jobs = jobs;
         this.pipelines = pipelines;
+        this.modelChoices = modelChoices;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
     }
 
@@ -105,7 +111,7 @@ public class InternalRunVerificationRestApi {
         verdict.put("tenantId", tenantId);
         verdict.put("pipelineId", pipelineId);
         verdict.put("terminal", run != null && RunCallbackTokens.isOver(run.getJobStatus()));
-        verdict.put("workerSteps", tenantId != null && pipelineId != null ? this.workerSteps(pipelineId, tenantId)
+        verdict.put("workerSteps", tenantId != null && pipelineId != null ? this.workerSteps(pipelineId, tenantId, run, job.orElse(null))
             : Collections.emptyList());
         return new ResponseEntity<>(verdict, HttpStatus.OK);
     }
@@ -128,18 +134,43 @@ public class InternalRunVerificationRestApi {
         return new ResponseEntity<>(answer, HttpStatus.OK);
     }
 
-    /** The steps this run's pipeline hands to a worker: [{stepTag, promptId}], in position order. */
-    private List<Map<String, Object>> workerSteps(String pipelineId, Long tenantId) {
+    /**
+     * The steps this run's pipeline hands to a worker, in position order: [{stepTag, promptId}], and since MIG-242 the
+     * model each asks for (modelProfile, an ai-service option id; absent for the step's default) and the pipeline's
+     * source task (sourceTaskId), which ai-service runs the worker's call on -- the worker never names a model itself.
+     * The model is the one the run was prepared with (run_ai_step, written by the pre-dispatch phase), so changing the
+     * schedule mid-run does not move a running run; a run prepared before V182 falls back to the run's and the job's
+     * settings as they are now.
+     */
+    private List<Map<String, Object>> workerSteps(String pipelineId, Long tenantId, JobQueue run, SourceJob job) {
         List<Pipeline> found = this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot(pipelineId.trim(), tenantId, Status.Delete);
         List<Map<String, Object>> steps = new ArrayList<>();
         if (found.isEmpty()) {
             return steps;
         }
+        Map<String, RunAiStep> prepared = new HashMap<>();
+        if (run != null) {
+            for (RunAiStep recorded : this.modelChoices.stepsOfRun(run.getJobQueueId())) {
+                if (recorded.attempt != null && recorded.attempt == run.getAttempt()) {
+                    prepared.put(recorded.stepKey, recorded);
+                }
+            }
+        }
+        ModelProfiles now = ModelProfiles.of(job == null ? null : job.getModelProfiles(), run == null ? null : run.getModelProfiles());
+        Long sourceTaskId = job == null || job.getTaskDetail() == null ? null : job.getTaskDetail().getTaskDetailId();
         for (PipelineField field : AiStepService.stepsOf(found.get(0))) {
             if ("worker".equals(field.getRunIn())) {
                 Map<String, Object> step = new LinkedHashMap<>();
                 step.put("stepTag", field.getTagKey());
                 step.put("promptId", field.getPromptId());
+                String profile = prepared.containsKey(field.getTagKey()) ? prepared.get(field.getTagKey()).modelProfile
+                    : now.forStep(field.getTagKey()).profile;
+                if (profile != null) {
+                    step.put("modelProfile", profile);
+                }
+                if (sourceTaskId != null) {
+                    step.put("sourceTaskId", sourceTaskId);
+                }
                 steps.add(step);
             }
         }

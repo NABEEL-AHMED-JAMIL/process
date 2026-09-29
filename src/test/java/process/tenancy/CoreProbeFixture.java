@@ -1,5 +1,9 @@
 package process.tenancy;
 
+import process.ai.AiModelChoiceService;
+import process.ai.AiPort;
+import process.ai.JdbcModelChoiceStore;
+import process.api.AiModelChoiceRestApi;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
@@ -354,6 +358,8 @@ final class CoreProbeFixture implements AutoCloseable {
     final OpenSearchRagClient rag = mock(OpenSearchRagClient.class);
     final EmbeddingService embeddings = mock(EmbeddingService.class);
     final FileIndexLock indexLock = mock(FileIndexLock.class);
+    /** ai-service, as Core's AI port: each probe class says what it answers (AI decides; Core obeys). */
+    final AiPort ai = mock(AiPort.class);
 
     final SourceJobRestApi sourceJobs;
     final SourceTaskRestApi sourceTasks;
@@ -367,6 +373,7 @@ final class CoreProbeFixture implements AutoCloseable {
     final MessageQRestApi messages;
     final ReportRestApi reports;
     final FileChatRestApi fileChat;
+    final AiModelChoiceRestApi modelChoice;
 
     private CoreProbeFixture(String prefix) throws Exception {
         this.db = ScratchPostgres.create(prefix);
@@ -442,6 +449,8 @@ final class CoreProbeFixture implements AutoCloseable {
         this.reports = new ReportRestApi(new ReportExportServiceImpl(this.media, asTheCaller, queries, this.identity));
         this.fileChat = new FileChatRestApi(new FileChatServiceImpl(asTheCaller, this.media, this.agents, this.rag, this.embeddings,
             this.indexLock));
+        this.modelChoice = new AiModelChoiceRestApi(new AiModelChoiceService(jobRows, taskRows, runRows, pipelineRows, this.ai,
+            new JdbcModelChoiceStore(this.db.jdbc()), jobs));
     }
 
     /** Skips the calling class when no database is configured, as every ScratchPostgres test does. */
@@ -638,7 +647,7 @@ final class CoreProbeFixture implements AutoCloseable {
     void reset() {
         this.leaks.clear();
         clearInvocations(this.engine, this.bulkAction, this.notifications, this.jobMail, this.openSearch, this.agents, this.media,
-            this.kafkaClients, this.trustedStorage, this.storageDirectory, this.rag, this.embeddings, this.indexLock);
+            this.kafkaClients, this.trustedStorage, this.storageDirectory, this.rag, this.embeddings, this.indexLock, this.ai);
         this.storage.seen.clear();
         this.storage.stored.clear();
     }

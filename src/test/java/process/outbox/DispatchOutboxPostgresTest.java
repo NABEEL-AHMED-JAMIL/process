@@ -19,6 +19,7 @@ import org.springframework.util.concurrent.SettableListenableFuture;
 import process.ScratchJpa;
 import process.ScratchPostgres;
 import process.ai.AiStepService;
+import process.ai.JdbcModelChoiceStore;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
 import process.engine.BulkAction;
@@ -137,10 +138,10 @@ class DispatchOutboxPostgresTest {
             jpa.repository(SourceTaskRepository.class), mock(OpenSearchAuditLogClient.class));
         BulkAction bulkAction = new BulkAction(store, mock(NotificationPort.class));
         AiStepService noAiSteps = mock(AiStepService.class);
-        when(noAiSteps.apply(any(), any(), any(), anyString())).thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(3), null));
+        when(noAiSteps.apply(any(), anyString())).thenAnswer(inv -> new AiStepService.Outcome(inv.getArgument(1), null));
         DispatchOutbox outbox = new DispatchOutbox(this.sql);
         RunCallbackTokens tokens = new RunCallbackTokens(jpa.repository(JobQueueRepository.class), 24, "");
-        this.phase = new PreDispatchPhase(store, bulkAction, noAiSteps, mock(JobMail.class), jpa.transactionManager());
+        this.phase = new PreDispatchPhase(store, bulkAction, noAiSteps, new JdbcModelChoiceStore(this.sql), mock(JobMail.class), jpa.transactionManager());
         this.dispatcher = new ProducerBulkEngine(bulkAction, store, mock(JobMail.class), tokens, outbox, jpa.transactionManager());
 
         this.broker = mock(KafkaTemplate.class);

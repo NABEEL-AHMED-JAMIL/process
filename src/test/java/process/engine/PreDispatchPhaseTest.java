@@ -7,6 +7,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionOperations;
 import process.ai.AiStepService;
+import process.ai.InMemoryModelChoiceStore;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
@@ -58,8 +59,8 @@ class PreDispatchPhaseTest {
 
     @BeforeEach
     void setUp() {
-        this.phase = new PreDispatchPhase(this.transactionService, this.bulkAction, this.aiStepService, this.jobMail,
-            TransactionOperations.withoutTransaction(), new DispatchPipeline.SameThread());
+        this.phase = new PreDispatchPhase(this.transactionService, this.bulkAction, this.aiStepService, new InMemoryModelChoiceStore(),
+            this.jobMail, TransactionOperations.withoutTransaction(), new DispatchPipeline.SameThread());
         this.run = new JobQueue();
         this.run.setJobQueueId(QUEUE_ID);
         this.run.setJobId(JOB_ID);
@@ -105,7 +106,8 @@ class PreDispatchPhaseTest {
 
     @Test
     void aRunThatCanBeSentIsHandedToTheDispatcherWithItsDocument() {
-        when(this.aiStepService.apply(TENANT, "F1", QUEUE_ID, STORED)).thenReturn(new AiStepService.Outcome("<answered/>", null));
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED)))
+            .thenReturn(new AiStepService.Outcome("<answered/>", null));
 
         this.phase.prepare(Optional.of(job(task -> { })), this.run);
 
@@ -131,7 +133,8 @@ class PreDispatchPhaseTest {
 
     @Test
     void aFailedAiStepIsClosed() {
-        when(this.aiStepService.apply(TENANT, "F1", QUEUE_ID, STORED)).thenReturn(new AiStepService.Outcome(null, "AI step <s> failed: x"));
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED)))
+            .thenReturn(new AiStepService.Outcome(null, "AI step <s> failed: x"));
 
         this.phase.prepare(Optional.of(job(task -> { })), this.run);
 
@@ -141,7 +144,7 @@ class PreDispatchPhaseTest {
 
     @Test
     void anExceptionFromTheAiSeamIsClosedAsRetryable() {
-        when(this.aiStepService.apply(TENANT, "F1", QUEUE_ID, STORED)).thenThrow(new IllegalStateException("model host unreachable"));
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED))).thenThrow(new IllegalStateException("model host unreachable"));
 
         this.phase.prepare(Optional.of(job(task -> { })), this.run);
 
@@ -152,7 +155,7 @@ class PreDispatchPhaseTest {
     /** Not only exceptions: an Error out of the seam must not leave the run in Queue either. */
     @Test
     void anErrorFromTheAiSeamIsClosedToo() {
-        when(this.aiStepService.apply(TENANT, "F1", QUEUE_ID, STORED)).thenThrow(new StackOverflowError());
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED))).thenThrow(new StackOverflowError());
 
         this.phase.prepare(Optional.of(job(task -> { })), this.run);
 
@@ -166,7 +169,8 @@ class PreDispatchPhaseTest {
      */
     @Test
     void anOutcomeThatCannotBeWrittenIsLeftToTheLease() {
-        when(this.aiStepService.apply(TENANT, "F1", QUEUE_ID, STORED)).thenReturn(new AiStepService.Outcome("<answered/>", null));
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED)))
+            .thenReturn(new AiStepService.Outcome("<answered/>", null));
         when(this.transactionService.markPrepared(anyLong(), any(), any(), any())).thenThrow(new IllegalStateException("connection lost"));
 
         this.phase.prepare(Optional.of(job(task -> { })), this.run);

@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionOperations;
 import process.ai.AiStepService;
+import process.ai.InMemoryModelChoiceStore;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
 import process.model.service.impl.TransactionServiceImpl;
@@ -79,7 +80,7 @@ class DispatchCorrelationTest {
     @Test
     void aRunIsPreparedUnderItsOwnIdAndTheTickGetsItsIdBack() {
         PreDispatchPhase phase = new PreDispatchPhase(this.transactionService, this.bulkAction, this.aiStepService,
-            this.jobMail, TransactionOperations.withoutTransaction(), new DispatchPipeline.SameThread());
+            new InMemoryModelChoiceStore(), this.jobMail, TransactionOperations.withoutTransaction(), new DispatchPipeline.SameThread());
         AtomicReference<String> during = new AtomicReference<>();
         lenient().when(this.bulkAction.scheduleRetry(any(JobQueue.class), any())).thenAnswer(call -> {
             during.set(CorrelationId.current());
@@ -156,7 +157,7 @@ class DispatchCorrelationTest {
         lines.start();
         logger.addAppender(lines);
         try {
-            engine.addManualJobInQueue(job);
+            engine.addManualJobInQueue(job, null);
         } finally {
             logger.detachAppender(lines);
         }

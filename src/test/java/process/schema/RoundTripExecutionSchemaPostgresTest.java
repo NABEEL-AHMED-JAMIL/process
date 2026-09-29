@@ -188,15 +188,23 @@ class RoundTripExecutionSchemaPostgresTest {
         assertThat(checkValues("ck_result_review_decision_enum")).isEqualTo(names(ReviewDecision.values()));
     }
 
-    /** V180's rollback takes off exactly its own four tables and sequences, job_queue as it was; then V180 applies again. */
+    /**
+     * V180's rollback takes off exactly its own four tables and sequences, job_queue as it was; then V180 applies again.
+     * The changesets after V180 are rolled back first and job_queue is compared from there, so a later changeset that
+     * adds to job_queue (V182's model_profiles) is not counted as V180's.
+     */
     @Test
     void theRollbackTakesItAllOffAndV180AppliesAgain() throws Exception {
+        // The rows other tests left would stop nothing: a rollback drops the tables with their rows. Only V180 and after.
+        int after = sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE orderexecuted > "
+            + "(SELECT orderexecuted FROM databasechangelog WHERE id = ?)", Integer.class, V180);
+        if (after > 0) {
+            db.rollback(after);
+        }
         List<String> jobQueueColumns = columns("job_queue");
         List<String> jobQueueConstraints = sql.queryForList("SELECT conname FROM pg_constraint WHERE conrelid = 'public.job_queue'::regclass "
             + "ORDER BY 1", String.class);
-        // The rows other tests left would stop nothing: a rollback drops the tables with their rows. Only V180 and after.
-        db.rollback(sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE orderexecuted >= "
-            + "(SELECT orderexecuted FROM databasechangelog WHERE id = ?)", Integer.class, V180));
+        db.rollback(1);
         try {
             assertThat(sql.queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN "
                 + "('step_execution', 'run_dataset', 'result_record', 'result_review')", Long.class)).isZero();

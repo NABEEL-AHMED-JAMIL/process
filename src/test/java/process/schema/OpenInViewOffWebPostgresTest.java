@@ -1,5 +1,6 @@
 package process.schema;
 
+import process.ai.InMemoryModelChoiceStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.hibernate.LazyInitializationException;
@@ -203,7 +204,7 @@ class OpenInViewOffWebPostgresTest {
         @Bean
         InternalRunVerificationRestApi internalRunVerificationRestApi(RunCallbackTokens tokens, JobQueueRepository runs,
             SourceJobRepository jobs, PipelineRepository pipelines) {
-            return new InternalRunVerificationRestApi(tokens, runs, jobs, pipelines, "internal-token");
+            return new InternalRunVerificationRestApi(tokens, runs, jobs, pipelines, new InMemoryModelChoiceStore(), "internal-token");
         }
     }
 

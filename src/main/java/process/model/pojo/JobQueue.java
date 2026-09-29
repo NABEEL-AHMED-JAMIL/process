@@ -168,6 +168,15 @@ public class JobQueue {
     @Enumerated(EnumType.STRING)
     private RunEnd endReason;
 
+    /**
+     * This run's "Run with..." (V182, MIG-242): {"<step tag>": "<ai-service model option id>"}, set when a person runs
+     * the job by hand and winning over the schedule's setting for the steps it names (process.ai.ModelProfiles). Null
+     * for every other run. A retry is this same row, so it keeps the choice. Not on the wire.
+     */
+    @JsonIgnore
+    @Column(name = "model_profiles", columnDefinition = "TEXT")
+    private String modelProfiles;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -347,6 +356,10 @@ public class JobQueue {
     public void setDispatchPayload(String dispatchPayload) { this.dispatchPayload = dispatchPayload; }
     public RunEnd getEndReason() { return endReason; }
     public void setEndReason(RunEnd endReason) { this.endReason = endReason; }
+
+    public String getModelProfiles() { return modelProfiles; }
+
+    public void setModelProfiles(String modelProfiles) { this.modelProfiles = modelProfiles; }
 
     public Long getTenantId() {
         return tenantId;

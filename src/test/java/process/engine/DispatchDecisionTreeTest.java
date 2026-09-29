@@ -10,6 +10,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.ai.AiStepService;
+import process.ai.InMemoryModelChoiceStore;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
@@ -135,7 +136,7 @@ class DispatchDecisionTreeTest {
     }
 
     private void aiSteps(AiStepService.Outcome outcome) {
-        when(this.aiStepService.apply(TENANT, "F1", QUEUE_ID, STORED)).thenReturn(outcome);
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED))).thenReturn(outcome);
     }
 
     private static AiStepService.Outcome answered(String... notes) {
@@ -340,7 +341,7 @@ class DispatchDecisionTreeTest {
 
         InOrder order = inOrder(this.aiStepService, this.bulkAction, this.transactionService, this.runCallbackTokens,
             this.pipeline.outbox);
-        order.verify(this.aiStepService).apply(TENANT, "F1", QUEUE_ID, STORED);
+        order.verify(this.aiStepService).apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED));
         order.verify(this.bulkAction).saveJobAuditLogs(QUEUE_ID,
             "AI step <summary>: Summarise v3 answered in 1.2 s (40 in, 12 out tokens).");
         order.verify(this.transactionService).markPrepared(eq(QUEUE_ID), eq(ANSWERED), any(), any());
@@ -370,8 +371,8 @@ class DispatchDecisionTreeTest {
 
         this.push(dispatchable());
 
-        verify(this.aiStepService).apply(TENANT, "F1", QUEUE_ID, STORED);
-        verify(this.aiStepService, never()).apply(eq(OTHER_TENANT), any(), any(), any());
+        verify(this.aiStepService).apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED));
+        verify(this.aiStepService, never()).apply(StepRuns.ofTenant(OTHER_TENANT), any());
     }
 
     /**
@@ -382,7 +383,7 @@ class DispatchDecisionTreeTest {
      */
     @Test
     void ifTheAiStepThrewItWouldBeMisreportedAsARetryableDispatchFailure() throws Exception {
-        when(this.aiStepService.apply(TENANT, "F1", QUEUE_ID, STORED))
+        when(this.aiStepService.apply(StepRuns.of(TENANT, "F1", QUEUE_ID), eq(STORED)))
             .thenThrow(new IllegalStateException("model host unreachable"));
 
         this.push(dispatchable());

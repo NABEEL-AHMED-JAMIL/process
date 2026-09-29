@@ -126,10 +126,18 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         }
     }
 
-    public void addManualJobInQueue(SourceJob sourceJob) {
+    /**
+     * Queues a run by request (Run now). {@code modelProfiles} is its "Run with..." (MIG-242), a ModelProfiles value
+     * already checked by the caller, or null for none: the run keeps it on its own row, retries included.
+     */
+    public void addManualJobInQueue(SourceJob sourceJob, String modelProfiles) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
             BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+        if (modelProfiles != null && jobQueue != null) {
+            jobQueue.setModelProfiles(modelProfiles);
+            this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        }
         // Under the request's id, which the run now carries (MIG-94): the trace's enqueue hop.
         logger.info("Run {} of job {} queued by request.", jobQueue.getJobQueueId(), sourceJob.getJobId());
         this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());

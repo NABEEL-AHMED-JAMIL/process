@@ -112,7 +112,7 @@ class RunNowPausedWorkspaceTest {
 
         assertThat(response.getStatus()).isEqualTo("ERROR");
         assertThat(response.getMessage()).contains("Suspended").contains("paused").endsWith(".");
-        verify(this.producerBulkEngine, never()).addManualJobInQueue(any());
+        verify(this.producerBulkEngine, never()).addManualJobInQueue(any(), any());
     }
 
     @Test
@@ -123,6 +123,6 @@ class RunNowPausedWorkspaceTest {
         ResponseDto response = this.service.runSourceJob(request());
 
         assertThat(response.getStatus()).isEqualTo("SUCCESS");
-        verify(this.producerBulkEngine).addManualJobInQueue(any());
+        verify(this.producerBulkEngine).addManualJobInQueue(any(), any());
     }
 }

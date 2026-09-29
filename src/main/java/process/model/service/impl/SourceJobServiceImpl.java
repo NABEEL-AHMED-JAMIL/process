@@ -511,6 +511,12 @@ public class SourceJobServiceImpl implements SourceJobService {
     @Override
     @Transactional
     public ResponseDto runSourceJob(SourceJobDto sourceJobDto) throws Exception {
+        return this.runSourceJob(sourceJobDto, null);
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto runSourceJob(SourceJobDto sourceJobDto, String modelProfiles) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
@@ -532,7 +538,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, String.format("This job's workspace is %s, so its runs are paused; "
                 + "it can be run again once the workspace is Active.", paused.get()));
         }
-        this.producerBulkEngine.addManualJobInQueue(sourceJob.get());
+        this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles);
         sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
         // A DTO, not the entity (MIG-67). Jackson walked the entity after the transaction closed: its lazy
         // tenant and assignee, its task's payload rows, and the task type's Kafka profile -- encrypted SASL

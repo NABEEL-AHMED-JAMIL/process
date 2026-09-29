@@ -12,6 +12,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionTemplate;
 import process.ai.AiStepService;
+import process.ai.ModelChoiceStore;
+import process.ai.ModelProfiles;
+import process.ai.RunAiStep;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
@@ -66,6 +69,8 @@ public class PreDispatchPhase {
         final String refusal;
         final boolean retryable;
         final List<String> notes;
+        /** Each AI step as it went (MIG-242): written to run_ai_step with the verdict. */
+        final List<RunAiStep> steps = new ArrayList<>();
         /** What a refusal that is not retried counts as for the SLI (MIG-196): configuration, or an AI step. */
         final RunEnd refusedAs;
 
@@ -98,6 +103,7 @@ public class PreDispatchPhase {
     private final TransactionServiceImpl transactionService;
     private final BulkAction bulkAction;
     private final AiStepService aiStepService;
+    private final ModelChoiceStore modelChoices;
     private final DispatchFailures failures;
     private final TransactionOperations transactions;
     private final ExecutorService aiThreads;
@@ -106,16 +112,17 @@ public class PreDispatchPhase {
 
     @Autowired
     public PreDispatchPhase(TransactionServiceImpl transactionService, BulkAction bulkAction, AiStepService aiStepService,
-        JobMail jobMail, PlatformTransactionManager transactionManager) {
-        this(transactionService, bulkAction, aiStepService, jobMail, new TransactionTemplate(transactionManager),
+        ModelChoiceStore modelChoices, JobMail jobMail, PlatformTransactionManager transactionManager) {
+        this(transactionService, bulkAction, aiStepService, modelChoices, jobMail, new TransactionTemplate(transactionManager),
             newAiThreads());
     }
 
     PreDispatchPhase(TransactionServiceImpl transactionService, BulkAction bulkAction, AiStepService aiStepService,
-        JobMail jobMail, TransactionOperations transactions, ExecutorService aiThreads) {
+        ModelChoiceStore modelChoices, JobMail jobMail, TransactionOperations transactions, ExecutorService aiThreads) {
         this.transactionService = transactionService;
         this.bulkAction = bulkAction;
         this.aiStepService = aiStepService;
+        this.modelChoices = modelChoices;
         this.failures = new DispatchFailures(bulkAction, transactionService, jobMail, transactions);
         this.transactions = transactions;
         this.aiThreads = aiThreads;
@@ -227,13 +234,16 @@ public class PreDispatchPhase {
             return Decision.refused(route.refusal, false, Collections.emptyList());
         }
         // The pipeline's AI steps write their answers into the task's document; the worker then sees
-        // ordinary tags. A step that fails (and says the run must) closes the run without a send.
-        AiStepService.Outcome steps = this.aiStepService.apply(job.get().getTenantId(),
-            job.get().getTaskDetail().getPipelineId(), run.getJobQueueId(), job.get().getTaskDetail().getTaskPayload());
-        if (steps.failed()) {
-            return Decision.aiStepFailed(String.format("Job %s: %s", run.getJobId(), steps.failure), steps.notes);
-        }
-        return Decision.prepared(steps.payload, steps.notes);
+        // ordinary tags. A step that fails (and says the run must) closes the run without a send. Each step asks for
+        // the model the run was started with (MIG-242): its "Run with...", else its schedule's, else the step's default.
+        AiStepService.Outcome steps = this.aiStepService.apply(new AiStepService.Run(job.get().getTenantId(),
+            job.get().getTaskDetail().getPipelineId(), run.getJobQueueId(), run.getAttempt(), job.get().getTaskDetail().getTaskDetailId(),
+            ModelProfiles.of(job.get().getModelProfiles(), run.getModelProfiles())), job.get().getTaskDetail().getTaskPayload());
+        Decision decision = steps.failed()
+            ? Decision.aiStepFailed(String.format("Job %s: %s", run.getJobId(), steps.failure), steps.notes)
+            : Decision.prepared(steps.payload, steps.notes);
+        decision.steps.addAll(steps.steps);
+        return decision;
     }
 
     /** The notes and the verdict, in one local transaction. */
@@ -242,6 +252,10 @@ public class PreDispatchPhase {
             // The narrative first, then the verdict: a failed step's notes are in the history before the Failed.
             for (String note : decision.notes) {
                 this.bulkAction.saveJobAuditLogs(run.getJobQueueId(), note);
+            }
+            // What each AI step asked for and ran on, with the verdict: the run's manifest never says less than it did.
+            if (!decision.steps.isEmpty()) {
+                this.modelChoices.recordSteps(decision.steps);
             }
             if (decision.isPrepared()) {
                 int prepared = this.transactionService.markPrepared(run.getJobQueueId(), decision.payload,

@@ -2,6 +2,7 @@ package process.engine;
 
 import org.springframework.transaction.support.TransactionOperations;
 import process.ai.AiStepService;
+import process.ai.InMemoryModelChoiceStore;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.service.impl.TransactionServiceImpl;
@@ -42,7 +43,7 @@ final class DispatchPipeline {
         this.transactionService = transactionService;
         this.outbox = mock(DispatchOutbox.class);
         lenient().doAnswer(inv -> this.written.add(inv.getArgument(0))).when(this.outbox).write(any());
-        this.phase = new PreDispatchPhase(transactionService, bulkAction, aiStepService, jobMail,
+        this.phase = new PreDispatchPhase(transactionService, bulkAction, aiStepService, new InMemoryModelChoiceStore(), jobMail,
             TransactionOperations.withoutTransaction(), new SameThread());
         this.engine = new ProducerBulkEngine(bulkAction, transactionService, jobMail, runCallbackTokens, this.outbox);
     }

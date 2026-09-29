@@ -141,3 +141,7 @@ databaseChangeLog:
   # V180: MIG-225 -- Core's round-trip and execution tables (steps, run datasets, results, reviews). V179 left free.
   - include:
       file: db/changelog/yaml/V180.0-round-trip-execution.yaml
+  # V182: Wave 4 (MIG-242) -- the AI model a run asks for (schedule, "Run with...") and what each AI step ran on. V181 is
+  # mig-258-rls's.
+  - include:
+      file: db/changelog/yaml/V182.0-ai-model-choice.yaml

@@ -79,7 +79,7 @@ public class AiStepServiceTest {
     @Test
     void theStepReadsItsVariablesFromTheDocumentAndWritesTheAnswerAsATag() throws Exception {
         thePipelineIs(this.pipelineWithStep("fail"));
-        when(this.ai.runStep(eq(TENANT), eq(55L), eq("summary"), eq(1000L), anyMap())).thenAnswer(inv -> {
+        when(this.ai.runStep(eq(TENANT), eq(55L), eq("summary"), eq(1000L), anyMap(), any(), any())).thenAnswer(inv -> {
             Map<String, String> values = inv.getArgument(4);
             assertThat(values).containsEntry("claim_id", "CLM-1").containsEntry("document_text", "notes here");
             return answered("Diabetes; 2 procedures & <flag>", false);
@@ -97,7 +97,7 @@ public class AiStepServiceTest {
     @Test
     void aRetriedRunReusesTheRecordedAnswerAndSaysSo() {
         thePipelineIs(this.pipelineWithStep("fail"));
-        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap())).thenReturn(answered("kept", true));
+        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap(), any(), any())).thenReturn(answered("kept", true));
 
         AiStepService.Outcome out = new AiStepService(this.pipelines, this.ai).apply(TENANT, "F1", 55L, PAYLOAD);
 
@@ -107,7 +107,7 @@ public class AiStepServiceTest {
 
     @Test
     void aFailedStepFailsTheRunOrContinuesEmptyAsThePipelineSays() {
-        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap()))
+        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap(), any(), any()))
             .thenReturn(AiPort.StepResult.failed("Daily token budget reached"));
         AiStepService service = new AiStepService(this.pipelines, this.ai);
 
@@ -126,7 +126,7 @@ public class AiStepServiceTest {
     @Test
     void anUnreachableAiServiceIsAFailedStepUnderTheStepsOwnRule() {
         thePipelineIs(this.pipelineWithStep("continue"));
-        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap()))
+        when(this.ai.runStep(anyLong(), anyLong(), anyString(), anyLong(), anyMap(), any(), any()))
             .thenReturn(AiPort.StepResult.failed("The AI service could not be reached, so the step did not run."));
 
         AiStepService.Outcome out = new AiStepService(this.pipelines, this.ai).apply(TENANT, "F1", 55L, PAYLOAD);
@@ -149,7 +149,7 @@ public class AiStepServiceTest {
         assertThat(out.payload).contains("<ai_step on_error=\"continue\" output=\"summary\" prompt=\"uuid-9\" version=\"3\">");
         assertThat(out.payload).contains("<var as=\"text\" from=\"claim_id\" name=\"claim_id\"/>");
         assertThat(out.payload).contains("<var as=\"file\" from=\"document\" name=\"document_text\"/>");
-        verify(this.ai, never()).runStep(any(), any(), any(), any(), any());
+        verify(this.ai, never()).runStep(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
