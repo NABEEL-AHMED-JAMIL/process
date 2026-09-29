@@ -35,7 +35,9 @@ class StepTimelineServiceTest {
     private final SourceJobRepository jobs = mock(SourceJobRepository.class);
     private final InMemoryStepStore steps = new InMemoryStepStore();
     private final InMemoryModelChoiceStore ai = new InMemoryModelChoiceStore();
-    private final StepTimelineService service = new StepTimelineService(this.runs, this.jobs, this.steps, this.ai);
+    private final InMemoryDatasetStore datasets = new InMemoryDatasetStore();
+    private final StepTimelineService service = new StepTimelineService(this.runs, this.jobs, this.steps, this.ai,
+        this.datasets);
     private JobQueue run;
     private SourceJob job;
 

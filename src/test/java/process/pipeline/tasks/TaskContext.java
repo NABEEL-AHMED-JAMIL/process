@@ -1,6 +1,7 @@
 package process.pipeline.tasks;
 
 import process.pipeline.Dataset;
+import process.pipeline.RunOutput;
 import process.pipeline.StepContext;
 
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ final class TaskContext implements StepContext {
     final Map<String, Dataset> outputs = new LinkedHashMap<>();
     final List<String> lines = new ArrayList<>();
     final Map<String, byte[]> files = new LinkedHashMap<>();
+    final List<RunOutput> recorded = new ArrayList<>();
     Long owner = 7L;
     String inputBucket;
     String inputKey;
@@ -104,6 +106,11 @@ final class TaskContext implements StepContext {
     @Override
     public void keepFile(String fileName, byte[] content, long rows, List<String> columns) {
         this.files.put(fileName, content);
+    }
+
+    @Override
+    public void recordOutput(RunOutput output) {
+        this.recorded.add(output);
     }
 
     @Override

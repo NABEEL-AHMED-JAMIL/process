@@ -536,7 +536,7 @@ public class StepEngine {
         }
 
         /** A file a step made, beside the run's datasets, and its run_dataset row. */
-        private void keepFile(long row, String stepKey, String fileName, byte[] content, long rows, List<String> columns) throws Exception {
+        private long keepFile(long row, String stepKey, String fileName, byte[] content, long rows, List<String> columns) throws Exception {
             String key = DatasetStore.fileKeyOf(this.run.getJobQueueId(), this.attempt, stepKey, fileName);
             datasets.writeFile(key, content);
             String columnsJson;
@@ -545,7 +545,30 @@ public class StepEngine {
             } catch (JsonProcessingException ex) {
                 columnsJson = "[]";
             }
-            steps.dataset(row, fileName, key, rows, columnsJson, Instant.now().plus(Duration.ofHours(this.settings.effectiveRetentionHours())));
+            return steps.dataset(row, fileName, key, rows, columnsJson, this.expiry());
+        }
+
+        /** When a dataset written now expires: the pipeline's datasetRetentionHours on. */
+        private Instant expiry() {
+            return Instant.now().plus(Duration.ofHours(this.settings.effectiveRetentionHours()));
+        }
+
+        /**
+         * A file the step wrote, in the run's manifest (run_output): a kept file with the dataset holding it and its
+         * expiry, an upload with its bucket and key. A file the step did not keep is refused: the manifest says only what
+         * the run holds.
+         */
+        private void recordOutput(long row, RunOutput output, Map<String, long[]> kept) {
+            if (RunOutput.FILE.equals(output.getKind())) {
+                long[] dataset = kept.get(output.getName());
+                if (dataset == null) {
+                    throw new IllegalStateException(String.format("'%s' was not kept with the run, so it is not in its manifest.",
+                        output.getName()));
+                }
+                steps.output(row, output, dataset[0], Instant.ofEpochMilli(dataset[1]));
+            } else {
+                steps.output(row, output, null, null);
+            }
         }
 
         private boolean stillRunning() {
@@ -660,6 +683,8 @@ public class StepEngine {
         private final Dataset input;
         private final int tryNumber;
         private final StepLog log;
+        /** The files this try kept: name -> {run_dataset_id, expiry millis}. */
+        private final Map<String, long[]> kept = new HashMap<>();
 
         Context(Execution execution, PipelineDefinition.Step step, long row, Dataset input, int tryNumber, StepLog log) {
             this.execution = execution;
@@ -737,7 +762,13 @@ public class StepEngine {
 
         @Override
         public void keepFile(String fileName, byte[] content, long rows, List<String> columns) throws Exception {
-            this.execution.keepFile(this.row, this.step.getKey(), fileName, content, rows, columns);
+            long dataset = this.execution.keepFile(this.row, this.step.getKey(), fileName, content, rows, columns);
+            this.kept.put(fileName, new long[] {dataset, this.execution.expiry().toEpochMilli()});
+        }
+
+        @Override
+        public void recordOutput(RunOutput output) {
+            this.execution.recordOutput(this.row, output, this.kept);
         }
 
         @Override

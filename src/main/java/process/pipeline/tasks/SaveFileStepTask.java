@@ -2,6 +2,7 @@ package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
 import process.pipeline.Dataset;
+import process.pipeline.RunOutput;
 import process.pipeline.StepContext;
 import process.pipeline.StepResult;
 import process.pipeline.data.FileFormats;
@@ -41,6 +42,7 @@ public class SaveFileStepTask extends RegisteredTask {
         Dataset input = context.input();
         byte[] content = FileFormats.write(input, format);
         context.keepFile(fileName, content, input.size(), input.getColumns());
+        context.recordOutput(RunOutput.file(fileName, format, input.size(), content.length));
         context.log(String.format("Saved %d row(s) as %s (%s, %,d bytes).", input.size(), fileName, format, content.length));
         return StepResult.nothing((long) input.size());
     }

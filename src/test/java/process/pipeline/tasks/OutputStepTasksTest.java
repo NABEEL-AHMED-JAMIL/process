@@ -32,6 +32,9 @@ class OutputStepTasksTest {
         assertThat(result.getRecordsOut()).isEqualTo(2L);
         assertThat(new String(context.files.get("claims.csv"), StandardCharsets.UTF_8))
             .isEqualTo("id,name,note\r\n1,\"Acme, Inc\",\r\n2,Beta,x\r\n");
+        // Wave 4: in the run's manifest, as the file it kept.
+        assertThat(context.recorded).extracting(o -> o.getKind() + ":" + o.getName() + ":" + o.getFormat() + ":" + o.getRows() + ":"
+            + o.getBytes() + ":" + o.getBucket()).containsExactly("file:claims.csv:csv:2:" + context.files.get("claims.csv").length + ":null");
         TaskContext json = TaskContext.of(config("fileName", "claims.jsonl", "format", "jsonl"), this.rows);
         new SaveFileStepTask().run(json);
         assertThat(new String(json.files.get("claims.jsonl"), StandardCharsets.UTF_8))
@@ -42,8 +45,12 @@ class OutputStepTasksTest {
     void uploadWritesTheRowsToTheWorkspacesBucketUnderTheFilledKey() throws Exception {
         Fakes.Buckets buckets = new Fakes.Buckets();
         UploadBucketStepTask task = new UploadBucketStepTask(buckets);
-        StepResult result = task.run(TaskContext.of(config("bucket", "exports", "key", "claims/{{pipeline}}-{{run}}.json", "format", "json"),
-            this.rows));
+        TaskContext uploaded = TaskContext.of(config("bucket", "exports", "key", "claims/{{pipeline}}-{{run}}.json", "format", "json"),
+            this.rows);
+        StepResult result = task.run(uploaded);
+        // Wave 4: in the run's manifest with its bucket alias and key, which storage's browse endpoints download.
+        assertThat(uploaded.recorded).extracting(o -> o.getKind() + ":" + o.getName() + ":" + o.getFormat() + ":" + o.getRows() + ":"
+            + o.getBucket() + ":" + o.getKey()).containsExactly("bucket:CLAIMS-88001.json:json:2:exports:claims/CLAIMS-88001.json");
         assertThat(result.getRecordsOut()).isEqualTo(2L);
         assertThat(buckets.uploads).containsExactly("exports/claims/CLAIMS-88001.json application/json");
         assertThat(buckets.lastTenant).isEqualTo(TaskContext.TENANT);

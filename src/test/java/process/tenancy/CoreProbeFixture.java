@@ -35,7 +35,9 @@ import process.api.PipelineRestApi;
 import process.api.PipelineDefinitionRestApi;
 import process.api.StepTimelineRestApi;
 import process.pipeline.JdbcStepStore;
+import process.pipeline.FileDatasetStore;
 import process.pipeline.StepTimelineService;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import process.pipeline.DefinitionValidator;
 import process.pipeline.Definitions;
 import process.pipeline.PipelineDefinitionService;
@@ -117,6 +119,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -382,6 +385,8 @@ final class CoreProbeFixture implements AutoCloseable {
     final PipelineDefinitionRestApi pipelineSteps;
     /** MIG-230: a run's steps, for the timeline. */
     final StepTimelineRestApi stepTimeline;
+    /** Where the run datasets the probes download live (Wave 4): a scratch directory, as FileDatasetStore keeps them. */
+    final FileDatasetStore runDatasets;
     final KafkaConnectionProfileRestApi kafkaProfiles;
     final KafkaSecretRestApi kafkaSecrets;
     final SettingRestApi settings;
@@ -453,8 +458,9 @@ final class CoreProbeFixture implements AutoCloseable {
         TaskRegistry registry = new TaskRegistry(stepTasks, taskSwitches);
         this.pipelineSteps = new PipelineDefinitionRestApi(new PipelineDefinitionService(pipelineRows,
             new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(registry), registry, taskSwitches));
+        this.runDatasets = new FileDatasetStore(Files.createTempDirectory("core-probe-datasets").toString());
         this.stepTimeline = new StepTimelineRestApi(new StepTimelineService(runRows, jobRows, new JdbcStepStore(this.db.appJdbc()),
-            new JdbcModelChoiceStore(this.db.appJdbc())));
+            new JdbcModelChoiceStore(this.db.appJdbc()), this.runDatasets));
 
         KafkaSecretServiceImpl secrets = new KafkaSecretServiceImpl(this.trustedStorage, this.identity, this.encryption, CONFIG_BUCKET);
         ReflectionTestUtils.setField(secrets, "maxFileSizeKb", 512);
@@ -713,6 +719,13 @@ final class CoreProbeFixture implements AutoCloseable {
         }
         if (body instanceof byte[]) {
             return workbookText((byte[]) body);
+        }
+        if (body instanceof StreamingResponseBody) {
+            // A streamed download (Wave 4): what the caller would receive.
+            ByteArrayOutputStream streamed = new ByteArrayOutputStream();
+            ((StreamingResponseBody) body).writeTo(streamed);
+            return "HTTP " + answer.getStatusCodeValue() + " " + answer.getHeaders().getFirst("Content-Disposition") + "\n"
+                + new String(streamed.toByteArray(), StandardCharsets.UTF_8);
         }
         return JSON.writeValueAsString(body);
     }

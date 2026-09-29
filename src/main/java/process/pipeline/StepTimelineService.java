@@ -13,13 +13,18 @@ import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.security.JobOwnership;
+import process.pipeline.data.FileFormats;
+import process.pipeline.data.RowCollector;
 import process.util.BusinessTime;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -47,6 +52,32 @@ public class StepTimelineService {
 
     static final String RUN_NOT_FOUND = "Run not found with jobQueueId.";
     static final String STEP_NOT_FOUND = "Step not found with stepExecutionId.";
+    static final String DATASET_NOT_FOUND = "Dataset not found with runDatasetId.";
+
+    /** A download's answer: a file to stream, or an HTTP status and the envelope that says why not. */
+    public static final class Download {
+        public final int status;
+        public final ResponseDto refusal;
+        public final String fileName;
+        public final String contentType;
+        public final StreamingResponseBody body;
+
+        private Download(int status, ResponseDto refusal, String fileName, String contentType, StreamingResponseBody body) {
+            this.status = status;
+            this.refusal = refusal;
+            this.fileName = fileName;
+            this.contentType = contentType;
+            this.body = body;
+        }
+
+        static Download refused(int status, String message) {
+            return new Download(status, new ResponseDto(ERROR, message), null, null, null);
+        }
+
+        static Download file(String fileName, String format, StreamingResponseBody body) {
+            return new Download(200, null, fileName, FileFormats.contentType(format), body);
+        }
+    }
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -54,12 +85,15 @@ public class StepTimelineService {
     private final SourceJobRepository jobs;
     private final StepStore steps;
     private final ModelChoiceStore aiSteps;
+    private final DatasetStore datasets;
 
-    public StepTimelineService(JobQueueRepository runs, SourceJobRepository jobs, StepStore steps, ModelChoiceStore aiSteps) {
+    public StepTimelineService(JobQueueRepository runs, SourceJobRepository jobs, StepStore steps, ModelChoiceStore aiSteps,
+                               DatasetStore datasets) {
         this.runs = runs;
         this.jobs = jobs;
         this.steps = steps;
         this.aiSteps = aiSteps;
+        this.datasets = datasets;
     }
 
     /** The timeline of one attempt of a run: the latest when none is named. */
@@ -117,6 +151,124 @@ public class StepTimelineService {
         log.put("attempt", step.get().attempt);
         log.put("lines", this.steps.logOf(step.get().stepExecutionId));
         return new ResponseDto(SUCCESS, String.format("%d line(s).", ((List<?>) log.get("lines")).size()), log);
+    }
+
+    /**
+     * A run dataset as a file (Wave 4): a step's output as CSV, JSON or JSON Lines (CSV when no format is named), or a
+     * file Save File kept, as it was written (or converted, when another format is named). The caller's when its run
+     * is (the timeline's rule); anything else, another workspace's included, is not found (404). Past its expiresAt it
+     * is gone (410) -- after the sweep too, for a kept file, which the run's manifest still names.
+     */
+    @Transactional(readOnly = true)
+    public Download download(Long runDatasetId, String format) {
+        String wanted = format == null || format.trim().isEmpty() ? null : format.trim().toLowerCase(Locale.ROOT);
+        if (wanted != null && !FileFormats.WRITABLE.contains(wanted)) {
+            return Download.refused(400, String.format("A dataset downloads as csv, json or jsonl; got '%s'.", format));
+        }
+        Optional<StepStore.DatasetFile> found = runDatasetId == null ? Optional.empty() : this.steps.datasetById(runDatasetId);
+        if (!found.isPresent()) {
+            Optional<StepStore.OutputRow> swept = runDatasetId == null ? Optional.empty() : this.steps.outputOfDataset(runDatasetId);
+            if (swept.isPresent() && this.owned(swept.get().jobQueueId).isPresent()) {
+                return Download.refused(410, expired(swept.get().expiresAt));
+            }
+            return Download.refused(404, DATASET_NOT_FOUND);
+        }
+        StepStore.DatasetFile dataset = found.get();
+        if (!this.owned(dataset.jobQueueId).isPresent()) {
+            return Download.refused(404, DATASET_NOT_FOUND);
+        }
+        if (dataset.expiresAt != null && !dataset.expiresAt.isAfter(Instant.now())) {
+            return Download.refused(410, expired(dataset.expiresAt));
+        }
+        try {
+            if (dataset.storageKey.contains("/files/")) {
+                return this.keptFile(dataset, wanted);
+            }
+            Dataset rows = this.datasets.read(dataset.storageKey);
+            String as = wanted == null ? "csv" : wanted;
+            String name = String.format("run-%d-attempt-%d-%s-%s.%s", dataset.jobQueueId, dataset.attempt, dataset.stepKey, dataset.name, as);
+            return Download.file(name, as, out -> FileFormats.writeTo(rows, as, out));
+        } catch (Exception ex) {
+            return Download.refused(410, "This dataset's content is no longer available; run the job again to make it anew.");
+        }
+    }
+
+    /**
+     * A run's result manifest (Wave 4): the files its steps wrote, every attempt unless one is named -- a kept file with
+     * the runDatasetId that downloads it (sourceJob.json/runDataset) and when it expires, an upload with the bucket alias
+     * and key storage-service's browse endpoints download. Never a storage key.
+     */
+    @Transactional(readOnly = true)
+    public ResponseDto outputs(Long jobQueueId, Integer attempt) {
+        Optional<JobQueue> run = this.owned(jobQueueId);
+        if (!run.isPresent()) {
+            return new ResponseDto(ERROR, RUN_NOT_FOUND);
+        }
+        Instant now = Instant.now();
+        List<Map<String, Object>> outputs = this.steps.outputsOfRun(run.get().getJobQueueId()).stream()
+            .filter(row -> attempt == null || row.attempt == attempt)
+            .map(row -> {
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("runOutputId", row.runOutputId);
+                out.put("stepExecutionId", row.stepExecutionId);
+                out.put("attempt", row.attempt);
+                out.put("stepIndex", row.stepIndex);
+                out.put("stepKey", row.stepKey);
+                out.put("task", row.taskCode);
+                out.put("kind", row.kind);
+                out.put("name", row.name);
+                out.put("format", row.format);
+                out.put("rowCount", row.rowCount);
+                out.put("byteCount", row.byteCount);
+                out.put("recordedAt", row.recordedAt);
+                if (RunOutput.FILE.equals(row.kind)) {
+                    out.put("runDatasetId", row.runDatasetId);
+                    out.put("expiresAt", row.expiresAt == null ? null : BusinessTime.wallClockOf(row.expiresAt));
+                    out.put("expired", row.expiresAt != null && !row.expiresAt.isAfter(now));
+                } else {
+                    out.put("bucket", row.bucketAlias);
+                    out.put("key", row.objectKey);
+                }
+                return out;
+            }).collect(Collectors.toList());
+        Map<String, Object> manifest = new LinkedHashMap<>();
+        manifest.put("jobQueueId", run.get().getJobQueueId());
+        manifest.put("jobId", run.get().getJobId());
+        manifest.put("attempt", attempt);
+        manifest.put("outputs", outputs);
+        return new ResponseDto(SUCCESS, String.format("%d file(s).", outputs.size()), manifest);
+    }
+
+    /** A file Save File kept: its own bytes in its own format, or its rows in the one asked for. */
+    private Download keptFile(StepStore.DatasetFile dataset, String wanted) throws Exception {
+        byte[] content = this.datasets.readFile(dataset.storageKey);
+        String own = this.steps.outputOfDataset(dataset.runDatasetId).map(output -> output.format)
+            .orElseGet(() -> Optional.ofNullable(FileFormats.byExtension(dataset.name)).orElse("csv"));
+        if (wanted == null || wanted.equals(own)) {
+            return Download.file(dataset.name, own, out -> out.write(content));
+        }
+        RowCollector collector = new RowCollector("The file", null);
+        FileFormats.read(content, own, new FileFormats.ReadOptions(), collector);
+        Dataset rows = collector.toDataset(parseColumns(dataset.columns));
+        int dot = dataset.name.lastIndexOf('.');
+        String name = (dot > 0 ? dataset.name.substring(0, dot) : dataset.name) + "." + wanted;
+        return Download.file(name, wanted, out -> FileFormats.writeTo(rows, wanted, out));
+    }
+
+    private static String expired(Instant at) {
+        return String.format("This dataset expired%s and can no longer be downloaded: a run's datasets are kept for its pipeline's "
+            + "datasetRetentionHours. Run the job again to make it anew.", at == null ? ""
+            : " at " + BusinessTime.wallClockOf(at).withNano(0).toString().replace('T', ' ') + " (Chicago)");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> parseColumns(String json) {
+        Object parsed = parseList(json);
+        List<String> columns = new ArrayList<>();
+        for (Object column : (List<Object>) parsed) {
+            columns.add(String.valueOf(column));
+        }
+        return columns;
     }
 
     private Optional<JobQueue> owned(Long jobQueueId) {

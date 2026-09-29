@@ -10,8 +10,10 @@ import process.pipeline.Dataset;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
@@ -168,6 +170,28 @@ public final class FileFormats {
     /** The dataset as a file in this format, at most {@link Limits#MAX_FILE_BYTES}. */
     public static byte[] write(Dataset dataset, String format) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        writeTo(dataset, format, bytes);
+        Limits.requireBytes(bytes.size(), "The file");
+        return bytes.toByteArray();
+    }
+
+    /**
+     * The dataset in this format, straight to a stream -- a run dataset's download (Wave 4), which a step's file limit
+     * does not bound: the dataset was already held to the row and cell limits when it was made. The stream is left open.
+     */
+    public static void writeTo(Dataset dataset, String format, OutputStream target) throws IOException {
+        // Closing the CSV printer, or Jackson finishing a value, would close the target: the caller owns it.
+        OutputStream bytes = new FilterOutputStream(target) {
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                this.out.write(b, off, len);
+            }
+
+            @Override
+            public void close() throws IOException {
+                this.flush();
+            }
+        };
         switch (format) {
             case "csv":
                 try (Writer writer = new OutputStreamWriter(bytes, StandardCharsets.UTF_8);
@@ -193,8 +217,7 @@ public final class FileFormats {
             default:
                 throw new IllegalArgumentException("A file is written as csv, json or jsonl, not " + format + ".");
         }
-        Limits.requireBytes(bytes.size(), "The file");
-        return bytes.toByteArray();
+        bytes.flush();
     }
 
     /** Rows with every column, in the dataset's column order. */

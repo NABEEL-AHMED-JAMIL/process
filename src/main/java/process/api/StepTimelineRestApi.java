@@ -1,6 +1,8 @@
 package process.api;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -19,13 +21,15 @@ import process.pipeline.StepTimelineService;
  *   <li>GET sourceJob.json/stepExecutions?jobQueueId=&amp;attempt=: one attempt of a run (the latest by default) --
  *       each step's status, times, records, tries, on-error, error and datasets, and the run's AI steps; a legacy run
  *       as its one legacy step;</li>
- *   <li>GET sourceJob.json/stepLogs?stepExecutionId=: one step's log lines.</li>
+ *   <li>GET sourceJob.json/stepLogs?stepExecutionId=: one step's log lines;</li>
+ *   <li>GET sourceJob.json/runDataset?runDatasetId=&amp;format=csv|json|jsonl: a run dataset as a file (Wave 4);</li>
+ *   <li>GET sourceJob.json/runOutputs?jobQueueId=&amp;attempt=: the run's result manifest (Wave 4).</li>
  * </ul>
  *
  * A missing id is Spring's 400; a run or step that is not the caller's is the envelope's "not found".
  */
 @RestController
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "*", exposedHeaders = {HttpHeaders.CONTENT_DISPOSITION})
 @PreAuthorize("hasRole('TENANT_USER')")
 public class StepTimelineRestApi {
 
@@ -38,6 +42,29 @@ public class StepTimelineRestApi {
     @RequestMapping(value = "/sourceJob.json/stepExecutions", method = RequestMethod.GET)
     public ResponseEntity<?> stepExecutions(@RequestParam Long jobQueueId, @RequestParam(required = false) Integer attempt) {
         return new ResponseEntity<>(this.service.timeline(jobQueueId, attempt), HttpStatus.OK);
+    }
+
+    /**
+     * Wave 4: a run dataset as a file -- csv (the default), json or jsonl. Streamed with a Content-Disposition; refused
+     * with the envelope: 400 for a format it does not write, 404 for a dataset that is not the caller's (another
+     * workspace's included), 410 once it has expired.
+     */
+    @RequestMapping(value = "/sourceJob.json/runDataset", method = RequestMethod.GET)
+    public ResponseEntity<?> runDataset(@RequestParam Long runDatasetId, @RequestParam(required = false) String format) {
+        StepTimelineService.Download download = this.service.download(runDatasetId, format);
+        if (download.refusal != null) {
+            return ResponseEntity.status(download.status).contentType(MediaType.APPLICATION_JSON).body(download.refusal);
+        }
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + download.fileName + "\"")
+            .contentType(MediaType.parseMediaType(download.contentType))
+            .body(download.body);
+    }
+
+    /** Wave 4: a run's result manifest -- the files its steps wrote, every attempt unless one is named. */
+    @RequestMapping(value = "/sourceJob.json/runOutputs", method = RequestMethod.GET)
+    public ResponseEntity<?> runOutputs(@RequestParam Long jobQueueId, @RequestParam(required = false) Integer attempt) {
+        return new ResponseEntity<>(this.service.outputs(jobQueueId, attempt), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/sourceJob.json/stepLogs", method = RequestMethod.GET)

@@ -576,6 +576,83 @@ class StepEngineTest {
         assertThat(this.worker.last()).startsWith("Failed: Step 1 <fetch> failed: The API request failed (HTTP 500)");
     }
 
+    // ---- Wave 4: the run's result manifest ------------------------------------------------------------------------
+
+    @Test
+    void aSavedFileAndAnUploadAreInTheRunsManifest() {
+        this.runs(Definitions.of(step("read", "sample", config("rows", Arrays.asList(config("id", 1), config("id", 2)))),
+            step("keep", "save_file", config("fileName", "claims.csv")),
+            step("send", "upload_bucket", config("bucket", "exports", "key", "out/{{run}}.json", "format", "json"))));
+
+        assertThat(this.statuses()).containsExactly(entry("read", "Completed"), entry("keep", "Completed"), entry("send", "Completed"));
+        List<StepStore.OutputRow> manifest = this.steps.outputsOfRun(RUN_ID);
+        assertThat(manifest).extracting(o -> o.stepKey + ":" + o.kind + ":" + o.name + ":" + o.format + ":" + o.rowCount + ":"
+            + o.bucketAlias + ":" + o.objectKey).containsExactly("keep:file:claims.csv:csv:2:null:null",
+            "send:bucket:" + RUN_ID + ".json:json:2:exports:out/" + RUN_ID + ".json");
+        StepStore.OutputRow file = manifest.get(0);
+        StepStore.DatasetFile kept = this.steps.datasetById(file.runDatasetId).get();
+        assertThat(kept.name).isEqualTo("claims.csv");
+        assertThat(kept.storageKey).isEqualTo("datasets/" + RUN_ID + "/1/keep/files/claims.csv");
+        assertThat(file.expiresAt).isNotNull();
+        assertThat(file.byteCount).isEqualTo((long) this.datasets.files.get(kept.storageKey).length);
+        assertThat(manifest.get(1).runDatasetId).isNull();
+        assertThat(manifest.get(1).expiresAt).isNull();
+    }
+
+    /** Recorded once per step per attempt: a try that kept and recorded, then failed, is replaced by the try that passed. */
+    @Test
+    void aRetriedStepHasOneManifestRow() {
+        StepTask keepsThenFails = new StepTask() {
+            @Override public String code() { return "keeps_then_fails"; }
+            @Override public String description() { return "keeps a file, fails the first try"; }
+            @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+            @Override public StepResult run(StepContext context) throws Exception {
+                byte[] content = ("try " + context.tryNumber()).getBytes();
+                context.keepFile("out.csv", content, context.tryNumber(), Collections.singletonList("n"));
+                context.recordOutput(RunOutput.file("out.csv", "csv", context.tryNumber(), content.length));
+                if (context.tryNumber() == 1) {
+                    throw new IllegalStateException("first try fails");
+                }
+                return StepResult.nothing(0L);
+            }
+        };
+        this.tasks = Definitions.builtInTasks(keepsThenFails);
+        this.engine = new StepEngine(this.definitions, this.steps, this.tasks, new DefinitionValidator(this.tasks), this.datasets,
+            this.worker, this.transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(),
+            this.tryThreads, this.waited::add);
+        PipelineDefinition.Step step = step("keep", "keeps_then_fails");
+        step.setRetry(PipelineDefinition.Retry.of(2, 1));
+
+        this.runs(Definitions.of(step));
+
+        assertThat(this.statuses()).containsExactly(entry("keep", "Completed"));
+        assertThat(this.steps.outputsOfRun(RUN_ID)).extracting(o -> o.attempt + ":" + o.name + ":" + o.rowCount)
+            .containsExactly("1:out.csv:2");
+    }
+
+    /** A step may not put a file in the manifest that it did not keep with the run. */
+    @Test
+    void aFileThatWasNotKeptIsNotRecorded() {
+        StepTask claims = new StepTask() {
+            @Override public String code() { return "claims_a_file"; }
+            @Override public String description() { return "records a file it never kept"; }
+            @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+            @Override public StepResult run(StepContext context) throws Exception {
+                context.recordOutput(RunOutput.file("ghost.csv", "csv", 1, 1));
+                return StepResult.nothing(0L);
+            }
+        };
+        this.tasks = Definitions.builtInTasks(claims);
+        this.engine = new StepEngine(this.definitions, this.steps, this.tasks, new DefinitionValidator(this.tasks), this.datasets,
+            this.worker, this.transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(),
+            this.tryThreads, this.waited::add);
+
+        this.runs(Definitions.of(step("claim", "claims_a_file")));
+
+        assertThat(this.statuses()).containsExactly(entry("claim", "Failed"));
+        assertThat(this.steps.outputsOfRun(RUN_ID)).isEmpty();
+    }
+
     private static Map.Entry<String, String> entry(String key, String value) {
         return new AbstractMap.SimpleEntry<>(key, value);
     }
