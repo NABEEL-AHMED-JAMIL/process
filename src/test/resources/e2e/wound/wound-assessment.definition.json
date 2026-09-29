@@ -1,0 +1,262 @@
+{
+ "version": 1,
+ "settings": {
+  "review": {
+   "required": [
+    "internal"
+   ]
+  },
+  "sensitivity": "sensitive",
+  "datasetRetentionHours": 72
+ },
+ "steps": [
+  {
+   "key": "intake",
+   "name": "Intake batch (the file that started the run)",
+   "task": "read_file",
+   "config": {
+    "format": "csv"
+   }
+  },
+  {
+   "key": "check",
+   "name": "Check rows against wound_intake_rows",
+   "task": "validate",
+   "config": {
+    "contractName": "wound_intake_rows",
+    "onInvalid": "drop"
+   }
+  },
+  {
+   "key": "history",
+   "name": "Earlier visits",
+   "task": "read_file",
+   "config": {
+    "bucket": "${BUCKET}",
+    "key": "${PREFIX}history/wound_history.csv",
+    "format": "csv"
+   }
+  },
+  {
+   "key": "last_visit",
+   "name": "Each patient's last visit",
+   "task": "aggregate",
+   "input": "history",
+   "config": {
+    "groupBy": [
+     "patient_id"
+    ],
+    "aggregations": [
+     {
+      "op": "max",
+      "column": "visit_date",
+      "as": "prev_date"
+     }
+    ]
+   }
+  },
+  {
+   "key": "prev",
+   "name": "Area at the last visit",
+   "task": "join",
+   "input": "last_visit",
+   "config": {
+    "with": "history",
+    "on": [
+     {
+      "left": "patient_id",
+      "right": "patient_id"
+     },
+     {
+      "left": "prev_date",
+      "right": "visit_date"
+     }
+    ],
+    "type": "inner"
+   }
+  },
+  {
+   "key": "prev_named",
+   "name": "Name the last visit's columns",
+   "task": "select",
+   "input": "prev",
+   "config": {
+    "columns": {
+     "patient_id": "patient_id",
+     "prev_date": "prev_date",
+     "area_cm2": "prev_area_cm2"
+    }
+   }
+  },
+  {
+   "key": "assess",
+   "name": "AI assessment of each photo (DRAFT)",
+   "task": "ai_prompt",
+   "input": "check",
+   "config": {
+    "promptId": "${PROMPT_ID}",
+    "values": {
+     "case_id": "{{case_id}}"
+    },
+    "image": {
+     "bucket": "${BUCKET}",
+     "keyColumn": "image_key"
+    },
+    "fields": [
+     {
+      "path": "scale_reference_visible",
+      "target": "scale_visible"
+     },
+     {
+      "path": "length_cm",
+      "target": "length_cm"
+     },
+     {
+      "path": "width_cm",
+      "target": "width_cm"
+     },
+     {
+      "path": "wound_bed",
+      "target": "wound_bed"
+     },
+     {
+      "path": "needs_review",
+      "target": "needs_review"
+     }
+    ],
+    "onError": "null",
+    "maxCalls": 50
+   }
+  },
+  {
+   "key": "with_history",
+   "name": "Add the last visit",
+   "task": "join",
+   "input": "assess",
+   "config": {
+    "with": "prev_named",
+    "on": [
+     {
+      "left": "patient_id",
+      "right": "patient_id"
+     }
+    ],
+    "type": "left"
+   }
+  },
+  {
+   "key": "measure",
+   "name": "Area, change and trend (computed in code)",
+   "task": "compute",
+   "config": {
+    "formulas": [
+     {
+      "target": "prev_area_cm2",
+      "expression": "number(prev_area_cm2)"
+     },
+     {
+      "target": "area_cm2",
+      "expression": "if(scale_visible == true, round(length_cm * width_cm * 0.785, 1), null)"
+     },
+     {
+      "target": "change_pct",
+      "expression": "if(prev_area_cm2 > 0 and not is_null(area_cm2), round((area_cm2 - prev_area_cm2) / prev_area_cm2 * 100, 1), null)"
+     },
+     {
+      "target": "days_since_prev",
+      "expression": "days_between(prev_date, visit_date)"
+     },
+     {
+      "target": "trend",
+      "expression": "if(is_null(prev_area_cm2), 'baseline', if(is_null(change_pct), 'not measurable', if(change_pct <= -10, 'improving', if(change_pct >= 10, 'worsening', 'stable'))))"
+     },
+     {
+      "target": "status",
+      "expression": "'DRAFT'"
+     }
+    ]
+   }
+  },
+  {
+   "key": "result",
+   "name": "Result columns",
+   "task": "select",
+   "config": {
+    "columns": {
+     "case_id": "case_id",
+     "patient_id": "patient_id",
+     "visit_date": "visit_date",
+     "wound_site": "wound_site",
+     "scale_visible": "scale_visible",
+     "length_cm": "length_cm",
+     "width_cm": "width_cm",
+     "area_cm2": "area_cm2",
+     "prev_area_cm2": "prev_area_cm2",
+     "prev_date": "prev_date",
+     "change_pct": "change_pct",
+     "days_since_prev": "days_since_prev",
+     "trend": "trend",
+     "wound_bed": "wound_bed",
+     "needs_review": "needs_review",
+     "status": "status"
+    }
+   }
+  },
+  {
+   "key": "check_result",
+   "name": "Check results against wound_result_rows",
+   "task": "validate",
+   "config": {
+    "contractName": "wound_result_rows",
+    "onInvalid": "fail"
+   }
+  },
+  {
+   "key": "save_csv",
+   "name": "Results as CSV",
+   "task": "save_file",
+   "input": "result",
+   "config": {
+    "fileName": "wound-results.csv",
+    "format": "csv"
+   }
+  },
+  {
+   "key": "save_json",
+   "name": "Results as JSON",
+   "task": "save_file",
+   "input": "result",
+   "config": {
+    "fileName": "wound-results.json",
+    "format": "json"
+   }
+  },
+  {
+   "key": "report",
+   "name": "PDF report",
+   "task": "render_pdf",
+   "input": "result",
+   "config": {
+    "fileName": "wound-assessment-report",
+    "title": "Wound assessment, run {{run}} (synthetic data)",
+    "fields": {
+     "Status": "DRAFT: AI output for clinician review",
+     "Measurement": "Sizes are estimates, only where a ruler is visible",
+     "Cases": "{{rows}}"
+    },
+    "columns": [
+     "case_id",
+     "patient_id",
+     "visit_date",
+     "wound_site",
+     "area_cm2",
+     "prev_area_cm2",
+     "change_pct",
+     "trend",
+     "wound_bed"
+    ],
+    "watermark": "DRAFT"
+   }
+  }
+ ]
+}
