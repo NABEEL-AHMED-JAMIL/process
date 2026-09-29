@@ -67,12 +67,33 @@ class RenderPdfStepTaskTest {
         assertThat(asked.fields).containsEntry("Status", "DRAFT for clinician review");
         assertThat(asked.columns).containsExactly("case_id", "trend");
         assertThat(asked.rows).containsExactly(Arrays.asList("C1", "improving"), Arrays.asList("C2", "baseline"));
+        assertThat(asked.orientation).as("two columns fit a portrait page").isEqualTo("portrait");
+        assertThat(asked.watermark).isNull();
         assertThat(context.files).containsKey("wound-report.pdf");
         RunOutput output = context.recorded.get(0);
         assertThat(output.getName()).isEqualTo("wound-report.pdf");
         assertThat(output.getFormat()).isEqualTo("pdf");
         assertThat(output.getRows()).isEqualTo(2);
         assertThat(out == null || out.size() == 2).as("the rows pass on").isTrue();
+    }
+
+    /** A wide table turns the page; a watermark (DRAFT) fills from the run like the title. */
+    @Test
+    void aWideTableIsLandscapeAndAWatermarkIsPrinted() throws Exception {
+        TaskContext context = TaskContext.of(config("fileName", "wide", "watermark", "DRAFT"), Arrays.asList(
+            row("a", 1, "b", 2, "c", 3, "d", 4, "e", 5, "f", 6, "g", 7)));
+        this.task.run(context);
+        assertThat(this.renderer.asked.get(0).orientation).isEqualTo("landscape");
+        assertThat(this.renderer.asked.get(0).watermark).isEqualTo("DRAFT");
+        this.task.run(TaskContext.of(config("fileName", "tall", "orientation", "portrait"), Arrays.asList(
+            row("a", 1, "b", 2, "c", 3, "d", 4, "e", 5, "f", 6, "g", 7))));
+        assertThat(this.renderer.asked.get(1).orientation).isEqualTo("portrait");
+    }
+
+    @Test
+    void aHeaderLabelIsPlainText() {
+        assertThat(this.task.check(config("fileName", "r", "fields", config("Status", "ok", "<b>x</b>", "no", "{{x}}", "no"))))
+            .extracting(p -> p.getPath()).containsExactly("fields.<b>x</b>", "fields.{{x}}");
     }
 
     @Test

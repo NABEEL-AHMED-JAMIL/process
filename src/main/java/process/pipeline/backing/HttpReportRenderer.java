@@ -58,6 +58,32 @@ public class HttpReportRenderer implements ReportRenderer {
             : Optional.of("media-service does not render reports for pipelines yet (process.pipeline.media.internal-render is off)");
     }
 
+    /**
+     * Core's own layout when no template is named: the title, every header field on its own line -- so a label such as
+     * DRAFT is always printed, never left to a template remembering it -- the row count, the table, the page turned as
+     * asked and the watermark. Labels are plain text (RenderPdfStepTask checks them); they are escaped all the same.
+     */
+    private ObjectNode ownTemplate(ReportRenderer.Report request) {
+        StringBuilder html = new StringBuilder("<h1>{{title}}</h1>");
+        for (String label : request.fields.keySet()) {
+            html.append("<p class=\"report-meta\"><strong>").append(escape(label)).append("</strong>: {{field:").append(label).append("}}</p>");
+        }
+        html.append("<p class=\"report-meta\">{{rowCount}} rows | generated {{generatedAt}}</p>{{table}}");
+        ObjectNode template = this.json.createObjectNode();
+        template.put("name", "Pipeline report");
+        template.put("bodyHtml", html.toString());
+        template.put("pageSize", "A4");
+        template.put("orientation", request.orientation == null ? "portrait" : request.orientation);
+        if (request.watermark != null && !request.watermark.trim().isEmpty()) {
+            template.put("watermarkText", request.watermark.trim());
+        }
+        return template;
+    }
+
+    private static String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
     @Override
     public byte[] renderPdf(ReportRenderer.Report request) throws Exception {
         Optional<String> off = this.unavailable();
@@ -70,6 +96,8 @@ public class HttpReportRenderer implements ReportRenderer {
         body.put("save", false);
         if (request.templateId != null) {
             body.put("templateId", request.templateId);
+        } else {
+            body.set("template", this.ownTemplate(request));
         }
         ObjectNode dataset = body.putObject("dataset");
         dataset.put("title", request.title);
