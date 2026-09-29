@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 183.0-pipeline-steps
+      author: nabeel.amd93
+      description: "MIG-230: pipelines as ordered steps -- pipeline_definition (the JSON definition, a version per save), step_execution's step columns, step_log; expand-only, row-level security on both new tables"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V183.0-pipeline-steps/V183__pipeline_steps.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V183.0-pipeline-steps/V183__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

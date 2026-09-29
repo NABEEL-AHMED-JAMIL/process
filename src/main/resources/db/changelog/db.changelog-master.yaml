@@ -148,3 +148,7 @@ databaseChangeLog:
   # MIG-258's (row-level security).
   - include:
       file: db/changelog/yaml/V182.0-ai-model-choice.yaml
+  # V183: MIG-230 -- pipelines as ordered steps: the stored definition (JSON, a version per save), each step's run
+  # (step_execution, V180) with its key, tries and on-error, and its log (step_log). Both new tables are guarded as V181.
+  - include:
+      file: db/changelog/yaml/V183.0-pipeline-steps.yaml
