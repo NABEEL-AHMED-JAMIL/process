@@ -30,7 +30,8 @@ import java.util.regex.Pattern;
  *   <li>{@code input} names an earlier step.</li>
  *   <li>{@code retry.maxAttempts} 1 to 10, {@code retry.delaySeconds} 0 to 3600, {@code timeoutSeconds} 1 to 86400,
  *       {@code onError} fail, continue or skip_rest.</li>
- *   <li>{@code settings}: datasetRetentionHours 1 to 720, defaultTimeoutSeconds 1 to 86400, defaultOnError as onError.</li>
+ *   <li>{@code settings}: datasetRetentionHours 1 to 720, defaultTimeoutSeconds 1 to 86400, defaultOnError as onError,
+ *       sensitivity public, internal or sensitive (MIG-243).</li>
  * </ul>
  */
 @Component
@@ -129,6 +130,9 @@ public class DefinitionValidator {
         }
         range(settings.getDatasetRetentionHours(), 1, MAX_RETENTION_HOURS, "settings.datasetRetentionHours", problems);
         range(settings.getDefaultTimeoutSeconds(), 1, MAX_TIMEOUT_SECONDS, "settings.defaultTimeoutSeconds", problems);
+        if (settings.getSensitivity() != null && !PipelineDefinition.Settings.SENSITIVITIES.contains(settings.getSensitivity())) {
+            problems.add(new DefinitionProblem("settings.sensitivity", "one of " + PipelineDefinition.Settings.SENSITIVITIES));
+        }
         if (settings.getDefaultOnError() != null && !OnError.of(settings.getDefaultOnError()).isPresent()) {
             problems.add(new DefinitionProblem("settings.defaultOnError", "one of " + OnError.words()));
         }

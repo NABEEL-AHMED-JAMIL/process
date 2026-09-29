@@ -106,6 +106,32 @@ public class HttpAi implements AiPort {
         }
     }
 
+    /**
+     * MIG-243: the workspace's retention days per level, from ai-service's data policy (service token; the workspace in
+     * the body). An ai-service without the endpoint yet (404) has no policy to say: empty, and the pipeline's own stands.
+     */
+    @Override
+    public Map<String, Integer> retentionDays(Long tenantId) throws AiUnavailableException {
+        ObjectNode body = this.json.createObjectNode();
+        body.put("tenantId", tenantId);
+        try (Response response = this.send("/dataPolicy/retention", body, false)) {
+            if (response.code() == 404) {
+                return new LinkedHashMap<>();
+            }
+            JsonNode answer = this.readJson(response);
+            if (response.code() != 200 || answer == null || !SUCCESS.equals(text(answer, "status"))) {
+                throw new AiUnavailableException("The AI service could not say the data policy's retention: " + this.messageOf(answer, response),
+                    null);
+            }
+            Map<String, Integer> days = new LinkedHashMap<>();
+            answer.path("data").fields().forEachRemaining(e -> days.put(e.getKey(), e.getValue().canConvertToInt() && !e.getValue().isNull()
+                ? e.getValue().asInt() : null));
+            return days;
+        } catch (IOException unreachable) {
+            throw new AiUnavailableException("The AI service could not be reached: " + unreachable.getMessage(), unreachable);
+        }
+    }
+
     /** ai-service's step answer (InternalAiRestApi.stepShape), field by field: StepAnswerContractTest pins the names. */
     static StepResult stepResultOf(JsonNode data) {
         StepResult result = new StepResult();

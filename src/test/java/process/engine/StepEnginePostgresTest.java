@@ -35,6 +35,7 @@ import process.pipeline.Definitions;
 import process.pipeline.FileDatasetStore;
 import process.pipeline.JdbcStepStore;
 import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.RetentionPolicy;
 import process.pipeline.StepContext;
 import process.pipeline.StepEngine;
 import process.pipeline.StepResult;
@@ -47,9 +48,16 @@ import process.util.OpenSearchAuditLogClient;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -86,6 +94,10 @@ class StepEnginePostgresTest {
     private static final long OUTPUT_PIPELINE = 78520L;
     private static final long OUTPUT_TASK = 78521L;
     private static final long OUTPUT_JOB = 78522L;
+    /** MIG-243: a sensitive pipeline that keeps a file, with 48 hours of its own. */
+    private static final long SENSITIVE_PIPELINE = 78523L;
+    private static final long SENSITIVE_TASK = 78524L;
+    private static final long SENSITIVE_JOB = 78525L;
     private static final String PAYLOAD = "<pipeline><claim_id>C-17</claim_id><amount>250</amount></pipeline>";
 
     private static ScratchPostgres db;
@@ -94,6 +106,9 @@ class StepEnginePostgresTest {
     private static Path datasetDir;
 
     private ThreadPoolExecutor runThreads;
+
+    /** MIG-243: the workspace's retention days per level, as the data policy would say them; empty: none. */
+    private final Map<String, Integer> policyDays = new ConcurrentHashMap<>();
 
     private final AtomicLong submitted = new AtomicLong();
 
@@ -142,6 +157,13 @@ class StepEnginePostgresTest {
                 + "{\"key\":\"keep\",\"task\":\"save_file\",\"config\":{\"fileName\":\"claims.csv\"}},"
                 + "{\"key\":\"send\",\"task\":\"upload_bucket\",\"config\":{\"bucket\":\"exports\",\"key\":\"out/{{run}}.json\","
                 + "\"format\":\"json\"}}]}");
+        pipeline(SENSITIVE_PIPELINE, "SENSITIVE-PIPE");
+        task(SENSITIVE_TASK, "SENSITIVE-PIPE");
+        job(SENSITIVE_JOB, SENSITIVE_TASK, 1);
+        login.update("INSERT INTO pipeline_definition (pipeline_key, version, definition) VALUES (?, 1, ?::json)", SENSITIVE_PIPELINE,
+            "{\"version\":1,\"settings\":{\"datasetRetentionHours\":48,\"sensitivity\":\"sensitive\"},\"steps\":[{\"key\":\"read\","
+                + "\"task\":\"sample\",\"config\":{\"rows\":[{\"id\":1}]}},{\"key\":\"keep\",\"task\":\"save_file\",\"config\":"
+                + "{\"fileName\":\"patients.csv\"}}]}");
         login.update("INSERT INTO pipeline_definition (pipeline_key, version, definition) VALUES (?, 1, ?::json)", STEPS_PIPELINE,
             "{\"version\":1,\"source\":{\"type\":\"task\"},\"steps\":[{\"key\":\"shape\",\"task\":\"select\",\"config\":{\"columns\":"
                 + "{\"claim_id\":\"claim\",\"amount\":\"amount\"}}},{\"key\":\"more\",\"task\":\"sample\",\"config\":{\"rows\":"
@@ -214,6 +236,9 @@ class StepEnginePostgresTest {
             new DefinitionValidator(tasks), new FileDatasetStore(datasetDir.toString()), notify, store,
             new TransactionTemplate(jpa.transactionManager()), this.runThreads,
             Executors.newCachedThreadPool(), duration -> { });
+        this.policyDays.clear();
+        engine.useRetention((tenantId, settings) -> RetentionPolicy.combine(settings.getDatasetRetentionHours(),
+            tenantId == TENANT ? this.policyDays.get(settings.effectiveSensitivity()) : null));
         PreDispatchPhase bare = new PreDispatchPhase(store, bulkAction, new AiStepService(jpa.repository(PipelineRepository.class),
             mock(AiPort.class)), new JdbcModelChoiceStore(db.appJdbc()), mock(JobMail.class),
             new TransactionTemplate(jpa.transactionManager()), new DispatchPipeline.SameThread());
@@ -379,5 +404,88 @@ class StepEnginePostgresTest {
         assertThat(Files.exists(datasetDir.resolve("datasets/" + steps + "/1/more/output.json"))).as("not expired").isTrue();
         assertThat(login.queryForObject("SELECT records_out FROM step_execution WHERE job_queue_id = ? AND step_key = 'shape'", Long.class,
             steps)).as("the step still says what it did").isEqualTo(1L);
+    }
+
+    /** Seconds each of a run's datasets is kept: expires_at from when it was written. */
+    private List<Long> keptSeconds(long run) {
+        return login.queryForList("SELECT round(extract(epoch FROM (d.expires_at - d.date_created)))::bigint FROM run_dataset d "
+            + "JOIN step_execution s ON s.step_execution_id = d.step_execution_id WHERE s.job_queue_id = ? ORDER BY d.run_dataset_id", Long.class, run);
+    }
+
+    /**
+     * MIG-243: a run's datasets expire as the workspace's data policy says for the pipeline's sensitivity -- its days a
+     * ceiling on the pipeline's own hours, and the pipeline's days when it names none -- and the manifest shows that expiry.
+     */
+    @Test
+    void mig243DatasetsExpireOnThePolicysDaysForThePipelinesSensitivityAndTheManifestSaysSo() throws Exception {
+        this.policyDays.put("sensitive", 1);
+        this.policyDays.put("internal", 3);
+        long sensitive = this.queue(SENSITIVE_JOB);
+        long internal = this.queue(STEPS_JOB);
+        this.pass();
+
+        assertThat(this.keptSeconds(sensitive)).as("48 hours of its own, cut to the policy's one day").isNotEmpty()
+            .allSatisfy(seconds -> assertThat(seconds).isBetween(24 * 3600L - 120, 24 * 3600L + 120));
+        assertThat(this.keptSeconds(internal)).as("none of its own: the policy's three days").hasSize(2)
+            .allSatisfy(seconds -> assertThat(seconds).isBetween(72 * 3600L - 120, 72 * 3600L + 120));
+        assertThat(login.queryForObject("SELECT count(*) FROM run_output o JOIN run_dataset d ON d.run_dataset_id = o.run_dataset_id "
+            + "JOIN step_execution s ON s.step_execution_id = o.step_execution_id WHERE s.job_queue_id = ? AND o.name = 'patients.csv' "
+            + "AND o.expires_at = d.expires_at", Long.class, sensitive)).as("the manifest names the same expiry").isEqualTo(1L);
+
+        this.policyDays.clear();
+        long unpolicied = this.queue(SENSITIVE_JOB);
+        this.pass();
+        assertThat(this.keptSeconds(unpolicied)).as("no policy days: the pipeline's own 48 hours, as before")
+            .allSatisfy(seconds -> assertThat(seconds).isBetween(48 * 3600L - 120, 48 * 3600L + 120));
+    }
+
+    /**
+     * MIG-243: the retention sweep, on a clock -- nothing before the expiry; after it, the run's datasets and files are
+     * removed and each is in retention_log; a run_dataset row whose key is not the engine's for its run is left alone.
+     */
+    @Test
+    void mig243TheRetentionSweepRemovesExpiredEngineDatasetsOnlyAndRecordsEach() throws Exception {
+        long run = this.queue(STEPS_JOB);
+        this.pass();
+        long step = login.queryForObject("SELECT step_execution_id FROM step_execution WHERE job_queue_id = ? AND step_key = 'shape'", Long.class, run);
+        // Not the engine's: a key outside datasets/, and one under another run's datasets/.
+        login.update("INSERT INTO run_dataset (step_execution_id, name, storage_key, row_count, expires_at) VALUES (?, 'foreign', 'exports/keep.csv', 1, "
+            + "now() - interval '1 day')", step);
+        login.update("INSERT INTO run_dataset (step_execution_id, name, storage_key, row_count, expires_at) VALUES (?, 'elsewhere', ?, 1, "
+            + "now() - interval '1 day')", step, "datasets/" + (run + 1000) + "/1/shape/output.json");
+        List<String> keys = login.queryForList("SELECT d.storage_key FROM run_dataset d JOIN step_execution s ON s.step_execution_id = "
+            + "d.step_execution_id WHERE s.job_queue_id = ? AND d.storage_key LIKE ? ORDER BY 1", String.class, run, "datasets/" + run + "/%");
+        assertThat(keys).hasSize(2);
+        Instant now = Instant.now();
+
+        DatasetSweep early = AcrossTenantsProxy.of(new DatasetSweep(db.appJdbc(), new FileDatasetStore(datasetDir.toString()),
+            Clock.fixed(now.plus(Duration.ofHours(1)), ZoneOffset.UTC)));
+        early.sweep();
+        assertThat(login.queryForObject("SELECT count(*) FROM retention_log WHERE job_queue_id = ?", Long.class, run)).isZero();
+        assertThat(keys).allSatisfy(key -> assertThat(Files.exists(datasetDir.resolve(key))).isTrue());
+
+        Instant later = now.plus(Duration.ofHours(25));
+        DatasetSweep sweep = AcrossTenantsProxy.of(new DatasetSweep(db.appJdbc(), new FileDatasetStore(datasetDir.toString()),
+            Clock.fixed(later, ZoneOffset.UTC)));
+        sweep.sweep();
+
+        assertThat(keys).allSatisfy(key -> assertThat(Files.exists(datasetDir.resolve(key))).as(key).isFalse());
+        assertThat(login.queryForList("SELECT name FROM run_dataset WHERE step_execution_id IN (SELECT step_execution_id FROM step_execution "
+            + "WHERE job_queue_id = ?) ORDER BY name", String.class, run)).as("only what is not the engine's is left").containsExactly("elsewhere", "foreign");
+        List<Map<String, Object>> logged = login.queryForList("SELECT tenant_id, step_key, name, storage_key, row_count, expires_at, removed_at, reason "
+            + "FROM retention_log WHERE job_queue_id = ? ORDER BY storage_key", run);
+        assertThat(logged).hasSize(2);
+        assertThat(logged).extracting(r -> r.get("storage_key")).containsExactlyElementsOf(keys);
+        assertThat(logged).allSatisfy(r -> {
+            assertThat(r.get("tenant_id")).isEqualTo(TENANT);
+            assertThat(r.get("name")).isEqualTo("output");
+            assertThat(r.get("expires_at")).isNotNull();
+            assertThat(((Timestamp) r.get("removed_at")).toInstant()).isEqualTo(later.truncatedTo(ChronoUnit.MICROS));
+            assertThat(r.get("reason")).isEqualTo("expired");
+        });
+        assertThat(logged).extracting(r -> r.get("step_key")).containsExactlyInAnyOrder("shape", "more");
+        assertThat(RowSecurity.forTenant(OTHER, () -> db.appJdbc().queryForObject("SELECT count(*) FROM retention_log", Long.class)))
+            .as("another workspace sees none of it").isZero();
+        login.update("DELETE FROM run_dataset WHERE step_execution_id = ? AND name IN ('foreign', 'elsewhere')", step);
     }
 }

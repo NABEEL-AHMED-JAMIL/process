@@ -41,6 +41,22 @@ class DefinitionValidatorTest {
         assertThat(this.validator.require(this.valid())).isNotNull();
     }
 
+    /** MIG-243: a pipeline's sensitivity is one of the data policies' three levels, or not said (internal). */
+    @Test
+    void theSensitivityIsPublicInternalOrSensitive() {
+        for (String level : new String[] {"public", "internal", "sensitive"}) {
+            PipelineDefinition definition = this.valid();
+            definition.getSettings().setSensitivity(level);
+            assertThat(this.validator.problems(definition)).as(level).isEmpty();
+            assertThat(definition.getSettings().effectiveSensitivity()).isEqualTo(level);
+        }
+        PipelineDefinition definition = this.valid();
+        assertThat(definition.getSettings().effectiveSensitivity()).isEqualTo("internal");
+        definition.getSettings().setSensitivity("PHI");
+        assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("settings.sensitivity", "one of [public, internal, sensitive]"));
+    }
+
     @Test
     void everyExistingPipelinesLegacyWrapValidates() {
         assertThat(this.validator.problems(PipelineDefinition.legacy("F768927"))).isEmpty();

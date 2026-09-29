@@ -120,6 +120,8 @@ public class StepEngine {
     private final ExecutorService runThreads;
     private final ExecutorService tryThreads;
     private final Sleeper sleeper;
+    /** MIG-243: how long a run's datasets are kept -- the definition's hours against the workspace's data policy. */
+    private RetentionPolicy retention = RetentionPolicy.DEFINITION_ONLY;
 
     @Autowired
     public StepEngine(PipelineDefinitionStore definitions, StepStore steps, StepTasks tasks, DefinitionValidator validator,
@@ -144,6 +146,12 @@ public class StepEngine {
         this.runThreads = runThreads;
         this.tryThreads = tryThreads;
         this.sleeper = sleeper;
+    }
+
+    /** MIG-243: the data policy's retention (PolicyRetention); without one, the definition's hours alone, as before. */
+    @Autowired(required = false)
+    public void useRetention(RetentionPolicy retention) {
+        this.retention = retention == null ? RetentionPolicy.DEFINITION_ONLY : retention;
     }
 
     private static ExecutorService newRunThreads(int threads) {
@@ -284,6 +292,8 @@ public class StepEngine {
         /** Each step's output by its key: the dataset key it wrote, or the one it passed on. */
         private final Map<String, String> outputs = new HashMap<>();
         private Dataset sourceRows;
+        /** MIG-243: how long this run's datasets are kept, read once when the first is written. */
+        private Duration keptFor;
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -507,8 +517,7 @@ public class StepEngine {
             } catch (JsonProcessingException ex) {
                 columns = "[]";
             }
-            steps.dataset(row, "output", key, output.size(), columns,
-                Instant.now().plus(Duration.ofHours(this.settings.effectiveRetentionHours())));
+            steps.dataset(row, "output", key, output.size(), columns, this.expiry());
             return key;
         }
 
@@ -551,9 +560,15 @@ public class StepEngine {
             return new long[] {steps.dataset(row, fileName, key, rows, columnsJson, expires), expires.toEpochMilli()};
         }
 
-        /** When a dataset written now expires: the pipeline's datasetRetentionHours on. */
+        /**
+         * When a dataset written now expires: the pipeline's datasetRetentionHours, cut to the workspace's data policy for
+         * the pipeline's sensitivity (MIG-243, {@link RetentionPolicy}).
+         */
         private Instant expiry() {
-            return Instant.now().truncatedTo(ChronoUnit.MILLIS).plus(Duration.ofHours(this.settings.effectiveRetentionHours()));
+            if (this.keptFor == null) {
+                this.keptFor = retention.retentionFor(this.tenantId, this.settings);
+            }
+            return Instant.now().truncatedTo(ChronoUnit.MILLIS).plus(this.keptFor);
         }
 
         /**

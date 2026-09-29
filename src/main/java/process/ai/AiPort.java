@@ -5,6 +5,7 @@ import process.model.dto.ResponseDto;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -114,6 +115,14 @@ public interface AiPort {
 
     /** One ad-hoc answer from an agent, as the signed-in caller. AI supplies the agent's own key. */
     ResponseDto adHoc(Long aiAgentId, String instructions, String text, Boolean jsonMode) throws AiUnavailableException;
+
+    /**
+     * MIG-243: the workspace's retention days per sensitivity level (public, internal, sensitive), as its data policy in
+     * ai-service says them; a level with none is null or absent. Empty from a port that knows no policy.
+     */
+    default Map<String, Integer> retentionDays(Long tenantId) throws AiUnavailableException {
+        return Collections.emptyMap();
+    }
 
     /** The AI service could not be asked. Callers refuse rather than guess. */
     class AiUnavailableException extends Exception {

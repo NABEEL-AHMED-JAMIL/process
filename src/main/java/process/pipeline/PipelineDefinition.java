@@ -246,15 +246,20 @@ public class PipelineDefinition {
 
     /** What applies to every step that does not say otherwise, and how long a run's datasets are kept. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"datasetRetentionHours", "defaultTimeoutSeconds", "defaultOnError"})
+    @JsonPropertyOrder({"datasetRetentionHours", "defaultTimeoutSeconds", "defaultOnError", "sensitivity"})
     public static class Settings {
 
         public static final int DEFAULT_RETENTION_HOURS = 24;
         public static final int DEFAULT_TIMEOUT_SECONDS = 600;
+        public static final String INTERNAL = "internal";
+        /** MIG-243: the levels a pipeline's data may be, as the data policies know them. */
+        public static final List<String> SENSITIVITIES = Arrays.asList("public", INTERNAL, "sensitive");
 
         private Integer datasetRetentionHours;
         private Integer defaultTimeoutSeconds;
         private String defaultOnError;
+        /** MIG-243: the sensitivity of the pipeline's data -- public, internal or sensitive; not said is internal. */
+        private String sensitivity;
 
         @JsonIgnore
         public int effectiveRetentionHours() {
@@ -276,6 +281,15 @@ public class PipelineDefinition {
 
         public Integer getDefaultTimeoutSeconds() { return defaultTimeoutSeconds; }
         public void setDefaultTimeoutSeconds(Integer defaultTimeoutSeconds) { this.defaultTimeoutSeconds = defaultTimeoutSeconds; }
+
+        /** MIG-243: the level the data policy's retention is read for: the one said, or internal. */
+        @JsonIgnore
+        public String effectiveSensitivity() {
+            return this.sensitivity == null ? INTERNAL : this.sensitivity;
+        }
+
+        public String getSensitivity() { return sensitivity; }
+        public void setSensitivity(String sensitivity) { this.sensitivity = sensitivity; }
 
         public String getDefaultOnError() { return defaultOnError; }
         public void setDefaultOnError(String defaultOnError) { this.defaultOnError = defaultOnError; }
