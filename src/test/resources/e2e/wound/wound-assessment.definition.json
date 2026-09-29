@@ -28,6 +28,20 @@
    }
   },
   {
+   "key": "size",
+   "name": "Measure each wound against its ruler (in code)",
+   "task": "measure_image",
+   "input": "check",
+   "config": {
+    "image": {
+     "bucket": "${BUCKET}",
+     "keyColumn": "image_key"
+    },
+    "onError": "null",
+    "maxRows": 50
+   }
+  },
+  {
    "key": "history",
    "name": "Earlier visits",
    "task": "read_file",
@@ -90,9 +104,9 @@
   },
   {
    "key": "assess",
-   "name": "AI assessment of each photo (DRAFT)",
+   "name": "AI description of each photo (DRAFT; sizes come from the measurement)",
    "task": "ai_prompt",
-   "input": "check",
+   "input": "size",
    "config": {
     "promptId": "${PROMPT_ID}",
     "values": {
@@ -103,18 +117,6 @@
      "keyColumn": "image_key"
     },
     "fields": [
-     {
-      "path": "scale_reference_visible",
-      "target": "scale_visible"
-     },
-     {
-      "path": "length_cm",
-      "target": "length_cm"
-     },
-     {
-      "path": "width_cm",
-      "target": "width_cm"
-     },
      {
       "path": "wound_bed",
       "target": "wound_bed"
@@ -155,10 +157,6 @@
       "expression": "number(prev_area_cm2)"
      },
      {
-      "target": "area_cm2",
-      "expression": "if(scale_visible == true, round(length_cm * width_cm * 0.785, 1), null)"
-     },
-     {
       "target": "change_pct",
       "expression": "if(prev_area_cm2 > 0 and not is_null(area_cm2), round((area_cm2 - prev_area_cm2) / prev_area_cm2 * 100, 1), null)"
      },
@@ -187,7 +185,7 @@
      "patient_id": "patient_id",
      "visit_date": "visit_date",
      "wound_site": "wound_site",
-     "scale_visible": "scale_visible",
+     "scale_found": "scale_visible",
      "length_cm": "length_cm",
      "width_cm": "width_cm",
      "area_cm2": "area_cm2",
@@ -198,7 +196,8 @@
      "trend": "trend",
      "wound_bed": "wound_bed",
      "needs_review": "needs_review",
-     "status": "status"
+     "status": "status",
+     "measure_note": "measure_note"
     }
    }
   },
@@ -241,7 +240,7 @@
     "title": "Wound assessment, run {{run}} (synthetic data)",
     "fields": {
      "Status": "DRAFT: AI output for clinician review",
-     "Measurement": "Sizes are estimates, only where a ruler is visible",
+     "Measurement": "Measured in code from the ruler in each photo; no ruler, no sizes",
      "Cases": "{{rows}}"
     },
     "columns": [
@@ -249,6 +248,8 @@
      "patient_id",
      "visit_date",
      "wound_site",
+     "length_cm",
+     "width_cm",
      "area_cm2",
      "prev_area_cm2",
      "change_pct",

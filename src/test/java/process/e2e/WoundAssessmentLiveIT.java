@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.withinPercentage;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -44,12 +45,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *       under wound-e2e/; the intake batch goes to the inbox, and its arrival starts the job.</li>
  *   <li>The run completes through the step engine: the batch's bad row is dropped by wound_intake_rows, each photo is
  *       assessed by the model (DRAFT), and area, change and trend are computed in code.</li>
- *   <li>The outputs agree: the CSV and the JSON hold the same values, the PDF is a PDF, every row is DRAFT, area is
- *       round(length x width x 0.785, 1) exactly where a ruler was seen, and the trend follows the change.</li>
+ *   <li>The outputs agree: the CSV and the JSON hold the same values, the PDF is a PDF, every row is DRAFT, sizes exist
+ *       exactly where a ruler was seen, and the trend follows the change.</li>
  *   <li>The results wait for the internal review (PENDING).</li>
- *   <li>Accuracy against the labelled set: whether a ruler is visible must be right for every photo; the sizes are
- *       reported, not asserted -- a small local model over-estimates them (MIG-255 notes), which is why they are
- *       estimates for a clinician to review.</li>
+ *   <li>Accuracy against the labelled set: the ruler is found on every photo that has one, and the sizes are measured in
+ *       code (measure_image) within 10% of the drawn truth (area 15%); a photo without a ruler gets no size. The model
+ *       only describes the wound (owner decision 2026-09-29: it over-estimated sizes by 40-68%).</li>
  * </ol>
  * Test data is left in place: the uploaded objects, the saved definition version and the run.
  */
@@ -63,7 +64,12 @@ class WoundAssessmentLiveIT {
     /** The labelled set: each synthetic photo's truth (the ellipse drawn is the wound; 40 px is a cm on its ruler). */
     private static final Map<String, Boolean> RULER = new HashMap<>();
 
+    /** The drawn wound bed's length and width in cm (an ellipse). */
+    private static final Map<String, double[]> SIZES = new HashMap<>();
+
     static {
+        SIZES.put("WC-0001", new double[] {4.0, 2.67});
+        SIZES.put("WC-0002", new double[] {2.5, 1.67});
         RULER.put("WC-0001", true);
         RULER.put("WC-0002", true);
         RULER.put("WC-0003", false);
@@ -209,11 +215,15 @@ class WoundAssessmentLiveIT {
             }
             assertThat(row.path("status").asText()).isEqualTo("DRAFT");
             assertThat(row.path("scale_visible").asBoolean()).as(caseId + ": a ruler is visible (labelled set)").isEqualTo(RULER.get(caseId));
-            if (row.path("scale_visible").asBoolean() && row.path("length_cm").isNumber() && row.path("width_cm").isNumber()) {
-                double area = Math.round(row.path("length_cm").asDouble() * row.path("width_cm").asDouble() * 0.785 * 10) / 10.0;
-                assertThat(row.path("area_cm2").asDouble()).as(caseId + ": area computed in code").isEqualTo(area);
+            if (row.path("scale_visible").asBoolean()) {
+                // Measured in code against the photo's ruler (measure_image): within 10% of the drawn truth.
+                double[] truth = SIZES.get(caseId);
+                assertThat(row.path("length_cm").asDouble()).as(caseId + ": length").isCloseTo(truth[0], withinPercentage(10));
+                assertThat(row.path("width_cm").asDouble()).as(caseId + ": width").isCloseTo(truth[1], withinPercentage(10));
+                assertThat(row.path("area_cm2").asDouble()).as(caseId + ": area").isCloseTo(Math.PI / 4 * truth[0] * truth[1], withinPercentage(15));
             } else {
-                assertThat(row.path("area_cm2").isNull()).as(caseId + ": no ruler, no area").isTrue();
+                assertThat(row.path("area_cm2").isNull()).as(caseId + ": no ruler, no size").isTrue();
+                assertThat(row.path("length_cm").isNull()).isTrue();
             }
             String trend = row.path("trend").asText();
             if (row.path("prev_area_cm2").isNull()) {
@@ -226,7 +236,7 @@ class WoundAssessmentLiveIT {
             }
             sizes.add(caseId + " " + row.path("length_cm") + " x " + row.path("width_cm") + " cm");
         }
-        System.out.println("MIG-255 run " + run + " estimated sizes (truth: WC-0001 4.0 x 2.67, WC-0002 2.5 x 1.67, WC-0003 none): " + sizes);
+        System.out.println("MIG-255 run " + run + " measured sizes (truth: WC-0001 4.0 x 2.67, WC-0002 2.5 x 1.67, WC-0003 none): " + sizes);
     }
 
     /** Whether a JSON value and a CSV cell say the same: numbers by value, null as an empty cell. */
