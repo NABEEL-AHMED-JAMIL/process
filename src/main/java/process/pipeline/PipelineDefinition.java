@@ -7,9 +7,14 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import process.model.enums.ReviewParty;
 
 /**
  * A pipeline as ordered steps (MIG-230): where its input comes from, the steps that run on it in order, and the
@@ -29,7 +34,8 @@ import java.util.Map;
  *   - key: shape
  *     task: select
  *     input: read                      # an earlier step's output; default: the latest output before this step
- * settings: {datasetRetentionHours: 24, defaultTimeoutSeconds: 600, defaultOnError: fail}
+ * settings: {datasetRetentionHours: 24, defaultTimeoutSeconds: 600, defaultOnError: fail,
+ *            review: {required: [internal, customer]}}   # MIG-237: who must approve a run's results; none by default
  * </pre>
  *
  * Every existing pipeline is, without a stored definition, {@link #legacy}: one {@code legacy} step that runs today's
@@ -246,7 +252,7 @@ public class PipelineDefinition {
 
     /** What applies to every step that does not say otherwise, and how long a run's datasets are kept. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"datasetRetentionHours", "defaultTimeoutSeconds", "defaultOnError"})
+    @JsonPropertyOrder({"datasetRetentionHours", "defaultTimeoutSeconds", "defaultOnError", "review"})
     public static class Settings {
 
         public static final int DEFAULT_RETENTION_HOURS = 24;
@@ -255,6 +261,22 @@ public class PipelineDefinition {
         private Integer datasetRetentionHours;
         private Integer defaultTimeoutSeconds;
         private String defaultOnError;
+        private Review review;
+
+        /**
+         * MIG-237: the parties that must approve a run's results, INTERNAL before CUSTOMER; none without a review
+         * setting. Words the validator refuses are left out, so a run is never held for a party nobody can be.
+         */
+        @JsonIgnore
+        public Set<ReviewParty> requiredReviews() {
+            Set<ReviewParty> required = EnumSet.noneOf(ReviewParty.class);
+            if (this.review != null && this.review.getRequired() != null) {
+                for (String word : this.review.getRequired()) {
+                    Review.partyOf(word).ifPresent(required::add);
+                }
+            }
+            return required;
+        }
 
         @JsonIgnore
         public int effectiveRetentionHours() {
@@ -279,5 +301,44 @@ public class PipelineDefinition {
 
         public String getDefaultOnError() { return defaultOnError; }
         public void setDefaultOnError(String defaultOnError) { this.defaultOnError = defaultOnError; }
+
+        public Review getReview() { return review; }
+        public void setReview(Review review) { this.review = review; }
+    }
+
+    /**
+     * MIG-237: who reviews a run's results -- {@code required: [internal]}, {@code [customer]}, {@code [internal,
+     * customer]} or {@code []}. Absent means [] (nobody: the run's review status is NOT_REQUIRED). A run that requires
+     * a review starts PENDING and is approved only by every party named here.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class Review {
+
+        /** The words a party is written as, in the order they are listed. */
+        public static final List<String> PARTIES = Collections.unmodifiableList(Arrays.asList("internal", "customer"));
+
+        private List<String> required;
+
+        public static Review of(List<String> required) {
+            Review review = new Review();
+            review.setRequired(required == null ? null : new ArrayList<>(required));
+            return review;
+        }
+
+        /** The party a word names: exactly "internal" or "customer". */
+        public static Optional<ReviewParty> partyOf(String word) {
+            if ("internal".equals(word)) {
+                return Optional.of(ReviewParty.INTERNAL);
+            }
+            return "customer".equals(word) ? Optional.of(ReviewParty.CUSTOMER) : Optional.empty();
+        }
+
+        /** The word a party is written as. */
+        public static String wordOf(ReviewParty party) {
+            return party.name().toLowerCase(Locale.ROOT);
+        }
+
+        public List<String> getRequired() { return required; }
+        public void setRequired(List<String> required) { this.required = required; }
     }
 }

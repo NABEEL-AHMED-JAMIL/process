@@ -1,5 +1,6 @@
 package process.pipeline;
 
+import process.model.enums.ReviewParty;
 import process.pipeline.tasks.SampleStepTask;
 import org.junit.jupiter.api.Test;
 
@@ -157,6 +158,35 @@ class DefinitionValidatorTest {
         assertThat(bare.effectiveTimeoutSeconds(settings)).isEqualTo(30);
         bare.setOnError("skip_rest");
         assertThat(bare.effectiveOnError(settings)).isEqualTo(OnError.SKIP_REST);
+    }
+
+    /** MIG-237: settings.review.required names the parties that must approve a run's results -- each once, as a word. */
+    @Test
+    void reviewRequiresInternalCustomerBothOrNobody() {
+        for (List<String> required : Arrays.asList(Collections.<String>emptyList(), Arrays.asList("internal"), Arrays.asList("customer"),
+            Arrays.asList("internal", "customer"), Arrays.asList("customer", "internal"))) {
+            PipelineDefinition definition = this.valid();
+            definition.getSettings().setReview(PipelineDefinition.Review.of(required));
+            assertThat(this.validator.problems(definition)).as("%s", required).isEmpty();
+        }
+        PipelineDefinition definition = this.valid();
+        definition.getSettings().setReview(PipelineDefinition.Review.of(Arrays.asList("internal", "partner", "INTERNAL", null,
+            "internal")));
+        assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("settings.review.required[1]", "one of [internal, customer]"),
+            new DefinitionProblem("settings.review.required[2]", "one of [internal, customer]"),
+            new DefinitionProblem("settings.review.required[3]", "one of [internal, customer]"),
+            new DefinitionProblem("settings.review.required[4]", "'internal' is already required"));
+    }
+
+    @Test
+    void withoutAReviewSettingNobodyReviewsAndAReviewSettingSaysWho() {
+        assertThat(new PipelineDefinition.Settings().requiredReviews()).isEmpty();
+        PipelineDefinition.Settings settings = new PipelineDefinition.Settings();
+        settings.setReview(new PipelineDefinition.Review());
+        assertThat(settings.requiredReviews()).isEmpty();
+        settings.setReview(PipelineDefinition.Review.of(Arrays.asList("customer", "internal")));
+        assertThat(settings.requiredReviews()).containsExactly(ReviewParty.INTERNAL, ReviewParty.CUSTOMER);
     }
 
     @Test
