@@ -22,6 +22,7 @@ import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.service.impl.TransactionServiceImpl;
 import process.notifications.JobMail;
+import process.pipeline.StepEngine;
 import process.util.exception.ExceptionUtil;
 
 import javax.annotation.PreDestroy;
@@ -111,6 +112,12 @@ public class PreDispatchPhase {
     private final ExecutorService aiThreads;
     /** Runs this instance is preparing, so a pass never hands one to a second thread. */
     private final Set<Long> inProgress = ConcurrentHashMap.newKeySet();
+    /**
+     * MIG-230: runs of a pipeline with a stored step definition go to the step engine instead of being prepared for a
+     * worker. A setter, so a phase built by hand in a test -- and every run of a pipeline without a definition, which is
+     * every pipeline today -- takes exactly the path it took before.
+     */
+    private StepEngine stepEngine;
 
     @Autowired
     public PreDispatchPhase(TransactionServiceImpl transactionService, BulkAction bulkAction, AiStepService aiStepService,
@@ -128,6 +135,11 @@ public class PreDispatchPhase {
         this.failures = new DispatchFailures(bulkAction, transactionService, jobMail, transactions);
         this.transactions = transactions;
         this.aiThreads = aiThreads;
+    }
+
+    @Autowired(required = false)
+    public void useStepEngine(StepEngine stepEngine) {
+        this.stepEngine = stepEngine;
     }
 
     private static ExecutorService newAiThreads() {
@@ -174,6 +186,15 @@ public class PreDispatchPhase {
                     continue;
                 }
                 Optional<SourceJob> job = this.transactionService.findByJobIdAndJobStatus(run.get().getJobId(), Status.Active);
+                // MIG-230: a run of a pipeline with a stored step definition is the step engine's, which takes it as its
+                // worker and releases it here when it is done. Every other run -- the legacy wrap -- goes on below,
+                // unchanged.
+                Optional<StepEngine.StepPlan> plan = this.stepEngine == null || !job.isPresent() ? Optional.empty()
+                    : this.stepEngine.planFor(job.get(), run.get());
+                if (plan.isPresent()) {
+                    this.stepEngine.submit(plan.get(), () -> this.inProgress.remove(jobQueueId));
+                    continue;
+                }
                 if (job.isPresent() && job.get().getTaskDetail() != null
                     && this.aiStepService.hasSteps(job.get().getTenantId(), job.get().getTaskDetail().getPipelineId())) {
                     // Its own thread: the run's workspace, named (the pass's grant does not travel).
