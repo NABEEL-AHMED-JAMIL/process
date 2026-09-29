@@ -114,6 +114,30 @@ class DispatchRecordShapeTest {
         assertThat(sent.has("tenantId")).isFalse();
     }
 
+    /**
+     * MIG-239: a run a file's arrival in the workspace's inbox started names that file -- the inbox connection's alias
+     * and the object's key under intake/ -- so the pipeline reads it instead of scanning its input folder.
+     */
+    @Test
+    void aRunStartedByAnInboxArrivalNamesTheFile() throws Exception {
+        this.run.setInputBucket("acme-inbox");
+        this.run.setInputKey("intake/2026/09/28/0b8f6a52-3f5e-4c1a-9d7e-5a4b3c2d1e0f-invoices_q3.csv");
+
+        JsonObject sent = JsonParser.parseString(this.dispatch(job(TENANT, "REF_CSV_CHECK_V1")).payload).getAsJsonObject();
+
+        assertThat(sent.get("inputBucket").getAsString()).isEqualTo("acme-inbox");
+        assertThat(sent.get("inputKey").getAsString()).isEqualTo("intake/2026/09/28/0b8f6a52-3f5e-4c1a-9d7e-5a4b3c2d1e0f-invoices_q3.csv");
+    }
+
+    /** Any other run sends neither: the worker's shape is unchanged. */
+    @Test
+    void anyOtherRunNamesNoInputFile() throws Exception {
+        JsonObject sent = JsonParser.parseString(this.dispatch(job(TENANT, "REF_CSV_CHECK_V1")).payload).getAsJsonObject();
+
+        assertThat(sent.has("inputBucket")).isFalse();
+        assertThat(sent.has("inputKey")).isFalse();
+    }
+
     @Test
     void theRecordIsKeyedByTheRunNotAtRandom() throws Exception {
         assertThat(this.dispatch(job(TENANT, "REF_CSV_CHECK_V1")).messageKey).isEqualTo("5073");

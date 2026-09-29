@@ -146,6 +146,28 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
     }
 
+    /**
+     * Queues a run because a file arrived in the job's workspace inbox (MIG-239): as Run now does, but not by hand
+     * (run_manual false), and with the file on the run -- the dispatch names it (inputBucket, inputKey). The caller has
+     * already applied Run now's rules (active job, workspace not paused, nothing in flight); the one-in-flight index
+     * still refuses a second run that races it. Runs in the caller's transaction, as the arrival's workspace.
+     */
+    public JobQueue addInboxJobInQueue(SourceJob sourceJob, String inputBucket, String inputKey, String fileName, String arrivalId) {
+        this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
+            BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue: a file arrived in the inbox.", false);
+        jobQueue.setRunManual(false);
+        jobQueue.setInputBucket(inputBucket);
+        jobQueue.setInputKey(inputKey);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        logger.info("Run {} of job {} queued by inbox arrival {} ({}).", jobQueue.getJobQueueId(), sourceJob.getJobId(), arrivalId, inputKey);
+        this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
+            "Job %s now in the queue: %s arrived in the inbox (%s, arrival %s).", sourceJob.getJobId(), fileName, inputBucket, arrivalId));
+        this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
+        return jobQueue;
+    }
+
     public void skipManualJobInQueue(Scheduler scheduler) {
 
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(scheduler.getJobId(),
@@ -674,6 +696,9 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         }
         dto.setPriority(sourceJob.getPriority());
         dto.setTenantId(sourceJob.getTenantId());
+        // An inbox arrival's run names its file (MIG-239); null on every other run, so absent from the payload.
+        dto.setInputBucket(jobQueue.getInputBucket());
+        dto.setInputKey(jobQueue.getInputKey());
         return dto.toString();
     }
 

@@ -152,7 +152,11 @@ databaseChangeLog:
   # (step_execution, V180) with its key, tries and on-error, and its log (step_log). Both new tables are guarded as V181.
   - include:
       file: db/changelog/yaml/V183.0-pipeline-steps.yaml
-  # V186: MIG-231 -- the Task Registry's per-workspace switches (task_registry_override), guarded as V181. V184 and V185
-  # are reserved by work running beside it (V185: the Inbox helper).
+  # V185: MIG-239 -- the inbox: a job's trigger on a file arriving in its workspace's inbox, each arrival's outcome, and
+  # the file on the run. V183-V184 are MIG-230's (the step engine).
+  - include:
+      file: db/changelog/yaml/V185.0-inbox-trigger.yaml
+  # V186: MIG-231 -- the Task Registry's per-workspace switches (task_registry_override), guarded as V181. V184 is
+  # reserved; V185 is MIG-239's (the inbox).
   - include:
       file: db/changelog/yaml/V186.0-task-registry-override.yaml

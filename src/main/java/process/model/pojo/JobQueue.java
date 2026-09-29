@@ -177,6 +177,19 @@ public class JobQueue {
     @Column(name = "model_profiles", columnDefinition = "TEXT")
     private String modelProfiles;
 
+    /**
+     * The file this run was started for (V185, MIG-239): an inbox arrival's storage alias and key under intake/. Null
+     * for every other run. The dispatch carries them (inputBucket, inputKey) for the pipeline to read. Not on the wire
+     * to the console: sourceJob.json/inboxArrivals says which file started which run.
+     */
+    @JsonIgnore
+    @Column(name = "input_bucket")
+    private String inputBucket;
+
+    @JsonIgnore
+    @Column(name = "input_key", length = 1024)
+    private String inputKey;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -360,6 +373,14 @@ public class JobQueue {
     public String getModelProfiles() { return modelProfiles; }
 
     public void setModelProfiles(String modelProfiles) { this.modelProfiles = modelProfiles; }
+
+    public String getInputBucket() { return inputBucket; }
+
+    public void setInputBucket(String inputBucket) { this.inputBucket = inputBucket; }
+
+    public String getInputKey() { return inputKey; }
+
+    public void setInputKey(String inputKey) { this.inputKey = inputKey; }
 
     public Long getTenantId() {
         return tenantId;
