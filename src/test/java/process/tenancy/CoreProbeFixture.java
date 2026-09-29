@@ -35,6 +35,7 @@ import process.api.PipelineRestApi;
 import process.api.PipelineDefinitionRestApi;
 import process.api.StepTimelineRestApi;
 import process.pipeline.JdbcStepStore;
+import process.pipeline.FileAccessLog;
 import process.pipeline.FileDatasetStore;
 import process.pipeline.StepTimelineService;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -460,7 +461,7 @@ final class CoreProbeFixture implements AutoCloseable {
             new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(registry), registry, taskSwitches));
         this.runDatasets = new FileDatasetStore(Files.createTempDirectory("core-probe-datasets").toString());
         this.stepTimeline = new StepTimelineRestApi(new StepTimelineService(runRows, jobRows, new JdbcStepStore(this.db.appJdbc()),
-            new JdbcModelChoiceStore(this.db.appJdbc()), this.runDatasets));
+            new JdbcModelChoiceStore(this.db.appJdbc()), this.runDatasets), new FileAccessLog(this.db.appJdbc()));
 
         KafkaSecretServiceImpl secrets = new KafkaSecretServiceImpl(this.trustedStorage, this.identity, this.encryption, CONFIG_BUCKET);
         ReflectionTestUtils.setField(secrets, "maxFileSizeKb", 512);

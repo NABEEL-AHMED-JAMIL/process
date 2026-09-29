@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import process.pipeline.FileAccessLog;
 import process.pipeline.StepTimelineService;
 
 /**
@@ -38,10 +39,14 @@ public class StepTimelineRestApi {
 
     private final StepTimelineService service;
 
+    /** MIG-243: every run dataset download, served or refused. */
+    private final FileAccessLog accessLog;
+
     private static final ObjectMapper REFUSALS = new ObjectMapper();
 
-    public StepTimelineRestApi(StepTimelineService service) {
+    public StepTimelineRestApi(StepTimelineService service, FileAccessLog accessLog) {
         this.service = service;
+        this.accessLog = accessLog;
     }
 
     @RequestMapping(value = "/sourceJob.json/stepExecutions", method = RequestMethod.GET)
@@ -52,7 +57,7 @@ public class StepTimelineRestApi {
     /**
      * Wave 4: a run dataset as a file -- csv (the default), json or jsonl. Streamed with a Content-Disposition; refused
      * with the envelope: 400 for a format it does not write, 404 for a dataset that is not the caller's (another
-     * workspace's included), 410 once it has expired.
+     * workspace's included), 410 once it has expired. Every answer is in file_access_log (MIG-243).
      */
     @RequestMapping(value = "/sourceJob.json/runDataset", method = RequestMethod.GET)
     public ResponseEntity<StreamingResponseBody> runDataset(@RequestParam Long runDatasetId,
@@ -61,6 +66,7 @@ public class StepTimelineRestApi {
         // hands it to the message converters instead ("{}" for JSON, a 500 "No converter" for CSV -- live, run 7405).
         // So a refusal is streamed too, as its JSON envelope.
         StepTimelineService.Download download = this.service.download(runDatasetId, format);
+        this.accessLog.runDataset(runDatasetId, format, download);
         if (download.refusal != null) {
             ResponseDto refusal = download.refusal;
             return ResponseEntity.status(download.status).contentType(MediaType.APPLICATION_JSON)

@@ -1,5 +1,6 @@
 package process.tenancy;
 
+import org.barco.platform.tenancy.RowSecurity;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,6 +12,7 @@ import process.pipeline.DatasetStore;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -127,6 +129,36 @@ class CoreCrossTenantProbeRunDatasetsPostgresTest {
         }
         assertThat(fx.leaks).isEmpty();
         assertThat(fx.foreignRows()).isEqualTo(before);
+    }
+
+    /**
+     * MIG-243: every download is in file_access_log -- served in the dataset's workspace with its run; another workspace's,
+     * refused as not found, in the caller's own and without the run, so nothing is written in B; a caller with no
+     * workspace leaves no row at all.
+     */
+    @Test
+    void everyDownloadIsInTheFileAccessLog() {
+        JdbcTemplate sql = fx.db.jdbc();
+        long before = sql.queryForObject("SELECT count(*) FROM file_access_log", Long.class);
+        String foreign = fx.foreignRows();
+
+        fx.probe("GET sourceJob.json/runDataset(mine, logged)", ADMIN_OF_A, () -> fx.stepTimeline.runDataset(aDatasets[0], "csv"));
+        fx.probe("GET sourceJob.json/runDataset(theirs, logged)", ADMIN_OF_A, () -> fx.stepTimeline.runDataset(bDatasets[1], null));
+        fx.probe("GET sourceJob.json/runDataset(no workspace, logged)", tenantlessUser(null), () -> fx.stepTimeline.runDataset(aDatasets[0], null));
+
+        List<Map<String, Object>> rows = sql.queryForList("SELECT tenant_id, user_id, action, kind, run_dataset_id, job_queue_id, format, outcome, "
+            + "http_status, file_name FROM file_access_log ORDER BY file_access_id DESC LIMIT 2");
+        assertThat(sql.queryForObject("SELECT count(*) FROM file_access_log", Long.class)).isEqualTo(before + 2);
+        Map<String, Object> theirs = rows.get(0);
+        assertThat(theirs).containsEntry("tenant_id", A).containsEntry("run_dataset_id", bDatasets[1]).containsEntry("outcome", "refused")
+            .containsEntry("http_status", 404).containsEntry("job_queue_id", null).containsEntry("file_name", null);
+        Map<String, Object> mine = rows.get(1);
+        assertThat(mine).containsEntry("tenant_id", A).containsEntry("user_id", ADMIN_OF_A.appUserId).containsEntry("action", "download")
+            .containsEntry("kind", "run_dataset").containsEntry("run_dataset_id", aDatasets[0]).containsEntry("job_queue_id", A_RUN)
+            .containsEntry("format", "csv").containsEntry("outcome", "served").containsEntry("http_status", 200);
+        assertThat(fx.foreignRows()).as("nothing written in B's workspace, or anyone else's").isEqualTo(foreign);
+        assertThat(RowSecurity.forTenant(B, () -> fx.db.appJdbc().queryForObject("SELECT count(*) FROM file_access_log", Long.class)))
+            .as("B sees none of A's records").isZero();
     }
 
     /** The control: A's admin downloads A's output and kept file, and a colleague's; lists A's manifest without a storage key. */

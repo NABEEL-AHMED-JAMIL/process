@@ -61,13 +61,28 @@ public class StepTimelineService {
         public final String fileName;
         public final String contentType;
         public final StreamingResponseBody body;
+        /** MIG-243: the run's workspace and the run, when the dataset is the caller's -- for the file access log. */
+        public final Long tenantId;
+        public final Long jobQueueId;
 
         private Download(int status, ResponseDto refusal, String fileName, String contentType, StreamingResponseBody body) {
+            this(status, refusal, fileName, contentType, body, null, null);
+        }
+
+        private Download(int status, ResponseDto refusal, String fileName, String contentType, StreamingResponseBody body, Long tenantId,
+            Long jobQueueId) {
             this.status = status;
             this.refusal = refusal;
             this.fileName = fileName;
             this.contentType = contentType;
             this.body = body;
+            this.tenantId = tenantId;
+            this.jobQueueId = jobQueueId;
+        }
+
+        /** The same answer, about this run of this workspace. */
+        Download of(JobQueue run) {
+            return new Download(this.status, this.refusal, this.fileName, this.contentType, this.body, run.getTenantId(), run.getJobQueueId());
         }
 
         static Download refused(int status, String message) {
@@ -168,28 +183,30 @@ public class StepTimelineService {
         Optional<StepStore.DatasetFile> found = runDatasetId == null ? Optional.empty() : this.steps.datasetById(runDatasetId);
         if (!found.isPresent()) {
             Optional<StepStore.OutputRow> swept = runDatasetId == null ? Optional.empty() : this.steps.outputOfDataset(runDatasetId);
-            if (swept.isPresent() && this.owned(swept.get().jobQueueId).isPresent()) {
-                return Download.refused(410, expired(swept.get().expiresAt));
+            Optional<JobQueue> sweptRun = swept.isPresent() ? this.owned(swept.get().jobQueueId) : Optional.empty();
+            if (sweptRun.isPresent()) {
+                return Download.refused(410, expired(swept.get().expiresAt)).of(sweptRun.get());
             }
             return Download.refused(404, DATASET_NOT_FOUND);
         }
         StepStore.DatasetFile dataset = found.get();
-        if (!this.owned(dataset.jobQueueId).isPresent()) {
+        Optional<JobQueue> run = this.owned(dataset.jobQueueId);
+        if (!run.isPresent()) {
             return Download.refused(404, DATASET_NOT_FOUND);
         }
         if (dataset.expiresAt != null && !dataset.expiresAt.isAfter(Instant.now())) {
-            return Download.refused(410, expired(dataset.expiresAt));
+            return Download.refused(410, expired(dataset.expiresAt)).of(run.get());
         }
         try {
             if (dataset.storageKey.contains("/files/")) {
-                return this.keptFile(dataset, wanted);
+                return this.keptFile(dataset, wanted).of(run.get());
             }
             Dataset rows = this.datasets.read(dataset.storageKey);
             String as = wanted == null ? "csv" : wanted;
             String name = String.format("run-%d-attempt-%d-%s-%s.%s", dataset.jobQueueId, dataset.attempt, dataset.stepKey, dataset.name, as);
-            return Download.file(name, as, out -> FileFormats.writeTo(rows, as, out));
+            return Download.file(name, as, out -> FileFormats.writeTo(rows, as, out)).of(run.get());
         } catch (Exception ex) {
-            return Download.refused(410, "This dataset's content is no longer available; run the job again to make it anew.");
+            return Download.refused(410, "This dataset's content is no longer available; run the job again to make it anew.").of(run.get());
         }
     }
 

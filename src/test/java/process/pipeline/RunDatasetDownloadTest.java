@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import process.ai.InMemoryModelChoiceStore;
 import process.api.StepTimelineRestApi;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -220,7 +221,7 @@ class RunDatasetDownloadTest {
     // as a 500 "No converter" (live, 2026-09-29, run 7405). Calling the service directly could not see that.
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new StepTimelineRestApi(this.service)).build();
+        return MockMvcBuilders.standaloneSetup(new StepTimelineRestApi(this.service, new FileAccessLog(mock(JdbcTemplate.class)))).build();
     }
 
     @Test
