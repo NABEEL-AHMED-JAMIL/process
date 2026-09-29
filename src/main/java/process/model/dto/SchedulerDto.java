@@ -23,6 +23,8 @@ public class SchedulerDto {
     private String intervalValue;
     private String daysOfWeek;
     private Integer dayOfMonth;
+    /** A Cron schedule's expression (Wave 4): five fields, or six with seconds 0; null for the other frequencies. */
+    private String cronExpression;
     private Long jobId;
     private Timestamp dateCreated;
     private LocalDateTime nextRunAt;
@@ -93,6 +95,14 @@ public class SchedulerDto {
 
     public void setDayOfMonth(Integer dayOfMonth) {
         this.dayOfMonth = dayOfMonth;
+    }
+
+    public String getCronExpression() {
+        return cronExpression;
+    }
+
+    public void setCronExpression(String cronExpression) {
+        this.cronExpression = cronExpression;
     }
 
     public Long getJobId() {

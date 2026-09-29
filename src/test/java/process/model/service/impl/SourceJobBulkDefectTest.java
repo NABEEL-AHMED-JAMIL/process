@@ -89,6 +89,11 @@ public class SourceJobBulkDefectTest {
 
     /** The same sheet, with the Recurrence cell open to the test as well. */
     private static FileUploadDto sheetWith(String taskIdCell, String recurrenceCell) throws Exception {
+        return sheetWith(taskIdCell, "Daily", recurrenceCell);
+    }
+
+    /** The same sheet, with the Frequency cell open too. */
+    private static FileUploadDto sheetWith(String taskIdCell, String frequencyCell, String recurrenceCell) throws Exception {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             XSSFSheet sheet = workbook.createSheet(ProcessUtil.JOB_ADD);
             Row header = sheet.createRow(0);
@@ -100,7 +105,7 @@ public class SourceJobBulkDefectTest {
             // the past, so a fixed one would pass today and fail for ever after.
             String startDate = LocalDate.now().plusDays(1).toString();
             String[] cells = { "nightly load", taskIdCell, startDate, "", "02:00",
-                "Daily", recurrenceCell, "1", "False", "False", "False" };
+                frequencyCell, recurrenceCell, "1", "False", "False", "False" };
             for (int i = 0; i < cells.length; i++) {
                 body.createCell(i).setCellValue(cells[i]);
             }
@@ -214,6 +219,41 @@ public class SourceJobBulkDefectTest {
         assertThat(captor.getValue().getNextRunAt()).isNotNull();
         // MIG-29: written with its job's tenant (the job takes the linked task's).
         assertThat(captor.getValue().getTenantId()).isEqualTo(TENANT_A);
+    }
+
+    // ---- upload: a Cron row carries its expression in the Recurrence cell (Wave 4) ------------------
+
+    @Test
+    void aCronRowIsSavedWithItsExpressionAndNoInterval() throws Exception {
+        this.theLinkedTaskExists();
+
+        ResponseDto response = this.service.uploadSourceJob(sheetWith("1043", "Cron", " 0 9  * * MON-FRI "));
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        ArgumentCaptor<Scheduler> captor = ArgumentCaptor.forClass(Scheduler.class);
+        verify(this.transactionService).saveOrUpdateScheduler(captor.capture());
+        assertThat(captor.getValue().getFrequency()).isEqualTo("Cron");
+        assertThat(captor.getValue().getCronExpression()).isEqualTo("0 9 * * MON-FRI");
+        assertThat(captor.getValue().getIntervalValue()).isNull();
+        assertThat(captor.getValue().getNextRunAt()).isNotNull();
+        assertThat(captor.getValue().getNextRunAt().getHour()).isEqualTo(9);
+        assertThat(captor.getValue().getNextRunAt().getDayOfWeek().getValue()).isLessThanOrEqualTo(5);
+    }
+
+    @Test
+    void aBadOrTooFrequentCronRowIsReportedAgainstItsRow() throws Exception {
+        this.theLinkedTaskExists();
+
+        ResponseDto bad = this.service.uploadSourceJob(sheetWith("1043", "Cron", "0 25 * * *"));
+        assertThat(bad.getStatus()).isEqualTo("ERROR");
+        assertThat(String.valueOf(((List<?>) bad.getData()).get(0))).contains("row 2").contains("is not a cron expression");
+
+        ResponseDto seconds = this.service.uploadSourceJob(sheetWith("1043", "Cron", "*/10 * * * * *"));
+        assertThat(String.valueOf(((List<?>) seconds.getData()).get(0))).contains("row 2").contains("at most once a minute");
+
+        ResponseDto blank = this.service.uploadSourceJob(sheetWith("1043", "Cron", ""));
+        assertThat(String.valueOf(((List<?>) blank.getData()).get(0))).contains("row 2").contains("cron expression");
+        verify(this.transactionService, never()).saveOrUpdateScheduler(any());
     }
 
     // ---- download: one query for the schedules, and no unguarded task dereference ----------------

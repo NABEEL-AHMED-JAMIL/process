@@ -3,6 +3,7 @@ package process.model.service.impl;
 import process.identity.WorkspaceNames;
 import org.slf4j.Logger;
 import process.util.BusinessTime;
+import process.util.CronSchedule;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
@@ -12,6 +13,7 @@ import org.springframework.util.StringUtils;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.*;
 import process.model.enums.Execution;
+import process.model.enums.Frequency;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.enums.Status;
@@ -32,6 +34,7 @@ import process.util.ProcessUtil;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import static process.util.ProcessUtil.*;
@@ -151,6 +154,10 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (schedulerCardinalityError != null) {
             return new ResponseDto(ERROR, schedulerCardinalityError);
         }
+        String cronError = cronScheduleError(sourceJobDto);
+        if (cronError != null) {
+            return new ResponseDto(ERROR, cronError);
+        }
 
         Optional<SourceTask> taskDetail = this.sourceTaskRepository.findById(
              sourceJobDto.getTaskDetail().getTaskDetailId());
@@ -223,10 +230,13 @@ public class SourceJobServiceImpl implements SourceJobService {
      */
     /** Whether a posted timetable is the stored one; an empty interval means "unchanged", as applySchedulerFields reads it. */
     static boolean sameTimetable(Scheduler stored, SchedulerDto posted) {
-        return Objects.equals(stored.getStartDate(), posted.getStartDate())
+        // A Cron schedule's start date and time may be left out (see applySchedulerFields): left out is "unchanged".
+        boolean cron = Frequency.Cron.name().equals(posted.getFrequency());
+        return (Objects.equals(stored.getStartDate(), posted.getStartDate()) || (cron && posted.getStartDate() == null))
             && Objects.equals(stored.getEndDate(), posted.getEndDate())
-            && Objects.equals(stored.getStartTime(), posted.getStartTime())
+            && (Objects.equals(stored.getStartTime(), posted.getStartTime()) || (cron && posted.getStartTime() == null))
             && Objects.equals(stored.getFrequency(), posted.getFrequency())
+            && (!cron || Objects.equals(stored.getCronExpression(), CronSchedule.normalise(posted.getCronExpression())))
             && Objects.equals(stored.getDaysOfWeek(), posted.getDaysOfWeek())
             && Objects.equals(stored.getDayOfMonth(), posted.getDayOfMonth())
             && (StringUtils.isEmpty(posted.getIntervalValue())
@@ -234,7 +244,10 @@ public class SourceJobServiceImpl implements SourceJobService {
     }
 
     private void applySchedulerFields(Scheduler scheduler, SchedulerDto schedulerDto, Long jobId) {
-        scheduler.setStartDate(schedulerDto.getStartDate());
+        boolean cron = Frequency.Cron.name().equals(schedulerDto.getFrequency());
+        if (!cron || schedulerDto.getStartDate() != null) {
+            scheduler.setStartDate(schedulerDto.getStartDate());
+        }
         /*
          * Written whatever it holds, including nothing.
          *
@@ -252,15 +265,51 @@ public class SourceJobServiceImpl implements SourceJobService {
          * which is exactly why the hole was there and nowhere else.
          */
         scheduler.setEndDate(schedulerDto.getEndDate());
-        scheduler.setStartTime(schedulerDto.getStartTime());
+        if (!cron || schedulerDto.getStartTime() != null) {
+            scheduler.setStartTime(schedulerDto.getStartTime());
+        }
         scheduler.setFrequency(schedulerDto.getFrequency());
         if (!StringUtils.isEmpty(schedulerDto.getIntervalValue())) {
             scheduler.setIntervalValue(schedulerDto.getIntervalValue());
         }
         scheduler.setDaysOfWeek(schedulerDto.getDaysOfWeek());
         scheduler.setDayOfMonth(schedulerDto.getDayOfMonth());
+        /*
+         * Cron (Wave 4): the expression is the cadence, stored tidied; every other frequency stores none, so a
+         * schedule moved off Cron does not carry a stale expression. A Cron schedule's start date and time only bound
+         * it, so a caller may leave them out: the stored ones stand, else it starts now (today, 00:00 -- the first
+         * slot is still the first one after now).
+         */
+        scheduler.setCronExpression(cron ? CronSchedule.normalise(schedulerDto.getCronExpression()) : null);
+        if (cron) {
+            if (scheduler.getStartDate() == null) {
+                scheduler.setStartDate(BusinessTime.today());
+            }
+            if (scheduler.getStartTime() == null) {
+                scheduler.setStartTime(LocalTime.MIDNIGHT);
+            }
+        }
         ProcessTimeUtil.applyInitialSchedule(scheduler);
         scheduler.setJobId(jobId);
+    }
+
+    /**
+     * What is wrong with a posted Cron schedule, as a sentence; null when nothing is (or the schedule is not Cron).
+     * Checked before anything is written, like every other refusal on these paths.
+     */
+    static String cronScheduleError(SourceJobDto sourceJobDto) {
+        if (ProcessUtil.isNull(sourceJobDto.getSchedulers())) {
+            return null;
+        }
+        for (SchedulerDto schedulerDto : sourceJobDto.getSchedulers()) {
+            if (schedulerDto != null && Frequency.Cron.name().equals(schedulerDto.getFrequency())) {
+                String problem = CronSchedule.problem(schedulerDto.getCronExpression());
+                if (problem != null) {
+                    return "SourceJob schedule: " + problem;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -332,6 +381,10 @@ public class SourceJobServiceImpl implements SourceJobService {
         String schedulerCardinalityError = this.refuseMoreThanOneScheduler(sourceJobDto);
         if (schedulerCardinalityError != null) {
             return new ResponseDto(ERROR, schedulerCardinalityError);
+        }
+        String cronError = cronScheduleError(sourceJobDto);
+        if (cronError != null) {
+            return new ResponseDto(ERROR, cronError);
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
@@ -885,6 +938,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         schedulerDto.setIntervalValue(scheduler.getIntervalValue());
         schedulerDto.setDaysOfWeek(scheduler.getDaysOfWeek());
         schedulerDto.setDayOfMonth(scheduler.getDayOfMonth());
+        schedulerDto.setCronExpression(scheduler.getCronExpression());
         schedulerDto.setNextRunAt(scheduler.getNextRunAt());
         schedulerDto.setExpired(scheduler.isExpired());
         schedulerDto.setLastFlight(!scheduler.isExpired() && ProcessTimeUtil.isLastFlight(scheduler));

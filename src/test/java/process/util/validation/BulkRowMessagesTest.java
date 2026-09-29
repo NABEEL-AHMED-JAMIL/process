@@ -39,7 +39,7 @@ class BulkRowMessagesTest {
         assertThat(message).doesNotContain("<br").doesNotContain("its should be");
         assertThat(message.split("\n")).hasSizeGreaterThanOrEqualTo(2)
             .allSatisfy(line -> assertThat(line).isNotBlank().contains("row 4"));
-        assertThat(message).contains("Frequency must be one of [Mint, Hr, Daily, Weekly, Monthly]");
+        assertThat(message).contains("Frequency must be one of [Mint, Hr, Daily, Weekly, Monthly, Cron]");
     }
 
     @Test

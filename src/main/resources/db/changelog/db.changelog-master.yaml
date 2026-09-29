@@ -160,3 +160,6 @@ databaseChangeLog:
   # reserved; V185 is MIG-239's (the inbox).
   - include:
       file: db/changelog/yaml/V186.0-task-registry-override.yaml
+  # V187: Wave 4 -- the Cron frequency: scheduler.cron_expression. Expand-only; scheduler is already guarded (V181).
+  - include:
+      file: db/changelog/yaml/V187.0-cron-schedule.yaml

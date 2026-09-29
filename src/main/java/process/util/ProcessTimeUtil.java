@@ -37,7 +37,11 @@ public class ProcessTimeUtil {
      */
     public static List<String> priority = IntStream.rangeClosed(1, 9)
          .mapToObj(String::valueOf).collect(Collectors.toList());
-    public static List<String> frequency = Arrays.asList("Mint", "Hr", "Daily", "Weekly", "Monthly");
+    /**
+     * Cron (Wave 4) is last: the bulk sheet's Frequency dropdown and JobDetailValidation read this list, and a Cron row
+     * carries its expression in the Recurrence cell (the sheet keeps its eleven columns).
+     */
+    public static List<String> frequency = Arrays.asList("Mint", "Hr", "Daily", "Weekly", "Monthly", "Cron");
 
     public static List<String> daysOfWeek = Arrays.asList("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
 
@@ -108,7 +112,33 @@ public class ProcessTimeUtil {
         return date.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1]));
     }
 
+    /** Whether this is a Cron schedule (Wave 4): stepped by its own expression, not by an interval. */
+    public static boolean isCron(Scheduler scheduler) {
+        return Frequency.Cron.name().equals(scheduler.getFrequency());
+    }
+
+    /**
+     * Whether the schedule has anything to step by: an interval, or for Cron its expression. Without one a schedule
+     * runs its first slot and then expires -- the rule every frequency has always had.
+     */
+    private static boolean hasCadence(Scheduler scheduler) {
+        return isCron(scheduler) ? !ProcessUtil.isNull(CronSchedule.normalise(scheduler.getCronExpression()))
+            : !ProcessUtil.isNull(scheduler.getIntervalValue());
+    }
+
     private static UnaryOperator<LocalDateTime> stepFunction(Scheduler scheduler) {
+        if (isCron(scheduler)) {
+            String expression = scheduler.getCronExpression();
+            if (CronSchedule.next(expression, BusinessTime.now()) == null) {
+                return null;
+            }
+            // The next slot after the candidate, in the same Chicago wall-clock every other step walks in. Never
+            // null for an expression that fired just now; a walk ends on the guard if it ever were.
+            return candidate -> {
+                LocalDateTime next = CronSchedule.next(expression, candidate);
+                return next == null ? LocalDateTime.MAX : next;
+            };
+        }
         long interval = Long.parseLong(scheduler.getIntervalValue());
         if (scheduler.getFrequency().equals(Frequency.Mint.name())) {
             return candidate -> candidate.plusMinutes(interval);
@@ -147,7 +177,7 @@ public class ProcessTimeUtil {
      * happened in the last hour is worth more than what happened on the first morning.
      */
     public static List<LocalDateTime> computeMissedRuns(Scheduler scheduler) {
-        if (ProcessUtil.isNull(scheduler.getIntervalValue()) || scheduler.getNextRunAt() == null) {
+        if (!hasCadence(scheduler) || scheduler.getNextRunAt() == null) {
             return Collections.emptyList();
         }
         UnaryOperator<LocalDateTime> step = stepFunction(scheduler);
@@ -160,11 +190,16 @@ public class ProcessTimeUtil {
         Deque<LocalDateTime> recent = new ArrayDeque<>();
         LocalDateTime candidate = step.apply(stepBase(scheduler));
         int guard = 0;
+        boolean cron = isCron(scheduler);
         while (!candidate.isAfter(now) && guard++ < 100000) {
-            if (recent.size() == MAX_MISSED_RUNS_REPLAYED) {
-                recent.removeFirst();
+            // A Cron slot in the spring-forward gap (02:15 on the second Sunday of March) never happened on any clock,
+            // so it was not missed. The interval frequencies keep what they have always reported.
+            if (!(cron && inSpringForwardGap(candidate))) {
+                if (recent.size() == MAX_MISSED_RUNS_REPLAYED) {
+                    recent.removeFirst();
+                }
+                recent.addLast(candidate);
             }
-            recent.addLast(candidate);
             candidate = step.apply(candidate);
         }
         return new ArrayList<>(recent);
@@ -172,6 +207,14 @@ public class ProcessTimeUtil {
 
     public static LocalDateTime resolveInitialNextRun(Scheduler scheduler) {
         LocalDateTime seed = getRecurrenceTime(scheduler.getStartDate(), scheduler.getStartTime().toString());
+        if (isCron(scheduler)) {
+            // The first slot at or after the start, and after now: a start date and time bound a Cron schedule, they
+            // are not a slot of it. Slots fall on whole minutes, so a second before the start finds one AT it.
+            LocalDateTime now = BusinessTime.now();
+            LocalDateTime from = seed.minusSeconds(1).isAfter(now) ? seed.minusSeconds(1) : now;
+            LocalDateTime first = CronSchedule.next(scheduler.getCronExpression(), from);
+            return first == null ? seed : first;
+        }
         if (ProcessUtil.isNull(scheduler.getIntervalValue())) {
             return seed;
         }
@@ -276,7 +319,7 @@ public class ProcessTimeUtil {
     }
 
     public static LocalDateTime computeNextRun(Scheduler scheduler) {
-        if (ProcessUtil.isNull(scheduler.getIntervalValue()) || scheduler.getNextRunAt() == null) {
+        if (!hasCadence(scheduler) || scheduler.getNextRunAt() == null) {
             return null;
         }
         UnaryOperator<LocalDateTime> step = stepFunction(scheduler);
@@ -301,9 +344,10 @@ public class ProcessTimeUtil {
             while (!fromNow.isAfter(now) && forward++ < 1000) {
                 fromNow = step.apply(fromNow);
             }
-            return fromNow.isAfter(now) ? fromNow : null;
+            return fromNow.isAfter(now) && !LocalDateTime.MAX.equals(fromNow) ? fromNow : null;
         }
-        return next;
+        // LocalDateTime.MAX is a Cron step's "no slot after this one" (stepFunction): no next run, not one in 999999999.
+        return LocalDateTime.MAX.equals(next) ? null : next;
     }
 
     /**
@@ -360,6 +404,11 @@ public class ProcessTimeUtil {
         int lastDayOfTargetMonth = base.toLocalDate().lengthOfMonth();
         int resolvedDay = (dayOfMonth <= 0) ? lastDayOfTargetMonth : Math.min(dayOfMonth, lastDayOfTargetMonth);
         return base.withDayOfMonth(resolvedDay);
+    }
+
+    /** Whether this Chicago wall-clock reading falls in a spring-forward gap: a time no clock in Chicago ever showed. */
+    private static boolean inSpringForwardGap(LocalDateTime wallClock) {
+        return BusinessTime.ZONE.getRules().getValidOffsets(wallClock).isEmpty();
     }
 
     public static void applyNextRun(Scheduler scheduler) {

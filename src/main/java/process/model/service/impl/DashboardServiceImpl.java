@@ -389,6 +389,7 @@ public class DashboardServiceImpl implements DashboardService {
         schedulerDto.setStartTime(scheduler.getStartTime());
         schedulerDto.setFrequency(scheduler.getFrequency());
         schedulerDto.setIntervalValue(scheduler.getIntervalValue());
+        schedulerDto.setCronExpression(scheduler.getCronExpression());
         schedulerDto.setDaysOfWeek(scheduler.getDaysOfWeek());
         schedulerDto.setDayOfMonth(scheduler.getDayOfMonth());
         schedulerDto.setNextRunAt(scheduler.getNextRunAt());

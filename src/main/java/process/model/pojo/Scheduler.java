@@ -66,6 +66,13 @@ public class Scheduler {
     @Column(name = "day_of_month")
     private Integer dayOfMonth;
 
+    /**
+     * A Cron schedule's expression (V187, Wave 4): five fields, or six with seconds 0 (process.util.CronSchedule), as
+     * the caller wrote it, tidied. Null for every other frequency.
+     */
+    @Column(name = "cron_expression", length = 120)
+    private String cronExpression;
+
     @Column(name = "job_id",
         nullable = false)
     private Long jobId;
@@ -178,6 +185,14 @@ public class Scheduler {
 
     public void setDayOfMonth(Integer dayOfMonth) {
         this.dayOfMonth = dayOfMonth;
+    }
+
+    public String getCronExpression() {
+        return cronExpression;
+    }
+
+    public void setCronExpression(String cronExpression) {
+        this.cronExpression = cronExpression;
     }
 
     public Long getJobId() {

@@ -167,7 +167,8 @@ public class JobAssistantServiceImpl {
 
         scheduler.ifPresent(s -> out.append("\n== SCHEDULE ==\n")
             .append("Frequency: ").append(nullSafe(s.getFrequency()))
-            .append(" every ").append(nullSafe(s.getIntervalValue())).append('\n')
+            .append(s.getCronExpression() != null ? " on the cron expression " + s.getCronExpression() + " (Chicago time)"
+                : " every " + nullSafe(s.getIntervalValue())).append('\n')
             .append("Starts: ").append(s.getStartDate()).append(' ').append(s.getStartTime()).append('\n')
             .append("Ends: ").append(s.getEndDate() == null ? "no end date" : s.getEndDate()).append('\n')
             .append("Next run: ").append(s.isExpired() ? "expired, will not run again" : nullSafe(String.valueOf(s.getNextRunAt()))).append('\n'));

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import process.model.dto.*;
 import process.model.enums.Execution;
+import process.model.enums.Frequency;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.enums.Status;
@@ -20,6 +21,7 @@ import process.model.service.SourceJobBulkService;
 import process.security.JobOwnership;
 import process.security.TenantContext;
 import process.util.BusinessTime;
+import process.util.CronSchedule;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
@@ -277,9 +279,11 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
                  */
                 if (ProcessUtil.isNull(jobDetailValidation.getRecurrence())) {
                     List<?> allowed = ProcessTimeUtil.frequencyDetail.get(jobDetailValidation.getFrequency());
+                    boolean cron = Frequency.Cron.name().equals(jobDetailValidation.getFrequency());
                     jobDetailValidation.setErrorMsg("Recurrence should not be empty at row "
                         + (currentRow.getRowNum() + 1) + "; a schedule with no recurrence runs once and then expires"
-                        + (allowed != null ? ". It should be " + allowed + "." : ".") + "\n");
+                        + (cron ? ". A Cron row's Recurrence is its cron expression, e.g. 0 9 * * MON-FRI."
+                            : allowed != null ? ". It should be " + allowed + "." : ".") + "\n");
                 }
                 if (!ProcessUtil.isNull(jobDetailValidation.getErrorMsg())) {
                     errors.add(jobDetailValidation.getErrorMsg());
@@ -318,7 +322,12 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             scheduler.setFrequency(jobDetailValidation.getFrequency());
             // Unguarded: a row with no recurrence never reaches this loop any more, and a guard
             // that cannot be false is what hid the one-shot schedule in the first place.
-            scheduler.setIntervalValue(jobDetailValidation.getRecurrence());
+            if (Frequency.Cron.name().equals(jobDetailValidation.getFrequency())) {
+                // A Cron row's Recurrence cell is its expression (Wave 4); it has no interval.
+                scheduler.setCronExpression(CronSchedule.normalise(jobDetailValidation.getRecurrence()));
+            } else {
+                scheduler.setIntervalValue(jobDetailValidation.getRecurrence());
+            }
             ProcessTimeUtil.applyInitialSchedule(scheduler);
             scheduler.setJobId(sourceJob.getJobId());
             this.transactionService.saveOrUpdateScheduler(scheduler);

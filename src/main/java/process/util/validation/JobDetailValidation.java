@@ -8,6 +8,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import process.model.enums.Frequency;
+import process.util.CronSchedule;
 import process.util.ProcessTimeUtil;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -211,6 +212,16 @@ public class JobDetailValidation {
 
     private void isValidDetail() {
         try {
+            if (Frequency.Cron.name().equals(this.frequency)) {
+                // A Cron row's Recurrence cell is its cron expression (Wave 4): the sheet keeps its eleven columns. A
+                // blank one is refused by the upload with the other blank-Recurrence rows.
+                String problem = isNull(this.recurrence) ? null : CronSchedule.problem(this.recurrence);
+                if (problem != null) {
+                    this.setErrorMsg(String.format("Recurrence at row %s: %s", rowCounter, problem));
+                }
+                this.dateTimeValidation(false, false);
+                return;
+            }
             if (!isNull(this.recurrence) && this.frequencyDetailByTime.get(this.frequency)
                 .stream().noneMatch(x -> x.equals(Integer.valueOf(this.recurrence)))) {
                 this.setErrorMsg(String.format("Recurrence must be one of %s at row %s.",
