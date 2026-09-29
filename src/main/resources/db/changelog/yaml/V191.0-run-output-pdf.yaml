@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 191.0-run-output-pdf
+      author: nabeel.amd93
+      description: "MIG-255: run_output.format also allows pdf (the render_pdf step's report); expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V191.0-run-output-pdf/V191__run_output_pdf.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V191.0-run-output-pdf/V191__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

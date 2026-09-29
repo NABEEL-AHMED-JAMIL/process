@@ -173,3 +173,6 @@ databaseChangeLog:
   # guarded as V181. V189 is reserved by another branch.
   - include:
       file: db/changelog/yaml/V190.0-retention-and-access-log.yaml
+  # V191: MIG-255 -- run_output.format also allows pdf (the render_pdf step's report); expand-only.
+  - include:
+      file: db/changelog/yaml/V191.0-run-output-pdf.yaml

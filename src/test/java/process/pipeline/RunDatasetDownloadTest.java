@@ -148,6 +148,24 @@ class RunDatasetDownloadTest {
         assertThat(body(converted)).isEqualTo("{\"id\":\"1\",\"name\":\"Acme\"}\n");
     }
 
+    /** MIG-255: a render_pdf report is kept like a Save File, and downloads only as the PDF it is. */
+    @Test
+    void aReportDownloadsAsThePdfItIsAndRowsNeverAsAPdf() throws Exception {
+        String reportKey = DatasetStore.fileKeyOf(RUN, 1, "keep", "wound-report.pdf");
+        this.datasets.writeFile(reportKey, "%PDF-1.7 report".getBytes(StandardCharsets.UTF_8));
+        long report = this.steps.dataset(this.keep, "wound-report.pdf", reportKey, 2, "[\"case_id\"]", Instant.now().plus(Duration.ofHours(24)));
+        this.steps.output(this.keep, RunOutput.file("wound-report.pdf", "pdf", 2, 15), report, Instant.now().plus(Duration.ofHours(24)));
+
+        StepTimelineService.Download pdf = this.service.download(report, null);
+        assertThat(pdf.fileName).isEqualTo("wound-report.pdf");
+        assertThat(pdf.contentType).isEqualTo("application/pdf");
+        assertThat(body(pdf)).isEqualTo("%PDF-1.7 report");
+        assertThat(body(this.service.download(report, "pdf"))).isEqualTo("%PDF-1.7 report");
+        assertThat(this.service.download(report, "csv").refusal.getMessage()).isEqualTo("A PDF report downloads as the PDF it is.");
+        assertThat(this.service.download(this.file, "pdf").status).isEqualTo(400);
+        assertThat(this.service.download(this.output, "pdf").refusal.getMessage()).contains("csv, json or jsonl");
+    }
+
     @Test
     void aFormatItDoesNotWriteIsA400() {
         StepTimelineService.Download parquet = this.service.download(this.output, "parquet");

@@ -178,7 +178,7 @@ public class StepTimelineService {
     @Transactional(readOnly = true)
     public Download download(Long runDatasetId, String format) {
         String wanted = format == null || format.trim().isEmpty() ? null : format.trim().toLowerCase(Locale.ROOT);
-        if (wanted != null && !FileFormats.WRITABLE.contains(wanted)) {
+        if (wanted != null && !FileFormats.WRITABLE.contains(wanted) && !"pdf".equals(wanted)) {
             return Download.refused(400, String.format("A dataset downloads as csv, json or jsonl; got '%s'.", format));
         }
         Optional<StepStore.DatasetFile> found = runDatasetId == null ? Optional.empty() : this.steps.datasetById(runDatasetId);
@@ -201,6 +201,9 @@ public class StepTimelineService {
         try {
             if (dataset.storageKey.contains("/files/")) {
                 return this.keptFile(dataset, wanted).of(run.get());
+            }
+            if ("pdf".equals(wanted)) {
+                return Download.refused(400, "A dataset downloads as csv, json or jsonl; only a report is a PDF.").of(run.get());
             }
             Dataset rows = this.datasets.read(dataset.storageKey);
             String as = wanted == null ? "csv" : wanted;
@@ -266,6 +269,11 @@ public class StepTimelineService {
             .orElseGet(() -> Optional.ofNullable(FileFormats.byExtension(dataset.name)).orElse("csv"));
         if (wanted == null || wanted.equals(own)) {
             return Download.file(dataset.name, own, out -> out.write(content));
+        }
+        // MIG-255: a report is a document, not rows -- it downloads as itself, and rows download as rows.
+        if ("pdf".equals(own) || "pdf".equals(wanted)) {
+            return Download.refused(400, "pdf".equals(own) ? "A PDF report downloads as the PDF it is."
+                : "Only a report is a PDF; this file downloads as csv, json or jsonl.");
         }
         RowCollector collector = new RowCollector("The file", null);
         FileFormats.read(content, own, new FileFormats.ReadOptions(), collector);

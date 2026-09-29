@@ -1,10 +1,13 @@
 package process.pipeline;
 
 import process.ai.AiPort;
+import process.pipeline.backing.ReportRenderer;
 
 import process.pipeline.backing.Fakes;
 import process.pipeline.tasks.AggregateStepTask;
 import process.pipeline.tasks.AiPromptStepTask;
+import process.pipeline.tasks.ComputeStepTask;
+import process.pipeline.tasks.RenderPdfStepTask;
 import process.pipeline.tasks.EnrichStepTask;
 import process.pipeline.tasks.FilterStepTask;
 import process.pipeline.tasks.JoinStepTask;
@@ -37,6 +40,7 @@ public final class AllTasks {
     public final Fakes.Buckets buckets = new Fakes.Buckets();
     public final Fakes.Notifier notifier = new Fakes.Notifier();
     public final AiPort ai = mock(AiPort.class);
+    public final ReportRenderer reports = mock(ReportRenderer.class);
 
     public List<StepTask> list() {
         return new ArrayList<>(Arrays.asList(new LegacyStepTask(), new SampleStepTask(), new SelectStepTask(),
@@ -44,7 +48,8 @@ public final class AllTasks {
             new ReadDatabaseStepTask(this.database), new ValidateStepTask(this.contracts), new TransformStepTask(), new FilterStepTask(),
             new JoinStepTask(), new EnrichStepTask(this.api), new AggregateStepTask(), new SaveFileStepTask(),
             new UploadBucketStepTask(this.buckets), new WriteDatabaseStepTask(this.database), new SendNotificationStepTask(this.notifier),
-            new AiPromptStepTask(this.ai, this.buckets)));
+            new AiPromptStepTask(this.ai, this.buckets), new ComputeStepTask(),
+            new RenderPdfStepTask(this.reports)));
     }
 
     public StepTasks tasks() {

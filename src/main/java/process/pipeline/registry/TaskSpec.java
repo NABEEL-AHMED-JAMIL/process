@@ -25,6 +25,7 @@ public final class TaskSpec {
     public static final String STORAGE = "storage-service";
     public static final String NOTIFICATIONS = "notifications-service";
     public static final String AI = "ai-service";
+    public static final String MEDIA = "media-service";
     public static final String WORKER = "worker";
 
     private static final Pattern TOOL_NAME = Pattern.compile("^[a-z][a-z0-9_]{0,63}$");

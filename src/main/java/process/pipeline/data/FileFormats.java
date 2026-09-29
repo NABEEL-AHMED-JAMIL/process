@@ -67,6 +67,8 @@ public final class FileFormats {
                 return "application/json";
             case "jsonl":
                 return "application/x-ndjson; charset=utf-8";
+            case "pdf":
+                return "application/pdf";
             default:
                 return "application/octet-stream";
         }
