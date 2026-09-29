@@ -108,6 +108,7 @@ public class InMemoryStepStore implements StepStore {
         row.columns = columnsJson;
         this.datasets.add(row);
         this.storageKeys.put(row.runDatasetId, storageKey);
+        this.datasetExpiry.put(row.runDatasetId, expiresAt);
         return row.runDatasetId;
     }
 
@@ -129,6 +130,63 @@ public class InMemoryStepStore implements StepStore {
     @Override
     public synchronized List<DatasetRow> datasetsOfRun(long jobQueueId) {
         return this.datasets.stream().filter(d -> this.rows.get(d.stepExecutionId).jobQueueId == jobQueueId).collect(Collectors.toList());
+    }
+
+    /** run_output in memory: one per step execution, a later record replacing it. */
+    public final Map<Long, OutputRow> outputs = new LinkedHashMap<>();
+    public final Map<Long, Instant> datasetExpiry = new LinkedHashMap<>();
+
+    @Override
+    public synchronized Optional<DatasetFile> datasetById(long runDatasetId) {
+        return this.datasets.stream().filter(d -> d.runDatasetId == runDatasetId).findFirst().map(d -> {
+            StepRow step = this.rows.get(d.stepExecutionId);
+            DatasetFile file = new DatasetFile();
+            file.runDatasetId = d.runDatasetId;
+            file.stepExecutionId = d.stepExecutionId;
+            file.jobQueueId = step.jobQueueId;
+            file.attempt = step.attempt;
+            file.stepKey = step.stepKey;
+            file.name = d.name;
+            file.storageKey = this.storageKeys.get(d.runDatasetId);
+            file.columns = d.columns;
+            file.expiresAt = this.datasetExpiry.get(d.runDatasetId);
+            return file;
+        });
+    }
+
+    @Override
+    public synchronized void output(long stepExecutionId, RunOutput output, Long runDatasetId, Instant expiresAt) {
+        StepRow step = this.rows.get(stepExecutionId);
+        OutputRow row = new OutputRow();
+        OutputRow before = this.outputs.get(stepExecutionId);
+        row.runOutputId = before != null ? before.runOutputId : this.ids.incrementAndGet();
+        row.stepExecutionId = stepExecutionId;
+        row.jobQueueId = step.jobQueueId;
+        row.attempt = step.attempt;
+        row.stepIndex = step.stepIndex;
+        row.stepKey = step.stepKey;
+        row.taskCode = step.taskCode;
+        row.kind = output.getKind();
+        row.name = output.getName();
+        row.format = output.getFormat();
+        row.rowCount = output.getRows();
+        row.byteCount = output.getBytes();
+        row.runDatasetId = runDatasetId;
+        row.bucketAlias = output.getBucket();
+        row.objectKey = output.getKey();
+        row.expiresAt = expiresAt;
+        row.recordedAt = LocalDateTime.now();
+        this.outputs.put(stepExecutionId, row);
+    }
+
+    @Override
+    public synchronized List<OutputRow> outputsOfRun(long jobQueueId) {
+        return this.outputs.values().stream().filter(o -> o.jobQueueId == jobQueueId).collect(Collectors.toList());
+    }
+
+    @Override
+    public synchronized Optional<OutputRow> outputOfDataset(long runDatasetId) {
+        return this.outputs.values().stream().filter(o -> o.runDatasetId != null && o.runDatasetId == runDatasetId).findFirst();
     }
 
     /** The rows of one attempt, by step key: status, as the timeline would show them. */

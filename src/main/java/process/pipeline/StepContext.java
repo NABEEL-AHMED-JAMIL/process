@@ -65,6 +65,14 @@ public interface StepContext {
         throw new UnsupportedOperationException("This context keeps no files.");
     }
 
+    /**
+     * Records a file this step wrote in the run's result manifest (run_output, Wave 4): a file kept with {@link #keepFile}
+     * (named by it), or an object uploaded to a workspace bucket. Once per step per attempt: a later try's record
+     * replaces an earlier one's. Nothing outside a run.
+     */
+    default void recordOutput(RunOutput output) throws Exception {
+    }
+
     /** A line in the step's log (step_log), shown on the step in the console's timeline. */
     void log(String message);
 

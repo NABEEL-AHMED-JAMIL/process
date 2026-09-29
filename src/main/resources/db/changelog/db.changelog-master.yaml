@@ -163,3 +163,6 @@ databaseChangeLog:
   # V187: Wave 4 -- the Cron frequency: scheduler.cron_expression. Expand-only; scheduler is already guarded (V181).
   - include:
       file: db/changelog/yaml/V187.0-cron-schedule.yaml
+  # V188: Wave 4 -- a run's result manifest (run_output): the files its steps wrote, guarded as V181.
+  - include:
+      file: db/changelog/yaml/V188.0-run-output.yaml

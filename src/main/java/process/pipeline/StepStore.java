@@ -47,6 +47,21 @@ public interface StepStore {
 
     List<DatasetRow> datasetsOfRun(long jobQueueId);
 
+    /**
+     * One dataset by its id with what a download needs -- its run, step, key and expiry -- as the caller's session sees
+     * it (row-level security); empty when there is none.
+     */
+    Optional<DatasetFile> datasetById(long runDatasetId);
+
+    /** Records a file a step wrote in the run's manifest (run_output): once per step execution, a later record replacing it. */
+    void output(long stepExecutionId, RunOutput output, Long runDatasetId, Instant expiresAt);
+
+    /** The run's manifest, every attempt, in step order. */
+    List<OutputRow> outputsOfRun(long jobQueueId);
+
+    /** The manifest row that named this dataset, if one did: what is left of a file dataset after the sweep removed it. */
+    Optional<OutputRow> outputOfDataset(long runDatasetId);
+
     /** A step as the plan names it. */
     final class Planned {
         public final int index;
@@ -88,6 +103,40 @@ public interface StepStore {
         public String level;
         public String message;
         public LocalDateTime loggedAt;
+    }
+
+    /** A dataset for a download: its run and step, name, key, columns and expiry. Never handed to a caller as is. */
+    final class DatasetFile {
+        public long runDatasetId;
+        public long stepExecutionId;
+        public long jobQueueId;
+        public int attempt;
+        public String stepKey;
+        public String name;
+        public String storageKey;
+        public String columns;
+        public Instant expiresAt;
+    }
+
+    /** One run_output row, with its step. */
+    final class OutputRow {
+        public long runOutputId;
+        public long stepExecutionId;
+        public long jobQueueId;
+        public int attempt;
+        public int stepIndex;
+        public String stepKey;
+        public String taskCode;
+        public String kind;
+        public String name;
+        public String format;
+        public Long rowCount;
+        public Long byteCount;
+        public Long runDatasetId;
+        public String bucketAlias;
+        public String objectKey;
+        public Instant expiresAt;
+        public LocalDateTime recordedAt;
     }
 
     /** A dataset a step wrote -- never its storage key, which is the platform's. */
