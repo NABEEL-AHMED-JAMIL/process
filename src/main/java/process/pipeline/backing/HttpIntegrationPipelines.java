@@ -90,8 +90,8 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
     /** Write Database's own availability: the endpoints, and its own switch. */
     public Optional<String> writeUnavailable() {
         if (!this.databaseWrite) {
-            return Optional.of("integration-service has no database write path; MIG-229's connections are read-only "
-                + "(process.pipeline.integration.database-write is off)");
+            // Owner decision 2026-09-29: pipelines do not write into customer databases (may be added later).
+            return Optional.of("Writing to a database is not part of this release: database connections are read-only.");
         }
         return this.unavailable();
     }
