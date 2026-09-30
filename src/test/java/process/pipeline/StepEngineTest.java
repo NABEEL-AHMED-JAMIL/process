@@ -32,6 +32,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -386,6 +390,43 @@ class StepEngineTest {
         assertThat(row.status).isEqualTo("Failed");
         assertThat(row.error).isEqualTo("{\"message\":\"timed out after 1 s\",\"tries\":1,\"timedOut\":true}");
         assertThat(this.worker.last()).isEqualTo("Failed: Step 1 <slow> failed: timed out after 1 s");
+    }
+
+    @Test
+    void aTryThatFindsNoFreeThreadFailsInWordsInsteadOfGrowingThePool() throws Exception {
+        // MIG-214: the try threads are bounded; here the only one is still held by an earlier try that timed out
+        // while blocked (an HTTP read ignores the interrupt until its own timeout).
+        ThreadPoolExecutor full = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new SynchronousQueue<>());
+        CountDownLatch release = new CountDownLatch(1);
+        full.submit(() -> {
+            release.await();
+            return null;
+        });
+        this.engine = new StepEngine(this.definitions, this.steps, this.tasks, new DefinitionValidator(this.tasks), this.datasets,
+            this.worker, this.transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(),
+            full, this.waited::add);
+        try {
+            this.runs(Definitions.of(step("count", "counts")));
+        } finally {
+            release.countDown();
+            full.shutdownNow();
+        }
+
+        StepStore.StepRow row = this.steps.row(RUN_ID, 1, "count");
+        assertThat(row.status).isEqualTo("Failed");
+        assertThat(row.error).contains("no thread was free for this try");
+        assertThat(full.getPoolSize()).as("the pool did not grow").isLessThanOrEqualTo(1);
+    }
+
+    @Test
+    void theProductionTryPoolIsBoundedAndLetsIdleThreadsGo() {
+        ThreadPoolExecutor tries = (ThreadPoolExecutor) StepEngine.newTryThreads(4);
+        try {
+            assertThat(tries.getMaximumPoolSize()).isEqualTo(4 * StepEngine.TRY_THREADS_PER_RUN_THREAD);
+            assertThat(tries.allowsCoreThreadTimeOut()).isTrue();
+        } finally {
+            tries.shutdownNow();
+        }
     }
 
     @Test

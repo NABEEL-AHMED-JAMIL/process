@@ -41,6 +41,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -117,6 +120,9 @@ public class StepEngine {
     private final TransactionServiceImpl transactions;
     /** One local transaction per audit line, as the pre-dispatch phase writes its notes. */
     private final TransactionOperations local;
+    /** How many try threads each run thread may hold at once: its current try and a few timed-out ones unwinding. */
+    static final int TRY_THREADS_PER_RUN_THREAD = 4;
+
     private final ExecutorService runThreads;
     private final ExecutorService tryThreads;
     private final Sleeper sleeper;
@@ -128,7 +134,7 @@ public class StepEngine {
         DatasetStore datasets, NotifyService notify, TransactionServiceImpl transactions, PlatformTransactionManager transactionManager,
         @Value("${process.pipeline.engine.threads:4}") int threads) {
         this(definitions, steps, tasks, validator, datasets, notify, transactions, new TransactionTemplate(transactionManager),
-            newRunThreads(Math.max(1, threads)), newTryThreads(), duration -> Thread.sleep(duration.toMillis()));
+            newRunThreads(Math.max(1, threads)), newTryThreads(Math.max(1, threads)), duration -> Thread.sleep(duration.toMillis()));
     }
 
     /** For tests: the threads a run and a try run on, and the wait between tries. */
@@ -163,13 +169,22 @@ public class StepEngine {
         });
     }
 
-    private static ExecutorService newTryThreads() {
+    /**
+     * MIG-214: the threads the tries run on, bounded. A try that overruns is interrupted, but one blocked in a network
+     * read ignores that until its own read timeout, so it keeps its thread a while: each run thread may have a few
+     * of those unwinding. Beyond that a try is refused (and fails in words) rather than growing the pool without end.
+     * Idle threads go after a minute.
+     */
+    static ExecutorService newTryThreads(int runThreads) {
         AtomicInteger count = new AtomicInteger();
-        return Executors.newCachedThreadPool(runnable -> {
-            Thread thread = new Thread(runnable, "step-try-" + count.incrementAndGet());
-            thread.setDaemon(true);
-            return thread;
-        });
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(runThreads, runThreads * TRY_THREADS_PER_RUN_THREAD, 60, TimeUnit.SECONDS,
+            new SynchronousQueue<>(), runnable -> {
+                Thread thread = new Thread(runnable, "step-try-" + count.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            });
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
     }
 
     @PreDestroy
@@ -459,34 +474,44 @@ public class StepEngine {
                     log.line("INFO", String.format("Try %d of %d.", t, maxTries));
                 }
                 Context context = new Context(this, step, row, input, t, log);
-                Future<StepResult> future = tryThreads.submit(() -> RowSecurity.forTenant(this.tenantId, () -> {
-                    try {
-                        return task.get().run(context);
-                    } catch (RuntimeException ex) {
-                        throw ex;
-                    } catch (Exception ex) {
-                        throw new StepFailure(ex);
-                    }
-                }));
+                Future<StepResult> future;
                 try {
-                    tried.result = future.get(timeout, TimeUnit.SECONDS);
-                    tried.error = null;
+                    future = tryThreads.submit(() -> RowSecurity.forTenant(this.tenantId, () -> {
+                        try {
+                            return task.get().run(context);
+                        } catch (RuntimeException ex) {
+                            throw ex;
+                        } catch (Exception ex) {
+                            throw new StepFailure(ex);
+                        }
+                    }));
+                } catch (RejectedExecutionException full) {
+                    // MIG-214: the bounded try pool is full of tries that timed out and are still unwinding.
+                    tried.error = "no thread was free for this try: earlier tries that timed out are still unwinding";
                     tried.timedOut = false;
-                    return tried;
-                } catch (TimeoutException ex) {
-                    future.cancel(true);
-                    tried.error = String.format("timed out after %d s", timeout);
-                    tried.timedOut = true;
-                } catch (ExecutionException ex) {
-                    Throwable cause = ex.getCause() instanceof StepFailure ? ex.getCause().getCause() : ex.getCause();
-                    tried.error = reasonOf(cause == null ? ex : cause);
-                    tried.timedOut = false;
-                } catch (InterruptedException ex) {
-                    future.cancel(true);
-                    Thread.currentThread().interrupt();
-                    tried.error = "the step engine was stopped";
-                    log.line("ERROR", String.format("Try %d stopped: the step engine is shutting down.", t));
-                    return tried;
+                    future = null;
+                }
+                if (future != null) {
+                    try {
+                        tried.result = future.get(timeout, TimeUnit.SECONDS);
+                        tried.error = null;
+                        tried.timedOut = false;
+                        return tried;
+                    } catch (TimeoutException ex) {
+                        future.cancel(true);
+                        tried.error = String.format("timed out after %d s", timeout);
+                        tried.timedOut = true;
+                    } catch (ExecutionException ex) {
+                        Throwable cause = ex.getCause() instanceof StepFailure ? ex.getCause().getCause() : ex.getCause();
+                        tried.error = reasonOf(cause == null ? ex : cause);
+                        tried.timedOut = false;
+                    } catch (InterruptedException ex) {
+                        future.cancel(true);
+                        Thread.currentThread().interrupt();
+                        tried.error = "the step engine was stopped";
+                        log.line("ERROR", String.format("Try %d stopped: the step engine is shutting down.", t));
+                        return tried;
+                    }
                 }
                 log.line(t < maxTries ? "WARN" : "ERROR", String.format("Try %d of %d failed: %s", t, maxTries, tried.error));
                 if (t < maxTries && delay > 0) {

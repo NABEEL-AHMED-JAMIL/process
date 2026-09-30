@@ -8,14 +8,24 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Datasets on the local disk of the replica that runs the run (MIG-230). A run's steps all run on one replica, in one
@@ -47,10 +57,16 @@ public class FileDatasetStore implements DatasetStore {
         document.put("columns", dataset.getColumns());
         document.put("rows", dataset.getRows());
         Path partial = file.resolveSibling(file.getFileName() + ".partial");
-        try (OutputStream out = Files.newOutputStream(partial)) {
-            JSON.writeValue(out, document);
+        try {
+            try (OutputStream out = Files.newOutputStream(partial)) {
+                JSON.writeValue(out, document);
+            }
+            Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException | RuntimeException failed) {
+            // MIG-214: a write that fails part-way leaves nothing behind.
+            Files.deleteIfExists(partial);
+            throw failed;
         }
-        Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     @Override
@@ -70,8 +86,13 @@ public class FileDatasetStore implements DatasetStore {
         Path file = this.resolve(storageKey);
         Files.createDirectories(file.getParent());
         Path partial = file.resolveSibling(file.getFileName() + ".partial");
-        Files.write(partial, content);
-        Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        try {
+            Files.write(partial, content);
+            Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException | RuntimeException failed) {
+            Files.deleteIfExists(partial);
+            throw failed;
+        }
     }
 
     @Override
@@ -81,7 +102,66 @@ public class FileDatasetStore implements DatasetStore {
 
     @Override
     public void delete(String storageKey) throws IOException {
-        Files.deleteIfExists(this.resolve(storageKey));
+        Path file = this.resolve(storageKey);
+        Files.deleteIfExists(file);
+        // MIG-214: the run's folders go with its last dataset (datasets/ itself stays).
+        this.pruneEmpty(file.getParent());
+    }
+
+    /**
+     * What a crash leaves (MIG-214): partial files older than {@code olderThan} -- a write in progress is younger -- and
+     * empty folders, when they are that old or this sweep emptied them. Returns the partial files removed.
+     */
+    @Override
+    public int sweepLeftovers(Duration olderThan) throws IOException {
+        Path top = this.root.resolve("datasets");
+        if (!Files.isDirectory(top)) {
+            return 0;
+        }
+        FileTime cutoff = FileTime.from(Instant.now().minus(olderThan));
+        List<Path> paths;
+        try (Stream<Path> walk = Files.walk(top)) {
+            paths = walk.sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+        }
+        int removed = 0;
+        Set<Path> emptied = new HashSet<>();
+        for (Path path : paths) {
+            if (path.equals(top)) {
+                continue;
+            }
+            if (Files.isRegularFile(path) && path.getFileName().toString().endsWith(".partial")
+                && Files.getLastModifiedTime(path).compareTo(cutoff) < 0) {
+                Files.deleteIfExists(path);
+                emptied.add(path.getParent());
+                removed++;
+            } else if (Files.isDirectory(path) && isEmpty(path)
+                && (emptied.contains(path) || Files.getLastModifiedTime(path).compareTo(cutoff) < 0)) {
+                Files.deleteIfExists(path);
+                emptied.add(path.getParent());
+            }
+        }
+        return removed;
+    }
+
+    private void pruneEmpty(Path dir) throws IOException {
+        Path top = this.root.resolve("datasets");
+        while (dir != null && dir.startsWith(top) && !dir.equals(top) && isEmpty(dir)) {
+            try {
+                Files.delete(dir);
+            } catch (DirectoryNotEmptyException | NoSuchFileException raced) {
+                return;
+            }
+            dir = dir.getParent();
+        }
+    }
+
+    private static boolean isEmpty(Path dir) throws IOException {
+        if (!Files.isDirectory(dir)) {
+            return false;
+        }
+        try (Stream<Path> entries = Files.list(dir)) {
+            return !entries.findAny().isPresent();
+        }
     }
 
     /** The key under the root, and only under it. */

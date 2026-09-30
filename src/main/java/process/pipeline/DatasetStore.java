@@ -1,5 +1,7 @@
 package process.pipeline;
 
+import java.time.Duration;
+
 /**
  * Where a run's datasets live between its steps (MIG-230). A step's output is written here and recorded as a
  * run_dataset row -- its key, rows and columns -- and the next step is handed the reference, not the rows through the
@@ -19,6 +21,11 @@ public interface DatasetStore {
     /** Writes a file a step made (Save File) under its key. */
     default void writeFile(String storageKey, byte[] content) throws Exception {
         throw new UnsupportedOperationException("This dataset store keeps no files.");
+    }
+
+    /** What a crash left behind (MIG-214): stale partial files and empty folders. Returns the partial files removed. */
+    default int sweepLeftovers(Duration olderThan) throws Exception {
+        return 0;
     }
 
     /** The bytes of a file a step made; an exception when there is none. */

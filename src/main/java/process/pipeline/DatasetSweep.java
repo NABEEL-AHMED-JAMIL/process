@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +34,9 @@ import java.util.Map;
 public class DatasetSweep {
 
     static final int BATCH = 500;
+
+    /** A partial file older than this is not a write in progress. */
+    static final Duration LEFTOVER_AGE = Duration.ofHours(1);
 
     private static final Logger logger = LoggerFactory.getLogger(DatasetSweep.class);
 
@@ -82,6 +86,15 @@ public class DatasetSweep {
         }
         if (removed > 0) {
             logger.info("Removed {} expired run dataset(s).", removed);
+        }
+        // MIG-214: what a crash left on this replica's disk -- partial files an hour old, empty run folders.
+        try {
+            int partials = this.datasets.sweepLeftovers(LEFTOVER_AGE);
+            if (partials > 0) {
+                logger.info("Removed {} partial dataset file(s) a crash left behind.", partials);
+            }
+        } catch (Exception ex) {
+            logger.warn("Leftover dataset files could not be swept; tried again next hour: {}", ex.getMessage());
         }
         return removed;
     }
