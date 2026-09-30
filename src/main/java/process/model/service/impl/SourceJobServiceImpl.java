@@ -598,6 +598,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Object queued = this.queueRun(sourceJobDto.getJobId(), modelProfiles);
         if (queued instanceof ResponseDto) {
             return (ResponseDto) queued;
@@ -616,6 +617,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (ProcessUtil.isNull(jobId)) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Object queued = this.queueRun(jobId, null);
         if (queued instanceof ResponseDto) {
             return (ResponseDto) queued;
@@ -629,10 +631,9 @@ public class SourceJobServiceImpl implements SourceJobService {
 
     /**
      * Run now's rules, the one place they live: the job is active and the caller's, its last run is not still in flight,
-     * and its workspace is not paused. Answers the queued run, or the refusal (a ResponseDto) saying which rule stopped it.
+     * and its workspace is not paused. Its callers are public and transactional and switch the tenant filter on first. Answers the queued run, or the refusal (a ResponseDto) saying which rule stopped it.
      */
     private Object queueRun(Long jobId, String modelProfiles) {
-        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(jobId, Status.Active);
         if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");

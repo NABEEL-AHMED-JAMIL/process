@@ -46,6 +46,7 @@ import process.identity.InternalRunVerificationRestApi;
 import process.identity.InternalSecretRestApi;
 import process.identity.InternalTenantDirectoryRestApi;
 import process.identity.InternalTenantFactsRestApi;
+import process.workflow.InternalWorkflowRunRestApi;
 import process.identity.InternalUserDirectoryRestApi;
 import process.slo.InternalSloRestApi;
 import process.slo.ReliabilityRestApi;
@@ -110,7 +111,7 @@ class CoreProbeCoverageTest {
         InternalKafkaPublishRestApi.class, InternalNotificationRelayRestApi.class, InternalPageAccessRestApi.class,
         InternalRunVerificationRestApi.class, InternalSecretRestApi.class, InternalTenantDirectoryRestApi.class,
         InternalTenantFactsRestApi.class, InternalUserDirectoryRestApi.class, InternalSloRestApi.class, ReliabilityRestApi.class,
-        InternalStorageDirectoryRestApi.class);
+        InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class);
 
     private static final Map<String, String> NOTHING_TO_AIM = new LinkedHashMap<>();
 
@@ -157,6 +158,8 @@ class CoreProbeCoverageTest {
             + "and /internal is kept inside by the gateway; names nothing of a tenant's");
         NOTHING_TO_AIM.put("POST internal/kafka/publish", service
             + " (InternalKafkaPublishRestApiTest.withoutTheServiceTokenNothingIsPublished)");
+        NOTHING_TO_AIM.put("POST internal/workflows/run", service + "; the job runs as that workspace through Run now's own rules"
+            + " (InternalWorkflowRunRestApiTest.withoutTheInternalTokenNothingRuns)");
         NOTHING_TO_AIM.put("POST internal/notifications/notice", service
             + " (InternalNotificationRelayRestApiTest.withoutTheServiceTokenNothingIsRelayed)");
         NOTHING_TO_AIM.put("POST internal/notifications/mail", service
