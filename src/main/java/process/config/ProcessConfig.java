@@ -9,14 +9,12 @@ import org.slf4j.Logger;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * @author Nabeel Ahmed
  * */
 @Configuration
-@EnableAsync
 @EnableScheduling
 @EnableSchedulerLock(defaultLockAtMostFor = "10m")
 public class ProcessConfig {
