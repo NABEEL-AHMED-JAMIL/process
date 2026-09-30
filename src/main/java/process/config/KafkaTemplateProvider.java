@@ -585,8 +585,11 @@ public class KafkaTemplateProvider {
         }
 
         public boolean isReached() { return this.reached; }
+
         public int getCreated() { return this.created; }
+
         public int getExisting() { return this.existing; }
+
         public String getReason() { return this.reason; }
     }
 

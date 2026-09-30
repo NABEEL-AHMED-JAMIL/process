@@ -8,10 +8,20 @@ import process.model.pojo.Scheduler;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Objects;
 
 /**
  * @author Nabeel Ahmed
@@ -21,7 +31,7 @@ public class ProcessTimeUtil {
 
     private Logger logger = LoggerFactory.getLogger(ProcessTimeUtil.class);
 
-    public static List<String> checked = Arrays.asList("True", "False");
+    public static final List<String> checked = Collections.unmodifiableList(Arrays.asList("True", "False"));
 
     /**
      * The priorities a job may carry: 1 (highest) to 9.
@@ -35,13 +45,13 @@ public class ProcessTimeUtil {
      * then sorted against every other job on a number no other path can produce, and the first
      * attempt to edit it in the console was rejected over a priority the operator never typed.
      */
-    public static List<String> priority = IntStream.rangeClosed(1, 9)
+    public static final List<String> priority = IntStream.rangeClosed(1, 9)
          .mapToObj(String::valueOf).collect(Collectors.toList());
     /**
      * Cron (Wave 4) is last: the bulk sheet's Frequency dropdown and JobDetailValidation read this list, and a Cron row
      * carries its expression in the Recurrence cell (the sheet keeps its eleven columns).
      */
-    public static List<String> frequency = Arrays.asList("Mint", "Hr", "Daily", "Weekly", "Monthly", "Cron");
+    public static final List<String> frequency = Collections.unmodifiableList(Arrays.asList("Mint", "Hr", "Daily", "Weekly", "Monthly", "Cron"));
 
     public static List<String> daysOfWeek = Arrays.asList("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
 
@@ -60,6 +70,7 @@ public class ProcessTimeUtil {
      * the console's 1=Mon..7=Sun ordering came from in the first place.
      */
     private static final Map<String, DayOfWeek> DAY_CODE_MAP = new LinkedHashMap<>();
+
     static {
         DAY_CODE_MAP.put("MON", DayOfWeek.MONDAY);
         DAY_CODE_MAP.put("TUE", DayOfWeek.TUESDAY);
@@ -77,33 +88,35 @@ public class ProcessTimeUtil {
         DAY_CODE_MAP.put("7", DayOfWeek.SUNDAY);
     }
 
-    public static Map<String, List<?>> frequencyDetail = new HashMap<>();
+    public static final Map<String, List<?>> frequencyDetail;
 
     static {
-        frequencyDetail.put("Mint", getMints());
-        frequencyDetail.put("Hr", getHr());
-        frequencyDetail.put("Daily", getDaily());
-        frequencyDetail.put("Weekly", getWeekly());
-        frequencyDetail.put("Monthly", getMonthly());
+        Map<String, List<?>> detail = new HashMap<>();
+        detail.put("Mint", getMints());
+        detail.put("Hr", getHr());
+        detail.put("Daily", getDaily());
+        detail.put("Weekly", getWeekly());
+        detail.put("Monthly", getMonthly());
+        frequencyDetail = Collections.unmodifiableMap(detail);
     }
 
-    private static List getMints() {
+    private static List<Integer> getMints() {
         return Arrays.asList(5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55);
     }
 
-    private static List getHr() {
+    private static List<Integer> getHr() {
         return Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
     }
 
-    private static List getDaily() {
+    private static List<Integer> getDaily() {
         return Arrays.asList(1, 2, 3, 4, 5, 6);
     }
 
-    private static List getWeekly() {
+    private static List<Integer> getWeekly() {
         return Arrays.asList(1, 2, 3, 4);
     }
 
-    private static List getMonthly() {
+    private static List<Integer> getMonthly() {
         return Arrays.asList(1, 2, 3, 4, 5, 6);
     }
 

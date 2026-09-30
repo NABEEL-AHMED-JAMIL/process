@@ -1,12 +1,9 @@
 package process.model.service.impl;
 
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import process.model.dto.*;
 import process.model.enums.Execution;
 import process.model.enums.Frequency;
 import process.model.enums.NotificationSeverity;
@@ -27,15 +24,31 @@ import process.util.ProcessUtil;
 import process.util.excel.BulkExcel;
 import process.util.excel.UploadedSheet;
 import process.util.validation.JobDetailValidation;
-import java.io.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import static process.util.ProcessUtil.*;
 import process.notifications.Notices;
 import process.notifications.NotificationPort;
+import java.io.ByteArrayOutputStream;
+import process.model.dto.FileUploadDto;
+import process.model.dto.ResponseDto;
+import java.io.InputStream;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import java.util.List;
+import java.util.Map;
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Optional;
+import org.apache.poi.ss.usermodel.Row;
+import static process.util.ProcessUtil.HEADER_FILED_BATCH_FILE;
+import static process.util.ProcessUtil.HEADER_FILED_BATCH_DOWNLOAD_FILE;
+import static process.util.ProcessUtil.REAL_FILE_PATH;
+import static process.util.ProcessUtil.JOB_ADD;
+import static process.util.ProcessUtil.SHEET_NAME;
+import static process.util.ProcessUtil.ERROR;
+import static process.util.ProcessUtil.SUCCESS;
 
 /**
  * @author Nabeel Ahmed
@@ -81,13 +94,13 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             try (XSSFWorkbook wb = new XSSFWorkbook(templateStream)) {
                 XSSFSheet sheet = wb.getSheet(JOB_ADD);
 
-                this.bulkExcel.fillDropDownValue(sheet,1,999,1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
-                this.bulkExcel.fillDropDownValue(sheet,1,999,5, ProcessTimeUtil.frequency.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet, 1, 999, 1, this.transactionService.findAllSourceTask().stream().map(String::valueOf).toArray(String[]::new));
+                this.bulkExcel.fillDropDownValue(sheet, 1, 999, 5, ProcessTimeUtil.frequency.toArray(new String[0]));
 
-                this.bulkExcel.fillDropDownValue(sheet,1,999,7, ProcessTimeUtil.priority.toArray(new String[0]));
-                this.bulkExcel.fillDropDownValue(sheet,1,999,8, ProcessTimeUtil.checked.toArray(new String[0]));
-                this.bulkExcel.fillDropDownValue(sheet,1,999,9, ProcessTimeUtil.checked.toArray(new String[0]));
-                this.bulkExcel.fillDropDownValue(sheet,1,999,10, ProcessTimeUtil.checked.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet, 1, 999, 7, ProcessTimeUtil.priority.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet, 1, 999, 8, ProcessTimeUtil.checked.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet, 1, 999, 9, ProcessTimeUtil.checked.toArray(new String[0]));
+                this.bulkExcel.fillDropDownValue(sheet, 1, 999, 10, ProcessTimeUtil.checked.toArray(new String[0]));
                 ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                 wb.write(byteArrayOutputStream);
                 return byteArrayOutputStream;
@@ -148,7 +161,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             Optional<Scheduler> scheduler = Optional.ofNullable(schedulerByJobId.get(sourceJob.getJobId()));
             if (scheduler.isPresent()) {
                 dataCellValue.add(String.valueOf(scheduler.get().getStartDate()));
-                dataCellValue.add(!ProcessUtil.isNull(scheduler.get().getEndDate()) ? String.valueOf(scheduler.get().getEndDate()): "");
+                dataCellValue.add(!ProcessUtil.isNull(scheduler.get().getEndDate()) ? String.valueOf(scheduler.get().getEndDate()) : "");
                 dataCellValue.add(!ProcessUtil.isNull(String.valueOf(scheduler.get().getStartTime())) ? String.valueOf(scheduler.get().getStartTime()) : "");
             } else {
                 dataCellValue.add("");
@@ -162,7 +175,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
                 dataCellValue.add("");
             }
             dataCellValue.add(!ProcessUtil.isNull(sourceJob.getJobRunningStatus()) ? String.valueOf(sourceJob.getJobRunningStatus()) : "");
-            dataCellValue.add(sourceJob.isCompleteJob() ? ProcessTimeUtil.checked.get(0): ProcessTimeUtil.checked.get(1));
+            dataCellValue.add(sourceJob.isCompleteJob() ? ProcessTimeUtil.checked.get(0) : ProcessTimeUtil.checked.get(1));
             dataCellValue.add(sourceJob.isFailJob() ? ProcessTimeUtil.checked.get(0) : ProcessTimeUtil.checked.get(1));
             dataCellValue.add(sourceJob.isSkipJob() ? ProcessTimeUtil.checked.get(0) : ProcessTimeUtil.checked.get(1));
             this.bulkExcel.fillBulkBody(dataCellValue, rowCount.get());
@@ -175,7 +188,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
         }
     }
 
-    public ResponseDto uploadSourceJob(FileUploadDto object) throws Exception {
+    public ResponseDto uploadSourceJob(FileUploadDto<?> object) throws Exception {
         logger.info("### Start bulk uploading file!");
         if (!object.getFile().getContentType().equalsIgnoreCase(SHEET_NAME)) {
             logger.info("File Type " + object.getFile().getContentType());
@@ -191,12 +204,12 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             return new ResponseDto(ERROR,  "You uploaded an empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(JOB_ADD);
-        if(ProcessUtil.isNull(sheet)) {
+        if (ProcessUtil.isNull(sheet)) {
             return new ResponseDto(ERROR, "Sheet not found with (Job-Add)");
         } else if (sheet.getLastRowNum() < 1) {
             return new ResponseDto(ERROR,  "You cannot upload an empty file.");
-        } else if(sheet.getLastRowNum() > 1001) {
-            return new ResponseDto(ERROR,"File support 1000 rows at a time.");
+        } else if (sheet.getLastRowNum() > 1001) {
+            return new ResponseDto(ERROR, "File support 1000 rows at a time.");
         }
         List<JobDetailValidation> jobDetailValidations = new ArrayList<>();
         List<String> errors = new ArrayList<>();
@@ -317,7 +330,7 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
             Scheduler scheduler = new Scheduler();
             scheduler.setTenantId(sourceJob.getTenantId());
             scheduler.setStartDate(LocalDate.parse(jobDetailValidation.getStartDate()));
-            if (!StringUtils.isEmpty(jobDetailValidation.getEndDate())) {
+            if (StringUtils.hasLength(jobDetailValidation.getEndDate())) {
                 scheduler.setEndDate(LocalDate.parse(jobDetailValidation.getEndDate()));
             }
             scheduler.setStartTime(LocalTime.parse(jobDetailValidation.getStartTime()));

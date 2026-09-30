@@ -18,13 +18,15 @@ import process.security.JobOwnership;
 import process.security.TenantContext;
 import process.util.ProcessUtil;
 import process.util.SqlLogRedaction;
-import javax.persistence.*;
 import javax.transaction.Transactional;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.persistence.Query;
 
 /**
  * @author Nabeel Ahmed
@@ -58,12 +60,15 @@ public class QueryService {
         return query.getSingleResult();
     }
 
+    // A native query's getResultList() is a raw List of Object[] rows (JPA's own signature).
+    @SuppressWarnings("unchecked")
     public List<Object[]> executeQuery(String queryStr) {
         this.logQuery(queryStr);
         Query query = this._em.createNativeQuery(queryStr);
         return query.getResultList();
     }
 
+    @SuppressWarnings("unchecked")
     public List<Object[]> executeQuery(String queryStr, Pageable paging) {
         this.logQuery(queryStr);
         Query query = this._em.createNativeQuery(queryStr);
@@ -616,16 +621,16 @@ public class QueryService {
             query += this.jobClause("sj") + "\n";
             if (!ProcessUtil.isNull(messageQSearch.getJobId()) && !messageQSearch.getJobId().isEmpty()) {
                 String jobId = messageQSearch.getJobId().toString();
-                query += String.format("and jq.job_id in (%s) \n", jobId.substring(1, jobId.length()-1));
+                query += String.format("and jq.job_id in (%s) \n", jobId.substring(1, jobId.length() - 1));
             }
             if (!ProcessUtil.isNull(messageQSearch.getJobQId()) && !messageQSearch.getJobQId().isEmpty()) {
                 String jobQId = messageQSearch.getJobQId().toString();
-                query += String.format("and jq.job_queue_id in (%s) \n", jobQId.substring(1, jobQId.length()-1));
+                query += String.format("and jq.job_queue_id in (%s) \n", jobQId.substring(1, jobQId.length() - 1));
             }
             if (!ProcessUtil.isNull(messageQSearch.getJobStatuses()) && !messageQSearch.getJobStatuses().isEmpty()) {
                 String jobStatus = messageQSearch.getJobStatuses().stream()
                         .map(jobStatus1 -> "'" + jobStatus1.toString().toUpperCase() + "',").collect(Collectors.joining());
-                query += String.format("and UPPER(jq.job_status) in (%s)", jobStatus.substring(0,jobStatus.length()-1));
+                query += String.format("and UPPER(jq.job_status) in (%s)", jobStatus.substring(0, jobStatus.length() - 1));
             }
         }
         if (isState) {

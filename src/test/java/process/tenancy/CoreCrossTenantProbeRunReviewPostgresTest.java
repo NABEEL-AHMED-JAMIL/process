@@ -8,7 +8,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import process.pipeline.review.RunReviewRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static process.tenancy.CoreProbeFixture.*;
+import static process.tenancy.CoreProbeFixture.A_PIPELINE;
+import static process.tenancy.CoreProbeFixture.B_PIPELINE;
+import static process.tenancy.CoreProbeFixture.A_RUN;
+import static process.tenancy.CoreProbeFixture.COLLEAGUE_RUN;
+import static process.tenancy.CoreProbeFixture.B_RUN;
+import static process.tenancy.CoreProbeFixture.B_RUN_NAMING_USER_A;
+import static process.tenancy.CoreProbeFixture.USER_OF_A;
+import static process.tenancy.CoreProbeFixture.ADMIN_OF_A;
+import static process.tenancy.CoreProbeFixture.REFUSED;
+import static process.tenancy.CoreProbeFixture.ADMIN_OF_C;
+import static process.tenancy.CoreProbeFixture.NO_WORKSPACE;
+import static process.tenancy.CoreProbeFixture.tenantlessUser;
+import static process.tenancy.CoreProbeFixture.SUCCEEDED;
+import static process.tenancy.CoreProbeFixture.A;
+import process.tenancy.CoreProbeFixture.Caller;
 
 /**
  * MIG-166's cross-tenant probe for MIG-237's run review: sourceJob.json/review and sourceJob.json/review/decide, called

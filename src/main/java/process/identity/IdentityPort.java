@@ -116,14 +116,21 @@ public interface IdentityPort {
         }
 
         public Long getAppUserId() { return this.appUserId; }
+
         /** Null for a platform administrator, who belongs to no workspace. */
         public Long getTenantId() { return this.tenantId; }
+
         public String getUsername() { return this.username; }
+
         public String getFullName() { return this.fullName; }
+
         public String getUserRole() { return this.userRole; }
+
         public String getStatus() { return this.status; }
+
         /** Where the person's picture is, if they have one: the object key, never the bytes. */
         public String getAvatarBucket() { return this.avatarBucket; }
+
         public String getAvatarKey() { return this.avatarKey; }
 
         public boolean isDeleted() { return "Delete".equals(this.status); }
@@ -149,8 +156,11 @@ public interface IdentityPort {
         }
 
         public Long getTenantId() { return this.tenantId; }
+
         public String getName() { return this.name; }
+
         public String getCode() { return this.code; }
+
         public String getStatus() { return this.status; }
 
         public boolean isDeleted() { return "Delete".equals(this.status); }
@@ -167,6 +177,7 @@ public interface IdentityPort {
         }
 
         public boolean isAllowed() { return this.allowed; }
+
         public String getMessage() { return this.message; }
     }
 }

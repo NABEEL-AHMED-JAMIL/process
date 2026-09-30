@@ -8,18 +8,27 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.Id;
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
+import javax.persistence.PrePersist;
+import javax.persistence.PreUpdate;
 
 /**
  * @author Nabeel Ahmed
  * */
 @Entity
 @Table(name = "scheduler")
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
@@ -251,7 +260,6 @@ public class Scheduler {
     public String toString() {
         return EntityStrings.of(this);
     }
-
 
     public Long getTenantId() {
         return tenantId;

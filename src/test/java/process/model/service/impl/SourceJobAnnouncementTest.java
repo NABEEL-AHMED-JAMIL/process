@@ -17,7 +17,6 @@ import process.model.enums.UserRole;
 import process.model.pojo.AppUser;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
-import process.model.repository.*;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.OpenSearchAuditLogClient;
@@ -28,8 +27,18 @@ import java.lang.reflect.Field;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 import process.notifications.TestNotifications;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.repository.AppUserRepository;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * That creating, editing, pausing or deleting a job is announced to the other people looking at

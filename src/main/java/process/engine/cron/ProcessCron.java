@@ -31,7 +31,7 @@ public class ProcessCron {
 
     private static final Logger logger = LogManager.getLogger(ProcessCron.class);
 
-    public static final int SCHEDULER_CRON_TIME_IN_ONE_MINUTES=1;
+    public static final int SCHEDULER_CRON_TIME_IN_ONE_MINUTES = 1;
 
     private final ProducerBulkEngine producerBulkEngine;
 

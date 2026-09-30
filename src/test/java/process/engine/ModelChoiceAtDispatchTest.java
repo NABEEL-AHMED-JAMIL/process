@@ -85,17 +85,35 @@ class ModelChoiceAtDispatchTest {
         pipeline.setTenantId(TENANT);
         pipeline.setStatus(Status.Active);
         PipelineField document = new PipelineField();
-        document.setTagKey("document"); document.setLabel("Doc"); document.setFieldType("text"); document.setPosition(0);
+        document.setTagKey("document");
+        document.setLabel("Doc");
+        document.setFieldType("text");
+        document.setPosition(0);
         PipelineField summary = new PipelineField();
-        summary.setTagKey("summary"); summary.setLabel("AI summary"); summary.setFieldType("ai"); summary.setPosition(1);
-        summary.setPromptId(1000L); summary.setVariableMap("{\"text\":\"document\"}"); summary.setOnError("continue"); summary.setRunIn("server");
+        summary.setTagKey("summary");
+        summary.setLabel("AI summary");
+        summary.setFieldType("ai");
+        summary.setPosition(1);
+        summary.setPromptId(1000L);
+        summary.setVariableMap("{\"text\":\"document\"}");
+        summary.setOnError("continue");
+        summary.setRunIn("server");
         PipelineField caption = new PipelineField();
-        caption.setTagKey("caption"); caption.setLabel("AI caption"); caption.setFieldType("ai"); caption.setPosition(2);
-        caption.setPromptId(2000L); caption.setVariableMap("{}"); caption.setRunIn("worker");
+        caption.setTagKey("caption");
+        caption.setLabel("AI caption");
+        caption.setFieldType("ai");
+        caption.setPosition(2);
+        caption.setPromptId(2000L);
+        caption.setVariableMap("{}");
+        caption.setRunIn("worker");
         pipeline.getFields().addAll(Arrays.asList(document, summary, caption));
         when(this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot("F1", TENANT, Status.Delete)).thenReturn(Collections.singletonList(pipeline));
         AiPort.PromptInfo prompt = new AiPort.PromptInfo();
-        prompt.promptId = 2000L; prompt.promptUuid = "uuid-2000"; prompt.name = "Caption"; prompt.version = 4; prompt.status = "Active";
+        prompt.promptId = 2000L;
+        prompt.promptUuid = "uuid-2000";
+        prompt.name = "Caption";
+        prompt.version = 4;
+        prompt.status = "Active";
         prompt.tenantId = TENANT;
         lenient().when(this.ai.prompts(any())).thenReturn(Collections.singletonMap(2000L, prompt));
     }
@@ -120,9 +138,18 @@ class ModelChoiceAtDispatchTest {
 
     private static AiPort.StepResult ranOn(String model, long optionId, String choice) {
         AiPort.StepResult r = new AiPort.StepResult();
-        r.status = "ok"; r.output = "a summary"; r.promptId = 1000L; r.promptName = "Summarise"; r.promptVersion = 3;
-        r.latencyMs = 800; r.tokensIn = 20; r.tokensOut = 9;
-        r.model = model; r.connectionId = 1003L; r.modelOptionId = optionId; r.modelChoice = choice;
+        r.status = "ok";
+        r.output = "a summary";
+        r.promptId = 1000L;
+        r.promptName = "Summarise";
+        r.promptVersion = 3;
+        r.latencyMs = 800;
+        r.tokensIn = 20;
+        r.tokensOut = 9;
+        r.model = model;
+        r.connectionId = 1003L;
+        r.modelOptionId = optionId;
+        r.modelChoice = choice;
         return r;
     }
 

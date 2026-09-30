@@ -52,7 +52,6 @@ public class OpenSearchJobAuditLogProjection implements JobAuditLogProjection {
         return "Active";
     }
 
-
     public String getExternalId() {
         return this.externalId;
     }

@@ -52,7 +52,6 @@ public final class TextChunker {
             throw new IllegalArgumentException("overlap must be >= 0 and less than chunkSize.");
         }
         String trimmed = text.trim();
-        int step = chunkSize - overlap;
         int position = 0;
         while (position < trimmed.length()) {
             int end = Math.min(position + chunkSize, trimmed.length());

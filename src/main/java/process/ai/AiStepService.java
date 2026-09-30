@@ -61,7 +61,12 @@ public class AiStepService {
         public final String failure;
         public final List<String> notes = new ArrayList<>();
         public final List<RunAiStep> steps = new ArrayList<>();
-        public Outcome(String payload, String failure) { this.payload = payload; this.failure = failure; }
+
+        public Outcome(String payload, String failure) {
+            this.payload = payload;
+            this.failure = failure;
+        }
+
         public boolean failed() { return this.failure != null; }
     }
 
@@ -92,7 +97,11 @@ public class AiStepService {
     public static List<PipelineField> stepsOf(Pipeline pipeline) {
         List<PipelineField> steps = new ArrayList<>();
         if (pipeline == null || pipeline.getFields() == null) return steps;
-        for (PipelineField f : pipeline.getFields()) if ("ai".equals(f.getFieldType()) && f.getPromptId() != null) steps.add(f);
+        for (PipelineField f : pipeline.getFields()) {
+            if ("ai".equals(f.getFieldType()) && f.getPromptId() != null) {
+                steps.add(f);
+            }
+        }
         steps.sort(Comparator.comparingInt(PipelineField::getPosition));
         return steps;
     }
@@ -190,7 +199,11 @@ public class AiStepService {
         return copyNotes(new Outcome(xml.toString(), null), outcome);
     }
 
-    private static Outcome copyNotes(Outcome into, Outcome from) { into.notes.addAll(from.notes); into.steps.addAll(from.steps); return into; }
+    private static Outcome copyNotes(Outcome into, Outcome from) {
+        into.notes.addAll(from.notes);
+        into.steps.addAll(from.steps);
+        return into;
+    }
 
     /** ", on <model> (<how it was chosen>)" when ai-service said what the step ran on; nothing when it did not. */
     private static String ranOn(AiPort.StepResult answer) {

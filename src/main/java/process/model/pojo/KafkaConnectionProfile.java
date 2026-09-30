@@ -8,8 +8,17 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
-import javax.persistence.*;
 import java.sql.Timestamp;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Index;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
 
 @Entity
 @Table(name = "kafka_connection_profile", indexes = {
@@ -23,7 +32,7 @@ import java.sql.Timestamp;
 // which is the last-resort default when nothing else resolves, so the filter admits it as
 // findVisibleToTenant already does.
 @Filter(name = "tenantFilter", condition = "(tenant_id = :tenantId or tenant_id is null)")
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
 public class KafkaConnectionProfile implements Audited {

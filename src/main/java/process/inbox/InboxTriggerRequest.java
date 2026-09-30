@@ -17,9 +17,14 @@ public class InboxTriggerRequest {
     }
 
     public Long getJobId() { return this.jobId; }
+
     public void setJobId(Long jobId) { this.jobId = jobId; }
+
     public Boolean getEnabled() { return this.enabled; }
+
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+
     public String getFilePattern() { return this.filePattern; }
+
     public void setFilePattern(String filePattern) { this.filePattern = filePattern; }
 }

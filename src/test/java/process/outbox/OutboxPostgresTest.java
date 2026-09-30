@@ -172,8 +172,14 @@ class OutboxPostgresTest {
         OutboxRelay b = this.relay(kafka);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch go = new CountDownLatch(1);
-        pool.submit(() -> { go.await(); while (a.drain() > 0) { } return null; });
-        pool.submit(() -> { go.await(); while (b.drain() > 0) { } return null; });
+        pool.submit(() -> {
+            go.await();
+            while (a.drain() > 0) { } return null;
+        });
+        pool.submit(() -> {
+            go.await();
+            while (b.drain() > 0) { } return null;
+        });
         go.countDown();
         pool.shutdown();
         assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();

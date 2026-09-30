@@ -570,9 +570,12 @@ public class OpenSearchRagClient {
         }
 
         public int getAttempted() { return this.attempted; }
+
         public int getStored() { return this.stored; }
+
         /** Null when everything was stored. */
         public String getFailureSummary() { return this.failureSummary; }
+
         public boolean isComplete() { return this.stored == this.attempted; }
     }
 
@@ -1230,7 +1233,9 @@ public class OpenSearchRagClient {
         if (a == null || b == null || a.length != b.length || a.length == 0) {
             return Double.NaN;
         }
-        double dot = 0, normA = 0, normB = 0;
+        double dot = 0;
+        double normA = 0;
+        double normB = 0;
         for (int i = 0; i < a.length; i++) {
             dot += a[i] * b[i];
             normA += a[i] * a[i];

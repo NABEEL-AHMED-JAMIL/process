@@ -60,6 +60,9 @@ class InternalIdentityEventsRestApiPostgresTest {
         return event;
     }
 
+    // The array is only copied into a new list; nothing is stored in it.
+    @SafeVarargs
+    @SuppressWarnings("varargs")
     private static Map<String, Object> batch(Map<String, Object>... events) {
         return Collections.singletonMap("events", new ArrayList<>(Arrays.asList(events)));
     }

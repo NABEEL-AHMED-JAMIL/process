@@ -5,19 +5,19 @@ package process.model.projection;
  * */
 public interface JobAuditLogProjection {
 
-    public Long getJobAuditLogId();
+    Long getJobAuditLogId();
 
-    public Long getJobQueueId();
+    Long getJobQueueId();
 
-    public String getLogsDetail();
+    String getLogsDetail();
 
-    public String getDateCreated();
+    String getDateCreated();
 
-    public String getStatus();
+    String getStatus();
 
-    public String getExternalId();
+    String getExternalId();
 
     /** The correlation id of the work that wrote the line (MIG-94): one string joins the trail and every log. */
-    public String getCorrelationId();
+    String getCorrelationId();
 
 }

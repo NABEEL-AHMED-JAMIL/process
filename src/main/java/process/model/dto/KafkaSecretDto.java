@@ -47,39 +47,51 @@ public class KafkaSecretDto {
     private String storePasswordEnc;
 
     public KafkaSecretKind getKind() { return this.kind; }
+
     public void setKind(KafkaSecretKind kind) { this.kind = kind; }
 
     public String getBucket() { return this.bucket; }
+
     public void setBucket(String bucket) { this.bucket = bucket; }
 
     public String getObjectKey() { return this.objectKey; }
+
     public void setObjectKey(String objectKey) { this.objectKey = objectKey; }
 
     public String getFileName() { return this.fileName; }
+
     public void setFileName(String fileName) { this.fileName = fileName; }
 
     public String getUploadId() { return this.uploadId; }
+
     public void setUploadId(String uploadId) { this.uploadId = uploadId; }
 
     public String getUploadedOn() { return this.uploadedOn; }
+
     public void setUploadedOn(String uploadedOn) { this.uploadedOn = uploadedOn; }
 
     public Long getSizeBytes() { return this.sizeBytes; }
+
     public void setSizeBytes(Long sizeBytes) { this.sizeBytes = sizeBytes; }
 
     public String getSubject() { return this.subject; }
+
     public void setSubject(String subject) { this.subject = subject; }
 
     public String getIssuer() { return this.issuer; }
+
     public void setIssuer(String issuer) { this.issuer = issuer; }
 
     public String getExpiresOn() { return this.expiresOn; }
+
     public void setExpiresOn(String expiresOn) { this.expiresOn = expiresOn; }
 
     public Boolean getExpired() { return this.expired; }
+
     public void setExpired(Boolean expired) { this.expired = expired; }
 
     public String getStorePasswordEnc() { return this.storePasswordEnc; }
+
     public void setStorePasswordEnc(String storePasswordEnc) { this.storePasswordEnc = storePasswordEnc; }
 
 }

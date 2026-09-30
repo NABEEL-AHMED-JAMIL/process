@@ -31,7 +31,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import static process.util.ProcessUtil.*;
+import static process.util.ProcessUtil.isNull;
+import static process.util.ProcessUtil.SUCCESS;
+import static process.util.ProcessUtil.ERROR;
 
 /**
  * @author Nabeel Ahmed
@@ -56,6 +58,7 @@ public class FileChatServiceImpl implements FileChatService {
      * instructions and the conversation that share the window.
      */
     private static final Map<String, Integer> PROMPT_FILE_CHARS_BY_PROVIDER;
+
     static {
         Map<String, Integer> limits = new HashMap<>();
         limits.put("ANTHROPIC", 400000);
@@ -221,6 +224,7 @@ public class FileChatServiceImpl implements FileChatService {
      * whole point of emailing an export is that the person who receives it can open it.
      */
     private static final Map<String, String> EXPORT_CONTENT_TYPES;
+
     static {
         Map<String, String> types = new HashMap<>();
         types.put("pdf", "application/pdf");
@@ -753,12 +757,7 @@ public class FileChatServiceImpl implements FileChatService {
      * genuinely slow step -- audio transcription runs tens of seconds per file -- so a caller
      * that never needs the raw text at all (the common already-indexed case) must never pay for
      * it, and one that does need it must never pay for it twice.
-     */
-    private TextSupplier memoizedExtraction(String bucket, String key, String etag) {
-        return this.memoizedExtraction(bucket, key, etag, null);
-    }
-
-    /**
+     *
      * The same supplier, told which agent is asking.
      *
      * Only the image path cares. A PDF with no text layer is read by a vision model, and until

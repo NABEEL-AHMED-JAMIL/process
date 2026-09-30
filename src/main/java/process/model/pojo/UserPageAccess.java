@@ -35,15 +35,23 @@ public class UserPageAccess {
         private String pageKey;
 
         public Key() {}
-        public Key(Long appUserId, String pageKey) { this.appUserId = appUserId; this.pageKey = pageKey; }
+
+        public Key(Long appUserId, String pageKey) {
+            this.appUserId = appUserId;
+            this.pageKey = pageKey;
+        }
+
         public Long getAppUserId() { return appUserId; }
+
         public String getPageKey() { return pageKey; }
+
         @Override public boolean equals(Object o) {
             if (this == o) return true;
             if (!(o instanceof Key)) return false;
             Key k = (Key) o;
             return Objects.equals(appUserId, k.appUserId) && Objects.equals(pageKey, k.pageKey);
         }
+
         @Override public int hashCode() { return Objects.hash(appUserId, pageKey); }
     }
 
@@ -77,11 +85,18 @@ public class UserPageAccess {
     }
 
     public Key getId() { return id; }
+
     public Long getAppUserId() { return id == null ? null : id.getAppUserId(); }
+
     public String getPageKey() { return id == null ? null : id.getPageKey(); }
+
     public Long getTenantId() { return tenantId; }
+
     public boolean isAllowed() { return allowed; }
+
     public void setAllowed(boolean allowed) { this.allowed = allowed; }
+
     public Timestamp getDateCreated() { return dateCreated; }
+
     public Long getCreatedBy() { return createdBy; }
 }

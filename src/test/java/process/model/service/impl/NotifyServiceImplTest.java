@@ -22,9 +22,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
 import static process.util.ProcessUtil.ERROR;
 import process.notifications.TestNotifications;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.anyList;
 
 /**
  * The worker callback is how nearly every run reports its outcome, and it had no test at all --

@@ -29,7 +29,6 @@ import process.model.repository.TenantRepository;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;

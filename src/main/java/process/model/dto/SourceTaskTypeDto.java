@@ -9,14 +9,13 @@ import java.util.List;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskTypeDto implements AuditNamed {
     private Long createdBy;
 
     private String createdByName;
     private String updatedByName;
-
 
     private Long sourceTaskTypeId;
     private Long tenantId;
@@ -150,18 +149,31 @@ public class SourceTaskTypeDto implements AuditNamed {
         private String pipelineName;
         private String status;
         private int fields;
+
         public PipelineSummary() { }
+
         public PipelineSummary(Long pipelineKey, String pipelineId, String pipelineName, String status, int fields) {
-            this.pipelineKey = pipelineKey; this.pipelineId = pipelineId; this.pipelineName = pipelineName; this.status = status; this.fields = fields;
+            this.pipelineKey = pipelineKey;
+            this.pipelineId = pipelineId;
+            this.pipelineName = pipelineName;
+            this.status = status;
+            this.fields = fields;
         }
+
         public Long getPipelineKey() { return pipelineKey; }
+
         public String getPipelineId() { return pipelineId; }
+
         public String getPipelineName() { return pipelineName; }
+
         public String getStatus() { return status; }
+
         public int getFields() { return fields; }
     }
 
     private List<PipelineSummary> pipelines;
+
     public List<PipelineSummary> getPipelines() { return pipelines; }
+
     public void setPipelines(List<PipelineSummary> pipelines) { this.pipelines = pipelines; }
 }

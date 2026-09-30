@@ -12,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import process.model.dto.UserStatisticDto;
-import process.model.dto.*;
 import process.model.enums.JobStatus;
 import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
@@ -29,8 +28,19 @@ import process.util.BusinessTime;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
-import java.util.*;
-import static process.util.ProcessUtil.*;
+import process.model.dto.ResponseDto;
+import process.model.dto.SourceJobDto;
+import process.model.dto.SourceTaskDto;
+import process.model.dto.SchedulerDto;
+import process.model.dto.SourceTaskTypeDto;
+import java.util.ArrayList;
+import java.util.List;
+import process.model.dto.JobStatusStatisticDto;
+import process.model.dto.WeeklyJobStatisticsDto;
+import process.model.dto.WeeklyHrJobDimensionStatisticsDto;
+import process.model.dto.SourceJobQueueDto;
+import java.util.Optional;
+import static process.util.ProcessUtil.SUCCESS;
 
 /**
  * @author Nabeel Ahmed
@@ -67,7 +77,7 @@ public class DashboardServiceImpl implements DashboardService {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobStatusStatistics(startDate, endDate));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
-            for(Object[] obj : result) {
+            for (Object[] obj : result) {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
@@ -142,7 +152,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private static Integer asInt(Object value) {
-        return value == null ? 0 : Integer.valueOf(value.toString());
+        return value == null ? 0 : Integer.parseInt(value.toString());
     }
 
     private static Long asLong(Object value) {
@@ -163,7 +173,7 @@ public class DashboardServiceImpl implements DashboardService {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.jobRunningStatistics(startDate, endDate));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
-            for(Object[] obj : result) {
+            for (Object[] obj : result) {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
             }
@@ -182,7 +192,7 @@ public class DashboardServiceImpl implements DashboardService {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyRunningJobStatistics(startDate, endDate));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
-            for(Object[] obj : result) {
+            for (Object[] obj : result) {
                 int index = 0;
                 jobStatusStatistic.add(new JobStatusStatisticDto(obj[index].toString().trim(), Integer.valueOf(obj[++index].toString())));
             }
@@ -201,7 +211,7 @@ public class DashboardServiceImpl implements DashboardService {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrsRunningJobStatistics(startDate, endDate));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<WeeklyJobStatisticsDto> weeklyJobStatistics = new ArrayList<>();
-            for(Object[] obj : result) {
+            for (Object[] obj : result) {
                 int index = 0;
                 weeklyJobStatistics.add(new WeeklyJobStatisticsDto(obj[index].toString().trim(),
                     Double.valueOf(obj[++index].toString()).longValue(), obj[++index].toString().trim(),
@@ -263,7 +273,7 @@ public class DashboardServiceImpl implements DashboardService {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.weeklyHrRunningStatisticsDimensionDetail(targetDate, targetHr, jobStatus, jobId));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
-            for(Object[] obj : result) {
+            for (Object[] obj : result) {
                 int index = 0;
                 SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
                 if (!ProcessUtil.isNull(obj[index])) {
@@ -327,7 +337,7 @@ public class DashboardServiceImpl implements DashboardService {
                     scheduler.ifPresent(value -> sourceJobDto.setScheduler(getSchedulerDto(value)));
                     objectDetail.put("sourceJob", sourceJobDto);
                     result = this.queryService.executeQuery(this.queryService.statisticsBySourceJobId(jobId));
-                    for(Object[] obj : result) {
+                    for (Object[] obj : result) {
                         int index = 0;
                         objectDetail.put("sourceJobStatistics", new WeeklyHrJobDimensionStatisticsDto(
                             Long.valueOf(obj[index].toString()), Long.valueOf(obj[++index].toString()), Long.valueOf(obj[++index].toString()),

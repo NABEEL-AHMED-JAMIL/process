@@ -32,7 +32,7 @@ public class XmlOutTagInfoUtil {
     public Logger logger = LoggerFactory.getLogger(XmlOutTagInfoUtil.class);
 
     final String BLANK = "";
-    final String UTF8 ="UTF-8";
+    final String UTF8 = "UTF-8";
     final String YES = "yes";
     final String NAME = "{http://xml.apache.org/xslt}indent-amount";
     final String VALUE = "2";
@@ -74,7 +74,7 @@ public class XmlOutTagInfoUtil {
     public String makeXml(ConfigurationMakerRequest xmlMakerRequest) throws Exception {
         logger.info("Process For Xml Create Start");
         String xml = null;
-        if(xmlMakerRequest.getXmlTagsInfo() != null) {
+        if (xmlMakerRequest.getXmlTagsInfo() != null) {
             Document xmlDoc = this.newDocument();
             /*
              * An XML document has exactly one root, and it is this wrapper -- never the first tag
@@ -93,24 +93,24 @@ public class XmlOutTagInfoUtil {
             Element root = xmlDoc.createElementNS(BLANK, ROOT_TAG);
             xmlDoc.appendChild(root);
 
-            for(ConfigurationMakerRequest.TagInfo tagInfo: xmlMakerRequest.getXmlTagsInfo()) {
+            for (ConfigurationMakerRequest.TagInfo tagInfo: xmlMakerRequest.getXmlTagsInfo()) {
                 String tagKey = tagInfo.getTagKey();
                 String tagParent = tagInfo.getTagParent();
                 String tagValue = tagInfo.getTagValue();
 
                 // A row with no key cannot become an element; skipping it keeps one blank row in
                 // the editor from failing the whole save.
-                if(tagKey == null || tagKey.equals(BLANK)) {
+                if (tagKey == null || tagKey.equals(BLANK)) {
                     continue;
                 }
 
                 Element child = xmlDoc.createElement(tagKey);
                 addTagValue(xmlDoc, child, tagValue);
 
-                if(tagParent != null && !tagParent.equals(BLANK)) {
+                if (tagParent != null && !tagParent.equals(BLANK)) {
                     NodeList nodeList = xmlDoc.getElementsByTagName(tagParent);
-                    if(nodeList != null && nodeList.getLength() > 0) {
-                        nodeList.item(nodeList.getLength()-1).appendChild(child);
+                    if (nodeList != null && nodeList.getLength() > 0) {
+                        nodeList.item(nodeList.getLength() - 1).appendChild(child);
                     } else {
                         // The parent tag has no row of its own -- create the wrapper it names.
                         Element parent = xmlDoc.createElement(tagParent);
@@ -129,17 +129,15 @@ public class XmlOutTagInfoUtil {
             DOMSource source = new DOMSource(xmlDoc);
             StringWriter writer = new StringWriter();
             StreamResult result = new StreamResult(writer);
-            transformer.transform(source,result);
+            transformer.transform(source, result);
             xml = result.getWriter().toString();
         }
         logger.info("Process For Xml Create End");
         return xml;
     }
 
-
-
     private void addTagValue(Document xmlDoc, Element child, String tagValue) {
-        if(!ProcessUtil.isNull(tagValue)) {
+        if (!ProcessUtil.isNull(tagValue)) {
             child.appendChild(xmlDoc.createTextNode(tagValue));
         } else {
             child.appendChild(xmlDoc.createTextNode(BLANK));

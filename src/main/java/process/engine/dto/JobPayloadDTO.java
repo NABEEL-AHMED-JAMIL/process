@@ -7,7 +7,7 @@ import com.google.gson.GsonBuilder;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class JobPayloadDTO {
 
@@ -107,13 +107,22 @@ public class JobPayloadDTO {
     }
 
     public String getCallbackToken() { return callbackToken; }
+
     public void setCallbackToken(String callbackToken) { this.callbackToken = callbackToken; }
+
     public Integer getAttempt() { return attempt; }
+
     public void setAttempt(Integer attempt) { this.attempt = attempt; }
+
     public Long getTenantId() { return tenantId; }
+
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+
     public String getInputBucket() { return inputBucket; }
+
     public void setInputBucket(String inputBucket) { this.inputBucket = inputBucket; }
+
     public String getInputKey() { return inputKey; }
+
     public void setInputKey(String inputKey) { this.inputKey = inputKey; }
 }

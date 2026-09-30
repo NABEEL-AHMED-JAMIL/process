@@ -42,9 +42,11 @@ public class UserActivityDto {
         }
 
         public String getName() { return this.name; }
+
         public void setName(String name) { this.name = name; }
 
         public long getValue() { return this.value; }
+
         public void setValue(long value) { this.value = value; }
     }
 
@@ -68,46 +70,60 @@ public class UserActivityDto {
         private String jobStatusMessage;
 
         public Long getJobQueueId() { return this.jobQueueId; }
+
         public void setJobQueueId(Long jobQueueId) { this.jobQueueId = jobQueueId; }
 
         public Long getJobId() { return this.jobId; }
+
         public void setJobId(Long jobId) { this.jobId = jobId; }
 
         public String getJobName() { return this.jobName; }
+
         public void setJobName(String jobName) { this.jobName = jobName; }
 
         public String getJobStatus() { return this.jobStatus; }
+
         public void setJobStatus(String jobStatus) { this.jobStatus = jobStatus; }
 
         public LocalDateTime getStartTime() { return this.startTime; }
+
         public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
 
         public LocalDateTime getEndTime() { return this.endTime; }
+
         public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
 
         public String getJobStatusMessage() { return this.jobStatusMessage; }
+
         public void setJobStatusMessage(String jobStatusMessage) { this.jobStatusMessage = jobStatusMessage; }
     }
 
     public long getJobsAssigned() { return this.jobsAssigned; }
+
     public void setJobsAssigned(long jobsAssigned) { this.jobsAssigned = jobsAssigned; }
 
     public long getActiveJobs() { return this.activeJobs; }
+
     public void setActiveJobs(long activeJobs) { this.activeJobs = activeJobs; }
 
     public long getRecentRuns() { return this.recentRuns; }
+
     public void setRecentRuns(long recentRuns) { this.recentRuns = recentRuns; }
 
     public long getRecentFailures() { return this.recentFailures; }
+
     public void setRecentFailures(long recentFailures) { this.recentFailures = recentFailures; }
 
     public int getWindowDays() { return this.windowDays; }
+
     public void setWindowDays(int windowDays) { this.windowDays = windowDays; }
 
     public List<Run> getRuns() { return this.runs; }
+
     public void setRuns(List<Run> runs) { this.runs = runs; }
 
     public List<Outcome> getOutcomes() { return this.outcomes; }
+
     public void setOutcomes(List<Outcome> outcomes) { this.outcomes = outcomes; }
 
 }

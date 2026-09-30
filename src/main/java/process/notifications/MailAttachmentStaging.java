@@ -12,7 +12,6 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import java.util.function.Supplier;

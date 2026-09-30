@@ -8,7 +8,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SearchTextDto;
@@ -17,6 +16,12 @@ import process.model.service.SourceTaskService;
 import process.util.PagingUtil;
 import process.util.ProcessUtil;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * @author Nabeel Ahmed
@@ -80,7 +85,7 @@ public class SourceTaskRestApi {
         @RequestBody(required = false) SearchTextDto searchTextDto) {
         try {
             return new ResponseEntity<>(this.sourceTaskService.listSourceTask(startDate, endDate, columnName,
-                order, PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
+                order, PagingUtil.applyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listSourceTask :- {}.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -100,7 +105,7 @@ public class SourceTaskRestApi {
         @RequestBody(required = false) SearchTextDto searchTextDto) {
         try {
             return new ResponseEntity<>(this.sourceTaskService.fetchAllLinkJobsWithSourceTaskId(sourceTaskId, startDate, endDate,
-                columnName, order, PagingUtil.ApplyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
+                columnName, order, PagingUtil.applyPaging(columnName, order, page, limit), searchTextDto), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchAllLinkJobsWithSourceTaskId :- {}.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -122,8 +127,8 @@ public class SourceTaskRestApi {
     public ResponseEntity<?> downloadListSourceTask() {
         try {
             HttpHeaders headers = new HttpHeaders();
-            String fileName = "BatchDownload-"+BusinessTime.today() + "-" + UUID.randomUUID() + ProcessUtil.XLSX_EXTENSION;
-            headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
+            String fileName = "BatchDownload-" + BusinessTime.today() + "-" + UUID.randomUUID() + ProcessUtil.XLSX_EXTENSION;
+            headers.add(ProcessUtil.CONTENT_DISPOSITION, ProcessUtil.FILE_NAME_HEADER + fileName);
             return ResponseEntity.ok().headers(headers).body(this.sourceTaskService.downloadListSourceTask().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceTask :- {}.", ex);
@@ -135,8 +140,8 @@ public class SourceTaskRestApi {
     public ResponseEntity<?> downloadSourceTaskTemplate() {
         try {
             HttpHeaders headers = new HttpHeaders();
-            String fileName = "BatchDownload-"+BusinessTime.today()+ "-" + UUID.randomUUID() + ProcessUtil.XLSX_EXTENSION;
-            headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
+            String fileName = "BatchDownload-" + BusinessTime.today() + "-" + UUID.randomUUID() + ProcessUtil.XLSX_EXTENSION;
+            headers.add(ProcessUtil.CONTENT_DISPOSITION, ProcessUtil.FILE_NAME_HEADER + fileName);
             return ResponseEntity.ok().headers(headers).body(this.sourceTaskService.downloadSourceTaskTemplate().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadSourceTaskTemplate :- {}.", ex);
@@ -146,7 +151,7 @@ public class SourceTaskRestApi {
 
     @BuilderAction
     @RequestMapping(value = "/uploadSourceTask", method = RequestMethod.POST)
-    public ResponseEntity<?> uploadSourceTask(FileUploadDto fileUploadDto) {
+    public ResponseEntity<?> uploadSourceTask(FileUploadDto<?> fileUploadDto) {
         try {
             if (fileUploadDto.getFile() != null) {
                 return new ResponseEntity<>(this.sourceTaskService.uploadSourceTask(fileUploadDto), HttpStatus.OK);

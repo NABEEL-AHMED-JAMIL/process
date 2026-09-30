@@ -12,24 +12,24 @@ import java.io.ByteArrayOutputStream;
  * */
 public interface SourceTaskService {
 
-    public ResponseDto addSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
+    ResponseDto addSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
 
-    public ResponseDto updateSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
+    ResponseDto updateSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
 
-    public ResponseDto deleteSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
+    ResponseDto deleteSourceTask(SourceTaskDto sourceTaskDto) throws Exception;
 
-    public ResponseDto listSourceTask(String startDate, String endDate,
+    ResponseDto listSourceTask(String startDate, String endDate,
           String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception;
 
-    public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
+    ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
           String columnName, String order, Pageable paging, SearchTextDto searchTextDt) throws Exception;
 
-    public ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId);
+    ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId);
 
-    public ByteArrayOutputStream downloadListSourceTask() throws Exception;
+    ByteArrayOutputStream downloadListSourceTask() throws Exception;
 
-    public ByteArrayOutputStream downloadSourceTaskTemplate() throws Exception;
+    ByteArrayOutputStream downloadSourceTaskTemplate() throws Exception;
 
-    public ResponseDto uploadSourceTask(FileUploadDto fileUploadDto) throws Exception;
+    ResponseDto uploadSourceTask(FileUploadDto<?> fileUploadDto) throws Exception;
 
 }

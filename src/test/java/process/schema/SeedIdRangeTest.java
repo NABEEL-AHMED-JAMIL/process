@@ -6,7 +6,6 @@ import org.yaml.snakeyaml.Yaml;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;

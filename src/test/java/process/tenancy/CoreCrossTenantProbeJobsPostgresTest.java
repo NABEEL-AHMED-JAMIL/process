@@ -22,7 +22,28 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static process.tenancy.CoreProbeFixture.*;
+import static process.tenancy.CoreProbeFixture.A_AGENT;
+import static process.tenancy.CoreProbeFixture.USER_OF_A;
+import static process.tenancy.CoreProbeFixture.ADMIN_OF_A;
+import static process.tenancy.CoreProbeFixture.A_TASK;
+import static process.tenancy.CoreProbeFixture.B_TASK;
+import static process.tenancy.CoreProbeFixture.B_JOB;
+import static process.tenancy.CoreProbeFixture.B_JOB_NAMING_USER_A;
+import static process.tenancy.CoreProbeFixture.COLLEAGUE_JOB;
+import static process.tenancy.CoreProbeFixture.REFUSED;
+import static process.tenancy.CoreProbeFixture.B_RUN;
+import static process.tenancy.CoreProbeFixture.A_JOB;
+import static process.tenancy.CoreProbeFixture.A_RUN;
+import static process.tenancy.CoreProbeFixture.COLLEAGUE_RUN;
+import static process.tenancy.CoreProbeFixture.USER_B;
+import static process.tenancy.CoreProbeFixture.jobSheet;
+import static process.tenancy.CoreProbeFixture.B;
+import static process.tenancy.CoreProbeFixture.SUCCEEDED;
+import static process.tenancy.CoreProbeFixture.A;
+import static process.tenancy.CoreProbeFixture.C;
+import static process.tenancy.CoreProbeFixture.NO_WORKSPACE;
+import static process.tenancy.CoreProbeFixture.tenantlessUser;
+import process.tenancy.CoreProbeFixture.Caller;
 
 /**
  * MIG-166's CI cross-tenant probe for Core, jobs: every /sourceJob.json endpoint, called by workspace A's tenant user

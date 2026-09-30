@@ -28,7 +28,6 @@ import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * The actual enforcement behind an agent's "Target file types" field. Before this, the field

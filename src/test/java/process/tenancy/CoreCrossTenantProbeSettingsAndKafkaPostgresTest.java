@@ -23,7 +23,33 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static process.tenancy.CoreProbeFixture.*;
+import static process.tenancy.CoreProbeFixture.ADMIN_OF_A;
+import static process.tenancy.CoreProbeFixture.B_TYPE;
+import static process.tenancy.CoreProbeFixture.A_TYPE;
+import static process.tenancy.CoreProbeFixture.REFUSED;
+import static process.tenancy.CoreProbeFixture.B_PROFILE;
+import static process.tenancy.CoreProbeFixture.PLATFORM_PROFILE;
+import static process.tenancy.CoreProbeFixture.A_PROFILE;
+import static process.tenancy.CoreProbeFixture.B;
+import static process.tenancy.CoreProbeFixture.B_CONFIG;
+import static process.tenancy.CoreProbeFixture.B_SECRET;
+import static process.tenancy.CoreProbeFixture.B_HOME;
+import static process.tenancy.CoreProbeFixture.B_GROUP;
+import static process.tenancy.CoreProbeFixture.B_STORAGE_ALIAS;
+import static process.tenancy.CoreProbeFixture.CONFIG_BUCKET;
+import static process.tenancy.CoreProbeFixture.B_SECRET_KEY;
+import static process.tenancy.CoreProbeFixture.A;
+import static process.tenancy.CoreProbeFixture.SUCCEEDED;
+import static process.tenancy.CoreProbeFixture.GONE;
+import static process.tenancy.CoreProbeFixture.DEFAULT_WS;
+import static process.tenancy.CoreProbeFixture.UNKNOWN;
+import static process.tenancy.CoreProbeFixture.ADMIN_OF_C;
+import static process.tenancy.CoreProbeFixture.C_TYPE;
+import static process.tenancy.CoreProbeFixture.C;
+import static process.tenancy.CoreProbeFixture.PLATFORM;
+import static process.tenancy.CoreProbeFixture.NO_WORKSPACE;
+import static process.tenancy.CoreProbeFixture.tenantlessAdmin;
+import process.tenancy.CoreProbeFixture.Caller;
 
 /**
  * MIG-166's CI cross-tenant probe for Core, a workspace's settings: topics and their Kafka routes (/setting.json),

@@ -23,7 +23,24 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static process.tenancy.CoreProbeFixture.*;
+import static process.tenancy.CoreProbeFixture.USER_OF_A;
+import static process.tenancy.CoreProbeFixture.ADMIN_OF_A;
+import static process.tenancy.CoreProbeFixture.REFUSED;
+import static process.tenancy.CoreProbeFixture.B_BUCKET;
+import static process.tenancy.CoreProbeFixture.A_AGENT;
+import static process.tenancy.CoreProbeFixture.A_BUCKET;
+import static process.tenancy.CoreProbeFixture.B_AGENT;
+import static process.tenancy.CoreProbeFixture.B_SECRET_KEY;
+import static process.tenancy.CoreProbeFixture.ADMIN_A;
+import static process.tenancy.CoreProbeFixture.B_PRIVATE_KEY;
+import static process.tenancy.CoreProbeFixture.USER_B;
+import static process.tenancy.CoreProbeFixture.SUCCEEDED;
+import static process.tenancy.CoreProbeFixture.CONFIG_BUCKET;
+import static process.tenancy.CoreProbeFixture.NO_WORKSPACE;
+import static process.tenancy.CoreProbeFixture.tenantlessUser;
+import static process.tenancy.CoreProbeFixture.tenantlessAdmin;
+import static process.tenancy.CoreProbeFixture.USER_A;
+import process.tenancy.CoreProbeFixture.Caller;
 
 /**
  * MIG-166's CI cross-tenant probe for Core, the two places a request names a stored object: file chat

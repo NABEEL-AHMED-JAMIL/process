@@ -251,7 +251,9 @@ class StepAnswerContractTest {
     void savingAStepsListSendsItAndRelaysTheAnswer() throws Exception {
         this.answers("/api/v1/internal/ai/steps/modelOptions/save", 200, OPTIONS);
         AiPort.ModelOption local = new AiPort.ModelOption();
-        local.connectionId = 1003L; local.model = "llama3.1:8b"; local.isDefault = true;
+        local.connectionId = 1003L;
+        local.model = "llama3.1:8b";
+        local.isDefault = true;
 
         ResponseDto answer = this.ai().saveStepModelOptions(2905L, 8801L, "summary", 1049L, Collections.singletonList(local), 7602L);
 

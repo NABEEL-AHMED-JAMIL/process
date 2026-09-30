@@ -25,15 +25,26 @@ public class FormSaveRequest {
     }
 
     public Long getFormId() { return this.formId; }
+
     public void setFormId(Long formId) { this.formId = formId; }
+
     public String getName() { return this.name; }
+
     public void setName(String name) { this.name = name; }
+
     public String getDescription() { return this.description; }
+
     public void setDescription(String description) { this.description = description; }
+
     public String getStatus() { return this.status; }
+
     public void setStatus(String status) { this.status = status; }
+
     public List<FormField> getFields() { return this.fields; }
+
     public void setFields(List<FormField> fields) { this.fields = fields; }
+
     public Long getJobId() { return this.jobId; }
+
     public void setJobId(Long jobId) { this.jobId = jobId; }
 }

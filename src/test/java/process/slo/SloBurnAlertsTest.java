@@ -59,9 +59,13 @@ class SloBurnAlertsTest {
         }
 
         @Override public String key() { return this.key; }
+
         @Override public String title() { return this.key.equals("pipeline_execution") ? "Pipeline execution" : "Billing"; }
+
         @Override public double target() { return 0.9999; }
+
         @Override public Duration lag() { return this.lag; }
+
         @Override public Optional<SloBurnRates.Counts> measure(Instant from, Instant to) {
             if (this.failure != null) {
                 throw this.failure;

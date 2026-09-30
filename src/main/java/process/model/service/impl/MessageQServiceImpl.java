@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import process.notifications.JobMail;
 import process.engine.BulkAction;
-import process.model.dto.*;
 import process.model.enums.JobStatus;
 import process.model.enums.RunEnd;
 import process.model.pojo.JobQueue;
@@ -18,10 +17,21 @@ import process.util.BusinessTime;
 import process.util.EnumUtils;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
-import java.util.*;
 import java.util.Set;
-import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.SUCCESS;
+import process.model.dto.MessageQSearchDto;
+import process.model.dto.ResponseDto;
+import process.model.dto.QueueMessageStatusDto;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import process.model.dto.SourceJobQueueDto;
+import process.model.dto.JobStatusStatisticDto;
+import static process.util.ProcessUtil.isNull;
+import java.util.Optional;
+import java.util.Objects;
+import static process.util.ProcessUtil.ERROR;
 
 /**
  * @author Nabeel Ahmed
@@ -88,7 +98,7 @@ public class MessageQServiceImpl implements MessageQService {
         List<Object[]> result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, false));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
-            for(Object[] obj : result) {
+            for (Object[] obj : result) {
                 int index = 0;
                 SourceJobQueueDto sourceJobQueue = new SourceJobQueueDto();
                 if (!ProcessUtil.isNull(obj[index])) {
@@ -140,7 +150,7 @@ public class MessageQServiceImpl implements MessageQService {
             result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, true));
             if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
                 List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
-                for(Object[] obj : result) {
+                for (Object[] obj : result) {
                     int index = 0;
                     jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
                 }
@@ -184,7 +194,7 @@ public class MessageQServiceImpl implements MessageQService {
             // Failed mail (ProducerBulkEngine.changeStatusForLastJob and changeJobStatus below)
             // read isFailJob().
             if (sourceJob.isPresent() && sourceJob.get().isFailJob()) {
-                this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue.get()),JobStatus.Failed);
+                this.jobMail.send(SourceJobQueueDto.forEmailNotification(jobQueue.get()), JobStatus.Failed);
             }
             return new ResponseDto(SUCCESS, "JobQueue successfully updated.", jobQId);
         }

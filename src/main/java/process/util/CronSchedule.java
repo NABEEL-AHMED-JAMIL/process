@@ -52,6 +52,8 @@ public final class CronSchedule {
     /**
      * What is wrong with this expression, as a sentence for the caller; null when a schedule may run on it.
      */
+    // CronSequenceGenerator: CronExpression differs around DST and day-of-week; switching is a behaviour change for Wave 6, with its own tests.
+    @SuppressWarnings("deprecation")
     public static String problem(String expression) {
         String tidy = normalise(expression);
         if (tidy == null) {
@@ -95,6 +97,8 @@ public final class CronSchedule {
      * The first slot strictly after this Chicago wall-clock reading; null when the expression cannot be read or never
      * fires. Only an expression {@link #problem} passed is ever stored, so null here means a row written some other way.
      */
+    // CronSequenceGenerator: CronExpression differs around DST and day-of-week; switching is a behaviour change for Wave 6, with its own tests.
+    @SuppressWarnings("deprecation")
     public static LocalDateTime next(String expression, LocalDateTime after) {
         if (after == null || problemOfShape(expression)) {
             return null;
@@ -116,6 +120,8 @@ public final class CronSchedule {
         return !(fields.length == 5 || (fields.length == 6 && fields[0].matches("0+")));
     }
 
+    // CronSequenceGenerator: CronExpression differs around DST and day-of-week; switching is a behaviour change for Wave 6, with its own tests.
+    @SuppressWarnings("deprecation")
     private static LocalDateTime next(CronSequenceGenerator generator, LocalDateTime after) {
         // Whole seconds: the generator drops the millis, and a reading at 09:00:00.5 must still step past 09:00.
         LocalDateTime from = after.withNano(0);

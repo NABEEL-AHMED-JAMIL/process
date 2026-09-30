@@ -1,6 +1,5 @@
 package process.model.service.impl;
 
-import org.junit.jupiter.api.AfterEach;
 import process.identity.TestIdentity;
 import process.model.pojo.AppUser;
 import process.model.enums.UserRole;
@@ -12,27 +11,23 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.engine.ProducerBulkEngine;
-import process.model.dto.ResponseDto;
-import process.model.dto.SourceJobDto;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
-import process.model.repository.*;
-import process.model.dto.UserActivityDto;
-import java.sql.Timestamp;
-import java.util.Collections;
-import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.OpenSearchAuditLogClient;
 
-import javax.persistence.EntityManager;
-import java.lang.reflect.Field;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-import java.util.Arrays;
 import process.notifications.TestNotifications;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.repository.AppUserRepository;
+import static org.mockito.Mockito.when;
 
 /**
  * MIG-107: source_job.assigned_username is written by process, from IdentityPort, wherever the assignee

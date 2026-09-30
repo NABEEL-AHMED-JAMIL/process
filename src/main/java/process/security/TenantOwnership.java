@@ -1,6 +1,5 @@
 package process.security;
 
-
 /**
  * The one place the tenant-ownership rule lives. Every service had grown its own private copy of
  * it, and the copies had begun to disagree about the rows that carry no tenant at all -- which is

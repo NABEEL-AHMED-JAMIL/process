@@ -1,17 +1,18 @@
 package process.model.service;
 
-import process.model.dto.*;
 import java.io.ByteArrayOutputStream;
+import process.model.dto.FileUploadDto;
+import process.model.dto.ResponseDto;
 
 /**
  * @author Nabeel Ahmed
  * */
 public interface SourceJobBulkService {
 
-    public ByteArrayOutputStream downloadSourceJobTemplateFile() throws Exception;
+    ByteArrayOutputStream downloadSourceJobTemplateFile() throws Exception;
 
-    public ByteArrayOutputStream downloadListSourceJob() throws Exception;
+    ByteArrayOutputStream downloadListSourceJob() throws Exception;
 
-    public ResponseDto uploadSourceJob(FileUploadDto object) throws Exception;
+    ResponseDto uploadSourceJob(FileUploadDto<?> object) throws Exception;
 
 }

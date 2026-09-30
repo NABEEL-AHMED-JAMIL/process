@@ -33,20 +33,20 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "and (:allTenants = true or tenant_id = :tenantId)\n" +
         "and (:q = '' or lower(service_name) like :q or lower(coalesce(queue_topic_partition, '')) like :q)\n" +
         "order by service_name asc", nativeQuery = true)
-    public List<TopicOptionProjection> searchTopicOptions(@Param("allTenants") boolean allTenants, @Param("tenantId") long tenantId,
+    List<TopicOptionProjection> searchTopicOptions(@Param("allTenants") boolean allTenants, @Param("tenantId") long tenantId,
         @Param("q") String q,
         Pageable limit);
 
     /** The picker rows for known ids -- how a box shows the label of a value it was handed. */
     @Query(value = TOPIC_OPTION_SELECT + "and source_task_type_id in (:ids) order by service_name asc", nativeQuery = true)
-    public List<TopicOptionProjection> fetchTopicOptionsByIds(@Param("ids") Collection<Long> ids);
+    List<TopicOptionProjection> fetchTopicOptionsByIds(@Param("ids") Collection<Long> ids);
 
     /** One Kafka profile's topics as picker rows; on the default profile the workspace's unrouted topics ride along. */
     @Query(value = TOPIC_OPTION_SELECT +
         "and (kafka_connection_profile_id = :profileId\n" +
         "     or (:includeUnrouted = true and kafka_connection_profile_id is null and tenant_id = :tenantId))\n" +
         "order by service_name asc", nativeQuery = true)
-    public List<TopicOptionProjection> fetchTopicOptionsForProfile(@Param("profileId") long profileId,
+    List<TopicOptionProjection> fetchTopicOptionsForProfile(@Param("profileId") long profileId,
         @Param("includeUnrouted") boolean includeUnrouted, @Param("tenantId") long tenantId);
 
     /**
@@ -56,10 +56,10 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
      */
     @Query(value = TOPIC_OPTION_SELECT + "and " + PLATFORM_DEFAULT_SCOPE +
         "order by service_name asc", nativeQuery = true)
-    public List<TopicOptionProjection> fetchTopicOptionsForPlatformDefault(@Param("profileId") long profileId,
+    List<TopicOptionProjection> fetchTopicOptionsForPlatformDefault(@Param("profileId") long profileId,
         @Param("allTenants") boolean allTenants, @Param("tenantId") Long tenantId);
 
-    public Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
+    Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
 
     long countByTenantIdAndStatusNot(Long tenantId, Status status);
 
@@ -73,7 +73,7 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         + " where stt.tenant_id = :tenantId and stt.task_type_status = 'Active' and st.task_status <> 'Delete'", nativeQuery = true)
     long countTopicsInUse(@Param("tenantId") Long tenantId);
 
-    public List<SourceTaskType> findByStatus(Status status);
+    List<SourceTaskType> findByStatus(Status status);
 
     /**
      * Whether a task type that still exists points at this Kafka connection profile.
@@ -84,7 +84,7 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
      * that no screen lists and nobody can reassign, and the profile they once used could never be
      * deleted again.
      */
-    public boolean existsByKafkaConnectionProfileIdAndStatusNot(Long kafkaConnectionProfileId, Status status);
+    boolean existsByKafkaConnectionProfileIdAndStatusNot(Long kafkaConnectionProfileId, Status status);
 
     String FETCH_ALL_SOURCE_TASK_TYPE_SELECT = "select source_task_type.source_task_type_id as sourceTaskTypeId, source_task_type.description as description, \n" +
         "CONCAT(UPPER(SUBSTR(CAST(task_type_status as varchar), 1, 1)), LOWER(SUBSTR(CAST(task_type_status as varchar), 2))) as status,\n" +
@@ -99,7 +99,7 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
     @Query(value = FETCH_ALL_SOURCE_TASK_TYPE_SELECT +
         "group by source_task_type.source_task_type_id\n" +
         "order by source_task_type.source_task_type_id asc", nativeQuery = true)
-    public List<SourceTaskTypeProjection> fetchAllSourceTaskType();
+    List<SourceTaskTypeProjection> fetchAllSourceTaskType();
 
     // One workspace, its own task types, and nothing else.
     //
@@ -114,7 +114,7 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "where source_task_type.tenant_id = :tenantId\n" +
         "group by source_task_type.source_task_type_id\n" +
         "order by source_task_type.source_task_type_id asc", nativeQuery = true)
-    public List<SourceTaskTypeProjection> fetchAllSourceTaskTypeForTenant(@Param("tenantId") Long tenantId);
+    List<SourceTaskTypeProjection> fetchAllSourceTaskTypeForTenant(@Param("tenantId") Long tenantId);
 
     /**
      * The topics that publish through one Kafka profile: those that name it, plus -- when the
@@ -132,7 +132,7 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         + "    and source_task_type.tenant_id = cast(cast(:tenantId as text) as bigint)))\n" +
         "group by source_task_type.source_task_type_id\n" +
         "order by source_task_type.service_name asc", nativeQuery = true)
-    public List<SourceTaskTypeProjection> fetchTopicsForProfile(@Param("profileId") Long profileId,
+    List<SourceTaskTypeProjection> fetchTopicsForProfile(@Param("profileId") Long profileId,
         @Param("includeUnrouted") boolean includeUnrouted, @Param("tenantId") Long tenantId);
 
     /**
@@ -159,7 +159,7 @@ public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, 
         "where source_task_type.task_type_status <> 'Delete' and " + PLATFORM_DEFAULT_SCOPE +
         "group by source_task_type.source_task_type_id\n" +
         "order by source_task_type.service_name asc", nativeQuery = true)
-    public List<SourceTaskTypeProjection> fetchTopicsForPlatformDefault(@Param("profileId") Long profileId,
+    List<SourceTaskTypeProjection> fetchTopicsForPlatformDefault(@Param("profileId") Long profileId,
         @Param("allTenants") boolean allTenants, @Param("tenantId") Long tenantId);
 
 }

@@ -5,7 +5,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import process.model.pojo.AppUser;
 import process.model.repository.AppUserRepository;
 
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**

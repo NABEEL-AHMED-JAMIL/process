@@ -61,6 +61,7 @@ class OutboxNotificationsTest {
         user.setTenantId(tenantId);
         return user;
     }
+
     private final ObjectMapper json = new ObjectMapper();
 
     private JsonNode written(String topic, String key) throws Exception {

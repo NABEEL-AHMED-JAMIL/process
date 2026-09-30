@@ -94,7 +94,11 @@ class OneTimeSecretsRedisTest {
         List<Future<Optional<String>>> results = new ArrayList<>();
         for (int i = 0; i < 8; i++) results.add(pool.submit(redeem));
         int got = 0;
-        for (Future<Optional<String>> result : results) if (result.get().isPresent()) got++;
+        for (Future<Optional<String>> result : results) {
+            if (result.get().isPresent()) {
+                got++;
+            }
+        }
         pool.shutdown();
 
         assertThat(got).isEqualTo(1);

@@ -85,7 +85,7 @@ public class OrchestrationSettings {
     private List<Setting> read(String tail, Object... arguments) {
         return this.jdbc.query("SELECT setting_key, setting_value, description, updated_at, updated_by FROM orchestration_setting " + tail,
             (row, i) -> new Setting(row.getString("setting_key"), row.getString("setting_value"), row.getString("description"),
-                row.getTimestamp("updated_at"), (Long) row.getObject("updated_by", Long.class)),
+                row.getTimestamp("updated_at"), row.getObject("updated_by", Long.class)),
             arguments);
     }
 }

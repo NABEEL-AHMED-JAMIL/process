@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -159,6 +158,8 @@ public class RagBulkEncodingTest {
     // 7-14. The client's own bulk request.
     // ------------------------------------------------------------------------------------------
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("rawtypes")
     private void stubBulk(String responseBody) {
         ArgumentCaptor<HttpEntity> captor = ArgumentCaptor.forClass(HttpEntity.class);
         doReturn(new ResponseEntity<>(responseBody, HttpStatus.OK))
@@ -167,8 +168,12 @@ public class RagBulkEncodingTest {
         this.bulkCaptor = captor;
     }
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("rawtypes")
     private ArgumentCaptor<HttpEntity> bulkCaptor;
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private HttpEntity<String> lastBulkEntity() {
         List<HttpEntity> all = this.bulkCaptor.getAllValues();
         assertFalse(all.isEmpty(), "no bulk request was sent");

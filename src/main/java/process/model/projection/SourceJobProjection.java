@@ -9,29 +9,29 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface SourceJobProjection {
 
-    public Long getJobId();
+    Long getJobId();
 
-    public Status getJobStatus();
+    Status getJobStatus();
 
-    public JobStatus getJobRunningStatus();
+    JobStatus getJobRunningStatus();
 
     /** The instant; BusinessTime.wallClockOf gives what the event carries. */
-    public Timestamp getLastJobRun();
+    Timestamp getLastJobRun();
 
-    public String getNextRunAt();
+    String getNextRunAt();
 
-    public String getExecution();
+    String getExecution();
 
-    public String getAssignedUsername();
+    String getAssignedUsername();
 
-    public Long getAssignedUserId();
+    Long getAssignedUserId();
 
-    public Long getTenantId();
+    Long getTenantId();
 
-    public String getJobName();
+    String getJobName();
 
 }

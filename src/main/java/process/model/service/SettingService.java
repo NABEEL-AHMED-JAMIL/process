@@ -9,22 +9,22 @@ import java.util.List;
  * */
 public interface SettingService {
 
-    public ResponseDto appSetting() throws Exception;
+    ResponseDto appSetting() throws Exception;
 
-    public ResponseDto topicsForProfile(Long kafkaConnectionProfileId) throws Exception;
+    ResponseDto topicsForProfile(Long kafkaConnectionProfileId) throws Exception;
 
-    public ResponseDto topics(String q, Integer limit, List<Long> ids, Long kafkaConnectionProfileId) throws Exception;
+    ResponseDto topics(String q, Integer limit, List<Long> ids, Long kafkaConnectionProfileId) throws Exception;
 
-    public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
+    ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 
-    public ResponseDto updateSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
+    ResponseDto updateSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 
-    public ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception;
+    ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception;
 
-    public ResponseDto fetchKafkaRoute(Long sourceTaskTypeId) throws Exception;
+    ResponseDto fetchKafkaRoute(Long sourceTaskTypeId) throws Exception;
 
-    public ResponseDto setKafkaRoute(Long sourceTaskTypeId, Long kafkaConnectionProfileId) throws Exception;
+    ResponseDto setKafkaRoute(Long sourceTaskTypeId, Long kafkaConnectionProfileId) throws Exception;
 
-    public ResponseDto deleteKafkaRoute(Long sourceTaskTypeId) throws Exception;
+    ResponseDto deleteKafkaRoute(Long sourceTaskTypeId) throws Exception;
 
 }

@@ -166,6 +166,8 @@ class DispatchOutboxPostgresTest {
         return this.sql.queryForMap("SELECT * FROM job_queue WHERE job_queue_id = ?", jobQueueId);
     }
 
+    // drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings("deprecation")
     private static SettableListenableFuture<SendResult<String, String>> tookItAt(long offset) {
         SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
         future.set(new SendResult<>(new ProducerRecord<>("etl.jobs", "k", "v"),

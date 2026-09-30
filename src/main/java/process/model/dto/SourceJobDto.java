@@ -16,13 +16,12 @@ import java.util.Set;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceJobDto implements AuditNamed {
     private String createdByName;
     private String updatedByName;
     private Long createdBy;
-
 
     private Long jobId;
     /** Whose job this is, and (for a platform administrator's list of every workspace) its name (MIG-296). */
@@ -224,7 +223,6 @@ public class SourceJobDto implements AuditNamed {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 
     @Override
     public Long auditKey() {

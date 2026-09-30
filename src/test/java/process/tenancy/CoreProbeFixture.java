@@ -864,7 +864,7 @@ final class CoreProbeFixture implements AutoCloseable {
      * A Job-Add workbook, one valid row per task id: everything but the task passes the row validator, so a
      * refusal can only be the task's (tomorrow's start date, as the validator refuses one in the past).
      */
-    static FileUploadDto jobSheet(Long tenantIdInBody, String jobName, long... taskIds) throws IOException {
+    static FileUploadDto<?> jobSheet(Long tenantIdInBody, String jobName, long... taskIds) throws IOException {
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             XSSFSheet sheet = workbook.createSheet(ProcessUtil.JOB_ADD);
             Row header = sheet.createRow(0);
@@ -886,7 +886,7 @@ final class CoreProbeFixture implements AutoCloseable {
     }
 
     /** A ListSourceTask workbook with one row naming this task type and home page. */
-    static FileUploadDto taskSheet(Long tenantIdInBody, long taskTypeId, String taskName, String homePageId) throws IOException {
+    static FileUploadDto<?> taskSheet(Long tenantIdInBody, long taskTypeId, String taskName, String homePageId) throws IOException {
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             XSSFSheet sheet = workbook.createSheet("ListSourceTask");
             String[] header = {"TaskTypeId", "Task Name", "Task Payload", "PipelineId", "HomePage"};
@@ -905,8 +905,8 @@ final class CoreProbeFixture implements AutoCloseable {
         }
     }
 
-    private static FileUploadDto upload(String name, byte[] bytes, Long tenantIdInBody) {
-        FileUploadDto dto = new FileUploadDto();
+    private static FileUploadDto<?> upload(String name, byte[] bytes, Long tenantIdInBody) {
+        FileUploadDto<?> dto = new FileUploadDto<>();
         dto.setFile(new MockMultipartFile("file", name, ProcessUtil.SHEET_NAME, bytes));
         dto.setTenantId(tenantIdInBody);
         return dto;

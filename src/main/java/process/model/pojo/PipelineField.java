@@ -9,8 +9,16 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Column;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
+import javax.persistence.Transient;
 
-import javax.persistence.*;
 
 /** One field of a task form: the XML tag it fills, and how it is presented. */
 /**
@@ -88,17 +96,27 @@ public class PipelineField {
     private String promptName;
 
     public Long getPromptId() { return promptId; }
+
     public void setPromptId(Long promptId) { this.promptId = promptId; }
+
     public String getVariableMap() { return variableMap; }
+
     public void setVariableMap(String variableMap) { this.variableMap = variableMap; }
+
     public String getOnError() { return onError; }
+
     public void setOnError(String onError) { this.onError = onError; }
+
     public String getRunIn() { return runIn; }
+
     public void setRunIn(String runIn) { this.runIn = runIn; }
+
     public String getPromptName() { return promptName; }
+
     public void setPromptName(String promptName) { this.promptName = promptName; }
 
     public Long getPipelineFieldId() { return pipelineFieldId; }
+
     public void setPipelineFieldId(Long pipelineFieldId) { this.pipelineFieldId = pipelineFieldId; }
 
     /**
@@ -119,35 +137,46 @@ public class PipelineField {
     }
 
     public Long getTenantId() { return tenantId; }
+
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 
     public Pipeline getPipeline() { return pipeline; }
+
     public void setPipeline(Pipeline pipeline) { this.pipeline = pipeline; }
 
     public String getTagKey() { return tagKey; }
+
     public void setTagKey(String tagKey) { this.tagKey = tagKey; }
 
     public String getTagParent() { return tagParent; }
+
     public void setTagParent(String tagParent) { this.tagParent = tagParent; }
 
     public String getLabel() { return label; }
+
     public void setLabel(String label) { this.label = label; }
 
     public String getFieldType() { return fieldType; }
+
     public void setFieldType(String fieldType) { this.fieldType = fieldType; }
 
     public boolean isRequired() { return required; }
+
     public void setRequired(boolean required) { this.required = required; }
 
     public String getDefaultValue() { return defaultValue; }
+
     public void setDefaultValue(String defaultValue) { this.defaultValue = defaultValue; }
 
     public String getHelpText() { return helpText; }
+
     public void setHelpText(String helpText) { this.helpText = helpText; }
 
     public String getFieldOptions() { return fieldOptions; }
+
     public void setFieldOptions(String fieldOptions) { this.fieldOptions = fieldOptions; }
 
     public int getPosition() { return position; }
+
     public void setPosition(int position) { this.position = position; }
 }

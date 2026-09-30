@@ -13,9 +13,21 @@ import org.hibernate.annotations.ParamDef;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Index;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.ManyToOne;
+import javax.persistence.JoinColumn;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.PrePersist;
 
 @Entity
 @Table(name = "source_job", indexes = {
@@ -39,7 +51,7 @@ import java.time.LocalDateTime;
     @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId"),
     @Filter(name = "jobOwnerFilter", condition = "(created_by = :appUserId or assigned_user_id = :appUserId)")
 })
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
 public class SourceJob implements Audited {

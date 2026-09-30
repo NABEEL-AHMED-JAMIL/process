@@ -9,9 +9,20 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import javax.persistence.*;
 import java.sql.Timestamp;
 import process.model.enums.Status;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.Index;
+import javax.persistence.Id;
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.PrePersist;
 
 @Entity
 
@@ -22,7 +33,7 @@ import process.model.enums.Status;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
@@ -159,7 +170,6 @@ public class JobAuditLogs {
     public String toString() {
         return EntityStrings.of(this);
     }
-
 
     public Long getTenantId() {
         return tenantId;

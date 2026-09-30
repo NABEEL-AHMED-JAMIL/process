@@ -30,7 +30,6 @@ import process.util.UserNameResolver;
 import process.util.exception.ExceptionUtil;
 import process.util.ProcessUtil;
 
-import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -43,6 +42,13 @@ import process.model.dto.AiPromptDto;
 import process.model.projection.PipelineRowProjection;
 import process.model.projection.PipelineSummaryProjection;
 import process.ai.AiPort;
+import java.util.Set;
+import java.util.List;
+import java.util.HashSet;
+import java.util.Arrays;
+import java.util.Optional;
+import java.util.Comparator;
+import java.util.ArrayList;
 
 /**
  * Form definitions: what a pipeline's payload looks like, so tasks can be filled in.
@@ -144,7 +150,7 @@ public class PipelineServiceImpl {
             : ((TenantScope.Scoped) scope).tenantId();
         if (!scope.isAllTenants() && tenant == TenantScope.NO_TENANT_MATCHES) {
             return new ResponseDto(SUCCESS, "0 pipeline(s).", pageOf(Collections.emptyList(), null),
-                PagingUtil.convertEntityToPagingDTO(0L, PagingUtil.ApplyPaging("pipeline_key", "desc", 1L, limit)));
+                PagingUtil.convertEntityToPagingDTO(0L, PagingUtil.applyPaging("pipeline_key", "desc", 1L, limit)));
         }
         boolean untopped = "none".equalsIgnoreCase(topic);
         long topicId = untopped || ProcessUtil.isNull(topic) || topic.trim().isEmpty() ? 0L : Long.parseLong(topic.trim());
@@ -441,7 +447,10 @@ public class PipelineServiceImpl {
         // Tags a worker step writes: a server step (which runs earlier, before dispatch) cannot read them.
         Set<String> workerWritten = new HashSet<>();
         for (PipelineField field : form.getFields()) {
-            if (!"ai".equals(field.getFieldType())) { before.add(field.getTagKey()); continue; }
+            if (!"ai".equals(field.getFieldType())) {
+                before.add(field.getTagKey());
+                continue;
+            }
             boolean inWorker = "worker".equals(field.getRunIn());
             if (field.getPromptId() == null) return String.format("The AI step <%s> names no prompt.", field.getTagKey());
             Optional<AiPort.PromptInfo> prompt = Optional.ofNullable(prompts.get(field.getPromptId()))
@@ -634,9 +643,11 @@ public class PipelineServiceImpl {
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
+
     private static String blankToNull(String value) {
         return isBlank(value) ? null : value.trim();
     }
+
     private static String safe(String value) {
         return value == null ? "" : value.trim();
     }

@@ -26,7 +26,6 @@ import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.service.NotifyService;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import static process.util.ProcessUtil.ERROR;
@@ -41,7 +40,6 @@ public class NotifyServiceImpl implements NotifyService {
     /** The meter, when the console has one; optional so hand-built instances in tests need none. */
     @Autowired(required = false)
     private MeterReporter meter;
-
 
     private Logger logger = LoggerFactory.getLogger(NotifyServiceImpl.class);
 
@@ -403,7 +401,6 @@ public class NotifyServiceImpl implements NotifyService {
                 return false;
         }
     }
-
 
     /**
      * A log line's position in its run, which the contract dedupes a redelivered line on. Audit lines

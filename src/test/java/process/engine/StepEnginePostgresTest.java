@@ -118,9 +118,13 @@ class StepEnginePostgresTest {
 
     /** Fails every try: what a step that cannot reach its API does. */
     static final class Refuses implements StepTask {
+
         @Override public String code() { return "refuses"; }
+
         @Override public String description() { return "always fails"; }
+
         @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
         @Override public StepResult run(StepContext context) {
             context.log("calling the claims API");
             throw new IllegalStateException("the claims API answered 503");
@@ -200,7 +204,8 @@ class StepEnginePostgresTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    // also drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings({"unchecked", "deprecation"})
     private static <T> T transactional(T bean) {
         ProxyFactory proxy = new ProxyFactory(bean);
         proxy.setProxyTargetClass(true);

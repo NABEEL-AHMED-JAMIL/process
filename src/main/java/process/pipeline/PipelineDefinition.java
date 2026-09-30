@@ -93,15 +93,19 @@ public class PipelineDefinition {
     }
 
     public Integer getVersion() { return version; }
+
     public void setVersion(Integer version) { this.version = version; }
 
     public Source getSource() { return source; }
+
     public void setSource(Source source) { this.source = source; }
 
     public List<Step> getSteps() { return steps; }
+
     public void setSteps(List<Step> steps) { this.steps = steps == null ? new ArrayList<>() : steps; }
 
     public Settings getSettings() { return settings; }
+
     public void setSettings(Settings settings) { this.settings = settings; }
 
     /** Where the first step's input comes from. */
@@ -125,9 +129,11 @@ public class PipelineDefinition {
         }
 
         public String getType() { return type; }
+
         public void setType(String type) { this.type = type; }
 
         public Map<String, Object> getConfig() { return config; }
+
         public void setConfig(Map<String, Object> config) { this.config = config; }
     }
 
@@ -204,27 +210,35 @@ public class PipelineDefinition {
         }
 
         public String getKey() { return key; }
+
         public void setKey(String key) { this.key = key; }
 
         public String getName() { return name; }
+
         public void setName(String name) { this.name = name; }
 
         public String getTask() { return task; }
+
         public void setTask(String task) { this.task = task; }
 
         public String getInput() { return input; }
+
         public void setInput(String input) { this.input = input; }
 
         public Map<String, Object> getConfig() { return config; }
+
         public void setConfig(Map<String, Object> config) { this.config = config; }
 
         public Retry getRetry() { return retry; }
+
         public void setRetry(Retry retry) { this.retry = retry; }
 
         public Integer getTimeoutSeconds() { return timeoutSeconds; }
+
         public void setTimeoutSeconds(Integer timeoutSeconds) { this.timeoutSeconds = timeoutSeconds; }
 
         public String getOnError() { return onError; }
+
         public void setOnError(String onError) { this.onError = onError; }
     }
 
@@ -244,9 +258,11 @@ public class PipelineDefinition {
         }
 
         public Integer getMaxAttempts() { return maxAttempts; }
+
         public void setMaxAttempts(Integer maxAttempts) { this.maxAttempts = maxAttempts; }
 
         public Integer getDelaySeconds() { return delaySeconds; }
+
         public void setDelaySeconds(Integer delaySeconds) { this.delaySeconds = delaySeconds; }
     }
 
@@ -259,7 +275,7 @@ public class PipelineDefinition {
         public static final int DEFAULT_TIMEOUT_SECONDS = 600;
         public static final String INTERNAL = "internal";
         /** MIG-243: the levels a pipeline's data may be, as the data policies know them. */
-        public static final List<String> SENSITIVITIES = Arrays.asList("public", INTERNAL, "sensitive");
+        public static final List<String> SENSITIVITIES = Collections.unmodifiableList(Arrays.asList("public", INTERNAL, "sensitive"));
 
         private Integer datasetRetentionHours;
         private Integer defaultTimeoutSeconds;
@@ -300,9 +316,11 @@ public class PipelineDefinition {
         }
 
         public Integer getDatasetRetentionHours() { return datasetRetentionHours; }
+
         public void setDatasetRetentionHours(Integer datasetRetentionHours) { this.datasetRetentionHours = datasetRetentionHours; }
 
         public Integer getDefaultTimeoutSeconds() { return defaultTimeoutSeconds; }
+
         public void setDefaultTimeoutSeconds(Integer defaultTimeoutSeconds) { this.defaultTimeoutSeconds = defaultTimeoutSeconds; }
 
         /** MIG-243: the level the data policy's retention is read for: the one said, or internal. */
@@ -312,12 +330,15 @@ public class PipelineDefinition {
         }
 
         public String getSensitivity() { return sensitivity; }
+
         public void setSensitivity(String sensitivity) { this.sensitivity = sensitivity; }
 
         public String getDefaultOnError() { return defaultOnError; }
+
         public void setDefaultOnError(String defaultOnError) { this.defaultOnError = defaultOnError; }
 
         public Review getReview() { return review; }
+
         public void setReview(Review review) { this.review = review; }
     }
 
@@ -354,6 +375,7 @@ public class PipelineDefinition {
         }
 
         public List<String> getRequired() { return required; }
+
         public void setRequired(List<String> required) { this.required = required; }
     }
 }

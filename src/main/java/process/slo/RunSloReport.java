@@ -91,7 +91,9 @@ public class RunSloReport {
             this.from = from;
             this.to = to;
             this.groups = Collections.unmodifiableList(groups);
-            long g = 0, b = 0, x = 0;
+            long g = 0;
+            long b = 0;
+            long x = 0;
             for (Group group : groups) {
                 if (group.slo == RunSlo.GOOD) {
                     g += group.runs;

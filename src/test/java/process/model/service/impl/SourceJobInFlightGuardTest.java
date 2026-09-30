@@ -17,7 +17,6 @@ import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
-import process.model.repository.*;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.OpenSearchAuditLogClient;
@@ -32,9 +31,19 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 import process.notifications.TestNotifications;
 import org.junit.jupiter.api.Test;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.repository.AppUserRepository;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * "Run now" and "Skip next" refuse a job whose last run is still in flight -- including one in

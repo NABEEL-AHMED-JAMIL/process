@@ -8,23 +8,23 @@ import process.model.dto.ResponseDto;
  * */
 public interface KafkaConnectionProfileService {
 
-    public ResponseDto addProfile(KafkaConnectionProfileDto dto) throws Exception;
+    ResponseDto addProfile(KafkaConnectionProfileDto dto) throws Exception;
 
-    public ResponseDto updateProfile(KafkaConnectionProfileDto dto) throws Exception;
+    ResponseDto updateProfile(KafkaConnectionProfileDto dto) throws Exception;
 
-    public ResponseDto deleteProfile(Long kafkaConnectionProfileId) throws Exception;
+    ResponseDto deleteProfile(Long kafkaConnectionProfileId) throws Exception;
 
-    public ResponseDto fetchAllProfiles() throws Exception;
+    ResponseDto fetchAllProfiles() throws Exception;
 
-    public ResponseDto setAsDefault(Long kafkaConnectionProfileId) throws Exception;
+    ResponseDto setAsDefault(Long kafkaConnectionProfileId) throws Exception;
 
-    public ResponseDto clearDefault() throws Exception;
+    ResponseDto clearDefault() throws Exception;
 
-    public ResponseDto testConnection(KafkaConnectionProfileDto dto) throws Exception;
+    ResponseDto testConnection(KafkaConnectionProfileDto dto) throws Exception;
 
-    public ResponseDto testTopicConnection(String topicName) throws Exception;
+    ResponseDto testTopicConnection(String topicName) throws Exception;
 
     /** The same check against one named profile, for a topic listed under that profile's pane. */
-    public ResponseDto testTopicConnection(String topicName, Long kafkaConnectionProfileId) throws Exception;
+    ResponseDto testTopicConnection(String topicName, Long kafkaConnectionProfileId) throws Exception;
 
 }

@@ -65,9 +65,13 @@ public class TenantOrphanAudit {
         }
 
         public boolean isChecked() { return this.checked; }
+
         public String getReason() { return this.reason; }
+
         public List<String> getTables() { return this.tables; }
+
         public Map<Long, Map<String, Long>> getOrphans() { return this.orphans; }
+
         public Map<Long, Integer> getRetired() { return this.retired; }
     }
 

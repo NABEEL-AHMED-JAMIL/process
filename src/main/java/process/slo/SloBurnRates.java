@@ -215,10 +215,15 @@ public class SloBurnRates {
 
     static Sli pipeline(RunSloReport runs) {
         return new Sli() {
+
             @Override public String key() { return "pipeline_execution"; }
+
             @Override public String title() { return "Pipeline execution"; }
+
             @Override public double target() { return RunSlo.TARGET; }
+
             @Override public Duration lag() { return Duration.ZERO; }
+
             @Override public Optional<Counts> measure(Instant from, Instant to) {
                 RunSloReport.Window window = runs.measure(from, to);
                 return Optional.of(new Counts(window.good, window.bad));
@@ -228,12 +233,17 @@ public class SloBurnRates {
 
     static Sli billing(BillingSloClient client) {
         return new Sli() {
+
             @Override public String key() { return "billing_events_priced"; }
+
             @Override public String title() { return "Billing"; }
+
             /** Billing's MeterSloReport.TARGET. */
             @Override public double target() { return 0.9999; }
+
             /** Billing's MeterSloReport.GRACE. */
             @Override public Duration lag() { return Duration.ofMinutes(5); }
+
             @Override public Optional<Counts> measure(Instant from, Instant to) {
                 return client.measure(from, to);
             }

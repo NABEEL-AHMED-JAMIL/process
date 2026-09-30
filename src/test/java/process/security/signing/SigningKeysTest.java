@@ -93,6 +93,7 @@ class SigningKeysTest {
 
     static final class SecretKeyHolder {
         final SecretKey key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+
         String base64() {
             return Base64.getEncoder().encodeToString(this.key.getEncoded());
         }

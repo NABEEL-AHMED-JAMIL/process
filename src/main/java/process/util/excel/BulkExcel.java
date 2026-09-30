@@ -4,10 +4,21 @@ import java.util.List;
 import com.google.gson.Gson;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddressList;
-import org.apache.poi.xssf.usermodel.*;
 import org.springframework.stereotype.Component;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.xssf.usermodel.XSSFDataValidationHelper;
+import org.apache.poi.xssf.usermodel.XSSFDataValidationConstraint;
+import org.apache.poi.xssf.usermodel.XSSFDataValidation;
+import org.apache.poi.ss.usermodel.IndexedColors;
 
 /**
  * Spreadsheet plumbing for the bulk upload and download screens.
@@ -34,6 +45,7 @@ public class BulkExcel {
     public XSSFWorkbook getWb() {
         return this.wb.get();
     }
+
     public void setWb(XSSFWorkbook wb) {
         this.wb.set(wb);
     }
@@ -41,6 +53,7 @@ public class BulkExcel {
     public XSSFSheet getSheet() {
         return this.sheet.get();
     }
+
     public void setSheet(XSSFSheet sheet) {
         this.sheet.set(sheet);
     }
@@ -58,16 +71,17 @@ public class BulkExcel {
     public void fillBulkHeader(Integer rowCount, String[] HEADER_FILED_BATCH_FILE) {
         Row header = this.getSheet().createRow(rowCount);
         CellStyle style = this.cellHeadingBackgroundColorStyle(IndexedColors.GREY_25_PERCENT.getIndex());
-        int start = 0; int index = 0;
-        for (int i=start; i<HEADER_FILED_BATCH_FILE.length; i++) {
+        int start = 0;
+        int index = 0;
+        for (int i = start; i < HEADER_FILED_BATCH_FILE.length; i++) {
             fillHeading(index, header, style, HEADER_FILED_BATCH_FILE[i]);
-            index = index+1;
+            index = index + 1;
         }
     }
 
     public void fillBulkBody(List<String> data, Integer rowCount) {
         Row body = this.getSheet().createRow(rowCount);
-        for(int i=0; i<data.size(); i++) {
+        for (int i = 0; i < data.size(); i++) {
             this.fillCellValue(i, body, data.get(i));
         }
     }
@@ -92,7 +106,7 @@ public class BulkExcel {
     public void fillHeading(Integer fillCellCount, Row title, CellStyle style, String value) {
         Cell cell = title.createCell(fillCellCount);
         cell.setCellStyle(style);
-        this.getSheet().setColumnWidth(cell.getColumnIndex(), 30*255);
+        this.getSheet().setColumnWidth(cell.getColumnIndex(), 30 * 255);
         cell.setCellValue(value);
     }
 

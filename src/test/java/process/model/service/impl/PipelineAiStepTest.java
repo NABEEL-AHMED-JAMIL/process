@@ -25,10 +25,14 @@ import java.util.Collections;
 import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * An AI step is checked at save so a run never discovers the problem: the prompt is this
@@ -37,7 +41,8 @@ import java.util.Map;
 @ExtendWith(MockitoExtension.class)
 public class PipelineAiStepTest {
 
-    private static final long TENANT_A = 2901L, TENANT_B = 2905L;
+    private static final long TENANT_A = 2901L;
+    private static final long TENANT_B = 2905L;
 
     @Mock private PipelineRepository pipelineRepository;
     @Mock private TenantRepository tenantRepository;
@@ -53,7 +58,10 @@ public class PipelineAiStepTest {
         ReflectionTestUtils.setField(this.service, "ai", this.ai);
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 10L, "a@example.com");
         SourceTaskType topic = new SourceTaskType();
-        topic.setSourceTaskTypeId(77L); topic.setTenantId(TENANT_A); topic.setStatus(Status.Active); topic.setServiceName("Claims intake");
+        topic.setSourceTaskTypeId(77L);
+        topic.setTenantId(TENANT_A);
+        topic.setStatus(Status.Active);
+        topic.setServiceName("Claims intake");
         topic.setQueueTopicPartition("topic=claims&partitions=[*]");
         lenient().when(this.sourceTaskTypeRepository.findById(77L)).thenReturn(Optional.of(topic));
         lenient().when(this.pipelineRepository.findAllByPipelineIdAndTenantIdAndStatusNot(any(), any(), any())).thenReturn(Collections.emptyList());
@@ -65,7 +73,11 @@ public class PipelineAiStepTest {
 
     private static Map<Long, AiPort.PromptInfo> prompt(Long tenantId, Status status) {
         AiPort.PromptInfo p = new AiPort.PromptInfo();
-        p.promptId = 1000L; p.tenantId = tenantId; p.status = status.name(); p.name = "Summarise"; p.version = 1;
+        p.promptId = 1000L;
+        p.tenantId = tenantId;
+        p.status = status.name();
+        p.name = "Summarise";
+        p.version = 1;
         p.variables.add(variable("claim_id", true));
         p.variables.add(variable("document_text", true));
         p.variables.add(variable("note", false));
@@ -74,18 +86,28 @@ public class PipelineAiStepTest {
 
     private static AiPromptDto.Variable variable(String name, boolean required) {
         AiPromptDto.Variable v = new AiPromptDto.Variable();
-        v.name = name; v.required = required;
+        v.name = name;
+        v.required = required;
         return v;
     }
 
     private static PipelineField field(String tag, String type) {
-        PipelineField f = new PipelineField(); f.setTagKey(tag); f.setLabel(tag); f.setFieldType(type); return f;
+        PipelineField f = new PipelineField();
+        f.setTagKey(tag);
+        f.setLabel(tag);
+        f.setFieldType(type);
+        return f;
     }
 
     private static Pipeline pipelineWith(String variableMap, PipelineField... after) {
         Pipeline p = new Pipeline();
-        p.setPipelineId("F1"); p.setPipelineName("Claims"); p.setSourceTaskTypeId(77L);
-        PipelineField step = field("summary", "ai"); step.setPromptId(1000L); step.setVariableMap(variableMap); step.setOnError("continue");
+        p.setPipelineId("F1");
+        p.setPipelineName("Claims");
+        p.setSourceTaskTypeId(77L);
+        PipelineField step = field("summary", "ai");
+        step.setPromptId(1000L);
+        step.setVariableMap(variableMap);
+        step.setOnError("continue");
         List<PipelineField> fields = new ArrayList<>(Arrays.asList(field("claim_id", "text"), field("document", "textarea"), step));
         fields.addAll(Arrays.asList(after));
         p.setFields(fields);
@@ -144,7 +166,9 @@ public class PipelineAiStepTest {
         // a server step after a worker step reading its tag
         Pipeline q = pipelineWith("{\"claim_id\":\"claim_id\",\"document_text\":\"document\"}");
         q.getFields().get(2).setRunIn("worker");
-        PipelineField later = field("verdict", "ai"); later.setPromptId(1000L); later.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"summary\"}");
+        PipelineField later = field("verdict", "ai");
+        later.setPromptId(1000L);
+        later.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"summary\"}");
         q.getFields().add(later);
         assertThat(this.service.saveForm(q).getMessage()).contains("runs before dispatch but reads <summary>");
     }
@@ -154,7 +178,8 @@ public class PipelineAiStepTest {
     void aFormAsksForAllItsPromptsInOneCall() throws Exception {
         when(this.ai.prompts(any())).thenReturn(prompt(TENANT_A, Status.Active));
         Pipeline p = pipelineWith("{\"claim_id\":\"claim_id\",\"document_text\":\"document\"}");
-        PipelineField second = field("verdict", "ai"); second.setPromptId(1000L);
+        PipelineField second = field("verdict", "ai");
+        second.setPromptId(1000L);
         second.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"summary\"}");
         p.getFields().add(second);
         assertThat(this.service.saveForm(p).getStatus()).isEqualTo("SUCCESS");

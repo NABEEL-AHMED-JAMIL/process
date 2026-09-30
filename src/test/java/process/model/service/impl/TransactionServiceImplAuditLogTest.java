@@ -187,6 +187,8 @@ public class TransactionServiceImplAuditLogTest {
         assertThat(saved.getValue().getExternalId()).isEqualTo(offered.getValue());
     }
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     @Test
     void batchedLinesOpenSearchRefusedKeepTheirExternalIds() {
         when(this.openSearchAuditLogClient.indexAllReturningFailures(anyList()))

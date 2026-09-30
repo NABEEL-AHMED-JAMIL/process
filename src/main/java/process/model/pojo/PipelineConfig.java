@@ -6,8 +6,16 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.ParamDef;
 import org.hibernate.annotations.Parameter;
 
-import javax.persistence.*;
 import java.sql.Timestamp;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Id;
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Transient;
+import javax.persistence.PrePersist;
+import javax.persistence.PreUpdate;
 
 /**
  * One configuration entry of a workspace (MIG-167), referenced from task payloads as ${config:KEY} or ${secret:KEY}.
@@ -104,34 +112,62 @@ public class PipelineConfig implements Audited {
     }
 
     public Long getId() { return id; }
+
     public void setId(Long id) { this.id = id; }
+
     public Long getTenantId() { return tenantId; }
+
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+
     public String getConfigKey() { return configKey; }
+
     public void setConfigKey(String configKey) { this.configKey = configKey; }
+
     public String getKind() { return kind; }
+
     public void setKind(String kind) { this.kind = kind; }
+
     public String getValue() { return value; }
+
     public void setValue(String value) { this.value = value; }
+
     public String getValueSealed() { return valueSealed; }
+
     public void setValueSealed(String valueSealed) { this.valueSealed = valueSealed; }
+
     public String getDescription() { return description; }
+
     public void setDescription(String description) { this.description = description; }
+
     public Timestamp getValueSetAt() { return valueSetAt; }
+
     public void setValueSetAt(Timestamp valueSetAt) { this.valueSetAt = valueSetAt; }
+
     public Long getValueSetBy() { return valueSetBy; }
+
     public void setValueSetBy(Long valueSetBy) { this.valueSetBy = valueSetBy; }
+
     public Timestamp getCreatedAt() { return createdAt; }
+
     public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
+
     public Timestamp getUpdatedAt() { return updatedAt; }
+
     public void setUpdatedAt(Timestamp updatedAt) { this.updatedAt = updatedAt; }
 
     @Override public Long getCreatedBy() { return createdBy; }
+
     @Override public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+
     @Override public Long getUpdatedBy() { return updatedBy; }
+
     @Override public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
+
     @Override public String getCreatedByName() { return createdByName; }
+
     @Override public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
+
     @Override public String getUpdatedByName() { return updatedByName; }
+
     @Override public void setUpdatedByName(String updatedByName) { this.updatedByName = updatedByName; }
 }

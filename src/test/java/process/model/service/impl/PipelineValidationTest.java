@@ -8,10 +8,10 @@ import process.model.pojo.PipelineField;
 import process.security.TenantContext;
 
 import java.util.Arrays;
-import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
 import java.util.ArrayList;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * What a form definition must satisfy before it can be saved.
@@ -26,7 +26,10 @@ public class PipelineValidationTest {
 
     private PipelineField field(String tag, String parent, String label) {
         PipelineField f = new PipelineField();
-        f.setTagKey(tag); f.setTagParent(parent); f.setLabel(label); f.setFieldType("text");
+        f.setTagKey(tag);
+        f.setTagParent(parent);
+        f.setLabel(label);
+        f.setFieldType("text");
         return f;
     }
 

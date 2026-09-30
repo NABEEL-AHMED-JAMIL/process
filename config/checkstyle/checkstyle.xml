@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN" "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  MIG-213 platform code standard.
+
+  The same file is copied into every repository at config/checkstyle/checkstyle.xml and runs in each build
+  (maven-checkstyle-plugin 3.2.2, Checkstyle 9.3, validate phase, main and test sources). Any violation
+  fails the build. Change it everywhere or nowhere.
+
+  - Exactly one blank line between members and methods; consecutive fields may sit together; never two
+    blank lines in a row, inside or between members.
+  - Imports: no unused, redundant or wildcard imports (static wildcards included).
+  - One statement and one variable declaration per line; braces on every multi-line if/else/for/while/do.
+  - No tabs, no trailing whitespace, a newline at the end of every file.
+  - No commented-out code: a // line that is only an import, a call, an assignment, a return or a brace.
+  - A handful of correctness checks: equals/hashCode pairs, == on strings, empty statements, upper-case L.
+  Not enforced (see QUALITY.md): import order, line length, brace placement of one-line methods.
+  An individual exception is written in the code as @SuppressWarnings("checkstyle:<CheckName>") with a reason.
+-->
+<module name="Checker">
+  <property name="severity" value="error"/>
+  <property name="charset" value="UTF-8"/>
+  <property name="fileExtensions" value="java"/>
+
+  <module name="SuppressWarningsFilter"/>
+  <module name="FileTabCharacter"/>
+  <module name="NewlineAtEndOfFile">
+    <property name="lineSeparator" value="lf"/>
+  </module>
+  <module name="RegexpSingleline">
+    <property name="id" value="TrailingWhitespace"/>
+    <property name="format" value="\s+$"/>
+    <property name="message" value="Trailing whitespace."/>
+  </module>
+  <module name="RegexpSingleline">
+    <property name="id" value="CommentedOutCode"/>
+    <property name="format" value="^\s*//\s*(import\s+[\w.*]+;|package\s+[\w.]+;|[A-Za-z_][\w.]*(\([^)]*\))+(\.[A-Za-z_]\w*\([^)]*\))*;|return\b[^;]*;|[\w&lt;&gt;\[\], ]+\s+\w+\s*=\s*[^;]+;|\}|(if|for|while)\s*\(.*\)\s*\{)\s*$"/>
+    <property name="message" value="Commented-out code: delete it (git keeps the history)."/>
+  </module>
+
+  <module name="TreeWalker">
+    <module name="SuppressWarningsHolder"/>
+
+    <module name="EmptyLineSeparator">
+      <property name="allowNoEmptyLineBetweenFields" value="true"/>
+      <property name="allowMultipleEmptyLines" value="false"/>
+      <property name="allowMultipleEmptyLinesInsideClassMembers" value="false"/>
+    </module>
+
+    <module name="AvoidStarImport"/>
+    <module name="RedundantImport"/>
+    <module name="UnusedImports"/>
+
+    <module name="OneStatementPerLine"/>
+    <module name="MultipleVariableDeclarations"/>
+    <module name="NeedBraces">
+      <property name="allowSingleLineStatement" value="true"/>
+    </module>
+    <module name="EmptyStatement"/>
+
+    <module name="ModifierOrder"/>
+    <module name="RedundantModifier"/>
+    <module name="UpperEll"/>
+    <module name="ArrayTypeStyle"/>
+
+    <module name="EqualsHashCode"/>
+    <module name="StringLiteralEquality"/>
+    <module name="SimplifyBooleanExpression"/>
+
+    <module name="WhitespaceAround">
+      <property name="allowEmptyConstructors" value="true"/>
+      <property name="allowEmptyMethods" value="true"/>
+      <property name="allowEmptyTypes" value="true"/>
+      <property name="allowEmptyLambdas" value="true"/>
+      <property name="allowEmptyLoops" value="true"/>
+    </module>
+    <module name="WhitespaceAfter"/>
+    <module name="NoWhitespaceBefore"/>
+    <module name="GenericWhitespace"/>
+    <module name="MethodParamPad"/>
+    <module name="ParenPad"/>
+  </module>
+</module>

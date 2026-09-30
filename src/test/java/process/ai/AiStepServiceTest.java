@@ -41,24 +41,51 @@ public class AiStepServiceTest {
 
     private Pipeline pipelineWithStep(String onError) {
         Pipeline p = new Pipeline();
-        p.setPipelineId("F1"); p.setTenantId(TENANT); p.setStatus(Status.Active);
-        PipelineField a = new PipelineField(); a.setTagKey("claim_id"); a.setLabel("Claim"); a.setFieldType("text"); a.setPosition(0);
-        PipelineField b = new PipelineField(); b.setTagKey("document"); b.setLabel("Doc"); b.setFieldType("text"); b.setPosition(1);
-        PipelineField step = new PipelineField(); step.setTagKey("summary"); step.setLabel("AI summary"); step.setFieldType("ai"); step.setPosition(2);
-        step.setPromptId(1000L); step.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"document\"}"); step.setOnError(onError);
+        p.setPipelineId("F1");
+        p.setTenantId(TENANT);
+        p.setStatus(Status.Active);
+        PipelineField a = new PipelineField();
+        a.setTagKey("claim_id");
+        a.setLabel("Claim");
+        a.setFieldType("text");
+        a.setPosition(0);
+        PipelineField b = new PipelineField();
+        b.setTagKey("document");
+        b.setLabel("Doc");
+        b.setFieldType("text");
+        b.setPosition(1);
+        PipelineField step = new PipelineField();
+        step.setTagKey("summary");
+        step.setLabel("AI summary");
+        step.setFieldType("ai");
+        step.setPosition(2);
+        step.setPromptId(1000L);
+        step.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"document\"}");
+        step.setOnError(onError);
         p.getFields().addAll(Arrays.asList(a, b, step));
         return p;
     }
 
     private static Map<Long, AiPort.PromptInfo> catalogue(String status, Long tenantId) {
         AiPort.PromptInfo p = new AiPort.PromptInfo();
-        p.promptId = 1000L; p.promptUuid = "uuid-9"; p.name = "Summarise"; p.version = 3; p.status = status; p.tenantId = tenantId;
+        p.promptId = 1000L;
+        p.promptUuid = "uuid-9";
+        p.name = "Summarise";
+        p.version = 3;
+        p.status = status;
+        p.tenantId = tenantId;
         return Collections.singletonMap(1000L, p);
     }
 
     private static AiPort.StepResult answered(String text, boolean reused) {
         AiPort.StepResult r = new AiPort.StepResult();
-        r.status = "ok"; r.output = text; r.promptName = "Summarise"; r.promptVersion = 3; r.tokensIn = 10; r.tokensOut = 5; r.latencyMs = 500;
+        r.status = "ok";
+        r.output = text;
+        r.promptName = "Summarise";
+        r.promptVersion = 3;
+        r.tokensIn = 10;
+        r.tokensOut = 5;
+        r.latencyMs = 500;
         r.reused = reused;
         return r;
     }
@@ -139,7 +166,9 @@ public class AiStepServiceTest {
     @Test
     void aWorkerStepIsHandedOverInTheDocumentNotRun() throws Exception {
         Pipeline p = this.pipelineWithStep("continue");
-        PipelineField step = p.getFields().get(2); step.setRunIn("worker"); step.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"file:document\"}");
+        PipelineField step = p.getFields().get(2);
+        step.setRunIn("worker");
+        step.setVariableMap("{\"claim_id\":\"claim_id\",\"document_text\":\"file:document\"}");
         thePipelineIs(p);
         when(this.ai.prompts(any())).thenReturn(catalogue("Active", TENANT));
 
@@ -155,7 +184,8 @@ public class AiStepServiceTest {
     @Test
     void aStepOverTheInputObjectsIsHandedOverWithObjectVariables() throws Exception {
         Pipeline p = this.pipelineWithStep("continue");
-        PipelineField step = p.getFields().get(2); step.setRunIn("worker");
+        PipelineField step = p.getFields().get(2);
+        step.setRunIn("worker");
         step.setVariableMap("{\"claim_id\":\"object:name\",\"document_text\":\"object:text\"}");
         thePipelineIs(p);
         when(this.ai.prompts(any())).thenReturn(catalogue("Active", TENANT));

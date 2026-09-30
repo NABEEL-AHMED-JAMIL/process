@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -141,7 +140,8 @@ class CorrelationHopsTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    // also drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings({"unchecked", "deprecation"})
     void anEventAnalyticsAsksCoreToPublishCarriesTheAskingRequestsId() {
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         AtomicReference<ProducerRecord<String, String>> sent = new AtomicReference<>();

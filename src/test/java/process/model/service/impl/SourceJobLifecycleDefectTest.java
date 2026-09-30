@@ -20,7 +20,6 @@ import process.model.pojo.AppUser;
 import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
-import process.model.repository.*;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.OpenSearchAuditLogClient;
@@ -42,8 +41,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.*;
 import process.notifications.TestNotifications;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.repository.AppUserRepository;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.times;
 
 /**
  * What a job's create and update paths do with the fields the caller actually sent.

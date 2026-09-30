@@ -11,16 +11,16 @@ import process.model.enums.Frequency;
 import process.util.CronSchedule;
 import process.util.ProcessTimeUtil;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static java.time.temporal.ChronoUnit.DAYS;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class JobDetailValidation {
 
@@ -233,7 +233,7 @@ public class JobDetailValidation {
             } else if (this.frequency.equals(Frequency.Weekly.name())) {
                 this.dateTimeValidation(true, false);
             } else if (this.frequency.equals(Frequency.Monthly.name())) {
-                this.dateTimeValidation(false, true) ;
+                this.dateTimeValidation(false, true);
             }
         } catch (Exception ex) {
             this.setErrorMsg(String.format("Issue with (Start Date, End Date, Start Time, Recurrence) at row %s.", rowCounter));
@@ -271,7 +271,7 @@ public class JobDetailValidation {
         LocalDate userInputStartDate = LocalDate.parse(this.startDate);
         logger.info("User startDate valid :- {}.", userInputStartDate);
 
-        LocalDate todayDateWithTimeZone = BusinessTime.today();;
+        LocalDate todayDateWithTimeZone = BusinessTime.today();
         logger.info("System date with time zone :- {}.", todayDateWithTimeZone);
 
         if (userInputStartDate.isEqual(todayDateWithTimeZone) || userInputStartDate.isAfter(todayDateWithTimeZone)) {
@@ -289,7 +289,7 @@ public class JobDetailValidation {
                 }
             }
 
-            String timeSplit[] = this.startTime.split(":");
+            String[] timeSplit = this.startTime.split(":");
             if (BusinessTime.now().isAfter(userInputStartDate.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1])))) {
                 this.setErrorMsg(String.format("StartTime should not be previous time at row %s.", rowCounter));
             }

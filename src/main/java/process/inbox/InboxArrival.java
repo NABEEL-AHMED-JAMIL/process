@@ -85,12 +85,20 @@ public final class InboxArrival {
     }
 
     public String getEventId() { return this.eventId; }
+
     public String getTraceId() { return this.traceId; }
+
     public String getArrivalId() { return this.arrivalId; }
+
     public long getTenantId() { return this.tenantId; }
+
     public String getAlias() { return this.alias; }
+
     public String getKey() { return this.key; }
+
     public String getFileName() { return this.fileName; }
+
     public long getBytes() { return this.bytes; }
+
     public String getContentType() { return this.contentType; }
 }

@@ -16,9 +16,9 @@ public interface AiAgentService {
      * ownership and status checks every agent lookup makes. Never its key: the provider key stays in
      * the AI service, which answers the ad-hoc call itself.
      */
-    public ResponseDto resolveRuntimeConfig(Long aiAgentId) throws Exception;
+    ResponseDto resolveRuntimeConfig(Long aiAgentId) throws Exception;
 
     /** One answer from the agent the request names (its aiAgentId); the AI service supplies the key. */
-    public ResponseDto processAdHoc(AdHocPromptRequestDto adHocPromptRequestDto) throws Exception;
+    ResponseDto processAdHoc(AdHocPromptRequestDto adHocPromptRequestDto) throws Exception;
 
 }

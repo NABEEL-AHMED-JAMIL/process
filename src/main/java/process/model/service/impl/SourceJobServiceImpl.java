@@ -11,16 +11,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import process.engine.ProducerBulkEngine;
-import process.model.dto.*;
 import process.model.enums.Execution;
 import process.model.enums.Frequency;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
-import process.model.pojo.*;
 import process.model.projection.JobAuditLogProjection;
-import process.model.repository.*;
 import process.identity.IdentityPort;
 import process.model.service.SourceJobService;
 import org.barco.platform.tenancy.TenantScope;
@@ -35,12 +32,41 @@ import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.*;
 import java.util.stream.Collectors;
-import static process.util.ProcessUtil.*;
 import org.barco.notifications.contract.JobLifecycleChanged;
 import process.notifications.Notices;
 import process.notifications.NotificationPort;
+import process.model.dto.SourceJobDto;
+import process.model.dto.ResponseDto;
+import process.model.dto.SchedulerDto;
+import process.model.dto.SourceTaskDto;
+import process.model.dto.SourceTaskTypeDto;
+import process.model.dto.SourceJobQueueDto;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.pojo.SourceJob;
+import process.model.pojo.SourceTask;
+import process.model.pojo.Scheduler;
+import java.util.List;
+import java.util.Map;
+import process.model.pojo.SourceTaskType;
+import process.model.pojo.JobQueue;
+import static process.util.ProcessUtil.ERROR;
+import java.util.Optional;
+import static process.util.ProcessUtil.SUCCESS;
+import java.util.Objects;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Collections;
+import java.util.Set;
+import java.util.LinkedHashSet;
+import process.model.dto.UserActivityDto;
 
 /**
  * @author Nabeel Ahmed
@@ -66,7 +92,6 @@ public class SourceJobServiceImpl implements SourceJobService {
     private EntityManager entityManager;
 
     private final UserNameResolver userNameResolver;
-
 
     public SourceJobServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
@@ -239,7 +264,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             && (!cron || Objects.equals(stored.getCronExpression(), CronSchedule.normalise(posted.getCronExpression())))
             && Objects.equals(stored.getDaysOfWeek(), posted.getDaysOfWeek())
             && Objects.equals(stored.getDayOfMonth(), posted.getDayOfMonth())
-            && (StringUtils.isEmpty(posted.getIntervalValue())
+            && (!StringUtils.hasLength(posted.getIntervalValue())
                 || Objects.equals(stored.getIntervalValue(), posted.getIntervalValue()));
     }
 
@@ -269,7 +294,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             scheduler.setStartTime(schedulerDto.getStartTime());
         }
         scheduler.setFrequency(schedulerDto.getFrequency());
-        if (!StringUtils.isEmpty(schedulerDto.getIntervalValue())) {
+        if (StringUtils.hasLength(schedulerDto.getIntervalValue())) {
             scheduler.setIntervalValue(schedulerDto.getIntervalValue());
         }
         scheduler.setDaysOfWeek(schedulerDto.getDaysOfWeek());
@@ -888,10 +913,6 @@ public class SourceJobServiceImpl implements SourceJobService {
             }
         }
         return dto;
-    }
-
-    private SourceTaskDto mapSourceTaskToDto(SourceTask sourceTask) {
-        return this.mapSourceTaskToDto(sourceTask, null);
     }
 
     private SourceTaskDto mapSourceTaskToDto(SourceTask sourceTask, Map<Long, String> lookupTypeByLookupId) {

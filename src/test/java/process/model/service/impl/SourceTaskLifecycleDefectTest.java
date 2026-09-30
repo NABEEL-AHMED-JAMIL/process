@@ -40,9 +40,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
 import java.math.BigInteger;
 import process.notifications.TestNotifications;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 
 /**
  * Three things a task's own endpoints got wrong about the request they were given.
@@ -220,7 +223,7 @@ public class SourceTaskLifecycleDefectTest {
      */
     @Test
     void theLinkedJobsEndpointPagesAndCountsWhatItWasAsked() throws Exception {
-        Pageable paging = PagingUtil.ApplyPaging("sj.job_id", "asc", 2L, 25L);
+        Pageable paging = PagingUtil.applyPaging("sj.job_id", "asc", 2L, 25L);
         this.queryBuilderReturnsDistinguishableSql();
         when(this.queryService.executeQueryForSingleResult("count-sql")).thenReturn(BigInteger.valueOf(400L));
         when(this.queryService.executeQuery("rows-sql", paging)).thenReturn(oneLinkedJobRow());
@@ -279,7 +282,7 @@ public class SourceTaskLifecycleDefectTest {
 
     @Test
     void anEmptyPageStillReportsTheTotal() throws Exception {
-        Pageable paging = PagingUtil.ApplyPaging("sj.job_id", "asc", 99L, 25L);
+        Pageable paging = PagingUtil.applyPaging("sj.job_id", "asc", 99L, 25L);
         this.queryBuilderReturnsDistinguishableSql();
         when(this.queryService.executeQueryForSingleResult("count-sql")).thenReturn(BigInteger.valueOf(400L));
         when(this.queryService.executeQuery("rows-sql", paging)).thenReturn(Arrays.asList());

@@ -14,6 +14,7 @@ public final class ContentTypeUtil {
     private ContentTypeUtil() {}
 
     private static final Map<String, String> EXTENSION_CONTENT_TYPES = new HashMap<>();
+
     static {
         EXTENSION_CONTENT_TYPES.put("json", "application/json");
         EXTENSION_CONTENT_TYPES.put("csv", "text/csv");

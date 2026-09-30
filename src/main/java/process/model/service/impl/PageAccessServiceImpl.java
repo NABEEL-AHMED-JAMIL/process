@@ -79,7 +79,8 @@ public class PageAccessServiceImpl implements PageAccessService {
         Set<PageKey> pages = profilePages(user, own, fallback);
         for (UserPageAccess exception : exceptions == null ? Collections.<UserPageAccess>emptyList() : exceptions) {
             PageKey.fromKey(exception.getPageKey()).ifPresent(page -> {
-                if (exception.isAllowed()) pages.add(page); else pages.remove(page);
+                if (exception.isAllowed()) pages.add(page);
+                else pages.remove(page);
             });
         }
         return pages;

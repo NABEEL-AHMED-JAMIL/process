@@ -22,7 +22,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskValidation {
 

@@ -56,7 +56,8 @@ public class JdbcModelChoiceStore implements ModelChoiceStore {
                 p.setString(++i, s.stepKey);
                 p.setString(++i, s.runIn);
                 setLong(p, ++i, s.promptId);
-                if (s.promptVersion == null) p.setNull(++i, Types.INTEGER); else p.setInt(++i, s.promptVersion);
+                if (s.promptVersion == null) p.setNull(++i, Types.INTEGER);
+                else p.setInt(++i, s.promptVersion);
                 p.setString(++i, s.modelProfile);
                 p.setString(++i, s.profileSource);
                 p.setString(++i, s.outcome);

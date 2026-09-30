@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -308,6 +307,8 @@ class KafkaTopicProvisioningTest {
     }
 
     /** Opt-in against the dev broker (PROCESS_TEST_KAFKA=localhost:9092): the real client, a real create. */
+    // drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings("deprecation")
     @Test
     void againstARealBrokerTheMissingTopicIsCreatedWithItsPartitions() throws Exception {
         String bootstrap = System.getenv("PROCESS_TEST_KAFKA");

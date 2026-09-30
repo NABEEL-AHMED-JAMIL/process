@@ -42,5 +42,4 @@ public interface StorageBrowserService {
     // The trusted workflow operations are not here: they live in process.storage behind a principal
     // (MIG-52, MIG-65), and nothing handed this interface can reach them.
 
-
 }

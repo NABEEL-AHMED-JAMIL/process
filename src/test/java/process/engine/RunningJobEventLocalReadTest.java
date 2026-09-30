@@ -82,6 +82,8 @@ class RunningJobEventLocalReadTest {
     }
 
     /** The fifty-slot catch-up: one read of the job -- not one per missed slot. */
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     @Test
     void fiftyMissedSlotsReadTheJobOnce() {
         lenient().when(this.job.getAssignedUsername()).thenReturn("ops@medaxis.example");

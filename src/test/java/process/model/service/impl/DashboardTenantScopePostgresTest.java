@@ -133,7 +133,8 @@ class DashboardTenantScopePostgresTest {
         return totals;
     }
 
-    @SuppressWarnings("unchecked")
+    // a generic array of Map.Entry can only be made raw
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static Map.Entry<String, Long>[] every(long expected) {
         String[] names = {"jobStatusStatistics", "jobRunningStatistics", "weeklyRunningJobStatistics",
             "weeklyHrsRunningJobStatistics", "weeklyHrRunningStatisticsDimension", "weeklyHrRunningStatisticsDimensionDetail",

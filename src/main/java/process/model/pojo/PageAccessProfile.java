@@ -109,29 +109,54 @@ public class PageAccessProfile implements Audited {
     private String updatedByName;
 
     public Long getPageAccessProfileId() { return pageAccessProfileId; }
+
     public void setPageAccessProfileId(Long pageAccessProfileId) { this.pageAccessProfileId = pageAccessProfileId; }
+
     public Long getTenantId() { return tenantId; }
+
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+
     public String getProfileName() { return profileName; }
+
     public void setProfileName(String profileName) { this.profileName = profileName; }
+
     public String getDescription() { return description; }
+
     public void setDescription(String description) { this.description = description; }
+
     public boolean isDefaultProfile() { return defaultProfile; }
+
     public void setDefaultProfile(boolean defaultProfile) { this.defaultProfile = defaultProfile; }
+
     public Status getStatus() { return status; }
+
     public void setStatus(Status status) { this.status = status; }
+
     public Set<String> getPageKeys() { return pageKeys; }
+
     public void setPageKeys(Set<String> pageKeys) { this.pageKeys = pageKeys; }
+
     public Timestamp getDateCreated() { return dateCreated; }
+
     public void setDateCreated(Timestamp dateCreated) { this.dateCreated = dateCreated; }
+
     public Timestamp getDateUpdated() { return dateUpdated; }
+
     public void setDateUpdated(Timestamp dateUpdated) { this.dateUpdated = dateUpdated; }
+
     @Override public Long getCreatedBy() { return createdBy; }
+
     @Override public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+
     @Override public Long getUpdatedBy() { return updatedBy; }
+
     @Override public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
+
     @Override public String getCreatedByName() { return createdByName; }
+
     @Override public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
+
     @Override public String getUpdatedByName() { return updatedByName; }
+
     @Override public void setUpdatedByName(String updatedByName) { this.updatedByName = updatedByName; }
 }

@@ -401,7 +401,6 @@ public class KafkaSecretE2EIT extends E2ESupport {
         }
     }
 
-
     /**
      * The third listing to be caught sharing the platform's rows with every tenant, after the
      * object browser and the storage screen. A workspace brings its own Kafka, so the platform's
@@ -461,6 +460,5 @@ public class KafkaSecretE2EIT extends E2ESupport {
             .andExpect(jsonPath("$.status").value("SUCCESS"));
         return profileName;
     }
-
 
 }

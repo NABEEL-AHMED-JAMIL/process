@@ -7,9 +7,14 @@ package process.model.projection;
  */
 public interface TopicOptionProjection {
     Long getSourceTaskTypeId();
+
     String getServiceName();
+
     String getQueueTopicPartition();
+
     String getStatus();
+
     Long getKafkaConnectionProfileId();
+
     Long getTenantId();
 }

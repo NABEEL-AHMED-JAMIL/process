@@ -115,13 +115,24 @@ class AiModelChoiceServiceTest {
         p.setPipelineId("PIPE-" + tenant);
         p.setTenantId(tenant);
         PipelineField text = new PipelineField();
-        text.setTagKey("document"); text.setLabel("Doc"); text.setFieldType("text"); text.setPosition(0);
+        text.setTagKey("document");
+        text.setLabel("Doc");
+        text.setFieldType("text");
+        text.setPosition(0);
         PipelineField summary = new PipelineField();
-        summary.setTagKey("summary"); summary.setLabel("AI summary"); summary.setFieldType("ai"); summary.setPosition(1);
-        summary.setPromptId(1000L); summary.setRunIn("server");
+        summary.setTagKey("summary");
+        summary.setLabel("AI summary");
+        summary.setFieldType("ai");
+        summary.setPosition(1);
+        summary.setPromptId(1000L);
+        summary.setRunIn("server");
         PipelineField caption = new PipelineField();
-        caption.setTagKey("caption"); caption.setLabel("AI caption"); caption.setFieldType("ai"); caption.setPosition(2);
-        caption.setPromptId(2000L); caption.setRunIn("worker");
+        caption.setTagKey("caption");
+        caption.setLabel("AI caption");
+        caption.setFieldType("ai");
+        caption.setPosition(2);
+        caption.setPromptId(2000L);
+        caption.setRunIn("worker");
         p.getFields().addAll(Arrays.asList(text, summary, caption));
         return p;
     }
@@ -297,7 +308,10 @@ class AiModelChoiceServiceTest {
         when(this.runs.findById(8681L)).thenReturn(Optional.of(run(8681L, A_JOB, A)));
         when(this.runs.findById(8683L)).thenReturn(Optional.of(run(8683L, B_JOB, B)));
         RunAiStep step = new RunAiStep();
-        step.jobQueueId = 8681L; step.attempt = 1; step.stepKey = "summary"; step.model = "llama3.1:8b";
+        step.jobQueueId = 8681L;
+        step.attempt = 1;
+        step.stepKey = "summary";
+        step.model = "llama3.1:8b";
         this.store.recordSteps(Collections.singletonList(step));
 
         assertThat((List<?>) this.service.runSteps(8681L).getData()).hasSize(1);

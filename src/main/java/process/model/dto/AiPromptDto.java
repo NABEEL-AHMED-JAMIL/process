@@ -57,35 +57,251 @@ public class AiPromptDto {
     /** For Try it: the values to render with (overrides the samples). */
     private Map<String, String> values;
 
-    public Long getPromptId() { return promptId; } public void setPromptId(Long v) { promptId = v; }
-    public String getPromptUuid() { return promptUuid; } public void setPromptUuid(String v) { promptUuid = v; }
-    public Long getTenantId() { return tenantId; } public void setTenantId(Long v) { tenantId = v; }
-    public String getTenantName() { return tenantName; } public void setTenantName(String v) { tenantName = v; }
-    public String getName() { return name; } public void setName(String v) { name = v; }
-    public String getDescription() { return description; } public void setDescription(String v) { description = v; }
-    public Long getConnectionId() { return connectionId; } public void setConnectionId(Long v) { connectionId = v; }
-    public String getConnectionName() { return connectionName; } public void setConnectionName(String v) { connectionName = v; }
-    public String getProvider() { return provider; } public void setProvider(String v) { provider = v; }
-    public String getModel() { return model; } public void setModel(String v) { model = v; }
-    public String getEffectiveModel() { return effectiveModel; } public void setEffectiveModel(String v) { effectiveModel = v; }
-    public String getSystemInstructions() { return systemInstructions; } public void setSystemInstructions(String v) { systemInstructions = v; }
-    public String getUserTemplate() { return userTemplate; } public void setUserTemplate(String v) { userTemplate = v; }
-    public List<Variable> getVariables() { return variables; } public void setVariables(List<Variable> v) { variables = v; }
-    public String getOutputMode() { return outputMode; } public void setOutputMode(String v) { outputMode = v; }
-    public String getOutputSchema() { return outputSchema; } public void setOutputSchema(String v) { outputSchema = v; }
-    public Double getTemperature() { return temperature; } public void setTemperature(Double v) { temperature = v; }
-    public Integer getMaxTokens() { return maxTokens; } public void setMaxTokens(Integer v) { maxTokens = v; }
-    public String getTags() { return tags; } public void setTags(String v) { tags = v; }
-    public Integer getVersion() { return version; } public void setVersion(Integer v) { version = v; }
-    public String getStatus() { return status; } public void setStatus(String v) { status = v; }
-    public Boolean getActivate() { return activate; } public void setActivate(Boolean v) { activate = v; }
-    public Long getRunCount() { return runCount; } public void setRunCount(Long v) { runCount = v; }
-    public Long getPipelineCount() { return pipelineCount; } public void setPipelineCount(Long v) { pipelineCount = v; }
-    public Timestamp getLastRunAt() { return lastRunAt; } public void setLastRunAt(Timestamp v) { lastRunAt = v; }
-    public String getLastRunStatus() { return lastRunStatus; } public void setLastRunStatus(String v) { lastRunStatus = v; }
-    public Timestamp getDateCreated() { return dateCreated; } public void setDateCreated(Timestamp v) { dateCreated = v; }
-    public Long getCreatedBy() { return createdBy; } public void setCreatedBy(Long v) { createdBy = v; }
-    public String getCreatedByName() { return createdByName; } public void setCreatedByName(String v) { createdByName = v; }
-    public String getUpdatedByName() { return updatedByName; } public void setUpdatedByName(String v) { updatedByName = v; }
-    public Map<String, String> getValues() { return values; } public void setValues(Map<String, String> v) { values = v; }
+    public Long getPromptId() {
+        return promptId;
+    }
+
+    public void setPromptId(Long v) {
+        promptId = v;
+    }
+
+    public String getPromptUuid() {
+        return promptUuid;
+    }
+
+    public void setPromptUuid(String v) {
+        promptUuid = v;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long v) {
+        tenantId = v;
+    }
+
+    public String getTenantName() {
+        return tenantName;
+    }
+
+    public void setTenantName(String v) {
+        tenantName = v;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String v) {
+        name = v;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String v) {
+        description = v;
+    }
+
+    public Long getConnectionId() {
+        return connectionId;
+    }
+
+    public void setConnectionId(Long v) {
+        connectionId = v;
+    }
+
+    public String getConnectionName() {
+        return connectionName;
+    }
+
+    public void setConnectionName(String v) {
+        connectionName = v;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setProvider(String v) {
+        provider = v;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String v) {
+        model = v;
+    }
+
+    public String getEffectiveModel() {
+        return effectiveModel;
+    }
+
+    public void setEffectiveModel(String v) {
+        effectiveModel = v;
+    }
+
+    public String getSystemInstructions() {
+        return systemInstructions;
+    }
+
+    public void setSystemInstructions(String v) {
+        systemInstructions = v;
+    }
+
+    public String getUserTemplate() {
+        return userTemplate;
+    }
+
+    public void setUserTemplate(String v) {
+        userTemplate = v;
+    }
+
+    public List<Variable> getVariables() {
+        return variables;
+    }
+
+    public void setVariables(List<Variable> v) {
+        variables = v;
+    }
+
+    public String getOutputMode() {
+        return outputMode;
+    }
+
+    public void setOutputMode(String v) {
+        outputMode = v;
+    }
+
+    public String getOutputSchema() {
+        return outputSchema;
+    }
+
+    public void setOutputSchema(String v) {
+        outputSchema = v;
+    }
+
+    public Double getTemperature() {
+        return temperature;
+    }
+
+    public void setTemperature(Double v) {
+        temperature = v;
+    }
+
+    public Integer getMaxTokens() {
+        return maxTokens;
+    }
+
+    public void setMaxTokens(Integer v) {
+        maxTokens = v;
+    }
+
+    public String getTags() {
+        return tags;
+    }
+
+    public void setTags(String v) {
+        tags = v;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer v) {
+        version = v;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String v) {
+        status = v;
+    }
+
+    public Boolean getActivate() {
+        return activate;
+    }
+
+    public void setActivate(Boolean v) {
+        activate = v;
+    }
+
+    public Long getRunCount() {
+        return runCount;
+    }
+
+    public void setRunCount(Long v) {
+        runCount = v;
+    }
+
+    public Long getPipelineCount() {
+        return pipelineCount;
+    }
+
+    public void setPipelineCount(Long v) {
+        pipelineCount = v;
+    }
+
+    public Timestamp getLastRunAt() {
+        return lastRunAt;
+    }
+
+    public void setLastRunAt(Timestamp v) {
+        lastRunAt = v;
+    }
+
+    public String getLastRunStatus() {
+        return lastRunStatus;
+    }
+
+    public void setLastRunStatus(String v) {
+        lastRunStatus = v;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp v) {
+        dateCreated = v;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(Long v) {
+        createdBy = v;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    public void setCreatedByName(String v) {
+        createdByName = v;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    public void setUpdatedByName(String v) {
+        updatedByName = v;
+    }
+
+    public Map<String, String> getValues() {
+        return values;
+    }
+
+    public void setValues(Map<String, String> v) {
+        values = v;
+    }
 }

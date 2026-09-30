@@ -48,7 +48,11 @@ class UserNameResolverDirectoryTest {
         for (UserDirectory.Entry entry : entries) held.put(entry.getAppUserId(), entry);
         when(this.directory.find(any())).thenAnswer(call -> {
             Map<Long, UserDirectory.Entry> answer = new HashMap<>();
-            for (Long id : call.<Collection<Long>>getArgument(0)) if (held.containsKey(id)) answer.put(id, held.get(id));
+            for (Long id : call.<Collection<Long>>getArgument(0)) {
+                if (held.containsKey(id)) {
+                    answer.put(id, held.get(id));
+                }
+            }
             return answer;
         });
     }

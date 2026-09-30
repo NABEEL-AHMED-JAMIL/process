@@ -3,21 +3,16 @@ package process.model.service.impl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import process.identity.TestIdentity;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.ResponseDto;
-import process.model.dto.SchedulerDto;
 import process.model.dto.SourceJobDto;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import process.model.pojo.Scheduler;
 import process.model.pojo.SourceJob;
-import process.model.repository.*;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.OpenSearchAuditLogClient;
@@ -25,16 +20,23 @@ import process.util.UserNameResolver;
 
 import javax.persistence.EntityManager;
 import java.lang.reflect.Field;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 import process.notifications.TestNotifications;
 import org.junit.jupiter.api.Test;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.repository.AppUserRepository;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * Owner decision 2026-09-24 (MIG-166 follow-up): a Suspended or Inactive workspace's jobs are paused. "Run now"

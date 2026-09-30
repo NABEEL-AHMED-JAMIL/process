@@ -5,15 +5,23 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.TenantStatus;
-import javax.persistence.*;
 import java.sql.Timestamp;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
 
 /**
  * @author Nabeel Ahmed
  * */
 @Entity
 @Table(name = "tenant")
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
 public class Tenant implements Audited {
@@ -28,7 +36,6 @@ public class Tenant implements Audited {
 
     @Column(name = "updated_by")
     private Long updatedBy;
-
 
     @GenericGenerator(
         name = "tenantSequenceGenerator",
@@ -114,7 +121,6 @@ public class Tenant implements Audited {
     public String toString() {
         return EntityStrings.of(this);
     }
-
 
     @Override
     public Long getCreatedBy() {

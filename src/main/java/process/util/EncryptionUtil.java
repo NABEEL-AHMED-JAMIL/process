@@ -19,6 +19,9 @@ import java.util.Base64;
 @Component
 public class EncryptionUtil {
 
+    /** One generator for every IV: SecureRandom is thread-safe, and making one per call only costs time. */
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
     private static final int GCM_TAG_LENGTH_BITS = 128;
     private static final int GCM_IV_LENGTH_BYTES = 12;
@@ -79,7 +82,7 @@ public class EncryptionUtil {
         }
         try {
             byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
-            new SecureRandom().nextBytes(iv);
+            RANDOM.nextBytes(iv);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, this.secretKey(), new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
             byte[] cipherText = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));

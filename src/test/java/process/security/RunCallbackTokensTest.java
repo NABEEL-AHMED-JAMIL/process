@@ -67,7 +67,10 @@ public class RunCallbackTokensTest {
     @Test
     void aTokenIsBoundToItsRunAndItsJob() {
         String token = this.tokens.issue(this.run);
-        JobQueue other = new JobQueue(); other.setJobQueueId(RUN + 1); other.setJobId(JOB); other.setAttempt(1);
+        JobQueue other = new JobQueue();
+        other.setJobQueueId(RUN + 1);
+        other.setJobId(JOB);
+        other.setAttempt(1);
         String othersToken = this.tokens.issue(other);
         when(this.jobQueueRepository.findById(999999L)).thenReturn(Optional.empty());
 

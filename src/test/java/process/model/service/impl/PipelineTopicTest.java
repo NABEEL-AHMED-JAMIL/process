@@ -78,7 +78,8 @@ public class PipelineTopicTest {
         p.setPipelineName("Claims files");
         p.setSourceTaskTypeId(topicId);
         PipelineField f = new PipelineField();
-        f.setTagKey("input_folder"); f.setLabel("Input folder");
+        f.setTagKey("input_folder");
+        f.setLabel("Input folder");
         p.setFields(Arrays.asList(f));
         return p;
     }
@@ -109,6 +110,8 @@ public class PipelineTopicTest {
         verify(this.pipelineRepository, never()).save(any());
     }
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     @Test
     void ownTopicIsSavedAndNamedOnTheWayOut() {
         when(this.sourceTaskTypeRepository.findById(80L)).thenReturn(Optional.of(topic(80L, TENANT_A, Status.Active)));
@@ -132,8 +135,10 @@ public class PipelineTopicTest {
     /** listForTopic is scoped: a tenant is never handed another tenant's pipeline on the same platform topic. */
     @Test
     void listingATopicShowsOnlyTheCallersOwnPipelines() {
-        Pipeline mine = pipeline(80L); mine.setTenantId(TENANT_A);
-        Pipeline theirs = pipeline(80L); theirs.setTenantId(TENANT_B);
+        Pipeline mine = pipeline(80L);
+        mine.setTenantId(TENANT_A);
+        Pipeline theirs = pipeline(80L);
+        theirs.setTenantId(TENANT_B);
         when(this.pipelineRepository.findAllBySourceTaskTypeIdAndStatusNotOrderByPipelineNameAsc(80L, Status.Delete))
             .thenReturn(Arrays.asList(mine, theirs));
         when(this.sourceTaskTypeRepository.findAllById(any())).thenReturn(Collections.emptyList());

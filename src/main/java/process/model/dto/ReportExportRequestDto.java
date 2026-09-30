@@ -27,26 +27,34 @@ public class ReportExportRequestDto {
     private String submitUrl;
 
     public String getTitle() { return title; }
+
     public void setTitle(String title) { this.title = title; }
 
     public List<String> getColumns() { return columns; }
+
     public void setColumns(List<String> columns) { this.columns = columns; }
 
     public List<List<Object>> getRows() { return rows; }
+
     public void setRows(List<List<Object>> rows) { this.rows = rows; }
 
     public String getFormat() { return format; }
+
     public void setFormat(String format) { this.format = format; }
 
     public String getDestination() { return destination; }
+
     public void setDestination(String destination) { this.destination = destination; }
 
     public String getBucket() { return bucket; }
+
     public void setBucket(String bucket) { this.bucket = bucket; }
 
     public String getFolder() { return folder; }
+
     public void setFolder(String folder) { this.folder = folder; }
 
     public String getSubmitUrl() { return submitUrl; }
+
     public void setSubmitUrl(String submitUrl) { this.submitUrl = submitUrl; }
 }

@@ -89,9 +89,13 @@ public enum PageKey {
     }
 
     public String getKey() { return this.key; }
+
     public String getLabel() { return this.label; }
+
     public String getSection() { return this.section; }
+
     public String getRoute() { return this.route; }
+
     public List<String> getApiPrefixes() { return this.apiPrefixes; }
 
     /** The catalogue as the console sees it -- keys, never enum names. */

@@ -37,10 +37,10 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
         + "and scheduler.scheduler_id not in (:passed) "
         + "order by scheduler.next_run_at asc, scheduler.scheduler_id asc "
         + "limit 1 for update skip locked", nativeQuery = true)
-    public Optional<Scheduler> claimNextDueScheduler(@Param("now") Timestamp now, @Param("passed") List<Long> passed);
+    Optional<Scheduler> claimNextDueScheduler(@Param("now") Timestamp now, @Param("passed") List<Long> passed);
 
-    public Optional<Scheduler> findSchedulerByJobId(Long jobId);
+    Optional<Scheduler> findSchedulerByJobId(Long jobId);
 
-    public List<Scheduler> findByJobIdIn(List<Long> jobIds);
+    List<Scheduler> findByJobIdIn(List<Long> jobIds);
 
 }

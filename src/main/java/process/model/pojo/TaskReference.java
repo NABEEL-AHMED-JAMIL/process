@@ -6,8 +6,16 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.ParamDef;
 import org.hibernate.annotations.Parameter;
 
-import javax.persistence.*;
 import java.sql.Timestamp;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Id;
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Transient;
+import javax.persistence.PrePersist;
+import javax.persistence.PreUpdate;
 
 /**
  * A workspace's home page or task group (MIG-167): what source_task.home_page_id and group_id point at. Moved out of
@@ -84,28 +92,50 @@ public class TaskReference implements Audited {
     }
 
     public Long getId() { return id; }
+
     public void setId(Long id) { this.id = id; }
+
     public Long getTenantId() { return tenantId; }
+
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+
     public String getKind() { return kind; }
+
     public void setKind(String kind) { this.kind = kind; }
+
     public String getName() { return name; }
+
     public void setName(String name) { this.name = name; }
+
     public String getValue() { return value; }
+
     public void setValue(String value) { this.value = value; }
+
     public String getDescription() { return description; }
+
     public void setDescription(String description) { this.description = description; }
+
     public Timestamp getCreatedAt() { return createdAt; }
+
     public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
+
     public Timestamp getUpdatedAt() { return updatedAt; }
+
     public void setUpdatedAt(Timestamp updatedAt) { this.updatedAt = updatedAt; }
 
     @Override public Long getCreatedBy() { return createdBy; }
+
     @Override public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+
     @Override public Long getUpdatedBy() { return updatedBy; }
+
     @Override public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
+
     @Override public String getCreatedByName() { return createdByName; }
+
     @Override public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
+
     @Override public String getUpdatedByName() { return updatedByName; }
+
     @Override public void setUpdatedByName(String updatedByName) { this.updatedByName = updatedByName; }
 }

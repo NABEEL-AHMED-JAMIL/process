@@ -47,7 +47,9 @@ public class WorkspaceDirectory {
         }
 
         public long getTenantId() { return this.tenantId; }
+
         public String getStatus() { return this.status; }
+
         public Timestamp getSince() { return this.since; }
     }
 
@@ -73,9 +75,12 @@ public class WorkspaceDirectory {
         }
 
         public String getBefore() { return this.before; }
+
         public String getAfter() { return this.after; }
+
         /** The workspace's schedules were running and are paused from now on. */
         public boolean pausedNow() { return !pauses(this.before) && pauses(this.after); }
+
         /** The workspace's schedules were paused and run again from now on. */
         public boolean resumedNow() { return pauses(this.before) && !pauses(this.after); }
     }

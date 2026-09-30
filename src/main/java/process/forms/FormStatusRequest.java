@@ -15,7 +15,10 @@ public class FormStatusRequest {
     }
 
     public Long getFormId() { return this.formId; }
+
     public void setFormId(Long formId) { this.formId = formId; }
+
     public String getStatus() { return this.status; }
+
     public void setStatus(String status) { this.status = status; }
 }

@@ -102,6 +102,8 @@ public final class FileFormats {
         }
     }
 
+    // CSVFormat's with* methods: the builder API reads the same; moving is Wave 6 maintainability, not a lint fix.
+    @SuppressWarnings("deprecation")
     private static void csv(byte[] content, ReadOptions options, RowCollector rows) throws IOException {
         CSVFormat format = CSVFormat.RFC4180.withDelimiter(options.delimiter).withIgnoreEmptyLines();
         if (options.header) {
@@ -181,6 +183,8 @@ public final class FileFormats {
      * The dataset in this format, straight to a stream -- a run dataset's download (Wave 4), which a step's file limit
      * does not bound: the dataset was already held to the row and cell limits when it was made. The stream is left open.
      */
+    // CSVFormat's with* methods: the builder API reads the same; moving is Wave 6 maintainability, not a lint fix.
+    @SuppressWarnings("deprecation")
     public static void writeTo(Dataset dataset, String format, OutputStream target) throws IOException {
         // Closing the CSV printer, or Jackson finishing a value, would close the target: the caller owns it.
         OutputStream bytes = new FilterOutputStream(target) {

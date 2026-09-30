@@ -8,7 +8,19 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
-import javax.persistence.*;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Index;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
 
 @Entity
 @Table(name = "source_task_type", indexes = {
@@ -23,7 +35,7 @@ import javax.persistence.*;
 // listing query says the same thing in SQL -- so the filter has to let those rows through or
 // the shared task types would vanish from every tenant's screen.
 @Filter(name = "tenantFilter", condition = "(tenant_id = :tenantId or tenant_id is null)")
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
 public class SourceTaskType implements Audited {
@@ -49,7 +61,7 @@ public class SourceTaskType implements Audited {
         }
     )
     @Id
-    @Column(name="source_task_type_id", unique=true, nullable=false)
+    @Column(name = "source_task_type_id", unique = true, nullable = false)
     @GeneratedValue(generator = "sourceTaskTypeSequenceGenerator")
     private Long sourceTaskTypeId;
 

@@ -7,33 +7,33 @@ import java.time.format.DateTimeFormatter;
  * */
 public class ProcessUtil {
 
-    public static String INTERNAL_ERROR_500 = "Some internal error occurred contact with support.";
-    public static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    public static String START = "*";
-    public static String ERROR_MESSAGE = "ERROR";
-    public static String SIMPLE_DATE_PATTERN = "yyyy-MM-dd";
-    public static String CONTENT_DISPOSITION ="Content-Disposition";
-    public static String FILE_NAME_HEADER = "attachment; filename=";
-    public static String QUEUE_FETCH_LIMIT = "QUEUE_FETCH_LIMIT";
-    public static String SCHEDULER_LAST_RUN_TIME = "SCHEDULER_LAST_RUN_TIME";
-    public static String AUDIT_LOG_SYNC_LAST_RUN_TIME = "AUDIT_LOG_SYNC_LAST_RUN_TIME";
-    public static String JOB_STATUS_INVALID = "Job status must be Running, Failed, or Completed";
-    public static String JOB_STATUS_MESSAGE_REQUIRED = "Job status message is required for failed and completed job.";
-    public static String BAD_REQUEST_400 = "Bad request.";
-    public static String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    public static String REAL_FILE_PATH = "Scheduler.xlsx";
-    public static String XLSX_EXTENSION = ".xlsx";
-    public static String ERROR = "ERROR";
-    public static String SUCCESS = "SUCCESS";
-    public static String JOB_ADD = "Job-Add";
+    public static final String INTERNAL_ERROR_500 = "Some internal error occurred contact with support.";
+    public static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    public static final String START = "*";
+    public static final String ERROR_MESSAGE = "ERROR";
+    public static final String SIMPLE_DATE_PATTERN = "yyyy-MM-dd";
+    public static final String CONTENT_DISPOSITION = "Content-Disposition";
+    public static final String FILE_NAME_HEADER = "attachment; filename=";
+    public static final String QUEUE_FETCH_LIMIT = "QUEUE_FETCH_LIMIT";
+    public static final String SCHEDULER_LAST_RUN_TIME = "SCHEDULER_LAST_RUN_TIME";
+    public static final String AUDIT_LOG_SYNC_LAST_RUN_TIME = "AUDIT_LOG_SYNC_LAST_RUN_TIME";
+    public static final String JOB_STATUS_INVALID = "Job status must be Running, Failed, or Completed";
+    public static final String JOB_STATUS_MESSAGE_REQUIRED = "Job status message is required for failed and completed job.";
+    public static final String BAD_REQUEST_400 = "Bad request.";
+    public static final String SHEET_NAME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    public static final String REAL_FILE_PATH = "Scheduler.xlsx";
+    public static final String XLSX_EXTENSION = ".xlsx";
+    public static final String ERROR = "ERROR";
+    public static final String SUCCESS = "SUCCESS";
+    public static final String JOB_ADD = "Job-Add";
 
-    public static String[] HEADER_FILED_BATCH_FILE = new String[] {
+    public static final String[] HEADER_FILED_BATCH_FILE = new String[] {
         "Job Name", "Task Detail Id", "Start Date", "End Date", "Start Time",
         "Frequency", "Recurrence", "Priority", "Email Job Complete",
         "Email Job Fail", "Email Job Skip"
     };
 
-    public static String[] HEADER_FILED_BATCH_DOWNLOAD_FILE = new String[] {
+    public static final String[] HEADER_FILED_BATCH_DOWNLOAD_FILE = new String[] {
         "Job Name", "Task", "Execution", "Priority",  "Status", "Created Date",
         "Start Date", "End Date", "Time", "Last Run", "Next Flight",
         "R-Status", "Email job complete", "Email job fail", "Email job skip"
@@ -43,7 +43,7 @@ public class ProcessUtil {
         return payload == null || "".equals(payload);
     }
 
-    public static Long parseLongOrNull(String value) {
+    public static final Long parseLongOrNull(String value) {
         if (isNull(value)) {
             return null;
         }
@@ -54,9 +54,8 @@ public class ProcessUtil {
         }
     }
 
-
     /** The summary of a rejected bulk sheet: the rows are refused together, so nothing was saved. */
-    public static String rejectedRowsMessage(int rows) {
+    public static final String rejectedRowsMessage(int rows) {
         return String.format("%d %s could not be imported, so nothing was saved. Fix %s and upload the sheet again.",
             rows, rows == 1 ? "row" : "rows", rows == 1 ? "it" : "them");
     }

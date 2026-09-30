@@ -6,8 +6,9 @@ import process.model.pojo.JobQueue;
 import process.model.enums.JobStatus;
 
 import java.lang.reflect.Method;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The text a run gets when it ended without reporting one.

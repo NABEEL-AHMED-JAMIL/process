@@ -217,7 +217,7 @@ class DashboardScopeTest {
         when(this.identity.members(any())).thenReturn(Collections.emptyList());
         when(this.queries.userStatistics(any(), any(), any())).thenReturn("counts");
 
-        ResponseDto answer = (ResponseDto) this.dashboard.userStatistics(null, null);
+        ResponseDto answer = this.dashboard.userStatistics(null, null);
 
         assertThat(answer.getMessage()).isEqualTo("No data found.");
         assertThat(data(answer)).isEmpty();

@@ -7,8 +7,18 @@ import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import org.hibernate.annotations.ParamDef;
-import javax.persistence.*;
 import java.sql.Timestamp;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.UniqueConstraint;
+import javax.persistence.Index;
+import javax.persistence.Id;
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
+import javax.persistence.PrePersist;
 
 @Entity
 @Table(name = "tenant_task_type_kafka_route",
@@ -26,7 +36,7 @@ import java.sql.Timestamp;
 // A route always belongs to one tenant -- the column is not nullable and there is no shared
 // row to admit -- so the plain condition is the whole rule here.
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TenantTaskTypeKafkaRoute {
 

@@ -17,7 +17,10 @@ public class FormSubmitRequest {
     }
 
     public Long getFormId() { return this.formId; }
+
     public void setFormId(Long formId) { this.formId = formId; }
+
     public Map<String, Object> getAnswers() { return this.answers; }
+
     public void setAnswers(Map<String, Object> answers) { this.answers = answers; }
 }

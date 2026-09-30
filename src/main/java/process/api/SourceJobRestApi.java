@@ -8,7 +8,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
 import process.model.dto.FileUploadDto;
 import process.config.RaceRefusals;
 import process.engine.OneRunInFlight;
@@ -20,6 +19,12 @@ import process.model.service.SourceJobService;
 import process.model.service.SourceJobBulkService;
 import process.util.ProcessUtil;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * @author Nabeel Ahmed
@@ -203,8 +208,8 @@ public class SourceJobRestApi {
     public ResponseEntity<?> downloadSourceJobTemplateFile() {
         try {
             HttpHeaders headers = new HttpHeaders();
-            String fileName = "BatchDownload-"+BusinessTime.today()+"-"+ UUID.randomUUID() + ".xlsx";
-            headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
+            String fileName = "BatchDownload-" + BusinessTime.today() + "-" + UUID.randomUUID() + ".xlsx";
+            headers.add(ProcessUtil.CONTENT_DISPOSITION, ProcessUtil.FILE_NAME_HEADER + fileName);
             return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkService.downloadSourceJobTemplateFile().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloading source job template xlsx file.", ex);
@@ -216,8 +221,8 @@ public class SourceJobRestApi {
     public ResponseEntity<?> downloadListSourceJob() {
         try {
             HttpHeaders headers = new HttpHeaders();
-            String fileName = "BatchDownload-"+BusinessTime.today()+"-"+ UUID.randomUUID() + ".xlsx";
-            headers.add(ProcessUtil.CONTENT_DISPOSITION,ProcessUtil.FILE_NAME_HEADER + fileName);
+            String fileName = "BatchDownload-" + BusinessTime.today() + "-" + UUID.randomUUID() + ".xlsx";
+            headers.add(ProcessUtil.CONTENT_DISPOSITION, ProcessUtil.FILE_NAME_HEADER + fileName);
             return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkService.downloadListSourceJob().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceJob.", ex);
@@ -228,7 +233,7 @@ public class SourceJobRestApi {
     @BuilderAction
     @RequestMapping(value = "/uploadSourceJob", method = RequestMethod.POST)
     public ResponseEntity<?> uploadSourceJob(
-        FileUploadDto fileObject) {
+        FileUploadDto<?> fileObject) {
         try {
             if (fileObject.getFile() != null) {
                 return new ResponseEntity<>(this.sourceJobBulkService.uploadSourceJob(fileObject), HttpStatus.OK);

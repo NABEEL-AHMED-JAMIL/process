@@ -34,10 +34,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.*;
 import java.time.LocalDate;
 import java.util.Optional;
 import process.notifications.TestNotifications;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.doThrow;
 
 /**
  * The two bulk paths, on the inputs they were never written for.
@@ -84,17 +89,17 @@ public class SourceJobBulkDefectTest {
     // ---- upload: a bad Task Id is a row error, not a dead request -------------------------------
 
     /** A one-row Job-Add sheet whose Task Id cell holds whatever is passed in. */
-    private static FileUploadDto sheetWithTaskIdCell(String taskIdCell) throws Exception {
+    private static FileUploadDto<?> sheetWithTaskIdCell(String taskIdCell) throws Exception {
         return sheetWith(taskIdCell, "1");
     }
 
     /** The same sheet, with the Recurrence cell open to the test as well. */
-    private static FileUploadDto sheetWith(String taskIdCell, String recurrenceCell) throws Exception {
+    private static FileUploadDto<?> sheetWith(String taskIdCell, String recurrenceCell) throws Exception {
         return sheetWith(taskIdCell, "Daily", recurrenceCell);
     }
 
     /** The same sheet, with the Frequency cell open too. */
-    private static FileUploadDto sheetWith(String taskIdCell, String frequencyCell, String recurrenceCell) throws Exception {
+    private static FileUploadDto<?> sheetWith(String taskIdCell, String frequencyCell, String recurrenceCell) throws Exception {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             XSSFSheet sheet = workbook.createSheet(ProcessUtil.JOB_ADD);
             Row header = sheet.createRow(0);
@@ -112,7 +117,7 @@ public class SourceJobBulkDefectTest {
             }
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             workbook.write(out);
-            FileUploadDto fileUploadDto = new FileUploadDto();
+            FileUploadDto<?> fileUploadDto = new FileUploadDto<>();
             fileUploadDto.setFile(new MockMultipartFile("file", "jobs.xlsx",
                 ProcessUtil.SHEET_NAME, out.toByteArray()));
             return fileUploadDto;
@@ -341,7 +346,7 @@ public class SourceJobBulkDefectTest {
      */
     @Test
     void aFileThatIsNotReallyASpreadsheetIsRefusedWithAReason() throws Exception {
-        FileUploadDto dto = new FileUploadDto();
+        FileUploadDto<?> dto = new FileUploadDto<>();
         dto.setFile(new MockMultipartFile("file", "sheet.xlsx", ProcessUtil.SHEET_NAME, "id,name\n1,orders\n".getBytes()));
 
         ResponseDto response = this.service.uploadSourceJob(dto);

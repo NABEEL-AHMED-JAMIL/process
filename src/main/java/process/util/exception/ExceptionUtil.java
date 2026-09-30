@@ -14,7 +14,7 @@ public class ExceptionUtil {
 
     public static Throwable getRootCause(final Throwable throwable) {
         final List<Throwable> list = getThrowableList(throwable);
-        Throwable rootCause = list.size() < 2 ? null : (Throwable) list.get(list.size() - 1);
+        Throwable rootCause = list.size() < 2 ? null : list.get(list.size() - 1);
         if (rootCause == null) {
             return throwable;
         }

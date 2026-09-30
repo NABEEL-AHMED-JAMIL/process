@@ -40,7 +40,8 @@ class DispatchRelayCorrelationTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    // also drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings({"unchecked", "deprecation"})
     void aRunIsHandedOverAndMovedToStartUnderItsOwnId() {
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         AtomicReference<String> atSend = new AtomicReference<>();

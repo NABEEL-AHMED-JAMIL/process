@@ -13,6 +13,8 @@ import process.identity.IdentityPort;
 /**
  * @author Nabeel Ahmed
  * */
+// Boot 2.7's WebSecurityConfigurerAdapter; the move to a SecurityFilterChain bean is Wave 6's security review, not a lint fix.
+@SuppressWarnings("deprecation")
 @Configuration
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 

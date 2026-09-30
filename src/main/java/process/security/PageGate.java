@@ -26,8 +26,14 @@ public class PageGate {
     public static final class Decision {
         private final boolean allowed;
         private final String message;
-        private Decision(boolean allowed, String message) { this.allowed = allowed; this.message = message; }
+
+        private Decision(boolean allowed, String message) {
+            this.allowed = allowed;
+            this.message = message;
+        }
+
         public boolean isAllowed() { return this.allowed; }
+
         public String getMessage() { return this.message; }
     }
 

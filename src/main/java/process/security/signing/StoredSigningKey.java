@@ -31,11 +31,16 @@ public final class StoredSigningKey {
 
     /** The key id tokens carry in their header. */
     public String getKid() { return this.kid; }
+
     /** The public key, X.509 DER, base64. Not a secret: it is what the JWKS publishes. */
     public String getPublicKey() { return this.publicKey; }
+
     /** The private key, PKCS#8 DER base64, sealed by EncryptionUtil under the current key. Null once withdrawn. */
     public String getSealedPrivateKey() { return this.sealedPrivateKey; }
+
     public String getStatus() { return this.status; }
+
     public Timestamp getCreatedAt() { return this.createdAt; }
+
     public Timestamp getRetiredAt() { return this.retiredAt; }
 }

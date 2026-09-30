@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import process.model.dto.KafkaConnectionProfileDto;
@@ -27,7 +26,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -68,7 +66,6 @@ public class AjwaKafkaProvisioningDriver {
     /** The application runs in a container, so it reaches the published ports by this name. */
     private static final String BROKER_HOST = "host.docker.internal";
     private static final String TENANT_NAME = "Ajwa LLC";
-
 
     @Autowired private KafkaConnectionProfileService profileService;
     @Autowired private KafkaSecretService secretService;

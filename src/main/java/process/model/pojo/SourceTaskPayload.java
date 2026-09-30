@@ -8,14 +8,18 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
-import javax.persistence.*;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.Id;
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
 
 /**
  * @author Nabeel Ahmed
  * */
 @Entity
 @Table(name = "source_task_payload")
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
@@ -92,7 +96,6 @@ public class SourceTaskPayload {
     public String toString() {
         return EntityStrings.of(this);
     }
-
 
     public Long getTenantId() {
         return tenantId;

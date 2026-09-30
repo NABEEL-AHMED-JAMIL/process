@@ -11,16 +11,27 @@ import java.sql.Timestamp;
  */
 public interface PipelineRowProjection {
     Long getPipelineKey();
+
     String getPipelineId();
+
     String getPipelineName();
+
     String getDescription();
+
     Long getTenantId();
+
     Long getSourceTaskTypeId();
+
     String getStatus();
+
     /** The instant; PipelineRowDto carries its Chicago wall-clock. */
     Timestamp getDateCreated();
+
     Long getCreatedBy();
+
     Long getUpdatedBy();
+
     Long getFieldCount();
+
     Long getRequiredCount();
 }

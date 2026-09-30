@@ -6,7 +6,6 @@ import process.pipeline.backing.Fakes;
 
 import java.util.Arrays;
 
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static process.pipeline.Definitions.config;

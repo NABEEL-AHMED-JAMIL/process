@@ -121,6 +121,8 @@ public final class IdentityPostgres implements AutoCloseable {
     }
 
     /** Hibernate over every process entity, validating nothing and creating nothing: Liquibase owns the schema. */
+    // drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings("deprecation")
     public IdentityPostgres withJpa() {
         this.factoryBean = new LocalContainerEntityManagerFactoryBean();
         this.factoryBean.setDataSource(this.pool);

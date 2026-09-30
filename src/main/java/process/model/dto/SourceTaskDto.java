@@ -9,13 +9,12 @@ import java.util.List;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskDto implements AuditNamed {
     private String createdByName;
     private String updatedByName;
     private Long createdBy;
-
 
     private Long taskDetailId;
     private Long tenantId;
@@ -160,7 +159,6 @@ public class SourceTaskDto implements AuditNamed {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 
     @Override
     public Long auditKey() {

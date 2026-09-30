@@ -35,15 +35,26 @@ public class FormField {
     }
 
     public String getKey() { return this.key; }
+
     public void setKey(String key) { this.key = key; }
+
     public String getLabel() { return this.label; }
+
     public void setLabel(String label) { this.label = label; }
+
     public String getType() { return this.type; }
+
     public void setType(String type) { this.type = type; }
+
     public boolean isRequired() { return this.required; }
+
     public void setRequired(boolean required) { this.required = required; }
+
     public String getHelp() { return this.help; }
+
     public void setHelp(String help) { this.help = help; }
+
     public List<String> getOptions() { return this.options; }
+
     public void setOptions(List<String> options) { this.options = options; }
 }

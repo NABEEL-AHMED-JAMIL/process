@@ -156,11 +156,17 @@ class StepEngineTest {
         }
 
         @Override public ResponseDto addLogs(SourceJobQueueDto dto) { throw new UnsupportedOperationException(); }
+
         @Override public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, List<String> messages) { throw new UnsupportedOperationException(); }
+
         @Override public ResponseDto changeState(SourceJobQueueDto dto, String key) { throw new UnsupportedOperationException(); }
+
         @Override public ResponseDto addLogs(SourceJobQueueDto dto, String key) { throw new UnsupportedOperationException(); }
+
         @Override public ResponseDto addLogsBatch(Long jobId, Long jobQueueId, List<String> messages, String key) { throw new UnsupportedOperationException(); }
+
         @Override public void noteRefusedCallback(Long jobQueueId, JobStatus reportedStatus) { throw new UnsupportedOperationException(); }
+
         @Override public Optional<ResponseDto> replay(Long jobQueueId, JobStatus s, String request, String key) { throw new UnsupportedOperationException(); }
     }
 
@@ -168,9 +174,13 @@ class StepEngineTest {
 
     /** Fails its first {@code failTimes} tries with {@code message}, then passes its input on. */
     final class Flaky implements StepTask {
+
         @Override public String code() { return "flaky"; }
+
         @Override public String description() { return "fails, then passes"; }
+
         @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
         @Override public StepResult run(StepContext context) {
             int failTimes = ((Number) context.config().getOrDefault("failTimes", Integer.MAX_VALUE)).intValue();
             int n = tries.computeIfAbsent(context.stepKey(), k -> new AtomicInteger()).incrementAndGet();
@@ -184,9 +194,13 @@ class StepEngineTest {
 
     /** Sleeps {@code millis}, interruptibly, then passes its input on. */
     static final class Slow implements StepTask {
+
         @Override public String code() { return "slow"; }
+
         @Override public String description() { return "sleeps"; }
+
         @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
         @Override public StepResult run(StepContext context) throws Exception {
             Thread.sleep(((Number) context.config().get("millis")).longValue());
             return StepResult.of(context.input());
@@ -195,9 +209,13 @@ class StepEngineTest {
 
     /** Acts on its input and makes no dataset: the next step reads what this one read. */
     static final class Counts implements StepTask {
+
         @Override public String code() { return "counts"; }
+
         @Override public String description() { return "counts"; }
+
         @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
         @Override public StepResult run(StepContext context) {
             context.log(context.input().size() + " record(s) counted");
             return StepResult.nothing((long) context.input().size());
@@ -403,9 +421,13 @@ class StepEngineTest {
     void aRunClosedByAnOperatorWhileItsStepsRunStopsAndReportsNothingMore() {
         PipelineDefinition.Step close = step("close", "counts");
         StepTask closer = new StepTask() {
+
             @Override public String code() { return "closer"; }
+
             @Override public String description() { return "an operator marks the run failed meanwhile"; }
+
             @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
             @Override public StepResult run(StepContext context) {
                 run.setJobStatus(JobStatus.Failed);
                 return StepResult.nothing(0L);
@@ -603,9 +625,13 @@ class StepEngineTest {
     @Test
     void aRetriedStepHasOneManifestRow() {
         StepTask keepsThenFails = new StepTask() {
+
             @Override public String code() { return "keeps_then_fails"; }
+
             @Override public String description() { return "keeps a file, fails the first try"; }
+
             @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
             @Override public StepResult run(StepContext context) throws Exception {
                 byte[] content = ("try " + context.tryNumber()).getBytes();
                 context.keepFile("out.csv", content, context.tryNumber(), Collections.singletonList("n"));
@@ -634,9 +660,13 @@ class StepEngineTest {
     @Test
     void aFileThatWasNotKeptIsNotRecorded() {
         StepTask claims = new StepTask() {
+
             @Override public String code() { return "claims_a_file"; }
+
             @Override public String description() { return "records a file it never kept"; }
+
             @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
             @Override public StepResult run(StepContext context) throws Exception {
                 context.recordOutput(RunOutput.file("ghost.csv", "csv", 1, 1));
                 return StepResult.nothing(0L);

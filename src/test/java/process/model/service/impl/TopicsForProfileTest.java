@@ -147,6 +147,8 @@ public class TopicsForProfileTest {
         assertThat(window.getValue().getPageSize()).isEqualTo(50);
     }
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     @Test
     void resolvingIdsDropsAnotherWorkspacesRows() throws Exception {
         TopicOptionProjection mine = option(11L, MINE);

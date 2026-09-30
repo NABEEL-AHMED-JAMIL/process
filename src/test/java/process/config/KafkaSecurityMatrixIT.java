@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.model.dto.ObjectContentDto;
 import process.model.pojo.KafkaConnectionProfile;
-import process.model.service.StorageBrowserService;
 import process.util.EncryptionUtil;
 
 import javax.crypto.KeyGenerator;
@@ -334,6 +333,5 @@ public class KafkaSecurityMatrixIT {
         assertThat(props.get("ssl.truststore.type")).isEqualTo(expectedType);
         assertThat(this.describeCluster(props)).isNotBlank();
     }
-
 
 }

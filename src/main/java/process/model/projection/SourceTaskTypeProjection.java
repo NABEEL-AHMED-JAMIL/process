@@ -7,22 +7,22 @@ import process.model.enums.Status;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface SourceTaskTypeProjection {
 
-    public Long getSourceTaskTypeId();
+    Long getSourceTaskTypeId();
 
-    public String getServiceName();
+    String getServiceName();
 
-    public String getDescription();
+    String getDescription();
 
-    public String getQueueTopicPartition();
+    String getQueueTopicPartition();
 
-    public Status getStatus();
+    Status getStatus();
 
-    public Long getTotalTaskLink();
+    Long getTotalTaskLink();
 
-    public Long getKafkaConnectionProfileId();
+    Long getKafkaConnectionProfileId();
 
 }

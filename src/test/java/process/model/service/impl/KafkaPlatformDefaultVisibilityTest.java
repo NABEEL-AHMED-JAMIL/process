@@ -177,7 +177,10 @@ public class KafkaPlatformDefaultVisibilityTest {
 
         // The list is handed over and then grown, so what it held has to be read at the call.
         List<List<AuditNamed>> named = new ArrayList<>();
-        doAnswer(call -> { named.add(new ArrayList<>((List<AuditNamed>) call.getArgument(0))); return null; })
+        doAnswer(call -> {
+            named.add(new ArrayList<>((List<AuditNamed>) call.getArgument(0)));
+            return null;
+        })
             .when(this.userNameResolver).attachToDtos(any(), any(), any());
 
         List<KafkaConnectionProfileDto> rows = rows(this.service.fetchAllProfiles());

@@ -26,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -254,7 +253,10 @@ class PipelineConfigServiceTest {
         entry.setUpdatedBy(44L);
         entry.setUpdatedAt(Timestamp.valueOf("2026-09-25 09:00:00"));
         when(this.entries.findByTenantIdOrderByConfigKeyAsc(MINE)).thenReturn(Collections.singletonList(entry));
-        when(this.names.namesFor(any())).thenReturn(new HashMap<Long, String>() {{ put(42L, "Emily"); put(43L, "Sarah"); }});
+        when(this.names.namesFor(any())).thenReturn(new HashMap<Long, String>() { {
+            put(42L, "Emily");
+            put(43L, "Sarah");
+        }});
         when(this.tasks.countLiveTasksWithPayloadContaining(MINE, "${secret:DB_PASSWORD}")).thenReturn(1L);
 
         @SuppressWarnings("unchecked")

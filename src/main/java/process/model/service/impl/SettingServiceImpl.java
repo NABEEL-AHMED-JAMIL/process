@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import process.config.KafkaConnectionResolver;
@@ -26,13 +25,21 @@ import process.model.service.SettingService;
 import org.barco.platform.tenancy.TenantScope;
 import process.security.TenantContext;
 import process.util.KafkaTopicPartitionUtil;
-import java.util.*;
 import java.util.stream.Collectors;
-import static process.util.ProcessUtil.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import process.model.pojo.Pipeline;
 import process.model.repository.PipelineRepository;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import static process.util.ProcessUtil.isNull;
+import java.util.Collections;
+import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Objects;
+import static process.util.ProcessUtil.SUCCESS;
+import static process.util.ProcessUtil.ERROR;
 
 /**
  * @author Nabeel Ahmed
@@ -61,7 +68,6 @@ public class SettingServiceImpl implements SettingService {
     private final KafkaConnectionResolver kafkaConnectionResolver;
 
     private final UserNameResolver userNameResolver;
-
 
     public SettingServiceImpl(SourceJobRepository sourceJobRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
@@ -105,7 +111,7 @@ public class SettingServiceImpl implements SettingService {
         this.userNameResolver.attachToDtos(sourceTaskTypeList, this.sourceTaskTypeRepository,
             SourceTaskType::getSourceTaskTypeId);
         appSettingDetail.put(SOURCE_TASK_TYPE, sourceTaskTypeList);
-        return new ResponseDto(SUCCESS, "Data fetch successfully.",appSettingDetail);
+        return new ResponseDto(SUCCESS, "Data fetch successfully.", appSettingDetail);
     }
 
     /**

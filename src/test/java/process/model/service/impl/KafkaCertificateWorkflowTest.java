@@ -41,7 +41,6 @@ import static process.util.ProcessUtil.SUCCESS;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.Arrays;
-import process.model.service.StorageBrowserService;
 import process.storage.TrustedStorageOperations;
 
 /**

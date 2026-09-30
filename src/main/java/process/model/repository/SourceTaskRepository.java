@@ -86,10 +86,10 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
     @Query(value = DOWNLOAD_LIST_SOURCE_TASK_SELECT +
 
         "where st.task_status != 'Delete'", nativeQuery = true)
-    public List<SourceTaskProjection> downloadListSourceTask();
+    List<SourceTaskProjection> downloadListSourceTask();
 
     @Query(value = DOWNLOAD_LIST_SOURCE_TASK_SELECT +
         "where st.task_status != 'Delete' and st.tenant_id = :tenantId", nativeQuery = true)
-    public List<SourceTaskProjection> downloadListSourceTaskForTenant(@Param("tenantId") Long tenantId);
+    List<SourceTaskProjection> downloadListSourceTaskForTenant(@Param("tenantId") Long tenantId);
 
 }

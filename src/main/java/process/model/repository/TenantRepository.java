@@ -13,8 +13,8 @@ import java.util.Optional;
 @Repository
 public interface TenantRepository extends JpaRepository<Tenant, Long> {
 
-    public List<Tenant> findByStatusNotOrderByTenantIdDesc(TenantStatus status);
+    List<Tenant> findByStatusNotOrderByTenantIdDesc(TenantStatus status);
 
-    public Optional<Tenant> findByTenantCode(String tenantCode);
+    Optional<Tenant> findByTenantCode(String tenantCode);
 
 }

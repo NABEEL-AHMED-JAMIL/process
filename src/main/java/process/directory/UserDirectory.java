@@ -62,10 +62,15 @@ public class UserDirectory {
         }
 
         public Long getAppUserId() { return this.appUserId; }
+
         public Long getTenantId() { return this.tenantId; }
+
         public String getUsername() { return this.username; }
+
         public String getFullName() { return this.fullName; }
+
         public String getStatus() { return this.status; }
+
         public Instant getUpdatedAt() { return this.updatedAt; }
 
         /** IdentityPort.Person's rule: the full name where there is one, else the username. */

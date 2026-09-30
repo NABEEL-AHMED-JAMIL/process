@@ -287,6 +287,8 @@ public class OpenSearchRagClientTest {
      * name a field that mapping defines; the dynamic-mapping alternative goes through
      * {@code match}, which answers an unmapped field with match-none on its own.
      */
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("rawtypes")
     @Test
     void everyTermClauseNamesAFieldTheIndexThisClassCreatesActuallyMaps() throws Exception {
         doThrow(notFound()).when(this.restTemplate).getForEntity(anyString(), eq(String.class));
@@ -608,6 +610,8 @@ public class OpenSearchRagClientTest {
      * is the other half: the fallback ranks by cosine, so a graph built for the default l2 would
      * rank by a different metric than the code that has to agree with it.
      */
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("rawtypes")
     @Test
     void aNewIndexIsCreatedWithAMethodThatFilteredKnnCanBeServedFrom() throws Exception {
         doThrow(notFound()).when(this.restTemplate).getForEntity(anyString(), eq(String.class));

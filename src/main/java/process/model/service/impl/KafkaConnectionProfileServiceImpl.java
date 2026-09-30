@@ -74,7 +74,6 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
     /** Storage's directory: whether a name is a connection the caller may use (MIG-68). */
     private final RemoteStorageDirectory storage;
 
-
     public KafkaConnectionProfileServiceImpl(KafkaConnectionProfileRepository profileRepository,
         SourceTaskTypeRepository sourceTaskTypeRepository,
         TenantTaskTypeKafkaRouteRepository routeRepository,
@@ -448,6 +447,8 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
      * to be -- else the profile that resolves for the caller. A profile the caller cannot see
      * reads as not found, the same as everywhere else on this service.
      */
+    // DescribeTopicsResult.values(): kept until the Kafka client upgrade; topicNameValues() needs a newer client.
+    @SuppressWarnings("deprecation")
     @Override
     public ResponseDto testTopicConnection(String topicName, Long kafkaConnectionProfileId) throws Exception {
         if (isNull(topicName) || topicName.trim().isEmpty()) {

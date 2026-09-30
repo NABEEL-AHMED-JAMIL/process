@@ -29,10 +29,14 @@ public class InboxTriggerView {
     }
 
     public Long getJobId() { return this.jobId; }
+
     public boolean isConfigured() { return this.configured; }
+
     public Boolean getEnabled() { return this.enabled; }
+
     /** A glob on the arriving file's name; absent for every file. */
     public String getFilePattern() { return this.filePattern; }
+
     /** When the trigger was last set, an instant (UTC, ...Z). */
     public String getDateUpdated() { return this.dateUpdated; }
 }

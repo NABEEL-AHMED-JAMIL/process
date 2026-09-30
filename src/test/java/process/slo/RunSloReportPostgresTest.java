@@ -17,7 +17,6 @@ import process.engine.ProducerBulkEngine;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.model.enums.RunEnd;
-import process.model.pojo.JobQueue;
 import process.model.repository.JobAuditLogRepository;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SchedulerRepository;
@@ -297,7 +296,9 @@ class RunSloReportPostgresTest {
     @Test
     void theLiveCounterAgreesWithTheRows() {
         RunSloReport.Window everything = report.measure(FROM.minus(Duration.ofDays(2)), TO.plus(Duration.ofDays(2)));
-        long legacyGood = 1, legacyBad = 2, legacyExcluded = 2;
+        long legacyGood = 1;
+        long legacyBad = 2;
+        long legacyExcluded = 2;
         assertThat(counted("bad")).isPositive();
         assertThat(counted("good")).isEqualTo(everything.good - legacyGood);
         assertThat(counted("bad")).isEqualTo(everything.bad - legacyBad);

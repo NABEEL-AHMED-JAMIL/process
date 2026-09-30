@@ -31,9 +31,9 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     @Query("update SourceJob s set s.assignedUserId = ?1 where s.assignedUserId is null")
     int backfillAssignedUserId(Long appUserId);
 
-    public Optional<SourceJob> findByJobIdAndJobStatus(Long jobId, Status status);
+    Optional<SourceJob> findByJobIdAndJobStatus(Long jobId, Status status);
 
-    public List<SourceJob> findByTenantId(Long tenantId);
+    List<SourceJob> findByTenantId(Long tenantId);
 
     /**
      * The task and its type are both eager many-to-ones, so without the fetch joins Hibernate
@@ -43,7 +43,7 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
      */
     @Query("SELECT sj FROM SourceJob sj LEFT JOIN FETCH sj.sourceTask st "
         + "LEFT JOIN FETCH st.sourceTaskType WHERE sj.jobStatus IN (?1, ?2)")
-    public List<SourceJob> findAllActiveAndInactiveJobs(Status activeStatus, Status inactiveStatus, Sort sort);
+    List<SourceJob> findAllActiveAndInactiveJobs(Status activeStatus, Status inactiveStatus, Sort sort);
 
     /**
      * The live job event, for every job-state change (MIG-151): one read of Core's own tables. The
@@ -59,7 +59,7 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
         "sj.assigned_username as assignedUsername, sj.assigned_user_id as assignedUserId, sj.tenant_id as tenantId, sj.job_name as jobName\n" +
         "from source_job sj left join scheduler sc on sc.job_id = sj.job_id\n" +
         "where sj.job_id in (?1) and UPPER(sj.job_status) = 'ACTIVE'", nativeQuery = true)
-    public List<SourceJobProjection> fetchRunningJobEvent(List<Long> jobIds);
+    List<SourceJobProjection> fetchRunningJobEvent(List<Long> jobIds);
 
     @Transactional
     @Modifying
@@ -69,12 +69,12 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     @Query(value = "update source_job set job_status = ?2\n" +
         "where task_detail_id in (select task_detail_id from source_task where source_task_type_id = ?1)",
         nativeQuery = true)
-    public int statusChangeSourceJobLinkWithSourceTaskTypeId(Long sourceTaskTypeId, String status);
+    int statusChangeSourceJobLinkWithSourceTaskTypeId(Long sourceTaskTypeId, String status);
 
     @Transactional
     @Modifying
     @Query(value = "update source_job set job_status = ?2 where task_detail_id = ?1", nativeQuery = true)
-    public int statusChangeSourceJobWithSourceTaskId(Long sourceTaskId, String status);
+    int statusChangeSourceJobWithSourceTaskId(Long sourceTaskId, String status);
 
     /**
      * Jobs still bound to a task and not themselves deleted.
@@ -95,7 +95,7 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
 
     @Query(value = "select count(*) from source_job where task_detail_id = ?1 "
         + "and upper(job_status) <> 'DELETE'", nativeQuery = true)
-    public long countLiveJobsForTask(Long sourceTaskId);
+    long countLiveJobsForTask(Long sourceTaskId);
 
 
     /**

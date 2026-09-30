@@ -62,6 +62,8 @@ class ReconcileOncePerTickTest {
      * When one replica would fire, from its boot to the horizon, reading the schedule the way Spring
      * does: a cron from the replica's (skewed) clock, a fixedDelay from the replica's own start.
      */
+    // drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings("deprecation")
     private static List<Long> firings(Scheduled scheduled, long bootMillis, long skewMillis, long horizonMillis) {
         List<Long> at = new ArrayList<>();
         if (!scheduled.cron().isEmpty()) {
@@ -110,6 +112,8 @@ class ReconcileOncePerTickTest {
         assertThat(scheduled.fixedRateString()).isEmpty();
     }
 
+    // drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings("deprecation")
     @Test
     void productionTicksEveryFifteenMinutesAsBefore() throws Exception {
         Scheduled scheduled = sweep().getAnnotation(Scheduled.class);

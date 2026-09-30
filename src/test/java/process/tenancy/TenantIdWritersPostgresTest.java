@@ -15,7 +15,6 @@ import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskDto;
 import process.model.dto.SourceTaskTypeDto;
 import process.model.enums.JobStatus;
-import process.model.enums.Status;
 import process.model.pojo.JobAuditLogs;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Pipeline;

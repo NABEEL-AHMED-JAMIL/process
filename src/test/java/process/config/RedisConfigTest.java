@@ -242,6 +242,7 @@ public class RedisConfigTest {
     /** Shaped like the two real call sites: one @Cacheable read, one allEntries eviction. */
     public interface CachedLikeFileChat {
         String metadataFor(String bucket, String key);
+
         void deleteAndEvict(String bucket);
     }
 

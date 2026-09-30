@@ -9,13 +9,15 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfoHandlerMapping;
 import springfox.documentation.builders.RequestHandlerSelectors;
-import springfox.documentation.service.*;
 import springfox.documentation.spi.DocumentationType;
 import springfox.documentation.spring.web.plugins.Docket;
 import springfox.documentation.spring.web.plugins.WebMvcRequestHandlerProvider;
 import springfox.documentation.swagger2.annotations.EnableSwagger2;
 import java.lang.reflect.Field;
-import java.util.*;
+import java.util.List;
+import springfox.documentation.service.ApiInfo;
+import springfox.documentation.service.Contact;
+import java.util.Collections;
 
 /**
  * The API documentation (/v2/api-docs, /swagger-ui.html). Generated only where process.api-docs.enabled
@@ -85,7 +87,7 @@ public class SwaggerConfig {
     }
 
     private ApiInfo apiInfo() {
-        return new ApiInfo("Process API", "Basic ETL Api.","1.0", "Terms of service",
+        return new ApiInfo("Process API", "Basic ETL Api.", "1.0", "Terms of service",
             new Contact("Nabeel Ahmed Jamil", "www.process.com", "nabeel.amd93@gmail.com"), "License of API", "API license URL",
                 Collections.emptyList());
     }

@@ -9,14 +9,13 @@ import java.sql.Timestamp;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class KafkaConnectionProfileDto implements AuditNamed {
     private Long createdBy;
 
     private String createdByName;
     private String updatedByName;
-
 
     private Long kafkaConnectionProfileId;
 
@@ -386,7 +385,6 @@ public class KafkaConnectionProfileDto implements AuditNamed {
     public String toString() {
         return new Gson().toJson(this);
     }
-
 
     @Override
     public Long auditKey() {

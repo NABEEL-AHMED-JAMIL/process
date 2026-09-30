@@ -87,8 +87,13 @@ class OpenSearchRagTenantIsolationTest {
 
     private void store(long tenant, String bucket, String key, String etag, int chunkIndex, String text) {
         ObjectNode doc = this.json.createObjectNode();
-        doc.put("tenantId", tenant); doc.put("bucket", bucket); doc.put("key", key); doc.put("etag", etag);
-        doc.put("embeddingModel", "nomic-embed-text"); doc.put("chunkIndex", chunkIndex); doc.put("chunkText", text);
+        doc.put("tenantId", tenant);
+        doc.put("bucket", bucket);
+        doc.put("key", key);
+        doc.put("etag", etag);
+        doc.put("embeddingModel", "nomic-embed-text");
+        doc.put("chunkIndex", chunkIndex);
+        doc.put("chunkText", text);
         doc.putArray("embedding").add(1f).add(0f).add(0f);
         this.index.add(doc);
     }
@@ -105,7 +110,11 @@ class OpenSearchRagTenantIsolationTest {
         JsonNode query = request.path("query");
         if (query.has("knn")) query = query.path("knn").path("embedding").path("filter");
         List<ObjectNode> hits = new ArrayList<>();
-        for (ObjectNode doc : this.index) if (matches(query, doc)) hits.add(doc);
+        for (ObjectNode doc : this.index) {
+            if (matches(query, doc)) {
+                hits.add(doc);
+            }
+        }
         StringBuilder out = new StringBuilder("{\"hits\":{\"total\":{\"value\":" + hits.size() + ",\"relation\":\"eq\"},\"hits\":[");
         if (request.path("size").asInt(10) > 0) {
             out.append(hits.stream().map(d -> "{\"_source\":" + d.toString() + "}").collect(Collectors.joining(",")));
@@ -125,9 +134,17 @@ class OpenSearchRagTenantIsolationTest {
         }
         JsonNode bool = clause.path("bool");
         for (String all : new String[] {"must", "filter"}) {
-            for (JsonNode c : asList(bool.path(all))) if (!matches(c, doc)) return false;
+            for (JsonNode c : asList(bool.path(all))) {
+                if (!matches(c, doc)) {
+                    return false;
+                }
+            }
         }
-        for (JsonNode c : asList(bool.path("must_not"))) if (matches(c, doc)) return false;
+        for (JsonNode c : asList(bool.path("must_not"))) {
+            if (matches(c, doc)) {
+                return false;
+            }
+        }
         List<JsonNode> should = asList(bool.path("should"));
         return should.isEmpty() || should.stream().anyMatch(c -> matches(c, doc));
     }
@@ -135,7 +152,9 @@ class OpenSearchRagTenantIsolationTest {
     private static List<JsonNode> asList(JsonNode node) {
         List<JsonNode> out = new ArrayList<>();
         if (node.isArray()) node.forEach(out::add);
-        else if (node.isObject()) out.add(node);
+        else if (node.isObject()) {
+            out.add(node);
+        }
         return out;
     }
 

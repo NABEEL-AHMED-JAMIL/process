@@ -24,21 +24,38 @@ public class TablePreviewDto {
     private String note;
 
     public String getSource() { return source; }
+
     public void setSource(String source) { this.source = source; }
+
     public List<String> getColumns() { return columns; }
+
     public void setColumns(List<String> columns) { this.columns = columns; }
+
     public List<List<String>> getRows() { return rows; }
+
     public void setRows(List<List<String>> rows) { this.rows = rows; }
+
     public int getOffset() { return offset; }
+
     public void setOffset(int offset) { this.offset = offset; }
+
     public int getLimit() { return limit; }
+
     public void setLimit(int limit) { this.limit = limit; }
+
     public long getTotalRows() { return totalRows; }
+
     public void setTotalRows(long totalRows) { this.totalRows = totalRows; }
+
     public List<String> getSheets() { return sheets; }
+
     public void setSheets(List<String> sheets) { this.sheets = sheets; }
+
     public String getSheet() { return sheet; }
+
     public void setSheet(String sheet) { this.sheet = sheet; }
+
     public String getNote() { return note; }
+
     public void setNote(String note) { this.note = note; }
 }

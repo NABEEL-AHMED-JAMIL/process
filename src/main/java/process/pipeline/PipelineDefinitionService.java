@@ -64,12 +64,15 @@ public class PipelineDefinitionService {
         private String text;
 
         public Long getPipelineKey() { return pipelineKey; }
+
         public void setPipelineKey(Long pipelineKey) { this.pipelineKey = pipelineKey; }
 
         public String getFormat() { return format; }
+
         public void setFormat(String format) { this.format = format; }
 
         public String getText() { return text; }
+
         public void setText(String text) { this.text = text; }
     }
 
@@ -176,9 +179,11 @@ public class PipelineDefinitionService {
         private Boolean enabled;
 
         public String getCode() { return code; }
+
         public void setCode(String code) { this.code = code; }
 
         public Boolean getEnabled() { return enabled; }
+
         public void setEnabled(Boolean enabled) { this.enabled = enabled; }
     }
 

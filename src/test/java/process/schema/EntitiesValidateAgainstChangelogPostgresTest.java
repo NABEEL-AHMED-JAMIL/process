@@ -24,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  */
 class EntitiesValidateAgainstChangelogPostgresTest {
 
+    // drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings("deprecation")
     @Test
     void theEntitiesValidateAgainstAChangelogBuiltEtlJob() throws Exception {
         try (ScratchPostgres db = ScratchPostgres.create("validate_entities")) {

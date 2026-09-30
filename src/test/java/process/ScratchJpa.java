@@ -41,6 +41,8 @@ public final class ScratchJpa implements AutoCloseable {
     }
 
     /** As above, with Hibernate properties of the caller's on top (hibernate.hbm2ddl.auto=validate, say). */
+    // drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings("deprecation")
     public ScratchJpa(DataSource pool, Map<String, Object> overrides) {
         this.factoryBean = new LocalContainerEntityManagerFactoryBean();
         this.factoryBean.setDataSource(pool);

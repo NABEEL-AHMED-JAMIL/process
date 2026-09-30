@@ -26,7 +26,7 @@ public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long>
         "to_char(date_created AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD HH24:MI:SS') || '.' || coalesce(nullif(rtrim(to_char(date_created AT TIME ZONE 'America/Chicago', 'US'), '0'), ''), '0') as dateCreated, " +
         "status as status, external_id as externalId, correlation_id as correlationId " +
         "from job_audit_logs where job_queue_id = ? order by date_created asc", nativeQuery = true)
-    public List<JobAuditLogProjection> findAllByJobQueueIdV1(Long jobQueueId);
+    List<JobAuditLogProjection> findAllByJobQueueIdV1(Long jobQueueId);
 
     @Transactional
     @Modifying
@@ -34,7 +34,7 @@ public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long>
     @Query(value = "insert into job_audit_logs (job_audit_log_id, external_id, job_queue_id, log_detail, date_created, status, tenant_id, correlation_id) " +
         "select nextval('job_audit_logs_source_seq'), ?1, ?2, ?3, ?4, 'Active', q.tenant_id, ?5 from job_queue q where q.job_queue_id = ?2 " +
         "on conflict (external_id) do nothing", nativeQuery = true)
-    public int upsertFromOpenSearch(String externalId, Long jobQueueId, String logDetail, Timestamp dateCreated, String correlationId);
+    int upsertFromOpenSearch(String externalId, Long jobQueueId, String logDetail, Timestamp dateCreated, String correlationId);
 
     /**
      * Of the job_queue ids handed in, the ones job_queue still holds.
@@ -51,11 +51,11 @@ public interface JobAuditLogRepository extends JpaRepository<JobAuditLogs, Long>
      * ClassCastException at the first element the caller touches.
      */
     @Query(value = "select job_queue_id from job_queue where job_queue_id in :jobQueueIds", nativeQuery = true)
-    public List<Number> findExistingJobQueueIds(@Param("jobQueueIds") List<Long> jobQueueIds);
+    List<Number> findExistingJobQueueIds(@Param("jobQueueIds") List<Long> jobQueueIds);
 
     @Transactional
     @Modifying
     @Query(value = "update job_audit_logs set status = ?2 where job_queue_id in (select job_queue_id from job_queue where job_id = ?1)", nativeQuery = true)
-    public int updateStatusByJobId(Long jobId, String statusName);
+    int updateStatusByJobId(Long jobId, String statusName);
 
 }

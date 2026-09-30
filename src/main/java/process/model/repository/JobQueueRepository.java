@@ -34,7 +34,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "and prepared_at is not null "
         + "and (next_attempt_at is null or next_attempt_at <= ?2) "
         + "order by job_queue_id asc limit ?1 ", nativeQuery = true)
-    public List<JobQueue> findAllJobForTodayWithLimit(Long limit, Timestamp eligibleAt);
+    List<JobQueue> findAllJobForTodayWithLimit(Long limit, Timestamp eligibleAt);
 
     /**
      * Runs waiting for the pre-dispatch phase, for the caller's transaction (MIG-134): queued, not sent,
@@ -71,13 +71,13 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     String findOrchestrationSetting(String settingKey);
 
     @Query(value = "select count(*) from job_queue where job_id = ?1 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
-    public int getCountForInQueueJobByJobId(Long jobId);
+    int getCountForInQueueJobByJobId(Long jobId);
 
     @Query(value = "select count(*) from job_queue where job_id = ?1", nativeQuery = true)
-    public int getCountForJobByJobId(Long jobId);
+    int getCountForJobByJobId(Long jobId);
 
     @Query(value = "select job_id, count(*) from job_queue where job_id in :jobIds group by job_id", nativeQuery = true)
-    public List<Object[]> countGroupByJobIds(@Param("jobIds") List<Long> jobIds);
+    List<Object[]> countGroupByJobIds(@Param("jobIds") List<Long> jobIds);
 
     /**
      * Runs that say they are still going long after anything real would have finished.
@@ -105,7 +105,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "and COALESCE(start_time, date_created) is not null "
         + "and COALESCE(start_time, date_created) < ?1 "
         + "order by job_queue_id asc", nativeQuery = true)
-    public List<JobQueue> findStalledRuns(Timestamp startedBefore);
+    List<JobQueue> findStalledRuns(Timestamp startedBefore);
 
     /**
      * Notes on a run still in flight that its own worker's report was refused for an expired token
@@ -122,9 +122,9 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "where UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') "
         + "and refused_callback_at is not null "
         + "order by job_queue_id asc", nativeQuery = true)
-    public List<JobQueue> findRunsWithRefusedCallbacks();
+    List<JobQueue> findRunsWithRefusedCallbacks();
 
-    public List<JobQueue> findAllByJobId(Long jobId);
+    List<JobQueue> findAllByJobId(Long jobId);
 
     @Transactional
     @Modifying

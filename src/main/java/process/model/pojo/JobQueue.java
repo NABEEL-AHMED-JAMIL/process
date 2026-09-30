@@ -12,9 +12,20 @@ import process.model.enums.JobStatus;
 import process.model.enums.RunEnd;
 import process.model.enums.Status;
 
-import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.Index;
+import javax.persistence.Id;
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
+import javax.persistence.PrePersist;
 
 @Entity
 
@@ -24,7 +35,7 @@ import java.time.LocalDateTime;
 /**
  * @author Nabeel Ahmed
  * */
-@JsonIgnoreProperties(ignoreUnknown=true)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
@@ -350,24 +361,40 @@ public class JobQueue {
         return EntityStrings.of(this);
     }
 
-
     public String getCallbackTokenHash() { return callbackTokenHash; }
+
     public void setCallbackTokenHash(String callbackTokenHash) { this.callbackTokenHash = callbackTokenHash; }
+
     public Integer getCallbackTokenAttempt() { return callbackTokenAttempt; }
+
     public void setCallbackTokenAttempt(Integer callbackTokenAttempt) { this.callbackTokenAttempt = callbackTokenAttempt; }
+
     public LocalDateTime getCallbackTokenExpiresAt() { return callbackTokenExpiresAt; }
+
     public void setCallbackTokenExpiresAt(LocalDateTime callbackTokenExpiresAt) { this.callbackTokenExpiresAt = callbackTokenExpiresAt; }
+
     public LocalDateTime getRefusedCallbackAt() { return refusedCallbackAt; }
+
     public void setRefusedCallbackAt(LocalDateTime refusedCallbackAt) { this.refusedCallbackAt = refusedCallbackAt; }
+
     public String getRefusedCallbackStatus() { return refusedCallbackStatus; }
+
     public void setRefusedCallbackStatus(String refusedCallbackStatus) { this.refusedCallbackStatus = refusedCallbackStatus; }
+
     public String getCorrelationId() { return correlationId; }
+
     public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
+
     public LocalDateTime getPreparedAt() { return preparedAt; }
+
     public void setPreparedAt(LocalDateTime preparedAt) { this.preparedAt = preparedAt; }
+
     public String getDispatchPayload() { return dispatchPayload; }
+
     public void setDispatchPayload(String dispatchPayload) { this.dispatchPayload = dispatchPayload; }
+
     public RunEnd getEndReason() { return endReason; }
+
     public void setEndReason(RunEnd endReason) { this.endReason = endReason; }
 
     public String getModelProfiles() { return modelProfiles; }

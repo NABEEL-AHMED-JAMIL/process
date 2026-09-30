@@ -16,7 +16,18 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static process.tenancy.CoreProbeFixture.*;
+import static process.tenancy.CoreProbeFixture.B_RUN;
+import static process.tenancy.CoreProbeFixture.COLLEAGUE_RUN;
+import static process.tenancy.CoreProbeFixture.A_RUN;
+import static process.tenancy.CoreProbeFixture.USER_OF_A;
+import static process.tenancy.CoreProbeFixture.ADMIN_OF_A;
+import static process.tenancy.CoreProbeFixture.REFUSED;
+import static process.tenancy.CoreProbeFixture.NO_WORKSPACE;
+import static process.tenancy.CoreProbeFixture.tenantlessUser;
+import static process.tenancy.CoreProbeFixture.A;
+import static process.tenancy.CoreProbeFixture.B;
+import static process.tenancy.CoreProbeFixture.SUCCEEDED;
+import process.tenancy.CoreProbeFixture.Caller;
 
 /**
  * MIG-166's cross-tenant probe for a run's datasets and result manifest (Wave 4): sourceJob.json/runDataset and

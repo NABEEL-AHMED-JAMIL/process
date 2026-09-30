@@ -86,20 +86,34 @@ public final class TaskSpec {
     }
 
     public String code() { return code; }
+
     public String name() { return name; }
+
     public TaskKind kind() { return kind; }
+
     public String description() { return description; }
+
     public Map<String, Object> inputSchema() { return inputSchema; }
+
     public Map<String, Object> outputSchema() { return outputSchema; }
+
     public Map<String, Object> configSchema() { return configSchema; }
+
     public String backingService() { return backingService; }
+
     public int maxAttempts() { return maxAttempts; }
+
     public int delaySeconds() { return delaySeconds; }
+
     /** Null: the pipeline's default timeout (settings.defaultTimeoutSeconds, else 600 s). */
     public Integer timeoutSeconds() { return timeoutSeconds; }
+
     public String requiredRole() { return requiredRole; }
+
     public boolean enabledByDefault() { return enabledByDefault; }
+
     public boolean overridable() { return overridable; }
+
     public String aiToolName() { return aiToolName; }
 
     /** The entry as GET pipeline.json/steps/tasks answers it, before the workspace's enabled and availability. */
@@ -160,18 +174,66 @@ public final class TaskSpec {
             this.kind = kind;
         }
 
-        public Builder description(String description) { this.description = description; return this; }
-        public Builder input(Map<String, Object> schema) { this.inputSchema = schema; return this; }
-        public Builder output(Map<String, Object> schema) { this.outputSchema = schema; return this; }
-        public Builder config(Map<String, Object> schema) { this.configSchema = schema; return this; }
-        public Builder config(JsonSchema schema) { this.configSchema = schema.toMap(); return this; }
-        public Builder backing(String service) { this.backingService = service; return this; }
-        public Builder retry(int maxAttempts, int delaySeconds) { this.maxAttempts = maxAttempts; this.delaySeconds = delaySeconds; return this; }
-        public Builder timeoutSeconds(Integer seconds) { this.timeoutSeconds = seconds; return this; }
-        public Builder requiredRole(String role) { this.requiredRole = role; return this; }
-        public Builder enabledByDefault(boolean enabled) { this.enabledByDefault = enabled; return this; }
-        public Builder overridable(boolean overridable) { this.overridable = overridable; return this; }
-        public Builder aiToolName(String name) { this.aiToolName = name; return this; }
+        public Builder description(String description) {
+            this.description = description;
+            return this;
+        }
+
+        public Builder input(Map<String, Object> schema) {
+            this.inputSchema = schema;
+            return this;
+        }
+
+        public Builder output(Map<String, Object> schema) {
+            this.outputSchema = schema;
+            return this;
+        }
+
+        public Builder config(Map<String, Object> schema) {
+            this.configSchema = schema;
+            return this;
+        }
+
+        public Builder config(JsonSchema schema) {
+            this.configSchema = schema.toMap();
+            return this;
+        }
+
+        public Builder backing(String service) {
+            this.backingService = service;
+            return this;
+        }
+
+        public Builder retry(int maxAttempts, int delaySeconds) {
+            this.maxAttempts = maxAttempts;
+            this.delaySeconds = delaySeconds;
+            return this;
+        }
+
+        public Builder timeoutSeconds(Integer seconds) {
+            this.timeoutSeconds = seconds;
+            return this;
+        }
+
+        public Builder requiredRole(String role) {
+            this.requiredRole = role;
+            return this;
+        }
+
+        public Builder enabledByDefault(boolean enabled) {
+            this.enabledByDefault = enabled;
+            return this;
+        }
+
+        public Builder overridable(boolean overridable) {
+            this.overridable = overridable;
+            return this;
+        }
+
+        public Builder aiToolName(String name) {
+            this.aiToolName = name;
+            return this;
+        }
 
         public TaskSpec build() {
             return new TaskSpec(this);

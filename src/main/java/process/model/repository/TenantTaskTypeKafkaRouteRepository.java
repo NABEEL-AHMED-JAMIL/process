@@ -12,11 +12,11 @@ import java.util.Optional;
 @Repository
 public interface TenantTaskTypeKafkaRouteRepository extends JpaRepository<TenantTaskTypeKafkaRoute, Long> {
 
-    public Optional<TenantTaskTypeKafkaRoute> findByTenantIdAndSourceTaskTypeId(Long tenantId, Long sourceTaskTypeId);
+    Optional<TenantTaskTypeKafkaRoute> findByTenantIdAndSourceTaskTypeId(Long tenantId, Long sourceTaskTypeId);
 
     @Transactional
-    public void deleteByTenantIdAndSourceTaskTypeId(Long tenantId, Long sourceTaskTypeId);
+    void deleteByTenantIdAndSourceTaskTypeId(Long tenantId, Long sourceTaskTypeId);
 
-    public boolean existsByKafkaConnectionProfileId(Long kafkaConnectionProfileId);
+    boolean existsByKafkaConnectionProfileId(Long kafkaConnectionProfileId);
 
 }

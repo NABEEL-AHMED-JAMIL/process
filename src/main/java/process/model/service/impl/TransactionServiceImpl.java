@@ -5,9 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import process.model.enums.Status;
-import process.model.pojo.*;
 import process.model.projection.SourceJobProjection;
-import process.model.repository.*;
 import process.security.TenantContext;
 import process.util.OpenSearchAuditLogClient;
 import java.sql.Timestamp;
@@ -17,6 +15,17 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import process.model.pojo.SourceJob;
+import process.model.pojo.Scheduler;
+import process.model.pojo.JobQueue;
+import process.model.pojo.SourceTask;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.pojo.JobAuditLogs;
 
 /**
  * @author Nabeel Ahmed

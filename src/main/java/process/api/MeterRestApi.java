@@ -42,7 +42,9 @@ public class MeterRestApi {
     private final SourceJobRepository jobs;
 
     public MeterRestApi(RunCallbackTokens runTokens, JobQueueRepository jobQueues, SourceJobRepository jobs) {
-        this.runTokens = runTokens; this.jobQueues = jobQueues; this.jobs = jobs;
+        this.runTokens = runTokens;
+        this.jobQueues = jobQueues;
+        this.jobs = jobs;
     }
 
     /**

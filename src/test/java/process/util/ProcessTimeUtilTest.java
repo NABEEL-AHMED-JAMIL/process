@@ -1,6 +1,5 @@
 package process.util;
 
-import process.util.BusinessTime;
 import org.junit.jupiter.api.Test;
 import process.model.pojo.Scheduler;
 
@@ -10,8 +9,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * The scheduler decides when every job runs, and had no tests at all. These exercise the

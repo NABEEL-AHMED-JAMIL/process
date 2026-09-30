@@ -286,7 +286,10 @@ public class HttpIdentity implements IdentityPort {
             if (answer != null) {
                 for (Object row : answer) {
                     if (row instanceof Map) {
-                        rows.add((Map<String, Object>) row);
+                        // A JSON object read as Map: its keys are the JSON's field names, always Strings.
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> fields = (Map<String, Object>) row;
+                        rows.add(fields);
                     }
                 }
             }

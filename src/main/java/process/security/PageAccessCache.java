@@ -130,6 +130,10 @@ public class PageAccessCache {
     private static final class Entry {
         final Set<PageKey> pages;
         final long expiresAt;
-        Entry(Set<PageKey> pages, long expiresAt) { this.pages = pages; this.expiresAt = expiresAt; }
+
+        Entry(Set<PageKey> pages, long expiresAt) {
+            this.pages = pages;
+            this.expiresAt = expiresAt;
+        }
     }
 }

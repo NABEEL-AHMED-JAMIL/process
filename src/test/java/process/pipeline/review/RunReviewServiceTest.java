@@ -144,6 +144,8 @@ class RunReviewServiceTest {
         verify(this.definitions, atLeastOnce()).latestFor(TENANT, "F237001", MADE);
     }
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     @Test
     void aRunThatRequiresReviewStartsPendingAndTheAdminMayDecide() {
         this.requires("internal");
@@ -163,6 +165,8 @@ class RunReviewServiceTest {
             .containsEntry("required", Arrays.asList("internal", "customer"));
     }
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     @Test
     void aTenantUserReadsTheReviewOfTheirOwnJobsRunButMayNotDecide() {
         this.requires("internal");
@@ -309,6 +313,8 @@ class RunReviewServiceTest {
 
     // -------------------------------------------------------------------------------------------------------- re-run
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     @Test
     void aRejectionWithRerunQueuesTheJobAgainAndLinksTheNewRun() throws Exception {
         this.requires("internal");
@@ -331,6 +337,8 @@ class RunReviewServiceTest {
         verify(this.transactions).saveJobAuditLogs(eq(RERUN), contains("run " + RUN + "'s results were rejected"));
     }
 
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     @Test
     void aRejectionStandsWhenTheRerunIsRefused() throws Exception {
         this.requires("internal");

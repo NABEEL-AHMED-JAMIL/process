@@ -70,7 +70,7 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
     PipelineSummaryProjection summarise(@Param("allTenants") boolean allTenants, @Param("tenantId") long tenantId);
 
     /** Everything a platform admin sees -- every tenant's forms, in one list. */
-    public List<Pipeline> findAllByStatusNot(Status status);
+    List<Pipeline> findAllByStatusNot(Status status);
 
     /**
      * A tenant's own form definitions, and only those.
@@ -86,7 +86,7 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
      * 'Delete', so a rename of that enum constant is caught by the compiler here too instead of
      * silently drifting out of sync in a string only this method used to carry.
      */
-    public List<Pipeline> findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(Long tenantId, Status status);
+    List<Pipeline> findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(Long tenantId, Status status);
 
     /**
      * The form a pipeline should use for this tenant, if it has defined one.
@@ -96,16 +96,16 @@ public interface PipelineRepository extends JpaRepository<Pipeline, Long> {
      * "most pipelines have no form" case that already exists today, not a shared definition
      * borrowed from another tenant or a platform-wide default.
      */
-    public List<Pipeline> findAllByPipelineIdAndTenantIdAndStatusNot(String pipelineId, Long tenantId, Status status);
+    List<Pipeline> findAllByPipelineIdAndTenantIdAndStatusNot(String pipelineId, Long tenantId, Status status);
 
-    public Optional<Pipeline> findByPipelineKeyAndStatusNot(Long pipelineKey, Status status);
+    Optional<Pipeline> findByPipelineKeyAndStatusNot(Long pipelineKey, Status status);
 
     /** The pipelines that publish on one topic -- what the task screen offers once a topic is picked. */
-    public List<Pipeline> findAllBySourceTaskTypeIdAndStatusNotOrderByPipelineNameAsc(Long sourceTaskTypeId, Status status);
+    List<Pipeline> findAllBySourceTaskTypeIdAndStatusNotOrderByPipelineNameAsc(Long sourceTaskTypeId, Status status);
 
     /** The pipelines of many topics at once, for a pane that lists a profile's topics. */
-    public List<Pipeline> findAllBySourceTaskTypeIdInAndStatusNotOrderByPipelineNameAsc(Collection<Long> sourceTaskTypeIds, Status status);
+    List<Pipeline> findAllBySourceTaskTypeIdInAndStatusNotOrderByPipelineNameAsc(Collection<Long> sourceTaskTypeIds, Status status);
 
     /** How many pipelines still name a topic; a topic with any cannot be deleted. */
-    public long countBySourceTaskTypeIdAndStatusNot(Long sourceTaskTypeId, Status status);
+    long countBySourceTaskTypeIdAndStatusNot(Long sourceTaskTypeId, Status status);
 }

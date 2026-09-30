@@ -13,7 +13,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import process.model.dto.ObjectContentDto;
 import process.model.pojo.KafkaConnectionProfile;
-import process.model.service.StorageBrowserService;
 import process.security.TenantContext;
 import process.util.EncryptionUtil;
 

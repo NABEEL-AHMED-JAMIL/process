@@ -93,7 +93,8 @@ class WorkerCallbackRowSecurityPostgresTest {
     }
 
     /** The bean behind its @Transactional, as Spring hands it out (the tests build them by hand). */
-    @SuppressWarnings("unchecked")
+    // also drives the deprecated API the code under test still uses (QUALITY.md lists them)
+    @SuppressWarnings({"unchecked", "deprecation"})
     private static <T> T transactional(T bean) {
         ProxyFactory proxy = new ProxyFactory(bean);
         proxy.setProxyTargetClass(true);

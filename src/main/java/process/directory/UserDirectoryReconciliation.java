@@ -48,11 +48,17 @@ public class UserDirectoryReconciliation {
         private final Map<Long, Map<String, Long>> danglingAuthors = new TreeMap<>();
 
         public boolean isChecked() { return this.checked; }
+
         public String getReason() { return this.reason; }
+
         public Instant getOldestUpdatedAt() { return this.oldestUpdatedAt; }
+
         public List<Long> getRepaired() { return this.repaired; }
+
         public List<Long> getUnknownToIdentity() { return this.unknownToIdentity; }
+
         public List<Long> getBackfilled() { return this.backfilled; }
+
         public Map<Long, Map<String, Long>> getDanglingAuthors() { return this.danglingAuthors; }
 
         Report couldNotCheck(String why) {

@@ -9,12 +9,24 @@ import org.hibernate.annotations.Parameter;
 import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 
-import javax.persistence.*;
 import process.util.BusinessTime;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.OneToMany;
+import javax.persistence.CascadeType;
+import javax.persistence.FetchType;
+import javax.persistence.OrderBy;
 
 /**
  * A pipeline a task can run: its public id (what the worker routes on), the topic it publishes
@@ -46,7 +58,6 @@ public class Pipeline implements Audited {
 
     @Column(name = "updated_by")
     private Long updatedBy;
-
 
     @GenericGenerator(
         name = "pipelineSequenceGenerator",
@@ -109,42 +120,55 @@ public class Pipeline implements Audited {
     private List<PipelineField> fields = new ArrayList<>();
 
     public Long getPipelineKey() { return pipelineKey; }
+
     public void setPipelineKey(Long pipelineKey) { this.pipelineKey = pipelineKey; }
 
     public String getPipelineId() { return pipelineId; }
+
     public void setPipelineId(String pipelineId) { this.pipelineId = pipelineId; }
 
     public String getPipelineName() { return pipelineName; }
+
     public void setPipelineName(String pipelineName) { this.pipelineName = pipelineName; }
 
     public String getDescription() { return description; }
+
     public void setDescription(String description) { this.description = description; }
 
     public Long getTenantId() { return tenantId; }
+
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 
     public Long getSourceTaskTypeId() { return sourceTaskTypeId; }
+
     public void setSourceTaskTypeId(Long sourceTaskTypeId) { this.sourceTaskTypeId = sourceTaskTypeId; }
 
     public String getTopicName() { return topicName; }
+
     public void setTopicName(String topicName) { this.topicName = topicName; }
 
     public String getKafkaTopic() { return kafkaTopic; }
+
     public void setKafkaTopic(String kafkaTopic) { this.kafkaTopic = kafkaTopic; }
 
     public Status getStatus() { return status; }
+
     public void setStatus(Status status) { this.status = status; }
 
     public LocalDateTime getDateCreated() { return dateCreated; }
+
     public void setDateCreated(LocalDateTime dateCreated) { this.dateCreated = dateCreated; }
 
     public Long getCreatedBy() { return createdBy; }
+
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
 
     public List<PipelineField> getFields() { return fields; }
+
     public void setFields(List<PipelineField> fields) { this.fields = fields; }
 
     public String getCreatedByName() { return createdByName; }
+
     public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
 
     @Override

@@ -10,13 +10,22 @@ public class ArchiveEntryDto {
     private long lastModified;
 
     public String getName() { return name; }
+
     public void setName(String name) { this.name = name; }
+
     public boolean isDirectory() { return directory; }
+
     public void setDirectory(boolean directory) { this.directory = directory; }
+
     public long getSize() { return size; }
+
     public void setSize(long size) { this.size = size; }
+
     public long getCompressedSize() { return compressedSize; }
+
     public void setCompressedSize(long compressedSize) { this.compressedSize = compressedSize; }
+
     public long getLastModified() { return lastModified; }
+
     public void setLastModified(long lastModified) { this.lastModified = lastModified; }
 }

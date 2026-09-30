@@ -1,7 +1,6 @@
 package process.util;
 
 import process.identity.IdentityInProcess;
-import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.barco.platform.error.PlatformException;
 import org.barco.platform.security.JwtVerifier;
@@ -15,6 +14,12 @@ import javax.crypto.SecretKey;
 import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtBuilder;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.JwsHeader;
+import io.jsonwebtoken.JwtException;
 
 /**
  * Mints and reads Identity's tokens.

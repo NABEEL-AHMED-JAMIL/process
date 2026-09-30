@@ -321,6 +321,8 @@ class JobOwnershipPostgresTest {
      * A statistic that only counts is read as "the jobs whose runs it counted": each job has exactly one run in the
      * hour, so a count of n is n jobs, and it is compared as the first n of the expected ids.
      */
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
     private Map<String, Set<Long>> everyListAndStatistic() throws Exception {
         Map<String, Set<Long>> seen = new LinkedHashMap<>();
 

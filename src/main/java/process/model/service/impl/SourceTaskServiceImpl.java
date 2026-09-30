@@ -3,7 +3,6 @@ package process.model.service.impl;
 import process.identity.WorkspaceNames;
 import process.settings.ConfigReferences;
 import org.apache.poi.ss.usermodel.Row;
-import process.util.BusinessTime;
 import process.util.UserNameResolver;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -13,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import process.model.dto.*;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.enums.Status;
@@ -46,14 +44,29 @@ import javax.persistence.PersistenceContext;
 import java.io.ByteArrayOutputStream;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import static process.util.ProcessUtil.*;
 import static process.util.ProcessUtil.ERROR;
 import java.util.function.Consumer;
 import process.notifications.Notices;
 import process.notifications.NotificationPort;
+import process.model.dto.ResponseDto;
+import process.model.dto.SourceTaskDto;
+import process.model.dto.SearchTextDto;
+import process.model.dto.FileUploadDto;
+import process.model.dto.SourceTaskTypeDto;
+import java.util.Optional;
+import java.util.Objects;
+import java.util.ArrayList;
+import java.util.Map;
+import process.model.dto.SourceJobDto;
+import static process.util.ProcessUtil.formatter;
+import static process.util.ProcessUtil.isNull;
+import java.util.Collections;
+import java.util.HashMap;
+import static process.util.ProcessUtil.SUCCESS;
+import static process.util.ProcessUtil.SHEET_NAME;
+import process.model.dto.ConfigurationMakerRequest;
 
 /**
  * @author Nabeel Ahmed
@@ -96,7 +109,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private static final String HOME_PAGES = TaskReference.HOME_PAGE;
 
     private static final String TASK_GROUPS = TaskReference.TASK_GROUP;
-
 
     public SourceTaskServiceImpl(BulkExcel bulkExcel,
         QueryService queryService,
@@ -226,12 +238,12 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     }
 
     private final String ListSourceTask = "ListSourceTask";
-    private final String SOURCE_TASK_HEADER[] = {
+    private final String[] SOURCE_TASK_HEADER = {
         "Task Id", "Task Name", "Task Payload",
         "Task Status", "PipelineId", "HomePage",
         "ServiceName", "QueueTopicPartition",
     };
-    private final String UPLOAD_SOURCE_TASK_HEADER[] = {
+    private final String[] UPLOAD_SOURCE_TASK_HEADER = {
         "TaskTypeId", "Task Name", "Task Payload", "PipelineId", "HomePage"
     };
 
@@ -437,6 +449,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
     }
 
+    // EnumConverter is deprecated for new code; these legacy task screens still use it until they are retired.
+    @SuppressWarnings("deprecation")
     @Override
     public ResponseDto listSourceTask(String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
@@ -449,7 +463,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             false, startDate, endDate, columnName, order, searchTextDto), paging);
             if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
                 List<SourceTaskDto> sourceTaskDtoList = new ArrayList<>();
-                for(Object[] obj : result) {
+                for (Object[] obj : result) {
                     int index = 0;
                     SourceTaskDto sourceTaskDto = new SourceTaskDto();
                     if (!ProcessUtil.isNull(obj[index])) {
@@ -544,10 +558,12 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return responseDto;
     }
 
+    // EnumConverter is deprecated for new code; these legacy task screens still use it until they are retired.
+    @SuppressWarnings("deprecation")
     @Override
     public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
-        ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());;
+        ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         /*
          * Paged and counted the way listSourceTask is. The endpoint has always declared page,
          * limit, columnName and order, and this method took the Pageable built from them and
@@ -568,7 +584,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     columnName, order, searchTextDto), paging);
             if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
                 List<SourceJobDto> sourceJobDtoList = new ArrayList<>();
-                for(Object[] obj : result) {
+                for (Object[] obj : result) {
                     int index = 0;
                     SourceJobDto sourceJobDto = new SourceJobDto();
                     if (!ProcessUtil.isNull(obj[index])) {
@@ -743,7 +759,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     }
 
     @Override
-    public ResponseDto uploadSourceTask(FileUploadDto object) throws Exception {
+    public ResponseDto uploadSourceTask(FileUploadDto<?> object) throws Exception {
         logger.info("### Start bulk uploadSourceTask file!");
         if (!object.getFile().getContentType().equalsIgnoreCase(SHEET_NAME)) {
             logger.info("File Type " + object.getFile().getContentType());
@@ -759,12 +775,12 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             return new ResponseDto(ERROR,  "You uploaded empty file.");
         }
         XSSFSheet sheet = workbook.getSheet(ListSourceTask);
-        if(isNull(sheet)) {
+        if (isNull(sheet)) {
             return new ResponseDto(ERROR, "Sheet not found with (ListSourceTask)");
         } else if (sheet.getLastRowNum() < 1) {
             return new ResponseDto(ERROR,  "You can't upload empty file.");
-        } else if(sheet.getLastRowNum() > 1001) {
-            return new ResponseDto(ERROR,"File support 1000 rows at a time.");
+        } else if (sheet.getLastRowNum() > 1001) {
+            return new ResponseDto(ERROR, "File support 1000 rows at a time.");
         }
         List<SourceTaskValidation> sourceTaskValidations = new ArrayList<>();
         List<String> errors = new ArrayList<>();

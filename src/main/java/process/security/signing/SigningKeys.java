@@ -61,6 +61,7 @@ public class SigningKeys implements PublicKeys {
         }
 
         public String getKid() { return this.kid; }
+
         public PrivateKey getPrivateKey() { return this.privateKey; }
     }
 

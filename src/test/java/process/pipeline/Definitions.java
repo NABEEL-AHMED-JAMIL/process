@@ -54,6 +54,9 @@ public final class Definitions {
         return config(keyValues);
     }
 
+    // The array is only copied into a new list; nothing is stored in it.
+    @SafeVarargs
+    @SuppressWarnings("varargs")
     public static PipelineDefinition.Step sample(String key, Map<String, Object>... rows) {
         return step(key, "sample", config("rows", new ArrayList<>(Arrays.asList(rows))));
     }

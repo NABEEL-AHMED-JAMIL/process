@@ -12,7 +12,6 @@ import process.media.MediaPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -27,13 +26,22 @@ import java.io.ByteArrayInputStream;
 import java.net.InetAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
 import java.util.regex.Pattern;
 
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
+import java.util.List;
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Base64;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpEntity;
 
 /**
  * Turns a report grid into a file, and puts it where the caller asked.
@@ -129,7 +137,8 @@ public class ReportExportServiceImpl {
         Map<Long, IdentityPort.Person> people;
         Map<Long, String> workspaces = new HashMap<>();
         try {
-            Set<Long> ownerIds = new HashSet<>(), tenantIds = new HashSet<>();
+            Set<Long> ownerIds = new HashSet<>();
+            Set<Long> tenantIds = new HashSet<>();
             for (Object[] r : result) {
                 if (r[2] != null) ownerIds.add(Long.valueOf(String.valueOf(r[2])));
                 if (r.length > 7 && r[7] != null) tenantIds.add(Long.valueOf(String.valueOf(r[7])));
@@ -144,12 +153,16 @@ public class ReportExportServiceImpl {
         }
 
         // dictionaries per dimension, rows as indexes into them
-        List<String> tasks = new ArrayList<>(), statuses = new ArrayList<>(),
-                     owners = new ArrayList<>(), days = new ArrayList<>(),
-                     tenants = new ArrayList<>();
-        Map<String,Integer> ti = new HashMap<>(), si = new HashMap<>(),
-                            oi = new HashMap<>(), di = new HashMap<>(),
-                            ni = new HashMap<>();
+        List<String> tasks = new ArrayList<>();
+        List<String> statuses = new ArrayList<>();
+        List<String> owners = new ArrayList<>();
+        List<String> days = new ArrayList<>();
+        List<String> tenants = new ArrayList<>();
+        Map<String, Integer> ti = new HashMap<>();
+        Map<String, Integer> si = new HashMap<>();
+        Map<String, Integer> oi = new HashMap<>();
+        Map<String, Integer> di = new HashMap<>();
+        Map<String, Integer> ni = new HashMap<>();
         List<List<Object>> rows = new ArrayList<>();
         for (Object[] r : result) {
             rows.add(Arrays.asList(
@@ -181,7 +194,7 @@ public class ReportExportServiceImpl {
         return new ResponseDto(SUCCESS, message, data);
     }
 
-    private static int intern(List<String> values, Map<String,Integer> index, String value) {
+    private static int intern(List<String> values, Map<String, Integer> index, String value) {
         Integer at = index.get(value);
         if (at != null) return at;
         index.put(value, values.size());
@@ -386,7 +399,12 @@ public class ReportExportServiceImpl {
     }
 
     private boolean isNumeric(String text) {
-        try { Double.parseDouble(text.trim()); return true; } catch (Exception ex) { return false; }
+        try {
+            Double.parseDouble(text.trim());
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     // ---- helpers --------------------------------------------------------------------------

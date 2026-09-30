@@ -14,7 +14,33 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static process.tenancy.CoreProbeFixture.*;
+import static process.tenancy.CoreProbeFixture.A_PIPELINE_ID;
+import static process.tenancy.CoreProbeFixture.USER_OF_A;
+import static process.tenancy.CoreProbeFixture.ADMIN_OF_A;
+import static process.tenancy.CoreProbeFixture.REFUSED;
+import static process.tenancy.CoreProbeFixture.B_TASK;
+import static process.tenancy.CoreProbeFixture.A_TASK;
+import static process.tenancy.CoreProbeFixture.A_TYPE;
+import static process.tenancy.CoreProbeFixture.B_TYPE;
+import static process.tenancy.CoreProbeFixture.B_HOME;
+import static process.tenancy.CoreProbeFixture.B_GROUP;
+import static process.tenancy.CoreProbeFixture.B;
+import static process.tenancy.CoreProbeFixture.B_PIPELINE;
+import static process.tenancy.CoreProbeFixture.B_PIPELINE_ID;
+import static process.tenancy.CoreProbeFixture.taskSheet;
+import static process.tenancy.CoreProbeFixture.SUCCEEDED;
+import static process.tenancy.CoreProbeFixture.A;
+import static process.tenancy.CoreProbeFixture.GONE;
+import static process.tenancy.CoreProbeFixture.UNKNOWN;
+import static process.tenancy.CoreProbeFixture.PLATFORM;
+import static process.tenancy.CoreProbeFixture.C;
+import static process.tenancy.CoreProbeFixture.DEFAULT_WS;
+import static process.tenancy.CoreProbeFixture.NO_WORKSPACE;
+import static process.tenancy.CoreProbeFixture.tenantlessAdmin;
+import static process.tenancy.CoreProbeFixture.PLATFORM_PIPELINE_ID;
+import static process.tenancy.CoreProbeFixture.PLATFORM_PIPELINE;
+import static process.tenancy.CoreProbeFixture.DEFAULT_TYPE;
+import process.tenancy.CoreProbeFixture.Caller;
 
 /**
  * MIG-166's CI cross-tenant probe for Core, the definitions jobs are made from: tasks (/sourceTask.json) and the

@@ -166,7 +166,7 @@ class SourceTaskConfigRuleTest {
         return task;
     }
 
-    private static FileUploadDto upload(String payload) throws Exception {
+    private static FileUploadDto<?> upload(String payload) throws Exception {
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             XSSFSheet sheet = workbook.createSheet("ListSourceTask");
             String[] header = {"TaskTypeId", "Task Name", "Task Payload", "PipelineId", "HomePage"};
@@ -181,7 +181,7 @@ class SourceTaskConfigRuleTest {
             row.createCell(3).setCellValue("F1");
             row.createCell(4).setCellValue("");
             workbook.write(out);
-            FileUploadDto dto = new FileUploadDto();
+            FileUploadDto<?> dto = new FileUploadDto<>();
             dto.setFile(new MockMultipartFile("file", "tasks.xlsx", ProcessUtil.SHEET_NAME, out.toByteArray()));
             return dto;
         }
@@ -202,7 +202,7 @@ class SourceTaskConfigRuleTest {
      */
     @Test
     void aFileThatIsNotReallyASpreadsheetIsRefusedWithAReason() throws Exception {
-        FileUploadDto dto = new FileUploadDto();
+        FileUploadDto<?> dto = new FileUploadDto<>();
         dto.setFile(new MockMultipartFile("file", "sheet.xlsx", ProcessUtil.SHEET_NAME, "id,name\n1,orders\n".getBytes()));
 
         ResponseDto response = this.service.uploadSourceTask(dto);
