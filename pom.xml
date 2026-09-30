@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.3.2.RELEASE</version>
+        <version>2.7.18</version>
         <relativePath/>
     </parent>
 
@@ -25,18 +25,13 @@
         -->
         <test.timezone>UTC</test.timezone>
         <!--
-          Bytecode level, not the JDK you build or run on: any JDK from 17 up compiles and runs
-          this. It has to stay at 1.8 while the parent is Spring Boot 2.3.2, whose bundled ASM
-          reads class files up to Java 14. At 17 the build compiled cleanly and then failed at
-          spring-boot-maven-plugin:repackage with "Unsupported class file major version 61",
-          so no deployable jar could be made; and Spring's component scan at startup reads
-          the same class files, so the application would not have started either. Nothing in
-          the source needs a newer level: a clean build at 1.8 packages without change.
-          Moving to 17 means moving the parent to Spring Boot 2.7 first.
+          Bytecode level 17, the JDK the image ships (MIG-204). Until then it had to stay at 1.8:
+          Spring Boot 2.3.2's bundled ASM reads class files only up to Java 14, so at 17 the build
+          failed at spring-boot-maven-plugin:repackage ("Unsupported class file major version 61")
+          and component scan would have failed the same way at startup. Spring Boot 2.7 reads 17.
         -->
-        <java.version>1.8</java.version>
+        <java.version>17</java.version>
         <swagger.version>2.9.2</swagger.version>
-        <tomcat.version>9.0.83</tomcat.version>
     </properties>
 
     <dependencies>
@@ -100,7 +95,6 @@
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
-            <version>2.5.12.RELEASE</version>
         </dependency>
 
         <dependency>
