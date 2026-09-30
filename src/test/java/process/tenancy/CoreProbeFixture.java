@@ -4,7 +4,14 @@ import process.ai.AiModelChoiceService;
 import process.ai.AiPort;
 import process.ai.JdbcModelChoiceStore;
 import process.api.AiModelChoiceRestApi;
+import process.api.FormRestApi;
+import process.api.FormSubmissionRestApi;
 import process.api.InboxTriggerRestApi;
+import process.forms.FormInbox;
+import process.forms.FormService;
+import process.forms.FormSubmissionService;
+import process.forms.JdbcFormStore;
+import process.pipeline.backing.BucketStore;
 import process.inbox.InboxTriggerService;
 import process.inbox.JdbcInboxTriggerStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -405,6 +412,11 @@ final class CoreProbeFixture implements AutoCloseable {
     final FileChatRestApi fileChat;
     final AiModelChoiceRestApi modelChoice;
     final InboxTriggerRestApi inboxTriggers;
+    /** Wave 5 Forms (lite): the workspace inbox a submission is written to, and the bucket it is written through. */
+    final FormInbox formInbox = mock(FormInbox.class);
+    final BucketStore formBuckets = mock(BucketStore.class);
+    final FormRestApi forms;
+    final FormSubmissionRestApi formSubmissions;
 
     private CoreProbeFixture(String prefix) throws Exception {
         this.db = ScratchPostgres.create(prefix);
@@ -498,6 +510,11 @@ final class CoreProbeFixture implements AutoCloseable {
             new JdbcModelChoiceStore(this.db.appJdbc()), jobs));
         this.inboxTriggers = new InboxTriggerRestApi(new InboxTriggerService(new JdbcInboxTriggerStore(this.db.appJdbc()), this.engine,
             transactions, this.jpa.transactionManager()));
+        FormService formService = new FormService(new JdbcFormStore(this.db.appJdbc()), transactions);
+        FormSubmissionService formSubmissionService = new FormSubmissionService(new JdbcFormStore(this.db.appJdbc()), formService,
+            this.formInbox, this.formBuckets, this.engine, transactions, this.jpa.transactionManager());
+        this.forms = new FormRestApi(formService, formSubmissionService);
+        this.formSubmissions = new FormSubmissionRestApi(formSubmissionService);
     }
 
     /** Skips the calling class when no database is configured, as every ScratchPostgres test does. */
@@ -694,7 +711,8 @@ final class CoreProbeFixture implements AutoCloseable {
     void reset() {
         this.leaks.clear();
         clearInvocations(this.engine, this.bulkAction, this.notifications, this.jobMail, this.openSearch, this.agents, this.media,
-            this.kafkaClients, this.trustedStorage, this.storageDirectory, this.rag, this.embeddings, this.indexLock, this.ai);
+            this.kafkaClients, this.trustedStorage, this.storageDirectory, this.rag, this.embeddings, this.indexLock, this.ai,
+            this.formInbox, this.formBuckets);
         this.storage.seen.clear();
         this.storage.stored.clear();
     }

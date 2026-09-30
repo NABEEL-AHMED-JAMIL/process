@@ -28,6 +28,10 @@ public class PageKeyTest {
         assertThat(PageKey.pagesGating("/sourceTask.json/list")).containsExactlyInAnyOrder(PageKey.JOBS, PageKey.TASKS);
         assertThat(PageKey.pagesGating("/analyticsWorkspace.json/list"))
             .containsExactlyInAnyOrder(PageKey.ANALYTICS, PageKey.ANALYTICS_DASHBOARDS);
+        // Wave 5 Forms (lite): building and filling in is the page 'forms'; what they collected is 'form-submissions'.
+        assertThat(PageKey.pagesGating("/form.json/submit")).containsExactly(PageKey.FORMS);
+        assertThat(PageKey.pagesGating("/formSubmission.json/export")).containsExactly(PageKey.FORM_SUBMISSIONS);
+        assertThat(PageKey.fromKey("form-submissions")).contains(PageKey.FORM_SUBMISSIONS);
     }
 
     @Test

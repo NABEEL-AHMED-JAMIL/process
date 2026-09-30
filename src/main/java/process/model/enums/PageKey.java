@@ -54,7 +54,14 @@ public enum PageKey {
     // Prompts replaced AI Agents on 2026-09-18 (V44 renames the grants). /aiAgent.json stays in
     // the group: the file chat and the job assistant still read prompts through its aliases.
     AI_PROMPTS("ai-prompts", "Prompts", "Assistants", "/assistants/prompts",
-        "/aiPrompt.json", "/aiAgent.json");
+        "/aiPrompt.json", "/aiAgent.json"),
+    // Wave 5 Forms (lite): Core's own forms (/form.json: build, read, fill in) and what they collected
+    // (/formSubmission.json). Identity-service's catalogue has had both keys since MIG-267; they gate these groups
+    // once its PageKey names the same prefixes (HttpIdentity asks it only about a path this catalogue gates).
+    FORMS("forms", "Form builder", "Forms", "/forms/builder",
+        "/form.json"),
+    FORM_SUBMISSIONS("form-submissions", "Submissions", "Forms", "/forms/submissions",
+        "/formSubmission.json");
     // BILLING was retired by MIG-34. It promised that an access profile could withhold Cost & usage
     // from a tenant admin, and nothing could: admins hold no profile, page access is evaluated for
     // tenant users only, and /billing.json -- billing-service's now, behind the gateway -- is

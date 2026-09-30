@@ -52,6 +52,7 @@ class ManagementModeMatrixTest {
     /** Build or run: refused to the customer's own people in a MANAGED workspace. */
     static final Set<String> BUILDER_ACTIONS = new TreeSet<>(Arrays.asList(
         "AiModelChoiceRestApi.saveSchedule", "AiModelChoiceRestApi.saveStepOptions",
+        "FormRestApi.save", "FormRestApi.status",
         "InboxTriggerRestApi.delete", "InboxTriggerRestApi.save",
         "KafkaConnectionProfileRestApi.addProfile", "KafkaConnectionProfileRestApi.clearDefault",
         "KafkaConnectionProfileRestApi.deleteProfile", "KafkaConnectionProfileRestApi.setAsDefault",
@@ -77,6 +78,9 @@ class ManagementModeMatrixTest {
         String read = "a read sent as a POST: it changes nothing";
         CUSTOMERS_IN_EITHER_MODE.put("RunReviewRestApi.decide", "review: the customer approves or rejects a run's output (MIG-237)");
         CUSTOMERS_IN_EITHER_MODE.put("ReportRestApi.export", "download");
+        // Wave 5 Forms (lite): filling in a form the workspace was given is data entry, not building -- even when the form
+        // starts a job, as Run now and the inbox upload do for an existing schedule.
+        CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.submit", "filling in a form: data entry, which may start the job the form names");
         // Owner 2026-09-29: running an existing schedule is not building it; a managed customer reruns with a new file.
         CUSTOMERS_IN_EITHER_MODE.put("SourceJobRestApi.runSourceJob", "running an existing schedule (Run now)");
         CUSTOMERS_IN_EITHER_MODE.put("AiModelChoiceRestApi.runWith", "running an existing schedule once with other inputs (Run with)");

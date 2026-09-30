@@ -1,5 +1,6 @@
 package process.contract;
 
+import process.forms.FormFields;
 import process.pipeline.DefinitionException;
 import process.config.KafkaRouteUnresolvedException;
 import org.barco.platform.contract.EnvelopeContract;
@@ -75,6 +76,9 @@ class EnvelopeContractTest extends EnvelopeContract {
             + "validate is answered in words, every problem at its path (MIG-230)");
         internal.put(declared("process.pipeline.StepEngine$StepFailure"), "carries a step task's checked exception off its try "
             + "thread; the engine unwraps it into the step's error and never lets it out (MIG-230)");
+        internal.put(FormFields.Refused.class, "caught in FormService.save: a form definition refused in words (Wave 5 Forms lite)");
+        internal.put(FormFields.Unanswered.class, "caught in FormSubmissionService.submit: answers refused in words, each at its "
+            + "field (Wave 5 Forms lite)");
         return internal;
     }
 

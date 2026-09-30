@@ -168,6 +168,30 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         return jobQueue;
     }
 
+    /**
+     * Wave 5 Forms (lite): a form's submission starts its linked job -- one run, with the submission (a JSON file in the
+     * workspace's inbox bucket) as its input, exactly as an inbox arrival's run has its file (input_bucket, input_key), so
+     * a step pipeline's Read CSV/JSON/Parquet with no bucket and key reads it. The caller has checked Run now's rules; the
+     * one-in-flight index still refuses a racing second run (OneRunInFlight).
+     */
+    public JobQueue addFormJobInQueue(SourceJob sourceJob, String inputBucket, String inputKey, String formName, long submissionId) {
+        this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
+            BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue: a form was submitted.", false);
+        jobQueue.setRunManual(false);
+        jobQueue.setInputBucket(inputBucket);
+        jobQueue.setInputKey(inputKey);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        logger.info("Run {} of job {} queued by form submission {} ({}).", jobQueue.getJobQueueId(), sourceJob.getJobId(), submissionId,
+            inputKey);
+        this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
+            "Job %s now in the queue: submission %d of the form '%s' (%s/%s).", sourceJob.getJobId(), submissionId, formName,
+            inputBucket, inputKey));
+        this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
+        return jobQueue;
+    }
+
     public void skipManualJobInQueue(Scheduler scheduler) {
 
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(scheduler.getJobId(),
