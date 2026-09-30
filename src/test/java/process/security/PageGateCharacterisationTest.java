@@ -77,7 +77,9 @@ class PageGateCharacterisationTest {
         MockHttpServletResponse response = this.call("/report.json/fetchReports");
 
         assertThat(response.getStatus()).isEqualTo(403);
-        assertThat(response.getContentType()).isEqualTo("application/json");
+        // With the charset, as Tomcat has always sent it. Spring 5.3's mock response (Boot 2.7, MIG-204) folds a
+        // later setCharacterEncoding into the Content-Type the way the container does; 5.2's left it off.
+        assertThat(response.getContentType()).isEqualTo("application/json;charset=UTF-8");
         assertThat(response.getCharacterEncoding()).isEqualTo("UTF-8");
         // No data, no paging, no stack, no path: the two fields every refusal carries.
         assertThat(response.getContentAsString())

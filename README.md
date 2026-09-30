@@ -34,7 +34,7 @@ Concurrency comes from Spring's own scheduling pool, sized by `spring.task.sched
 
 | | |
 |---|---|
-| **Java / Spring Boot 2.3.2** | Core engine. Java 8 source level, JDK 17 runtime |
+| **Java 17 / Spring Boot 2.7.18** | Core engine. Java 17 bytecode, JDK 17 runtime (MIG-204) |
 | **Apache Kafka** (`cp-kafka` 7.5.0 + ZooKeeper) | Messaging and stream processing |
 | **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`, V1.0 → V25.0) |
 | **Redis** | Caching |
