@@ -476,7 +476,7 @@ final class CoreProbeFixture implements AutoCloseable {
         JdbcTaskOverrideStore taskSwitches = new JdbcTaskOverrideStore(this.db.appJdbc());
         TaskRegistry registry = new TaskRegistry(stepTasks, taskSwitches);
         this.pipelineSteps = new PipelineDefinitionRestApi(new PipelineDefinitionService(pipelineRows,
-            new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(registry), registry, taskSwitches));
+            new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(registry), registry, taskSwitches, names));
         this.runDatasets = new FileDatasetStore(Files.createTempDirectory("core-probe-datasets").toString());
         JdbcRunReviewStore reviewRows = new JdbcRunReviewStore(this.db.appJdbc());
         RunReviews runReviews = new RunReviews(new JdbcStepStore(this.db.appJdbc()), new PipelineDefinitionStore(this.db.appJdbc()),

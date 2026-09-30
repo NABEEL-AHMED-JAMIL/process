@@ -13,11 +13,14 @@ import process.pipeline.registry.TaskRegistry;
 import process.pipeline.registry.TaskSpec;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
+import process.util.UserNameResolver;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -47,14 +50,16 @@ public class PipelineDefinitionService {
     private final DefinitionValidator validator;
     private final TaskRegistry registry;
     private final TaskOverrideStore overrides;
+    private final UserNameResolver names;
 
     public PipelineDefinitionService(PipelineRepository pipelines, PipelineDefinitionStore store, DefinitionValidator validator,
-        TaskRegistry registry, TaskOverrideStore overrides) {
+        TaskRegistry registry, TaskOverrideStore overrides, UserNameResolver names) {
         this.pipelines = pipelines;
         this.store = store;
         this.validator = validator;
         this.registry = registry;
         this.overrides = overrides;
+        this.names = names;
     }
 
     /** A draft to check or save: the definition's text, as JSON or YAML ("json", "yaml", or null to tell by its shape). */
@@ -90,11 +95,16 @@ public class PipelineDefinitionService {
         payload.put("pipelineId", pipeline.get().getPipelineId());
         payload.put("stored", latest.isPresent());
         payload.put("version", latest.map(stored -> stored.version).orElse(null));
-        payload.put("versions", this.store.versions(pipeline.get().getPipelineKey()).stream().map(stored -> {
+        List<PipelineDefinitionStore.Stored> versions = this.store.versions(pipeline.get().getPipelineKey());
+        List<Long> savers = versions.stream().map(stored -> stored.createdBy).filter(Objects::nonNull).distinct()
+            .collect(Collectors.toList());
+        Map<Long, String> byId = savers.isEmpty() ? Collections.emptyMap() : this.names.namesFor(savers);
+        payload.put("versions", versions.stream().map(stored -> {
             Map<String, Object> version = new LinkedHashMap<>();
             version.put("version", stored.version);
             version.put("pipelineDefinitionId", stored.id);
             version.put("createdBy", stored.createdBy);
+            version.put("createdByName", stored.createdBy == null ? null : byId.get(stored.createdBy));
             version.put("dateCreated", stored.dateCreated == null ? null : stored.dateCreated.toString());
             return version;
         }).collect(Collectors.toList()));

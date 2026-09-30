@@ -11,7 +11,9 @@ import process.model.repository.PipelineRepository;
 import process.pipeline.registry.InMemoryTaskOverrideStore;
 import process.pipeline.registry.TaskRegistry;
 import process.security.TenantContext;
+import process.util.UserNameResolver;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -38,8 +40,9 @@ class PipelineDefinitionServiceTest {
     private final StepTasks tasks = Definitions.builtInTasks();
     private final InMemoryTaskOverrideStore overrides = new InMemoryTaskOverrideStore();
     private final TaskRegistry registry = new TaskRegistry(this.tasks, this.overrides);
+    private final UserNameResolver names = mock(UserNameResolver.class);
     private final PipelineDefinitionService service = new PipelineDefinitionService(this.pipelines, this.store,
-        new DefinitionValidator(this.registry), this.registry, this.overrides);
+        new DefinitionValidator(this.registry), this.registry, this.overrides, this.names);
 
     @BeforeEach
     void signIn() {
@@ -118,6 +121,27 @@ class PipelineDefinitionServiceTest {
     void twoSavesAtOnceAnswerTheLoserInWords() {
         when(this.store.save(eq(KEY), anyString(), any())).thenThrow(new DuplicateKeyException("ux_pipeline_definition_version"));
         assertThat(this.service.save(draft(GOOD)).getMessage()).startsWith("Someone else saved this pipeline's definition");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void eachVersionNamesWhoSavedIt() {
+        PipelineDefinitionStore.Stored second = new PipelineDefinitionStore.Stored();
+        second.version = 2;
+        second.createdBy = 4537L;
+        PipelineDefinitionStore.Stored first = new PipelineDefinitionStore.Stored();
+        first.version = 1;
+        PipelineDefinitionStore.Stored gone = new PipelineDefinitionStore.Stored();
+        gone.version = 0;
+        gone.createdBy = 12L;
+        when(this.store.versions(KEY)).thenReturn(Arrays.asList(second, first, gone));
+        when(this.names.namesFor(any())).thenReturn(Collections.singletonMap(4537L, "Claude Demo Admin"));
+
+        Map<String, Object> payload = (Map<String, Object>) this.service.read(KEY).getData();
+        List<Map<String, Object>> versions = (List<Map<String, Object>>) payload.get("versions");
+
+        assertThat(versions).extracting(v -> v.get("createdByName")).containsExactly("Claude Demo Admin", null, null);
+        assertThat(versions).extracting(v -> v.get("createdBy")).containsExactly(4537L, null, 12L);
     }
 
     @Test
