@@ -10,11 +10,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import process.forms.FormSaveRequest;
 import process.forms.FormService;
 import process.forms.FormStatusRequest;
 import process.forms.FormSubmissionService;
 import process.forms.FormSubmitRequest;
+
+import java.io.IOException;
 
 /**
  * Wave 5 Forms (lite): a workspace's forms, built by its administrators and filled in by its members -- inside the
@@ -27,6 +30,8 @@ import process.forms.FormSubmitRequest;
  *   <li>GET form.json/linkableJobs -- the jobs a form may start (an administrator's);</li>
  *   <li>POST form.json/save -- create or replace a form (an administrator's; a builder action);</li>
  *   <li>POST form.json/status {formId, status} -- Draft, Active or Archived (an administrator's; a builder action);</li>
+ *   <li>POST form.json/upload (multipart: formId, field, file) -- a file or drawn signature for a form's field, before it
+ *       is sent (MIG-277); the answer names it by uploadId. Data entry, as submit.</li>
  *   <li>POST form.json/submit {formId, answers} -- fill it in; when the form names a job, the submission starts it
  *       (FormSubmissionService). Every member's, in either management mode: it is data entry, not building.</li>
  * </ul>
@@ -72,6 +77,12 @@ public class FormRestApi {
     @RequestMapping(value = "/form.json/status", method = RequestMethod.POST)
     public ResponseEntity<?> status(@RequestBody FormStatusRequest request) {
         return new ResponseEntity<>(this.forms.status(request), HttpStatus.OK);
+    }
+
+    @RequestMapping(value = "/form.json/upload", method = RequestMethod.POST)
+    public ResponseEntity<?> upload(@RequestParam Long formId, @RequestParam String field, @RequestParam("file") MultipartFile file)
+        throws IOException {
+        return new ResponseEntity<>(this.submissions.upload(formId, field, file.getOriginalFilename(), file.getBytes()), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/form.json/submit", method = RequestMethod.POST)

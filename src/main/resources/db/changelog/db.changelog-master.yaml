@@ -180,3 +180,7 @@ databaseChangeLog:
   # the run a submission started), guarded as V181. Expand-only: two new tables.
   - include:
       file: db/changelog/yaml/V192.0-forms-lite.yaml
+  # V193: MIG-277 -- the fields at each form version (form_version) and the files and signatures a form collects
+  # (form_upload); guarded as V181. Expand-only: two new tables.
+  - include:
+      file: db/changelog/yaml/V193.0-form-uploads.yaml

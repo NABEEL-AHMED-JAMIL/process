@@ -31,8 +31,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -199,5 +202,49 @@ class FormsPostgresTest {
 
         TenantContext.set(A, "TENANT_USER", 62L, "nora@clinic.example");
         assertThat(this.app.queryForObject("SELECT count(*) FROM form_submission", Long.class)).isEqualTo(1L);
+    }
+
+    // ---- MIG-277 -----------------------------------------------------------------------------------------------
+
+    @Test
+    void everySaveKeepsItsVersionsFieldsAndASubmissionIsShownWithItsOwn() {
+        long formId = woundForm(A, null);
+        submitAsMember(A, formId);
+        TenantContext.set(A, "TENANT_ADMIN", 61L, "admin@clinic.example");
+        List<FormField> fewer = new ArrayList<>(FormFieldsTest.woundIntake());
+        fewer.remove(6);
+        assertThat(this.forms.save(new FormSaveRequest(formId, "Wound intake", null, FormStore.ACTIVE, fewer, null)).getStatus())
+            .isEqualTo(SUCCESS);
+
+        assertThat(this.sql.queryForList("SELECT version FROM form_version WHERE form_id = ? ORDER BY version", Integer.class, formId))
+            .containsExactly(1, 2);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) this.submissions.list(formId, 10).getData();
+        assertThat((List<?>) rows.get(0).get("fields")).as("version 1 had seven fields").hasSize(7);
+        assertThat(new JdbcFormStore(this.app).fieldsAt(A, formId, 2).get()).hasSize(6);
+    }
+
+    @Test
+    void aLookupReadsDistinctAnswersNewestFirstAndAnUploadIsTakenOnceUnderRowSecurity() {
+        long formId = woundForm(A, null);
+        submitAsMember(A, formId);
+        submitAsMember(A, formId);
+        TenantContext.set(A, "TENANT_USER", 62L, "nora@clinic.example");
+        JdbcFormStore store = new JdbcFormStore(this.app);
+        assertThat(store.answerValues(A, formId, "patient_id", 10)).containsExactly("P-00017");
+        assertThat(store.answerValues(A, formId, "length_cm", 10)).containsExactly("2.5");
+
+        long upload = store.createUpload(A, formId, "patient_id", 62L, "a.png", "image/png", 10, "wound-inbox", "intake/x.png");
+        assertThat(store.openUpload(A, formId, "patient_id", 62L, upload)).isPresent();
+        assertThat(store.openUpload(A, formId, "patient_id", 63L, upload)).as("someone else's").isEmpty();
+        long submission = this.sql.queryForObject("SELECT max(submission_id) FROM form_submission WHERE form_id = ?", Long.class, formId);
+        store.claimUploads(A, submission, Collections.singletonList(upload));
+        assertThat(store.openUpload(A, formId, "patient_id", 62L, upload)).as("taken").isEmpty();
+        assertThatThrownBy(() -> store.claimUploads(A, submission, Collections.singletonList(upload)))
+            .isInstanceOf(IllegalStateException.class);
+
+        TenantContext.set(B, "TENANT_ADMIN", 71L, "bella@bravo.example");
+        assertThat(this.app.queryForObject("SELECT count(*) FROM form_upload", Long.class)).isZero();
+        assertThat(this.app.queryForObject("SELECT count(*) FROM form_version", Long.class)).isZero();
     }
 }

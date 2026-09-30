@@ -81,6 +81,7 @@ class ManagementModeMatrixTest {
         // Wave 5 Forms (lite): filling in a form the workspace was given is data entry, not building -- even when the form
         // starts a job, as Run now and the inbox upload do for an existing schedule.
         CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.submit", "filling in a form: data entry, which may start the job the form names");
+        CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.upload", "a file or signature for a form being filled in: data entry (MIG-277)");
         // Owner 2026-09-29: running an existing schedule is not building it; a managed customer reruns with a new file.
         CUSTOMERS_IN_EITHER_MODE.put("SourceJobRestApi.runSourceJob", "running an existing schedule (Run now)");
         CUSTOMERS_IN_EITHER_MODE.put("AiModelChoiceRestApi.runWith", "running an existing schedule once with other inputs (Run with)");

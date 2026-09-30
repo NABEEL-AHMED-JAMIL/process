@@ -59,8 +59,8 @@ class FormFieldsTest {
             new FormField("a", "B", "text", false, null, null)))).hasMessageContaining("Field 2 (B)").hasMessageContaining("already has");
         assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(new FormField("a", " ", "text", false, null, null))))
             .hasMessageContaining("give it a label");
-        assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(new FormField("a", "A", "file", false, null, null))))
-            .hasMessageContaining("text, longText, number, date, choice, yesNo, email");
+        assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(new FormField("a", "A", "video", false, null, null))))
+            .hasMessageContaining("text, longText, number, date, choice, yesNo, email, table, file, signature, lookup");
         assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(new FormField("a", "A", "choice", false, null, null))))
             .hasMessageContaining("at least one option");
         assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(new FormField("a", "A", "choice", false, null,

@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.Objects;
+import java.util.Collection;
 
 /** {@link FormStore} in memory, for the service tests: each statement keeps to the workspace it names, as the SQL does. */
 class InMemoryFormStore implements FormStore {
@@ -113,5 +115,53 @@ class InMemoryFormStore implements FormStore {
     @Override
     public List<Map<String, Object>> linkableJobs(long tenantId, int limit) {
         return this.jobs.stream().filter(j -> ((Long) j.get("tenantId")) == tenantId).limit(limit).collect(Collectors.toList());
+    }
+
+    /** Uploads by id: form, field, uploader, the upload, and the submission that took it (0 when none). */
+    final Map<Long, Object[]> uploads = new LinkedHashMap<>();
+    private long nextUpload = 7000;
+
+    @Override
+    public Optional<List<FormField>> fieldsAt(long tenantId, long formId, int version) {
+        return Optional.empty();
+    }
+
+    @Override
+    public List<String> answerValues(long tenantId, long formId, String fieldKey, int limit) {
+        List<String> values = new ArrayList<>();
+        for (Submission s : this.submissions.values()) {
+            Object value = s.tenantId == tenantId && s.formId == formId ? s.answers.get(fieldKey) : null;
+            if (value != null && !values.contains(String.valueOf(value))) {
+                values.add(String.valueOf(value));
+            }
+        }
+        return values;
+    }
+
+    @Override
+    public long createUpload(long tenantId, long formId, String fieldKey, Long uploadedBy, String fileName, String contentType, long size,
+        String bucket, String storageKey) {
+        long id = this.nextUpload++;
+        this.uploads.put(id, new Object[] {formId, fieldKey, uploadedBy,
+            new FormFields.Upload(id, fileName, contentType, size, bucket, storageKey), 0L});
+        return id;
+    }
+
+    @Override
+    public Optional<FormFields.Upload> openUpload(long tenantId, long formId, String fieldKey, Long uploadedBy, long uploadId) {
+        Object[] u = this.uploads.get(uploadId);
+        return u != null && (long) u[0] == formId && fieldKey.equals(u[1]) && Objects.equals(uploadedBy, u[2]) && (long) u[4] == 0L
+            ? Optional.of((FormFields.Upload) u[3]) : Optional.empty();
+    }
+
+    @Override
+    public void claimUploads(long tenantId, long submissionId, Collection<Long> uploadIds) {
+        for (Long id : uploadIds) {
+            Object[] u = this.uploads.get(id);
+            if (u == null || (long) u[4] != 0L) {
+                throw new IllegalStateException("Upload " + id + " was sent with another submission.");
+            }
+            u[4] = submissionId;
+        }
     }
 }

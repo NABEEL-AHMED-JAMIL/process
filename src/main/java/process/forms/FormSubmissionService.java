@@ -30,6 +30,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Collections;
+import java.util.UUID;
+import java.util.Locale;
+import java.util.HashMap;
 
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
@@ -73,6 +77,7 @@ public class FormSubmissionService {
     private static final DateTimeFormatter FOLDER = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final ObjectMapper JSON = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+    private static final ObjectMapper CSV_JSON = new ObjectMapper();
 
     private static final Logger logger = LoggerFactory.getLogger(FormSubmissionService.class);
 
@@ -111,15 +116,26 @@ public class FormSubmissionService {
             return new ResponseDto(ERROR, CLOSED + " It is " + form.status + "; make it Active first.");
         }
         Map<String, Object> answers;
+        Long person = TenantContext.getAppUserId();
         try {
-            answers = FormFields.answers(form.fields, request.getAnswers());
+            answers = FormFields.answers(form.fields, request.getAnswers(), this.context(tenantId, form, person));
         } catch (FormFields.Unanswered unanswered) {
             Map<String, Object> problems = new LinkedHashMap<>();
             problems.put("problems", unanswered.getProblems());
             return new ResponseDto(ERROR, unanswered.getMessage(), problems);
         }
-        FormStore.Submission received = this.transactions.execute(status -> this.store.receive(tenantId, form.formId, form.version,
-            answers, form.jobId, TenantContext.getAppUserId(), TenantContext.getUsername()));
+        List<Long> uploads = uploadIds(form.fields, answers);
+        FormStore.Submission received;
+        try {
+            received = this.transactions.execute(status -> {
+                FormStore.Submission kept = this.store.receive(tenantId, form.formId, form.version, answers, form.jobId, person,
+                    TenantContext.getUsername());
+                this.store.claimUploads(tenantId, kept.submissionId, uploads);
+                return kept;
+            });
+        } catch (IllegalStateException sentTwice) {
+            return new ResponseDto(ERROR, "A file on this form was just sent with another submission; upload it again and send.");
+        }
         if (form.jobId == null) {
             return new ResponseDto(SUCCESS, "Thank you: your submission was received.", view(received));
         }
@@ -127,6 +143,184 @@ public class FormSubmissionService {
         return new ResponseDto(SUCCESS, FormStore.RUN_STARTED.equals(outcome.status)
             ? String.format("Thank you: your submission was received and started run #%d.", outcome.jobQueueId)
             : "Your submission was received, but it did not start its run: " + outcome.reason, view(outcome));
+    }
+
+    /** Lookups' values and this person's own open uploads to this form, for checking the answers. */
+    private FormFields.Context context(long tenantId, FormStore.Form form, Long person) {
+        return new FormFields.Context() {
+            @Override
+            public List<String> lookupValues(FormField field) {
+                return FormSubmissionService.this.forms.lookupValues(tenantId, field);
+            }
+
+            @Override
+            public Optional<FormFields.Upload> upload(String fieldKey, long uploadId) {
+                return FormSubmissionService.this.store.openUpload(tenantId, form.formId, fieldKey, person, uploadId);
+            }
+        };
+    }
+
+    /** The uploads the kept answers name. */
+    @SuppressWarnings("unchecked")
+    static List<Long> uploadIds(List<FormField> fields, Map<String, Object> answers) {
+        List<Long> ids = new ArrayList<>();
+        for (FormField field : fields) {
+            Object answer = answers.get(field.getKey());
+            List<Object> named = answer instanceof List ? (List<Object>) answer : answer == null ? new ArrayList<>()
+                : Collections.singletonList(answer);
+            if (!FormFields.UPLOAD_TYPES.contains(field.getType())) {
+                continue;
+            }
+            for (Object upload : named) {
+                if (upload instanceof Map && ((Map<String, Object>) upload).get("uploadId") instanceof Number) {
+                    ids.add(((Number) ((Map<String, Object>) upload).get("uploadId")).longValue());
+                }
+            }
+        }
+        return ids;
+    }
+
+    // ---- uploading ---------------------------------------------------------------------------------------------
+
+    /**
+     * A file (or a drawn signature) for a form's field, before the form is sent: checked against the field -- its
+     * accepted extensions and size, or a PNG of at most 512 KB for a signature -- written to the workspace's inbox
+     * bucket under intake/forms/form-N/uploads/, and recorded as this person's for this field. The answer names it by
+     * uploadId; only its uploader can send it, once.
+     */
+    public ResponseDto upload(Long formId, String fieldKey, String originalName, byte[] content) {
+        Long tenantId = FormService.workspace();
+        if (tenantId == null) {
+            return new ResponseDto(ERROR, FormService.NO_WORKSPACE);
+        }
+        Optional<FormStore.Form> found = this.forms.visible(tenantId, formId);
+        if (!found.isPresent()) {
+            return new ResponseDto(ERROR, FormService.FORM_NOT_FOUND);
+        }
+        FormStore.Form form = found.get();
+        if (!FormStore.ACTIVE.equals(form.status)) {
+            return new ResponseDto(ERROR, CLOSED + " It is " + form.status + "; make it Active first.");
+        }
+        FormField field = form.fields.stream().filter(f -> f.getKey().equals(fieldKey)).findFirst().orElse(null);
+        if (field == null || !FormFields.UPLOAD_TYPES.contains(field.getType())) {
+            return new ResponseDto(ERROR, "This form has no file or signature field '" + fieldKey + "'.");
+        }
+        String name = safeName(originalName);
+        String extension = extensionOf(name);
+        long size = content == null ? 0 : content.length;
+        if (size == 0) {
+            return new ResponseDto(ERROR, "The file is empty.");
+        }
+        if (FormFields.SIGNATURE.equals(field.getType())) {
+            if (!isPng(content) || size > FormFields.MAX_SIGNATURE_BYTES) {
+                return new ResponseDto(ERROR, "A signature is a drawn PNG of at most 512 KB; sign in the box again.");
+            }
+            extension = "png";
+            name = "signature.png";
+        } else {
+            List<String> accept = field.getAccept() == null ? FormFields.DEFAULT_ACCEPT : field.getAccept();
+            if (!accept.contains(extension)) {
+                return new ResponseDto(ERROR, String.format("%s takes %s files; '%s' is not one.", field.getLabel(),
+                    String.join(", ", accept), name));
+            }
+            long most = (field.getMaxSizeMb() == null ? 10L : field.getMaxSizeMb()) * 1024L * 1024L;
+            if (size > most) {
+                return new ResponseDto(ERROR, String.format("%s takes files of at most %d MB; '%s' is larger.", field.getLabel(),
+                    most / (1024 * 1024), name));
+            }
+        }
+        Optional<String> unavailable = this.buckets.unavailable();
+        if (unavailable.isPresent()) {
+            return new ResponseDto(ERROR, "Files cannot be stored yet (" + unavailable.get() + ").");
+        }
+        FormInbox.Location location = this.inbox.locate();
+        if (location.alias == null) {
+            return new ResponseDto(ERROR, "Files go to the workspace's inbox, and there is none: " + location.refusal);
+        }
+        String contentType = contentTypeOf(extension);
+        String key = String.format("intake/forms/form-%d/uploads/%s/%s-%s", form.formId, BusinessTime.today().format(FOLDER),
+            UUID.randomUUID(), name);
+        try {
+            this.buckets.upload(tenantId, location.alias, key, content, contentType);
+        } catch (Exception unwritten) {
+            logger.warn("An upload to form {} field {} could not be written to {}/{}: {}", form.formId, fieldKey, location.alias, key,
+                unwritten.getMessage());
+            return new ResponseDto(ERROR, "The file could not be stored (" + unwritten.getMessage() + "). Try again.");
+        }
+        String kept = originalName == null || originalName.trim().isEmpty() ? name : originalName.trim();
+        String keptName = kept.length() > 255 ? name : kept;
+        Long uploadId = this.transactions.execute(status -> this.store.createUpload(tenantId, form.formId, fieldKey,
+            TenantContext.getAppUserId(), keptName, contentType, size, location.alias, key));
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("uploadId", uploadId);
+        view.put("name", FormFields.SIGNATURE.equals(field.getType()) ? "signature.png" : name);
+        view.put("contentType", contentType);
+        view.put("size", size);
+        return new ResponseDto(SUCCESS, "Uploaded.", view);
+    }
+
+    /** The file's own name, stripped of any path and of characters a key should not carry; at most 120 characters. */
+    static String safeName(String original) {
+        String base = original == null ? "" : original.replace('\\', '/');
+        base = base.substring(base.lastIndexOf('/') + 1).trim();
+        String safe = base.replaceAll("[^A-Za-z0-9._ -]", "_").replaceAll("\\s+", "-");
+        if (safe.isEmpty() || safe.matches("^\\.+$")) {
+            safe = "file";
+        }
+        if (safe.length() > 120) {
+            String extension = extensionOf(safe);
+            safe = safe.substring(0, 120 - extension.length() - 1) + "." + extension;
+        }
+        return safe;
+    }
+
+    static String extensionOf(String name) {
+        int dot = name == null ? -1 : name.lastIndexOf('.');
+        return dot < 0 || dot == name.length() - 1 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
+
+    static boolean isPng(byte[] content) {
+        byte[] magic = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+        if (content == null || content.length < magic.length) {
+            return false;
+        }
+        for (int i = 0; i < magic.length; i++) {
+            if (content[i] != magic[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The type the file is served as, from its extension -- never the browser's word for it. */
+    static String contentTypeOf(String extension) {
+        switch (extension) {
+            case "pdf": return "application/pdf";
+            case "png": return "image/png";
+            case "jpg": case "jpeg": return "image/jpeg";
+            case "gif": return "image/gif";
+            case "webp": return "image/webp";
+            case "tif": case "tiff": return "image/tiff";
+            case "heic": return "image/heic";
+            case "csv": return "text/csv";
+            case "txt": return "text/plain";
+            case "json": return "application/json";
+            case "xml": return "application/xml";
+            case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "xls": return "application/vnd.ms-excel";
+            case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "doc": return "application/msword";
+            case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "odt": return "application/vnd.oasis.opendocument.text";
+            case "ods": return "application/vnd.oasis.opendocument.spreadsheet";
+            case "mp3": return "audio/mpeg";
+            case "wav": return "audio/wav";
+            case "m4a": return "audio/mp4";
+            case "mp4": return "video/mp4";
+            case "mov": return "video/quicktime";
+            case "zip": return "application/zip";
+            default: return "application/octet-stream";
+        }
     }
 
     private FormStore.Submission start(long tenantId, FormStore.Form form, FormStore.Submission received) {
@@ -238,8 +432,15 @@ public class FormSubmissionService {
         }
         int size = limit <= 0 ? DEFAULT_LIST : Math.min(limit, MAX_LIST);
         List<Map<String, Object>> rows = new ArrayList<>();
+        Map<Integer, Optional<List<FormField>>> versions = new HashMap<>();
         for (FormStore.Submission submission : this.store.submissions(tenantId, form.get().formId, size)) {
-            rows.add(view(submission));
+            Map<String, Object> row = view(submission);
+            // A submission to an earlier version carries that version's fields, so it is shown as it was answered.
+            if (submission.formVersion != form.get().version) {
+                versions.computeIfAbsent(submission.formVersion, v -> this.fieldsOf(tenantId, submission))
+                    .ifPresent(fields -> row.put("fields", fields));
+            }
+            rows.add(row);
         }
         return new ResponseDto(SUCCESS, String.format("%d submission(s).", rows.size()), rows);
     }
@@ -253,8 +454,17 @@ public class FormSubmissionService {
             return new ResponseDto(ERROR, SUBMISSION_NOT_FOUND);
         }
         return this.store.submission(tenantId, submissionId).filter(s -> s.tenantId == tenantId)
-            .map(s -> new ResponseDto(SUCCESS, "Submission fetched successfully.", view(s)))
+            .map(s -> {
+                Map<String, Object> view = view(s);
+                this.fieldsOf(tenantId, s).ifPresent(fields -> view.put("fields", fields));
+                return new ResponseDto(SUCCESS, "Submission fetched successfully.", view);
+            })
             .orElseGet(() -> new ResponseDto(ERROR, SUBMISSION_NOT_FOUND));
+    }
+
+    /** The fields the submission answered: its version's, kept since MIG-277. */
+    private Optional<List<FormField>> fieldsOf(long tenantId, FormStore.Submission submission) {
+        return this.store.fieldsAt(tenantId, submission.formId, submission.formVersion);
     }
 
     /** A CSV export of a form's submissions; null when the form is not the caller's workspace's. */
@@ -318,11 +528,38 @@ public class FormSubmissionService {
             cells.add(s.reason == null ? "" : s.reason);
             for (String key : keys) {
                 Object answer = s.answers.get(key);
-                cells.add(answer == null ? "" : answer instanceof Boolean ? ((Boolean) answer ? "Yes" : "No") : String.valueOf(answer));
+                cells.add(csvAnswer(answer));
             }
             line(out, cells);
         }
         return out.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** An answer in one cell: yes/no in words, files by name, a signature as signed, a table's rows as JSON. */
+    static String csvAnswer(Object answer) {
+        if (answer == null) {
+            return "";
+        }
+        if (answer instanceof Boolean) {
+            return (Boolean) answer ? "Yes" : "No";
+        }
+        if (answer instanceof Map && ((Map<?, ?>) answer).containsKey("uploadId")) {
+            return String.valueOf(((Map<?, ?>) answer).get("name"));
+        }
+        if (answer instanceof List) {
+            List<?> items = (List<?>) answer;
+            if (!items.isEmpty() && items.stream().allMatch(i -> i instanceof Map && ((Map<?, ?>) i).containsKey("uploadId"))) {
+                List<String> names = new ArrayList<>();
+                items.forEach(i -> names.add(String.valueOf(((Map<?, ?>) i).get("name"))));
+                return String.join("; ", names);
+            }
+            try {
+                return CSV_JSON.writeValueAsString(answer);
+            } catch (JsonProcessingException unwritable) {
+                return String.valueOf(answer);
+            }
+        }
+        return String.valueOf(answer);
     }
 
     private static void line(StringBuilder out, List<String> cells) {

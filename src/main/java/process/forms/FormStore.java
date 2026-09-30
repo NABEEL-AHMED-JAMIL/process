@@ -1,6 +1,7 @@
 package process.forms;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -93,10 +94,10 @@ public interface FormStore {
 
     Optional<Form> find(long tenantId, long formId);
 
-    /** A new form; its id. DuplicateKeyException when the workspace already has a form by that name. */
+    /** A new form; its id; its first version's fields are kept (form_version). DuplicateKeyException when the name is taken. */
     long create(long tenantId, String name, String description, String status, List<FormField> fields, Long jobId, Long actor);
 
-    /** Replaces a form's content, one version on; false when it is not the workspace's. */
+    /** Replaces a form's content, one version on (kept in form_version); false when it is not the workspace's. */
     boolean update(long tenantId, long formId, String name, String description, String status, List<FormField> fields, Long jobId,
         Long actor);
 
@@ -113,6 +114,22 @@ public interface FormStore {
     List<Submission> submissions(long tenantId, long formId, int limit);
 
     Optional<Submission> submission(long tenantId, long submissionId);
+
+    /** The fields a form had at a version (MIG-277); empty for a version saved before versions were kept. */
+    Optional<List<FormField>> fieldsAt(long tenantId, long formId, int version);
+
+    /** The distinct answers a form's field has collected, newest first: what a lookup on it offers. */
+    List<String> answerValues(long tenantId, long formId, String fieldKey, int limit);
+
+    /** Records an uploaded file for a form's field; its id. */
+    long createUpload(long tenantId, long formId, String fieldKey, Long uploadedBy, String fileName, String contentType, long size,
+        String bucket, String storageKey);
+
+    /** The upload, when this person made it for this form's field and no submission has taken it yet. */
+    Optional<FormFields.Upload> openUpload(long tenantId, long formId, String fieldKey, Long uploadedBy, long uploadId);
+
+    /** The submission takes these uploads; each can be taken once. */
+    void claimUploads(long tenantId, long submissionId, Collection<Long> uploadIds);
 
     /** The workspace's jobs a form may start (any not deleted), by name: id, name, status. */
     List<Map<String, Object>> linkableJobs(long tenantId, int limit);

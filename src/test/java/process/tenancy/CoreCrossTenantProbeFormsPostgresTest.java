@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import process.forms.FormField;
 import process.forms.FormInbox;
@@ -99,6 +100,8 @@ class CoreCrossTenantProbeFormsPostgresTest {
                 .contains(REFUSED);
             assertThat(fx.probe("POST form.json/submit", caller, () -> fx.forms.submit(new FormSubmitRequest(B_FORM,
                 Collections.<String, Object>singletonMap("q", "probe"))))).contains(REFUSED);
+            assertThat(fx.probe("POST form.json/upload", caller, () -> fx.forms.upload(B_FORM, "q",
+                new MockMultipartFile("file", "probe.png", "image/png", new byte[] {1, 2, 3})))).contains(REFUSED);
             assertThat(fx.probe("GET formSubmission.json/list", caller, () -> fx.formSubmissions.list(B_FORM, 50))).contains(REFUSED);
             assertThat(fx.probe("GET formSubmission.json/fetch", caller, () -> fx.formSubmissions.fetch(B_SUBMISSION))).contains(REFUSED);
             assertThat(fx.probe("GET formSubmission.json/export", caller, () -> fx.formSubmissions.export(B_FORM)))

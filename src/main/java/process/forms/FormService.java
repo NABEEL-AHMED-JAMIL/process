@@ -42,6 +42,11 @@ public class FormService {
     static final int MAX_NAME = 120;
     static final int MAX_DESCRIPTION = 2000;
     static final int MAX_LINKABLE_JOBS = 500;
+    /** The most values a lookup field offers: the newest distinct answers of its source field. */
+    static final int MAX_LOOKUP_VALUES = 500;
+    /** The types a lookup's source field may have: one plain value per submission. */
+    static final List<String> LOOKUP_SOURCES = Arrays.asList(FormFields.TEXT, FormFields.NUMBER, FormFields.DATE, FormFields.CHOICE,
+        FormFields.EMAIL, FormFields.LOOKUP);
     static final List<String> STATUSES = Arrays.asList(FormStore.DRAFT, FormStore.ACTIVE, FormStore.ARCHIVED);
 
     private final FormStore store;
@@ -141,6 +146,10 @@ public class FormService {
         if (FormStore.ACTIVE.equals(status) && fields.isEmpty()) {
             return new ResponseDto(ERROR, "Add at least one field before the form takes submissions (Active).");
         }
+        String lookupRefusal = this.lookupRefusal(tenantId, request.getFormId(), fields);
+        if (lookupRefusal != null) {
+            return new ResponseDto(ERROR, lookupRefusal);
+        }
         String jobRefusal = this.jobRefusal(tenantId, request.getJobId());
         if (jobRefusal != null) {
             return new ResponseDto(ERROR, jobRefusal);
@@ -193,6 +202,39 @@ public class FormService {
             this.view(this.store.find(tenantId, form.get().formId).orElse(form.get()), true, true));
     }
 
+    /** Null when every lookup names another form of the workspace and one of its plain fields. */
+    private String lookupRefusal(long tenantId, Long formId, List<FormField> fields) {
+        for (FormField field : fields) {
+            if (!FormFields.LOOKUP.equals(field.getType())) {
+                continue;
+            }
+            FormField.Lookup lookup = field.getLookup();
+            if (lookup.getFormId().equals(formId)) {
+                return field.getLabel() + ": a lookup offers another form's answers, not this form's own.";
+            }
+            Optional<FormStore.Form> source = this.store.find(tenantId, lookup.getFormId());
+            if (!source.isPresent()) {
+                return field.getLabel() + ": the form it looks up was not found in this workspace.";
+            }
+            boolean found = source.get().fields.stream().anyMatch(f -> f.getKey().equals(lookup.getField())
+                && LOOKUP_SOURCES.contains(f.getType()));
+            if (!found) {
+                return String.format("%s: '%s' has no field '%s' with one value per submission (text, number, date, choice, e-mail).",
+                    field.getLabel(), source.get().name, lookup.getField());
+            }
+        }
+        return null;
+    }
+
+    /** What a lookup field offers now: its source field's distinct answers, newest first. */
+    List<String> lookupValues(long tenantId, FormField field) {
+        FormField.Lookup lookup = field.getLookup();
+        if (lookup == null || lookup.getFormId() == null || lookup.getField() == null) {
+            return new ArrayList<>();
+        }
+        return this.store.answerValues(tenantId, lookup.getFormId(), lookup.getField(), MAX_LOOKUP_VALUES);
+    }
+
     /** Null when the job may be linked: none at all, or one of the workspace's own that is not deleted. */
     private String jobRefusal(long tenantId, Long jobId) {
         if (jobId == null) {
@@ -219,6 +261,15 @@ public class FormService {
         view.put("fieldCount", form.fields.size());
         if (withFields) {
             view.put("fields", form.fields);
+            Map<String, List<String>> lookups = new LinkedHashMap<>();
+            for (FormField field : form.fields) {
+                if (FormFields.LOOKUP.equals(field.getType())) {
+                    lookups.put(field.getKey(), this.lookupValues(form.tenantId, field));
+                }
+            }
+            if (!lookups.isEmpty()) {
+                view.put("lookupValues", lookups);
+            }
         }
         view.put("startsJob", form.jobId != null);
         if (admin) {

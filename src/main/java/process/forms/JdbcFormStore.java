@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,17 +57,87 @@ public class JdbcFormStore implements FormStore {
 
     @Override
     public long create(long tenantId, String name, String description, String status, List<FormField> fields, Long jobId, Long actor) {
-        return this.jdbc.queryForObject("INSERT INTO form_definition (tenant_id, name, description, status, fields, job_id, created_by, "
-            + "updated_by) VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?) RETURNING form_id", Long.class, tenantId, name, description, status,
-            json(fields), jobId, actor, actor);
+        Long formId = this.jdbc.queryForObject("INSERT INTO form_definition (tenant_id, name, description, status, fields, job_id, "
+            + "created_by, updated_by) VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?) RETURNING form_id", Long.class, tenantId, name, description,
+            status, json(fields), jobId, actor, actor);
+        if (formId == null) {
+            throw new IllegalStateException("The new form has no id.");
+        }
+        this.keepVersion(tenantId, formId, actor);
+        return formId;
     }
 
     @Override
     public boolean update(long tenantId, long formId, String name, String description, String status, List<FormField> fields, Long jobId,
         Long actor) {
-        return this.jdbc.update("UPDATE form_definition SET name = ?, description = ?, status = ?, fields = ?::jsonb, job_id = ?, "
+        boolean updated = this.jdbc.update("UPDATE form_definition SET name = ?, description = ?, status = ?, fields = ?::jsonb, job_id = ?, "
             + "version = version + 1, updated_by = ?, date_updated = now() WHERE tenant_id = ? AND form_id = ?", name, description, status,
             json(fields), jobId, actor, tenantId, formId) > 0;
+        if (updated) {
+            this.keepVersion(tenantId, formId, actor);
+        }
+        return updated;
+    }
+
+    /** The form's fields at its current version, as form_version keeps them (in the saving transaction). */
+    private void keepVersion(long tenantId, long formId, Long actor) {
+        this.jdbc.update("INSERT INTO form_version (form_id, tenant_id, version, name, fields, saved_by) SELECT form_id, tenant_id, version, "
+            + "name, fields, ? FROM form_definition WHERE tenant_id = ? AND form_id = ? ON CONFLICT (form_id, version) DO NOTHING", actor,
+            tenantId, formId);
+    }
+
+    @Override
+    public Optional<List<FormField>> fieldsAt(long tenantId, long formId, int version) {
+        List<String> found = this.jdbc.queryForList("SELECT fields::text FROM form_version WHERE tenant_id = ? AND form_id = ? AND version = ?",
+            String.class, tenantId, formId, version);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(read(found.get(0), FIELDS));
+        } catch (SQLException unreadable) {
+            throw new IllegalStateException(unreadable.getMessage(), unreadable);
+        }
+    }
+
+    @Override
+    public List<String> answerValues(long tenantId, long formId, String fieldKey, int limit) {
+        return this.jdbc.queryForList("SELECT value FROM (SELECT answers ->> ? AS value, submitted_at FROM form_submission "
+            + "WHERE tenant_id = ? AND form_id = ? AND jsonb_typeof(answers -> ?) IN ('string', 'number')) a "
+            + "WHERE btrim(value) <> '' GROUP BY value ORDER BY max(submitted_at) DESC LIMIT ?", String.class, fieldKey, tenantId, formId,
+            fieldKey, limit);
+    }
+
+    @Override
+    public long createUpload(long tenantId, long formId, String fieldKey, Long uploadedBy, String fileName, String contentType, long size,
+        String bucket, String storageKey) {
+        Long uploadId = this.jdbc.queryForObject("INSERT INTO form_upload (form_id, tenant_id, field_key, uploaded_by, file_name, content_type, "
+            + "size_bytes, bucket, storage_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING upload_id", Long.class, formId, tenantId, fieldKey,
+            uploadedBy, fileName, contentType, size, bucket, storageKey);
+        if (uploadId == null) {
+            throw new IllegalStateException("The new upload has no id.");
+        }
+        return uploadId;
+    }
+
+    @Override
+    public Optional<FormFields.Upload> openUpload(long tenantId, long formId, String fieldKey, Long uploadedBy, long uploadId) {
+        return this.jdbc.query("SELECT upload_id, file_name, content_type, size_bytes, bucket, storage_key FROM form_upload WHERE tenant_id = ? "
+            + "AND form_id = ? AND field_key = ? AND uploaded_by IS NOT DISTINCT FROM ? AND upload_id = ? AND submission_id IS NULL",
+            (rs, i) -> new FormFields.Upload(rs.getLong("upload_id"), rs.getString("file_name"), rs.getString("content_type"),
+                rs.getLong("size_bytes"), rs.getString("bucket"), rs.getString("storage_key")),
+            tenantId, formId, fieldKey, uploadedBy, uploadId).stream().findFirst();
+    }
+
+    @Override
+    public void claimUploads(long tenantId, long submissionId, Collection<Long> uploadIds) {
+        for (Long uploadId : uploadIds) {
+            int claimed = this.jdbc.update("UPDATE form_upload SET submission_id = ? WHERE tenant_id = ? AND upload_id = ? AND submission_id IS NULL",
+                submissionId, tenantId, uploadId);
+            if (claimed == 0) {
+                throw new IllegalStateException("Upload " + uploadId + " was sent with another submission.");
+            }
+        }
     }
 
     @Override

@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 193.0-form-uploads
+      author: nabeel.amd93
+      description: "MIG-277: form_version (the fields at each version) and form_upload (files and signatures), guarded as V181; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V193.0-form-uploads/V193__form_uploads.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V193.0-form-uploads/V193__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
