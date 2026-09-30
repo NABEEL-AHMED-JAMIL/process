@@ -65,13 +65,14 @@ public class SourceJobBulkDefectTest {
     @Mock private TestNotifications.NoticeSink notificationCenterService;
 
     private SourceJobBulkServiceImpl service;
+    private BulkExcel bulkExcel;
 
     @BeforeEach
     void setUp() {
         // The real BulkExcel: it is a thread-local holder around POI with no collaborators, and
         // the export assertions are about what it writes into the sheet.
         this.service = new SourceJobBulkServiceImpl(this.transactionService, this.sourceJobRepository,
-            this.schedulerRepository, new BulkExcel(), TestNotifications.recording(null, this.notificationCenterService, null));
+            this.schedulerRepository, this.bulkExcel = new BulkExcel(), TestNotifications.recording(null, this.notificationCenterService, null));
         TenantContext.set(TENANT_A, "TENANT_ADMIN", 1L, "admin-a@example.com");
     }
 
@@ -299,6 +300,37 @@ public class SourceJobBulkDefectTest {
         // Previously a NullPointerException here, answered as HTTP 500, so nobody could export
         // anything at all until the offending row was found by hand.
         assertThatCode(() -> this.service.downloadListSourceJob()).doesNotThrowAnyException();
+    }
+
+    /**
+     * MIG-214: the export's workbook was left in BulkExcel's ThreadLocal after the request, so every Tomcat
+     * thread that ever exported kept its last workbook -- every row and cell of it -- reachable until that
+     * thread exported again. The workbook is the request's; the thread gives it up when the export ends.
+     */
+    @Test
+    void theExportLeavesNoWorkbookOnTheThread() throws Exception {
+        when(this.sourceJobRepository.findByTenantId(TENANT_A)).thenReturn(Arrays.asList(
+            exportableJob(1L, namedTask()), exportableJob(2L, namedTask())));
+        when(this.schedulerRepository.findByJobIdIn(anyList())).thenReturn(Collections.emptyList());
+
+        this.service.downloadListSourceJob();
+
+        assertThat(this.bulkExcel.getWb()).isNull();
+        assertThat(this.bulkExcel.getSheet()).isNull();
+    }
+
+    @Test
+    void anExportThatFailsHalfwayLeavesNoWorkbookOnTheThreadEither() throws Exception {
+        SourceJob broken = spy(exportableJob(2L, namedTask()));
+        doThrow(new IllegalStateException("a row that cannot be read")).when(broken).getPriority();
+        when(this.sourceJobRepository.findByTenantId(TENANT_A)).thenReturn(Arrays.asList(
+            exportableJob(1L, namedTask()), broken));
+        when(this.schedulerRepository.findByJobIdIn(anyList())).thenReturn(Collections.emptyList());
+
+        assertThatCode(() -> this.service.downloadListSourceJob()).isInstanceOf(IllegalStateException.class);
+
+        assertThat(this.bulkExcel.getWb()).isNull();
+        assertThat(this.bulkExcel.getSheet()).isNull();
     }
 
 

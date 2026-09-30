@@ -365,7 +365,20 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
     }
 
     private ResponseDto doTestConnection(KafkaConnectionProfile profile) {
-        try (AdminClient adminClient = AdminClient.create(this.kafkaTemplateProvider.commonClientProps(profile))) {
+        Map<String, Object> props = null;
+        try {
+            props = this.kafkaTemplateProvider.commonClientProps(profile);
+            return this.describeCluster(profile, props);
+        } finally {
+            // MIG-214: an unsaved profile's downloaded stores are the probe's alone; they go when it is done.
+            if (props != null && profile.getKafkaConnectionProfileId() == null) {
+                this.kafkaTemplateProvider.discardUnsaved(props);
+            }
+        }
+    }
+
+    private ResponseDto describeCluster(KafkaConnectionProfile profile, Map<String, Object> props) {
+        try (AdminClient adminClient = AdminClient.create(props)) {
             DescribeClusterResult result = adminClient.describeCluster();
             String clusterId = result.clusterId().get(10, TimeUnit.SECONDS);
             int nodeCount = result.nodes().get(10, TimeUnit.SECONDS).size();

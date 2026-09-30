@@ -19,9 +19,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 import process.storage.TrustedStorageOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -148,6 +151,64 @@ public class KafkaTemplateProviderSecretCacheTest {
         assertThat(cached).doesNotExist();
         assertThat(this.truststorePathFor(PROFILE_ID, OLD_STORE)).isEqualTo(cached.toString());
         assertThat(this.downloaded).hasSize(2);
+    }
+
+    /**
+     * MIG-214: an unsaved profile's download (Test Connection on a dialog never saved) is private to the call. It was
+     * left to deleteOnExit, so every click kept key material on disk, and two entries in the JVM's never-pruned
+     * DeleteOnExitHook set, until the process ended. The probe discards it.
+     */
+    @Test
+    void anUnsavedProfilesDownloadIsDiscardedAfterTheProbe(@TempDir Path cacheDir) throws Exception {
+        ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
+        this.eachObjectAnswersWithItsOwnKey();
+        Map<String, Object> props = this.provider.commonClientProps(this.profile(null, OLD_STORE));
+        Path downloaded = Paths.get((String) props.get("ssl.truststore.location"));
+        assertThat(downloaded).exists();
+
+        this.provider.discardUnsaved(props);
+
+        assertThat(downloaded.getParent()).doesNotExist();
+        try (Stream<Path> left = Files.list(cacheDir.resolve("unsaved"))) {
+            assertThat(left).isEmpty();
+        }
+    }
+
+    /** A saved profile's cached store is its cache, not the probe's to throw away. */
+    @Test
+    void discardingLeavesASavedProfilesCacheAlone(@TempDir Path cacheDir) {
+        ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
+        this.eachObjectAnswersWithItsOwnKey();
+        Map<String, Object> props = this.provider.commonClientProps(this.profile(PROFILE_ID, OLD_STORE));
+
+        this.provider.discardUnsaved(props);
+
+        assertThat(Paths.get((String) props.get("ssl.truststore.location"))).exists();
+    }
+
+    /** The keystore refused after the truststore arrived: the truststore does not stay behind either. */
+    @Test
+    void anUnsavedProfileWhoseSecondStoreFailsLeavesNothingBehind(@TempDir Path cacheDir) throws Exception {
+        ReflectionTestUtils.setField(this.provider, "secretCacheDir", cacheDir.toString());
+        when(this.storageBrowserService.readForWorkflow(any(), anyString(), anyString()))
+            .thenAnswer(call -> {
+                String key = call.getArgument(2);
+                if (key.contains("keystore")) {
+                    throw new IllegalStateException("storage refused the keystore");
+                }
+                return new ObjectContentDto(new ByteArrayInputStream(key.getBytes(StandardCharsets.UTF_8)),
+                    "application/octet-stream", 1L, "truststore.p12");
+            });
+        KafkaConnectionProfile profile = this.profile(null, OLD_STORE);
+        profile.setSslKeystoreBucket(BUCKET);
+        profile.setSslKeystoreLocation("kafka-secrets/7/1a2b/2026-08-01/keystore.p12");
+
+        assertThatThrownBy(() -> this.provider.commonClientProps(profile))
+            .isInstanceOf(IllegalStateException.class);
+
+        try (Stream<Path> left = Files.list(cacheDir.resolve("unsaved"))) {
+            assertThat(left).isEmpty();
+        }
     }
 
 }

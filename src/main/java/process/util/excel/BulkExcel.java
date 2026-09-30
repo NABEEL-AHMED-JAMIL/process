@@ -45,6 +45,16 @@ public class BulkExcel {
         this.sheet.set(sheet);
     }
 
+    /**
+     * MIG-214: forgets this thread's workbook and sheet. Call in finally once the workbook is written: Tomcat's
+     * threads are pooled, and a workbook left here stayed reachable -- every row and cell of it -- until that
+     * thread built another, so each thread that ever exported held its last export.
+     */
+    public void clear() {
+        this.wb.remove();
+        this.sheet.remove();
+    }
+
     public void fillBulkHeader(Integer rowCount, String[] HEADER_FILED_BATCH_FILE) {
         Row header = this.getSheet().createRow(rowCount);
         CellStyle style = this.cellHeadingBackgroundColorStyle(IndexedColors.GREY_25_PERCENT.getIndex());

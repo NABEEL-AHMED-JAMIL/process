@@ -170,6 +170,8 @@ public class SourceJobBulkServiceImpl implements SourceJobBulkService {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         workbook.write(outputStream);
         return outputStream;
+        } finally {
+            this.bulkExcel.clear();
         }
     }
 
