@@ -17,9 +17,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -89,11 +91,23 @@ public class UserDirectory {
      */
     @Autowired
     public UserDirectory(JdbcTemplate jdbc) {
-        this(jdbc, Executors.newSingleThreadExecutor(runnable -> {
+        this(jdbc, writeBackExecutor());
+    }
+
+    /** Write-backs that may wait; past that they are dropped, as writeBack's catch always meant. */
+    static final int WRITE_BACK_QUEUE = 64;
+
+    /**
+     * MIG-214: a bounded queue. Executors.newSingleThreadExecutor's is unbounded, so the RejectedExecutionException
+     * writeBack drops on could never come: with the database stalled, every name lookup that missed the directory
+     * queued another copied list, without limit.
+     */
+    static ThreadPoolExecutor writeBackExecutor() {
+        return new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(WRITE_BACK_QUEUE), runnable -> {
             Thread thread = new Thread(runnable, "user-directory-write-back");
             thread.setDaemon(true);
             return thread;
-        }));
+        });
     }
 
     public UserDirectory(JdbcTemplate jdbc, Executor writeBacks) {

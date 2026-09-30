@@ -159,35 +159,70 @@ public class KafkaTemplateProvider {
                 this.jaasEscape(username), this.jaasEscape(password)));
         }
         if ("SSL".equals(securityProtocol) || "SASL_SSL".equals(securityProtocol)) {
-            if (profile.getSslTruststoreLocation() != null && !profile.getSslTruststoreLocation().trim().isEmpty()) {
-                String localPath = this.resolveLocalSecretFile(
-                    profile, "truststore", profile.getSslTruststoreBucket(), profile.getSslTruststoreLocation());
-                props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, localPath);
-                props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
-                    this.storeTypeOf(profile.getSslTruststoreLocation()));
-                if (profile.getSslTruststorePasswordEnc() != null) {
-                    props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslTruststorePasswordEnc()));
+            try {
+                this.putSslProps(props, profile);
+            } catch (RuntimeException ex) {
+                // MIG-214: a store that did arrive before the one that failed is nobody's to use.
+                if (profile.getKafkaConnectionProfileId() == null) {
+                    this.discardUnsaved(props);
                 }
-            }
-            if (profile.getSslKeystoreLocation() != null && !profile.getSslKeystoreLocation().trim().isEmpty()) {
-                String localPath = this.resolveLocalSecretFile(
-                    profile, "keystore", profile.getSslKeystoreBucket(), profile.getSslKeystoreLocation());
-                props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, localPath);
-                props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
-                    this.storeTypeOf(profile.getSslKeystoreLocation()));
-                if (profile.getSslKeystorePasswordEnc() != null) {
-                    props.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslKeystorePasswordEnc()));
-                }
-                if (profile.getSslKeyPasswordEnc() != null) {
-                    props.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslKeyPasswordEnc()));
-                }
-            }
-
-            if (profile.getSslEndpointIdentificationAlgorithm() != null) {
-                props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, profile.getSslEndpointIdentificationAlgorithm());
+                throw ex;
             }
         }
         return props;
+    }
+
+    private void putSslProps(Map<String, Object> props, KafkaConnectionProfile profile) {
+        if (profile.getSslTruststoreLocation() != null && !profile.getSslTruststoreLocation().trim().isEmpty()) {
+            String localPath = this.resolveLocalSecretFile(
+                profile, "truststore", profile.getSslTruststoreBucket(), profile.getSslTruststoreLocation());
+            props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, localPath);
+            props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+                this.storeTypeOf(profile.getSslTruststoreLocation()));
+            if (profile.getSslTruststorePasswordEnc() != null) {
+                props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslTruststorePasswordEnc()));
+            }
+        }
+        if (profile.getSslKeystoreLocation() != null && !profile.getSslKeystoreLocation().trim().isEmpty()) {
+            String localPath = this.resolveLocalSecretFile(
+                profile, "keystore", profile.getSslKeystoreBucket(), profile.getSslKeystoreLocation());
+            props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, localPath);
+            props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+                this.storeTypeOf(profile.getSslKeystoreLocation()));
+            if (profile.getSslKeystorePasswordEnc() != null) {
+                props.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslKeystorePasswordEnc()));
+            }
+            if (profile.getSslKeyPasswordEnc() != null) {
+                props.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslKeyPasswordEnc()));
+            }
+        }
+
+        if (profile.getSslEndpointIdentificationAlgorithm() != null) {
+            props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, profile.getSslEndpointIdentificationAlgorithm());
+        }
+    }
+
+    /**
+     * MIG-214: takes an unsaved profile's downloaded stores -- the ones named in these client properties -- off disk,
+     * once its probe is done with them. They were left to deleteOnExit, so each Test Connection on an unsaved profile
+     * kept key material on disk, and two entries in the JVM's never-pruned DeleteOnExitHook set, until the process
+     * ended. A saved profile's cached store is left where it is.
+     */
+    public void discardUnsaved(Map<String, Object> props) {
+        if (props == null) {
+            return;
+        }
+        Path unsaved = this.secretCacheRoot().resolve("unsaved").toAbsolutePath().normalize();
+        for (String key : Arrays.asList(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG)) {
+            Object location = props.get(key);
+            if (!(location instanceof String)) {
+                continue;
+            }
+            Path dir = Paths.get((String) location).toAbsolutePath().normalize().getParent();
+            if (dir != null && dir.getParent() != null && dir.getParent().equals(unsaved)) {
+                this.deleteQuietlyRecursive(dir);
+            }
+        }
     }
 
     /**
@@ -229,15 +264,15 @@ public class KafkaTemplateProvider {
         }
         try {
             this.createPrivateDirectories(localFile.getParent());
-            if (profileId == null) {
-                localFile.getParent().toFile().deleteOnExit();
-                localFile.toFile().deleteOnExit();
-            }
+            // An unsaved profile's download is discarded by its probe (discardUnsaved), not by deleteOnExit.
             ObjectContentDto content = this.downloadProfileSecret(profile.getTenantId(), bucket, objectKey);
             this.writePrivateFile(content.getContent(), localFile);
             this.logger.info("Cached {} for Kafka profile {} from bucket {}/{} -> {}", kind, profileId, bucket, objectKey, localFile);
             return localFile.toString();
         } catch (IOException | RuntimeException ex) {
+            if (profileId == null) {
+                this.deleteQuietlyRecursive(localFile.getParent());
+            }
             throw new IllegalStateException(
                 "Could not download " + kind + " from bucket " + bucket + "/" + objectKey + " for Kafka profile " + profileId, ex);
         }

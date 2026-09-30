@@ -721,6 +721,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         workbook.write(outputStream);
         return outputStream;
+        } finally {
+            this.bulkExcel.clear();
         }
     }
 
@@ -735,6 +737,8 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         workbook.write(outputStream);
         return outputStream;
+        } finally {
+            this.bulkExcel.clear();
         }
     }
 
