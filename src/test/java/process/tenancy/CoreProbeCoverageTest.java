@@ -46,6 +46,7 @@ import process.identity.InternalTenantDirectoryRestApi;
 import process.identity.InternalTenantFactsRestApi;
 import process.identity.InternalUserDirectoryRestApi;
 import process.slo.InternalSloRestApi;
+import process.slo.ReliabilityRestApi;
 import process.storage.InternalStorageDirectoryRestApi;
 
 import java.io.IOException;
@@ -106,7 +107,7 @@ class CoreProbeCoverageTest {
         InternalBillingDirectoryRestApi.class, InternalIdentityEventsRestApi.class, InternalJwksRestApi.class,
         InternalKafkaPublishRestApi.class, InternalNotificationRelayRestApi.class, InternalPageAccessRestApi.class,
         InternalRunVerificationRestApi.class, InternalSecretRestApi.class, InternalTenantDirectoryRestApi.class,
-        InternalTenantFactsRestApi.class, InternalUserDirectoryRestApi.class, InternalSloRestApi.class,
+        InternalTenantFactsRestApi.class, InternalUserDirectoryRestApi.class, InternalSloRestApi.class, ReliabilityRestApi.class,
         InternalStorageDirectoryRestApi.class);
 
     private static final Map<String, String> NOTHING_TO_AIM = new LinkedHashMap<>();

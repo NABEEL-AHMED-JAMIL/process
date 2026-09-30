@@ -8,11 +8,13 @@ import process.model.enums.RunEnd;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * The pipeline execution SLI for any window, from stored rows (MIG-196; etl-platform docs/SLO.md). Each run is one
@@ -33,18 +35,26 @@ public class RunSloReport {
     public static final String UNATTRIBUTED = "UNATTRIBUTED";
 
     /** [from, to) on when the run ended; one row per (status, reason). The patterns are the writers' own sentences. */
-    static final String QUERY = "select q.job_status, coalesce(q.end_reason, case "
+    static final String REASON = "coalesce(q.end_reason, case "
         + "when q.job_status = 'Skip' then 'SKIPPED' "
         + "when q.job_status = 'Missed' then 'MISSED' "
         + "when q.job_status = 'Failed' and q.job_status_message ~ '^Job [0-9]+ fail by manual\\.$' then 'OPERATOR' "
         + "when q.job_status = 'Interrupt' and q.job_status_message ~ '^Job [0-9]+ interrupted\\.$' then 'OPERATOR' "
         + "when q.job_status = 'Interrupt' and q.job_status_message like '%callback token had expired%' then 'TOKEN_EXPIRED' "
         + "when q.job_status = 'Interrupt' and q.job_status_message like '%stopped reporting and was closed after%' then 'STALLED' "
-        + "else '" + UNATTRIBUTED + "' end) as reason, count(*) as runs "
-        + "from job_queue q "
+        + "else '" + UNATTRIBUTED + "' end)";
+
+    /** The rows a window holds: [from, to) on when the run ended, terminal statuses only. */
+    static final String WINDOW = "from job_queue q "
         + "where coalesce(q.end_time, q.skip_time) >= ? and coalesce(q.end_time, q.skip_time) < ? "
-        + "and q.job_status in ('Completed', 'Failed', 'Interrupt', 'Skip', 'Missed') "
+        + "and q.job_status in ('Completed', 'Failed', 'Interrupt', 'Skip', 'Missed') ";
+
+    static final String QUERY = "select q.job_status, " + REASON + " as reason, count(*) as runs " + WINDOW
         + "group by 1, 2 order by 1, 2";
+
+    /** The same rows by the UTC day each run ended on: the console's daily series. */
+    static final String DAILY_QUERY = "select (coalesce(q.end_time, q.skip_time) at time zone 'UTC')::date as day, q.job_status, "
+        + REASON + " as reason, count(*) as runs " + WINDOW + "group by 1, 2, 3 order by 1, 2, 3";
 
     private final JdbcTemplate sql;
 
@@ -125,6 +135,10 @@ public class RunSloReport {
             out.put("successRate", this.successRate());
             out.put("errorBudgetRuns", this.errorBudget());
             out.put("budgetSpent", this.budgetSpent());
+            // The same figures under the card's names (MIG-196): numerator / denominator = rate.
+            out.put("numerator", this.good);
+            out.put("denominator", this.good + this.bad);
+            out.put("errorBudgetRemaining", this.budgetSpent() == null ? null : 1 - this.budgetSpent());
             List<Map<String, Object>> rows = new ArrayList<>();
             for (Group group : this.groups) {
                 Map<String, Object> row = new LinkedHashMap<>();
@@ -135,6 +149,34 @@ public class RunSloReport {
                 rows.add(row);
             }
             out.put("groups", rows);
+            return out;
+        }
+    }
+
+    /** One UTC day of a window: the runs that ended on it, as the SLI counts them. */
+    public static final class Day {
+        public final LocalDate day;
+        public long good;
+        public long bad;
+        public long excluded;
+
+        Day(LocalDate day) {
+            this.day = day;
+        }
+
+        /** good / (good + bad); null when no run counted that day. */
+        public Double successRate() {
+            long counted = this.good + this.bad;
+            return counted == 0 ? null : (double) this.good / counted;
+        }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("day", this.day.toString());
+            out.put("good", this.good);
+            out.put("bad", this.bad);
+            out.put("excluded", this.excluded);
+            out.put("successRate", this.successRate());
             return out;
         }
     }
@@ -150,5 +192,32 @@ public class RunSloReport {
                 UNATTRIBUTED.equals(reason) ? null : RunEnd.valueOf(reason), rs.getLong("runs"));
         }, Timestamp.from(from), Timestamp.from(to));
         return new Window(from, to, groups);
+    }
+
+    /**
+     * The window day by day (UTC), for the console's chart: every day in [from, to) that holds an ended run, classified
+     * by the same rule as {@link #measure}. The days' sums are the window's figures.
+     */
+    @AcrossTenants("the pipeline-execution SLO's daily series is measured over every workspace's runs")
+    public List<Day> measureDaily(Instant from, Instant to) {
+        if (!from.isBefore(to)) {
+            throw new IllegalArgumentException("The window must start before it ends: " + from + " .. " + to);
+        }
+        Map<LocalDate, Day> days = new TreeMap<>();
+        this.sql.query(DAILY_QUERY, rs -> {
+            String reason = rs.getString("reason");
+            RunSlo slo = RunSlo.of(JobStatus.valueOf(rs.getString("job_status")),
+                UNATTRIBUTED.equals(reason) ? null : RunEnd.valueOf(reason));
+            Day day = days.computeIfAbsent(rs.getObject("day", LocalDate.class), Day::new);
+            long runs = rs.getLong("runs");
+            if (slo == RunSlo.GOOD) {
+                day.good += runs;
+            } else if (slo == RunSlo.BAD) {
+                day.bad += runs;
+            } else {
+                day.excluded += runs;
+            }
+        }, Timestamp.from(from), Timestamp.from(to));
+        return new ArrayList<>(days.values());
     }
 }

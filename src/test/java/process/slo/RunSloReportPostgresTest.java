@@ -38,6 +38,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.function.Supplier;
 
@@ -158,6 +159,7 @@ class RunSloReportPostgresTest {
     }
 
     static long retriedTwiceThenCompleted;
+    static long declined;
     static long failedThreeTimes;
 
     /** The runs, in order: one job has one run in flight at a time (V83). */
@@ -205,6 +207,17 @@ class RunSloReportPostgresTest {
             failures.close(store.findJobQueueByJobQueueId(sendFailed).get(), "the broker would not take it", true);
             return null;
         });
+        // MIG-201's decline at w(10): the worker fails a run it never started -- never retried, counted bad.
+        declined = queue(JOB, w(10).minusSeconds(60));
+        tx(() -> {
+            bulkAction.changeJobQueueStatus(declined, JobStatus.Start, null);
+            bulkAction.changeJobStatus(JOB, JobStatus.Start);
+            return null;
+        });
+        reports(JOB, declined, JobStatus.Failed, w(10));
+        // A slot missed while the platform was down, recorded at w(11): never attempted, excluded.
+        tx(() -> bulkAction.createJobQueue(JOB, BusinessTime.wallClockOf(w(11)), JobStatus.Missed,
+            "Job %s missed its scheduled run -- the system was catching up after downtime.", true));
         // Outside the window: exactly at its end, and the day before.
         completed(TO);
         completed(FROM.minus(Duration.ofDays(1)));
@@ -238,19 +251,23 @@ class RunSloReportPostgresTest {
         RunSloReport.Window window = report.measure(FROM, TO);
         // good: two completions, the run completed on its third attempt, a pre-V174 completion
         assertThat(window.good).isEqualTo(4);
-        // bad: the run that failed three times (once), the sweep's Interrupt, the dispatch out of retries,
+        // bad: the run that failed three times (once), the sweep's Interrupt, the dispatch out of retries, the decline,
         //      a pre-V174 sweep Interrupt and a pre-V174 failure that proves nothing else
-        assertThat(window.bad).isEqualTo(5);
-        // excluded: a person's fail, a skip, a configuration refusal, and two pre-V174 console closes
-        assertThat(window.excluded).isEqualTo(5);
-        assertThat(window.successRate()).isEqualTo(4.0 / 9);
-        assertThat(window.errorBudget()).isCloseTo(9 * 0.0001, Offset.offset(1e-12));
+        assertThat(window.bad).isEqualTo(6);
+        // excluded: a person's fail, a skip, a missed slot, a configuration refusal, and two pre-V174 console closes
+        assertThat(window.excluded).isEqualTo(6);
+        assertThat(window.successRate()).isEqualTo(4.0 / 10);
+        assertThat(window.errorBudget()).isCloseTo(10 * 0.0001, Offset.offset(1e-12));
         assertThat(groups(window)).containsExactlyInAnyOrder(
             "Completed/WORKER/good=3", "Completed/UNATTRIBUTED/good=1",
-            "Failed/WORKER/bad=1", "Failed/DISPATCH/bad=1", "Failed/UNATTRIBUTED/bad=1",
+            "Failed/WORKER/bad=1", "Failed/DISPATCH/bad=1", "Failed/DECLINED/bad=1", "Failed/UNATTRIBUTED/bad=1",
             "Interrupt/STALLED/bad=2",
             "Failed/OPERATOR/excluded=2", "Interrupt/OPERATOR/excluded=1", "Failed/REFUSED/excluded=1",
-            "Skip/SKIPPED/excluded=1");
+            "Skip/SKIPPED/excluded=1", "Missed/MISSED/excluded=1");
+        Map<String, Object> figures = window.toMap();
+        assertThat(figures.get("numerator")).isEqualTo(4L);
+        assertThat(figures.get("denominator")).isEqualTo(10L);
+        assertThat((Double) figures.get("errorBudgetRemaining")).isCloseTo(1 - 6 / (10 * 0.0001), Offset.offset(1e-6));
     }
 
     /** C7c: each retried run is one row and one run -- counted once in the window, and once by the counter. */
@@ -281,9 +298,52 @@ class RunSloReportPostgresTest {
     void theLiveCounterAgreesWithTheRows() {
         RunSloReport.Window everything = report.measure(FROM.minus(Duration.ofDays(2)), TO.plus(Duration.ofDays(2)));
         long legacyGood = 1, legacyBad = 2, legacyExcluded = 2;
+        assertThat(counted("bad")).isPositive();
         assertThat(counted("good")).isEqualTo(everything.good - legacyGood);
         assertThat(counted("bad")).isEqualTo(everything.bad - legacyBad);
         assertThat(counted("excluded")).isEqualTo(everything.excluded - legacyExcluded);
+    }
+
+    /** MIG-201: a decline is one run, closed at once, never retried, counted bad. */
+    @Test
+    void aDeclineIsOneFailedRunNeverRetried() {
+        JdbcTemplate sql = db.jdbc();
+        assertThat(sql.queryForObject("SELECT attempt FROM job_queue WHERE job_queue_id = ?", Integer.class, declined)).isEqualTo(1);
+        assertThat(sql.queryForObject("SELECT end_reason FROM job_queue WHERE job_queue_id = ?", String.class, declined))
+            .isEqualTo("DECLINED");
+        RunSloReport.Window justIt = report.measure(w(10).minusSeconds(1), w(10).plusSeconds(1));
+        assertThat(justIt.good).isZero();
+        assertThat(justIt.bad).isEqualTo(1);
+    }
+
+    /** The console's daily series: one row per UTC day holding ended runs, and the days add up to the window. */
+    @Test
+    void theDailySeriesAddsUpToTheWindow() {
+        Instant from = FROM.minus(Duration.ofDays(2));
+        Instant to = TO.plus(Duration.ofDays(2));
+        List<RunSloReport.Day> days = report.measureDaily(from, to);
+        assertThat(days).extracting(day -> day.day.toString()).containsExactly("2026-09-19", "2026-09-20", "2026-09-21");
+        RunSloReport.Day theDay = days.get(1);
+        RunSloReport.Window window = report.measure(FROM, TO);
+        assertThat(new long[] {theDay.good, theDay.bad, theDay.excluded}).containsExactly(window.good, window.bad, window.excluded);
+        RunSloReport.Window everything = report.measure(from, to);
+        assertThat(days.stream().mapToLong(day -> day.good).sum()).isEqualTo(everything.good);
+        assertThat(days.stream().mapToLong(day -> day.bad).sum()).isEqualTo(everything.bad);
+        assertThat(days.stream().mapToLong(day -> day.excluded).sum()).isEqualTo(everything.excluded);
+        assertThat(days.get(0).successRate()).isEqualTo(1.0);
+    }
+
+    /** The burn alert's once-per-window row: taken once, refused while held, taken again when it has passed. */
+    @Test
+    void anAlertIsTakenOncePerWindow() {
+        SloBurnAlerts.Once once = SloBurnAlerts.shedlockTable(db.appJdbc());
+        assertThat(once.first("sloBurn:test:PAGE_1H", Duration.ofHours(1))).isTrue();
+        assertThat(once.first("sloBurn:test:PAGE_1H", Duration.ofHours(1))).isFalse();
+        assertThat(once.first("sloBurn:test:PAGE_6H", Duration.ofHours(6))).isTrue();
+        db.jdbc().update("UPDATE shedlock SET lock_until = now() - interval '1 second' WHERE name = 'sloBurn:test:PAGE_1H'");
+        assertThat(once.first("sloBurn:test:PAGE_1H", Duration.ofHours(1))).isTrue();
+        assertThat(db.jdbc().queryForObject("SELECT lock_until > now() + interval '59 minutes' FROM shedlock WHERE name = ?",
+            Boolean.class, "sloBurn:test:PAGE_1H")).isTrue();
     }
 
     @Test
