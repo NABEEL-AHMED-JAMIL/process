@@ -12,6 +12,7 @@ import process.model.dto.SourceJobDto;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
+import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
@@ -114,6 +115,33 @@ class RunNowPausedWorkspaceTest {
 
         assertThat(response.getStatus()).isEqualTo("ERROR");
         assertThat(response.getMessage()).contains("Suspended").contains("paused").endsWith(".");
+        verify(this.producerBulkEngine, never()).addManualJobInQueue(any(), any());
+    }
+
+    @Test
+    void aWorkflowStepRunsTheJobByTheSameRulesAndAnswersTheRunWithItsReasonInTheAuditLog() throws Exception {
+        SourceJob job = this.autoJobWhoseLastRunIs(JobStatus.Completed);
+        when(this.producerBulkEngine.workspacePause(TENANT_A)).thenReturn(Optional.empty());
+        JobQueue queued = new JobQueue();
+        queued.setJobQueueId(9123L);
+        when(this.producerBulkEngine.addManualJobInQueue(job, null)).thenReturn(queued);
+
+        ResponseDto response = this.service.runSourceJobFor(JOB_ID, "Queued by workflow instance 1001, step run.");
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getData()).isEqualTo(9123L);
+        verify(this.producerBulkEngine).auditRun(9123L, "Queued by workflow instance 1001, step run.");
+    }
+
+    @Test
+    void aWorkflowStepIsRefusedWhileTheWorkspaceIsPausedAsRunNowIs() throws Exception {
+        this.autoJobWhoseLastRunIs(JobStatus.Completed);
+        when(this.producerBulkEngine.workspacePause(TENANT_A)).thenReturn(Optional.of("Inactive"));
+
+        ResponseDto response = this.service.runSourceJobFor(JOB_ID, "Queued by workflow instance 1001, step run.");
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        assertThat(response.getMessage()).contains("Inactive");
         verify(this.producerBulkEngine, never()).addManualJobInQueue(any(), any());
     }
 

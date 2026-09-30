@@ -138,9 +138,10 @@ public class ProducerBulkEngine implements DispatchOutcomes {
 
     /**
      * Queues a run by request (Run now). {@code modelProfiles} is its "Run with..." (MIG-242), a ModelProfiles value
-     * already checked by the caller, or null for none: the run keeps it on its own row, retries included.
+     * already checked by the caller, or null for none: the run keeps it on its own row, retries included. Answers the
+     * queued run (a workflow's run_pipeline step records its id, MIG-273).
      */
-    public void addManualJobInQueue(SourceJob sourceJob, String modelProfiles) {
+    public JobQueue addManualJobInQueue(SourceJob sourceJob, String modelProfiles) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
             BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
@@ -153,6 +154,12 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
+        return jobQueue;
+    }
+
+    /** A line in a run's audit log saying why it was queued (a workflow step, MIG-273). */
+    public void auditRun(Long jobQueueId, String reason) {
+        this.bulkAction.saveJobAuditLogs(jobQueueId, reason);
     }
 
     /**

@@ -24,6 +24,13 @@ public interface SourceJobService {
      */
     ResponseDto runSourceJob(SourceJobDto sourceJobDto, String modelProfiles) throws Exception;
 
+    /**
+     * Run now for a workflow step (MIG-273): the job is run as its workspace -- the caller has set it -- with every check
+     * Run now makes, and {@code reason} written in the run's audit log. Answers the queued run's id in the data, or the
+     * same refusal Run now gives.
+     */
+    ResponseDto runSourceJobFor(Long jobId, String reason) throws Exception;
+
     ResponseDto skipNextSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
     ResponseDto findSourceJobAuditLog(Long jobQueueIdb, Long jobId) throws Exception;

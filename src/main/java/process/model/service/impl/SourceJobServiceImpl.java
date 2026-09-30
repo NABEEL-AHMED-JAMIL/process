@@ -598,8 +598,42 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
-        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Object queued = this.queueRun(sourceJobDto.getJobId(), modelProfiles);
+        if (queued instanceof ResponseDto) {
+            return (ResponseDto) queued;
+        }
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
+        // A DTO, not the entity (MIG-67). Jackson walked the entity after the transaction closed: its lazy
+        // tenant and assignee, its task's payload rows, and the task type's Kafka profile -- encrypted SASL
+        // and keystore passwords included, which no response should carry. Neither console reads it.
+        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.",
+            sourceJob.map(this::mapSourceJobToDto).orElse(null));
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto runSourceJobFor(Long jobId, String reason) throws Exception {
+        if (ProcessUtil.isNull(jobId)) {
+            return new ResponseDto(ERROR, "SourceJob jobId missing.");
+        }
+        Object queued = this.queueRun(jobId, null);
+        if (queued instanceof ResponseDto) {
+            return (ResponseDto) queued;
+        }
+        JobQueue run = (JobQueue) queued;
+        if (reason != null && !reason.isBlank()) {
+            this.producerBulkEngine.auditRun(run.getJobQueueId(), reason);
+        }
+        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.", run.getJobQueueId());
+    }
+
+    /**
+     * Run now's rules, the one place they live: the job is active and the caller's, its last run is not still in flight,
+     * and its workspace is not paused. Answers the queued run, or the refusal (a ResponseDto) saying which rule stopped it.
+     */
+    private Object queueRun(Long jobId, String modelProfiles) {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(jobId, Status.Active);
         if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");
         } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus())
@@ -616,13 +650,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, String.format("This job's workspace is %s, so its runs are paused; "
                 + "it can be run again once the workspace is Active.", paused.get()));
         }
-        this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles);
-        sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
-        // A DTO, not the entity (MIG-67). Jackson walked the entity after the transaction closed: its lazy
-        // tenant and assignee, its task's payload rows, and the task type's Kafka profile -- encrypted SASL
-        // and keystore passwords included, which no response should carry. Neither console reads it.
-        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.",
-            sourceJob.map(this::mapSourceJobToDto).orElse(null));
+        return this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles);
     }
 
     @Override
