@@ -12,10 +12,10 @@
  "steps": [
   {
    "key": "intake",
-   "name": "Intake batch (the file that started the run)",
+   "name": "Intake (the batch or form submission that started the run)",
    "task": "read_file",
    "config": {
-    "format": "csv"
+    "format": "auto"
    }
   },
   {

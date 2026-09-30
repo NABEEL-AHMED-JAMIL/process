@@ -58,7 +58,7 @@ public enum PageKey {
     // Wave 5 Forms (lite): Core's own forms (/form.json: build, read, fill in) and what they collected
     // (/formSubmission.json). Identity-service's catalogue has had both keys since MIG-267; they gate these groups
     // once its PageKey names the same prefixes (HttpIdentity asks it only about a path this catalogue gates).
-    FORMS("forms", "Form builder", "Forms", "/forms/builder",
+    FORMS("forms", "All forms", "Forms", "/forms/builder",
         "/form.json"),
     FORM_SUBMISSIONS("form-submissions", "Submissions", "Forms", "/forms/submissions",
         "/formSubmission.json");
