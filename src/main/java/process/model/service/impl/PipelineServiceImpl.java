@@ -510,7 +510,7 @@ public class PipelineServiceImpl {
 
     static String validate(Pipeline form) {
         if (form == null) return "Nothing to save.";
-        if (isBlank(form.getPipelineId())) return "Give the pipeline its id -- the one the worker routes on.";
+        if (isBlank(form.getPipelineId())) return "Give the pipeline its id — the one the worker routes on.";
         if (isBlank(form.getPipelineName())) return "Give the pipeline a name.";
         if (form.getSourceTaskTypeId() == null) return "Choose the topic this pipeline publishes on.";
         if (form.getFields() == null || form.getFields().isEmpty()) {

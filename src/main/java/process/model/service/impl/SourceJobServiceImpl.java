@@ -153,14 +153,14 @@ public class SourceJobServiceImpl implements SourceJobService {
             // Not-null in the database, so omitting it used to surface as a constraint violation
             // at commit and reach the caller as "Some internal error occurred contact with
             // support." Named here instead, like every other required field.
-            return new ResponseDto(ERROR, "SourceJob execution missing -- Auto or Manual.");
+            return new ResponseDto(ERROR, "SourceJob execution missing — Auto or Manual.");
         } else if (ProcessUtil.isNull(sourceJobDto.getPriority())) {
             // Exactly the same trap as execution above, and it was still open: priority is
             // not-null in the database and was written straight through from the DTO, so a
             // caller that omitted it got HTTP 500 "Some internal error occurred contact with
             // support." rather than being told which field was missing. The console always
             // sends it, which is why this only ever bit the API.
-            return new ResponseDto(ERROR, "SourceJob priority missing -- 1 (highest) to 9.");
+            return new ResponseDto(ERROR, "SourceJob priority missing — 1 (highest) to 9.");
         } else if (sourceJobDto.getPriority() < 1 || sourceJobDto.getPriority() > 9) {
             // The console offers 1-9 and validates it; without the same check here the range is
             // decoration, and a job saved outside it sorts unpredictably against the rest.
@@ -173,7 +173,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             // Delete is the soft-delete tombstone, not something a job is born in. Honouring it
             // below would write a job that is invisible to every list and every count the moment
             // it exists, and the caller would be told it was saved.
-            return new ResponseDto(ERROR, "SourceJob cannot be created as Delete -- create it Active or Inactive.");
+            return new ResponseDto(ERROR, "SourceJob cannot be created as Delete — create it Active or Inactive.");
         }
         String schedulerCardinalityError = this.refuseMoreThanOneScheduler(sourceJobDto);
         if (schedulerCardinalityError != null) {
@@ -192,7 +192,7 @@ public class SourceJobServiceImpl implements SourceJobService {
         }
         Long tenantId = taskDetail.get().getTenantId();
         if (ProcessUtil.isNull(tenantId)) {
-            return new ResponseDto(ERROR, "Selected sourceTask has no owning tenant -- fix its tenant before creating jobs against it.");
+            return new ResponseDto(ERROR, "Selected sourceTask has no owning tenant — fix its tenant before creating jobs against it.");
         }
         Long assignedUserId = !ProcessUtil.isNull(sourceJobDto.getAssignedUserId())
             ? sourceJobDto.getAssignedUserId() : TenantContext.getAppUserId();

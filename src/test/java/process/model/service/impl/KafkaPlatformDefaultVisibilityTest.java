@@ -102,7 +102,7 @@ public class KafkaPlatformDefaultVisibilityTest {
         p.setAdditionalProperties("{\"sasl.jaas.config\":\"secret\"}");
         p.setConnectionStatus("SUCCESS");
         p.setLastTestedAt(new Timestamp(0L));
-        p.setLastTestMessage("Connected successfully -- cluster \"pf-cluster\" with 3 broker(s).");
+        p.setLastTestMessage("Connected successfully — cluster \"pf-cluster\" with 3 broker(s).");
         p.setIsDefault(true);
         p.setStatus(Status.Active);
         return p;

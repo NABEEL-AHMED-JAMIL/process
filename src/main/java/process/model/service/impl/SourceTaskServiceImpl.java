@@ -262,7 +262,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             // Delete is the tombstone deleteSourceTask writes, not a state to create in: a task
             // saved that way is invisible to every list and picker the moment it exists, and the
             // caller is told it was saved.
-            return new ResponseDto(ERROR, "SourceTask cannot be created as Delete -- create it Active or Inactive.");
+            return new ResponseDto(ERROR, "SourceTask cannot be created as Delete — create it Active or Inactive.");
         }
         Optional<String> platformDatabase = PlatformDatabases.refusal(sourceTaskDto.getTaskPayload());
         if (platformDatabase.isPresent()) {

@@ -34,7 +34,7 @@ public class SendNotificationStepTask extends RegisteredTask {
             .property("severity", JsonSchema.string().enumOf("INFO", "SUCCESS", "WARNING", "ERROR").title("Severity").defaultValue("INFO"))
             .property("to", JsonSchema.string().enumOf("owner", "admins", "everyone", "users").title("To").defaultValue("owner"))
             .property("userIds", JsonSchema.array(JsonSchema.integer().minimum(1)).maxItems(PipelineNotifier.MAX_RECIPIENTS)
-                .title("People").format("user").description("to: users -- members of the workspace, by id."))
+                .title("People").format("user").description("to: users — members of the workspace, by id."))
             .property("when", JsonSchema.string().enumOf("always", "has_rows", "no_rows").title("Send").defaultValue("always"))
             .property("link", JsonSchema.string().pattern("^/[^\\s]{0,254}$").title("Link").defaultValue("/jobList")
                 .description("A console path the notice opens, starting with /")))

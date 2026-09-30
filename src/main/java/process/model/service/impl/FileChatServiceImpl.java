@@ -166,7 +166,7 @@ public class FileChatServiceImpl implements FileChatService {
     }
 
     private static String fileTypeMismatchMessage(String targetFileTypes, String key) {
-        return String.format("This agent only handles %s files -- pick a different agent for %s.",
+        return String.format("This agent only handles %s files — pick a different agent for %s.",
             targetFileTypes, key);
     }
 
@@ -813,7 +813,7 @@ public class FileChatServiceImpl implements FileChatService {
                         // exactly that). "Couldn't get any readable content" would send the
                         // reader looking for a format problem that is not there.
                         throw new UnsupportedFileTypeException(String.format(
-                            "%s is empty -- there is nothing in it to ask about.", ContentTypeUtil.fileNameOf(key)));
+                            "%s is empty — there is nothing in it to ask about.", ContentTypeUtil.fileNameOf(key)));
                     }
                     text[0] = extracted;
                 } catch (UnsupportedFileTypeException ex) {

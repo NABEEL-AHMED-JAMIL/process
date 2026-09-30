@@ -30,7 +30,7 @@ import java.util.Optional;
 public class ReadFileStepTask extends RegisteredTask {
 
     static final TaskSpec SPEC = TaskSpec.builder("read_file", "Read CSV/JSON/Parquet", TaskKind.READ)
-        .description("Reads one file of a workspace bucket -- CSV, JSON, JSON Lines or Parquet -- as rows (storage-service).")
+        .description("Reads one file of a workspace bucket — CSV, JSON, JSON Lines or Parquet — as rows (storage-service).")
         .output(TaskSpec.rows("The file's rows; CSV cells as text."))
         .config(FileConfigs.parsing(JsonSchema.object()
             .property("bucket", JsonSchema.string().minLength(1).maxLength(255).title("Bucket").format("bucket")

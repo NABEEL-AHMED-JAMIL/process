@@ -118,7 +118,7 @@ public final class KafkaCertificateUtil {
             }
         }
         throw new IllegalArgumentException(
-            "That private key could not be read. It must be an unencrypted PKCS#8 key -- a PEM "
+            "That private key could not be read. It must be an unencrypted PKCS#8 key — a PEM "
             + "file beginning \"-----BEGIN PRIVATE KEY-----\".");
     }
 

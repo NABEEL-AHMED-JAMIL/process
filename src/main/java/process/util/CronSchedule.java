@@ -57,7 +57,7 @@ public final class CronSchedule {
     public static String problem(String expression) {
         String tidy = normalise(expression);
         if (tidy == null) {
-            return String.format("A Cron schedule needs a cron expression: five fields, %s -- e.g. '0 9 * * MON-FRI' for "
+            return String.format("A Cron schedule needs a cron expression: five fields, %s — e.g. '0 9 * * MON-FRI' for "
                 + "09:00 on weekdays, Chicago time.", FIELDS);
         }
         if (tidy.length() > MAX_LENGTH) {

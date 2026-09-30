@@ -403,7 +403,7 @@ public class SettingServiceImpl implements SettingService {
         return this.tenantTaskTypeKafkaRouteRepository
             .findByTenantIdAndSourceTaskTypeId(TenantContext.getTenantId(), sourceTaskTypeId)
             .map(route -> new ResponseDto(SUCCESS, "Route fetched.", route.getKafkaConnectionProfileId()))
-            .orElseGet(() -> new ResponseDto(SUCCESS, "No routing override set -- using the type's default.", null));
+            .orElseGet(() -> new ResponseDto(SUCCESS, "No routing override set — using the type's default.", null));
     }
 
     @Override
@@ -413,7 +413,7 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, "Topic id and Kafka connection profile id are both required.");
         }
         if (TenantContext.isPlatformAdmin()) {
-            return new ResponseDto(ERROR, "A platform administrator publishes unscoped -- tenant routing overrides don't apply.");
+            return new ResponseDto(ERROR, "A platform administrator publishes unscoped — tenant routing overrides don't apply.");
         }
         Long tenantId = TenantContext.getTenantId();
         String kafkaProfileError = this.validateKafkaProfileOwnership(kafkaConnectionProfileId);
@@ -444,7 +444,7 @@ public class SettingServiceImpl implements SettingService {
             return new ResponseDto(ERROR, "A platform administrator has no tenant routing override to remove.");
         }
         this.tenantTaskTypeKafkaRouteRepository.deleteByTenantIdAndSourceTaskTypeId(TenantContext.getTenantId(), sourceTaskTypeId);
-        return new ResponseDto(SUCCESS, "Kafka routing override removed -- back to the type's own default.");
+        return new ResponseDto(SUCCESS, "Kafka routing override removed — back to the type's own default.");
     }
 
     private SourceTaskType getSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) {
@@ -479,7 +479,7 @@ public class SettingServiceImpl implements SettingService {
         }
         Long tenantId = sourceTaskTypeDto.getTenantId();
         if (isNull(tenantId)) {
-            return "Topic workspace missing -- a platform administrator must say which workspace "
+            return "Topic workspace missing — a platform administrator must say which workspace "
                 + "this task type belongs to.";
         }
         if (!IdentityPort.live(this.identity, tenantId).isPresent()) {

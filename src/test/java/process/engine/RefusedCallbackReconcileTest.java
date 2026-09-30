@@ -76,7 +76,7 @@ class RefusedCallbackReconcileTest {
         assertThat(run.getJobStatus()).isEqualTo(JobStatus.Interrupt);
         assertThat(run.getEndTime()).isNotNull();
         assertThat(run.getJobStatusMessage()).isEqualTo("Job 2410's worker reported Completed at 2026-09-24T09:12:05, "
-            + "but its callback token had expired, so the report was refused. Closed as interrupted -- check the "
+            + "but its callback token had expired, so the report was refused. Closed as interrupted — check the "
             + "output before running it again.");
         verify(this.transactionService).saveJobQueue(run);
         verify(this.bulkAction).saveJobAuditLogs(5705L, "Run closed automatically: the worker's report "

@@ -376,7 +376,7 @@ public class OpenSearchRagClient {
         String mappedType = embedding.path("type").asText("");
         if (!"knn_vector".equals(mappedType)) {
             return "its embedding field is mapped as '" + (mappedType.isEmpty() ? "(absent)" : mappedType)
-                + "' rather than knn_vector, so it carries no vector index at all -- the signature of an "
+                + "' rather than knn_vector, so it carries no vector index at all — the signature of an "
                 + "index auto-created by a _bulk write against a cluster whose index had been wiped";
         }
         int mappedDimension = embedding.path("dimension").asInt(0);
@@ -394,7 +394,7 @@ public class OpenSearchRagClient {
         boolean hasKeywordSubField = "keyword".equals(modelField.path("fields").path("keyword").path("type").asText(""));
         if (!"keyword".equals(modelType) && !hasKeywordSubField) {
             return "its embeddingModel field is mapped as '" + (modelType.isEmpty() ? "(absent)" : modelType)
-                + "' with no keyword sub-field, so neither term clause retrieval scopes by can match it -- "
+                + "' with no keyword sub-field, so neither term clause retrieval scopes by can match it — "
                 + "and the standard analyzer splits a model name like nomic-embed-text on its hyphens. Left "
                 + "alone, every file will read as un-indexed and be re-chunked and re-embedded on every "
                 + "single message";
@@ -876,7 +876,7 @@ public class OpenSearchRagClient {
         JsonNode firstFailure = shards.path("failures").path(0).path("reason");
         String type = firstFailure.path("type").asText("");
         String reason = firstFailure.path("reason").asText("");
-        return "every shard failed -- " + (type.isEmpty() ? "no reason given" : type + ": " + reason);
+        return "every shard failed — " + (type.isEmpty() ? "no reason given" : type + ": " + reason);
     }
 
     /**

@@ -78,7 +78,7 @@ public class JobAssistantServiceImpl {
             return new ResponseDto(ProcessUtil.ERROR_MESSAGE, "jobId missing.");
         }
         if (ProcessUtil.isNull(dto.getAiAgentId())) {
-            return new ResponseDto(ProcessUtil.ERROR_MESSAGE, "aiAgentId missing -- pick an AI agent first.");
+            return new ResponseDto(ProcessUtil.ERROR_MESSAGE, "aiAgentId missing — pick an AI agent first.");
         }
         if (ProcessUtil.isNull(dto.getMessage()) || dto.getMessage().trim().isEmpty()) {
             return new ResponseDto(ProcessUtil.ERROR_MESSAGE, "message missing.");

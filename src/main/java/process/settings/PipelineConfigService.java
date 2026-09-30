@@ -118,7 +118,7 @@ public class PipelineConfigService {
         }
         PipelineConfig entry = found.get();
         if (request.getKey() != null && !request.getKey().trim().equals(entry.getConfigKey())) {
-            return new ResponseDto(ERROR, String.format("%s cannot be renamed -- tasks reference it by that key. Add a new "
+            return new ResponseDto(ERROR, String.format("%s cannot be renamed — tasks reference it by that key. Add a new "
                 + "entry instead.", entry.getConfigKey()));
         }
         if (request.getKind() != null && !request.getKind().equals(entry.getKind())) {

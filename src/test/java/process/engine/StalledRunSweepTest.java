@@ -154,7 +154,7 @@ class StalledRunSweepTest {
         assertThat(saved.getValue().getJobStatus()).isEqualTo(JobStatus.Interrupt);
         assertWithin(saved.getValue().getEndTime(), before, after);
         assertThat(saved.getValue().getJobStatusMessage()).isEqualTo("Job 1196 stopped reporting and was "
-            + "closed after 6 hours. Its worker may have finished the work -- check the output before running it again.");
+            + "closed after 6 hours. Its worker may have finished the work — check the output before running it again.");
     }
 
     /** Whatever state it was stranded in, the verdict is the same one -- and it is never an outcome. */

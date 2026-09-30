@@ -179,7 +179,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
                 .existsByKafkaConnectionProfileIdAndStatusNot(kafkaConnectionProfileId, Status.Delete)
             || this.routeRepository.existsByKafkaConnectionProfileId(kafkaConnectionProfileId);
         if (stillReferenced) {
-            return new ResponseDto(ERROR, "This profile is still used by a Source Task Type or tenant routing override -- reassign those first.");
+            return new ResponseDto(ERROR, "This profile is still used by a Source Task Type or tenant routing override — reassign those first.");
         }
         KafkaConnectionProfile profile = profileOpt.get();
         profile.setStatus(Status.Delete);
@@ -382,7 +382,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
             String clusterId = result.clusterId().get(10, TimeUnit.SECONDS);
             int nodeCount = result.nodes().get(10, TimeUnit.SECONDS).size();
             return new ResponseDto(SUCCESS, String.format(
-                "Connected successfully -- cluster \"%s\" with %d broker(s).", clusterId, nodeCount));
+                "Connected successfully — cluster \"%s\" with %d broker(s).", clusterId, nodeCount));
         } catch (Exception ex) {
             // The caller is told only that it failed, so the log is now the only place the reason exists.
             this.logger.warn("Kafka test connection failed for '{}': {}", profile.getProfileName(), ex.getMessage(), ex);
@@ -424,15 +424,15 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
     private String failureReason(Exception ex) {
         Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
         if (cause instanceof SaslAuthenticationException) {
-            return "Authentication rejected -- check username/password/mechanism.";
+            return "Authentication rejected — check username/password/mechanism.";
         }
         if (cause instanceof SslAuthenticationException) {
-            return "TLS handshake failed -- check certificates/truststore.";
+            return "TLS handshake failed — check certificates/truststore.";
         }
         if (cause instanceof TimeoutException || ex instanceof TimeoutException) {
             return "Broker unreachable or network blocked (timed out).";
         }
-        return "The broker did not answer -- check the bootstrap servers and security settings; "
+        return "The broker did not answer — check the bootstrap servers and security settings; "
             + "the detail is in the server log.";
     }
 
@@ -482,11 +482,11 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
             List<String> groups = this.consumerGroupsOf(adminClient, topicName);
             if (groups.isEmpty()) {
                 return new ResponseDto(SUCCESS, String.format(
-                    "Topic \"%s\" is reachable -- %d partition(s) -- but no consumer is reading it right now. A run dispatched to it will wait until a worker subscribes.",
+                    "Topic \"%s\" is reachable — %d partition(s) — but no consumer is reading it right now. A run dispatched to it will wait until a worker subscribes.",
                     topicName, description.partitions().size()));
             }
             return new ResponseDto(SUCCESS, String.format(
-                "Topic \"%s\" is reachable -- %d partition(s), read by %s.", topicName, description.partitions().size(),
+                "Topic \"%s\" is reachable — %d partition(s), read by %s.", topicName, description.partitions().size(),
                 String.join(", ", groups)));
         } catch (Exception ex) {
             this.logger.warn("Kafka topic test failed for '{}': {}", topicName, ex.getMessage(), ex);
@@ -539,7 +539,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
             boolean truststorePasswordGiven = !isNull(dto.getSslTruststorePassword())
                 && !dto.getSslTruststorePassword().trim().isEmpty();
             if (truststorePasswordGiven && !truststoreNamed) {
-                return new ResponseDto(ERROR, "sslTruststorePassword needs an sslTruststoreLocation -- a truststore "
+                return new ResponseDto(ERROR, "sslTruststorePassword needs an sslTruststoreLocation — a truststore "
                     + "itself is optional, leave both blank to use the JVM default for brokers signed by a well-known CA.");
             }
         }
@@ -644,7 +644,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
             && this.sameText(stored.getSaslUsername(), dto.getSaslUsername())) {
             return null;
         }
-        return new ResponseDto(ERROR, "Enter the SASL password again -- a saved password is only reused for the "
+        return new ResponseDto(ERROR, "Enter the SASL password again — a saved password is only reused for the "
             + "bootstrap servers, security protocol, mechanism and username it was saved with, and this changes one of those.");
     }
 
