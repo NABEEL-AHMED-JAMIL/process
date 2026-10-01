@@ -59,19 +59,22 @@ public class FormService {
     private final FormWorkflows workflows;
     private final FormInbox inbox;
     private final FormDatasets.Registry datasets;
+    private final FormDatasetWriter rows;
 
     /** Forms without workflows or datasets: what the plain-forms tests build. */
     public FormService(FormStore store, TransactionServiceImpl jobs) {
-        this(store, jobs, null, null, null);
+        this(store, jobs, null, null, null, null);
     }
 
     @Autowired
-    public FormService(FormStore store, TransactionServiceImpl jobs, FormWorkflows workflows, FormInbox inbox, FormDatasets.Registry datasets) {
+    public FormService(FormStore store, TransactionServiceImpl jobs, FormWorkflows workflows, FormInbox inbox, FormDatasets.Registry datasets,
+        FormDatasetWriter rows) {
         this.store = store;
         this.jobs = jobs;
         this.workflows = workflows;
         this.inbox = inbox;
         this.datasets = datasets;
+        this.rows = rows;
     }
 
     // ---- reading -----------------------------------------------------------------------------------------------
@@ -302,7 +305,11 @@ public class FormService {
         try {
             long id = this.datasets.register(location.alias, FormDatasets.globOf(form.formId), FormDatasets.nameOf(form));
             this.store.setDataset(tenantId, form.formId, id, location.alias);
-            return " Its submissions are the Analytics dataset '" + FormDatasets.nameOf(form) + "'.";
+            // Submissions sent before it was a dataset become rows too, so the dataset is the whole form.
+            String bucket = form.datasetBucket == null ? location.alias : form.datasetBucket;
+            int written = this.rows == null ? 0 : this.rows.backfill(tenantId, form, bucket);
+            return " Its submissions are the Analytics dataset '" + FormDatasets.nameOf(form) + "'"
+                + (written > 0 ? String.format(" (%d so far).", written) : ".");
         } catch (RuntimeException refused) {
             logger.warn("Form {}'s dataset was not registered: {}", form.formId, refused.getMessage());
             this.store.setDataset(tenantId, form.formId, null, location.alias);

@@ -90,17 +90,19 @@ public class FormSubmissionService {
     private final TransactionServiceImpl jobs;
     private final TransactionTemplate transactions;
     private final FormWorkflows workflows;
+    private final FormDatasetWriter rows;
 
-    /** Submissions without workflows: what the plain-forms tests build. */
+    /** Submissions without workflows; their rows written to the same bucket as their files: what the plain-forms tests build. */
     public FormSubmissionService(FormStore store, FormService forms, FormInbox inbox, BucketStore buckets, ProducerBulkEngine engine,
         TransactionServiceImpl jobs, PlatformTransactionManager transactionManager) {
-        this(store, forms, inbox, buckets, engine, jobs, transactionManager, null);
+        this(store, forms, inbox, buckets, engine, jobs, transactionManager, null, new FormDatasetWriter(store, buckets));
     }
 
     @Autowired
     public FormSubmissionService(FormStore store, FormService forms, FormInbox inbox, BucketStore buckets, ProducerBulkEngine engine,
-        TransactionServiceImpl jobs, PlatformTransactionManager transactionManager, FormWorkflows workflows) {
+        TransactionServiceImpl jobs, PlatformTransactionManager transactionManager, FormWorkflows workflows, FormDatasetWriter rows) {
         this.workflows = workflows;
+        this.rows = rows;
         this.store = store;
         this.forms = forms;
         this.inbox = inbox;
@@ -217,28 +219,19 @@ public class FormSubmissionService {
         }
     }
 
-    /**
-     * The submission as its form's dataset row (FormDatasets), in the bucket the form's rows are kept in -- the inbox, the
-     * first time, as the person submitting. Best effort: a row that cannot be written is logged; the submission stands.
-     */
+    /** The submission's dataset row, in the form's bucket -- the inbox, the first time, as the person submitting. */
     private void writeRow(long tenantId, FormStore.Form form, FormStore.Submission submission, boolean mayLocate) {
-        String bucket = form.datasetBucket;
-        try {
-            if (bucket == null && mayLocate) {
-                bucket = this.inbox.locate().alias;
-                if (bucket != null) {
-                    this.store.setDataset(tenantId, form.formId, null, bucket);
-                }
-            }
-            if (bucket == null || this.buckets.unavailable().isPresent()) {
-                return;
-            }
-            List<FormField> fields = this.store.fieldsAt(tenantId, form.formId, submission.formVersion).orElse(form.fields);
-            this.buckets.upload(tenantId, bucket, FormDatasets.keyOf(form.formId, submission.submissionId),
-                CSV_JSON.writeValueAsBytes(FormDatasets.rowOf(fields, submission)), "application/json");
-        } catch (Exception unwritten) {
-            logger.warn("Submission {}'s dataset row was not written to {}: {}", submission.submissionId, bucket, unwritten.getMessage());
+        if (this.rows == null) {
+            return;
         }
+        String bucket = form.datasetBucket;
+        if (bucket == null && mayLocate) {
+            bucket = this.inbox.locate().alias;
+            if (bucket != null) {
+                this.store.setDataset(tenantId, form.formId, null, bucket);
+            }
+        }
+        this.rows.write(tenantId, form, submission, bucket);
     }
 
     private static String typeOf(FormStore.Form form, String key) {

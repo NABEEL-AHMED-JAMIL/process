@@ -76,9 +76,10 @@ class FormWorkflowDatasetTest {
             this.registered.add(alias + " " + path + " " + name);
             return 77L;
         };
-        this.forms = new FormService(this.store, mock(TransactionServiceImpl.class), this.workflows, inbox, registry);
+        FormDatasetWriter rows = new FormDatasetWriter(this.store, this.bucket);
+        this.forms = new FormService(this.store, mock(TransactionServiceImpl.class), this.workflows, inbox, registry, rows);
         this.service = new FormSubmissionService(this.store, this.forms, inbox, this.bucket, mock(ProducerBulkEngine.class),
-            mock(TransactionServiceImpl.class), mock(PlatformTransactionManager.class), this.workflows);
+            mock(TransactionServiceImpl.class), mock(PlatformTransactionManager.class), this.workflows, rows);
     }
 
     @AfterEach
@@ -151,6 +152,21 @@ class FormWorkflowDatasetTest {
         assertThat(new ObjectMapper().readTree(new String(this.bucket.lastRow, StandardCharsets.UTF_8)).path("approval_status").asText())
             .isEqualTo("Approved");
         assertThat(this.service.followWorkflow(A + 1, kept.submissionId, 1L, "Rejected", false)).as("another workspace").isFalse();
+    }
+
+    @Test
+    void aFormThatBecomesADatasetLaterBringsItsEarlierSubmissionsAsRows() {
+        TenantContext.set(A, "TENANT_ADMIN", 4537L, "admin@clinic.example");
+        FormSaveRequest draft = new FormSaveRequest(null, "Later", null, FormStore.DRAFT,
+            Collections.singletonList(new FormField("patient_id", "Patient ID", "text", true, null, null)), null);
+        long formId = formIdOf(this.forms.save(draft));
+        this.store.receive(A, formId, 1, Collections.singletonMap("patient_id", "P-1"), null, 4597L, "alex");
+        this.store.receive(A, formId, 1, Collections.singletonMap("patient_id", "P-2"), null, 4597L, "alex");
+        assertThat(this.bucket.rows).isEmpty();
+
+        ResponseDto activated = this.forms.status(new FormStatusRequest(formId, FormStore.ACTIVE));
+        assertThat(activated.getMessage()).contains("Its submissions are the Analytics dataset 'Form: Later' (2 so far).");
+        assertThat(this.bucket.rows).hasSize(2).allMatch(r -> r.contains("datasets/forms/form-" + formId + "/submission-"));
     }
 
     @Test
