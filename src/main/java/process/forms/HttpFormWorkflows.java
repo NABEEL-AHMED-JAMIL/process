@@ -18,7 +18,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
- * {@link FormWorkflows} through workflow-service's internal door (POST /internal/workflows/definition and /start), with
+ * {@link FormWorkflows} through workflow-service's internal door (POST /api/v1/internal/workflows/definition and /start), with
  * the internal token: the submission names its workspace and requester, and its id is the start's event id, so a retried
  * submission starts one request.
  */
@@ -38,7 +38,7 @@ public class HttpFormWorkflows implements FormWorkflows {
 
     public HttpFormWorkflows(@Value("${workflow.url:http://workflow:9190}") String workflowUrl,
         @Value("${internal.service-token:}") String serviceToken) {
-        this.base = workflowUrl.replaceAll("/+$", "") + "/internal/workflows";
+        this.base = workflowUrl.replaceAll("/+$", "") + "/api/v1/internal/workflows";
         this.serviceToken = serviceToken == null ? "" : serviceToken.trim();
     }
 
