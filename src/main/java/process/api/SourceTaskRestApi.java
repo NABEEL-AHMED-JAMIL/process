@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import process.model.dto.FileUploadDto;
@@ -31,6 +32,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequestMapping(value = "/sourceTask.json")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class SourceTaskRestApi {
+
+    /** MIG-305: the list and template downloads are workbooks, and say so -- they went out as application/json. */
+    static final MediaType XLSX = MediaType.parseMediaType(ProcessUtil.SHEET_NAME);
 
     private Logger logger = LoggerFactory.getLogger(SourceTaskRestApi.class);
 
@@ -129,7 +133,7 @@ public class SourceTaskRestApi {
             HttpHeaders headers = new HttpHeaders();
             String fileName = "BatchDownload-" + BusinessTime.today() + "-" + UUID.randomUUID() + ProcessUtil.XLSX_EXTENSION;
             headers.add(ProcessUtil.CONTENT_DISPOSITION, ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(this.sourceTaskService.downloadListSourceTask().toByteArray());
+            return ResponseEntity.ok().headers(headers).contentType(XLSX).body(this.sourceTaskService.downloadListSourceTask().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceTask :- {}.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -142,7 +146,7 @@ public class SourceTaskRestApi {
             HttpHeaders headers = new HttpHeaders();
             String fileName = "BatchDownload-" + BusinessTime.today() + "-" + UUID.randomUUID() + ProcessUtil.XLSX_EXTENSION;
             headers.add(ProcessUtil.CONTENT_DISPOSITION, ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(this.sourceTaskService.downloadSourceTaskTemplate().toByteArray());
+            return ResponseEntity.ok().headers(headers).contentType(XLSX).body(this.sourceTaskService.downloadSourceTaskTemplate().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadSourceTaskTemplate :- {}.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

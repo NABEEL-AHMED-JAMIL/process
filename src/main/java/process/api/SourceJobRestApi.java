@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import process.model.dto.FileUploadDto;
@@ -34,6 +35,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequestMapping(value = "/sourceJob.json")
 @PreAuthorize("hasRole('TENANT_USER')")
 public class SourceJobRestApi {
+
+    /** MIG-305: the list and template downloads are workbooks, and say so -- they went out as application/json. */
+    static final MediaType XLSX = MediaType.parseMediaType(ProcessUtil.SHEET_NAME);
 
     private Logger logger = LoggerFactory.getLogger(SourceJobRestApi.class);
 
@@ -210,7 +214,7 @@ public class SourceJobRestApi {
             HttpHeaders headers = new HttpHeaders();
             String fileName = "BatchDownload-" + BusinessTime.today() + "-" + UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION, ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkService.downloadSourceJobTemplateFile().toByteArray());
+            return ResponseEntity.ok().headers(headers).contentType(XLSX).body(this.sourceJobBulkService.downloadSourceJobTemplateFile().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloading source job template xlsx file.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, "Sorry, the file could not be downloaded. Please contact support."), HttpStatus.BAD_REQUEST);
@@ -223,7 +227,7 @@ public class SourceJobRestApi {
             HttpHeaders headers = new HttpHeaders();
             String fileName = "BatchDownload-" + BusinessTime.today() + "-" + UUID.randomUUID() + ".xlsx";
             headers.add(ProcessUtil.CONTENT_DISPOSITION, ProcessUtil.FILE_NAME_HEADER + fileName);
-            return ResponseEntity.ok().headers(headers).body(this.sourceJobBulkService.downloadListSourceJob().toByteArray());
+            return ResponseEntity.ok().headers(headers).contentType(XLSX).body(this.sourceJobBulkService.downloadListSourceJob().toByteArray());
         } catch (Exception ex) {
             logger.error("An error occurred while downloadListSourceJob.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
