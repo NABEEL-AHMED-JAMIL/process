@@ -11,6 +11,8 @@ public class FormSaveRequest {
     private String status;
     private List<FormField> fields;
     private Long jobId;
+    /** MIG-279: the workflow a submission starts (its key in workflow-service), or none. */
+    private String workflowKey;
 
     public FormSaveRequest() {
     }
@@ -47,4 +49,8 @@ public class FormSaveRequest {
     public Long getJobId() { return this.jobId; }
 
     public void setJobId(Long jobId) { this.jobId = jobId; }
+
+    public String getWorkflowKey() { return this.workflowKey; }
+
+    public void setWorkflowKey(String workflowKey) { this.workflowKey = workflowKey; }
 }

@@ -30,9 +30,10 @@ public class JdbcFormStore implements FormStore {
     private static final TypeReference<LinkedHashMap<String, Object>> ANSWERS = new TypeReference<LinkedHashMap<String, Object>>() { };
 
     private static final String FORM_COLUMNS = "f.form_id, f.tenant_id, f.name, f.description, f.status, f.fields::text AS fields, "
-        + "f.job_id, f.version, f.updated_by, f.date_created, f.date_updated";
+        + "f.job_id, f.version, f.updated_by, f.date_created, f.date_updated, f.workflow_key, f.analytics_dataset_id, f.dataset_bucket";
     private static final String SUBMISSION_COLUMNS = "submission_id, form_id, tenant_id, form_version, answers::text AS answers, "
-        + "submitted_by, submitted_by_name, submitted_at, status, job_id, job_queue_id, reason, bucket, storage_key";
+        + "submitted_by, submitted_by_name, submitted_at, status, job_id, job_queue_id, reason, bucket, storage_key, workflow_instance_id, "
+        + "workflow_status, workflow_reason";
 
     private final JdbcTemplate jdbc;
 
@@ -185,7 +186,33 @@ public class JdbcFormStore implements FormStore {
             }, tenantId, limit);
     }
 
+    @Override
+    public void setFormWorkflow(long tenantId, long formId, String workflowKey) {
+        this.jdbc.update("UPDATE form_definition SET workflow_key = ? WHERE tenant_id = ? AND form_id = ?", workflowKey, tenantId, formId);
+    }
+
+    @Override
+    public void setDataset(long tenantId, long formId, Long analyticsDatasetId, String bucket) {
+        this.jdbc.update("UPDATE form_definition SET analytics_dataset_id = coalesce(?, analytics_dataset_id), "
+            + "dataset_bucket = coalesce(?, dataset_bucket) WHERE tenant_id = ? AND form_id = ?", analyticsDatasetId, bucket, tenantId, formId);
+    }
+
+    @Override
+    public boolean setWorkflow(long tenantId, long submissionId, Long instanceId, String status, String reason) {
+        return this.jdbc.update("UPDATE form_submission SET workflow_instance_id = coalesce(?, workflow_instance_id), workflow_status = ?, "
+            + "workflow_reason = ?, workflow_updated_at = now() WHERE tenant_id = ? AND submission_id = ?", instanceId, status, reason, tenantId,
+            submissionId) > 0;
+    }
+
     private static Form form(ResultSet rs, int row) throws SQLException {
+        Form form = formOf(rs);
+        form.workflowKey = rs.getString("workflow_key");
+        form.analyticsDatasetId = rs.getObject("analytics_dataset_id", Long.class);
+        form.datasetBucket = rs.getString("dataset_bucket");
+        return form;
+    }
+
+    private static Form formOf(ResultSet rs) throws SQLException {
         return new Form(rs.getLong("form_id"), rs.getLong("tenant_id"), rs.getString("name"), rs.getString("description"),
             rs.getString("status"), read(rs.getString("fields"), FIELDS), rs.getObject("job_id", Long.class), rs.getInt("version"),
             rs.getObject("updated_by", Long.class), instant(rs.getTimestamp("date_created")), instant(rs.getTimestamp("date_updated")),
@@ -193,6 +220,14 @@ public class JdbcFormStore implements FormStore {
     }
 
     private static Submission submission(ResultSet rs, int row) throws SQLException {
+        Submission submission = submissionOf(rs);
+        submission.workflowInstanceId = rs.getObject("workflow_instance_id", Long.class);
+        submission.workflowStatus = rs.getString("workflow_status");
+        submission.workflowReason = rs.getString("workflow_reason");
+        return submission;
+    }
+
+    private static Submission submissionOf(ResultSet rs) throws SQLException {
         return new Submission(rs.getLong("submission_id"), rs.getLong("form_id"), rs.getLong("tenant_id"), rs.getInt("form_version"),
             read(rs.getString("answers"), ANSWERS), rs.getObject("submitted_by", Long.class), rs.getString("submitted_by_name"),
             instant(rs.getTimestamp("submitted_at")), rs.getString("status"), rs.getObject("job_id", Long.class),

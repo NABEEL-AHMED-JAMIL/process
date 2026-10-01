@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -88,9 +89,18 @@ public class FormSubmissionService {
     private final ProducerBulkEngine engine;
     private final TransactionServiceImpl jobs;
     private final TransactionTemplate transactions;
+    private final FormWorkflows workflows;
 
+    /** Submissions without workflows: what the plain-forms tests build. */
     public FormSubmissionService(FormStore store, FormService forms, FormInbox inbox, BucketStore buckets, ProducerBulkEngine engine,
         TransactionServiceImpl jobs, PlatformTransactionManager transactionManager) {
+        this(store, forms, inbox, buckets, engine, jobs, transactionManager, null);
+    }
+
+    @Autowired
+    public FormSubmissionService(FormStore store, FormService forms, FormInbox inbox, BucketStore buckets, ProducerBulkEngine engine,
+        TransactionServiceImpl jobs, PlatformTransactionManager transactionManager, FormWorkflows workflows) {
+        this.workflows = workflows;
         this.store = store;
         this.forms = forms;
         this.inbox = inbox;
@@ -136,13 +146,103 @@ public class FormSubmissionService {
         } catch (IllegalStateException sentTwice) {
             return new ResponseDto(ERROR, "A file on this form was just sent with another submission; upload it again and send.");
         }
-        if (form.jobId == null) {
-            return new ResponseDto(SUCCESS, "Thank you: your submission was received.", view(received));
-        }
-        FormStore.Submission outcome = this.start(tenantId, form, received);
-        return new ResponseDto(SUCCESS, FormStore.RUN_STARTED.equals(outcome.status)
+        FormStore.Submission outcome = form.jobId == null ? received : this.start(tenantId, form, received);
+        String message = form.jobId == null ? "Thank you: your submission was received."
+            : FormStore.RUN_STARTED.equals(outcome.status)
             ? String.format("Thank you: your submission was received and started run #%d.", outcome.jobQueueId)
-            : "Your submission was received, but it did not start its run: " + outcome.reason, view(outcome));
+            : "Your submission was received, but it did not start its run: " + outcome.reason;
+        if (form.workflowKey != null) {
+            outcome = this.startWorkflow(tenantId, form, outcome, person);
+            message += FormStore.NOT_STARTED.equals(outcome.workflowStatus)
+                ? " Its approval did not start: " + outcome.workflowReason
+                : String.format(" Its approval (request #%d) is %s.", outcome.workflowInstanceId, outcome.workflowStatus.toLowerCase(Locale.ROOT));
+        }
+        this.writeRow(tenantId, form, outcome, true);
+        return new ResponseDto(SUCCESS, message, view(outcome));
+    }
+
+    // ---- workflow and dataset (MIG-279) --------------------------------------------------------------------------
+
+    /** Starts the form's workflow for the submission; a failure is kept on it as NotStarted, with why. */
+    private FormStore.Submission startWorkflow(long tenantId, FormStore.Form form, FormStore.Submission submission, Long person) {
+        Map<String, Object> subject = new LinkedHashMap<>();
+        subject.put("form", form.name);
+        subject.put("submission_id", submission.submissionId);
+        subject.put("submitted_by", submission.submittedByName);
+        for (Map.Entry<String, Object> answer : submission.answers.entrySet()) {
+            subject.put(answer.getKey(), FormDatasets.flat(typeOf(form, answer.getKey()), answer.getValue()));
+        }
+        String title = String.format("%s #%d", form.name, submission.submissionId);
+        try {
+            FormWorkflows.Started started = this.workflows.start(tenantId, form.workflowKey, submission.submissionId,
+                title.length() > 255 ? title.substring(0, 255) : title, subject, person);
+            this.store.setWorkflow(tenantId, submission.submissionId, started.instanceId, statusOf(started.state, false), null);
+        } catch (RuntimeException refused) {
+            logger.warn("Submission {} of form {} did not start workflow {}: {}", submission.submissionId, form.formId, form.workflowKey,
+                refused.getMessage());
+            String reason = refused.getMessage() == null ? "workflow-service did not answer" : refused.getMessage();
+            this.store.setWorkflow(tenantId, submission.submissionId, null, FormStore.NOT_STARTED,
+                reason.length() > 2000 ? reason.substring(0, 2000) : reason);
+        }
+        return this.store.submission(tenantId, submission.submissionId).orElse(submission);
+    }
+
+    /**
+     * A request's change, from workflow-service's instance-changed event: the submission's status follows it, and its
+     * dataset row is written again. False when the submission is not this workspace's (or is gone).
+     */
+    public boolean followWorkflow(long tenantId, long submissionId, long instanceId, String state, boolean overdue) {
+        if (!this.store.setWorkflow(tenantId, submissionId, instanceId, statusOf(state, overdue), null)) {
+            return false;
+        }
+        this.store.submission(tenantId, submissionId).ifPresent(s ->
+            this.store.find(tenantId, s.formId).ifPresent(form -> this.writeRow(tenantId, form, s, false)));
+        return true;
+    }
+
+    /** A request's state as a submission's status: Pending (or Overdue) while it runs, else how it ended. */
+    static String statusOf(String state, boolean overdue) {
+        if (state == null) {
+            return "Pending";
+        }
+        switch (state) {
+            case "Approved":
+            case "Rejected":
+            case "Completed":
+            case "Cancelled":
+            case "Failed":
+                return state;
+            default:
+                return overdue ? "Overdue" : "Pending";
+        }
+    }
+
+    /**
+     * The submission as its form's dataset row (FormDatasets), in the bucket the form's rows are kept in -- the inbox, the
+     * first time, as the person submitting. Best effort: a row that cannot be written is logged; the submission stands.
+     */
+    private void writeRow(long tenantId, FormStore.Form form, FormStore.Submission submission, boolean mayLocate) {
+        String bucket = form.datasetBucket;
+        try {
+            if (bucket == null && mayLocate) {
+                bucket = this.inbox.locate().alias;
+                if (bucket != null) {
+                    this.store.setDataset(tenantId, form.formId, null, bucket);
+                }
+            }
+            if (bucket == null || this.buckets.unavailable().isPresent()) {
+                return;
+            }
+            List<FormField> fields = this.store.fieldsAt(tenantId, form.formId, submission.formVersion).orElse(form.fields);
+            this.buckets.upload(tenantId, bucket, FormDatasets.keyOf(form.formId, submission.submissionId),
+                CSV_JSON.writeValueAsBytes(FormDatasets.rowOf(fields, submission)), "application/json");
+        } catch (Exception unwritten) {
+            logger.warn("Submission {}'s dataset row was not written to {}: {}", submission.submissionId, bucket, unwritten.getMessage());
+        }
+    }
+
+    private static String typeOf(FormStore.Form form, String key) {
+        return form.fields.stream().filter(f -> f.getKey().equals(key)).map(FormField::getType).findFirst().orElse(null);
     }
 
     /** Lookups' values and this person's own open uploads to this form, for checking the answers. */
@@ -498,7 +598,7 @@ public class FormSubmissionService {
     static byte[] csv(FormStore.Form form, List<FormStore.Submission> submissions) {
         List<String> keys = new ArrayList<>();
         List<String> header = new ArrayList<>();
-        for (String column : new String[] {"Submission", "Submitted at", "Submitted by", "Status", "Run", "Reason"}) {
+        for (String column : new String[] {"Submission", "Submitted at", "Submitted by", "Status", "Run", "Reason", "Approval"}) {
             header.add(column);
         }
         for (FormField field : form.fields) {
@@ -526,6 +626,7 @@ public class FormSubmissionService {
             cells.add(s.status);
             cells.add(s.jobQueueId == null ? "" : String.valueOf(s.jobQueueId));
             cells.add(s.reason == null ? "" : s.reason);
+            cells.add(s.workflowStatus == null ? "" : s.workflowStatus);
             for (String key : keys) {
                 Object answer = s.answers.get(key);
                 cells.add(csvAnswer(answer));
@@ -608,6 +709,9 @@ public class FormSubmissionService {
         view.put("bucket", s.bucket);
         view.put("storageKey", s.storageKey);
         view.put("answers", s.answers);
+        view.put("workflowInstanceId", s.workflowInstanceId);
+        view.put("workflowStatus", s.workflowStatus);
+        view.put("workflowReason", s.workflowReason);
         return view;
     }
 }

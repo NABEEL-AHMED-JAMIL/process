@@ -184,3 +184,7 @@ databaseChangeLog:
   # (form_upload); guarded as V181. Expand-only: two new tables.
   - include:
       file: db/changelog/yaml/V193.0-form-uploads.yaml
+  # V194: MIG-279 -- a form's workflow and Analytics dataset, and a submission's request and its status. Expand-only:
+  # nullable columns.
+  - include:
+      file: db/changelog/yaml/V194.0-form-workflow-dataset.yaml

@@ -81,8 +81,17 @@ class FormSubmissionServiceTest {
             throw new UnsupportedOperationException();
         }
 
+        /** MIG-279: the dataset rows, kept apart from the files a run is given. */
+        final List<String> rows = new ArrayList<>();
+        byte[] lastRow;
+
         @Override
         public void upload(long tenantId, String bucket, String key, byte[] content, String contentType) {
+            if (key.startsWith("datasets/")) {
+                this.rows.add(tenantId + " " + bucket + " " + key + " " + contentType);
+                this.lastRow = content;
+                return;
+            }
             this.uploads.add(tenantId + " " + bucket + " " + key + " " + contentType);
             this.last = content;
         }
@@ -327,9 +336,9 @@ class FormSubmissionServiceTest {
 
         String csv = new String(export.content, StandardCharsets.UTF_8);
         assertThat(export.fileName).matches("wound-intake-2924-submissions-\\d{4}-\\d{2}-\\d{2}\\.csv");
-        assertThat(csv).startsWith("﻿Submission,Submitted at,Submitted by,Status,Run,Reason,Patient ID,Wound location,Length (cm),"
+        assertThat(csv).startsWith("﻿Submission,Submitted at,Submitted by,Status,Run,Reason,Approval,Patient ID,Wound location,Length (cm),"
             + "Observed on,Signs of infection,Notes,Nurse e-mail\r\n");
-        assertThat(csv).contains(",2026-10-02 10:04:05,nora@clinic.example,Received,,,P-00017,Sacrum,3.5,2026-10-01,Yes,"
+        assertThat(csv).contains(",2026-10-02 10:04:05,nora@clinic.example,Received,,,,P-00017,Sacrum,3.5,2026-10-01,Yes,"
             + "\"'=HYPERLINK(\"\"http://evil\"\"), and a comma\",\r\n");
         assertThat(FormSubmissionService.cell("-12.5")).isEqualTo("-12.5");
         assertThat(FormSubmissionService.cell("@SUM(A1)")).isEqualTo("'@SUM(A1)");

@@ -19,6 +19,8 @@ public interface FormStore {
     String RECEIVED = "Received";
     String RUN_STARTED = "RunStarted";
     String RUN_NOT_STARTED = "RunNotStarted";
+    /** MIG-279: a submission whose workflow did not start. */
+    String NOT_STARTED = "NotStarted";
 
     /** A form as kept. */
     final class Form {
@@ -34,6 +36,10 @@ public interface FormStore {
         public final Instant dateCreated;
         public final Instant dateUpdated;
         public final long submissions;
+        /** MIG-279: the workflow a submission starts, and the Analytics dataset its submissions are. */
+        public String workflowKey;
+        public Long analyticsDatasetId;
+        public String datasetBucket;
 
         public Form(long formId, long tenantId, String name, String description, String status, List<FormField> fields, Long jobId,
             int version, Long updatedBy, Instant dateCreated, Instant dateUpdated, long submissions) {
@@ -68,6 +74,10 @@ public interface FormStore {
         public final String reason;
         public final String bucket;
         public final String storageKey;
+        /** MIG-279: the request the submission started, and its status now (or NotStarted, and why). */
+        public Long workflowInstanceId;
+        public String workflowStatus;
+        public String workflowReason;
 
         public Submission(long submissionId, long formId, long tenantId, int formVersion, Map<String, Object> answers, Long submittedBy,
             String submittedByName, Instant submittedAt, String status, Long jobId, Long jobQueueId, String reason, String bucket,
@@ -130,6 +140,15 @@ public interface FormStore {
 
     /** The submission takes these uploads; each can be taken once. */
     void claimUploads(long tenantId, long submissionId, Collection<Long> uploadIds);
+
+    /** MIG-279: the workflow a submission starts (null: none). */
+    void setFormWorkflow(long tenantId, long formId, String workflowKey);
+
+    /** MIG-279: the Analytics dataset the form's submissions are registered as (null: not yet), and the bucket of its rows. */
+    void setDataset(long tenantId, long formId, Long analyticsDatasetId, String bucket);
+
+    /** MIG-279: the request a submission started and its status now; false when the submission is not the workspace's. */
+    boolean setWorkflow(long tenantId, long submissionId, Long instanceId, String status, String reason);
 
     /** The workspace's jobs a form may start (any not deleted), by name: id, name, status. */
     List<Map<String, Object>> linkableJobs(long tenantId, int limit);

@@ -36,8 +36,16 @@ class InMemoryFormStore implements FormStore {
 
     private Form counted(Form f) {
         long count = this.submissions.values().stream().filter(s -> s.formId == f.formId).count();
-        return new Form(f.formId, f.tenantId, f.name, f.description, f.status, f.fields, f.jobId, f.version, f.updatedBy, f.dateCreated,
-            f.dateUpdated, count);
+        return carry(f, new Form(f.formId, f.tenantId, f.name, f.description, f.status, f.fields, f.jobId, f.version, f.updatedBy,
+            f.dateCreated, f.dateUpdated, count));
+    }
+
+    /** A form's MIG-279 settings, kept across the copies this store makes. */
+    private static Form carry(Form from, Form to) {
+        to.workflowKey = from.workflowKey;
+        to.analyticsDatasetId = from.analyticsDatasetId;
+        to.datasetBucket = from.datasetBucket;
+        return to;
     }
 
     @Override
@@ -56,8 +64,8 @@ class InMemoryFormStore implements FormStore {
             return false;
         }
         this.unique(tenantId, name, formId);
-        this.forms.put(formId, new Form(formId, tenantId, name, description, status, fields, jobId, f.version + 1, actor, f.dateCreated,
-            Instant.now(), 0));
+        this.forms.put(formId, carry(f, new Form(formId, tenantId, name, description, status, fields, jobId, f.version + 1, actor,
+            f.dateCreated, Instant.now(), 0)));
         return true;
     }
 
@@ -75,8 +83,8 @@ class InMemoryFormStore implements FormStore {
         if (f == null || f.tenantId != tenantId) {
             return false;
         }
-        this.forms.put(formId, new Form(formId, tenantId, f.name, f.description, status, f.fields, f.jobId, f.version, actor, f.dateCreated,
-            Instant.now(), 0));
+        this.forms.put(formId, carry(f, new Form(formId, tenantId, f.name, f.description, status, f.fields, f.jobId, f.version, actor,
+            f.dateCreated, Instant.now(), 0)));
         return true;
     }
 
@@ -96,8 +104,12 @@ class InMemoryFormStore implements FormStore {
         if (s == null || s.tenantId != tenantId) {
             return;
         }
-        this.submissions.put(submissionId, new Submission(s.submissionId, s.formId, s.tenantId, s.formVersion, s.answers, s.submittedBy,
-            s.submittedByName, s.submittedAt, status, s.jobId, jobQueueId, reason, bucket, storageKey));
+        Submission next = new Submission(s.submissionId, s.formId, s.tenantId, s.formVersion, s.answers, s.submittedBy,
+            s.submittedByName, s.submittedAt, status, s.jobId, jobQueueId, reason, bucket, storageKey);
+        next.workflowInstanceId = s.workflowInstanceId;
+        next.workflowStatus = s.workflowStatus;
+        next.workflowReason = s.workflowReason;
+        this.submissions.put(submissionId, next);
     }
 
     @Override
@@ -163,5 +175,35 @@ class InMemoryFormStore implements FormStore {
             }
             u[4] = submissionId;
         }
+    }
+
+    @Override
+    public void setFormWorkflow(long tenantId, long formId, String workflowKey) {
+        this.forms.get(formId).workflowKey = workflowKey;
+    }
+
+    @Override
+    public void setDataset(long tenantId, long formId, Long analyticsDatasetId, String bucket) {
+        Form form = this.forms.get(formId);
+        if (analyticsDatasetId != null) {
+            form.analyticsDatasetId = analyticsDatasetId;
+        }
+        if (bucket != null) {
+            form.datasetBucket = bucket;
+        }
+    }
+
+    @Override
+    public boolean setWorkflow(long tenantId, long submissionId, Long instanceId, String status, String reason) {
+        Submission s = this.submissions.get(submissionId);
+        if (s == null || s.tenantId != tenantId) {
+            return false;
+        }
+        if (instanceId != null) {
+            s.workflowInstanceId = instanceId;
+        }
+        s.workflowStatus = status;
+        s.workflowReason = reason;
+        return true;
     }
 }

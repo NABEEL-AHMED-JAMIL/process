@@ -1,5 +1,8 @@
 package process.forms;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import process.model.dto.ResponseDto;
@@ -49,12 +52,26 @@ public class FormService {
         FormFields.EMAIL, FormFields.LOOKUP);
     static final List<String> STATUSES = Arrays.asList(FormStore.DRAFT, FormStore.ACTIVE, FormStore.ARCHIVED);
 
+    private static final Logger logger = LoggerFactory.getLogger(FormService.class);
+
     private final FormStore store;
     private final TransactionServiceImpl jobs;
+    private final FormWorkflows workflows;
+    private final FormInbox inbox;
+    private final FormDatasets.Registry datasets;
 
+    /** Forms without workflows or datasets: what the plain-forms tests build. */
     public FormService(FormStore store, TransactionServiceImpl jobs) {
+        this(store, jobs, null, null, null);
+    }
+
+    @Autowired
+    public FormService(FormStore store, TransactionServiceImpl jobs, FormWorkflows workflows, FormInbox inbox, FormDatasets.Registry datasets) {
         this.store = store;
         this.jobs = jobs;
+        this.workflows = workflows;
+        this.inbox = inbox;
+        this.datasets = datasets;
     }
 
     // ---- reading -----------------------------------------------------------------------------------------------
@@ -154,6 +171,11 @@ public class FormService {
         if (jobRefusal != null) {
             return new ResponseDto(ERROR, jobRefusal);
         }
+        String workflowKey = FormFields.trimmed(request.getWorkflowKey());
+        String workflowRefusal = this.workflowRefusal(tenantId, workflowKey);
+        if (workflowRefusal != null) {
+            return new ResponseDto(ERROR, workflowRefusal);
+        }
         Long actor = TenantContext.getAppUserId();
         long formId;
         try {
@@ -168,8 +190,11 @@ public class FormService {
         } catch (DuplicateKeyException taken) {
             return new ResponseDto(ERROR, String.format("This workspace already has a form named '%s'.", name));
         }
-        return new ResponseDto(SUCCESS, request.getFormId() == null ? "Form created." : "Form saved.",
-            this.view(this.store.find(tenantId, formId).orElseThrow(() -> new IllegalStateException("The saved form is gone.")), true, true));
+        this.store.setFormWorkflow(tenantId, formId, workflowKey);
+        FormStore.Form saved = this.store.find(tenantId, formId).orElseThrow(() -> new IllegalStateException("The saved form is gone."));
+        String datasetNote = FormStore.ACTIVE.equals(status) ? this.registerDataset(tenantId, saved) : "";
+        return new ResponseDto(SUCCESS, (request.getFormId() == null ? "Form created." : "Form saved.") + datasetNote,
+            this.view(this.store.find(tenantId, formId).orElse(saved), true, true));
     }
 
     /** Draft, Active (takes submissions) or Archived (takes none, kept with its submissions). */
@@ -196,7 +221,8 @@ public class FormService {
             return new ResponseDto(ERROR, "Add at least one field before the form takes submissions (Active).");
         }
         this.store.setStatus(tenantId, form.get().formId, status, TenantContext.getAppUserId());
-        return new ResponseDto(SUCCESS, FormStore.ACTIVE.equals(status) ? "The form is active: members can fill it in."
+        String datasetNote = FormStore.ACTIVE.equals(status) ? this.registerDataset(tenantId, form.get()) : "";
+        return new ResponseDto(SUCCESS, FormStore.ACTIVE.equals(status) ? "The form is active: members can fill it in." + datasetNote
             : FormStore.ARCHIVED.equals(status) ? "The form is archived: it takes no more submissions; the ones it has are kept."
             : "The form is a draft again: it takes no submissions until it is active.",
             this.view(this.store.find(tenantId, form.get().formId).orElse(form.get()), true, true));
@@ -233,6 +259,55 @@ public class FormService {
             return new ArrayList<>();
         }
         return this.store.answerValues(tenantId, lookup.getFormId(), lookup.getField(), MAX_LOOKUP_VALUES);
+    }
+
+    /** Null when the workflow may be named: none, or an Active, published one of the workspace (workflow-service). */
+    private String workflowRefusal(long tenantId, String key) {
+        if (key == null) {
+            return null;
+        }
+        if (this.workflows == null) {
+            return "Workflows are not available here.";
+        }
+        Optional<FormWorkflows.Workflow> found;
+        try {
+            found = this.workflows.find(tenantId, key);
+        } catch (RuntimeException unreachable) {
+            return "The workflow could not be checked (" + unreachable.getMessage() + "); try again.";
+        }
+        if (!found.isPresent()) {
+            return "The workflow '" + key + "' was not found in this workspace.";
+        }
+        if (!"Active".equals(found.get().status)) {
+            return "The workflow '" + found.get().name + "' is " + found.get().status + "; make it Active first.";
+        }
+        if (found.get().currentVersion == 0) {
+            return "The workflow '" + found.get().name + "' has no published version yet.";
+        }
+        return null;
+    }
+
+    /**
+     * An Active form's submissions as an Analytics dataset (MIG-279), registered once as the saving administrator, in the
+     * workspace's inbox bucket. Best effort: a form works without it; the answer says why it is not one yet.
+     */
+    private String registerDataset(long tenantId, FormStore.Form form) {
+        if (form.analyticsDatasetId != null || this.datasets == null || this.inbox == null) {
+            return "";
+        }
+        FormInbox.Location location = this.inbox.locate();
+        if (location.alias == null) {
+            return " Its submissions become an Analytics dataset once the workspace has an inbox.";
+        }
+        try {
+            long id = this.datasets.register(location.alias, FormDatasets.globOf(form.formId), FormDatasets.nameOf(form));
+            this.store.setDataset(tenantId, form.formId, id, location.alias);
+            return " Its submissions are the Analytics dataset '" + FormDatasets.nameOf(form) + "'.";
+        } catch (RuntimeException refused) {
+            logger.warn("Form {}'s dataset was not registered: {}", form.formId, refused.getMessage());
+            this.store.setDataset(tenantId, form.formId, null, location.alias);
+            return " Its submissions are not an Analytics dataset yet (" + refused.getMessage() + ").";
+        }
     }
 
     /** Null when the job may be linked: none at all, or one of the workspace's own that is not deleted. */
@@ -272,6 +347,10 @@ public class FormService {
             }
         }
         view.put("startsJob", form.jobId != null);
+        view.put("workflowKey", form.workflowKey);
+        if (form.datasetBucket != null) {
+            view.put("dataset", datasetView(form));
+        }
         if (admin) {
             view.put("jobId", form.jobId);
             view.put("jobName", form.jobId == null ? null : this.jobs.findByJobId(form.jobId)
@@ -281,6 +360,16 @@ public class FormService {
         view.put("dateCreated", text(form.dateCreated));
         view.put("dateUpdated", text(form.dateUpdated == null ? form.dateCreated : form.dateUpdated));
         return view;
+    }
+
+    /** Where the form's rows are: Analytics opens connection + path (and the registered id, when there is one). */
+    static Map<String, Object> datasetView(FormStore.Form form) {
+        Map<String, Object> dataset = new LinkedHashMap<>();
+        dataset.put("analyticsDatasetId", form.analyticsDatasetId);
+        dataset.put("name", FormDatasets.nameOf(form));
+        dataset.put("connection", form.datasetBucket);
+        dataset.put("path", FormDatasets.globOf(form.formId));
+        return dataset;
     }
 
     private static String text(Instant instant) {

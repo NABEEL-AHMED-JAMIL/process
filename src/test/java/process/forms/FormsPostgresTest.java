@@ -247,4 +247,30 @@ class FormsPostgresTest {
         assertThat(this.app.queryForObject("SELECT count(*) FROM form_upload", Long.class)).isZero();
         assertThat(this.app.queryForObject("SELECT count(*) FROM form_version", Long.class)).isZero();
     }
+
+    @Test
+    void aFormKeepsItsWorkflowAndDatasetAndASubmissionItsRequestsStatus() {
+        long formId = woundForm(A, null);
+        submitAsMember(A, formId);
+        TenantContext.set(A, "TENANT_ADMIN", 61L, "admin@clinic.example");
+        JdbcFormStore store = new JdbcFormStore(this.app);
+        store.setFormWorkflow(A, formId, "approve-visit");
+        store.setDataset(A, formId, null, "wound-inbox");
+        store.setDataset(A, formId, 77L, null);
+        FormStore.Form form = store.find(A, formId).get();
+        assertThat(form.workflowKey).isEqualTo("approve-visit");
+        assertThat(form.analyticsDatasetId).isEqualTo(77L);
+        assertThat(form.datasetBucket).as("kept when only the id is set").isEqualTo("wound-inbox");
+
+        long submission = this.sql.queryForObject("SELECT max(submission_id) FROM form_submission WHERE form_id = ?", Long.class, formId);
+        assertThat(store.setWorkflow(A, submission, 3001L, "Pending", null)).isTrue();
+        assertThat(store.setWorkflow(A, submission, null, "Approved", null)).isTrue();
+        FormStore.Submission kept = store.submission(A, submission).get();
+        assertThat(kept.workflowInstanceId).as("an update without an id keeps it").isEqualTo(3001L);
+        assertThat(kept.workflowStatus).isEqualTo("Approved");
+        assertThatThrownBy(() -> store.setWorkflow(A, submission, null, "Maybe", null)).as("only its spellings");
+
+        TenantContext.set(B, "TENANT_ADMIN", 71L, "bella@bravo.example");
+        assertThat(new JdbcFormStore(this.app).setWorkflow(A, submission, null, "Rejected", null)).as("row security").isFalse();
+    }
 }
