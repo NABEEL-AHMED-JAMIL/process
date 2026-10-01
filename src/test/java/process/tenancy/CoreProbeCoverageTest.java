@@ -45,6 +45,7 @@ import process.identity.InternalPageAccessRestApi;
 import process.identity.InternalRunVerificationRestApi;
 import process.identity.InternalSecretRestApi;
 import process.identity.InternalTenantDirectoryRestApi;
+import process.lineage.InternalLineageRestApi;
 import process.identity.InternalTenantFactsRestApi;
 import process.workflow.InternalWorkflowRunRestApi;
 import process.identity.InternalUserDirectoryRestApi;
@@ -111,7 +112,7 @@ class CoreProbeCoverageTest {
         InternalKafkaPublishRestApi.class, InternalNotificationRelayRestApi.class, InternalPageAccessRestApi.class,
         InternalRunVerificationRestApi.class, InternalSecretRestApi.class, InternalTenantDirectoryRestApi.class,
         InternalTenantFactsRestApi.class, InternalUserDirectoryRestApi.class, InternalSloRestApi.class, ReliabilityRestApi.class,
-        InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class);
+        InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class, InternalLineageRestApi.class);
 
     private static final Map<String, String> NOTHING_TO_AIM = new LinkedHashMap<>();
 
@@ -174,6 +175,8 @@ class CoreProbeCoverageTest {
             + " (InternalRunVerificationRestApiTest.thePromptDeleteGuardCountsThePipelinesUsingAPrompt)");
         NOTHING_TO_AIM.put("POST internal/secretRef/{ref}/redeem", service
             + " (InternalSecretRestApiTest.withoutTheTokenNothingIsRedeemed)");
+        NOTHING_TO_AIM.put("POST internal/lineage/runs", service
+            + " (InternalLineageRestApiPostgresTest.aCompletedRunWithWhatItReadAndWhatItWrote)");
         NOTHING_TO_AIM.put("POST internal/tenants/resolve", service
             + " (InternalTenantDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/core/tenantFacts", service
