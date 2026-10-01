@@ -192,3 +192,8 @@ databaseChangeLog:
   # sequences. Only an empty table is dropped; the copies that still hold rows stay for the owner to decide.
   - include:
       file: db/changelog/yaml/V195.0-drop-moved-tables.yaml
+  # V196: owner 2026-10-01 -- drop the 15 read-only copies that still held rows (ai_*, analytics_*, billing_account,
+  # billing_document, billing_number_counter, invoice_line, notification_moved_mig21, document_converter_task_moved_mig41)
+  # and their sequences, after a backup (etl-platform/backups/2026-10-01-*.sql) and a row-by-row check against each service.
+  - include:
+      file: db/changelog/yaml/V196.0-drop-moved-copies.yaml

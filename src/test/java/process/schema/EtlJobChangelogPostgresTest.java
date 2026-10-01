@@ -31,6 +31,19 @@ class EtlJobChangelogPostgresTest {
 
     private static ScratchEtlJob db;
 
+    /** What V195 and V196 drop: the moved tables' copies here and their sequences (those owned by a column go with it). */
+    private static final String[] MOVED_COPIES_DROPPED = {"ai_agent", "analytics_benchmark_result", "analytics_dataset", "payment",
+        "timestamptz_v100_unrepresentable", "ai_agent_seq", "analytics_benchmark_result_seq", "analytics_dataset_seq",
+        "payment_payment_id_seq",
+        // V196
+        "ai_model_connection", "ai_prompt", "ai_prompt_version", "ai_prompt_run", "analytics_query", "analytics_query_run",
+        "analytics_analysis", "analytics_dashboard", "analytics_dashboard_widget", "billing_account", "billing_document",
+        "billing_number_counter", "invoice_line", "notification_moved_mig21", "document_converter_task_moved_mig41",
+        "ai_model_connection_seq", "ai_prompt_seq", "ai_prompt_run_seq", "analytics_analysis_seq", "analytics_dashboard_seq",
+        "analytics_dashboard_widget_seq", "analytics_query_seq", "analytics_query_run_seq", "document_converter_task_id_seq",
+        "billing_account_billing_account_id_seq", "billing_document_billing_document_id_seq", "invoice_line_invoice_line_id_seq",
+        "notification_notification_id_seq"};
+
     @BeforeAll
     static void build() throws Exception {
         db = ScratchEtlJob.build("etl_job_fresh", Arrays.asList("platformKafkaBootstrapServers=broker.platform.test:9092",
@@ -56,15 +69,8 @@ class EtlJobChangelogPostgresTest {
         // MIG-53 (V55): an alias is unique within a workspace, and a platform name (no tenant)
         // is unique among platform rows -- NULLs must not be distinct here, or two platform rows
         // could claim one name, the hole bucket_credential has.
-        // MIG-53 part b (V56): every analytics alias carries the connection's id beside it. (analytics_dataset and
-        // analytics_benchmark_result had it too; V195 dropped them, empty.)
-        for (String column : new String[] {"analytics_analysis.storage_connection_id",
-            "analytics_query.storage_connection_id", "analytics_query.second_storage_connection_id",
-            "analytics_query_run.storage_connection_id", "analytics_query_run.second_storage_connection_id"}) {
-            String[] parts = column.split("\\.");
-            assertThat(sql.queryForObject("SELECT count(*) FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
-                Integer.class, parts[0], parts[1])).as(column).isEqualTo(1);
-        }
+        // MIG-53 part b (V56) gave every analytics alias the connection's id beside it; the analytics tables that carried it
+        // are analytics_db's, and V195/V196 dropped the copies here.
         // MIG-70 (V57): storage_connection is storage-service's now. The copy here is kept for its
         // retention period, read-only: every write is refused, and says where the table went.
         assertThat(sql.queryForObject("SELECT to_regclass('public.storage_connection') IS NOT NULL", Boolean.class)).isTrue();
@@ -73,38 +79,80 @@ class EtlJobChangelogPostgresTest {
             .as("insert").hasMessageContaining("storage-service");
         assertThatThrownBy(() -> sql.update("UPDATE storage_connection SET alias = 'y'")).as("update").hasMessageContaining("storage-service");
         assertThatThrownBy(() -> sql.update("DELETE FROM storage_connection")).as("delete").hasMessageContaining("storage-service");
-        // MIG-88/89 (V61): billing's tables are billing_db's now. The copies here are read-only, reads
-        // still answer, and every kind of write -- a truncate included -- is refused naming billing_db.
+        // MIG-88/89 (V61): billing's tables are billing_db's now. invoice is the one copy left here (V195 dropped payment,
+        // V196 billing_account, billing_document, billing_number_counter and invoice_line): read-only, reads still
+        // answer, and every kind of write -- a truncate included -- is refused naming billing_db.
         assertThat(sql.queryForObject("SELECT count(*) FROM invoice", Integer.class)).isZero();
-        assertThatThrownBy(() -> sql.update("INSERT INTO billing_account (tenant_id) VALUES (9001)")).as("insert").hasMessageContaining("billing_db");
         assertThatThrownBy(() -> sql.update("UPDATE invoice SET status = 'paid'")).as("update").hasMessageContaining("billing_db");
-        assertThatThrownBy(() -> sql.update("DELETE FROM invoice_line")).as("delete").hasMessageContaining("billing_db"); // payment: V195 dropped it
-        assertThatThrownBy(() -> sql.execute("TRUNCATE billing_document")).as("truncate").hasMessageContaining("billing_db");
-        // MIG-128 (V62): Analytics Studio's tables are analytics_db's, and process holds no code for them.
-        // Every one of the five left (V195 dropped analytics_dataset and analytics_benchmark_result) refuses every
-        // kind of write, naming analytics_db.
-        for (String table : new String[] {"analytics_query", "analytics_query_run", "analytics_analysis",
-            "analytics_dashboard", "analytics_dashboard_widget"}) {
-            assertThat(sql.queryForObject("SELECT count(*) FROM " + table, Integer.class)).as(table).isZero();
-            assertThatThrownBy(() -> sql.update("DELETE FROM " + table)).as("delete %s", table).hasMessageContaining("analytics_db");
-            assertThatThrownBy(() -> sql.execute("TRUNCATE " + table + " CASCADE")).as("truncate %s", table).hasMessageContaining("analytics_db");
-        }
-        assertThatThrownBy(() -> sql.update("UPDATE analytics_dashboard SET dashboard_name = 'x'")).as("update").hasMessageContaining("analytics_db");
-        // MIG-147 / MIG-150 (V63): the AI tables are ai_db's (ADR-020). A pipeline step names a prompt
-        // by id, and new prompts exist only in ai_db, so pipeline_field.prompt_id keeps its bigint
-        // and loses its foreign key (C2); the four copies left here (V195 dropped ai_agent) refuse every write, naming ai_db.
+        assertThatThrownBy(() -> sql.update("DELETE FROM invoice")).as("delete").hasMessageContaining("billing_db");
+        assertThatThrownBy(() -> sql.execute("TRUNCATE invoice")).as("truncate").hasMessageContaining("billing_db");
+        // MIG-147 / MIG-150 (V63): the AI tables are ai_db's (ADR-020). A pipeline step names a prompt by id, and prompts
+        // exist only in ai_db, so pipeline_field.prompt_id is a plain bigint with no foreign key (C2).
         assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE conrelid = 'pipeline_field'::regclass "
-            + "AND confrelid = 'ai_prompt'::regclass", Integer.class)).as("C2 demoted").isZero();
-        for (String table : new String[] {"ai_model_connection", "ai_prompt", "ai_prompt_version", "ai_prompt_run"}) {
-            assertThat(sql.queryForObject("SELECT count(*) FROM " + table, Integer.class)).as(table).isZero();
-            assertThatThrownBy(() -> sql.update("DELETE FROM " + table)).as("delete %s", table).hasMessageContaining("ai_db");
-        }
-        // V195 (owner 2026-10-01): the empty leftovers are gone, with their sequences.
-        for (String relation : new String[] {"ai_agent", "analytics_benchmark_result", "analytics_dataset", "payment",
-            "timestamptz_v100_unrepresentable", "ai_agent_seq", "analytics_benchmark_result_seq", "analytics_dataset_seq",
-            "payment_payment_id_seq"}) {
+            + "AND contype = 'f' AND pg_get_constraintdef(oid) LIKE '%(prompt_id)%'", Integer.class)).as("C2 demoted").isZero();
+        // V195 and V196 (owner 2026-10-01): the copies left behind by the moves to ai_db (MIG-147/150), analytics_db
+        // (MIG-128), billing_db (MIG-88/89), notifications_db (MIG-21) and media_db (MIG-41) are gone, with their sequences.
+        for (String relation : MOVED_COPIES_DROPPED) {
             assertThat(sql.queryForObject("SELECT to_regclass('public.' || ?) IS NULL", Boolean.class, relation)).as(relation).isTrue();
         }
+        // ai_moved_read_only() and analytics_moved_read_only() guard nothing any more, but stay: V196's rollback puts
+        // them back on the tables it recreates.
+    }
+
+    /**
+     * V196 (owner 2026-10-01) drops the moved tables' copies with their rows; its rollback brings each back empty. Built to
+     * just before V196, run, rolled back: every column, key, index, trigger, policy, comment, grant and sequence of the
+     * copies is as the changelog built it. (The two *_moved_mig* copies were never built by the changelog -- the move
+     * scripts renamed the originals on long-lived instances -- so a built database has neither before nor after.)
+     */
+    @Test
+    void v196RollbackRecreatesTheDroppedCopiesAsTheChangelogBuiltThem() throws Exception {
+        try (ScratchEtlJob scratch = ScratchEtlJob.buildUpTo("etl_job_v196", "196.0-drop-moved-copies")) {
+            JdbcTemplate sql = scratch.sql();
+            List<String> before = shapeOfTheCopies(sql);
+            assertThat(before).as("V196 has something to drop").anyMatch(line -> line.startsWith("column invoice_line."));
+            assertThat(before).noneMatch(line -> line.contains("_moved_mig"));
+
+            scratch.finish();
+            assertThat(shapeOfTheCopies(sql)).as("after V196").isEmpty();
+
+            scratch.rollback(1);
+            assertThat(shapeOfTheCopies(sql)).isEqualTo(before);
+        }
+    }
+
+    /** The catalog's account of every relation V196 drops, one line per fact, sorted: what a rollback must restore. */
+    private static List<String> shapeOfTheCopies(JdbcTemplate sql) {
+        String names = "ARRAY['ai_model_connection', 'ai_prompt', 'ai_prompt_version', 'ai_prompt_run', 'analytics_query', "
+            + "'analytics_query_run', 'analytics_analysis', 'analytics_dashboard', 'analytics_dashboard_widget', 'billing_account', "
+            + "'billing_document', 'billing_number_counter', 'invoice_line', 'notification_moved_mig21', "
+            + "'document_converter_task_moved_mig41', 'ai_model_connection_seq', 'ai_prompt_seq', 'ai_prompt_run_seq', "
+            + "'analytics_analysis_seq', 'analytics_dashboard_seq', 'analytics_dashboard_widget_seq', 'analytics_query_seq', "
+            + "'analytics_query_run_seq', 'document_converter_task_id_seq', 'billing_account_billing_account_id_seq', "
+            + "'billing_document_billing_document_id_seq', 'invoice_line_invoice_line_id_seq', 'notification_notification_id_seq']";
+        String rel = "SELECT oid FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname = ANY (" + names + ")";
+        return sql.queryForList(
+            "SELECT 'relation ' || c.relname || ' ' || c.relkind::text || ' rls=' || c.relrowsecurity || ' force=' || c.relforcerowsecurity "
+                + "|| ' acl=' || coalesce(c.relacl::text, '') || ' comment=' || coalesce(obj_description(c.oid, 'pg_class'), '') "
+                + "FROM pg_class c WHERE c.oid IN (" + rel + ") "
+            + "UNION ALL SELECT 'column ' || a.attrelid::regclass::text || '.' || a.attname || ' ' || format_type(a.atttypid, a.atttypmod) "
+                + "|| ' notnull=' || a.attnotnull || ' default=' || coalesce(pg_get_expr(d.adbin, d.adrelid), '') "
+                + "|| ' comment=' || coalesce(col_description(a.attrelid, a.attnum), '') "
+                + "FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum "
+                + "WHERE a.attrelid IN (" + rel + ") AND a.attnum > 0 AND NOT a.attisdropped AND a.attrelid IN "
+                + "(SELECT oid FROM pg_class WHERE relkind = 'r') "
+            + "UNION ALL SELECT 'constraint ' || conrelid::regclass::text || '.' || conname || ' ' || pg_get_constraintdef(oid) "
+                + "FROM pg_constraint WHERE conrelid IN (" + rel + ") "
+            + "UNION ALL SELECT 'index ' || pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid IN (" + rel + ") "
+            + "UNION ALL SELECT 'trigger ' || pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid IN (" + rel + ") AND NOT tgisinternal "
+            + "UNION ALL SELECT 'policy ' || tablename || '.' || policyname || ' ' || cmd || ' ' || roles::text || ' ' "
+                + "|| coalesce(qual, '') || ' ' || coalesce(with_check, '') FROM pg_policies WHERE schemaname = 'public' "
+                + "AND tablename = ANY (" + names + ") "
+            + "UNION ALL SELECT 'sequence ' || s.seqrelid::regclass::text || ' ' || s.seqstart || ' ' || s.seqincrement || ' ' || s.seqcache "
+                + "|| ' owned=' || coalesce((SELECT d.refobjid::regclass::text || '.' || d.refobjsubid FROM pg_depend d "
+                + "WHERE d.objid = s.seqrelid AND d.classid = 'pg_class'::regclass AND d.deptype IN ('a', 'i')), '') "
+                + "FROM pg_sequence s WHERE s.seqrelid IN (" + rel + ") "
+            + "ORDER BY 1", String.class);
     }
 
     /**

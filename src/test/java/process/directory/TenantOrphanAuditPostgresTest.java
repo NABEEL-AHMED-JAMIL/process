@@ -140,9 +140,10 @@ class TenantOrphanAuditPostgresTest {
         List<String> audited = this.audit.run().getTables();
         assertThat(audited).contains("source_job", "scheduler", "job_queue", "source_task", "source_task_type", "pipeline",
             "kafka_connection_profile", "task_reference", "pipeline_config");
-        // Identity's own, a projection of Identity, and every table moved out (read-only here, by trigger).
+        // Identity's own, a projection of Identity, and every table moved out that still has a copy here (read-only, by
+        // trigger). The billing, analytics and AI copies other than invoice went with V195/V196 (owner 2026-10-01).
         assertThat(audited).doesNotContain("tenant", "app_user", "page_access_profile", "user_page_access", "user_directory",
-            "lookup_data", "storage_connection", "invoice", "billing_account", "analytics_query", "ai_prompt");
+            "lookup_data", "storage_connection", "invoice");
         List<String> readOnly = this.sql.queryForList("SELECT DISTINCT c.relname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
             + "WHERE NOT t.tgisinternal AND t.tgname LIKE '%\\_read\\_only'", String.class);
         assertThat(readOnly).isNotEmpty();

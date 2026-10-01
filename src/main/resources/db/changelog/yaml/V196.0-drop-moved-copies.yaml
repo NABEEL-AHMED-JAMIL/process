@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 196.0-drop-moved-copies
+      author: nabeel.amd93
+      description: "Owner 2026-10-01: drop the 15 read-only copies left behind when their data moved to ai_db, analytics_db, billing_db, notifications_db and media_db (and their sequences), rows and all; the rows are in etl-platform/backups/2026-10-01-*.sql"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V196.0-drop-moved-copies/V196__drop_moved_copies.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V196.0-drop-moved-copies/V196__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

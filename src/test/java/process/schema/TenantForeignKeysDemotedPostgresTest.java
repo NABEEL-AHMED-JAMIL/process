@@ -53,8 +53,11 @@ class TenantForeignKeysDemotedPostgresTest {
             assertThat(intoIdentity(sql)).isEmpty();
             assertThat(count(sql, "conrelid::regclass::text IN " + SIX)).as("Identity's own keys stay").isEqualTo(insideIdentity);
             // Every one stays; changesets after V161 may add their own (V180's four, MIG-225), so the set only grows --
-            // except payment's key onto invoice, which went with its (empty) table in V195 (owner 2026-10-01).
+            // except the keys of the moved tables' copies, which went with them (owner 2026-10-01): payment's onto invoice
+            // in V195 (empty), and in V196 those among ai_prompt*, ai_model_connection, analytics_* and invoice_line's onto invoice.
             coreKeys.remove("payment.payment_invoice_id_fkey");
+            coreKeys.removeIf(key -> key.matches("(ai_prompt|ai_prompt_version|ai_prompt_run|analytics_dashboard_widget|"
+                + "analytics_query_run|invoice_line)\\..*"));
             assertThat(coreKeys(sql)).as("Core's own keys stay").containsAll(coreKeys).hasSizeGreaterThanOrEqualTo(coreKeys.size());
             // A row can name a workspace and a person that exist only in identity_db.
             sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, tenant_id, "
