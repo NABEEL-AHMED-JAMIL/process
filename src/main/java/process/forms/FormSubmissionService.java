@@ -91,6 +91,8 @@ public class FormSubmissionService {
     private final TransactionTemplate transactions;
     private final FormWorkflows workflows;
     private final FormDatasetWriter rows;
+    /** MIG-271: where a submission's files go to Document Intelligence; none in the plain-forms tests. */
+    private FormDocuments documents;
 
     /** Submissions without workflows; their rows written to the same bucket as their files: what the plain-forms tests build. */
     public FormSubmissionService(FormStore store, FormService forms, FormInbox inbox, BucketStore buckets, ProducerBulkEngine engine,
@@ -110,6 +112,11 @@ public class FormSubmissionService {
         this.engine = engine;
         this.jobs = jobs;
         this.transactions = new TransactionTemplate(transactionManager);
+    }
+
+    @Autowired(required = false)
+    public void useDocuments(FormDocuments documents) {
+        this.documents = documents;
     }
 
     // ---- submitting --------------------------------------------------------------------------------------------
@@ -160,6 +167,10 @@ public class FormSubmissionService {
                 : String.format(" Its approval (request #%d) is %s.", outcome.workflowInstanceId, outcome.workflowStatus.toLowerCase(Locale.ROOT));
         }
         this.writeRow(tenantId, form, outcome, true);
+        if (this.documents != null) {
+            // MIG-271: the files of the fields set to go to Document Intelligence, in the background.
+            this.documents.send(tenantId, form, outcome, person);
+        }
         return new ResponseDto(SUCCESS, message, view(outcome));
     }
 

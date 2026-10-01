@@ -221,6 +221,8 @@ public final class FormFields {
                     valid.setAccept(accept(name, field.getAccept()));
                     valid.setMaxSizeMb(bounded(name, "maxSizeMb", field.getMaxSizeMb(), 1, MAX_SIZE_MB, DEFAULT_SIZE_MB));
                     valid.setMaxFiles(bounded(name, "maxFiles", field.getMaxFiles(), 1, MAX_FILES, 1));
+                    // MIG-271: kept only when on, so a form saved before it reads exactly as it did.
+                    valid.setToDocuments(Boolean.TRUE.equals(field.getToDocuments()) ? Boolean.TRUE : null);
                     break;
                 case LOOKUP:
                     valid.setLookup(lookup(name, field.getLookup()));

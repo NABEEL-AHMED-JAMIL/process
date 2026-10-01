@@ -30,6 +30,8 @@ public class FormField {
     private List<String> accept;
     private Integer maxSizeMb;
     private Integer maxFiles;
+    /** MIG-271: a file field whose files also go to Document Intelligence, one document each; absent (null) is no. */
+    private Boolean toDocuments;
     private Lookup lookup;
 
     /** A condition on an earlier field's answer: eq, ne, in, gt, lt, filled, empty. */
@@ -149,6 +151,10 @@ public class FormField {
     public Integer getMaxFiles() { return this.maxFiles; }
 
     public void setMaxFiles(Integer maxFiles) { this.maxFiles = maxFiles; }
+
+    public Boolean getToDocuments() { return this.toDocuments; }
+
+    public void setToDocuments(Boolean toDocuments) { this.toDocuments = toDocuments; }
 
     public Lookup getLookup() { return this.lookup; }
 
