@@ -170,9 +170,9 @@ public class HttpAi implements AiPort {
 
     /**
      * The step's list from ai-service's internal read (tenant in the body, the token alone: Core has checked the
-     * caller). Until ai-service has that endpoint (404), the prompt's own list as the signed-in caller reads it -- which
-     * is then exactly the list a run chooses from, since no step can have a list of its own before ai-service can
-     * store one.
+     * caller; MIG-309). An ai-service older than that endpoint (404): the prompt's own list as the signed-in caller reads
+     * it -- which is then exactly the list a run chooses from, since no step can have a list of its own before
+     * ai-service can store one.
      */
     @Override
     public List<ModelOption> stepModelOptions(Long tenantId, Long sourceTaskId, String stepKey, Long promptId)

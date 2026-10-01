@@ -305,4 +305,30 @@ class StepAnswerContractTest {
             assertThat(verdict).as("RunVerdict reads %s", field).contains("step.get(\"" + field + "\")");
         }
     }
+
+    /** The fields of a step-list request Core sends (HttpAi.stepModelOptions / saveStepModelOptions). */
+    static final List<String> STEP_OPTIONS_REQUEST_FIELDS = Arrays.asList("tenantId", "sourceTaskId", "stepKey", "promptId", "updatedBy", "options");
+
+    /** The fields of one allowed model Core reads back (HttpAi.optionsOf), and the three it sends on a save. */
+    static final List<String> MODEL_OPTION_FIELDS = Arrays.asList("modelOptionId", "connectionId", "connectionName", "provider", "model",
+        "effectiveModel", "isDefault", "connectionActive");
+
+    /** MIG-309: ai-service's step-list read and save are where Core calls them, take what Core sends, and answer what it reads. */
+    @Test
+    void aiServicesStepListEndpointsTakeWhatCoreSendsAndAnswerWhatCoreReads() throws Exception {
+        Path root = aiServiceSource();
+        assumeTrue(root != null, "ai-service's source is not beside process");
+        String api = new String(Files.readAllBytes(root.resolve("api/InternalAiRestApi.java")), StandardCharsets.UTF_8);
+        assertThat(api).contains("@RequestMapping(\"/internal/ai\")").contains("@PostMapping(\"/steps/modelOptions\")")
+            .contains("@PostMapping(\"/steps/modelOptions/save\")");
+        String request = api.substring(api.indexOf("class StepOptionsRequest"));
+        request = request.substring(0, request.indexOf("}"));
+        for (String field : STEP_OPTIONS_REQUEST_FIELDS) {
+            assertThat(request).as("StepOptionsRequest takes %s", field).containsPattern("public [A-Za-z<>]+ " + field + ";");
+        }
+        String option = new String(Files.readAllBytes(root.resolve("model/dto/AiModelOptionDto.java")), StandardCharsets.UTF_8);
+        for (String field : MODEL_OPTION_FIELDS) {
+            assertThat(option).as("AiModelOptionDto carries %s", field).containsPattern("private [A-Za-z]+ " + field + ";");
+        }
+    }
 }
