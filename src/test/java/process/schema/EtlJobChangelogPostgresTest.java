@@ -56,9 +56,10 @@ class EtlJobChangelogPostgresTest {
         // MIG-53 (V55): an alias is unique within a workspace, and a platform name (no tenant)
         // is unique among platform rows -- NULLs must not be distinct here, or two platform rows
         // could claim one name, the hole bucket_credential has.
-        // MIG-53 part b (V56): every analytics alias carries the connection's id beside it.
-        for (String column : new String[] {"analytics_analysis.storage_connection_id", "analytics_benchmark_result.storage_connection_id",
-            "analytics_dataset.storage_connection_id", "analytics_query.storage_connection_id", "analytics_query.second_storage_connection_id",
+        // MIG-53 part b (V56): every analytics alias carries the connection's id beside it. (analytics_dataset and
+        // analytics_benchmark_result had it too; V195 dropped them, empty.)
+        for (String column : new String[] {"analytics_analysis.storage_connection_id",
+            "analytics_query.storage_connection_id", "analytics_query.second_storage_connection_id",
             "analytics_query_run.storage_connection_id", "analytics_query_run.second_storage_connection_id"}) {
             String[] parts = column.split("\\.");
             assertThat(sql.queryForObject("SELECT count(*) FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
@@ -77,12 +78,13 @@ class EtlJobChangelogPostgresTest {
         assertThat(sql.queryForObject("SELECT count(*) FROM invoice", Integer.class)).isZero();
         assertThatThrownBy(() -> sql.update("INSERT INTO billing_account (tenant_id) VALUES (9001)")).as("insert").hasMessageContaining("billing_db");
         assertThatThrownBy(() -> sql.update("UPDATE invoice SET status = 'paid'")).as("update").hasMessageContaining("billing_db");
-        assertThatThrownBy(() -> sql.update("DELETE FROM payment")).as("delete").hasMessageContaining("billing_db");
+        assertThatThrownBy(() -> sql.update("DELETE FROM invoice_line")).as("delete").hasMessageContaining("billing_db"); // payment: V195 dropped it
         assertThatThrownBy(() -> sql.execute("TRUNCATE billing_document")).as("truncate").hasMessageContaining("billing_db");
         // MIG-128 (V62): Analytics Studio's tables are analytics_db's, and process holds no code for them.
-        // Every one of the seven refuses every kind of write, naming analytics_db.
-        for (String table : new String[] {"analytics_dataset", "analytics_query", "analytics_query_run", "analytics_analysis",
-            "analytics_dashboard", "analytics_dashboard_widget", "analytics_benchmark_result"}) {
+        // Every one of the five left (V195 dropped analytics_dataset and analytics_benchmark_result) refuses every
+        // kind of write, naming analytics_db.
+        for (String table : new String[] {"analytics_query", "analytics_query_run", "analytics_analysis",
+            "analytics_dashboard", "analytics_dashboard_widget"}) {
             assertThat(sql.queryForObject("SELECT count(*) FROM " + table, Integer.class)).as(table).isZero();
             assertThatThrownBy(() -> sql.update("DELETE FROM " + table)).as("delete %s", table).hasMessageContaining("analytics_db");
             assertThatThrownBy(() -> sql.execute("TRUNCATE " + table + " CASCADE")).as("truncate %s", table).hasMessageContaining("analytics_db");
@@ -90,12 +92,18 @@ class EtlJobChangelogPostgresTest {
         assertThatThrownBy(() -> sql.update("UPDATE analytics_dashboard SET dashboard_name = 'x'")).as("update").hasMessageContaining("analytics_db");
         // MIG-147 / MIG-150 (V63): the AI tables are ai_db's (ADR-020). A pipeline step names a prompt
         // by id, and new prompts exist only in ai_db, so pipeline_field.prompt_id keeps its bigint
-        // and loses its foreign key (C2); the five copies here refuse every write, naming ai_db.
+        // and loses its foreign key (C2); the four copies left here (V195 dropped ai_agent) refuse every write, naming ai_db.
         assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE conrelid = 'pipeline_field'::regclass "
             + "AND confrelid = 'ai_prompt'::regclass", Integer.class)).as("C2 demoted").isZero();
-        for (String table : new String[] {"ai_model_connection", "ai_prompt", "ai_prompt_version", "ai_prompt_run", "ai_agent"}) {
+        for (String table : new String[] {"ai_model_connection", "ai_prompt", "ai_prompt_version", "ai_prompt_run"}) {
             assertThat(sql.queryForObject("SELECT count(*) FROM " + table, Integer.class)).as(table).isZero();
             assertThatThrownBy(() -> sql.update("DELETE FROM " + table)).as("delete %s", table).hasMessageContaining("ai_db");
+        }
+        // V195 (owner 2026-10-01): the empty leftovers are gone, with their sequences.
+        for (String relation : new String[] {"ai_agent", "analytics_benchmark_result", "analytics_dataset", "payment",
+            "timestamptz_v100_unrepresentable", "ai_agent_seq", "analytics_benchmark_result_seq", "analytics_dataset_seq",
+            "payment_payment_id_seq"}) {
+            assertThat(sql.queryForObject("SELECT to_regclass('public.' || ?) IS NULL", Boolean.class, relation)).as(relation).isTrue();
         }
     }
 

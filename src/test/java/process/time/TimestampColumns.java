@@ -45,23 +45,26 @@ public final class TimestampColumns {
         String liquibase = "Liquibase's own bookkeeping";
         left.put("databasechangelog.dateexecuted", liquibase);
         left.put("databasechangeloglock.lockgranted", liquibase);
-        left.put("timestamptz_v100_unrepresentable.original", "V100's own: the naive string it could not convert, for its rollback");
+        // timestamptz_v100_unrepresentable.original (V100's own store, naive by design) is gone with its table since V195,
+        // which drops it when empty; where V100 kept gap values it stays -- see TimestamptzMigrationPostgresTest.
         String ai = "read-only retention copy (V63); the live table is ai_db's, ai-service owns its type";
-        for (String column : new String[] {"ai_agent.date_created", "ai_model_connection.date_created", "ai_model_connection.last_tested_at",
+        // ai_agent: dropped by V195 (empty).
+        for (String column : new String[] {"ai_model_connection.date_created", "ai_model_connection.last_tested_at",
             "ai_prompt.date_created", "ai_prompt_run.date_created", "ai_prompt_version.date_created"}) {
             left.put(column, ai);
         }
         String analytics = "read-only retention copy (V62); the live table is analytics_db's";
+        // analytics_benchmark_result, analytics_dataset: dropped by V195 (empty).
         for (String column : new String[] {"analytics_analysis.date_created", "analytics_analysis.date_updated",
-            "analytics_benchmark_result.date_created", "analytics_dashboard.date_created", "analytics_dashboard.date_updated",
-            "analytics_dashboard_widget.date_created", "analytics_dashboard_widget.date_updated", "analytics_dataset.date_created",
+            "analytics_dashboard.date_created", "analytics_dashboard.date_updated",
+            "analytics_dashboard_widget.date_created", "analytics_dashboard_widget.date_updated",
             "analytics_query.date_created", "analytics_query.date_updated", "analytics_query_run.date_created"}) {
             left.put(column, analytics);
         }
         String billing = "read-only retention copy (V61); the live table is billing_db's";
+        // payment: dropped by V195 (empty).
         for (String column : new String[] {"billing_account.date_created", "billing_account.date_updated", "billing_document.issued_at",
-            "invoice.date_created", "invoice.date_updated", "invoice.due_at", "invoice.issued_at", "invoice.paid_at", "invoice.voided_at",
-            "payment.date_created", "payment.received_at", "payment.verified_at"}) {
+            "invoice.date_created", "invoice.date_updated", "invoice.due_at", "invoice.issued_at", "invoice.paid_at", "invoice.voided_at"}) {
             left.put(column, billing);
         }
         String storage = "read-only retention copy (V57); the live table is storage_db's";

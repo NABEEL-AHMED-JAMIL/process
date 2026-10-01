@@ -228,6 +228,12 @@ class TimestamptzMigrationPostgresTest {
     void theOnlyNaiveTimestampsLeftAreTheOnesWithAReason() {
         Set<String> naive = new TreeSet<>(db.sql().queryForList("SELECT table_name || '.' || column_name FROM information_schema.columns "
             + "WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND data_type = 'timestamp without time zone'", String.class));
+        // V100's own store of DST-gap strings is naive by design. V195 drops it only when it is empty; this fixture has a
+        // gap row (2026-03-08 02:30), so here it must have stayed, row and all, for V100's rollback to restore it.
+        JdbcTemplate sql = db.sql();
+        assertThat(sql.queryForObject("SELECT count(*) FROM timestamptz_v100_unrepresentable", Long.class))
+            .as("gap values V195 must keep").isPositive();
+        assertThat(naive.remove("timestamptz_v100_unrepresentable.original")).isTrue();
         assertThat(naive).isEqualTo(TimestampColumns.LEFT_NAIVE.keySet());
     }
 

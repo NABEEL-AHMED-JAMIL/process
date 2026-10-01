@@ -83,7 +83,9 @@ public class TimestamptzRehearsal {
             assertThat(rowsAfter).isEqualTo(rowsBefore);
             assertThat(instantsAfter).isEqualTo(instantsBefore);
             assertThat(nextSlotsAfter(pool)).isEqualTo(nextBefore);
-            Long kept = sql.queryForObject("SELECT count(*) FROM timestamptz_v100_unrepresentable", Long.class);
+            // V195 drops the table when V100 kept nothing in it; it stays only when it holds gap values.
+            Long kept = sql.queryForObject("SELECT to_regclass('public.timestamptz_v100_unrepresentable') IS NULL", Boolean.class)
+                ? 0L : sql.queryForObject("SELECT count(*) FROM timestamptz_v100_unrepresentable", Long.class);
             System.out.println("REHEARSAL gap values kept for the rollback: " + kept);
 
             liquibase(pool, ran.size());

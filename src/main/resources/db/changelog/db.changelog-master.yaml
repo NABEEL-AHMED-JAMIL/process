@@ -188,3 +188,7 @@ databaseChangeLog:
   # nullable columns.
   - include:
       file: db/changelog/yaml/V194.0-form-workflow-dataset.yaml
+  # V195: owner 2026-10-01 -- drop five empty leftovers (moved to ai_db/analytics_db/billing_db; V100's gap table) and their
+  # sequences. Only an empty table is dropped; the copies that still hold rows stay for the owner to decide.
+  - include:
+      file: db/changelog/yaml/V195.0-drop-moved-tables.yaml
