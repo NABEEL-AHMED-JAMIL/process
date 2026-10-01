@@ -206,4 +206,12 @@ class InMemoryFormStore implements FormStore {
         s.workflowReason = reason;
         return true;
     }
+
+    @Override
+    public void setStage(long tenantId, long submissionId, String stage) {
+        Submission s = this.submissions.get(submissionId);
+        if (s != null && s.tenantId == tenantId) {
+            s.workflowStage = stage;
+        }
+    }
 }

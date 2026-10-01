@@ -146,9 +146,12 @@ class FormWorkflowDatasetTest {
         assertThat(row.path("patient_id").asText()).isEqualTo("P-1");
 
         // The request is approved: the submission and its row follow.
+        assertThat(this.service.followWorkflow(A, kept.submissionId, 3000 + kept.submissionId, "Running", false, "Finance approval")).isTrue();
+        assertThat(this.store.submissions.get(kept.submissionId).workflowStage).isEqualTo("Finance approval");
         assertThat(this.service.followWorkflow(A, kept.submissionId, 3000 + kept.submissionId, "Approved", false)).isTrue();
+        assertThat(this.store.submissions.get(kept.submissionId).workflowStage).as("ended: no stage").isNull();
         assertThat(this.store.submissions.get(kept.submissionId).workflowStatus).isEqualTo("Approved");
-        assertThat(this.bucket.rows).hasSize(2);
+        assertThat(this.bucket.rows).hasSize(3);
         assertThat(new ObjectMapper().readTree(new String(this.bucket.lastRow, StandardCharsets.UTF_8)).path("approval_status").asText())
             .isEqualTo("Approved");
         assertThat(this.service.followWorkflow(A + 1, kept.submissionId, 1L, "Rejected", false)).as("another workspace").isFalse();
@@ -199,7 +202,10 @@ class FormWorkflowDatasetTest {
         FormWorkflowListener listener = new FormWorkflowListener(followed);
         listener.onChange("{\"eventType\":\"platform.workflow.instance-changed.v1\",\"tenantId\":2924,\"payload\":{\"instanceId\":3001,"
             + "\"tenantId\":2924,\"subjectId\":\"form-submission:41\",\"state\":\"Running\",\"overdue\":true}}");
-        verify(followed).followWorkflow(2924L, 41L, 3001L, "Running", true);
+        verify(followed).followWorkflow(2924L, 41L, 3001L, "Running", true, null);
+        listener.onChange("{\"payload\":{\"instanceId\":3001,\"tenantId\":2924,\"subjectId\":\"form-submission:41\","
+            + "\"state\":\"Running\",\"overdue\":false,\"stage\":\"Manager approval\"}}");
+        verify(followed).followWorkflow(2924L, 41L, 3001L, "Running", false, "Manager approval");
         listener.onChange("{\"payload\":{\"instanceId\":3002,\"tenantId\":2924,\"subjectId\":\"purchase:7\",\"state\":\"Approved\"}}");
         listener.onChange("not json");
         verifyNoMoreInteractions(followed);

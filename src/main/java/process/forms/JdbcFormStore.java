@@ -33,7 +33,7 @@ public class JdbcFormStore implements FormStore {
         + "f.job_id, f.version, f.updated_by, f.date_created, f.date_updated, f.workflow_key, f.analytics_dataset_id, f.dataset_bucket";
     private static final String SUBMISSION_COLUMNS = "submission_id, form_id, tenant_id, form_version, answers::text AS answers, "
         + "submitted_by, submitted_by_name, submitted_at, status, job_id, job_queue_id, reason, bucket, storage_key, workflow_instance_id, "
-        + "workflow_status, workflow_reason";
+        + "workflow_status, workflow_reason, workflow_stage";
 
     private final JdbcTemplate jdbc;
 
@@ -204,6 +204,12 @@ public class JdbcFormStore implements FormStore {
             submissionId) > 0;
     }
 
+    @Override
+    public void setStage(long tenantId, long submissionId, String stage) {
+        this.jdbc.update("UPDATE form_submission SET workflow_stage = ? WHERE tenant_id = ? AND submission_id = ?",
+            stage == null || stage.length() <= 200 ? stage : stage.substring(0, 200), tenantId, submissionId);
+    }
+
     private static Form form(ResultSet rs, int row) throws SQLException {
         Form form = formOf(rs);
         form.workflowKey = rs.getString("workflow_key");
@@ -224,6 +230,7 @@ public class JdbcFormStore implements FormStore {
         submission.workflowInstanceId = rs.getObject("workflow_instance_id", Long.class);
         submission.workflowStatus = rs.getString("workflow_status");
         submission.workflowReason = rs.getString("workflow_reason");
+        submission.workflowStage = rs.getString("workflow_stage");
         return submission;
     }
 

@@ -197,3 +197,6 @@ databaseChangeLog:
   # and their sequences, after a backup (etl-platform/backups/2026-10-01-*.sql) and a row-by-row check against each service.
   - include:
       file: db/changelog/yaml/V196.0-drop-moved-copies.yaml
+  # V197: MIG-280 -- the step a submission's request waits at now (form_submission.workflow_stage). Expand-only.
+  - include:
+      file: db/changelog/yaml/V197.0-form-submission-stage.yaml

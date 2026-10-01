@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 197.0-form-submission-stage
+      author: nabeel.amd93
+      description: "MIG-280: form_submission.workflow_stage, the step its request waits at; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V197.0-form-submission-stage/V197__form_submission_stage.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V197.0-form-submission-stage/V197__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

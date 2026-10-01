@@ -78,6 +78,8 @@ public interface FormStore {
         public Long workflowInstanceId;
         public String workflowStatus;
         public String workflowReason;
+        /** MIG-280: the step its request waits at now ("Manager approval"); null once it ended. */
+        public String workflowStage;
 
         public Submission(long submissionId, long formId, long tenantId, int formVersion, Map<String, Object> answers, Long submittedBy,
             String submittedByName, Instant submittedAt, String status, Long jobId, Long jobQueueId, String reason, String bucket,
@@ -149,6 +151,9 @@ public interface FormStore {
 
     /** MIG-279: the request a submission started and its status now; false when the submission is not the workspace's. */
     boolean setWorkflow(long tenantId, long submissionId, Long instanceId, String status, String reason);
+
+    /** MIG-280: the step a submission's request waits at now (null: none). */
+    void setStage(long tenantId, long submissionId, String stage);
 
     /** The workspace's jobs a form may start (any not deleted), by name: id, name, status. */
     List<Map<String, Object>> linkableJobs(long tenantId, int limit);

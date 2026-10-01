@@ -52,8 +52,9 @@ public class FormWorkflowListener {
         }
         String state = change.path("state").asText(null);
         boolean overdue = change.path("overdue").asBoolean(false);
+        String stage = change.path("stage").isTextual() ? change.path("stage").asText() : null;
         boolean followed = RowSecurity.forTenant(tenantId, () -> this.submissions.followWorkflow(tenantId, submissionId, instanceId, state,
-            overdue));
+            overdue, stage));
         logger.info("Request {} ({}{}) {} submission {} in workspace {}.", instanceId, state, overdue ? ", overdue" : "",
             followed ? "updated" : "did not match", submissionId, tenantId);
     }

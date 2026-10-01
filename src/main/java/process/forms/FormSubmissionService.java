@@ -194,9 +194,15 @@ public class FormSubmissionService {
      * dataset row is written again. False when the submission is not this workspace's (or is gone).
      */
     public boolean followWorkflow(long tenantId, long submissionId, long instanceId, String state, boolean overdue) {
+        return this.followWorkflow(tenantId, submissionId, instanceId, state, overdue, null);
+    }
+
+    /** As above, with the step the request waits at now (MIG-280), shown as the submission's stage. */
+    public boolean followWorkflow(long tenantId, long submissionId, long instanceId, String state, boolean overdue, String stage) {
         if (!this.store.setWorkflow(tenantId, submissionId, instanceId, statusOf(state, overdue), null)) {
             return false;
         }
+        this.store.setStage(tenantId, submissionId, stage);
         this.store.submission(tenantId, submissionId).ifPresent(s ->
             this.store.find(tenantId, s.formId).ifPresent(form -> this.writeRow(tenantId, form, s, false)));
         return true;
@@ -705,6 +711,7 @@ public class FormSubmissionService {
         view.put("workflowInstanceId", s.workflowInstanceId);
         view.put("workflowStatus", s.workflowStatus);
         view.put("workflowReason", s.workflowReason);
+        view.put("workflowStage", s.workflowStage);
         return view;
     }
 }

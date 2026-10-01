@@ -116,7 +116,10 @@ class EtlJobChangelogPostgresTest {
             scratch.finish();
             assertThat(shapeOfTheCopies(sql)).as("after V196").isEmpty();
 
-            scratch.rollback(1);
+            // V196 and every changeset after it, so a later changeset does not turn this into a test of that one.
+            Integer fromV196 = sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE orderexecuted >= "
+                + "(SELECT orderexecuted FROM databasechangelog WHERE id = '196.0-drop-moved-copies')", Integer.class);
+            scratch.rollback(fromV196 == null ? 1 : fromV196);
             assertThat(shapeOfTheCopies(sql)).isEqualTo(before);
         }
     }
