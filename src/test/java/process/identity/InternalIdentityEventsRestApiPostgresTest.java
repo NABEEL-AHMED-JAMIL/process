@@ -1,5 +1,6 @@
 package process.identity;
 
+import org.barco.platform.identity.IdentityTopics;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -7,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import process.ScratchPostgres;
-import process.directory.IdentityTopics;
 import process.outbox.OutboxWriter;
 
 import java.util.ArrayList;

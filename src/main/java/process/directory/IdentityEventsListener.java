@@ -1,8 +1,11 @@
 package process.directory;
 
+import org.barco.platform.event.PlatformEvent;
+import org.barco.platform.identity.IdentityEvents;
+import org.barco.platform.identity.IdentityTopics;
+import org.barco.platform.identity.TenantLifecycle;
+import org.barco.platform.identity.UserLifecycle;
 import org.barco.platform.tenancy.AcrossTenants;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -31,7 +34,6 @@ public class IdentityEventsListener {
 
     private static final Logger logger = LoggerFactory.getLogger(IdentityEventsListener.class);
 
-    private final ObjectMapper json = new ObjectMapper();
     private final UserDirectory directory;
     private final WorkspaceRetirement retirement;
     private final WorkspaceDirectory workspaces;
@@ -47,11 +49,11 @@ public class IdentityEventsListener {
     public void onUser(String message) {
         UserDirectory.Entry entry;
         try {
-            JsonNode person = this.json.readTree(message).get("payload");
-            entry = new UserDirectory.Entry(person.get("appUserId").asLong(), longOrNull(person.get("tenantId")),
-                person.get("username").asText(), textOrNull(person.get("fullName")), person.get("status").asText(),
-                Instant.parse(person.get("updatedAt").asText()));
-        } catch (Exception unreadable) {
+            // MIG-304: the one reader of Identity's events, platform-commons' -- the same checks in every consumer.
+            UserLifecycle person = IdentityEvents.user(message).getPayload();
+            entry = new UserDirectory.Entry(person.getAppUserId(), person.getTenantId(), person.getUsername(), person.getFullName(),
+                person.getStatus(), person.updatedAtInstant());
+        } catch (IllegalArgumentException unreadable) {
             logger.warn("Skipped an unreadable {} event: {}", IdentityTopics.USER, unreadable.getMessage());
             return;
         }
@@ -64,18 +66,14 @@ public class IdentityEventsListener {
         String type;
         long tenantId;
         try {
-            JsonNode event = this.json.readTree(message);
-            type = event.get("eventType").asText();
-            JsonNode tenant = event.get("payload").get("tenantId");
-            if (tenant == null || !tenant.isIntegralNumber()) {
-                throw new IllegalArgumentException("the event names no workspace");
-            }
-            tenantId = tenant.asLong();
-        } catch (Exception unreadable) {
+            PlatformEvent<TenantLifecycle> event = IdentityEvents.tenant(message);
+            type = event.getEventType();
+            tenantId = event.getPayload().getTenantId();
+        } catch (IllegalArgumentException unreadable) {
             logger.warn("Skipped an unreadable {} event: {}", IdentityTopics.TENANT, unreadable.getMessage());
             return;
         }
-        if ("tenant.deleted".equals(type)) {
+        if (TenantLifecycle.DELETED.equals(type)) {
             this.retirement.retire(tenantId);
         }
     }
@@ -92,15 +90,14 @@ public class IdentityEventsListener {
         String status;
         Instant updatedAt;
         try {
-            JsonNode workspace = this.json.readTree(message).get("payload");
-            JsonNode tenant = workspace.get("tenantId");
-            if (tenant == null || !tenant.isIntegralNumber()) {
-                throw new IllegalArgumentException("the event names no workspace");
+            TenantLifecycle workspace = IdentityEvents.tenant(message).getPayload();
+            if (workspace.getStatus() == null || workspace.getUpdatedAt() == null) {
+                throw new IllegalArgumentException("workspace " + workspace.getTenantId() + "'s event has no status or updatedAt");
             }
-            tenantId = tenant.asLong();
-            status = workspace.get("status").asText();
-            updatedAt = Instant.parse(workspace.get("updatedAt").asText());
-        } catch (Exception unreadable) {
+            tenantId = workspace.getTenantId();
+            status = workspace.getStatus();
+            updatedAt = workspace.updatedAtInstant();
+        } catch (IllegalArgumentException unreadable) {
             logger.warn("Skipped an unreadable {} event: {}", IdentityTopics.TENANT, unreadable.getMessage());
             return;
         }
@@ -112,13 +109,5 @@ public class IdentityEventsListener {
                 logger.info("Workspace {} is {} in Identity: its scheduled jobs resume from their next slot.", tenantId, change.getAfter());
             }
         });
-    }
-
-    private static Long longOrNull(JsonNode node) {
-        return node == null || node.isNull() ? null : node.asLong();
-    }
-
-    private static String textOrNull(JsonNode node) {
-        return node == null || node.isNull() ? null : node.asText();
     }
 }
