@@ -73,6 +73,21 @@ public class SettingRestApi {
         }
     }
 
+    /**
+     * The selected profile's live health -- brokers up, the caller's topics, the consumer groups reading them and their
+     * lag. A read: testing stays open in a MANAGED workspace too. {@code recheck} skips the 20-second cache.
+     */
+    @RequestMapping(value = "/profileHealth", method = RequestMethod.GET)
+    public ResponseEntity<?> profileHealth(@RequestParam Long kafkaConnectionProfileId,
+        @RequestParam(required = false, defaultValue = "false") boolean recheck) {
+        try {
+            return new ResponseEntity<>(this.settingService.profileHealth(kafkaConnectionProfileId, recheck), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while profileHealth.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @BuilderAction
     @RequestMapping(value = "/addSourceTaskType", method = RequestMethod.POST)
     public ResponseEntity<?> addSourceTaskType(

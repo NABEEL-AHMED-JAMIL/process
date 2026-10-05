@@ -554,6 +554,11 @@ public class KafkaTemplateProvider {
     /** How AdminClients are made: the real factory, or a test's. */
     private Function<Map<String, Object>, AdminClient> adminClients = AdminClient::create;
 
+    /** An AdminClient on one profile's brokers (Kafka & Topics' live health); the caller closes it. */
+    public AdminClient adminClientFor(KafkaConnectionProfile profile) {
+        return this.adminClients.apply(this.commonClientProps(profile));
+    }
+
     /** For the tests: an AdminClient of their own in place of a real broker's. */
     void useAdminClients(Function<Map<String, Object>, AdminClient> adminClients) {
         this.adminClients = adminClients;

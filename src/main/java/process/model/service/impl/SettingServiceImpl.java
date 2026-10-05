@@ -7,6 +7,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import process.config.KafkaConnectionResolver;
+import process.config.KafkaHealth;
 import process.config.KafkaTemplateProvider;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
@@ -65,6 +66,10 @@ public class SettingServiceImpl implements SettingService {
     private PipelineRepository pipelineRepository;
 
     private final KafkaTemplateProvider kafkaTemplateProvider;
+
+    /** Kafka &amp; Topics' live health; optional for the tests that build this service by hand. */
+    @Autowired(required = false)
+    private KafkaHealth kafkaHealth;
     private final KafkaConnectionResolver kafkaConnectionResolver;
 
     private final UserNameResolver userNameResolver;
@@ -196,6 +201,38 @@ public class SettingServiceImpl implements SettingService {
         }
         topics.forEach(t -> t.setPipelines(byTopic.getOrDefault(t.getSourceTaskTypeId(), Collections.emptyList())));
         return new ResponseDto(SUCCESS, String.format("%d topic(s).", topics.size()), topics);
+    }
+
+    @Override
+    public ResponseDto profileHealth(Long kafkaConnectionProfileId, boolean recheck) throws Exception {
+        if (isNull(kafkaConnectionProfileId)) {
+            return new ResponseDto(ERROR, "kafkaConnectionProfileId missing.");
+        }
+        Optional<KafkaConnectionProfile> profileOpt = this.kafkaConnectionProfileRepository.findById(kafkaConnectionProfileId)
+            .filter(this::visibleForTopics);
+        if (!profileOpt.isPresent()) {
+            return new ResponseDto(ERROR, String.format("Profile not found with %d.", kafkaConnectionProfileId));
+        }
+        if (this.kafkaHealth == null) {
+            return new ResponseDto(ERROR, "Broker health cannot be read here.");
+        }
+        KafkaConnectionProfile profile = profileOpt.get();
+        // The same topics the pane lists: the caller's on this profile, never the rest of a shared broker's.
+        boolean isDefault = Boolean.TRUE.equals(profile.getIsDefault());
+        List<SourceTaskTypeProjection> projections = this.isPlatformDefault(profile)
+            ? this.sourceTaskTypeRepository.fetchTopicsForPlatformDefault(kafkaConnectionProfileId,
+                TenantContext.isPlatformAdmin(), TenantContext.isPlatformAdmin() ? null : TenantContext.getTenantId())
+            : this.sourceTaskTypeRepository.fetchTopicsForProfile(
+                kafkaConnectionProfileId, isDefault && profile.getTenantId() != null, profile.getTenantId());
+        List<String> topics = projections.stream()
+            .map(p -> KafkaTopicPartitionUtil.parse(p.getQueueTopicPartition()))
+            .filter(Optional::isPresent)
+            .map(parsed -> parsed.get().getTopic())
+            .distinct()
+            .collect(Collectors.toList());
+        Map<String, Object> report = this.kafkaHealth.report(profile, topics, recheck);
+        return new ResponseDto(SUCCESS, Boolean.TRUE.equals(report.get("reachable")) ? "Brokers answered." : String.valueOf(report.get("reason")),
+            report);
     }
 
     /**

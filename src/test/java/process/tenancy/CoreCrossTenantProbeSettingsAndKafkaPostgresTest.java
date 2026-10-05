@@ -149,6 +149,11 @@ class CoreCrossTenantProbeSettingsAndKafkaPostgresTest {
         // A has a connection of its own, so the platform default is not A's to list topics under.
         assertThat(fx.probe("GET setting.json/topicsForProfile(the platform default)", ADMIN_OF_A,
             () -> fx.settings.topicsForProfile(PLATFORM_PROFILE))).contains(REFUSED);
+        // Live broker health follows the same rule: not another workspace's brokers, not a default A does not use.
+        assertThat(fx.probe("GET setting.json/profileHealth", ADMIN_OF_A, () -> fx.settings.profileHealth(B_PROFILE, true)))
+            .contains(REFUSED);
+        assertThat(fx.probe("GET setting.json/profileHealth(the platform default)", ADMIN_OF_A,
+            () -> fx.settings.profileHealth(PLATFORM_PROFILE, true))).contains(REFUSED);
         assertThat(fx.probe("PUT setting.json/updateSourceTaskType", ADMIN_OF_A,
             () -> fx.settings.updateSourceTaskType(topic(B_TYPE, "Renamed By Acme", null)))).contains(REFUSED);
         assertThat(fx.probe("PUT setting.json/updateSourceTaskType(my topic onto their profile)", ADMIN_OF_A,
@@ -343,6 +348,8 @@ class CoreCrossTenantProbeSettingsAndKafkaPostgresTest {
             fx.probe("GET kafkaConnectionProfile.json/fetchAllProfiles", caller, fx.kafkaProfiles::fetchAllProfiles);
             assertThat(fx.probe("GET setting.json/topicsForProfile(the platform default)", caller,
                 () -> fx.settings.topicsForProfile(PLATFORM_PROFILE))).contains(REFUSED);
+            assertThat(fx.probe("GET setting.json/profileHealth(the platform default)", caller,
+                () -> fx.settings.profileHealth(PLATFORM_PROFILE, true))).contains(REFUSED);
 
             fx.probe("POST kafkaConnectionProfile.json/addProfile", caller,
                 () -> fx.kafkaProfiles.addProfile(profile(null, "Orphan Kafka " + none)));

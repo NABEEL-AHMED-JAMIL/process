@@ -13,6 +13,9 @@ public interface SettingService {
 
     ResponseDto topicsForProfile(Long kafkaConnectionProfileId) throws Exception;
 
+    /** Live health of one profile's brokers, for the caller's topics on it only (Kafka &amp; Topics). */
+    ResponseDto profileHealth(Long kafkaConnectionProfileId, boolean recheck) throws Exception;
+
     ResponseDto topics(String q, Integer limit, List<Long> ids, Long kafkaConnectionProfileId) throws Exception;
 
     ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
