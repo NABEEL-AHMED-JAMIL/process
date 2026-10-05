@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import process.security.TenantContext;
 import process.storage.remote.StorageServiceClient;
 
 /**
@@ -31,7 +32,10 @@ public class StorageFormInbox implements FormInbox {
     public Location locate() {
         JsonNode inbox;
         try {
-            inbox = this.storage.guardedGet("/inbox", null);
+            // MIG-278: a share link's visitor is nobody of the workspace: the inbox is the link's workspace's, asked by id --
+            // never by a token the visitor happens to carry, which could name another workspace.
+            inbox = FormShareLinks.LINK_ROLE.equals(TenantContext.getUserRole()) && TenantContext.getTenantId() != null
+                ? this.storage.inboxOf(TenantContext.getTenantId()) : this.storage.guardedGet("/inbox", null);
         } catch (RuntimeException unreachable) {
             logger.warn("The workspace inbox could not be read for a form submission: {}", unreachable.getMessage());
             return Location.none("The workspace inbox could not be read (" + unreachable.getMessage() + "), so the submission "

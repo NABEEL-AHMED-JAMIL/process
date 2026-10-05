@@ -47,6 +47,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers(HttpMethod.POST, "/meter.json/verifyRun").permitAll()
                 // MIG-167: a worker fetches its run's configuration with the run's token; RunConfigResolver checks it.
                 .antMatchers(HttpMethod.POST, "/runConfig.json/resolve").permitAll()
+                // MIG-278: a form shared by link -- the token in the path is the proof; PublicForms checks it, the link's
+                // expiry and uses, the workspace's switch, a signed ticket and rate limits. Reads that form only.
+                .antMatchers("/publicForm.json/*", "/publicForm.json/*/upload", "/publicForm.json/*/submit").permitAll()
 
                 // Liveness probes have no account, so health and info stay open. The rest --
                 // metrics and prometheus -- name every endpoint, its call rate and its 401/403

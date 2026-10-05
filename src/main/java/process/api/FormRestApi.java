@@ -1,5 +1,8 @@
 package process.api;
 
+import java.util.Map;
+import process.forms.FormSharing;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.barco.platform.security.BuilderAction;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,11 +14,14 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import process.forms.FormFields;
 import process.forms.FormSaveRequest;
 import process.forms.FormService;
 import process.forms.FormStatusRequest;
 import process.forms.FormSubmissionService;
 import process.forms.FormSubmitRequest;
+import process.model.dto.ResponseDto;
+import process.util.ProcessUtil;
 
 import java.io.IOException;
 
@@ -44,9 +50,50 @@ public class FormRestApi {
     private final FormService forms;
     private final FormSubmissionService submissions;
 
+    private FormSharing sharing;
+
     public FormRestApi(FormService forms, FormSubmissionService submissions) {
         this.forms = forms;
         this.submissions = submissions;
+    }
+
+    /** MIG-278: sharing by link (absent in the tests that build this controller by hand). */
+    @Autowired(required = false)
+    public void setSharing(FormSharing sharing) {
+        this.sharing = sharing;
+    }
+
+    /** MIG-278: whether this workspace lets its forms be shared by link (off until a workspace admin turns it on). */
+    @RequestMapping(value = "/form.json/sharePolicy", method = RequestMethod.GET)
+    public ResponseEntity<?> sharePolicy() {
+        return new ResponseEntity<>(this.sharing.policy(), HttpStatus.OK);
+    }
+
+    @BuilderAction
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/form.json/sharePolicy", method = RequestMethod.POST)
+    public ResponseEntity<?> setSharePolicy(@RequestBody Map<String, Boolean> body) {
+        return new ResponseEntity<>(this.sharing.setPolicy(body == null ? null : body.get("enabled")), HttpStatus.OK);
+    }
+
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/form.json/shareLinks", method = RequestMethod.GET)
+    public ResponseEntity<?> shareLinks(@RequestParam Long formId) {
+        return new ResponseEntity<>(this.sharing.list(formId), HttpStatus.OK);
+    }
+
+    @BuilderAction
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/form.json/shareLinks/create", method = RequestMethod.POST)
+    public ResponseEntity<?> createShareLink(@RequestBody FormSharing.CreateRequest request) {
+        return new ResponseEntity<>(this.sharing.create(request), HttpStatus.OK);
+    }
+
+    @BuilderAction
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/form.json/shareLinks/revoke", method = RequestMethod.POST)
+    public ResponseEntity<?> revokeShareLink(@RequestParam Long linkId) {
+        return new ResponseEntity<>(this.sharing.revoke(linkId), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/form.json/list", method = RequestMethod.GET)
@@ -82,7 +129,16 @@ public class FormRestApi {
     @RequestMapping(value = "/form.json/upload", method = RequestMethod.POST)
     public ResponseEntity<?> upload(@RequestParam Long formId, @RequestParam String field, @RequestParam("file") MultipartFile file)
         throws IOException {
+        if (file.getSize() > FormFields.LARGEST_UPLOAD_BYTES) {
+            return new ResponseEntity<>(tooLarge(), HttpStatus.OK);
+        }
         return new ResponseEntity<>(this.submissions.upload(formId, field, file.getOriginalFilename(), file.getBytes()), HttpStatus.OK);
+    }
+
+    /** A file larger than any form field takes, refused before it is read into memory (scale review P0 #4). */
+    public static ResponseDto tooLarge() {
+        return new ResponseDto(ProcessUtil.ERROR, String.format("A form takes files of at most %d MB.",
+            FormFields.LARGEST_UPLOAD_BYTES / (1024 * 1024)));
     }
 
     @RequestMapping(value = "/form.json/submit", method = RequestMethod.POST)

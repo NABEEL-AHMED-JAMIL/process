@@ -134,10 +134,25 @@ public class FormSubmissionService {
         if (!FormStore.ACTIVE.equals(form.status)) {
             return new ResponseDto(ERROR, CLOSED + " It is " + form.status + "; make it Active first.");
         }
-        Map<String, Object> answers;
         Long person = TenantContext.getAppUserId();
+        return this.receiveAs(tenantId, form, request.getAnswers(), person, TenantContext.getUsername(), this.context(tenantId, form, person), null);
+    }
+
+    /** The visitor's id a share-link submission records in place of a person (MIG-278): none. */
+    interface Attach {
+        void attach(long tenantId, long submissionId);
+    }
+
+    /**
+     * A submission of an Active form, as a person or (MIG-278) as a share link's visitor: the answers checked against the
+     * form, the submission kept with the uploads it names, its run and workflow started, its dataset row written. The
+     * context says where uploads and lookups come from; {@code attach} (share links) runs in the same transaction.
+     */
+    ResponseDto receiveAs(long tenantId, FormStore.Form form, Map<String, Object> rawAnswers, Long person, String personName,
+        FormFields.Context context, Attach attach) {
+        Map<String, Object> answers;
         try {
-            answers = FormFields.answers(form.fields, request.getAnswers(), this.context(tenantId, form, person));
+            answers = FormFields.answers(form.fields, rawAnswers, context);
         } catch (FormFields.Unanswered unanswered) {
             Map<String, Object> problems = new LinkedHashMap<>();
             problems.put("problems", unanswered.getProblems());
@@ -148,8 +163,11 @@ public class FormSubmissionService {
         try {
             received = this.transactions.execute(status -> {
                 FormStore.Submission kept = this.store.receive(tenantId, form.formId, form.version, answers, form.jobId, person,
-                    TenantContext.getUsername());
+                    personName);
                 this.store.claimUploads(tenantId, kept.submissionId, uploads);
+                if (attach != null) {
+                    attach.attach(tenantId, kept.submissionId);
+                }
                 return kept;
             });
         } catch (IllegalStateException sentTwice) {
@@ -210,6 +228,12 @@ public class FormSubmissionService {
 
     /** As above, with the step the request waits at now (MIG-280), shown as the submission's stage. */
     public boolean followWorkflow(long tenantId, long submissionId, long instanceId, String state, boolean overdue, String stage) {
+        // Only the request this submission started may move it: any other instance naming the same subject -- a workflow
+        // someone started by hand with subjectId "form-submission:N" -- is ignored, or a person could approve their own.
+        Optional<FormStore.Submission> held = this.store.submission(tenantId, submissionId);
+        if (!held.isPresent() || held.get().workflowInstanceId == null || held.get().workflowInstanceId != instanceId) {
+            return false;
+        }
         if (!this.store.setWorkflow(tenantId, submissionId, instanceId, statusOf(state, overdue), null)) {
             return false;
         }
@@ -311,6 +335,15 @@ public class FormSubmissionService {
         if (!FormStore.ACTIVE.equals(form.status)) {
             return new ResponseDto(ERROR, CLOSED + " It is " + form.status + "; make it Active first.");
         }
+        return this.storeUpload(tenantId, form, fieldKey, originalName, content, TenantContext.getAppUserId());
+    }
+
+    /**
+     * A file for one of an Active form's file or signature fields, checked (type, size, a real PNG for a signature) and
+     * written to the workspace's inbox; kept unclaimed until a submission names it. {@code person} is the uploader (none
+     * for a share link's visitor, MIG-278, whose ticket is recorded on the upload instead).
+     */
+    ResponseDto storeUpload(long tenantId, FormStore.Form form, String fieldKey, String originalName, byte[] content, Long person) {
         FormField field = form.fields.stream().filter(f -> f.getKey().equals(fieldKey)).findFirst().orElse(null);
         if (field == null || !FormFields.UPLOAD_TYPES.contains(field.getType())) {
             return new ResponseDto(ERROR, "This form has no file or signature field '" + fieldKey + "'.");
@@ -360,7 +393,7 @@ public class FormSubmissionService {
         String kept = originalName == null || originalName.trim().isEmpty() ? name : originalName.trim();
         String keptName = kept.length() > 255 ? name : kept;
         Long uploadId = this.transactions.execute(status -> this.store.createUpload(tenantId, form.formId, fieldKey,
-            TenantContext.getAppUserId(), keptName, contentType, size, location.alias, key));
+            person, keptName, contentType, size, location.alias, key));
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("uploadId", uploadId);
         view.put("name", FormFields.SIGNATURE.equals(field.getType()) ? "signature.png" : name);

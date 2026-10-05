@@ -9,6 +9,8 @@ import process.api.FormSubmissionRestApi;
 import process.api.InboxTriggerRestApi;
 import process.forms.FormInbox;
 import process.forms.FormService;
+import process.forms.FormShareLinks;
+import process.forms.FormSharing;
 import process.forms.FormSubmissionService;
 import process.forms.JdbcFormStore;
 import process.pipeline.backing.BucketStore;
@@ -514,6 +516,7 @@ final class CoreProbeFixture implements AutoCloseable {
         FormSubmissionService formSubmissionService = new FormSubmissionService(new JdbcFormStore(this.db.appJdbc()), formService,
             this.formInbox, this.formBuckets, this.engine, transactions, this.jpa.transactionManager());
         this.forms = new FormRestApi(formService, formSubmissionService);
+        this.forms.setSharing(new FormSharing(new FormShareLinks(this.db.appJdbc()), new JdbcFormStore(this.db.appJdbc())));
         this.formSubmissions = new FormSubmissionRestApi(formSubmissionService);
     }
 

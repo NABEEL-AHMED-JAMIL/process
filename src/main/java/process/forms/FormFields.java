@@ -82,6 +82,11 @@ public final class FormFields {
     static final int DEFAULT_SIZE_MB = 10;
     static final int MAX_SIZE_MB = 25;
     static final int MAX_FILES = 10;
+    /**
+     * The largest file any form field takes. An upload over it is refused before its bytes are read into memory: the
+     * request itself may be far larger (the multipart limit is the inbox's, 500 MB), and it waits on disk until then.
+     */
+    public static final long LARGEST_UPLOAD_BYTES = MAX_SIZE_MB * 1024L * 1024L;
     /** A drawn signature is a small PNG. */
     public static final long MAX_SIGNATURE_BYTES = 512L * 1024;
     private static final Pattern KEY = Pattern.compile("^[a-z][a-z0-9_]{0,39}$");

@@ -2,6 +2,7 @@ package process.tenancy;
 
 import process.api.AiModelChoiceRestApi;
 import process.api.FormRestApi;
+import process.api.PublicFormRestApi;
 import process.api.FormSubmissionRestApi;
 import process.api.InboxTriggerRestApi;
 import process.api.PipelineDefinitionRestApi;
@@ -105,6 +106,8 @@ class CoreProbeCoverageTest {
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
         AiModelChoiceRestApi.class, InboxTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
         RunReviewRestApi.class, FormRestApi.class, FormSubmissionRestApi.class,
+        // a share link's visitor: the link's token, no tenant principal (MIG-278)
+        PublicFormRestApi.class,
         // worker callbacks: a run's X-Worker-Token, no tenant principal
         MeterRestApi.class, RunConfigRestApi.class, NotifyResetApi.class,
         // /internal: service token only
@@ -175,6 +178,13 @@ class CoreProbeCoverageTest {
             + " (InternalRunVerificationRestApiTest.thePromptDeleteGuardCountsThePipelinesUsingAPrompt)");
         NOTHING_TO_AIM.put("POST internal/secretRef/{ref}/redeem", service
             + " (InternalSecretRestApiTest.withoutTheTokenNothingIsRedeemed)");
+        // MIG-278: the visitor of a share link names no workspace and has no principal; the link's token names the one
+        // form, and a tampered, revoked or other workspace's token opens nothing.
+        String link = "share-link visitor, no tenant principal: the token's hash names the only form it opens "
+            + "(FormShareLinksPostgresTest)";
+        NOTHING_TO_AIM.put("GET publicForm.json/{token}", link);
+        NOTHING_TO_AIM.put("POST publicForm.json/{token}/upload", link);
+        NOTHING_TO_AIM.put("POST publicForm.json/{token}/submit", link);
         NOTHING_TO_AIM.put("POST internal/lineage/runs", service
             + " (InternalLineageRestApiPostgresTest.aCompletedRunWithWhatItReadAndWhatItWrote)");
         NOTHING_TO_AIM.put("POST internal/tenants/resolve", service

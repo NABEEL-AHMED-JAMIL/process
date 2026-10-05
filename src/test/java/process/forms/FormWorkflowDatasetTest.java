@@ -145,6 +145,10 @@ class FormWorkflowDatasetTest {
         assertThat(row.path("approval_status").asText()).isEqualTo("Pending");
         assertThat(row.path("patient_id").asText()).isEqualTo("P-1");
 
+        // A workflow someone started by hand naming this submission as its subject moves nothing (it is not its request).
+        assertThat(this.service.followWorkflow(A, kept.submissionId, 999_999L, "Approved", false)).as("a forged request").isFalse();
+        assertThat(this.store.submissions.get(kept.submissionId).workflowStatus).isNotEqualTo("Approved");
+
         // The request is approved: the submission and its row follow.
         assertThat(this.service.followWorkflow(A, kept.submissionId, 3000 + kept.submissionId, "Running", false, "Finance approval")).isTrue();
         assertThat(this.store.submissions.get(kept.submissionId).workflowStage).isEqualTo("Finance approval");

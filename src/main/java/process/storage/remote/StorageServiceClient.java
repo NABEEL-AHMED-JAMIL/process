@@ -31,6 +31,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -166,6 +167,13 @@ public class StorageServiceClient {
     }
 
     // ---- directory, as the service -----------------------------------------------------------
+
+    /** MIG-278: a workspace's inbox setting by id, for a form submitted through a share link (nobody signed in); null if none. */
+    public JsonNode inboxOf(long tenantId) {
+        Map<String, String> query = new LinkedHashMap<>();
+        query.put("tenantId", String.valueOf(tenantId));
+        return this.directoryGet("/inbox", query);
+    }
 
     /** The answer, or null for a 404. */
     public JsonNode directoryGet(String path, Map<String, String> query) {

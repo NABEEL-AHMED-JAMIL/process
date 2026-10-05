@@ -75,6 +75,8 @@ class RowSecurityContractTest extends RowSecurityContract {
             "storage asks which Kafka profiles of any workspace name an object before it deletes it (service token)");
         paths.put("InternalStorageDirectoryRestApi.userNames",
             "storage names the people on its rows by id, whichever workspace they are in (service token)");
+        paths.put("FormShareLinks: in code #1",
+            "a share link's visitor names no workspace: the link is found by its token's hash alone");
         paths.put("InternalLineageRestApi.runs",
             "the Data Catalog's lineage reads every workspace's finished runs into that workspace's lineage (service token)");
         paths.put("InternalTenantDirectoryRestApi.resolve",

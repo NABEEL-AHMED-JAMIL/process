@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import process.forms.FormField;
 import process.forms.FormInbox;
 import process.forms.FormSaveRequest;
+import process.forms.FormSharing;
 import process.forms.FormStatusRequest;
 import process.forms.FormSubmitRequest;
 import process.model.pojo.JobQueue;
@@ -52,6 +53,7 @@ class CoreCrossTenantProbeFormsPostgresTest {
     static final long A_FORM = 9702L;
     static final long B_SUBMISSION = 9801L;
     static final long A_RUN = 99701L;
+    static final long B_LINK = 9901L;
 
     private static CoreProbeFixture fx;
 
@@ -64,6 +66,10 @@ class CoreCrossTenantProbeFormsPostgresTest {
             + "'[{\"key\":\"q\",\"label\":\"Bravo secret field\",\"type\":\"text\",\"required\":false}]'::jsonb, ?)", B_FORM, B, B_JOB);
         sql.update("INSERT INTO form_submission (submission_id, form_id, tenant_id, form_version, answers, status, submitted_by_name) "
             + "VALUES (?, ?, ?, 1, '{\"q\":\"bravo payload marker\"}'::jsonb, 'Received', 'bella@bravo.example')", B_SUBMISSION, B_FORM, B);
+        // MIG-278: B shares its form by link; A's sharing stays off.
+        sql.update("INSERT INTO form_share_policy (tenant_id, enabled) VALUES (?, true)", B);
+        sql.update("INSERT INTO form_share_link (link_id, form_id, tenant_id, token_hash, label, expires_at, status) VALUES (?, ?, ?, "
+            + "repeat('b', 64), 'bravo payload marker', now() + interval '7 days', 'Active')", B_LINK, B_FORM, B);
         sql.update("INSERT INTO form_definition (form_id, tenant_id, name, status, fields, job_id) VALUES (?, ?, 'Acme intake', 'Active', "
             + "'[{\"key\":\"q\",\"label\":\"Question\",\"type\":\"text\",\"required\":true}]'::jsonb, ?)", A_FORM, A, COLLEAGUE_JOB);
         when(fx.formInbox.locate()).thenReturn(FormInbox.Location.at(A_BUCKET));
@@ -88,6 +94,13 @@ class CoreCrossTenantProbeFormsPostgresTest {
         return Collections.singletonList(new FormField("q", "Question", "text", false, null, null));
     }
 
+    private static FormSharing.CreateRequest shareOf(long formId) {
+        FormSharing.CreateRequest request = new FormSharing.CreateRequest();
+        request.formId = formId;
+        request.label = "probe";
+        return request;
+    }
+
     @Test
     void noFormEndpointReadsOrChangesAnotherWorkspacesFormsSubmissionsOrJobs() throws Exception {
         String before = fx.foreignRows();
@@ -107,7 +120,25 @@ class CoreCrossTenantProbeFormsPostgresTest {
             assertThat(fx.probe("GET formSubmission.json/export", caller, () -> fx.formSubmissions.export(B_FORM)))
                 .contains(REFUSED).doesNotContain("Bravo");
             assertThat(fx.probe("GET form.json/list", caller, () -> fx.forms.list(true))).contains(SUCCEEDED).contains("Acme intake");
+            assertThat(fx.probe("GET form.json/shareLinks", caller, () -> fx.forms.shareLinks(B_FORM))).contains(REFUSED);
+            assertThat(fx.probe("POST form.json/shareLinks/create", caller, () -> fx.forms.createShareLink(shareOf(B_FORM))))
+                .contains(REFUSED);
+            assertThat(fx.probe("POST form.json/shareLinks/revoke", caller, () -> fx.forms.revokeShareLink(B_LINK))).contains(REFUSED);
+            // A's own setting, never B's: B's is on, A's reads off.
+            assertThat(fx.probe("GET form.json/sharePolicy", caller, () -> fx.forms.sharePolicy())).contains(SUCCEEDED)
+                .contains("\"enabled\":false");
         }
+        // Turning A's sharing on and off touches A's row alone; a member may not.
+        assertThat(fx.probe("POST form.json/sharePolicy", USER_OF_A, () -> fx.forms.setSharePolicy(Collections.singletonMap("enabled",
+            true)))).contains(REFUSED);
+        assertThat(fx.probe("POST form.json/sharePolicy", ADMIN_OF_A, () -> fx.forms.setSharePolicy(Collections.singletonMap("enabled",
+            true)))).contains(SUCCEEDED).contains("\"enabled\":true");
+        assertThat(fx.probe("POST form.json/shareLinks/create(B's form, sharing on)", ADMIN_OF_A,
+            () -> fx.forms.createShareLink(shareOf(B_FORM)))).contains(REFUSED);
+        assertThat(fx.probe("POST form.json/shareLinks/revoke(sharing on)", ADMIN_OF_A, () -> fx.forms.revokeShareLink(B_LINK)))
+            .contains(REFUSED);
+        assertThat(fx.probe("POST form.json/sharePolicy(off)", ADMIN_OF_A, () -> fx.forms.setSharePolicy(Collections.singletonMap(
+            "enabled", false)))).contains(SUCCEEDED);
         // B's job is not A's to link, and the job list is an administrator's and A's own.
         assertThat(fx.probe("POST form.json/save(linking B's job)", ADMIN_OF_A, () -> fx.forms.save(new FormSaveRequest(null,
             "Acme link probe", null, "Draft", oneField(), B_JOB)))).contains("The job this form starts was not found in this workspace.");

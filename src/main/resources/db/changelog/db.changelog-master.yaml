@@ -200,3 +200,6 @@ databaseChangeLog:
   # V197: MIG-280 -- the step a submission's request waits at now (form_submission.workflow_stage). Expand-only.
   - include:
       file: db/changelog/yaml/V197.0-form-submission-stage.yaml
+  # V198: MIG-278 -- forms shared by link: form_share_policy (off by default), form_share_link, form_submission.share_link_id.
+  - include:
+      file: db/changelog/yaml/V198.0-form-share-links.yaml
