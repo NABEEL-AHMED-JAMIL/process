@@ -367,7 +367,8 @@ class JobStatusTransitionTableTest {
                 .doesNotContain("job_status");
         }
         // Five since MIG-63 added noteRefusedCallback and findRunsWithRefusedCallbacks, seven since MIG-134
-        // added findRunsToPrepare and markPrepared -- every one of them through UPPER().
-        assertThat(filtering).as("queries filtering on a run's job_status").isEqualTo(7);
+        // added findRunsToPrepare and markPrepared, eight since the scale review's countByStatusForJob (which
+        // groups on it) -- every one of them through UPPER().
+        assertThat(filtering).as("queries filtering on a run's job_status").isEqualTo(8);
     }
 }

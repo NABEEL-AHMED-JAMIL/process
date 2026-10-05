@@ -138,8 +138,9 @@ class QueryServiceSurfaceTest {
         Set<String> tables = new TreeSet<>();
         Matcher matcher = Pattern.compile("(?i)\\b(?:from|join)\\s+([a-z_]+)\\b").matcher(sql);
         while (matcher.find()) {
-            // extract(hour from cast(...)) is a FROM that names no table.
-            if (!"cast".equalsIgnoreCase(matcher.group(1))) {
+            // extract(hour from cast(...)) is a FROM that names no table, and "join lateral (" a JOIN that names
+            // none: its subquery's own FROM is matched on its own.
+            if (!"cast".equalsIgnoreCase(matcher.group(1)) && !"lateral".equalsIgnoreCase(matcher.group(1))) {
                 tables.add(matcher.group(1).toLowerCase());
             }
         }

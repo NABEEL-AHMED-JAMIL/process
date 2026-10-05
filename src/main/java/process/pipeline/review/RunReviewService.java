@@ -215,8 +215,8 @@ public class RunReviewService {
             return outcome;
         }
         long rejected = owned.run.getJobQueueId();
-        Long rerunId = this.runs.findAllByJobId(owned.job.getJobId()).stream().map(JobQueue::getJobQueueId)
-            .filter(id -> id != null && id > rejected).max(Long::compare).orElse(null);
+        // One max() in SQL, not the job's whole history (scale review P0 #1).
+        Long rerunId = this.runs.findNewestRunIdAfter(owned.job.getJobId(), rejected);
         outcome.put("queued", true);
         outcome.put("jobQueueId", rerunId);
         outcome.put("message", queued.getMessage());

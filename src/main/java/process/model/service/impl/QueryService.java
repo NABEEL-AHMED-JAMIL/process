@@ -22,6 +22,7 @@ import javax.transaction.Transactional;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.persistence.EntityManager;
@@ -412,19 +413,28 @@ public class QueryService {
             + "from job_queue q "
             + "join source_job sj on sj.job_id = q.job_id "
             + "left join source_task st on st.task_detail_id = sj.task_detail_id "
-            + "left join (select job_queue_id, min(date_created) as exec_start "
-            // The marker is JobAuditMarker.JOB_STARTED, one constant with the worker's literal behind it
-            // (MIG-77): matched exactly, never with LIKE.
-            + "from job_audit_logs where log_detail = '" + JobAuditMarker.JOB_STARTED.logDetail() + "' group by job_queue_id) x "
-            + "on x.job_queue_id = q.job_queue_id "
+            /*
+             * LATERAL, one indexed lookup per run returned (scale review P0 #2). This was a derived table that
+             * grouped EVERY 'Job started' line ever written -- the whole of job_audit_logs, whatever the range --
+             * before joining the few it needed. Now each run asks idx_job_audit_logs_job_queue_id for its own.
+             * The marker is JobAuditMarker.JOB_STARTED, one constant with the worker's literal behind it
+             * (MIG-77): matched exactly, never with LIKE.
+             */
+            + "left join lateral (select min(a.date_created) as exec_start from job_audit_logs a "
+            + "where a.job_queue_id = q.job_queue_id and a.log_detail = '" + JobAuditMarker.JOB_STARTED.logDetail() + "') x on true "
             // A deleted job's runs are not history any more, and every other statistic here
             // already leaves them out -- a report that counted them would disagree with the
             // dashboard beside it, on the same data.
             + "where (q.start_time is not null or q.skip_time is not null) "
             + "and upper(sj.job_status) <> 'DELETE' "
             + dateFilter + this.jobClause("sj")
-            + "order by q.job_queue_id desc";
+            // In SQL, not after: the report read every row in the range and then kept 50,000 of them.
+            // One past the cap, so the caller can say the range had more without reading the rest (scale review P0 #2).
+            + "order by q.job_queue_id desc limit " + (REPORT_ROW_CAP + 1);
     }
+
+    /** The most rows a report hands the browser; the query asks for one more to know it was cut. */
+    public static final int REPORT_ROW_CAP = 50_000;
 
     /**
      * Per-user totals, for "who owns what and how is it going": jobs, active jobs, distinct tasks, runs,
@@ -603,45 +613,61 @@ public class QueryService {
         return query;
     }
 
+    /** The runs one Queue read hands over when the caller names no limit, and the most it may ask for (scale review P0 #3). */
+    public static final int QUEUE_PAGE_DEFAULT = 2_000;
+    public static final int QUEUE_PAGE_MAX = 5_000;
+
+    /** A Queue read's window: the default when none is asked for, never more than the ceiling. */
+    static int queueWindow(Integer limit) {
+        return limit == null || limit <= 0 ? QUEUE_PAGE_DEFAULT : Math.min(limit, QUEUE_PAGE_MAX);
+    }
+
+    /**
+     * The Queue screen's two reads over one date range: the runs (isState false), newest first, one window of
+     * them with one row more to say there is a next; and the runs counted by status (isState true).
+     *
+     * Both carry the range now (scale review P0 #3). The counts had no date clause, no job clause and no
+     * deleted-run clause -- every message ever recorded, grouped on every read the screen made -- and the runs
+     * had no LIMIT, so a busy week came back whole on each status push. The counts take the same range and
+     * job narrowing as the runs but not the status one, so they can say how many of each status the range holds
+     * while the runs show one.
+     */
     public String fetchJobQLog(MessageQSearchDto messageQSearch, boolean isState) {
-        String selectPortion;
-        if (isState) {
-
-            selectPortion = "select UPPER(jq.job_status) as job_status, count(*) as total_count \n";
-        } else {
-
-            selectPortion = "select jq.job_queue_id, jq.date_created, jq.end_time, jq.job_id, jq.job_send, jq.job_status, jq.job_status_message, jq.run_manual, jq.skip_manual, jq.skip_time, jq.start_time \n";
-        }
+        String selectPortion = isState
+            ? "select UPPER(jq.job_status) as job_status, count(*) as total_count \n"
+            : "select jq.job_queue_id, jq.date_created, jq.end_time, jq.job_id, jq.job_send, jq.job_status, jq.job_status_message, "
+                + "jq.run_manual, jq.skip_manual, jq.skip_time, jq.start_time \n";
 
         String query = selectPortion + "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id \n";
-        if (!isState) {
-            query += String.format("where cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) between '%s' and '%s' \n",
-                    this.requireValidDate(messageQSearch.getFromDate()), this.requireValidDate(messageQSearch.getToDate()));
-            query += "and UPPER(sj.job_status) <> 'DELETE' and UPPER(jq.status) <> 'DELETE' \n";
-            query += this.jobClause("sj") + "\n";
-            if (!ProcessUtil.isNull(messageQSearch.getJobId()) && !messageQSearch.getJobId().isEmpty()) {
-                String jobId = messageQSearch.getJobId().toString();
-                query += String.format("and jq.job_id in (%s) \n", jobId.substring(1, jobId.length() - 1));
-            }
-            if (!ProcessUtil.isNull(messageQSearch.getJobQId()) && !messageQSearch.getJobQId().isEmpty()) {
-                String jobQId = messageQSearch.getJobQId().toString();
-                query += String.format("and jq.job_queue_id in (%s) \n", jobQId.substring(1, jobQId.length() - 1));
-            }
-            if (!ProcessUtil.isNull(messageQSearch.getJobStatuses()) && !messageQSearch.getJobStatuses().isEmpty()) {
-                String jobStatus = messageQSearch.getJobStatuses().stream()
-                        .map(jobStatus1 -> "'" + jobStatus1.toString().toUpperCase() + "',").collect(Collectors.joining());
-                query += String.format("and UPPER(jq.job_status) in (%s)", jobStatus.substring(0, jobStatus.length() - 1));
-            }
+        // Spelled as idx_job_queue_date_created_day is, so the range is an index read (DashboardIndexPostgresTest).
+        query += String.format("where cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) between '%s' and '%s' \n",
+                this.requireValidDate(messageQSearch.getFromDate()), this.requireValidDate(messageQSearch.getToDate()));
+        query += "and UPPER(sj.job_status) <> 'DELETE' and UPPER(jq.status) <> 'DELETE' \n";
+        query += this.jobClause("sj") + "\n";
+        if (!ProcessUtil.isNull(messageQSearch.getJobId()) && !messageQSearch.getJobId().isEmpty()) {
+            query += String.format("and jq.job_id in (%s) \n", this.idList(messageQSearch.getJobId()));
+        }
+        if (!ProcessUtil.isNull(messageQSearch.getJobQId()) && !messageQSearch.getJobQId().isEmpty()) {
+            query += String.format("and jq.job_queue_id in (%s) \n", this.idList(messageQSearch.getJobQId()));
         }
         if (isState) {
+            return query + "\ngroup by UPPER(jq.job_status)";
+        }
+        if (!ProcessUtil.isNull(messageQSearch.getJobStatuses()) && !messageQSearch.getJobStatuses().isEmpty()) {
+            String jobStatus = messageQSearch.getJobStatuses().stream()
+                    .map(status -> "'" + status.toString().toUpperCase() + "'").collect(Collectors.joining(","));
+            query += String.format("and UPPER(jq.job_status) in (%s)", jobStatus);
+        }
+        int window = queueWindow(messageQSearch.getLimit());
+        int page = messageQSearch.getPage() == null || messageQSearch.getPage() < 0 ? 0 : messageQSearch.getPage();
+        return query + String.format("\norder by job_queue_id desc limit %d offset %d", window + 1, (long) page * window);
+    }
 
-            query += "where UPPER(sj.job_status) in ('ACTIVE','INACTIVE') " + this.jobClause("sj") + "\n";
-            query += "\ngroup by UPPER(jq.job_status)";
-        }
-        if (!isState) {
-            query += "\norder by job_queue_id desc";
-        }
-        return query;
+    /** Numbers only, whatever the set held: each id is written back from a Long, never from the caller's text. */
+    private String idList(Collection<Long> ids) {
+        String list = ids.stream().filter(Objects::nonNull).map(String::valueOf).collect(Collectors.joining(", "));
+        // A set of nulls matches nothing, as it asked, rather than writing "in ()".
+        return list.isEmpty() ? "null" : list;
     }
 
     @Override

@@ -63,7 +63,9 @@ class CrossTenantReadsAreNamedTest {
     static {
         String byParent = "keyed by a job, run or task id the caller has already been shown to own";
         for (String name : new String[] {"JobAuditLogRepository.findAllByJobQueueIdV1", "JobAuditLogRepository.updateStatusByJobId",
-            "JobQueueRepository.countGroupByJobIds", "JobQueueRepository.getCountForInQueueJobByJobId",
+            "JobQueueRepository.findJobIdsWithRuns", "JobQueueRepository.getCountForInQueueJobByJobId",
+            "JobQueueRepository.findRecentByJobId", "JobQueueRepository.findNewestRunIdAfter", "JobQueueRepository.countByStatusForJob",
+            "SchedulerRepository.findAllForJobIds",
             "JobQueueRepository.getCountForJobByJobId", "JobQueueRepository.updateStatusByJobId", "SourceJobRepository.countLiveJobsForTask",
             "SourceJobRepository.statusChangeSourceJobWithSourceTaskId", "SourceJobRepository.statusChangeSourceJobLinkWithSourceTaskTypeId"}) {
             NOT_TENANT_ROWS.put(name, byParent);

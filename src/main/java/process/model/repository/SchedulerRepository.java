@@ -43,4 +43,11 @@ public interface SchedulerRepository extends CrudRepository<Scheduler, Long> {
 
     List<Scheduler> findByJobIdIn(List<Long> jobIds);
 
+    /**
+     * The schedulers of these jobs, the ids as ONE array parameter (scale review P1 #20): findByJobIdIn binds
+     * a parameter per id and stops at 32,767. Pass JobQueueRepository.idArray(ids).
+     */
+    @Query(value = "select scheduler.* from scheduler where scheduler.job_id = any(cast(:jobIds as bigint[]))", nativeQuery = true)
+    List<Scheduler> findAllForJobIds(@Param("jobIds") String jobIds);
+
 }

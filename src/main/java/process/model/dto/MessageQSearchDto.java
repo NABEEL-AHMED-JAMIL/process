@@ -18,6 +18,10 @@ public class MessageQSearchDto {
     private Set<Long> jobId;
     private Set<Long> jobQId;
     private Set<JobStatus> jobStatuses;
+    /** How many runs one read hands over, newest first (scale review P0 #3); the service's default and ceiling apply. */
+    private Integer limit;
+    /** Which window of {@code limit} runs, from 0. */
+    private Integer page;
 
     public MessageQSearchDto() {}
 
@@ -68,6 +72,22 @@ public class MessageQSearchDto {
 
     public void setJobStatuses(Set<JobStatus> jobStatuses) {
         this.jobStatuses = jobStatuses;
+    }
+
+    public Integer getLimit() {
+        return limit;
+    }
+
+    public void setLimit(Integer limit) {
+        this.limit = limit;
+    }
+
+    public Integer getPage() {
+        return page;
+    }
+
+    public void setPage(Integer page) {
+        this.page = page;
     }
 
     @Override

@@ -6,6 +6,7 @@ import process.util.BusinessTime;
 import process.util.CronSchedule;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -352,6 +353,12 @@ public class SourceJobServiceImpl implements SourceJobService {
      */
     /** Widest retry policy a job may be given; the same ceiling the database enforces. */
     private static final int MAX_ATTEMPTS_CEILING = 10;
+    /** A run-history read's window when the caller names none, and the most one may ask for (scale review P0 #1). */
+    static final int RUN_HISTORY_DEFAULT = 500;
+    static final int RUN_HISTORY_MAX = 1000;
+    /** The most jobs one listSourceJob?jobIds= call re-reads, and the largest page it serves (P1 #20, #21). */
+    static final int LIST_BY_IDS_MAX = 200;
+    static final int LIST_PAGE_MAX = 500;
 
     /** Longest base backoff a job may be given, in seconds; the same ceiling the database enforces. */
     private static final int MAX_BACKOFF_SECONDS_CEILING = 60 * 60;
@@ -774,7 +781,7 @@ public class SourceJobServiceImpl implements SourceJobService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResponseDto fetchSourceJobQueueListWithJobId(Long jobId) throws Exception {
+    public ResponseDto fetchSourceJobQueueListWithJobId(Long jobId, Integer limit, Long beforeId) throws Exception {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
 
         Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
@@ -787,29 +794,48 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (Status.Delete.equals(sourceJobOpt.get().getJobStatus())) {
             return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
         }
-        List<SourceJobQueueDto> jobQueues = jobQueueRepository.findAllByJobId(jobId)
-            .stream()
-            .sorted(Comparator.comparing(JobQueue::getDateCreated, Comparator.nullsLast(Comparator.reverseOrder())))
+        /*
+         * The newest window, in SQL (scale review P0 #1). This read the job's every run and sorted them
+         * here -- 525,000 rows a year for a job that runs each minute, on a call the console repeats on
+         * every status push. One row past the window says whether there is more without counting it.
+         */
+        int window = runHistoryWindow(limit);
+        long before = beforeId == null || beforeId <= 0 ? Long.MAX_VALUE : beforeId;
+        List<JobQueue> rows = jobQueueRepository.findRecentByJobId(jobId, before, window + 1);
+        boolean hasMore = rows.size() > window;
+        List<SourceJobQueueDto> jobQueues = rows.stream()
+            .limit(window)
             .map(this::getSourceJobQueueDto)
             .collect(Collectors.toList());
         Map<String, Object> payload = new HashMap<>();
         payload.put("jobQueues", jobQueues);
+        payload.put("hasMore", hasMore);
+        payload.put("limit", window);
         return new ResponseDto(SUCCESS, String.format("SourceJobQueue found with %d.", jobId), payload);
+    }
+
+    /** A run-history window: the default when none is asked for, never more than the ceiling. */
+    static int runHistoryWindow(Integer limit) {
+        if (limit == null || limit <= 0) {
+            return RUN_HISTORY_DEFAULT;
+        }
+        return Math.min(limit, RUN_HISTORY_MAX);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ResponseDto listSourceJob() throws Exception {
+    public ResponseDto listSourceJob(Integer page, Integer size, List<Long> onlyJobIds) throws Exception {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        List<SourceJob> jobs = sourceJobRepository.findAllActiveAndInactiveJobs(
-            Status.Active, Status.Inactive, Sort.by(Sort.Direction.ASC, "jobId"));
+        List<SourceJob> jobs = this.listedJobs(page, size, onlyJobIds);
         List<Long> jobIds = jobs.stream().map(SourceJob::getJobId).collect(Collectors.toList());
+        // One array parameter each, not an IN list per id (scale review P1 #20).
+        String idArray = JobQueueRepository.idArray(jobIds);
         Map<Long, Scheduler> schedulerByJobId = jobIds.isEmpty() ? Collections.emptyMap()
-            : schedulerRepository.findByJobIdIn(jobIds).stream()
+            : schedulerRepository.findAllForJobIds(idArray).stream()
                 .collect(Collectors.toMap(Scheduler::getJobId, s -> s, (a, b) -> a));
-        Map<Long, Long> queueCountByJobId = jobIds.isEmpty() ? Collections.emptyMap()
-            : jobQueueRepository.countGroupByJobIds(jobIds).stream()
-                .collect(Collectors.toMap(row -> ((Number) row[0]).longValue(), row -> ((Number) row[1]).longValue()));
+        // tabActive only asks whether a job has ever run, so it is an exists() per job, not a count of every run.
+        Set<Long> jobsWithRuns = jobIds.isEmpty() ? Collections.emptySet()
+            : jobQueueRepository.findJobIdsWithRuns(idArray).stream().map(Number::longValue).collect(Collectors.toSet());
 
         // The entities are already in hand here, so the names cost one lookup and no re-fetch.
         this.userNameResolver.attachNames(jobs);
@@ -829,7 +855,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             .map(job -> {
                 SourceJobDto dto = mapSourceJobToDto(job, usernameByUserId, lookupTypeByLookupId);
                 Optional.ofNullable(schedulerByJobId.get(job.getJobId())).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
-                dto.setTabActive(queueCountByJobId.getOrDefault(job.getJobId(), 0L) > 0);
+                dto.setTabActive(jobsWithRuns.contains(job.getJobId()));
                 // The task's XML payload rides along at roughly 600 bytes a row and no list
                 // view shows it -- only the single-job detail call needs it. Dropping it here
                 // takes this response from 54KB to about 30KB for 41 jobs, and the saving
@@ -844,6 +870,27 @@ public class SourceJobServiceImpl implements SourceJobService {
             jobs.stream().map(SourceJob::getTenantId).collect(Collectors.toList()));
         sourceJobDtoList.forEach(dto -> dto.setTenantName(workspaceNames.get(dto.getTenantId())));
         return new ResponseDto(SUCCESS, "Fetch source jobs.", sourceJobDtoList);
+    }
+
+    /**
+     * The jobs a list call asks for: the named ones (at most LIST_BY_IDS_MAX), a page in job id order,
+     * or every one -- the console's lists still read them all, and an absent size keeps that answer.
+     */
+    private List<SourceJob> listedJobs(Integer page, Integer size, List<Long> onlyJobIds) {
+        Sort byId = Sort.by(Sort.Direction.ASC, "jobId");
+        if (onlyJobIds != null && !onlyJobIds.isEmpty()) {
+            List<Long> ids = onlyJobIds.stream().filter(Objects::nonNull).distinct().limit(LIST_BY_IDS_MAX)
+                .collect(Collectors.toList());
+            return ids.isEmpty() ? Collections.emptyList()
+                : sourceJobRepository.findActiveAndInactiveJobsByIds(Status.Active, Status.Inactive, ids, byId);
+        }
+        if (size != null && size > 0) {
+            int pageSize = Math.min(size, LIST_PAGE_MAX);
+            int pageNumber = page == null || page < 0 ? 0 : page;
+            return sourceJobRepository.findActiveAndInactiveJobPage(Status.Active, Status.Inactive,
+                PageRequest.of(pageNumber, pageSize, byId));
+        }
+        return sourceJobRepository.findAllActiveAndInactiveJobs(Status.Active, Status.Inactive, byId);
     }
 
     /** Every distinct assignee in the list, resolved to a username in one query. */

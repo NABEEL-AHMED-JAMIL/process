@@ -40,7 +40,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.repository.SourceTaskRepository;
@@ -343,8 +343,8 @@ public class SourceJobCronScheduleTest {
         stored.setNextRunAt(next);
         when(this.sourceJobRepository.findAllActiveAndInactiveJobs(eq(Status.Active), eq(Status.Inactive), any()))
             .thenReturn(Collections.singletonList(job));
-        when(this.schedulerRepository.findByJobIdIn(anyList())).thenReturn(Collections.singletonList(stored));
-        when(this.jobQueueRepository.countGroupByJobIds(anyList())).thenReturn(Collections.emptyList());
+        when(this.schedulerRepository.findAllForJobIds(anyString())).thenReturn(Collections.singletonList(stored));
+        when(this.jobQueueRepository.findJobIdsWithRuns(anyString())).thenReturn(Collections.emptyList());
 
         ResponseDto response = this.service.listSourceJob();
 

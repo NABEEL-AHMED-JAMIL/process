@@ -24,7 +24,6 @@ import process.security.TenantContext;
 import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -319,11 +318,7 @@ class RunReviewServiceTest {
     void aRejectionWithRerunQueuesTheJobAgainAndLinksTheNewRun() throws Exception {
         this.requires("internal");
         when(this.sourceJobs.runSourceJob(any(SourceJobDto.class))).thenReturn(new ResponseDto("SUCCESS", "queued"));
-        JobQueue again = new JobQueue();
-        again.setJobQueueId(RERUN);
-        again.setJobId(JOB);
-        List<JobQueue> all = Arrays.asList(this.run, again);
-        when(this.runs.findAllByJobId(JOB)).thenReturn(all);
+        when(this.runs.findNewestRunIdAfter(JOB, RUN)).thenReturn(RERUN);
 
         Map<String, Object> review = data(this.service.consoleDecide(request("REJECTED", "wrong input file", true)));
 

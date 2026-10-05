@@ -40,7 +40,9 @@ class JobAuditMarkerContractTest {
     void theRunReportMatchesTheMarkerExactlyAndNothingElse() {
         String sql = new QueryService().runReportRows("2026-09-01", "2026-09-21");
 
-        assertThat(sql).contains("from job_audit_logs where log_detail = '" + JobAuditMarker.JOB_STARTED.logDetail() + "' ");
+        // Per run since scale review P0 #2: a lateral lookup on the run's own lines, the marker still matched exactly.
+        assertThat(sql).contains("from job_audit_logs a where a.job_queue_id = q.job_queue_id and a.log_detail = '"
+            + JobAuditMarker.JOB_STARTED.logDetail() + "') ");
         // Exact equality is the rule: a LIKE would silently start matching a reworded line's neighbours.
         assertThat(sql.toLowerCase()).doesNotContain("log_detail like").doesNotContain("log_detail ilike");
     }

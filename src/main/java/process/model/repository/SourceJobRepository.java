@@ -1,5 +1,6 @@
 package process.model.repository;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.projection.SourceJobProjection;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.List;
 
@@ -44,6 +46,16 @@ public interface SourceJobRepository extends JpaRepository<SourceJob, Long> {
     @Query("SELECT sj FROM SourceJob sj LEFT JOIN FETCH sj.sourceTask st "
         + "LEFT JOIN FETCH st.sourceTaskType WHERE sj.jobStatus IN (?1, ?2)")
     List<SourceJob> findAllActiveAndInactiveJobs(Status activeStatus, Status inactiveStatus, Sort sort);
+
+    /** One page of the same list, limit and offset in SQL (scale review P1 #20). To-one fetch joins, so paging is exact. */
+    @Query("SELECT sj FROM SourceJob sj LEFT JOIN FETCH sj.sourceTask st "
+        + "LEFT JOIN FETCH st.sourceTaskType WHERE sj.jobStatus IN (?1, ?2)")
+    List<SourceJob> findActiveAndInactiveJobPage(Status activeStatus, Status inactiveStatus, Pageable page);
+
+    /** The listed jobs among these ids: a screen re-reading the rows a push named (P1 #21). The caller bounds the ids. */
+    @Query("SELECT sj FROM SourceJob sj LEFT JOIN FETCH sj.sourceTask st "
+        + "LEFT JOIN FETCH st.sourceTaskType WHERE sj.jobStatus IN (?1, ?2) AND sj.jobId IN ?3")
+    List<SourceJob> findActiveAndInactiveJobsByIds(Status activeStatus, Status inactiveStatus, Collection<Long> jobIds, Sort sort);
 
     /**
      * The live job event, for every job-state change (MIG-151): one read of Core's own tables. The

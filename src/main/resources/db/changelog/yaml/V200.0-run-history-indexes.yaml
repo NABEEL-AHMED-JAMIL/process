@@ -1,0 +1,32 @@
+databaseChangeLog:
+  - changeSet:
+      id: 200.0-run-history-indexes
+      author: nabeel.amd93
+      description: "Scale review P0 #1/#2: job_queue (job_id, job_queue_id) for a job's newest runs, and the run's Chicago day for the report; expand-only"
+      # A concurrent build that fails leaves an INVALID index behind, which IF NOT EXISTS would then mistake for
+      # done, so an invalid one is dropped first (as V70.1 does).
+      runInTransaction: false
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+                    WHERE c.relname = 'idx_job_queue_job_id_run' AND NOT i.indisvalid) THEN
+                  DROP INDEX public.idx_job_queue_job_id_run;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+                    WHERE c.relname = 'idx_job_queue_run_day' AND NOT i.indisvalid) THEN
+                  DROP INDEX public.idx_job_queue_run_day;
+                END IF;
+              END $$;
+        - sqlFile:
+            path: ../changelog-sets/V200.0-run-history-indexes/V200__run_history_indexes.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V200.0-run-history-indexes/V200__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: true

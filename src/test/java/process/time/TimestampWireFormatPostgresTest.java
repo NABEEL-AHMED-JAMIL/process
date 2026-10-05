@@ -141,7 +141,8 @@ class TimestampWireFormatPostgresTest {
         ResponseDto response = messageQ.fetchLogs(day);
         String sent = wire(response.getData());
         System.out.println("WIRE fetchLogs " + sent);
-        assertThat(sent).isEqualTo("{\"jobStatusStatistic\":[{\"name\":\"COMPLETED\",\"value\":1}],\"sourceJobQueues\":[{\"jobQueueId\":310001,\"startTime\":\"2026-01-15T23:30:00\",\"endTime\":\"2026-01-15T23:45:10\",\"jobStatus\":\"Completed\",\"jobId\":31001,\"jobSend\":true,\"dateCreated\":\"2026-01-16T05:30:00.000+00:00\"}]}");
+        // The scale review (P0 #3) added total, hasMore and limit beside them; the two lists are as they were.
+        assertThat(sent).isEqualTo("{\"total\":1,\"jobStatusStatistic\":[{\"name\":\"COMPLETED\",\"value\":1}],\"hasMore\":false,\"limit\":2000,\"sourceJobQueues\":[{\"jobQueueId\":310001,\"startTime\":\"2026-01-15T23:30:00\",\"endTime\":\"2026-01-15T23:45:10\",\"jobStatus\":\"Completed\",\"jobId\":31001,\"jobSend\":true,\"dateCreated\":\"2026-01-16T05:30:00.000+00:00\"}]}");
     }
 
     /** The Dashboard's per-day and per-hour tiles: the run belongs to 15 January, 23:00, in Chicago. */

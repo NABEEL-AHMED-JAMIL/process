@@ -206,3 +206,6 @@ databaseChangeLog:
   # V199: event audit E2 -- platform_outbox.dead_at: an event that can never be sent is parked, not retried ahead of every later one.
   - include:
       file: db/changelog/yaml/V199.0-outbox-dead.yaml
+  # V200: scale review P0 #1/#2 -- job_queue (job_id, job_queue_id) for a job's newest runs; the run's Chicago day for the report.
+  - include:
+      file: db/changelog/yaml/V200.0-run-history-indexes.yaml

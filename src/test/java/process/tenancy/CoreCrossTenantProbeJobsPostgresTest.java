@@ -10,6 +10,7 @@ import process.model.dto.SourceTaskDto;
 import process.model.enums.Execution;
 import process.model.enums.Status;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -114,7 +115,11 @@ class CoreCrossTenantProbeJobsPostgresTest {
 
         // Lists, exports and the activity card: nothing of B's, and a tenant user nothing of a colleague's.
         for (Caller caller : new Caller[] {USER_OF_A, ADMIN_OF_A}) {
-            fx.probe("GET sourceJob.json/listSourceJob", caller, fx.sourceJobs::listSourceJob);
+            fx.probe("GET sourceJob.json/listSourceJob", caller, () -> fx.sourceJobs.listSourceJob(null, null, null));
+            // A page, and the rows a push named (scale review P1 #20, #21): the same filters, whatever is asked for.
+            fx.probe("GET sourceJob.json/listSourceJob", caller, () -> fx.sourceJobs.listSourceJob(0, 50, null));
+            fx.probe("GET sourceJob.json/listSourceJob", caller,
+                () -> fx.sourceJobs.listSourceJob(null, null, Arrays.asList(B_JOB, B_JOB_NAMING_USER_A, COLLEAGUE_JOB)));
             fx.probe("GET sourceJob.json/downloadListSourceJob", caller, fx.sourceJobs::downloadListSourceJob);
             String template = fx.probe("GET sourceJob.json/downloadSourceJobTemplateFile", caller,
                 fx.sourceJobs::downloadSourceJobTemplateFile);
@@ -132,7 +137,7 @@ class CoreCrossTenantProbeJobsPostgresTest {
                 assertThat(fx.probe("GET sourceJob.json/fetchSourceJobDetailWithSourceJobId", caller,
                     () -> fx.sourceJobs.fetchSourceJobDetailWithSourceJobId(theirs))).contains(REFUSED);
                 assertThat(fx.probe("GET sourceJob.json/fetchSourceJobQueueListWithJobId", caller,
-                    () -> fx.sourceJobs.fetchSourceJobQueueListWithJobId(theirs))).contains(REFUSED);
+                    () -> fx.sourceJobs.fetchSourceJobQueueListWithJobId(theirs, 5, null))).contains(REFUSED);
                 assertThat(fx.probe("PUT sourceJob.json/updateSourceJob", caller,
                     () -> fx.sourceJobs.updateSourceJob(job(theirs, "Renamed By Acme", A_TASK)))).contains(REFUSED);
                 assertThat(fx.probe("PUT sourceJob.json/toggleSourceJobStatus", caller,
@@ -225,7 +230,7 @@ class CoreCrossTenantProbeJobsPostgresTest {
 
         for (Long none : NO_WORKSPACE) {
             Caller caller = tenantlessUser(none);
-            fx.probe("GET sourceJob.json/listSourceJob", caller, fx.sourceJobs::listSourceJob);
+            fx.probe("GET sourceJob.json/listSourceJob", caller, () -> fx.sourceJobs.listSourceJob(null, null, null));
             fx.probe("GET sourceJob.json/downloadListSourceJob", caller, fx.sourceJobs::downloadListSourceJob);
             fx.probe("GET sourceJob.json/myActivity", caller, () -> fx.sourceJobs.myActivity(50, 90));
             String template = fx.probe("GET sourceJob.json/downloadSourceJobTemplateFile", caller,

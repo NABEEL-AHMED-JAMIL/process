@@ -40,7 +40,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import process.notifications.TestNotifications;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SchedulerRepository;
@@ -537,8 +537,8 @@ public class SourceJobLifecycleDefectTest {
             jobAssignedTo(1L, 500L), jobAssignedTo(2L, 501L), jobAssignedTo(3L, 500L));
         when(this.sourceJobRepository.findAllActiveAndInactiveJobs(eq(Status.Active), eq(Status.Inactive), any()))
             .thenReturn(jobs);
-        when(this.schedulerRepository.findByJobIdIn(anyList())).thenReturn(Collections.emptyList());
-        when(this.jobQueueRepository.countGroupByJobIds(anyList())).thenReturn(Collections.emptyList());
+        when(this.schedulerRepository.findAllForJobIds(anyString())).thenReturn(Collections.emptyList());
+        when(this.jobQueueRepository.findJobIdsWithRuns(anyString())).thenReturn(Collections.emptyList());
         when(this.appUserRepository.findAllByIdAcrossTenants(anyCollection()))
             .thenReturn(Arrays.asList(userNamed(500L, "ana@tenant-a"), userNamed(501L, "bo@tenant-a")));
 

@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.OptionalDouble;
 import java.util.Comparator;
 
@@ -49,6 +50,8 @@ public class JobAssistantServiceImpl {
 
     /** Enough runs to characterise behaviour without burying the question in context. */
     private static final int RUN_SAMPLE = 40;
+    /** The runs the averages and failure reasons are taken over; the totals count every run. */
+    private static final int RUN_WINDOW = 500;
     private static final int MAX_FAILURE_REASONS = 6;
 
     private final Logger logger = LoggerFactory.getLogger(JobAssistantServiceImpl.class);
@@ -130,7 +133,14 @@ public class JobAssistantServiceImpl {
      * something outside that. One job's facts, nothing else.
      */
     private String buildInstructions(SourceJob job, List<String> history) {
-        List<JobQueue> runs = this.jobQueueRepository.findAllByJobId(job.getJobId());
+        // The newest runs only, and the totals counted in the database (scale review P0 #1): a minute job has
+        // 525,000 runs a year, and this read every one of them to describe forty.
+        List<JobQueue> runs = this.jobQueueRepository.findRecentByJobId(job.getJobId(), Long.MAX_VALUE, RUN_WINDOW);
+        Map<String, Long> byStatus = new TreeMap<>();
+        for (Object[] row : this.jobQueueRepository.countByStatusForJob(job.getJobId())) {
+            byStatus.merge(String.valueOf(row[0]), ((Number) row[1]).longValue(), Long::sum);
+        }
+        long totalRuns = byStatus.values().stream().mapToLong(Long::longValue).sum();
         Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(job.getJobId());
         SourceTask task = job.getTaskDetail();
 
@@ -181,10 +191,11 @@ public class JobAssistantServiceImpl {
         if (runs.isEmpty()) {
             out.append("This job has never run.\n");
         } else {
-            Map<String, Long> byStatus = runs.stream()
-                .collect(Collectors.groupingBy(r -> String.valueOf(r.getJobStatus()), Collectors.counting()));
-            out.append("Total runs: ").append(runs.size()).append('\n')
+            out.append("Total runs: ").append(totalRuns).append('\n')
                .append("By status: ").append(byStatus).append('\n');
+            if (totalRuns > runs.size()) {
+                out.append("The figures below are over the newest ").append(runs.size()).append(" runs.\n");
+            }
 
             OptionalDouble average = runs.stream()
                 .filter(r -> r.getStartTime() != null && r.getEndTime() != null)

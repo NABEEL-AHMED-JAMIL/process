@@ -8,7 +8,10 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.JobQueue;
 import java.sql.Timestamp;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * @author Nabeel Ahmed
@@ -76,9 +79,6 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "select count(*) from job_queue where job_id = ?1", nativeQuery = true)
     int getCountForJobByJobId(Long jobId);
 
-    @Query(value = "select job_id, count(*) from job_queue where job_id in :jobIds group by job_id", nativeQuery = true)
-    List<Object[]> countGroupByJobIds(@Param("jobIds") List<Long> jobIds);
-
     /**
      * Runs that say they are still going long after anything real would have finished.
      *
@@ -125,6 +125,39 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     List<JobQueue> findRunsWithRefusedCallbacks();
 
     List<JobQueue> findAllByJobId(Long jobId);
+
+    /**
+     * A job's runs, newest first, one window at a time (scale review P0 #1). findAllByJobId above hands
+     * over the job's whole history -- 525,000 rows a year for a job that runs every minute -- and its
+     * callers sorted it in Java to keep a handful. This is the window in SQL, on (job_id, job_queue_id)
+     * (V200), so a read costs the rows it returns. beforeId is the keyset: Long.MAX_VALUE for the newest
+     * window, the oldest id already shown for the next one.
+     */
+    @Query(value = "select job_queue.* from job_queue where job_id = :jobId and job_queue_id < :beforeId "
+        + "order by job_queue_id desc limit :limit", nativeQuery = true)
+    List<JobQueue> findRecentByJobId(@Param("jobId") Long jobId, @Param("beforeId") long beforeId, @Param("limit") int limit);
+
+    /** The newest run of a job after a given one, or null: what a rerun queued (RunReviewService), without the history. */
+    @Query(value = "select max(job_queue_id) from job_queue where job_id = :jobId and job_queue_id > :afterId", nativeQuery = true)
+    Long findNewestRunIdAfter(@Param("jobId") Long jobId, @Param("afterId") long afterId);
+
+    /** A job's runs counted by status in the database, for the assistant's totals (rows: status, count). */
+    @Query(value = "select UPPER(job_status), count(*) from job_queue where job_id = ?1 group by UPPER(job_status)", nativeQuery = true)
+    List<Object[]> countByStatusForJob(Long jobId);
+
+    /**
+     * Which of these jobs have ever run (scale review P1 #20). The list only needs presence, so it is an
+     * exists() per job rather than a count of every run, and the ids travel as ONE array parameter: an IN
+     * list binds a parameter per id and stops at 32,767. Pass the ids through {@link #idArray}.
+     */
+    @Query(value = "select j.id from unnest(cast(:jobIds as bigint[])) as j(id) "
+        + "where exists (select 1 from job_queue q where q.job_id = j.id)", nativeQuery = true)
+    List<Number> findJobIdsWithRuns(@Param("jobIds") String jobIds);
+
+    /** Ids as a Postgres array literal, '{1,2,3}', for a cast(:ids as bigint[]) parameter. */
+    static String idArray(Collection<Long> ids) {
+        return ids.stream().filter(Objects::nonNull).map(String::valueOf).collect(Collectors.joining(",", "{", "}"));
+    }
 
     @Transactional
     @Modifying

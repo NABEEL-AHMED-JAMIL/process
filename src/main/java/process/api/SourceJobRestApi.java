@@ -1,5 +1,6 @@
 package process.api;
 
+import java.util.List;
 import org.barco.platform.security.BuilderAction;
 import process.util.BusinessTime;
 import org.slf4j.Logger;
@@ -119,10 +120,18 @@ public class SourceJobRestApi {
         }
     }
 
+    /**
+     * Every listed job, as before, when no parameter is given. size (with page) reads one page in job id
+     * order, and jobIds reads only those jobs (at most 200) -- what a screen re-reads after a push names
+     * them (scale review P1 #20, #21). Either way the answer is the same list of rows.
+     */
     @RequestMapping(value = "/listSourceJob", method = RequestMethod.GET)
-    public ResponseEntity<?> listSourceJob() {
+    public ResponseEntity<?> listSourceJob(
+        @RequestParam(value = "page", required = false) Integer page,
+        @RequestParam(value = "size", required = false) Integer size,
+        @RequestParam(value = "jobIds", required = false) List<Long> jobIds) {
         try {
-            return new ResponseEntity<>(this.sourceJobService.listSourceJob(), HttpStatus.OK);
+            return new ResponseEntity<>(this.sourceJobService.listSourceJob(page, size, jobIds), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while listSourceJob.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -142,9 +151,12 @@ public class SourceJobRestApi {
 
     @RequestMapping(value = "/fetchSourceJobQueueListWithJobId", method = RequestMethod.GET)
     public ResponseEntity<?> fetchSourceJobQueueListWithJobId(
-        @RequestParam(value = "jobId") Long jobId) {
+        @RequestParam(value = "jobId") Long jobId,
+        @RequestParam(value = "limit", required = false) Integer limit,
+        @RequestParam(value = "beforeId", required = false) Long beforeId) {
         try {
-            return new ResponseEntity<>(this.sourceJobService.fetchSourceJobQueueListWithJobId(jobId), HttpStatus.OK);
+            // The newest 500 runs when no limit is given, 1000 at most: a minute job makes 525,000 a year (scale review P0 #1).
+            return new ResponseEntity<>(this.sourceJobService.fetchSourceJobQueueListWithJobId(jobId, limit, beforeId), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSourceJobQueueListWithJobId.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

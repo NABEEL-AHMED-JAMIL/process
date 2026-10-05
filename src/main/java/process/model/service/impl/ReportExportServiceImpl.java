@@ -26,7 +26,9 @@ import java.io.ByteArrayInputStream;
 import java.net.InetAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.regex.Pattern;
 
 import static process.util.ProcessUtil.ERROR;
@@ -59,7 +61,9 @@ public class ReportExportServiceImpl {
     private static final Logger logger = LoggerFactory.getLogger(ReportExportServiceImpl.class);
 
     /** Enough for a large pivot; beyond this the answer is a query, not a spreadsheet. */
-    private static final int MAX_ROWS = 50_000;
+    private static final int MAX_ROWS = QueryService.REPORT_ROW_CAP;
+    /** A report asked for with no range covers this many days up to today. */
+    private static final int DEFAULT_RANGE_DAYS = 30;
     private static final int MAX_CELL_CHARS = 32_000;
 
     /**
@@ -118,9 +122,21 @@ public class ReportExportServiceImpl {
      * an unbounded range is a question for a query tool rather than a browser.
      */
     public ResponseDto runRows(String startDate, String endDate) {
+        // A report always has a range (scale review P0 #2): with none it read every run ever recorded. A
+        // missing end is today and a missing start the 30 days up to the end, on Chicago's calendar.
+        String end = blank(endDate) ? BusinessTime.today().toString() : endDate;
+        String start = startDate;
+        if (blank(start)) {
+            try {
+                start = LocalDate.parse(end).minusDays(DEFAULT_RANGE_DAYS - 1).toString();
+            } catch (DateTimeParseException malformed) {
+                start = end;  // the query refuses the malformed end in the validator's words
+            }
+        }
         List<Object[]> result;
         try {
-            result = this.queryService.executeQuery(this.queryService.runReportRows(startDate, endDate));
+            // The query stops one past MAX_ROWS: that one says the range had more, without reading the rest.
+            result = this.queryService.executeQuery(this.queryService.runReportRows(start, end));
         } catch (RequestRefused refused) {
             // The person's mistake, in the validator's words (MIG-103) -- not an error to log.
             return new ResponseDto(ERROR, refused.getMessage());
@@ -200,6 +216,10 @@ public class ReportExportServiceImpl {
         index.put(value, values.size());
         values.add(value);
         return values.size() - 1;
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private static String text(Object value) {

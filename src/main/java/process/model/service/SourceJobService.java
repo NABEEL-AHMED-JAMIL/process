@@ -1,6 +1,7 @@
 package process.model.service;
 
 import process.model.dto.ResponseDto;
+import java.util.List;
 import process.model.dto.SourceJobDto;
 
 /**
@@ -37,9 +38,28 @@ public interface SourceJobService {
 
     ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobId) throws Exception;
 
-    ResponseDto fetchSourceJobQueueListWithJobId(Long jobId) throws Exception;
+    /** The newest window of a job's runs, at the default size. */
+    default ResponseDto fetchSourceJobQueueListWithJobId(Long jobId) throws Exception {
+        return this.fetchSourceJobQueueListWithJobId(jobId, null, null);
+    }
 
-    ResponseDto listSourceJob() throws Exception;
+    /**
+     * A job's runs, newest first, a window at a time (scale review P0 #1): {@code limit} runs (default
+     * and ceiling in the implementation) older than {@code beforeId} when it is given. The payload keeps
+     * {@code jobQueues} and adds {@code hasMore} and {@code limit}.
+     */
+    ResponseDto fetchSourceJobQueueListWithJobId(Long jobId, Integer limit, Long beforeId) throws Exception;
+
+    /** Every listed job, as the console has always read it. */
+    default ResponseDto listSourceJob() throws Exception {
+        return this.listSourceJob(null, null, null);
+    }
+
+    /**
+     * The job list (scale review P1 #20): a page in job id order when {@code size} is given, only the
+     * named jobs when {@code jobIds} is (a screen re-reading the rows a push named), else every job.
+     */
+    ResponseDto listSourceJob(Integer page, Integer size, List<Long> jobIds) throws Exception;
 
     /** What the signed-in person has been doing: their jobs, and how their recent runs went. */
     ResponseDto fetchMyActivity(int limit, int windowDays) throws Exception;

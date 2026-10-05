@@ -95,8 +95,14 @@ public class MessageQServiceImpl implements MessageQService {
             return new ResponseDto(ERROR, "ToDate missing.");
         }
         Map<String, Object> objectMap = new HashMap<>();
+        // One window of the range, newest first, with one row more to say whether there is a next (scale review P0 #3).
+        int window = QueryService.queueWindow(messageQSearch.getLimit());
         List<Object[]> result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, false));
         if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
+            boolean hasMore = result.size() > window;
+            if (hasMore) {
+                result = result.subList(0, window);
+            }
             List<SourceJobQueueDto> sourceJobQueues = new ArrayList<>();
             for (Object[] obj : result) {
                 int index = 0;
@@ -147,15 +153,21 @@ public class MessageQServiceImpl implements MessageQService {
                 sourceJobQueues.add(sourceJobQueue);
             }
             objectMap.put(SOURCE_JOB_QUEUES, sourceJobQueues);
+            objectMap.put("hasMore", hasMore);
+            objectMap.put("limit", window);
+            // The range's runs by status -- the same dates and jobs as the rows, every status (see fetchJobQLog).
             result = this.queryService.executeQuery(this.queryService.fetchJobQLog(messageQSearch, true));
+            long total = 0;
             if (!ProcessUtil.isNull(result) && !result.isEmpty()) {
                 List<JobStatusStatisticDto> jobStatusStatistic = new ArrayList<>();
                 for (Object[] obj : result) {
-                    int index = 0;
-                    jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[index]), Integer.valueOf(obj[++index].toString())));
+                    int count = Integer.parseInt(obj[1].toString());
+                    jobStatusStatistic.add(new JobStatusStatisticDto(String.valueOf(obj[0]), count));
+                    total += count;
                 }
                 objectMap.put(JOB_STATUS_STATISTICS, jobStatusStatistic);
             }
+            objectMap.put("total", total);
             responseDto = new ResponseDto(SUCCESS, "MessageQ successfully ", objectMap);
         }
         return responseDto;
