@@ -159,7 +159,9 @@ public class PublicForms {
             logger.info("A share-link submission to form {} was dropped: its honeypot was filled.", o.form.formId);
             return new ResponseDto(SUCCESS, "Thank you: your submission was received.");
         }
-        if (!this.links.take(o.link.tenantId, o.link.linkId)) {
+        // Under the link's workspace: on the application's connection row security hides the row from a caller with none,
+        // and the use was never taken (every submission answered "expired" live).
+        if (!RowSecurity.forTenant(o.link.tenantId, () -> this.links.take(o.link.tenantId, o.link.linkId))) {
             throw new Refused(HttpStatus.GONE, o.link.usedUp() ? USED : EXPIRED);
         }
         String who = signedInName != null ? signedInName : "Share link: " + (o.link.label == null ? "#" + o.link.linkId : o.link.label);

@@ -10,8 +10,9 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import process.model.dto.ResponseDto;
-import process.schema.ScratchEtlJob;
+import process.ScratchPostgres;
 import process.security.TenantContext;
+import org.barco.platform.tenancy.RowSecurity;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,7 +44,8 @@ import static org.mockito.Mockito.when;
  * links, sign-in links, the ticket (too fast, too old, another link's, forged, replayed), the honeypot, rate limits, and
  * forms that may not be shared. Links against a scratch PostgreSQL (V198); Redis counted in memory.
  *
- * Opt-in: NOTIFICATIONS_TEST_DB_URL / _USER / _PASSWORD (see ScratchEtlJob).
+ * Opt-in: NOTIFICATIONS_TEST_DB_URL / _USER / _PASSWORD (see ScratchPostgres). The links run on the application's own
+ * connection (process_app, row security on), as in production: a visitor's work found no row there once (live check).
  */
 class FormShareLinksPostgresTest {
 
@@ -51,7 +54,7 @@ class FormShareLinksPostgresTest {
     static final long FORM = 888101L;
     static final long LOOKUP_FORM = 888102L;
 
-    private static ScratchEtlJob db;
+    private static ScratchPostgres db;
     private static JdbcTemplate sql;
 
     private FormShareLinks links;
@@ -64,8 +67,8 @@ class FormShareLinksPostgresTest {
 
     @BeforeAll
     static void build() throws Exception {
-        db = ScratchEtlJob.build("form_share_links");
-        sql = db.sql();
+        db = ScratchPostgres.create("form_share_links");
+        sql = db.jdbc();
         for (long tenant : new long[] {A, B}) {
             sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (?, 'Active', ?, ?)", tenant, "t" + tenant, "T" + tenant);
         }
@@ -85,8 +88,8 @@ class FormShareLinksPostgresTest {
     void setUp() {
         sql.update("DELETE FROM form_share_link");
         sql.update("DELETE FROM form_share_policy");
-        this.links = new FormShareLinks(sql);
-        this.links.setEnabled(A, true, 1L);
+        this.links = new FormShareLinks(db.appJdbc());
+        this.policy(true);
         this.store = mock(FormStore.class);
         when(this.store.find(eq(A), eq(FORM))).thenReturn(Optional.of(form(FORM, "text")));
         when(this.store.find(eq(A), eq(LOOKUP_FORM))).thenReturn(Optional.of(form(LOOKUP_FORM, FormFields.LOOKUP)));
@@ -102,6 +105,18 @@ class FormShareLinksPostgresTest {
             .thenAnswer(call -> this.counters.putIfAbsent(call.getArgument(0), 1L) == null);
         this.forms = this.publicForms(new PublicForms.Limits());
         TenantContext.clear();
+    }
+
+    private void policy(boolean on) {
+        RowSecurity.forTenant(A, () -> {
+            this.links.setEnabled(A, on, 1L);
+            return null;
+        });
+    }
+
+    /** A's administrator at work, as FormSharing runs: under A's row security. */
+    private static <T> T mine(Supplier<T> work) {
+        return RowSecurity.forTenant(A, work::get);
     }
 
     @AfterEach
@@ -135,7 +150,7 @@ class FormShareLinksPostgresTest {
     }
 
     private String link(Integer max, boolean signIn) {
-        return this.links.create(A, FORM, "Lobby tablet", 7, max, signIn, 1L).getKey();
+        return mine(() -> this.links.create(A, FORM, "Lobby tablet", 7, max, signIn, 1L).getKey());
     }
 
     private static Map<String, Object> answers() {
@@ -177,13 +192,13 @@ class FormShareLinksPostgresTest {
         String tampered = token.substring(0, token.length() - 1) + (last == 'A' ? 'B' : 'A');
         assertThat(this.refusal(() -> this.forms.open(tampered, "x", null))).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(this.refusal(() -> this.forms.open("not-a-token", "x", null))).isEqualTo(HttpStatus.NOT_FOUND);
-        this.links.setEnabled(A, false, 1L);
+        this.policy(false);
         assertThat(this.refusal(() -> this.forms.open(token, "x", null))).as("sharing off stops every link").isEqualTo(HttpStatus.NOT_FOUND);
-        this.links.setEnabled(A, true, 1L);
+        this.policy(true);
         long id = sql.queryForObject("SELECT link_id FROM form_share_link", Long.class);
-        assertThat(this.links.revoke(A, id, 1L)).isTrue();
+        assertThat(mine(() -> this.links.revoke(A, id, 1L))).isTrue();
         assertThat(this.refusal(() -> this.forms.open(token, "x", null))).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(this.links.revoke(B, id, 2L)).as("another workspace cannot revoke it").isFalse();
+        assertThat(RowSecurity.forTenant(B, () -> this.links.revoke(B, id, 2L))).as("another workspace cannot revoke it").isFalse();
     }
 
     @Test
@@ -285,12 +300,12 @@ class FormShareLinksPostgresTest {
         assertThat(made.getStatus()).isEqualTo("SUCCESS");
         assertThat(((Map<?, ?>) made.getData()).get("token")).isNotNull();
         assertThat(sharing.list(FORM).getData().toString()).doesNotContain(String.valueOf(((Map<?, ?>) made.getData()).get("token")));
-        this.links.setEnabled(A, false, 1L);
+        this.policy(false);
         assertThat(sharing.create(ask).getMessage()).isEqualTo(FormSharing.TURNED_OFF);
         TenantContext.set(A, "TENANT_USER", 2L, "member");
         assertThat(sharing.create(ask).getMessage()).isEqualTo(FormSharing.ADMIN_ONLY);
         assertThat(sharing.setPolicy(true).getMessage()).isEqualTo(FormSharing.ADMIN_ONLY);
-        List<FormShareLinks.Link> listed = this.links.list(B, FORM);
+        List<FormShareLinks.Link> listed = RowSecurity.forTenant(B, () -> this.links.list(B, FORM));
         assertThat(listed).as("another workspace sees no links of A").isEmpty();
         assertThat(Arrays.asList(FormSharing.TURNED_OFF, FormSharing.ADMIN_ONLY)).doesNotContainNull();
     }
