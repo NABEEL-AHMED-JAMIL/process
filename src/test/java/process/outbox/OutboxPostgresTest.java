@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.springframework.kafka.core.KafkaProducerException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -63,6 +66,8 @@ class OutboxPostgresTest {
         dataSource.setPassword(System.getenv("NOTIFICATIONS_TEST_DB_PASSWORD"));
         new JdbcTemplate(dataSource).execute(new String(Files.readAllBytes(Paths.get(
             "src/main/resources/db/changelog/changelog-sets/V53.0-platform-outbox/V53__platform_outbox.sql")), "UTF-8"));
+        new JdbcTemplate(dataSource).execute(new String(Files.readAllBytes(Paths.get(
+            "src/main/resources/db/changelog/changelog-sets/V199.0-outbox-dead/V199__outbox_dead.sql")), "UTF-8"));
     }
 
     @AfterAll
@@ -141,9 +146,13 @@ class OutboxPostgresTest {
         assertThat(this.sql.queryForObject("SELECT count(*) FROM platform_outbox WHERE published_at IS NULL", Integer.class)).isZero();
     }
 
-    /** Nothing may overtake an event the broker refused, or the job's states arrive out of order. */
+    /**
+     * A refused send goes first on the next pass (event audit E7: the batch is sent at once, so events of other keys in it
+     * are not held back; one key's events -- a job's Queue, Start, Completed -- keep their order through the idempotent
+     * producer).
+     */
     @Test
-    void aFailedSendStopsTheDrainAndIsRetriedFirst() {
+    void aFailedSendIsRetriedFirstOnTheNextPass() {
         this.transaction.execute(status -> {
             this.writer.write("t", "a", UUID.randomUUID().toString(), "1");
             this.writer.write("t", "b", UUID.randomUUID().toString(), "2");
@@ -151,13 +160,70 @@ class OutboxPostgresTest {
             return null;
         });
 
-        assertThat(this.relay(this.kafka("b")).drain()).isEqualTo(1);
-        assertThat(this.sent).containsExactly("t a 1");
+        assertThat(this.relay(this.kafka("b")).drain()).isEqualTo(2);
+        assertThat(this.sent).containsExactly("t a 1", "t c 3");
         assertThat(this.sql.queryForObject("SELECT attempts FROM platform_outbox WHERE message_key = 'b'", Integer.class)).isEqualTo(1);
         assertThat(this.sql.queryForObject("SELECT last_error FROM platform_outbox WHERE message_key = 'b'", String.class)).contains("broker unavailable");
+        assertThat(this.sql.queryForObject("SELECT dead_at IS NULL FROM platform_outbox WHERE message_key = 'b'", Boolean.class)).isTrue();
 
-        assertThat(this.relay(this.kafka(null)).drain()).isEqualTo(2);
-        assertThat(this.sent).containsExactly("t a 1", "t b 2", "t c 3");
+        assertThat(this.relay(this.kafka(null)).drain()).isEqualTo(1);
+        assertThat(this.sent).containsExactly("t a 1", "t c 3", "t b 2");
+    }
+
+    /** Event audit E2: a record the broker can never take is parked, and every event behind it still goes. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRecordTooLargeIsParkedAndTheRestGo() {
+        this.transaction.execute(status -> {
+            this.writer.write("t", "a", UUID.randomUUID().toString(), "1");
+            this.writer.write("t", "huge", UUID.randomUUID().toString(), "2");
+            this.writer.write("t", "c", UUID.randomUUID().toString(), "3");
+            return null;
+        });
+        KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
+        when(kafka.send(any(ProducerRecord.class))).thenAnswer(call -> {
+            ProducerRecord<String, String> record = call.getArgument(0);
+            SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
+            if ("huge".equals(record.key())) {
+                future.setException(new KafkaProducerException(record, "Failed to send", new RecordTooLargeException("1500000 bytes")));
+            } else {
+                this.sent.add(record.key());
+                future.set(null);
+            }
+            return future;
+        });
+        OutboxRelay relay = this.relay(kafka);
+
+        assertThat(relay.drain()).isEqualTo(2);
+        assertThat(this.sent).containsExactly("a", "c");
+        assertThat(this.sql.queryForObject("SELECT dead_at IS NOT NULL FROM platform_outbox WHERE message_key = 'huge'", Boolean.class)).isTrue();
+        assertThat(this.sql.queryForObject("SELECT last_error FROM platform_outbox WHERE message_key = 'huge'", String.class))
+            .startsWith("RecordTooLargeException");
+        assertThat(relay.deadCount()).isEqualTo(1);
+        assertThat(relay.drain()).as("a parked row is not tried again").isZero();
+        relay.refreshDeadCount();
+        assertThat(relay.deadCount()).isEqualTo(1);
+    }
+
+    /** A broker out of reach parks nothing, however many times it has failed. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aBrokerOutOfReachParksNothing() {
+        this.transaction.execute(status -> {
+            this.writer.write("t", "a", UUID.randomUUID().toString(), "1");
+            return null;
+        });
+        this.sql.update("UPDATE platform_outbox SET attempts = 99");
+        KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
+        when(kafka.send(any(ProducerRecord.class))).thenAnswer(call -> {
+            SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
+            future.setException(new NetworkException("broker unreachable"));
+            return future;
+        });
+
+        assertThat(this.relay(kafka).drain()).isZero();
+        assertThat(this.sql.queryForObject("SELECT count(*) FROM platform_outbox WHERE dead_at IS NOT NULL", Integer.class)).isZero();
+        assertThat(this.sql.queryForObject("SELECT attempts FROM platform_outbox", Integer.class)).isEqualTo(100);
     }
 
     /** Two instances drain at once; each event still goes out exactly once, in order. */

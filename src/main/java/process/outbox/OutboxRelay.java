@@ -11,17 +11,18 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.barco.platform.correlation.CorrelationId;
 import org.barco.platform.correlation.CorrelationScope;
+import org.barco.platform.outbox.OutboxBatch;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
@@ -29,9 +30,12 @@ import java.util.stream.Collectors;
  *
  * One drainer at a time, across every instance: each batch runs under a transaction-scoped
  * advisory lock, so a job's Queue, Start and Completed can never be sent by two instances at once
- * and overtake one another. Within a batch each send is waited for before the next, and a send the
- * broker refuses stops the batch -- nothing behind it goes out first -- to be retried on the next
- * pass.
+ * and overtake one another. A batch is handed to the (idempotent) producer at once and its answers
+ * waited for together (platform-commons OutboxBatch), so one key's events keep their order through
+ * retries. A row the broker refused for now goes first on the next pass; one that can never be sent --
+ * too large, an impossible topic, or its tenth failure while the broker answers -- is parked (dead_at),
+ * logged at ERROR with its event id and topic, and the rows behind it go on (event audit E2). A parked
+ * row is sent again once someone clears its dead_at. A broker out of reach parks nothing.
  *
  * It runs on its own thread, not on the shared @Scheduled pool, so a long cron cannot hold up live
  * pushes; and OutboxWriter wakes it after every commit, so the poll is only the fallback.
@@ -45,13 +49,15 @@ public class OutboxRelay implements SmartLifecycle {
     static final int BATCH = 100;
     private static final ObjectMapper EVENTS = new ObjectMapper();
     static final int RETENTION_DAYS = 7;
-    private static final long SEND_TIMEOUT_SECONDS = 10;
+    /** How long one pass waits for the broker to answer for its whole batch. */
+    private static final long SEND_WAIT_MILLIS = 30_000;
 
     private final Logger logger = LoggerFactory.getLogger(OutboxRelay.class);
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transaction;
     private final KafkaTemplate<String, String> kafka;
     private final AtomicBoolean wakePending = new AtomicBoolean();
+    private final AtomicLong dead = new AtomicLong();
     private volatile ScheduledExecutorService thread;
     private long pollMillis = 1000;
 
@@ -83,40 +89,61 @@ public class OutboxRelay implements SmartLifecycle {
         if (!Boolean.TRUE.equals(locked)) {
             return new int[] {0, 0};
         }
-        List<Object[]> rows = this.jdbc.query("SELECT outbox_id, topic, message_key, event FROM platform_outbox "
-            + "WHERE published_at IS NULL ORDER BY outbox_id LIMIT ?",
-            (rs, i) -> new Object[] {rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4)}, BATCH);
+        List<OutboxBatch.Row> rows = this.jdbc.query("SELECT outbox_id, event_id, topic, message_key, event, attempts FROM platform_outbox"
+            + " WHERE published_at IS NULL AND dead_at IS NULL ORDER BY outbox_id LIMIT ?", (rs, i) -> new OutboxBatch.Row(
+            rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getInt(6)), BATCH);
         List<Long> sent = new ArrayList<>();
-        boolean refused = false;
-        for (Object[] row : rows) {
-            ProducerRecord<String, String> record = recordOf((String) row[1], (String) row[2], (String) row[3]);
-            Header traced = record.headers().lastHeader(CorrelationId.HEADER);
-            // Published, and any failure logged, under the event's own id.
-            CorrelationScope scope = CorrelationScope.open(traced == null ? null : CorrelationId.fromHeader(traced.value()));
-            try {
-                this.kafka.send(record).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                sent.add((Long) row[0]);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                refused = true;
-                break;
-            } catch (ExecutionException | TimeoutException | RuntimeException failed) {
-                Throwable cause = failed instanceof ExecutionException && failed.getCause() != null ? failed.getCause() : failed;
-                String reason = cause.getClass().getSimpleName() + ": " + cause.getMessage();
-                this.jdbc.update("UPDATE platform_outbox SET attempts = attempts + 1, last_error = ? WHERE outbox_id = ?",
-                    reason.length() > 2000 ? reason.substring(0, 2000) : reason, row[0]);
-                this.logger.warn("Could not publish outbox event {} to {}; it goes first on the next pass: {}", row[0], row[1], reason);
-                refused = true;
-                break;
-            } finally {
-                scope.close();
+        boolean retry = false;
+        for (OutboxBatch.Outcome outcome : OutboxBatch.send(rows, this::send, SEND_WAIT_MILLIS)) {
+            OutboxBatch.Row row = outcome.getRow();
+            if (outcome.getFate() == OutboxBatch.Fate.SENT) {
+                sent.add(row.getId());
+                continue;
+            }
+            try (CorrelationScope scope = CorrelationScope.open(traceIdOf(row.getEvent()))) {
+                if (outcome.getFate() == OutboxBatch.Fate.DEAD) {
+                    this.jdbc.update("UPDATE platform_outbox SET attempts = attempts + 1, last_error = ?, dead_at = now() WHERE outbox_id = ?",
+                        outcome.getReason(), row.getId());
+                    this.dead.incrementAndGet();
+                    this.logger.error("Parked outbox event {} (row {}, topic {}) as dead after {} attempt(s); the events behind it go on: {}",
+                        row.getEventId(), row.getId(), row.getTopic(), row.getAttempts() + 1, outcome.getReason());
+                } else {
+                    this.jdbc.update("UPDATE platform_outbox SET attempts = attempts + 1, last_error = ? WHERE outbox_id = ?",
+                        outcome.getReason(), row.getId());
+                    this.logger.warn("Could not publish outbox event {} (row {}) to {}; it goes first on the next pass: {}", row.getEventId(),
+                        row.getId(), row.getTopic(), outcome.getReason());
+                    retry = true;
+                }
             }
         }
         if (!sent.isEmpty()) {
             this.jdbc.update("UPDATE platform_outbox SET published_at = now() WHERE outbox_id IN ("
                 + sent.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")");
         }
-        return new int[] {sent.size(), !refused && rows.size() == BATCH ? 1 : 0};
+        return new int[] {sent.size(), !retry && rows.size() == BATCH ? 1 : 0};
+    }
+
+    /**
+     * Hands one row to the producer under the id it carries (its event's traceId, as the X-Correlation-Id header; none
+     * when it has no usable one, X10); the answer is waited for with the rest of the batch.
+     */
+    private Future<?> send(OutboxBatch.Row row) {
+        ProducerRecord<String, String> record = recordOf(row.getTopic(), row.getKey(), row.getEvent());
+        Header traced = record.headers().lastHeader(CorrelationId.HEADER);
+        try (CorrelationScope scope = CorrelationScope.open(traced == null ? null : CorrelationId.fromHeader(traced.value()))) {
+            return this.kafka.send(record);
+        }
+    }
+
+    /** Events parked as dead (dead_at): what the outbox health detail and the platform.outbox.dead gauge show. */
+    public long deadCount() {
+        return this.dead.get();
+    }
+
+    /** Counts the parked events again; the relay's thread does this every minute, so a requeue (dead_at = NULL) shows. */
+    void refreshDeadCount() {
+        Long parked = this.jdbc.queryForObject("SELECT count(*) FROM platform_outbox WHERE dead_at IS NOT NULL", Long.class);
+        this.dead.set(parked == null ? 0 : parked);
     }
 
     /**
@@ -170,6 +197,16 @@ public class OutboxRelay implements SmartLifecycle {
         }
     }
 
+    private void refreshDeadQuietly() {
+        try (CorrelationScope tick = CorrelationScope.open(null)) {
+            try {
+                this.refreshDeadCount();
+            } catch (RuntimeException failed) {
+                this.logger.warn("Could not count the parked outbox events: {}", failed.getMessage());
+            }
+        }
+    }
+
     @Override
     public void start() {
         ScheduledExecutorService started = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -186,6 +223,7 @@ public class OutboxRelay implements SmartLifecycle {
                 this.logger.warn("Outbox purge failed: {}", failed.getMessage());
             }
         }, 1, 60, TimeUnit.MINUTES);
+        started.scheduleWithFixedDelay(this::refreshDeadQuietly, 0, 1, TimeUnit.MINUTES);
         this.thread = started;
     }
 
@@ -196,7 +234,7 @@ public class OutboxRelay implements SmartLifecycle {
         if (running != null) {
             running.shutdown();
             try {
-                running.awaitTermination(SEND_TIMEOUT_SECONDS + 5, TimeUnit.SECONDS);
+                running.awaitTermination(SEND_WAIT_MILLIS + 5_000, TimeUnit.MILLISECONDS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }

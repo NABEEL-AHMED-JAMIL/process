@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 199.0-outbox-dead
+      author: nabeel.amd93
+      description: "Event audit E2: platform_outbox.dead_at -- an event that can never be sent is parked, and the events behind it go on; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V199.0-outbox-dead/V199__outbox_dead.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V199.0-outbox-dead/V199__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: true

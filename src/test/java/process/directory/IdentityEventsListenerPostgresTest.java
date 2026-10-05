@@ -42,6 +42,7 @@ class IdentityEventsListenerPostgresTest {
         this.sql.update("TRUNCATE user_directory");
         this.sql.update("DELETE FROM scheduler");
         this.sql.update("DELETE FROM source_job");
+        this.sql.update("DELETE FROM workspace_directory");
         // As the application runs it (MIG-258): process_app, nobody signed in, behind the across-tenants proxy.
         this.listener = AcrossTenantsProxy.of(new IdentityEventsListener(new UserDirectory(db.appJdbc()),
             new WorkspaceRetirement(db.appJdbc()), new WorkspaceDirectory(db.appJdbc())));
@@ -106,6 +107,25 @@ class IdentityEventsListenerPostgresTest {
         // Redelivered: the same answer, no error.
         this.listener.onTenant(IdentityEventsFixture.tenant("tenant.deleted", 2901, "acme", "Delete", "2026-09-24T10:00:00Z"));
         assertThat(jobStatus(1)).isEqualTo("Inactive");
+    }
+
+    /**
+     * Event audit E8: the topic is compacted and read from the beginning, so a replay hands over a deletion long since
+     * followed by a restore. Core already holds the newer state (workspace_directory), so the restored workspace's jobs
+     * are left as they are; a deletion as new as what Core knows is still acted on.
+     */
+    @Test
+    void aReplayedDeletionOlderThanTheWorkspacesStateLeavesItsJobsAlone() {
+        job(6, 2904, "Active");
+        // Deleted at 10:00, restored at 11:00 -- the directory's listener has seen the restore.
+        this.listener.onWorkspaceStatus(IdentityEventsFixture.tenant("tenant.status.changed", 2904, "initech", "Active",
+            "2026-09-24T11:00:00Z"));
+
+        this.listener.onTenant(IdentityEventsFixture.tenant("tenant.deleted", 2904, "initech", "Delete", "2026-09-24T10:00:00Z"));
+        assertThat(jobStatus(6)).as("the replayed deletion predates the restore").isEqualTo("Active");
+
+        this.listener.onTenant(IdentityEventsFixture.tenant("tenant.deleted", 2904, "initech", "Delete", "2026-09-24T12:00:00Z"));
+        assertThat(jobStatus(6)).as("a deletion after the restore").isEqualTo("Inactive");
     }
 
     @Test

@@ -39,7 +39,7 @@ import java.util.Set;
 public class InternalKafkaPublishRestApi {
 
     /** The topics another service may publish through Core. A constant, as the topic itself is. */
-    static final Set<String> ALLOWED_TOPICS = Collections.singleton("analytics.query.completed");
+    static final Set<String> ALLOWED_TOPICS = Collections.singleton(AnalyticsTopicsConfig.QUERY_COMPLETED);
 
     private final Logger logger = LoggerFactory.getLogger(InternalKafkaPublishRestApi.class);
     private final KafkaConnectionResolver resolver;

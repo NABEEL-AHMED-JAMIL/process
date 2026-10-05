@@ -203,3 +203,6 @@ databaseChangeLog:
   # V198: MIG-278 -- forms shared by link: form_share_policy (off by default), form_share_link, form_submission.share_link_id.
   - include:
       file: db/changelog/yaml/V198.0-form-share-links.yaml
+  # V199: event audit E2 -- platform_outbox.dead_at: an event that can never be sent is parked, not retried ahead of every later one.
+  - include:
+      file: db/changelog/yaml/V199.0-outbox-dead.yaml

@@ -65,16 +65,19 @@ public class IdentityEventsListener {
     public void onTenant(String message) {
         String type;
         long tenantId;
+        Instant updatedAt;
         try {
             PlatformEvent<TenantLifecycle> event = IdentityEvents.tenant(message);
             type = event.getEventType();
             tenantId = event.getPayload().getTenantId();
+            updatedAt = event.getPayload().updatedAtInstant();
         } catch (IllegalArgumentException unreadable) {
             logger.warn("Skipped an unreadable {} event: {}", IdentityTopics.TENANT, unreadable.getMessage());
             return;
         }
         if (TenantLifecycle.DELETED.equals(type)) {
-            this.retirement.retire(tenantId);
+            // Not when the workspace has been restored since (a replay of the compacted topic, event audit E8).
+            this.retirement.retire(tenantId, updatedAt);
         }
     }
 

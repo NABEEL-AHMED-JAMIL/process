@@ -32,6 +32,9 @@ class RowSecurityContractTest extends RowSecurityContract {
             "pre-dispatch claims and prepares every workspace's queued runs");
         paths.put("DispatchRelay: in code #1",
             "the dispatch relay publishes every workspace's hand-offs");
+        paths.put("DispatchOutboxPurge: in code #1",
+            "the dispatch outbox purge deletes every workspace's hand-offs published or abandoned more than seven days ago; it never"
+                + " touches a pending one, and nothing else");
         paths.put("RunStartMarkerMonitor.measure",
             "a platform gauge over every workspace's runs");
         paths.put("AuditLogSyncCron.syncAuditLogsFromOpenSearch",
