@@ -319,7 +319,7 @@ public class CustomerEventRelay {
         review.put("status", anyParty ? "pending" : "not_required");
         review.put("decidedAt", null);
         review.put("rerunRunId", null);
-        review.put("decisions", new java.util.ArrayList<>());
+        review.put("decisions", new ArrayList<>());
         return review;
     }
 

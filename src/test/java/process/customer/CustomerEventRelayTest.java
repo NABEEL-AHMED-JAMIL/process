@@ -3,9 +3,11 @@ package process.customer;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,7 +65,7 @@ class CustomerEventRelayTest {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("reviewStatus", "APPROVED");
         summary.put("required", Collections.singletonList("customer"));
-        summary.put("decidedAt", java.time.LocalDateTime.parse("2026-10-06T09:00:01"));
+        summary.put("decidedAt", LocalDateTime.parse("2026-10-06T09:00:01"));
         summary.put("rerunJobQueueId", 9L);
         Map<String, Object> decision = new LinkedHashMap<>();
         decision.put("party", "customer");
@@ -72,7 +74,7 @@ class CustomerEventRelayTest {
         Map<String, Object> then = CustomerEventRelay.reviewAtCompletion(summary);
         assertThat(then.get("status")).isEqualTo("pending");
         assertThat(then.get("required")).isEqualTo(Collections.singletonList("customer"));
-        assertThat((java.util.List<?>) then.get("decisions")).isEmpty();
+        assertThat((List<?>) then.get("decisions")).isEmpty();
         assertThat(then.get("decidedAt")).isNull();
         assertThat(then.get("rerunRunId")).isNull();
         summary.put("required", Collections.emptyList());
