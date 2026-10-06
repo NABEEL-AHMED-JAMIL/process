@@ -112,6 +112,15 @@ class CustomerApiAuthenticationTest {
         assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/files/x/../../runs/content")).isFalse();
         // Any one segment: a malformed id gets the controller's 404, not a 401 (the gateway's route is any {fileId}).
         assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/files/api-check/content")).isTrue();
+        // MIG-335: a run's view link -- its data and its frame check -- and nothing else under /customer/embed.
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/embed/runs/abc.def")).isTrue();
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/embed/runs/abc.def/frame")).isTrue();
+        assertThat(JwtAuthenticationFilter.isSignedLink("POST", "/customer/embed/runs/abc.def")).isFalse();
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/embed/runs/abc.def/steps")).isFalse();
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/embed/runs")).isFalse();
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/runs/9100")).isFalse();
+        // Creating one is the API's: it needs an API client's token.
+        assertThat(this.call("/customer/runs/9100/view-links", null, new Seen()).getStatus()).isEqualTo(401);
         // The file itself (its link and facts) still needs an API client's token.
         assertThat(this.call("/customer/files/01JRESULT00000000000000000/meta", null, new Seen()).getStatus()).isEqualTo(401);
     }

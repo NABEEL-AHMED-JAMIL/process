@@ -36,6 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI().substring(request.getContextPath().length());
         if (isSignedLink(request.getMethod(), path)) {
             // MIG-334: a file's signed link has no caller; its token is checked by FileLinks, and nobody is set here.
+            // MIG-335: nor has a run's view link (its data and its frame check); ViewLinks checks it.
             filterChain.doFilter(request, response);
             return;
         }
@@ -80,12 +81,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
-    /** MIG-334: GET /customer/files/{fileId}/content -- the one /customer path an API client's token does not open. */
+    /**
+     * MIG-334: GET /customer/files/{fileId}/content; MIG-335: GET /customer/embed/runs/{token} and its /frame -- the /customer
+     * paths an API client's token does not open: a signed link's own token is the proof.
+     */
     static boolean isSignedLink(String method, String path) {
-        return "GET".equalsIgnoreCase(method) && SIGNED_LINK.matcher(path).matches();
+        return "GET".equalsIgnoreCase(method) && (SIGNED_LINK.matcher(path).matches() || VIEW_LINK.matcher(path).matches());
     }
 
     private static final Pattern SIGNED_LINK = Pattern.compile("^/customer/files/[^/]{1,128}/content$");
+    private static final Pattern VIEW_LINK = Pattern.compile("^/customer/embed/runs/[^/]{1,1024}(/frame)?$");
 
     /**
      * MIG-332: the customer API (/v1 at the gateway, /customer here). Only an API client's token opens it -- a person's

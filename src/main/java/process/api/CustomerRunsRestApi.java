@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import process.customer.CustomerResponses;
 import process.customer.CustomerReviews;
+import process.customer.CustomerRunViews;
 import process.customer.CustomerRuns;
 
 import java.util.Map;
@@ -29,10 +30,12 @@ public class CustomerRunsRestApi {
 
     private final CustomerRuns runs;
     private final CustomerReviews reviews;
+    private final CustomerRunViews views;
 
-    public CustomerRunsRestApi(CustomerRuns runs, CustomerReviews reviews) {
+    public CustomerRunsRestApi(CustomerRuns runs, CustomerReviews reviews, CustomerRunViews views) {
         this.runs = runs;
         this.reviews = reviews;
+        this.views = views;
     }
 
     /** ?limit= &cursor= &pipelineId= &status= &createdAfter= &updatedAfter=: the workspace's runs, newest first. */
@@ -71,5 +74,14 @@ public class CustomerRunsRestApi {
         @RequestHeader(value = IdempotencyKeys.HEADER, required = false) String idempotencyKey,
         @RequestBody(required = false) byte[] body) {
         return CustomerResponses.of(this.reviews.decide(runId, body, idempotencyKey));
+    }
+
+    /**
+     * MIG-335: body {expiresInSeconds?} (60..900, default 900); 201 {url, expiresAt}, a signed link to the run's read-only
+     * page for a portal to show or frame. runs:read. Nothing is stored, so no Idempotency-Key: each call is a new link.
+     */
+    @PostMapping("/{runId}/view-links")
+    public ResponseEntity<Map<String, Object>> viewLink(@PathVariable("runId") String runId, @RequestBody(required = false) byte[] body) {
+        return CustomerResponses.of(this.views.create(runId, body));
     }
 }

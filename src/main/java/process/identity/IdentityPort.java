@@ -4,6 +4,7 @@ import org.barco.platform.security.CallerIdentity;
 import org.barco.platform.tenancy.TenantScope;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +43,34 @@ public interface IdentityPort {
      */
     default Optional<CallerIdentity> authenticateClient(String bearerToken) {
         return Optional.empty();
+    }
+
+    /**
+     * MIG-335: whether the API client that made a view link may still act -- active, unexpired, its workspace active (a
+     * revoke ends its links at once) -- and the origins that may frame the view. Asked of identity-service for every view
+     * page and read; never cached. Throws {@link Unavailable} when Identity cannot answer. In-process identity knows no
+     * API clients and refuses every link.
+     */
+    default EmbedClient embedClient(long tenantId, String clientId) {
+        return EmbedClient.refused(404);
+    }
+
+    /** MIG-335: Identity's answer about a view link's client. */
+    final class EmbedClient {
+        public final boolean active;
+        /** 404 when no such client in the link's workspace, 410 when it may no longer act; 200 when active. */
+        public final int status;
+        public final List<String> frameAncestors;
+
+        public EmbedClient(boolean active, int status, List<String> frameAncestors) {
+            this.active = active;
+            this.status = status;
+            this.frameAncestors = frameAncestors == null ? Collections.<String>emptyList() : frameAncestors;
+        }
+
+        public static EmbedClient refused(int status) {
+            return new EmbedClient(false, status, null);
+        }
     }
 
     /** A person, deleted ones included (callers decide what a deleted person means to them). */

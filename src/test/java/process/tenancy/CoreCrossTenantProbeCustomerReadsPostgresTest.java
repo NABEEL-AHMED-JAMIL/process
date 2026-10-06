@@ -7,17 +7,22 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.api.CustomerEmbedRestApi;
 import process.api.CustomerFileLinkRestApi;
 import process.api.CustomerFilesRestApi;
 import process.api.CustomerRunsRestApi;
 import process.customer.ApiReceipts;
 import process.customer.CustomerFileReads;
+import process.customer.CustomerAnswer;
 import process.customer.CustomerReviews;
+import process.customer.CustomerRunViews;
 import process.customer.CustomerRunStore;
 import process.customer.CustomerRuns;
 import process.customer.FileLinks;
 import process.customer.Idempotency;
 import process.customer.RunFiles;
+import process.customer.ViewLinks;
+import process.identity.IdentityPort;
 import process.model.repository.JobAuditLogRepository;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SchedulerRepository;
@@ -38,6 +43,7 @@ import process.storage.remote.StorageServiceClient;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -79,6 +85,10 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
     private static CustomerFilesRestApi files;
     private static CustomerFileLinkRestApi content;
     private static FileLinks links;
+    private static ViewLinks viewLinks;
+    private static CustomerRunViews views;
+    private static CustomerEmbedRestApi embed;
+    private static final IdentityPort IDENTITY = mock(IdentityPort.class);
     private static final StorageServiceClient STORAGE = mock(StorageServiceClient.class);
 
     @BeforeAll
@@ -106,9 +116,14 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
         RunFiles runFiles = new RunFiles(STORAGE);
         CustomerRuns customerRuns = new CustomerRuns(store, runRows, jobRows, reviews, new JdbcStepStore(app), new PipelineDefinitionStore(app),
             runFiles);
-        runs = new CustomerRunsRestApi(customerRuns, new CustomerReviews(customerRuns, reviews, reviewService,
-            new Idempotency(new ApiReceipts(app))));
         links = new FileLinks("probe-service-token");
+        viewLinks = new ViewLinks("probe-service-token");
+        views = new CustomerRunViews(customerRuns, viewLinks, links, IDENTITY, fx.jpa.transactions(), "http://console.test");
+        embed = new CustomerEmbedRestApi(views);
+        when(IDENTITY.embedClient(eq(A), eq("cl_acme"))).thenReturn(new IdentityPort.EmbedClient(true, 200,
+            Collections.singletonList("https://portal.acme.example")));
+        runs = new CustomerRunsRestApi(customerRuns, new CustomerReviews(customerRuns, reviews, reviewService,
+            new Idempotency(new ApiReceipts(app))), views);
         CustomerFileReads reads = new CustomerFileReads(new JdbcStepStore(app), store, runFiles, fx.runDatasets, fx.formBuckets, links,
             new FileAccessLog(app));
         files = new CustomerFilesRestApi(reads);
@@ -210,6 +225,49 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
         assertThat(fx.db.jdbc().queryForObject("SELECT count(*) FROM run_review_decision WHERE job_queue_id = ? AND party = 'CUSTOMER'",
             Long.class, A_RUN)).isEqualTo(1L);
         assertThat(fx.leaks).isEmpty();
+    }
+
+    /**
+     * MIG-335: A's client asks a view link of B's run (404, the same as none), and a view link A could sign naming B's run
+     * reads nothing; A's own link, read with no caller at all (RowSecurity.forTenant as process_app), shows A's run and its
+     * made file with a download that opens it.
+     */
+    @Test
+    void aViewLinkOfAOpensOnlyAsOwnRun() {
+        assertThat(asClient("POST customer/runs/{runId}/view-links(B's run)", () -> runs.viewLink(String.valueOf(B_RUN), null), READER))
+            .contains("\"status\":404");
+        String forB = viewLinks.issue(A, B_RUN, "cl_acme", null).token;
+        assertThat(asClient("GET customer/embed/runs/{token}(A's link naming B's run)", () -> embed.view(forB), READER))
+            .contains("\"status\":404");
+        // The frame check reads no run at all: only the link's own client's origins, A's.
+        assertThat(asClient("GET customer/embed/runs/{token}/frame(A's link naming B's run)", () -> embed.frame(forB), READER))
+            .contains("https://portal.acme.example");
+
+        String made = asClient("POST customer/runs/{runId}/view-links(A's own)", () -> runs.viewLink(String.valueOf(A_RUN), null), READER);
+        Matcher url = Pattern.compile("http://console\\.test/embed/runs/([A-Za-z0-9_.-]+)").matcher(made);
+        assertThat(url.find()).as(made).isTrue();
+        String own = url.group(1);
+        TenantContext.clear();
+        String view = render(views.view(own));
+        assertThat(view).contains("\"status\":\"completed\"").contains("\"id\":\"" + A_FILE + "\"").contains("/v1/files/" + A_FILE + "/content?token=")
+            .doesNotContain(B_FILE).doesNotContain("bravo payload marker");
+        Matcher download = Pattern.compile("content\\?token=([A-Za-z0-9_.-]+)").matcher(view);
+        assertThat(download.find()).isTrue();
+        String signed = download.group(1);
+        assertThat(asClient("GET customer/files/{fileId}/content(from A's view)", () -> content.content(A_FILE, signed)))
+            .startsWith("HTTP 200").contains("acme run message");
+        assertThat(asClient("GET customer/files/{fileId}/content(A's view's link at B's file)", () -> content.content(B_FILE, signed)))
+            .startsWith("HTTP 404");
+        assertThat(views.frame(own).ancestors).isEqualTo("https://portal.acme.example");
+        assertThat(fx.leaks).isEmpty();
+    }
+
+    private static String render(CustomerAnswer answer) {
+        try {
+            return JSON.writeValueAsString(answer.body);
+        } catch (Exception unwritable) {
+            throw new IllegalStateException(unwritable);
+        }
     }
 
     @Test

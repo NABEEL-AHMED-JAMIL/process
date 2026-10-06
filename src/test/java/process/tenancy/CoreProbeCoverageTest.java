@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 import process.api.CustomerEventsRestApi;
+import process.api.CustomerEmbedRestApi;
 import process.api.CustomerFileLinkRestApi;
 import process.api.CustomerFilesRestApi;
 import process.api.CustomerRunsRestApi;
@@ -116,6 +117,8 @@ class CoreProbeCoverageTest {
         CustomerPipelinesRestApi.class, CustomerEventsRestApi.class, CustomerRunsRestApi.class, CustomerFilesRestApi.class,
         // MIG-334: a file's signed link -- no principal; the link's signature names the one file and workspace it opens
         CustomerFileLinkRestApi.class,
+        // MIG-335: a run's view link -- no principal; the link's signature names the one run and workspace it opens
+        CustomerEmbedRestApi.class,
         // a share link's visitor: the link's token, no tenant principal (MIG-278)
         PublicFormRestApi.class,
         // worker callbacks: a run's X-Worker-Token, no tenant principal

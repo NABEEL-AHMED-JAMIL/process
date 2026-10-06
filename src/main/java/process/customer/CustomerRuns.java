@@ -158,6 +158,27 @@ public class CustomerRuns {
             return CustomerAnswer.problem(Problem.of(404, NO_SUCH_RUN), instance);
         }
         CustomerRunStore.Row run = found.get().row;
+        Steps latest = this.stepsOf(run);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("runId", String.valueOf(run.runId));
+        body.put("attempt", latest.attempt);
+        body.put("data", latest.data);
+        return CustomerAnswer.of(200, body, null);
+    }
+
+    /** A run's latest attempt and its steps, as the Step schema. */
+    static final class Steps {
+        final int attempt;
+        final List<Map<String, Object>> data;
+
+        Steps(int attempt, List<Map<String, Object>> data) {
+            this.attempt = attempt;
+            this.data = data;
+        }
+    }
+
+    /** The latest attempt's steps in order; a run without steps is its one legacy step (MIG-335's view reads them too). */
+    Steps stepsOf(CustomerRunStore.Row run) {
         List<StepStore.StepRow> rows = this.steps.stepsOfRun(run.runId);
         int attempt = run.attempt;
         for (StepStore.StepRow row : rows) {
@@ -174,11 +195,31 @@ public class CustomerRuns {
                 }
             }
         }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("runId", String.valueOf(run.runId));
-        body.put("attempt", attempt);
-        body.put("data", data);
-        return CustomerAnswer.of(200, body, null);
+        return new Steps(attempt, data);
+    }
+
+    /**
+     * The files the run's latest attempt made, as the manifest lists them (the File schema with step, rows and expired); a
+     * file recorded before file ids is given its id here, so the caller's transaction must allow a write.
+     */
+    List<Map<String, Object>> madeFiles(CustomerRunStore.Row run, int attempt) {
+        List<Map<String, Object>> listed = new ArrayList<>();
+        Instant now = Instant.now();
+        for (StepStore.OutputRow output : this.steps.outputsOfRun(run.runId)) {
+            if (output.attempt != attempt) {
+                continue;
+            }
+            String fileId = output.fileId != null ? output.fileId : this.steps.fileIdOf(output.runOutputId);
+            if (fileId != null) {
+                listed.add(CustomerViews.madeFile(output, fileId, now));
+            }
+        }
+        return listed;
+    }
+
+    /** The run's review as the Review schema (MIG-335's view reads it too). */
+    Map<String, Object> reviewOf(Found found) {
+        return CustomerViews.review(this.reviews.summary(found.run, found.job));
     }
 
     /** Not read-only: a made file recorded before MIG-334 is given its file id the first time it is listed. */
@@ -211,21 +252,12 @@ public class CustomerRuns {
                 }
             }
         }
-        List<StepStore.OutputRow> outputs = this.steps.outputsOfRun(run.runId);
         int attempt = run.attempt;
         for (StepStore.StepRow row : this.steps.stepsOfRun(run.runId)) {
             attempt = Math.max(attempt, row.attempt);
         }
+        listed.addAll(this.madeFiles(run, attempt));
         Instant now = Instant.now();
-        for (StepStore.OutputRow output : outputs) {
-            if (output.attempt != attempt) {
-                continue;
-            }
-            String fileId = output.fileId != null ? output.fileId : this.steps.fileIdOf(output.runOutputId);
-            if (fileId != null) {
-                listed.add(CustomerViews.madeFile(output, fileId, now));
-            }
-        }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("runId", String.valueOf(run.runId));
         body.put("pipelineId", String.valueOf(run.jobId));
@@ -233,7 +265,7 @@ public class CustomerRuns {
         body.put("attempt", attempt);
         body.put("generatedAt", ApiTimes.utc(now));
         body.put("files", listed);
-        body.put("review", CustomerViews.review(this.reviews.summary(found.get().run, found.get().job)));
+        body.put("review", this.reviewOf(found.get()));
         return CustomerAnswer.of(200, body, null);
     }
 

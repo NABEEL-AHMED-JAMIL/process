@@ -86,6 +86,8 @@ class ManagementModeMatrixTest {
             + " 2026-09-29: MANAGED customers may run)");
         CUSTOMERS_IN_EITHER_MODE.put("CustomerRunsRestApi.decide", "MIG-334: the customer's review through the API -- the customer "
             + "approves or rejects a run's output, as RunReviewRestApi.decide (MIG-237)");
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerRunsRestApi.viewLink", "MIG-335: a signed link to read one run -- a read the customer's "
+            + "portal shows its own people; nothing is built or stored");
         CUSTOMERS_IN_EITHER_MODE.put("CustomerEventsRestApi.send", "MIG-332: the customer's own event, started through the routes our"
             + " team or the customer set");
         CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.submit", "filling in a form: data entry, which may start the job the form names");

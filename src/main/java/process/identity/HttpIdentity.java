@@ -72,6 +72,8 @@ public class HttpIdentity implements IdentityPort {
 
     private final RestTemplate http;
     private final String base;
+    /** MIG-335: identity-service's /internal/apiClient, for a view link's client. */
+    private final String apiClients;
     private final String serviceToken;
     private final JwtVerifier verifier;
     private final LongSupplier clock;
@@ -88,6 +90,7 @@ public class HttpIdentity implements IdentityPort {
     HttpIdentity(RestTemplate http, String identityUrl, String serviceToken, JwtVerifier verifier, LongSupplier clock) {
         this.http = http;
         this.base = identityUrl.replaceAll("/+$", "") + "/api/v1/internal/identity";
+        this.apiClients = identityUrl.replaceAll("/+$", "") + "/api/v1/internal/apiClient";
         this.serviceToken = serviceToken == null ? "" : serviceToken.trim();
         this.verifier = verifier;
         this.clock = clock;
@@ -143,6 +146,36 @@ public class HttpIdentity implements IdentityPort {
             logger.debug("Client token with a malformed claim: {}", malformed.getMessage());
             return Optional.empty();
         }
+    }
+
+    @Override
+    public EmbedClient embedClient(long tenantId, String clientId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("tenantId", tenantId);
+        body.put("clientId", clientId);
+        Map<?, ?> answer;
+        try {
+            answer = this.http.postForObject(this.apiClients + "/embed", this.request(body), Map.class);
+        } catch (RestClientException ex) {
+            throw unavailable("embed", ex);
+        }
+        if (answer == null) {
+            throw new IdentityPort.Unavailable("Identity answered nothing for embed", null);
+        }
+        if (!Boolean.TRUE.equals(answer.get("active"))) {
+            Object status = answer.get("status");
+            return EmbedClient.refused(status instanceof Number && ((Number) status).intValue() == 410 ? 410 : 404);
+        }
+        List<String> origins = new ArrayList<>();
+        Object listed = answer.get("frameAncestors");
+        if (listed instanceof Collection) {
+            for (Object origin : (Collection<?>) listed) {
+                if (origin != null) {
+                    origins.add(origin.toString());
+                }
+            }
+        }
+        return new EmbedClient(true, 200, origins);
     }
 
     @Override
