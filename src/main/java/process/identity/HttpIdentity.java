@@ -128,6 +128,23 @@ public class HttpIdentity implements IdentityPort {
         }
     }
 
+    /** MIG-332: a customer API client's token, against the same keys and Redis revocations (the client version). */
+    @Override
+    public Optional<CallerIdentity> authenticateClient(String bearerToken) {
+        if (bearerToken == null || bearerToken.trim().isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(this.verifier.verifyClient(bearerToken.trim()));
+        } catch (PlatformException refused) {
+            logger.debug("Client token not accepted: {}", refused.getOperatorDetail());
+            return Optional.empty();
+        } catch (RuntimeException malformed) {
+            logger.debug("Client token with a malformed claim: {}", malformed.getMessage());
+            return Optional.empty();
+        }
+    }
+
     @Override
     public Optional<Person> person(Long appUserId) {
         return appUserId == null ? Optional.empty() : Optional.ofNullable(this.people(Collections.singletonList(appUserId)).get(appUserId));

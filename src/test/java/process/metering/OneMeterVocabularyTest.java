@@ -28,14 +28,30 @@ class OneMeterVocabularyTest {
         "\\b(enum\\s+Meter|class\\s+UsageEvent)|/v1/events\\b|\"(" + Arrays.stream(Meter.values())
             .map(meter -> Pattern.quote(meter.key())).collect(Collectors.joining("|")) + ")\"");
 
+    /**
+     * MIG-332: the customer API's own POST /v1/events -- an organisation's events in, through its event routes -- shares
+     * the meter's old path by name and nothing else. Its package and its controllers say "/v1/events" for that endpoint.
+     */
+    private static boolean customerApi(Path file) {
+        String name = file.toString().replace('\\', '/');
+        return name.contains("/process/customer/") || name.endsWith("/api/CustomerEventsRestApi.java")
+            || name.endsWith("/api/EventRouteRestApi.java");
+    }
+
     @Test
     void noSourceKeepsItsOwnMeterKeysOrClient() throws IOException {
         List<String> copies;
         try (Stream<Path> files = Files.walk(Paths.get("src", "main", "java"))) {
-            copies = files.filter(f -> f.toString().endsWith(".java")).filter(f -> LOCAL_COPY.matcher(read(f)).find())
+            copies = files.filter(f -> f.toString().endsWith(".java")).filter(f -> !customerApi(f) || meterKeys(f))
+                .filter(f -> LOCAL_COPY.matcher(read(f)).find())
                 .map(Path::toString).collect(Collectors.toList());
         }
         assertThat(copies).isEmpty();
+    }
+
+    /** A customer API source still may not copy the meter's keys or its types. */
+    private static boolean meterKeys(Path file) {
+        return LOCAL_COPY.matcher(read(file).replace("/v1/events", "")).find();
     }
 
     private static String read(Path file) {

@@ -10,10 +10,13 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.barco.platform.api.Problem;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import process.correlation.CorrelationInterceptor;
+import process.customer.InputContracts;
+import process.pipeline.PipelineDefinition;
 import process.pipeline.data.Values;
 
 import java.io.IOException;
@@ -47,7 +50,7 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  */
 @Component
-public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, DatabaseReader {
+public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, DatabaseReader, InputContracts {
 
     static final String BASE = "/api/v1/internal/pipelines";
     private static final MediaType JSON = MediaType.get("application/json");
@@ -142,6 +145,42 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
             verdicts.rows.add(new RowVerdict(result.path("index").asInt(), result.path("valid").asBoolean(), errors));
         }
         return verdicts;
+    }
+
+    // ---- InputContracts (MIG-332) ----------------------------------------------------------------------------
+
+    /**
+     * POST /contract/check {tenantId, contractId, contractName, version, record?}: the contract's schema and, for a record,
+     * its verdict. Nothing is recorded on integration-service's side.
+     */
+    @Override
+    public InputContracts.Checked check(long tenantId, PipelineDefinition.ContractRef contract, JsonNode record, String pathPrefix) {
+        ObjectNode body = this.json.createObjectNode();
+        body.put("tenantId", tenantId);
+        body.putPOJO("contractId", contract.getContractId());
+        body.putPOJO("contractName", contract.getContractName());
+        body.putPOJO("version", contract.getVersion());
+        if (record != null) {
+            body.set("record", record);
+        }
+        JsonNode data;
+        try {
+            data = this.post("/contract/check", body);
+        } catch (IOException | RuntimeException failed) {
+            throw new InputContracts.Unavailable(failed.getMessage(), failed);
+        }
+        InputContracts.Checked checked = new InputContracts.Checked();
+        checked.contractId = data.hasNonNull("contractId") ? data.get("contractId").asLong() : null;
+        checked.name = data.path("name").asText(null);
+        checked.version = data.hasNonNull("version") ? data.get("version").asInt() : null;
+        checked.schema = data.get("schema");
+        checked.valid = data.hasNonNull("valid") ? data.get("valid").asBoolean() : null;
+        checked.errors = new ArrayList<>();
+        for (JsonNode error : data.path("errors")) {
+            checked.errors.add(new Problem.FieldError(InputContracts.pathOf(error.path("path").asText(""), pathPrefix),
+                error.path("message").asText("")));
+        }
+        return checked;
     }
 
     // ---- DatabaseReader ---------------------------------------------------------------------------------------

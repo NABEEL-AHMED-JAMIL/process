@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
  *       {@code onError} fail, continue or skip_rest.</li>
  *   <li>{@code settings}: datasetRetentionHours 1 to 720, defaultTimeoutSeconds 1 to 86400, defaultOnError as onError;
  *       review.required (MIG-237) each of internal and customer at most once; sensitivity public, internal or sensitive
- *       (MIG-243).</li>
+ *       (MIG-243); inputContract (MIG-332) a contract by id or by name, not both.</li>
  * </ul>
  */
 @Component
@@ -136,6 +136,20 @@ public class DefinitionValidator {
         }
         if (settings.getDefaultOnError() != null && !OnError.of(settings.getDefaultOnError()).isPresent()) {
             problems.add(new DefinitionProblem("settings.defaultOnError", "one of " + OnError.words()));
+        }
+        PipelineDefinition.ContractRef input = settings.getInputContract();
+        if (input != null) {
+            boolean byId = input.getContractId() != null;
+            boolean byName = input.getContractName() != null && !input.getContractName().trim().isEmpty();
+            if (byId == byName) {
+                problems.add(new DefinitionProblem("settings.inputContract", "name the contract by its id or by its name, not both"));
+            }
+            if (byId && input.getContractId() < 1) {
+                problems.add(new DefinitionProblem("settings.inputContract.contractId", "a contract id is at least 1"));
+            }
+            if (input.getVersion() != null && input.getVersion() < 1) {
+                problems.add(new DefinitionProblem("settings.inputContract.version", "a version is at least 1"));
+            }
         }
         if (settings.getReview() != null && settings.getReview().getRequired() != null) {
             List<String> required = settings.getReview().getRequired();

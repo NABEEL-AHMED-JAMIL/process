@@ -44,7 +44,8 @@ public class StorageFormInbox implements FormInbox {
         return of(inbox);
     }
 
-    static Location of(JsonNode inbox) {
+    /** The inbox an answer of storage-service names (public for the customer API's intake, MIG-332). */
+    public static Location of(JsonNode inbox) {
         if (inbox == null || !inbox.path("configured").asBoolean(false) || inbox.path("alias").asText("").trim().isEmpty()) {
             return Location.none(NO_INBOX);
         }

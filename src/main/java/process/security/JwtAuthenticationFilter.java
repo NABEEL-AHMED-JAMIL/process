@@ -1,5 +1,7 @@
 package process.security;
 
+import org.barco.platform.api.Problem;
+import org.barco.platform.security.BearerAuthFilter;
 import org.barco.platform.security.CallerIdentity;
 import org.barco.platform.security.ManagementMode;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -30,6 +32,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
         FilterChain filterChain) throws ServletException, IOException {
         String header = request.getHeader("Authorization");
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        if (path.startsWith(BearerAuthFilter.CUSTOMER_API) && !"OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            this.customerApi(request, response, filterChain, header, path);
+            return;
+        }
         if (header != null && header.startsWith("Bearer ")) {
             // A refresh token, a signed-out one, one minted before its person's standing changed, or one
             // that cannot be read authenticates nobody (MIG-14): the request goes on anonymous and Spring
@@ -67,4 +74,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
+    /**
+     * MIG-332: the customer API (/v1 at the gateway, /customer here). Only an API client's token opens it -- a person's
+     * never, and a client's opens nothing else (authenticate refuses type client). Refused as an RFC 9457 problem, as
+     * every /v1 answer is. The caller is the client's workspace with role API_CLIENT and no person; its scopes are the
+     * token's.
+     */
+    private void customerApi(HttpServletRequest request, HttpServletResponse response, FilterChain chain, String header, String path)
+        throws ServletException, IOException {
+        Optional<CallerIdentity> client = header != null && header.startsWith("Bearer ")
+            ? this.identity.authenticateClient(header.substring(7)) : Optional.empty();
+        if (!client.isPresent()) {
+            Problem.of(401, "A valid access token for the API is required.").at(BearerAuthFilter.publicPath(path)).write(response);
+            return;
+        }
+        CallerIdentity caller = client.get();
+        TenantContext.set(caller.getTenantId(), TenantContext.API_CLIENT, null, caller.getUsername());
+        TenantContext.setApiClient(caller.getClientId(), caller.getScopes());
+        ManagementMode.set(caller);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(caller.getUsername(), null,
+            Collections.singletonList(() -> "ROLE_" + TenantContext.API_CLIENT)));
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            TenantContext.clear();
+            ManagementMode.clear();
+        }
+    }
 }

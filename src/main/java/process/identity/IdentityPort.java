@@ -35,6 +35,15 @@ public interface IdentityPort {
      */
     Optional<CallerIdentity> authenticate(String bearerToken);
 
+    /**
+     * MIG-332: the API client behind a customer API token (type client): well signed, unexpired, not revoked and not
+     * minted under an older client version. Empty for anything else, a person's token included. Only identity-service's
+     * own verification (identity.mode=remote) knows client tokens; in-process identity accepts none.
+     */
+    default Optional<CallerIdentity> authenticateClient(String bearerToken) {
+        return Optional.empty();
+    }
+
     /** A person, deleted ones included (callers decide what a deleted person means to them). */
     Optional<Person> person(Long appUserId);
 

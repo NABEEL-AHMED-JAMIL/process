@@ -21,7 +21,10 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import process.api.CustomerEventsRestApi;
+import process.api.CustomerPipelinesRestApi;
 import process.api.DashboardRestApi;
+import process.api.EventRouteRestApi;
 import process.api.EngineSettingsRestApi;
 import process.api.FileChatRestApi;
 import process.api.KafkaConnectionProfileRestApi;
@@ -105,7 +108,9 @@ class CoreProbeCoverageTest {
         KafkaSecretRestApi.class, SettingRestApi.class, PipelineConfigRestApi.class, TaskReferenceRestApi.class,
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
         AiModelChoiceRestApi.class, InboxTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
-        RunReviewRestApi.class, FormRestApi.class, FormSubmissionRestApi.class,
+        RunReviewRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
+        // the customer API (MIG-332): an API client's token, its workspace and scopes
+        CustomerPipelinesRestApi.class, CustomerEventsRestApi.class,
         // a share link's visitor: the link's token, no tenant principal (MIG-278)
         PublicFormRestApi.class,
         // worker callbacks: a run's X-Worker-Token, no tenant principal

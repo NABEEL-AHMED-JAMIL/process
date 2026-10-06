@@ -208,6 +208,28 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         return jobQueue;
     }
 
+    /**
+     * MIG-332: the customer API starts the job -- one run, its intake (the record and the named files, a JSON file in the
+     * workspace's inbox bucket) as its input, as a form submission's run has its file. The caller has checked Run now's
+     * rules; the one-in-flight index still refuses a racing second run (OneRunInFlight).
+     */
+    public JobQueue addApiJobInQueue(SourceJob sourceJob, String inputBucket, String inputKey, String clientId, String origin) {
+        this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
+            BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue: started through the API.", false);
+        jobQueue.setRunManual(false);
+        jobQueue.setInputBucket(inputBucket);
+        jobQueue.setInputKey(inputKey);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        logger.info("Run {} of job {} queued through the API by client {} ({}).", jobQueue.getJobQueueId(), sourceJob.getJobId(), clientId,
+            origin);
+        this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
+            "Job %s now in the queue: %s by API client %s (%s/%s).", sourceJob.getJobId(), origin, clientId, inputBucket, inputKey));
+        this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
+        return jobQueue;
+    }
+
     public void skipManualJobInQueue(Scheduler scheduler) {
 
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(scheduler.getJobId(),

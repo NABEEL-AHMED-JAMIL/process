@@ -268,7 +268,7 @@ public class PipelineDefinition {
 
     /** What applies to every step that does not say otherwise, and how long a run's datasets are kept. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"datasetRetentionHours", "defaultTimeoutSeconds", "defaultOnError", "review", "sensitivity"})
+    @JsonPropertyOrder({"datasetRetentionHours", "defaultTimeoutSeconds", "defaultOnError", "review", "sensitivity", "inputContract"})
     public static class Settings {
 
         public static final int DEFAULT_RETENTION_HOURS = 24;
@@ -299,6 +299,17 @@ public class PipelineDefinition {
 
         /** MIG-243: the sensitivity of the pipeline's data -- public, internal or sensitive; not said is internal. */
         private String sensitivity;
+
+        /**
+         * MIG-332: the data contract (MIG-233) a run's record must meet when the customer API starts it
+         * (POST /v1/pipelines/{id}/runs): checked before anything is stored, and refused with each field's path. Absent: the
+         * contract of the pipeline's first validate step, if it has one; else none.
+         */
+        private ContractRef inputContract;
+
+        public ContractRef getInputContract() { return inputContract; }
+
+        public void setInputContract(ContractRef inputContract) { this.inputContract = inputContract; }
 
         @JsonIgnore
         public int effectiveRetentionHours() {
@@ -340,6 +351,36 @@ public class PipelineDefinition {
         public Review getReview() { return review; }
 
         public void setReview(Review review) { this.review = review; }
+    }
+
+    /** MIG-332: a data contract named by its id or by its name, optionally pinned to a version. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonPropertyOrder({"contractId", "contractName", "version"})
+    public static class ContractRef {
+
+        private Long contractId;
+        private String contractName;
+        private Integer version;
+
+        public static ContractRef of(Long contractId, String contractName, Integer version) {
+            ContractRef ref = new ContractRef();
+            ref.setContractId(contractId);
+            ref.setContractName(contractName);
+            ref.setVersion(version);
+            return ref;
+        }
+
+        public Long getContractId() { return contractId; }
+
+        public void setContractId(Long contractId) { this.contractId = contractId; }
+
+        public String getContractName() { return contractName; }
+
+        public void setContractName(String contractName) { this.contractName = contractName; }
+
+        public Integer getVersion() { return version; }
+
+        public void setVersion(Integer version) { this.version = version; }
     }
 
     /**

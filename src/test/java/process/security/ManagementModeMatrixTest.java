@@ -52,6 +52,7 @@ class ManagementModeMatrixTest {
     /** Build or run: refused to the customer's own people in a MANAGED workspace. */
     static final Set<String> BUILDER_ACTIONS = new TreeSet<>(Arrays.asList(
         "AiModelChoiceRestApi.saveSchedule", "AiModelChoiceRestApi.saveStepOptions",
+        "EventRouteRestApi.delete", "EventRouteRestApi.save",
         "FormRestApi.createShareLink", "FormRestApi.revokeShareLink", "FormRestApi.save", "FormRestApi.setSharePolicy",
         "FormRestApi.status",
         "InboxTriggerRestApi.delete", "InboxTriggerRestApi.save",
@@ -81,6 +82,10 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("ReportRestApi.export", "download");
         // Wave 5 Forms (lite): filling in a form the workspace was given is data entry, not building -- even when the form
         // starts a job, as Run now and the inbox upload do for an existing schedule.
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerPipelinesRestApi.startRun", "MIG-332: the customer API starting a run, as Run now (owner"
+            + " 2026-09-29: MANAGED customers may run)");
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerEventsRestApi.send", "MIG-332: the customer's own event, started through the routes our"
+            + " team or the customer set");
         CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.submit", "filling in a form: data entry, which may start the job the form names");
         // MIG-278: a visitor of a share link fills in the form the workspace published; no workspace person is acting.
         CUSTOMERS_IN_EITHER_MODE.put("PublicFormRestApi.submit", "a share link's visitor filling in the form: data entry (MIG-278)");

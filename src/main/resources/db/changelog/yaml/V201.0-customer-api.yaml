@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 201.0-customer-api
+      author: nabeel.amd93
+      description: "MIG-332 (ADR-025): the customer API's inbound work -- api_idempotency_receipt (per client), api_intake (runs started through the API), event_route (event type -> pipeline or workflow), api_event; all under row security"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V201.0-customer-api/V201__customer_api.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V201.0-customer-api/V201__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

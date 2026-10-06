@@ -3,6 +3,10 @@ package process.security;
 import org.barco.platform.tenancy.TenantScope;
 import org.slf4j.MDC;
 
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 /**
  * @author Nabeel Ahmed
  * */
@@ -18,6 +22,12 @@ public final class TenantContext {
     private static final ThreadLocal<Long> APP_USER_ID = new ThreadLocal<>();
     private static final ThreadLocal<String> USERNAME = new ThreadLocal<>();
     private static final ThreadLocal<TenantScope> SCOPE = new ThreadLocal<>();
+    /** MIG-332: the customer API's caller, when it is an API client: its public id and scopes. */
+    private static final ThreadLocal<String> CLIENT_ID = new ThreadLocal<>();
+    private static final ThreadLocal<Set<String>> CLIENT_SCOPES = new ThreadLocal<>();
+
+    /** The role an API client of the customer API holds: platform-commons' TenantContext.API_CLIENT, the same word. */
+    public static final String API_CLIENT = "API_CLIENT";
 
     private TenantContext() {}
 
@@ -36,6 +46,8 @@ public final class TenantContext {
         APP_USER_ID.set(appUserId);
         USERNAME.set(username);
         SCOPE.remove();
+        CLIENT_ID.remove();
+        CLIENT_SCOPES.remove();
         // On every log line while this caller is set (MIG-43), beside the correlation id.
         putOrRemove(MDC_TENANT, workspace);
         putOrRemove(MDC_USER, appUserId);
@@ -71,6 +83,31 @@ public final class TenantContext {
         return scope;
     }
 
+    /**
+     * MIG-332: the caller is this API client, with these scopes; set after {@link #set} by JwtAuthenticationFilter for a
+     * customer API request (role {@value #API_CLIENT}, no person).
+     */
+    public static void setApiClient(String clientId, Set<String> scopes) {
+        CLIENT_ID.set(clientId);
+        CLIENT_SCOPES.set(scopes == null ? Collections.<String>emptySet() : Collections.unmodifiableSet(new LinkedHashSet<>(scopes)));
+    }
+
+    /** The API client's public id, or null for a person or nobody. */
+    public static String getClientId() {
+        return CLIENT_ID.get();
+    }
+
+    /** Whether the caller is an API client of the customer API. */
+    public static boolean isApiClient() {
+        return CLIENT_ID.get() != null && API_CLIENT.equals(USER_ROLE.get());
+    }
+
+    /** Whether the caller is an API client holding this scope. */
+    public static boolean hasScope(String scope) {
+        Set<String> scopes = CLIENT_SCOPES.get();
+        return isApiClient() && scopes != null && scopes.contains(scope);
+    }
+
     public static boolean isPlatformAdmin() {
         return "PLATFORM_ADMIN".equals(USER_ROLE.get());
     }
@@ -81,6 +118,8 @@ public final class TenantContext {
         APP_USER_ID.remove();
         USERNAME.remove();
         SCOPE.remove();
+        CLIENT_ID.remove();
+        CLIENT_SCOPES.remove();
         MDC.remove(MDC_TENANT);
         MDC.remove(MDC_USER);
     }

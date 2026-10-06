@@ -735,7 +735,9 @@ final class CoreProbeFixture implements AutoCloseable {
         if (!Long.valueOf(A).equals(caller.tenantId)) {
             foreign.addAll(A_MARKERS);
             foreign.addAll(COLLEAGUE_MARKERS);
-        } else if (!"TENANT_ADMIN".equals(caller.role)) {
+        } else if (!"TENANT_ADMIN".equals(caller.role) && !"API_CLIENT".equals(caller.role)) {
+            // MIG-332: an API client is the workspace's own machine identity, made by its administrator: like the
+            // administrator it starts and reads every pipeline of the workspace, a colleague's private one included.
             foreign.addAll(COLLEAGUE_MARKERS);
         }
         if (!Long.valueOf(C).equals(caller.tenantId)) {

@@ -51,6 +51,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // expiry and uses, the workspace's switch, a signed ticket and rate limits. Reads that form only.
                 .antMatchers("/publicForm.json/*", "/publicForm.json/*/upload", "/publicForm.json/*/submit").permitAll()
 
+                // MIG-332: the customer API (the gateway's /v1). JwtAuthenticationFilter admits only an API client's token here
+                // and answers anything else with a problem; no person reaches it, and an API client reaches nothing else.
+                .antMatchers("/customer/**").hasRole("API_CLIENT")
                 // Liveness probes have no account, so health and info stay open. The rest --
                 // metrics and prometheus -- name every endpoint, its call rate and its 401/403
                 // rate, which is a map of the application for anyone who asks for it.

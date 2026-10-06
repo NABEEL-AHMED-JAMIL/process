@@ -72,6 +72,20 @@ public class HttpFormWorkflows implements FormWorkflows {
         return new Started(answer.path("data").path("id").asLong(), answer.path("data").path("state").asText(""));
     }
 
+    /** MIG-332: a request of the workflow for any subject, once per eventId (workflow-service's command key). */
+    @Override
+    public Started startFor(long tenantId, String key, String subjectId, String eventId, String title, Map<String, Object> subject) {
+        ObjectNode body = this.json.createObjectNode();
+        body.put("tenantId", tenantId);
+        body.put("definitionKey", key);
+        body.put("subjectId", subjectId);
+        body.put("title", title);
+        body.set("subject", this.json.valueToTree(subject));
+        body.put("eventId", eventId);
+        JsonNode answer = this.post("/start", body, false);
+        return new Started(answer.path("data").path("id").asLong(), answer.path("data").path("state").asText(""));
+    }
+
     /** The answer; null for a 404 when {@code missingIsNull}; an exception for anything else that is not SUCCESS. */
     private JsonNode post(String path, ObjectNode body, boolean missingIsNull) {
         Request call;

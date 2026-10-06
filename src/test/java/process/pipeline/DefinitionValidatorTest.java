@@ -42,6 +42,25 @@ class DefinitionValidatorTest {
         assertThat(this.validator.require(this.valid())).isNotNull();
     }
 
+    /** MIG-332: the input contract the customer API checks a started run's record against names one contract, by id or name. */
+    @Test
+    void theInputContractNamesOneContract() throws Exception {
+        PipelineDefinition definition = this.valid();
+        definition.getSettings().setInputContract(PipelineDefinition.ContractRef.of(null, "orders", 2));
+        assertThat(this.validator.problems(definition)).isEmpty();
+        PipelineDefinition read = DefinitionCodec.fromJson(DefinitionCodec.toJson(definition));
+        assertThat(read.getSettings().getInputContract().getContractName()).isEqualTo("orders");
+        assertThat(read.getSettings().getInputContract().getVersion()).isEqualTo(2);
+
+        definition.getSettings().setInputContract(PipelineDefinition.ContractRef.of(4L, "orders", 0));
+        assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("settings.inputContract", "name the contract by its id or by its name, not both"),
+            new DefinitionProblem("settings.inputContract.version", "a version is at least 1"));
+        definition.getSettings().setInputContract(PipelineDefinition.ContractRef.of(null, " ", null));
+        assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("settings.inputContract", "name the contract by its id or by its name, not both"));
+    }
+
     /** MIG-243: a pipeline's sensitivity is one of the data policies' three levels, or not said (internal). */
     @Test
     void theSensitivityIsPublicInternalOrSensitive() {
