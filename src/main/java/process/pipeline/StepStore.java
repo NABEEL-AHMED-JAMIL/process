@@ -2,7 +2,10 @@ package process.pipeline;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -21,6 +24,18 @@ public interface StepStore {
 
     /** The definition an earlier attempt of this run followed, if one did: a retry follows the same one. */
     Optional<Long> pinnedDefinition(long jobQueueId);
+
+    /**
+     * MIG-326: {@link #pinnedDefinition} for a page of runs at once, by run id (a run that follows none is left out). The
+     * default asks one run at a time; the JDBC store answers in one query.
+     */
+    default Map<Long, Long> pinnedDefinitions(Collection<Long> jobQueueIds) {
+        Map<Long, Long> pinned = new HashMap<>();
+        for (Long id : jobQueueIds) {
+            this.pinnedDefinition(id).ifPresent(definition -> pinned.put(id, definition));
+        }
+        return pinned;
+    }
 
     /** One row per step of this attempt, all Queue, in order; the rows' ids in the steps' order. Idempotent. */
     List<Long> plan(long jobQueueId, int attempt, long pipelineDefinitionId, List<Planned> steps);

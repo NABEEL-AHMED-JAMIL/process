@@ -4,7 +4,10 @@ import process.model.enums.ReviewDecision;
 import process.model.enums.ReviewParty;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -42,6 +45,30 @@ public interface RunReviewStore {
 
     /** The run's status row: absent until a party first decides on it. */
     Optional<Status> statusOf(long jobQueueId);
+
+    /**
+     * MIG-326: {@link #statusOf} for a page of runs, by run id (a run with no row is left out). The default asks one run at a
+     * time; the JDBC store answers in one query.
+     */
+    default Map<Long, Status> statusesOf(Collection<Long> jobQueueIds) {
+        Map<Long, Status> found = new HashMap<>();
+        for (Long id : jobQueueIds) {
+            this.statusOf(id).ifPresent(status -> found.put(id, status));
+        }
+        return found;
+    }
+
+    /** MIG-326: {@link #decisionsOf(long)} for a page of runs, by run id, each oldest first (a run with none is left out). */
+    default Map<Long, List<Decision>> decisionsOf(Collection<Long> jobQueueIds) {
+        Map<Long, List<Decision>> found = new HashMap<>();
+        for (Long id : jobQueueIds) {
+            List<Decision> decisions = this.decisionsOf(id);
+            if (!decisions.isEmpty()) {
+                found.put(id, decisions);
+            }
+        }
+        return found;
+    }
 
     /**
      * The run's status row, added PENDING with these parties when it has none, and held for this transaction: two

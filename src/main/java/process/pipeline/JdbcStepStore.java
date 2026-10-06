@@ -14,7 +14,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -69,6 +74,23 @@ public class JdbcStepStore implements StepStore {
         List<Long> found = this.jdbc.queryForList("SELECT pipeline_definition_id FROM step_execution WHERE job_queue_id = ? "
             + "AND pipeline_definition_id IS NOT NULL ORDER BY attempt, step_index LIMIT 1", Long.class, jobQueueId);
         return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
+    }
+
+    /** MIG-326: the first attempt's definition of each run, in one query (a page of runs read 50 single queries). */
+    @Override
+    public Map<Long, Long> pinnedDefinitions(Collection<Long> jobQueueIds) {
+        Map<Long, Long> pinned = new HashMap<>();
+        if (jobQueueIds == null || jobQueueIds.isEmpty()) {
+            return pinned;
+        }
+        List<Long> ids = new ArrayList<>(new LinkedHashSet<>(jobQueueIds));
+        String marks = String.join(", ", Collections.nCopies(ids.size(), "?"));
+        this.jdbc.query("SELECT DISTINCT ON (job_queue_id) job_queue_id, pipeline_definition_id FROM step_execution "
+            + "WHERE job_queue_id IN (" + marks + ") AND pipeline_definition_id IS NOT NULL ORDER BY job_queue_id, attempt, step_index",
+            (ResultSet rs) -> {
+                pinned.put(rs.getLong(1), rs.getLong(2));
+            }, ids.toArray());
+        return pinned;
     }
 
     @Override

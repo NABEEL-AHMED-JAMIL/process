@@ -7,7 +7,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -75,6 +80,35 @@ public class PipelineDefinitionStore {
         return first(this.jdbc.query("SELECT " + COLUMNS + " FROM pipeline_definition d WHERE d.pipeline_key = ("
             + "SELECT p.pipeline_key FROM pipeline p WHERE p.tenant_id = ? AND p.pipeline_id = ? AND p.status <> 'Delete' "
             + "ORDER BY p.pipeline_key LIMIT 1) ORDER BY d.version DESC LIMIT 1", PipelineDefinitionStore::row, tenantId, pipelineId.trim()));
+    }
+
+    /**
+     * MIG-326: {@link #latestFor(long, String)} for a page of the workspace's pipelines in one query, by pipeline id (one
+     * with no definition is left out): the same row each single read gives -- the lowest-keyed live pipeline of that id,
+     * its highest version.
+     */
+    public Map<String, Stored> latestFor(long tenantId, Collection<String> pipelineIds) {
+        Map<String, Stored> found = new HashMap<>();
+        List<String> ids = new ArrayList<>();
+        for (String id : pipelineIds == null ? Collections.<String>emptyList() : pipelineIds) {
+            if (id != null && !id.trim().isEmpty() && !ids.contains(id.trim())) {
+                ids.add(id.trim());
+            }
+        }
+        if (ids.isEmpty()) {
+            return found;
+        }
+        List<Object> args = new ArrayList<>();
+        args.add(tenantId);
+        args.addAll(ids);
+        this.jdbc.query("SELECT DISTINCT ON (k.pipeline_id) k.pipeline_id AS of_pipeline, " + COLUMNS + " FROM ("
+            + "SELECT DISTINCT ON (p.pipeline_id) p.pipeline_id, p.pipeline_key FROM pipeline p WHERE p.tenant_id = ? AND p.pipeline_id IN ("
+            + String.join(", ", Collections.nCopies(ids.size(), "?")) + ") AND p.status <> 'Delete' ORDER BY p.pipeline_id, p.pipeline_key) k "
+            + "JOIN pipeline_definition d ON d.pipeline_key = k.pipeline_key ORDER BY k.pipeline_id, d.version DESC",
+            (ResultSet rs) -> {
+                found.put(rs.getString("of_pipeline"), row(rs, 0));
+            }, args.toArray());
+        return found;
     }
 
     /**

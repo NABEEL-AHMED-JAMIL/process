@@ -12,13 +12,16 @@ import process.model.repository.SourceJobRepository;
 import process.pipeline.PipelineDefinitionStore;
 import process.pipeline.RunOutput;
 import process.pipeline.StepStore;
+import process.pipeline.review.RunReviewStatus;
 import process.pipeline.review.RunReviews;
 import process.security.TenantContext;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -68,6 +71,14 @@ class CustomerRunsTest {
         summary.put("decidedAt", null);
         summary.put("rerunJobQueueId", null);
         when(this.reviews.summary(any(), any())).thenReturn(summary);
+        // MIG-326: a page reads every run's review at once; the same word as the summary's.
+        when(this.reviews.statuses(any(), any())).thenAnswer(call -> {
+            Map<Long, RunReviewStatus> statuses = new HashMap<>();
+            for (Object run : (Collection<?>) call.getArgument(0)) {
+                statuses.put(((JobQueue) run).getJobQueueId(), RunReviewStatus.PENDING);
+            }
+            return statuses;
+        });
     }
 
     @AfterEach

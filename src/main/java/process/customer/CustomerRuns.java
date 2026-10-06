@@ -321,12 +321,10 @@ public class CustomerRuns {
         }
         Map<Long, SourceJob> jobsById = new HashMap<>();
         this.jobs.findAllById(jobIds).forEach(job -> jobsById.put(job.getJobId(), job));
-        for (JobQueue run : this.runs.findAllById(runIds)) {
-            SourceJob job = jobsById.get(run.getJobId());
-            if (job != null) {
-                words.put(run.getJobQueueId(), CustomerViews.reviewWordOf(this.reviews.summary(run, job).get("reviewStatus")));
-            }
-        }
+        List<JobQueue> page = new ArrayList<>();
+        this.runs.findAllById(runIds).forEach(page::add);
+        // MIG-326: the whole page's reviews in a few queries, not four a run.
+        this.reviews.statuses(page, jobsById).forEach((runId, status) -> words.put(runId, CustomerViews.reviewWordOf(status.name())));
         return words;
     }
 

@@ -90,9 +90,19 @@ public class PipelineCatalogue {
     /** The workspace's pipelines, newest first, after the one {@code afterJobId} names (keyset), at most {@code limit}. */
     public List<Entry> page(long tenantId, Long afterJobId, int limit) {
         List<Entry> entries = new ArrayList<>();
-        for (Object[] row : this.sql.query("SELECT " + COLUMNS + FROM + "WHERE j.tenant_id = ? AND j.job_status <> 'Delete' AND j.job_id < ? "
-            + "ORDER BY j.job_id DESC LIMIT ?", ROW, tenantId, afterJobId == null ? Long.MAX_VALUE : afterJobId, limit)) {
-            entries.add(this.entry(row));
+        List<Object[]> rows = this.sql.query("SELECT " + COLUMNS + FROM + "WHERE j.tenant_id = ? AND j.job_status <> 'Delete' AND j.job_id < ? "
+            + "ORDER BY j.job_id DESC LIMIT ?", ROW, tenantId, afterJobId == null ? Long.MAX_VALUE : afterJobId, limit);
+        // MIG-326: the page's definitions in one query, not one a pipeline.
+        List<String> pipelineIds = new ArrayList<>();
+        for (Object[] row : rows) {
+            if (row[5] != null) {
+                pipelineIds.add((String) row[5]);
+            }
+        }
+        Map<String, PipelineDefinitionStore.Stored> latest = this.definitions.latestFor(tenantId, pipelineIds);
+        for (Object[] row : rows) {
+            PipelineDefinitionStore.Stored stored = row[5] == null ? null : latest.get(((String) row[5]).trim());
+            entries.add(this.entry(row, stored == null ? null : stored.definition()));
         }
         return entries;
     }
@@ -117,6 +127,10 @@ public class PipelineCatalogue {
         String pipelineId = (String) row[5];
         PipelineDefinition definition = pipelineId == null ? null
             : this.definitions.latestFor(tenantId, pipelineId).map(PipelineDefinitionStore.Stored::definition).orElse(null);
-        return new Entry((Long) row[0], tenantId, (String) row[2], (String) row[3], (String) row[4], pipelineId, definition);
+        return this.entry(row, definition);
+    }
+
+    private Entry entry(Object[] row, PipelineDefinition definition) {
+        return new Entry((Long) row[0], (Long) row[1], (String) row[2], (String) row[3], (String) row[4], (String) row[5], definition);
     }
 }
