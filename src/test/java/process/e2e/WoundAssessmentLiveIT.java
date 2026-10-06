@@ -209,7 +209,12 @@ class WoundAssessmentLiveIT {
         assertThat(manifest.path("reviewStatus").asText()).as("the results wait for the internal review").isEqualTo("PENDING");
         Map<String, Long> files = new LinkedHashMap<>();
         for (JsonNode output : manifest.path("outputs")) {
-            files.put(output.path("format").asText(), output.path("runDatasetId").asLong());
+            // The run's own files; the trend copy in the bucket (the keep step) is listed beside them.
+            if ("file".equals(output.path("kind").asText())) {
+                files.put(output.path("format").asText(), output.path("runDatasetId").asLong());
+            } else if ("keep".equals(output.path("stepKey").asText())) {
+                assertThat(output.path("key").asText()).isEqualTo(PREFIX + "results/run-" + run + ".csv");
+            }
         }
         assertThat(files).containsKeys("csv", "json", "pdf");
 
@@ -300,7 +305,7 @@ class WoundAssessmentLiveIT {
 
         JsonNode photo = upload(base + "/form.json/upload?formId=" + formId.trim() + "&field=image", "WC-0001.png", bytes("WC-0001.png"),
             "image/png");
-        assertThat(photo.path("key").asText()).as("the upload's key").isNotEmpty();
+        assertThat(photo.path("uploadId").asLong()).as("the upload, which the submission names; its key is filled in there").isPositive();
         ObjectNode answers = JSON.createObjectNode().put("case_id", "WC-0001").put("patient_id", "SYN-001")
             .put("visit_date", "2026-09-29").put("wound_site", "left heel");
         answers.putArray("image").add(photo);
@@ -317,7 +322,7 @@ class WoundAssessmentLiveIT {
         assertThat(manifest.path("reviewStatus").asText()).isEqualTo("PENDING");
         long json = 0;
         for (JsonNode output : manifest.path("outputs")) {
-            if ("json".equals(output.path("format").asText())) {
+            if ("file".equals(output.path("kind").asText()) && "json".equals(output.path("format").asText())) {
                 json = output.path("runDatasetId").asLong();
             }
         }
