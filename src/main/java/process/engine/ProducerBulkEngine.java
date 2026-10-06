@@ -295,8 +295,8 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                             + "so the report was refused. Closed as interrupted — check the output before "
                             + "running it again.", jobQueue.getJobId(), reported, jobQueue.getRefusedCallbackAt())
                         : String.format(
-                        "Job %s stopped reporting and was closed after %d hours. Its worker may "
-                        + "have finished the work — check the output before running it again.",
+                        "Job %s stopped reporting and was closed after %d hours. The work may "
+                        + "have finished — check the output before running it again.",
                         jobQueue.getJobId(), STALLED_AFTER_MINUTES / 60));
                     this.transactionService.saveJobQueue(jobQueue);
                     // C4: the sweep writes Interrupt, never Failed -- and it is a bad run for the SLI (MIG-196).
@@ -310,7 +310,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                             + "because its callback token had expired.",
                             reported, jobQueue.getRefusedCallbackAt())
                         : jobQueue.getStartTime() != null
-                        ? String.format("Run closed automatically: no update from the worker since %s.",
+                        ? String.format("Run closed automatically: no progress reported since %s.",
                             jobQueue.getStartTime())
                         : String.format("Run closed automatically: queued at %s and never picked up.",
                             BusinessTime.legacyText(jobQueue.getDateCreated())));
