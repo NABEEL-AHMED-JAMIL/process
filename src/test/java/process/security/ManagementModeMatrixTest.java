@@ -79,6 +79,7 @@ class ManagementModeMatrixTest {
         String read = "a read sent as a POST: it changes nothing";
         CUSTOMERS_IN_EITHER_MODE.put("RunReviewRestApi.decide", "review: the customer approves or rejects a run's output (MIG-237)");
         CUSTOMERS_IN_EITHER_MODE.put("ReportRestApi.export", "download");
+        CUSTOMERS_IN_EITHER_MODE.put("SourceJobRestApi.schedulePreview", "a read in a POST: a timetable's next runs, nothing saved (MIG-321)");
         // Wave 5 Forms (lite): filling in a form the workspace was given is data entry, not building -- even when the form
         // starts a job, as Run now and the inbox upload do for an existing schedule.
         CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.submit", "filling in a form: data entry, which may start the job the form names");

@@ -2,6 +2,7 @@ package process.model.service;
 
 import process.model.dto.ResponseDto;
 import java.util.List;
+import process.model.dto.SchedulerDto;
 import process.model.dto.SourceJobDto;
 
 /**
@@ -10,6 +11,9 @@ import process.model.dto.SourceJobDto;
 public interface SourceJobService {
 
     ResponseDto addSourceJob(SourceJobDto sourceJobDto) throws Exception;
+
+    /** The next runs an unsaved timetable would make, worked out by the scheduler's own rules; nothing is saved. */
+    ResponseDto schedulePreview(SchedulerDto schedulerDto);
 
     ResponseDto updateSourceJob(SourceJobDto sourceJobDto) throws Exception;
 

@@ -154,6 +154,8 @@ class CoreProbeCoverageTest {
             + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/identity/events", service
             + " (InternalIdentityEventsRestApiPostgresTest.withoutTheServiceTokenNothingIsWritten)");
+        NOTHING_TO_AIM.put("POST sourceJob.json/schedulePreview", "a timetable in the body, stepped by the scheduler's rules on a "
+            + "Scheduler that is never saved; reads no row and names nothing of any workspace (SchedulePreviewTest)");
         NOTHING_TO_AIM.put("GET internal/jwks", "Identity's public signing keys, the same answer to anyone -- no token by design, "
             + "and /internal is kept inside by the gateway; names nothing of a tenant's");
         NOTHING_TO_AIM.put("POST internal/kafka/publish", service

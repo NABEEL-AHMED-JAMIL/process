@@ -16,6 +16,7 @@ import process.engine.OneRunInFlight;
 import process.model.dto.ResponseDto;
 import process.model.dto.JobAssistantRequestDto;
 import process.model.service.impl.JobAssistantServiceImpl;
+import process.model.dto.SchedulerDto;
 import process.model.dto.SourceJobDto;
 import process.model.service.SourceJobService;
 import process.model.service.SourceJobBulkService;
@@ -63,6 +64,12 @@ public class SourceJobRestApi {
         } catch (Exception ex) {
             return RaceRefusals.answer(ex, logger, "addSourceJob");
         }
+    }
+
+    /** MIG-321: the schedule editor's Next runs; reads nothing of the workspace and saves nothing. */
+    @RequestMapping(value = "/schedulePreview", method = RequestMethod.POST)
+    public ResponseEntity<?> schedulePreview(@RequestBody SchedulerDto scheduler) {
+        return new ResponseEntity<>(this.sourceJobService.schedulePreview(scheduler), HttpStatus.OK);
     }
 
     @BuilderAction
