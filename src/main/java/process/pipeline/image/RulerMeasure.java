@@ -11,11 +11,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
- * Measures a wound in a photo against the ruler beside it (MIG-255). Owner decision 2026-09-29: sizes are measured in
- * code, never taken from a vision model -- a local model read the synthetic photos 40-68% too large. Deterministic and
- * conservative: with no ruler it measures nothing (the MIG-221 rule), and it never guesses a size it cannot see.
+ * Measures the object in a photo against the ruler beside it: its length, width and area in cm (MIG-255, made generic
+ * 2026-10-06). Owner decision 2026-09-29: sizes are measured in code, never taken from a vision model -- a local model
+ * read the synthetic photos 40-68% too large. Deterministic and conservative: with no ruler it measures nothing (the
+ * MIG-221 rule), and it never guesses a size it cannot see.
  *
  * <ol>
  *   <li><b>Scale.</b> The ruler is the largest light, near-neutral strip (at least 2.5 times as long as it is deep, most
@@ -23,40 +25,88 @@ import java.util.Locale;
  *       across it marks a tick; only the longest ticks (within 75% of the longest) count, so a ruler's millimetre and
  *       half-centimetre ticks and its digits are left out, and those ticks are taken as 1 cm apart. The scale is the
  *       median spacing of neighbouring ticks, trusted only from {@value #MIN_TICKS} ticks whose spacings vary by less
- *       than {@value #MAX_TICK_CV} (coefficient of variation) -- otherwise there is no scale and no size.</li>
- *   <li><b>Wound.</b> Skin is the median colour of the photo's border (the ruler left out). A wound pixel is markedly
- *       redder than skin: its (green + blue) / 2 is at most {@value #MAX_BED_RATIO} of its red, and at least
- *       {@value #MIN_RATIO_DROP} below skin's -- a ratio, so shading does not move it. That is the red wound bed; the pink
- *       periwound ring around a wound (the e2e photos draw it 0.25 cm wide) is intact skin and is not measured, as a
- *       clinician measures from wound edge to wound edge. The largest 4-connected region, outside the ruler, is the
- *       wound, and the holes in it (slough, a highlight) are filled in; a region under {@value #MIN_WOUND_CM2} cm2 is
- *       none.</li>
+ *       than {@value #MAX_TICK_CV} (coefficient of variation) -- otherwise there is no scale and no size. Light is a
+ *       luminance of at least 200; in contrast mode, when no ruler is found, again at 215 and 230, so a ruler on light
+ *       grey paper is still told apart. The ruler must stand out as a white strip: on a white background it is not
+ *       found.</li>
+ *   <li><b>Region</b>, by the {@link Target}. The background is the photo's border (the ruler left out), and the
+ *       region is the largest 4-connected one outside the ruler that differs from it:
+ *       <ul>
+ *         <li>{@link Target#CONTRAST} (any object): a pixel whose colour differs markedly from the border's median
+ *             colour, of any hue -- its CIE76 colour difference (Delta E, in Lab) is at least
+ *             {@value #MIN_DELTA_E}, or {@value #NOISE_FACTOR} times the border's own median difference when the
+ *             background is busier. The threshold is then raised to half the region's median difference, so an edge
+ *             pixel counts when it is more object than background.</li>
+ *         <li>{@link Target#RED_ON_SKIN} (a wound bed on skin, the step's first rule): a pixel markedly redder than the
+ *             border: its (green + blue) / 2 is at most {@value #MAX_BED_RATIO} of its red, and at least
+ *             {@value #MIN_RATIO_DROP} below the border's -- a ratio, so shading does not move it. A pink ring around
+ *             the red region (a wound's periwound skin) is left out, as a clinician measures from wound edge to wound
+ *             edge.</li>
+ *       </ul>
+ *       The holes in the region (a highlight, a different colour inside) are filled in; a region under
+ *       {@value #MIN_REGION_CM2} cm2 is none.</li>
  *   <li><b>Size.</b> The region's major axis comes from its second moments. Length is its extent along that axis,
- *       width its extent across it (both in whole pixels, so a turned wound measures the same), and area its pixel
+ *       width its extent across it (both in whole pixels, so a turned object measures the same), and area its pixel
  *       count, each over the scale and rounded to 1 decimal.</li>
  * </ol>
+ *
+ * Limits: an uneven background (a strong shadow, a gradient, a patterned cloth) can be taken for the region in
+ * {@code contrast} mode; tilted rulers, inch rulers and colour casts are not handled in either mode.
  *
  * A photo over {@value #MAX_SIDE} px on its long side is halved (averaging) until it fits, which keeps a step's memory
  * bounded; sizes do not change, and the scale is reported in the photo's own pixels.
  */
-public final class WoundMeasure {
+public final class RulerMeasure {
 
     static final int MAX_SIDE = 2400;
     static final int MIN_TICKS = 4;
     static final double MAX_TICK_CV = 0.15;
     static final double MAX_BED_RATIO = 0.45;
     static final double MIN_RATIO_DROP = 0.2;
-    static final double MIN_WOUND_CM2 = 0.05;
+    static final double MIN_DELTA_E = 15;
+    static final double NOISE_FACTOR = 3;
+    static final double MIN_REGION_CM2 = 0.05;
 
     private static final double LONG_TICK = 0.75;
     private static final double MIN_ASPECT = 2.5;
     private static final double MIN_FILL = 0.75;
     private static final int MAX_GAP = 6;
+    private static final int LIGHT = 200;
+    private static final int[] WHITER = {215, 230};
 
-    private WoundMeasure() {
+    private RulerMeasure() {
     }
 
-    /** What was measured: every size is null when there is no scale or no wound; the note says why. */
+    /** What the region is: how a pixel is told apart from the background. */
+    public enum Target {
+        /** The largest region whose colour differs markedly from the background, of any hue: the default for a new step. */
+        CONTRAST("contrast"),
+        /** A red region on skin, such as a wound bed, by how much redder it is than the skin: the step's first rule. */
+        RED_ON_SKIN("red_on_skin");
+
+        private final String code;
+
+        Target(String code) {
+            this.code = code;
+        }
+
+        /** The word a step's config uses. */
+        public String code() {
+            return this.code;
+        }
+
+        /** The target a config word names; empty when it names none. */
+        public static Optional<Target> of(String code) {
+            for (Target target : values()) {
+                if (target.code.equals(code)) {
+                    return Optional.of(target);
+                }
+            }
+            return Optional.empty();
+        }
+    }
+
+    /** What was measured: every size is null when there is no scale or no region; the note says why. */
     public static final class Measurement {
         public final boolean scaleFound;
         public final Double pxPerCm;
@@ -76,7 +126,7 @@ public final class WoundMeasure {
     }
 
     /** A png or jpg photo's bytes, measured; bytes that are no image are an IOException. */
-    public static Measurement measure(byte[] bytes) throws IOException {
+    public static Measurement measure(byte[] bytes, Target target) throws IOException {
         BufferedImage image;
         try {
             image = ImageIO.read(new ByteArrayInputStream(bytes));
@@ -86,10 +136,10 @@ public final class WoundMeasure {
         if (image == null) {
             throw new IOException("The file is not a png or jpg image.");
         }
-        return measure(image);
+        return measure(image, target);
     }
 
-    public static Measurement measure(BufferedImage photo) {
+    public static Measurement measure(BufferedImage photo, Target target) {
         int shrink = 1;
         BufferedImage image = photo;
         while (Math.max(image.getWidth(), image.getHeight()) > MAX_SIDE) {
@@ -97,21 +147,26 @@ public final class WoundMeasure {
             shrink *= 2;
         }
         Pixels pixels = new Pixels(image);
-        Ruler ruler = Ruler.find(pixels);
+        Ruler ruler = Ruler.find(pixels, LIGHT);
+        // On a light background a ruler's face can merge with it: contrast looks again for a whiter strip. red_on_skin
+        // keeps its first rule exactly, so a saved wound step measures as it always has.
+        for (int k = 0; target == Target.CONTRAST && ruler == null && k < WHITER.length; k++) {
+            ruler = Ruler.find(pixels, WHITER[k]);
+        }
         if (ruler == null) {
             return new Measurement(false, null, null, null, null, "no ruler found: not measured");
         }
         double scale = ruler.pxPerCm;
         Double reported = round(scale * shrink);
         String found = String.format(Locale.ROOT, "ruler %d ticks, %.1f px/cm", ruler.ticks, scale * shrink);
-        Region wound = Region.find(pixels, ruler, MIN_WOUND_CM2 * scale * scale);
-        if (wound == null) {
-            return new Measurement(true, reported, null, null, null, found + "; no wound region found");
+        Region region = Region.find(pixels, ruler, MIN_REGION_CM2 * scale * scale, target);
+        if (region == null) {
+            return new Measurement(true, reported, null, null, null, found + "; no region found");
         }
-        String note = String.format(Locale.ROOT, "%s; wound %,d px%s", found, wound.count * (long) shrink * shrink,
-            wound.touchesEdge ? ", touches the photo's edge (may be larger)" : "");
-        return new Measurement(true, reported, round(wound.length / scale), round(wound.width / scale),
-            round(wound.count / (scale * scale)), note);
+        String note = String.format(Locale.ROOT, "%s; region %,d px%s", found, region.count * (long) shrink * shrink,
+            region.touchesEdge ? ", touches the photo's edge (may be larger)" : "");
+        return new Measurement(true, reported, round(region.length / scale), round(region.width / scale),
+            round(region.count / (scale * scale)), note);
     }
 
     private static Double round(double value) {
@@ -209,7 +264,7 @@ public final class WoundMeasure {
         }
     }
 
-    /** The ruler: its box (minX, minY, maxX, maxY), the box to leave out of the wound, and its scale. */
+    /** The ruler: its box (minX, minY, maxX, maxY), the box to leave out of the region, and its scale. */
     static final class Ruler {
         final int[] box;
         final int[] excluded;
@@ -228,8 +283,8 @@ public final class WoundMeasure {
         }
 
         /** The first light strip, largest first, whose ticks give a trusted scale; null when none does. */
-        static Ruler find(Pixels pixels) {
-            Labels strips = new Labels(bridged(light(pixels), pixels.width, pixels.height), pixels.width, pixels.height);
+        static Ruler find(Pixels pixels, int light) {
+            Labels strips = new Labels(bridged(light(pixels, light), pixels.width, pixels.height), pixels.width, pixels.height);
             for (int id : strips.bySize()) {
                 int[] box = strips.boxes.get(id - 1);
                 int count = strips.counts.get(id - 1);
@@ -251,14 +306,14 @@ public final class WoundMeasure {
             return null;
         }
 
-        /** Near-white and near-neutral: a ruler's face, not skin. */
-        private static boolean[] light(Pixels pixels) {
+        /** Near-white (luminance at least {@code least}) and near-neutral: a ruler's face, not skin. */
+        private static boolean[] light(Pixels pixels, int least) {
             boolean[] light = new boolean[pixels.rgb.length];
             for (int i = 0; i < light.length; i++) {
                 int r = pixels.red(i);
                 int g = pixels.green(i);
                 int b = pixels.blue(i);
-                light[i] = pixels.luminance(i) >= 200 && Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b)) <= 40;
+                light[i] = pixels.luminance(i) >= least && Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b)) <= 40;
             }
             return light;
         }
@@ -373,7 +428,7 @@ public final class WoundMeasure {
         }
     }
 
-    /** The wound: its pixel count (holes filled), extents along and across its major axis, and whether it meets the edge. */
+    /** The region: its pixel count (holes filled), extents along and across its major axis, and whether it meets the edge. */
     static final class Region {
         final long count;
         final double length;
@@ -387,21 +442,14 @@ public final class WoundMeasure {
             this.touchesEdge = touchesEdge;
         }
 
-        static Region find(Pixels pixels, Ruler ruler, double smallest) {
-            double skin = skinRatio(pixels, ruler);
-            double most = Math.min(MAX_BED_RATIO, skin - MIN_RATIO_DROP);
-            boolean[] bed = new boolean[pixels.rgb.length];
-            for (int i = 0; i < bed.length; i++) {
-                int r = pixels.red(i);
-                bed[i] = r >= 60 && !ruler.excludes(i % pixels.width, i / pixels.width)
-                    && (pixels.green(i) + pixels.blue(i)) / (2.0 * r) <= most;
-            }
-            Labels regions = new Labels(bed, pixels.width, pixels.height);
-            if (regions.counts.isEmpty()) {
+        static Region find(Pixels pixels, Ruler ruler, double smallest, Target target) {
+            boolean[] mask = target == Target.RED_ON_SKIN ? redOnSkin(pixels, ruler) : contrasting(pixels, ruler, smallest);
+            if (mask == null) {
                 return null;
             }
-            int id = regions.bySize().get(0);
-            if (regions.counts.get(id - 1) < Math.max(30, smallest)) {
+            Labels regions = new Labels(mask, pixels.width, pixels.height);
+            int id = largest(regions, smallest);
+            if (id == 0) {
                 return null;
             }
             int[] box = regions.boxes.get(id - 1);
@@ -409,24 +457,121 @@ public final class WoundMeasure {
             return measured(filled, box, pixels.width, pixels.height);
         }
 
-        /** Skin's (green + blue) / 2 over red: the median over the photo's border, the ruler left out. */
-        private static double skinRatio(Pixels pixels, Ruler ruler) {
-            int frame = Math.max(4, Math.min(pixels.width, pixels.height) / 20);
+        /** The largest region's label, or 0 when there is none or it is under the smallest size. */
+        private static int largest(Labels regions, double smallest) {
+            if (regions.counts.isEmpty()) {
+                return 0;
+            }
+            int id = regions.bySize().get(0);
+            return regions.counts.get(id - 1) < Math.max(30, smallest) ? 0 : id;
+        }
+
+        /** red_on_skin: markedly redder than the border, by (green + blue) / 2 over red. */
+        private static boolean[] redOnSkin(Pixels pixels, Ruler ruler) {
+            double skin = borderRatio(pixels, ruler);
+            double most = Math.min(MAX_BED_RATIO, skin - MIN_RATIO_DROP);
+            boolean[] bed = new boolean[pixels.rgb.length];
+            for (int i = 0; i < bed.length; i++) {
+                int r = pixels.red(i);
+                bed[i] = r >= 60 && !ruler.excludes(i % pixels.width, i / pixels.width)
+                    && (pixels.green(i) + pixels.blue(i)) / (2.0 * r) <= most;
+            }
+            return bed;
+        }
+
+        /** The border's (green + blue) / 2 over red: the median over the photo's border, the ruler left out. */
+        private static double borderRatio(Pixels pixels, Ruler ruler) {
             List<Double> ratios = new ArrayList<>();
-            for (int y = 0; y < pixels.height; y++) {
-                for (int x = 0; x < pixels.width; x++) {
-                    boolean border = x < frame || y < frame || x >= pixels.width - frame || y >= pixels.height - frame;
-                    if (border && !ruler.excludes(x, y)) {
-                        int i = y * pixels.width + x;
-                        ratios.add((pixels.green(i) + pixels.blue(i)) / (2.0 * Math.max(1, pixels.red(i))));
-                    }
-                }
+            for (int i : border(pixels, ruler)) {
+                ratios.add((pixels.green(i) + pixels.blue(i)) / (2.0 * Math.max(1, pixels.red(i))));
             }
             if (ratios.isEmpty()) {
                 return 1;
             }
             Collections.sort(ratios);
             return ratios.get(ratios.size() / 2);
+        }
+
+        /**
+         * contrast: a colour difference from the border's median colour of at least the noise threshold, then of at
+         * least half the largest region's median difference; null when nothing differs enough.
+         */
+        private static boolean[] contrasting(Pixels pixels, Ruler ruler, double smallest) {
+            int[] border = border(pixels, ruler);
+            if (border.length == 0) {
+                return null;
+            }
+            double[] lab = new double[3];
+            double[][] channels = new double[3][border.length];
+            for (int k = 0; k < border.length; k++) {
+                Lab.of(pixels.rgb[border[k]], lab);
+                channels[0][k] = lab[0];
+                channels[1][k] = lab[1];
+                channels[2][k] = lab[2];
+            }
+            double[] background = {median(channels[0]), median(channels[1]), median(channels[2])};
+            float[] difference = new float[pixels.rgb.length];
+            for (int i = 0; i < difference.length; i++) {
+                Lab.of(pixels.rgb[i], lab);
+                double dl = lab[0] - background[0];
+                double da = lab[1] - background[1];
+                double db = lab[2] - background[2];
+                difference[i] = (float) Math.sqrt(dl * dl + da * da + db * db);
+            }
+            double[] around = new double[border.length];
+            for (int k = 0; k < border.length; k++) {
+                around[k] = difference[border[k]];
+            }
+            double noise = Math.max(MIN_DELTA_E, NOISE_FACTOR * median(around));
+            boolean[] mask = over(difference, noise, pixels, ruler);
+            Labels first = new Labels(mask, pixels.width, pixels.height);
+            int id = largest(first, smallest);
+            if (id == 0) {
+                return mask;
+            }
+            int[] box = first.boxes.get(id - 1);
+            double[] inside = new double[first.counts.get(id - 1)];
+            int n = 0;
+            for (int y = box[1]; y <= box[3]; y++) {
+                for (int x = box[0]; x <= box[2]; x++) {
+                    int i = y * pixels.width + x;
+                    if (first.label[i] == id) {
+                        inside[n++] = difference[i];
+                    }
+                }
+            }
+            double edge = median(inside) / 2;
+            return edge > noise ? over(difference, edge, pixels, ruler) : mask;
+        }
+
+        private static boolean[] over(float[] difference, double threshold, Pixels pixels, Ruler ruler) {
+            boolean[] mask = new boolean[difference.length];
+            for (int i = 0; i < mask.length; i++) {
+                mask[i] = difference[i] >= threshold && !ruler.excludes(i % pixels.width, i / pixels.width);
+            }
+            return mask;
+        }
+
+        /** The photo's border, a twentieth of its short side deep (at least 4 px), the ruler left out: the background. */
+        private static int[] border(Pixels pixels, Ruler ruler) {
+            int frame = Math.max(4, Math.min(pixels.width, pixels.height) / 20);
+            int[] out = new int[pixels.rgb.length];
+            int n = 0;
+            for (int y = 0; y < pixels.height; y++) {
+                for (int x = 0; x < pixels.width; x++) {
+                    boolean edge = x < frame || y < frame || x >= pixels.width - frame || y >= pixels.height - frame;
+                    if (edge && !ruler.excludes(x, y)) {
+                        out[n++] = y * pixels.width + x;
+                    }
+                }
+            }
+            return Arrays.copyOf(out, n);
+        }
+
+        private static double median(double[] values) {
+            double[] sorted = values.clone();
+            Arrays.sort(sorted);
+            return sorted[sorted.length / 2];
         }
 
         /** The region with its holes filled, over its box (one pixel wider each side): what outside does not reach. */
@@ -512,6 +657,37 @@ public final class WoundMeasure {
             double across = maxV - minV + 1;
             boolean edge = box[0] == 0 || box[1] == 0 || box[2] == width - 1 || box[3] == height - 1;
             return new Region(count, Math.max(along, across), Math.min(along, across), edge);
+        }
+    }
+
+    /** sRGB to CIE Lab (D65), for colour differences as the eye sees them. */
+    static final class Lab {
+        private static final double[] LINEAR = new double[256];
+
+        static {
+            for (int v = 0; v < 256; v++) {
+                double c = v / 255.0;
+                LINEAR[v] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+            }
+        }
+
+        private Lab() {
+        }
+
+        static void of(int rgb, double[] out) {
+            double r = LINEAR[(rgb >> 16) & 255];
+            double g = LINEAR[(rgb >> 8) & 255];
+            double b = LINEAR[rgb & 255];
+            double fx = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047);
+            double fy = f(0.2126 * r + 0.7152 * g + 0.0722 * b);
+            double fz = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+            out[0] = 116 * fy - 16;
+            out[1] = 500 * (fx - fy);
+            out[2] = 200 * (fy - fz);
+        }
+
+        private static double f(double t) {
+            return t > 216.0 / 24389 ? Math.cbrt(t) : (24389.0 / 27 * t + 16) / 116;
         }
     }
 }

@@ -3,9 +3,11 @@ package process.pipeline.tasks;
 import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
+import process.pipeline.PipelineDefinition;
 import process.pipeline.backing.Fakes;
-import process.pipeline.image.SyntheticWounds;
+import process.pipeline.image.SyntheticPhotos;
 
+import java.awt.Color;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -18,11 +20,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static process.pipeline.Definitions.config;
 import static process.pipeline.Definitions.row;
+import static process.pipeline.Definitions.step;
 
 /**
- * MIG-255: Measure image reads each row's photo from the workspace's bucket and measures the wound in code against the
+ * MIG-255: Measure image reads each row's photo from the workspace's bucket and measures the object in code against the
  * ruler in the photo -- the sizes a model guessed were 40-68% too large. No ruler, no sizes; a photo that cannot be read
- * keeps its row with empty sizes and a note unless the step says otherwise.
+ * keeps its row with empty sizes and a note unless the step says otherwise. 2026-10-06: the target says what the object
+ * is (contrast, the default for a new step, or red_on_skin); a step saved without one measures red_on_skin, as every
+ * step did before -- the e2e wound tests below run without one on purpose.
  */
 class MeasureImageStepTaskTest {
 
@@ -70,7 +75,7 @@ class MeasureImageStepTaskTest {
 
     @Test
     void theOutputColumnsCanBeRenamed() throws Exception {
-        SyntheticWounds photo = SyntheticWounds.photo(800, 600, 30).ellipse(5.0, 3.0, 500, 220, 35).ruler(40, 500, 10).noise(12);
+        SyntheticPhotos photo = SyntheticPhotos.photo(800, 600, 30).ellipse(5.0, 3.0, 500, 220, 35).ruler(40, 500, 10).noise(12);
         this.buckets.objects.put("wounds/p1.jpg", photo.png());
         TaskContext context = TaskContext.of(config("image", image(), "lengthColumn", "wound_length", "widthColumn", "wound_width",
             "areaColumn", "wound_area", "scaleColumn", "has_ruler", "pxPerCmColumn", "scale", "noteColumn", "how"),
@@ -127,6 +132,84 @@ class MeasureImageStepTaskTest {
 
         assertThatThrownBy(() -> this.task.run(TaskContext.of(config("image", image()), Arrays.asList(row("image_key", "a.png")))))
             .hasMessage("Images cannot be read: storage-service is not configured");
+    }
+
+    @Test
+    void aContrastStepMeasuresAnyObject() throws Exception {
+        SyntheticPhotos photo = SyntheticPhotos.photo(800, 600, 30).on(new Color(128, 128, 128)).object(new Color(45, 75, 170))
+            .ellipse(6.0, 3.5, 450, 230, 40).ruler(40, 500, 10).noise(12);
+        this.buckets.objects.put("wounds/blue.png", photo.png());
+        TaskContext context = TaskContext.of(config("image", image(), "target", "contrast"), Arrays.asList(row("image_key", "blue.png")));
+
+        Map<String, Object> out = this.task.run(context).getOutput().getRows().get(0);
+
+        assertThat((Double) out.get("length_cm")).isCloseTo(6.0, within(0.6));
+        assertThat((Double) out.get("width_cm")).isCloseTo(3.5, within(0.35));
+        assertThat((String) out.get("measure_note")).matches("ruler \\d+ ticks, 30\\.\\d px/cm; region [\\d,]+ px");
+        assertThat(context.lines).anyMatch(line -> line.contains("1 photo(s) measured (contrast)"));
+    }
+
+    /** A step saved before targets existed has none: it measures red_on_skin, exactly as it did (the ring left out). */
+    @Test
+    void aStepWithoutATargetMeasuresRedOnSkinAsBefore() throws Exception {
+        SyntheticPhotos photo = SyntheticPhotos.photo(640, 480, 40).ellipse(4.0, 2.67, 320, 220, 0).periwound().ruler(60, 400, 8).noise(12);
+        this.buckets.objects.put("wounds/w.png", photo.png());
+        List<Map<String, Object>> rows = Arrays.asList(row("image_key", "w.png"));
+
+        Map<String, Object> none = this.task.run(TaskContext.of(config("image", image()), rows)).getOutput().getRows().get(0);
+        Map<String, Object> red = this.task.run(TaskContext.of(config("image", image(), "target", "red_on_skin"), rows)).getOutput().getRows().get(0);
+        Map<String, Object> contrast = this.task.run(TaskContext.of(config("image", image(), "target", "contrast"), rows)).getOutput().getRows().get(0);
+
+        assertThat(none).isEqualTo(red);
+        assertThat((Double) none.get("length_cm")).isCloseTo(4.0, within(0.4));
+        assertThat((Double) contrast.get("length_cm")).as("contrast takes the ring too").isGreaterThan((Double) none.get("length_cm") + 0.3);
+    }
+
+    @Test
+    void theTargetIsAChoiceWhoseDefaultIsContrast() {
+        Map<String, Object> target = property("target");
+
+        assertThat(target).containsEntry("default", "contrast").containsEntry("title", "What to measure");
+        assertThat(target.get("enum")).isEqualTo(Arrays.asList("contrast", "red_on_skin"));
+        assertThat(this.task.spec().aiToolName()).isEqualTo("measure_images");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> property(String name) {
+        Map<String, Object> schema = this.task.spec().configSchema();
+        return (Map<String, Object>) ((Map<String, Object>) schema.get("properties")).get(name);
+    }
+
+    /** A save writes the target: red_on_skin for a step the previous version had without one, contrast for a new step. */
+    @Test
+    void aSavePinsEachMeasureStepsTarget() {
+        PipelineDefinition.Step old = step("size", "measure_image", config("image", image()));
+        PipelineDefinition.Step renamed = step("size", "measure_image", config("image", image()));
+        PipelineDefinition.Step added = step("size_2", "measure_image", config("image", image()));
+        PipelineDefinition.Step chosen = step("size_3", "measure_image", config("image", image(), "target", "red_on_skin"));
+        PipelineDefinition.Step other = step("keep", "filter", config("where", "x > 1"));
+
+        int pinned = MeasureImageStepTask.pinTargets(Arrays.asList(renamed, added, chosen, other), Arrays.asList(old));
+
+        assertThat(pinned).isEqualTo(2);
+        assertThat(renamed.getConfig()).containsEntry("target", "red_on_skin");
+        assertThat(added.getConfig()).containsEntry("target", "contrast");
+        assertThat(chosen.getConfig()).containsEntry("target", "red_on_skin");
+        assertThat(other.getConfig()).doesNotContainKey("target");
+        assertThat(old.getConfig()).doesNotContainKey("target");
+    }
+
+    @Test
+    void aFirstSaveGivesEveryMeasureStepContrastUnlessItChose() {
+        PipelineDefinition.Step bare = step("size", "measure_image", null);
+        PipelineDefinition.Step targeted = step("size", "measure_image", config("image", image(), "target", "red_on_skin"));
+        PipelineDefinition.Step changed = step("size", "measure_image", config("image", image(), "target", "contrast"));
+
+        MeasureImageStepTask.pinTargets(Arrays.asList(bare), null);
+        MeasureImageStepTask.pinTargets(Arrays.asList(changed), Arrays.asList(targeted));
+
+        assertThat(bare.getConfig()).containsEntry("target", "contrast");
+        assertThat(changed.getConfig()).as("a target the person changed is theirs").containsEntry("target", "contrast");
     }
 
     @Test

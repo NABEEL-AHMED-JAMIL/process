@@ -3,13 +3,16 @@ package process.pipeline;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
 import process.model.pojo.Pipeline;
 import process.model.repository.PipelineRepository;
+import process.pipeline.backing.Fakes;
 import process.pipeline.registry.InMemoryTaskOverrideStore;
 import process.pipeline.registry.TaskRegistry;
+import process.pipeline.tasks.MeasureImageStepTask;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
 
@@ -103,6 +106,33 @@ class PipelineDefinitionServiceTest {
         ResponseDto answer = this.service.save(draft(GOOD));
         assertThat(answer.getMessage()).isEqualTo("Saved as version 1.");
         verify(this.store).save(KEY, DefinitionCodec.toJson(DefinitionCodec.fromYaml(GOOD)), 7L);
+    }
+
+    /**
+     * 2026-10-06: a save writes each measure step's target. One the previous version had without a target (saved before
+     * targets existed) keeps red_on_skin, the rule it was saved under; a new step gets contrast, the default.
+     */
+    @Test
+    void aSaveWritesEachMeasureStepsTargetAndKeepsRedOnSkinForAStepSavedWithout() throws Exception {
+        TaskRegistry registry = new TaskRegistry(Definitions.builtInTasks(new MeasureImageStepTask(new Fakes.Buckets())), this.overrides);
+        PipelineDefinitionService measuring = new PipelineDefinitionService(this.pipelines, this.store, new DefinitionValidator(registry),
+            registry, this.overrides, this.names);
+        String measure = "task: measure_image, input: read, config: {image: {bucket: photos, keyColumn: image_key}}}\n";
+        String before = "version: 1\nsteps:\n  - {key: read, task: sample, config: {rows: [{image_key: a.png}]}}\n  - {key: size, " + measure;
+        PipelineDefinitionStore.Stored latest = new PipelineDefinitionStore.Stored();
+        latest.version = 1;
+        latest.json = DefinitionCodec.toJson(DefinitionCodec.fromYaml(before));
+        when(this.store.latest(KEY)).thenReturn(Optional.of(latest));
+        when(this.store.save(eq(KEY), anyString(), eq(7L))).thenReturn(new PipelineDefinitionStore.Stored());
+
+        ResponseDto answer = measuring.save(draft(before + "  - {key: size_2, " + measure));
+
+        assertThat(answer.getStatus()).as(answer.getMessage()).isEqualTo("SUCCESS");
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(this.store).save(eq(KEY), json.capture(), eq(7L));
+        PipelineDefinition saved = DefinitionCodec.fromJson(json.getValue());
+        assertThat(saved.getSteps().get(1).getConfig()).containsEntry("target", "red_on_skin");
+        assertThat(saved.getSteps().get(2).getConfig()).containsEntry("target", "contrast");
     }
 
     @Test

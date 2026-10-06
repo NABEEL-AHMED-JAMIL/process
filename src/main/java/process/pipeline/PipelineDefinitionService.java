@@ -11,6 +11,7 @@ import process.model.repository.PipelineRepository;
 import process.pipeline.registry.TaskOverrideStore;
 import process.pipeline.registry.TaskRegistry;
 import process.pipeline.registry.TaskSpec;
+import process.pipeline.tasks.MeasureImageStepTask;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
 import process.util.UserNameResolver;
@@ -157,8 +158,10 @@ public class PipelineDefinitionService {
         } catch (DefinitionException ex) {
             return invalid(ex.getProblems(), null);
         }
-        String json = DefinitionCodec.toJson(definition);
         Optional<PipelineDefinitionStore.Stored> latest = this.store.latest(pipeline.get().getPipelineKey());
+        // A measure step's target is written into every save; one the previous version had without it keeps red_on_skin.
+        MeasureImageStepTask.pinTargets(definition.getSteps(), previousSteps(latest, definition));
+        String json = DefinitionCodec.toJson(definition);
         if (latest.isPresent() && latest.get().json.equals(json)) {
             Map<String, Object> payload = views(definition);
             payload.put("version", latest.get().version);
@@ -181,6 +184,18 @@ public class PipelineDefinitionService {
         payload.put("version", saved.version);
         payload.put("pipelineDefinitionId", saved.id);
         return new ResponseDto(SUCCESS, String.format("Saved as version %d.", saved.version), payload);
+    }
+
+    /** The previous version's steps; when it cannot be read, the draft's own, so no step loses the rule it had. */
+    private static List<PipelineDefinition.Step> previousSteps(Optional<PipelineDefinitionStore.Stored> latest, PipelineDefinition draft) {
+        if (!latest.isPresent()) {
+            return null;
+        }
+        try {
+            return latest.get().definition().getSteps();
+        } catch (IllegalStateException unreadable) {
+            return draft.getSteps();
+        }
     }
 
     /** A workspace admin's switch on one task: on, off, or (null) back to its default. */

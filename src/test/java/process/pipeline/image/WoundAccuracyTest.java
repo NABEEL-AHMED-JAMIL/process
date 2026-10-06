@@ -16,7 +16,8 @@ import java.util.Random;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * MIG-325's accuracy figure for the in-code measurement (WoundMeasure), with its method. The set is drawn, not
+ * MIG-325's accuracy figure for the in-code measurement (RulerMeasure) in its red_on_skin mode -- the wound photos --
+ * with its method. ContrastAccuracyTest is the same for the default contrast mode. The set is drawn, not
  * photographed: 60 synthetic photos from one seed, so every run measures the same set.
  *
  * <p><b>Variation:</b> scales 25 to 60 px/cm; wounds 1 to 7 cm long, ellipses and rectangles, turned 0 to 180 degrees;
@@ -33,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class WoundAccuracyTest {
 
+    private static final RulerMeasure.Target RED_ON_SKIN = RulerMeasure.Target.RED_ON_SKIN;
+
     static final long SEED = 325L;
     static final int PHOTOS = 60;
 
@@ -41,9 +44,9 @@ class WoundAccuracyTest {
         final double length;
         final double width;
         final double area;
-        final WoundMeasure.Measurement m;
+        final RulerMeasure.Measurement m;
 
-        Case(String name, SyntheticWounds photo, WoundMeasure.Measurement m) {
+        Case(String name, SyntheticPhotos photo, RulerMeasure.Measurement m) {
             this.name = name;
             this.length = photo.truthLength();
             this.width = photo.truthWidth();
@@ -72,7 +75,7 @@ class WoundAccuracyTest {
             double degrees = random.nextInt(180);
             int w = 900;
             int h = 700;
-            SyntheticWounds photo = SyntheticWounds.photo(w, h, pxPerCm);
+            SyntheticPhotos photo = SyntheticPhotos.photo(w, h, pxPerCm);
             double cx = vertical ? 520 + random.nextInt(80) : 420 + random.nextInt(80);
             double cy = vertical ? 330 + random.nextInt(40) : 280 + random.nextInt(40);
             photo = rectangle ? photo.rectangle(length, width, cx, cy, degrees) : photo.ellipse(length, width, cx, cy, degrees);
@@ -90,7 +93,8 @@ class WoundAccuracyTest {
             photo = photo.noise(noise);
             boolean jpeg = i % 3 == 2;
             float quality = 0.5f + random.nextInt(5) / 10f;
-            WoundMeasure.Measurement m = jpeg ? WoundMeasure.measure(photo.jpeg(quality)) : WoundMeasure.measure(photo.image());
+            RulerMeasure.Measurement m = jpeg ? RulerMeasure.measure(photo.jpeg(quality), RED_ON_SKIN)
+                : RulerMeasure.measure(photo.image(), RED_ON_SKIN);
             String name = String.format(Locale.ROOT, "%02d %s %.1fx%.1f cm, %.0f px/cm, %s ruler%s, %s%s%s", i + 1,
                 rectangle ? "rect" : "ellipse", length, width, pxPerCm, vertical ? "vertical" : "horizontal",
                 millimetres ? " (mm)" : "", periwound ? "periwound, " : "", "noise " + noise,

@@ -20,11 +20,12 @@ import java.io.UncheckedIOException;
 import java.util.Random;
 
 /**
- * Wound photos drawn with known sizes (MIG-255), after the generator of the e2e images in e2e/wound: skin with noise,
- * a red wound bed with yellow slough inside and, optionally, a pink periwound ring 0.25 cm wide around it, and a white
- * ruler with black 1 cm ticks. The truth is the red bed's outer edge -- the ring is not wound (see WoundMeasure).
+ * Photos drawn with known sizes, with a white ruler with black 1 cm ticks (MIG-255; made generic 2026-10-06). By
+ * default a wound photo, after the generator of the e2e images in e2e/wound: skin with noise, a red wound bed with
+ * yellow slough inside and, optionally, a pink periwound ring 0.25 cm wide around it; the truth is the red bed's outer
+ * edge -- the ring is not wound. {@link #on} and {@link #object} draw any plain object on any background instead.
  */
-public final class SyntheticWounds {
+public final class SyntheticPhotos {
 
     static final Color SKIN = new Color(224, 182, 150);
     static final Color PERIWOUND = new Color(196, 110, 110);
@@ -50,19 +51,22 @@ public final class SyntheticWounds {
     private boolean rulerVertical;
     private boolean rulerMillimetres;
     private int noise;
+    private Color background = SKIN;
+    private Color fill = BED;
+    private boolean slough = true;
 
-    private SyntheticWounds(int width, int height, double pxPerCm) {
+    private SyntheticPhotos(int width, int height, double pxPerCm) {
         this.width = width;
         this.height = height;
         this.pxPerCm = pxPerCm;
     }
 
-    public static SyntheticWounds photo(int width, int height, double pxPerCm) {
-        return new SyntheticWounds(width, height, pxPerCm);
+    public static SyntheticPhotos photo(int width, int height, double pxPerCm) {
+        return new SyntheticPhotos(width, height, pxPerCm);
     }
 
-    /** An elliptical wound bed lengthCm x widthCm, centred at (cx, cy) px and turned by degrees. */
-    public SyntheticWounds ellipse(double lengthCm, double widthCm, double cx, double cy, double degrees) {
+    /** An elliptical object (a wound bed by default) lengthCm x widthCm, centred at (cx, cy) px and turned by degrees. */
+    public SyntheticPhotos ellipse(double lengthCm, double widthCm, double cx, double cy, double degrees) {
         double a = lengthCm * this.pxPerCm;
         double b = widthCm * this.pxPerCm;
         this.wound = AffineTransform.getRotateInstance(Math.toRadians(degrees), cx, cy)
@@ -73,8 +77,8 @@ public final class SyntheticWounds {
         return this;
     }
 
-    /** A rectangular wound bed lengthCm x widthCm, centred at (cx, cy) px and turned by degrees. */
-    public SyntheticWounds rectangle(double lengthCm, double widthCm, double cx, double cy, double degrees) {
+    /** A rectangular object (a wound bed by default) lengthCm x widthCm, centred at (cx, cy) px and turned by degrees. */
+    public SyntheticPhotos rectangle(double lengthCm, double widthCm, double cx, double cy, double degrees) {
         double a = lengthCm * this.pxPerCm;
         double b = widthCm * this.pxPerCm;
         this.wound = AffineTransform.getRotateInstance(Math.toRadians(degrees), cx, cy)
@@ -85,32 +89,45 @@ public final class SyntheticWounds {
         return this;
     }
 
-    public SyntheticWounds periwound() {
+    /** The background, in place of skin. */
+    public SyntheticPhotos on(Color colour) {
+        this.background = colour;
+        return this;
+    }
+
+    /** A plain object of one colour, in place of a wound bed with slough inside. */
+    public SyntheticPhotos object(Color colour) {
+        this.fill = colour;
+        this.slough = false;
+        return this;
+    }
+
+    public SyntheticPhotos periwound() {
         this.periwound = true;
         return this;
     }
 
     /** A horizontal ruler of cm centimetres, its top-left corner at (x, y). */
-    public SyntheticWounds ruler(int x, int y, int cm) {
+    public SyntheticPhotos ruler(int x, int y, int cm) {
         this.rulerX = x;
         this.rulerY = y;
         this.rulerCm = cm;
         return this;
     }
 
-    public SyntheticWounds vertical() {
+    public SyntheticPhotos vertical() {
         this.rulerVertical = true;
         return this;
     }
 
     /** Shorter millimetre ticks between the centimetre ones, as most real rulers have. */
-    public SyntheticWounds millimetres() {
+    public SyntheticPhotos millimetres() {
         this.rulerMillimetres = true;
         return this;
     }
 
     /** Each channel of each pixel moved by up to +-amount. */
-    public SyntheticWounds noise(int amount) {
+    public SyntheticPhotos noise(int amount) {
         this.noise = amount;
         return this;
     }
@@ -130,7 +147,7 @@ public final class SyntheticWounds {
     public BufferedImage image() {
         BufferedImage image = new BufferedImage(this.width, this.height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = image.createGraphics();
-        g.setColor(SKIN);
+        g.setColor(this.background);
         g.fillRect(0, 0, this.width, this.height);
         if (this.wound != null) {
             if (this.periwound) {
@@ -139,12 +156,14 @@ public final class SyntheticWounds {
                 g.draw(this.wound);
                 g.fill(this.wound);
             }
-            g.setColor(BED);
+            g.setColor(this.fill);
             g.fill(this.wound);
-            Rectangle2D box = this.wound.getBounds2D();
-            double r = Math.min(box.getWidth(), box.getHeight()) / 6;
-            g.setColor(SLOUGH);
-            g.fill(new Ellipse2D.Double(box.getCenterX() - r, box.getCenterY() - r, 2 * r, 2 * r));
+            if (this.slough) {
+                Rectangle2D box = this.wound.getBounds2D();
+                double r = Math.min(box.getWidth(), box.getHeight()) / 6;
+                g.setColor(SLOUGH);
+                g.fill(new Ellipse2D.Double(box.getCenterX() - r, box.getCenterY() - r, 2 * r, 2 * r));
+            }
         }
         if (this.rulerX >= 0) {
             this.drawRuler(g);
