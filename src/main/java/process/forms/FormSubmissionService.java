@@ -554,10 +554,43 @@ public class FormSubmissionService {
         file.put("submitted_at", submission.submittedAt == null ? null : submission.submittedAt.atZone(BusinessTime.ZONE)
             .toOffsetDateTime().toString());
         file.putAll(submission.answers);
+        file.putAll(flatFileColumns(form.fields, submission.answers, file.keySet()));
         try {
             return JSON.writeValueAsString(file).getBytes(StandardCharsets.UTF_8);
         } catch (JsonProcessingException unwritable) {
             throw new IllegalStateException("The submission could not be written as JSON.", unwritable);
+        }
+    }
+
+    /**
+     * MIG-325: a file or signature answer is a list of uploads (or one upload), which a pipeline step cannot name as a
+     * column. Its first upload's key and bucket are added beside it as {@code <field>_key} and {@code <field>_bucket}, so a
+     * photo field named "image" feeds a step reading "image_key". A column the form already has is never overwritten.
+     */
+    static Map<String, Object> flatFileColumns(List<FormField> fields, Map<String, Object> answers, Set<String> taken) {
+        Map<String, Object> flat = new LinkedHashMap<>();
+        if (fields == null || answers == null) {
+            return flat;
+        }
+        for (FormField field : fields) {
+            if (field == null || field.getKey() == null || !FormFields.UPLOAD_TYPES.contains(field.getType())) {
+                continue;
+            }
+            Object answer = answers.get(field.getKey());
+            Object first = answer instanceof List ? (((List<?>) answer).isEmpty() ? null : ((List<?>) answer).get(0)) : answer;
+            if (!(first instanceof Map)) {
+                continue;
+            }
+            Map<?, ?> upload = (Map<?, ?>) first;
+            putUnlessTaken(flat, taken, field.getKey() + "_key", upload.get("key"));
+            putUnlessTaken(flat, taken, field.getKey() + "_bucket", upload.get("bucket"));
+        }
+        return flat;
+    }
+
+    private static void putUnlessTaken(Map<String, Object> flat, Set<String> taken, String column, Object value) {
+        if (value != null && !taken.contains(column) && !flat.containsKey(column)) {
+            flat.put(column, value.toString());
         }
     }
 

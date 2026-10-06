@@ -17,6 +17,8 @@ import process.pipeline.RunOwnership;
 import process.security.TenantContext;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -83,6 +85,54 @@ public class RunReviewService {
         you.put("refusal", refusal.orElse(null));
         review.put("you", you);
         return new ResponseDto(SUCCESS, String.format("The run's results are %s.", review.get("reviewStatus")), review);
+    }
+
+    /** How many runs "waiting for review" answers at most, and how many candidates it reads to find them. */
+    static final int WAITING_SHOWN = 50;
+    static final int WAITING_READ = 200;
+
+    /**
+     * MIG-325: the runs whose results wait for a review, newest first -- the reviewer's list across every job the
+     * caller may see, so nobody opens runs one by one to find them. Each is checked by the run's own rule (the version
+     * it follows) and the run reads' visibility (RunOwnership).
+     */
+    @Transactional(readOnly = true)
+    public ResponseDto waiting(Integer limit) {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            return new ResponseDto(ERROR, "Reviews belong to a workspace; this account is not attached to one.");
+        }
+        int shown = limit == null ? WAITING_SHOWN : Math.max(1, Math.min(limit, WAITING_SHOWN));
+        List<Map<String, Object>> waiting = new ArrayList<>();
+        boolean more = false;
+        for (Long jobQueueId : this.store.undecidedReviewedRuns(tenantId, WAITING_READ)) {
+            Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+            if (!owned.isPresent()) {
+                continue;
+            }
+            Map<String, Object> summary = this.reviews.summary(owned.get().run, owned.get().job);
+            if (!RunReviewStatus.PENDING.name().equals(summary.get("reviewStatus"))) {
+                continue;
+            }
+            if (waiting.size() == shown) {
+                more = true;
+                break;
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("jobQueueId", owned.get().run.getJobQueueId());
+            row.put("jobId", owned.get().job.getJobId());
+            row.put("jobName", owned.get().job.getJobName());
+            row.put("finishedAt", owned.get().run.getEndTime());
+            row.put("required", summary.get("required"));
+            row.put("decisions", summary.get("decisions"));
+            waiting.add(row);
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("runs", waiting);
+        data.put("more", more);
+        return new ResponseDto(SUCCESS, waiting.isEmpty() ? "No run is waiting for review."
+            : String.format("%d run%s waiting for review%s.", waiting.size(), waiting.size() == 1 ? " is" : "s are",
+                more ? ", and more" : ""), data);
     }
 
     /** The console's decision: the internal review. A request naming another party is refused here. */

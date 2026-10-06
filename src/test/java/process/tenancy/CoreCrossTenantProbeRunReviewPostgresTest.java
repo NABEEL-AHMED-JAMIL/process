@@ -120,6 +120,28 @@ class CoreCrossTenantProbeRunReviewPostgresTest {
         assertThat(fx.leaks).isEmpty();
     }
 
+    /**
+     * MIG-325's list, GET sourceJob.json/review/waiting: A's admin sees A's runs waiting (the colleague's included), A's
+     * tenant user not the colleague's, nobody any of B's, and a caller with no workspace is refused.
+     */
+    @Test
+    void theWaitingListHoldsOnlyRunsTheCallerMaySee() {
+        String b = "\"jobQueueId\":" + B_RUN + ",";
+        String bNamingA = "\"jobQueueId\":" + B_RUN_NAMING_USER_A + ",";
+        String colleague = "\"jobQueueId\":" + COLLEAGUE_RUN + ",";
+        assertThat(fx.probe("GET sourceJob.json/review/waiting", ADMIN_OF_A, () -> fx.runReview.waiting(null)))
+            .contains(SUCCEEDED).contains(colleague).doesNotContain(b).doesNotContain(bNamingA);
+        assertThat(fx.probe("GET sourceJob.json/review/waiting", USER_OF_A, () -> fx.runReview.waiting(null)))
+            .contains(SUCCEEDED).doesNotContain(colleague).doesNotContain(b).doesNotContain(bNamingA);
+        assertThat(fx.probe("GET sourceJob.json/review/waiting(as C)", ADMIN_OF_C, () -> fx.runReview.waiting(null)))
+            .contains(SUCCEEDED).contains("\"runs\":[]");
+        for (Long none : NO_WORKSPACE) {
+            assertThat(fx.probe("GET sourceJob.json/review/waiting", tenantlessUser(none), () -> fx.runReview.waiting(null)))
+                .contains(REFUSED);
+        }
+        assertThat(fx.leaks).isEmpty();
+    }
+
     /** The control: A's admin reads A's pending review, approves it, and the decision shows on the review and the manifest. */
     @Test
     void myWorkspacesRunIsReviewedAndAudited() {

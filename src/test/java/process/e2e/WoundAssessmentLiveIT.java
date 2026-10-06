@@ -119,14 +119,48 @@ class WoundAssessmentLiveIT {
         }
     }
 
-    private static void upload(String url, String fileName, byte[] content, String type) throws IOException {
+    private static JsonNode upload(String url, String fileName, byte[] content, String type) throws IOException {
         RequestBody form = new MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("file", fileName, RequestBody.create(content, MediaType.get(type))).build();
         try (Response response = send(new Request.Builder().url(url).post(form))) {
             String text = response.body() == null ? "" : response.body().string();
             assertThat(response.code()).as("upload " + fileName + ": " + text).isEqualTo(200);
-            assertThat(JSON.readTree(text).path("status").asText()).as(text).isEqualTo("SUCCESS");
+            JsonNode answer = JSON.readTree(text);
+            assertThat(answer.path("status").asText()).as(text).isEqualTo("SUCCESS");
+            return answer.path("data");
         }
+    }
+
+    /** The definition saved to the pipeline, and the photos and the history of earlier visits uploaded. */
+    private static void prepare(long pipelineKey, String promptId, String bucket) throws IOException {
+        String definition = resource("wound-assessment.definition.json").replace("\"${PROMPT_ID}\"", promptId)
+            .replace("${BUCKET}", bucket).replace("${PREFIX}", PREFIX);
+        ObjectNode save = JSON.createObjectNode().put("pipelineKey", pipelineKey).put("format", "json").put("text", definition);
+        call("POST", "/pipeline.json/steps/save", JSON.writeValueAsString(save));
+        for (String photo : new String[] {"WC-0001.png", "WC-0002.png", "WC-0003.png"}) {
+            upload(base + "/storage.json/uploadObject?bucket=" + bucket + "&prefix=" + PREFIX + "images/", photo, bytes(photo), "image/png");
+        }
+        upload(base + "/storage.json/uploadObject?bucket=" + bucket + "&prefix=" + PREFIX + "history/", "wound_history.csv",
+            bytes("wound_history.csv"), "text/csv");
+    }
+
+    /** The job's first run after {@code before}, once it has finished, as {run id, status}. */
+    private static Object[] awaitRun(long jobId, long before) throws Exception {
+        long run = 0;
+        String status = "";
+        long deadline = System.currentTimeMillis() + RUN_BUDGET.toMillis();
+        while (System.currentTimeMillis() < deadline) {
+            JsonNode runs = call("GET", "/sourceJob.json/fetchSourceJobQueueListWithJobId?jobId=" + jobId, null).path("data").path("jobQueues");
+            if (runs.size() > 0 && runs.get(0).path("jobQueueId").asLong() > before) {
+                run = runs.get(0).path("jobQueueId").asLong();
+                status = runs.get(0).path("jobStatus").asText();
+                if ("Completed".equals(status) || "Failed".equals(status)) {
+                    break;
+                }
+            }
+            Thread.sleep(3000);
+        }
+        return new Object[] {run, status};
     }
 
     private static byte[] download(long runDatasetId) throws IOException {
@@ -150,34 +184,14 @@ class WoundAssessmentLiveIT {
         String promptId = System.getenv("LIVE_WOUND_PROMPT_ID");
         String bucket = System.getenv("LIVE_WOUND_BUCKET");
 
-        String definition = resource("wound-assessment.definition.json").replace("\"${PROMPT_ID}\"", promptId)
-            .replace("${BUCKET}", bucket).replace("${PREFIX}", PREFIX);
-        ObjectNode save = JSON.createObjectNode().put("pipelineKey", pipelineKey).put("format", "json").put("text", definition);
-        call("POST", "/pipeline.json/steps/save", JSON.writeValueAsString(save));
-
-        for (String photo : new String[] {"WC-0001.png", "WC-0002.png", "WC-0003.png"}) {
-            upload(base + "/storage.json/uploadObject?bucket=" + bucket + "&prefix=" + PREFIX + "images/", photo, bytes(photo), "image/png");
-        }
-        upload(base + "/storage.json/uploadObject?bucket=" + bucket + "&prefix=" + PREFIX + "history/", "wound_history.csv",
-            bytes("wound_history.csv"), "text/csv");
+        prepare(pipelineKey, promptId, bucket);
         long before = latestRunId(jobId);
         upload(base + "/storage.json/inbox/upload", "wound-intake-0929.csv",
             resource("wound-intake-0929.csv").replace("${PREFIX}", PREFIX).getBytes(StandardCharsets.UTF_8), "text/csv");
 
-        long run = 0;
-        String status = "";
-        long deadline = System.currentTimeMillis() + RUN_BUDGET.toMillis();
-        while (System.currentTimeMillis() < deadline) {
-            JsonNode runs = call("GET", "/sourceJob.json/fetchSourceJobQueueListWithJobId?jobId=" + jobId, null).path("data").path("jobQueues");
-            if (runs.size() > 0 && runs.get(0).path("jobQueueId").asLong() > before) {
-                run = runs.get(0).path("jobQueueId").asLong();
-                status = runs.get(0).path("jobStatus").asText();
-                if ("Completed".equals(status) || "Failed".equals(status)) {
-                    break;
-                }
-            }
-            Thread.sleep(3000);
-        }
+        Object[] finished = awaitRun(jobId, before);
+        long run = (Long) finished[0];
+        String status = (String) finished[1];
         assertThat(run).as("the inbox arrival started a run of job " + jobId).isGreaterThan(before);
         assertThat(status).as("run " + run).isEqualTo("Completed");
 
@@ -269,5 +283,57 @@ class WoundAssessmentLiveIT {
             }
         }
         return rows;
+    }
+
+    /**
+     * MIG-325: the nurse's path. A photo taken on a phone goes into the wound form's photo field (a file field named
+     * "image", whose first upload the submission names as image_key), the submission starts the job, and the run
+     * measures that photo. Opt-in with LIVE_WOUND_FORM_ID, the form that starts LIVE_WOUND_JOB_ID.
+     */
+    @Test
+    void aPhotoSubmittedThroughTheFormIsMeasuredAndWaitsForReview() throws Exception {
+        String formId = System.getenv("LIVE_WOUND_FORM_ID");
+        assumeTrue(formId != null && !formId.trim().isEmpty(), "LIVE_WOUND_FORM_ID is not set");
+        long jobId = Long.parseLong(System.getenv("LIVE_WOUND_JOB_ID"));
+        prepare(Long.parseLong(System.getenv("LIVE_WOUND_PIPELINE_KEY")), System.getenv("LIVE_WOUND_PROMPT_ID"),
+            System.getenv("LIVE_WOUND_BUCKET"));
+
+        JsonNode photo = upload(base + "/form.json/upload?formId=" + formId.trim() + "&field=image", "WC-0001.png", bytes("WC-0001.png"),
+            "image/png");
+        assertThat(photo.path("key").asText()).as("the upload's key").isNotEmpty();
+        ObjectNode answers = JSON.createObjectNode().put("case_id", "WC-0001").put("patient_id", "SYN-001")
+            .put("visit_date", "2026-09-29").put("wound_site", "left heel");
+        answers.putArray("image").add(photo);
+        ObjectNode submit = JSON.createObjectNode().put("formId", Long.parseLong(formId.trim()));
+        submit.set("answers", answers);
+        long before = latestRunId(jobId);
+        call("POST", "/form.json/submit", JSON.writeValueAsString(submit));
+
+        Object[] finished = awaitRun(jobId, before);
+        long run = (Long) finished[0];
+        assertThat(run).as("the submission started a run of job " + jobId).isGreaterThan(before);
+        assertThat(finished[1]).as("run " + run).isEqualTo("Completed");
+        JsonNode manifest = call("GET", "/sourceJob.json/runOutputs?jobQueueId=" + run, null).path("data");
+        assertThat(manifest.path("reviewStatus").asText()).isEqualTo("PENDING");
+        long json = 0;
+        for (JsonNode output : manifest.path("outputs")) {
+            if ("json".equals(output.path("format").asText())) {
+                json = output.path("runDatasetId").asLong();
+            }
+        }
+        JsonNode rows = JSON.readTree(download(json));
+        assertThat(rows.size()).as("the one submission is one row").isEqualTo(1);
+        JsonNode row = rows.get(0);
+        assertThat(row.path("case_id").asText()).isEqualTo("WC-0001");
+        assertThat(row.path("length_cm").asDouble()).as("measured from the uploaded photo").isCloseTo(4.0, withinPercentage(10));
+        assertThat(row.path("width_cm").asDouble()).isCloseTo(2.67, withinPercentage(10));
+
+        JsonNode waiting = call("GET", "/sourceJob.json/review/waiting", null).path("data").path("runs");
+        boolean listed = false;
+        for (JsonNode w : waiting) {
+            listed |= w.path("jobQueueId").asLong() == run;
+        }
+        assertThat(listed).as("run " + run + " is on the reviewer's list").isTrue();
+        System.out.println("MIG-325 run " + run + " from form " + formId.trim() + ": " + row.path("length_cm") + " x " + row.path("width_cm") + " cm");
     }
 }

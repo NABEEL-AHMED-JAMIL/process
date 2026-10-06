@@ -60,4 +60,11 @@ public interface RunReviewStore {
 
     /** The run's results (result_record) still PENDING take the run's decision; how many did. */
     int settleResults(long jobQueueId, RunReviewStatus status);
+
+    /**
+     * MIG-325: the workspace's completed runs, newest first, of jobs whose pipeline has a review setting in some version,
+     * that no party has settled yet -- the candidates for "waiting for review". The caller still applies the run's own
+     * rule (RunReviews.summary), since the version a run follows decides.
+     */
+    List<Long> undecidedReviewedRuns(long tenantId, int limit);
 }

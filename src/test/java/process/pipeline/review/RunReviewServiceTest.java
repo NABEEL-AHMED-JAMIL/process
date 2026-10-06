@@ -24,6 +24,7 @@ import process.security.TenantContext;
 import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -131,6 +132,48 @@ class RunReviewServiceTest {
     private static void refused(ResponseDto answer, String message) {
         assertThat(answer.getStatus()).isEqualTo("ERROR");
         assertThat(answer.getMessage()).isEqualTo(message);
+    }
+
+    // ------------------------------------------------------------------------------------------- waiting for review (MIG-325)
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> waitingRuns(ResponseDto answer) {
+        return (List<Map<String, Object>>) data(answer).get("runs");
+    }
+
+    @Test
+    void aCompletedRunThatNeedsAReviewIsWaiting() {
+        this.requires("internal");
+        this.job.setJobName("Wound follow-up");
+        this.store.undecided.add(RUN);
+
+        List<Map<String, Object>> waiting = waitingRuns(this.service.waiting(null));
+
+        assertThat(waiting).hasSize(1);
+        assertThat(waiting.get(0)).containsEntry("jobQueueId", RUN).containsEntry("jobName", "Wound follow-up");
+    }
+
+    @Test
+    void aRunWhoseVersionNeedsNoReviewIsNotWaiting() {
+        this.store.undecided.add(RUN);
+
+        assertThat(waitingRuns(this.service.waiting(null))).isEmpty();
+    }
+
+    @Test
+    void aRunTheCallerMayNotSeeIsNotListed() {
+        this.requires("internal");
+        this.store.undecided.add(RUN);
+        TenantContext.set(OTHER_TENANT, "TENANT_ADMIN", ADMIN, "eve@other.example");
+
+        assertThat(waitingRuns(this.service.waiting(null))).isEmpty();
+    }
+
+    @Test
+    void anAccountWithoutAWorkspaceIsToldSo() {
+        TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
+
+        assertThat(this.service.waiting(null).getStatus()).isEqualTo("ERROR");
     }
 
     // ------------------------------------------------------------------------------------------------- the review read

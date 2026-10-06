@@ -68,4 +68,12 @@ public class InMemoryRunReviewStore implements RunReviewStore {
         this.settledResults.put(jobQueueId, status);
         return 1;
     }
+
+    /** What undecidedReviewedRuns answers, set by a test. */
+    public final List<Long> undecided = new ArrayList<>();
+
+    @Override
+    public synchronized List<Long> undecidedReviewedRuns(long tenantId, int limit) {
+        return this.undecided.stream().limit(limit).collect(Collectors.toList());
+    }
 }

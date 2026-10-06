@@ -123,4 +123,19 @@ public class JdbcRunReviewStore implements RunReviewStore {
         OffsetDateTime at = rs.getObject(column, OffsetDateTime.class);
         return at == null ? null : at.toInstant();
     }
+
+    @Override
+    public List<Long> undecidedReviewedRuns(long tenantId, int limit) {
+        // Per job on (job_id, job_queue_id), and only for the jobs whose pipeline asks for a review: a job that runs every
+        // minute without one never crowds the list.
+        return this.jdbc.queryForList("SELECT q.job_queue_id FROM job_queue q "
+            + "JOIN source_job j ON j.job_id = q.job_id AND j.tenant_id = q.tenant_id "
+            + "JOIN source_task t ON t.task_detail_id = j.task_detail_id "
+            + "JOIN pipeline p ON p.pipeline_id = t.pipeline_id AND p.tenant_id = q.tenant_id AND p.status <> 'Delete' "
+            + "WHERE q.tenant_id = ? AND q.job_status = 'Completed' AND j.job_status <> 'Delete' "
+            + "AND EXISTS (SELECT 1 FROM pipeline_definition d WHERE d.pipeline_key = p.pipeline_key "
+            + "AND d.definition::jsonb -> 'settings' -> 'review' IS NOT NULL) "
+            + "AND NOT EXISTS (SELECT 1 FROM run_review r WHERE r.job_queue_id = q.job_queue_id AND r.status <> 'PENDING') "
+            + "ORDER BY q.job_queue_id DESC LIMIT ?", Long.class, tenantId, limit);
+    }
 }
