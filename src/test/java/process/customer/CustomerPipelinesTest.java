@@ -191,4 +191,28 @@ class CustomerPipelinesTest {
         assertThat(this.pipelines.list(null, "nonsense!").status).isEqualTo(400);
         verify(this.contracts, never()).check(anyLong(), any(), any(), anyString());
     }
+
+    /** MIG-333: a pipeline whose steps make a file says its runs send file.available; one without such a step does not. */
+    @Test
+    void aPipelineThatMakesFilesEmitsFileAvailable() {
+        PipelineDefinition reads = new PipelineDefinition();
+        reads.setSteps(Collections.singletonList(step("read_file")));
+        PipelineDefinition keeps = new PipelineDefinition();
+        keeps.setSteps(Arrays.asList(step("read_file"), step("save_file")));
+        assertThat(CustomerPipelines.makesFiles(reads)).isFalse();
+        assertThat(CustomerPipelines.makesFiles(keeps)).isTrue();
+        assertThat(CustomerPipelines.makesFiles(null)).isFalse();
+        for (String task : new String[] {"render_pdf", "upload_bucket"}) {
+            PipelineDefinition one = new PipelineDefinition();
+            one.setSteps(Collections.singletonList(step(task)));
+            assertThat(CustomerPipelines.makesFiles(one)).as(task).isTrue();
+        }
+    }
+
+    private static PipelineDefinition.Step step(String task) {
+        PipelineDefinition.Step step = new PipelineDefinition.Step();
+        step.setKey(task);
+        step.setTask(task);
+        return step;
+    }
 }

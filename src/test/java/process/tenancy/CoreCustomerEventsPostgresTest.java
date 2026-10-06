@@ -2,6 +2,7 @@ package process.tenancy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.barco.platform.tenancy.RowSecurity;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -163,7 +164,7 @@ class CoreCustomerEventsPostgresTest {
     void aDecisionIsAnnouncedWithTheReviewAndADeletedRunIsNot() throws Exception {
         JdbcTemplate sql = fx.db.jdbc();
         sql.update("UPDATE job_queue SET job_status = 'Completed', end_time = now() WHERE job_queue_id = ?", A_RUN);
-        org.barco.platform.tenancy.RowSecurity.forTenant(A, () -> journal.reviewDecided(A, A_RUN));
+        RowSecurity.forTenant(A, () -> journal.reviewDecided(A, A_RUN));
         sql.update("UPDATE job_queue SET job_status = 'Failed', end_time = now() WHERE job_queue_id = ?", B_RUN);
         sql.update("UPDATE job_queue SET status = 'Delete' WHERE job_queue_id = ?", B_RUN);
         try {
