@@ -13,6 +13,7 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.SourceJobService;
 import process.model.service.impl.TransactionServiceImpl;
+import process.customer.CustomerEventJournal;
 import process.pipeline.PipelineDefinition;
 import process.pipeline.RunOwnership;
 import process.security.TenantContext;
@@ -60,6 +61,8 @@ public class RunReviewService {
     private final TransactionServiceImpl transactions;
     /** MIG-334: how the customer's rejection runs the pipeline again; absent in hand-built tests. */
     private CustomerRunAgain customerRunAgain;
+    /** MIG-333: run.review.decided is journalled with the decision; absent in hand-built tests. */
+    private CustomerEventJournal events;
 
     public RunReviewService(JobQueueRepository runs, SourceJobRepository jobs, RunReviews reviews, RunReviewStore store,
                             SourceJobService sourceJobs, TransactionServiceImpl transactions) {
@@ -74,6 +77,11 @@ public class RunReviewService {
     @Autowired(required = false)
     public void setCustomerRunAgain(CustomerRunAgain customerRunAgain) {
         this.customerRunAgain = customerRunAgain;
+    }
+
+    @Autowired(required = false)
+    public void setEventJournal(CustomerEventJournal events) {
+        this.events = events;
     }
 
     /** The run's review: its status, required parties and decisions, and whether the caller may decide now. */
@@ -224,6 +232,10 @@ public class RunReviewService {
             this.store.settleResults(run.getJobQueueId(), status);
         }
         this.transactions.saveJobAuditLogs(run.getJobQueueId(), auditLine(record, status));
+        if (this.events != null && run.getTenantId() != null) {
+            // MIG-333: the customer's webhooks hear of every decision, either party's, with the review's status after it.
+            this.events.reviewDecided(run.getTenantId(), run.getJobQueueId());
+        }
 
         Map<String, Object> rerunOutcome = rerun ? this.runAgain(owned.get(), record) : null;
         Map<String, Object> answer = this.head(run);

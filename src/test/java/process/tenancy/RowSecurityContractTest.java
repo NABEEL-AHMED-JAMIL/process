@@ -32,6 +32,9 @@ class RowSecurityContractTest extends RowSecurityContract {
             "pre-dispatch claims and prepares every workspace's queued runs");
         paths.put("DispatchRelay: in code #1",
             "the dispatch relay publishes every workspace's hand-offs");
+        paths.put("CustomerEventRelay: in code #1",
+            "the customer event relay (MIG-333) reads every workspace's unpublished api_event_out rows (ids and kinds, in order); each is"
+                + " built, published and stamped as its own workspace");
         paths.put("DispatchOutboxPurge: in code #1",
             "the dispatch outbox purge deletes every workspace's hand-offs published or abandoned more than seven days ago; it never"
                 + " touches a pending one, and nothing else");

@@ -245,7 +245,11 @@ public class CustomerRuns {
         } catch (NumberFormatException notOurs) {
             return Optional.empty();
         }
-        long tenantId = TenantContext.getTenantId();
+        return this.found(TenantContext.getTenantId(), id);
+    }
+
+    /** A run of this workspace, with its entities, or empty -- for a caller with no request (the event relay, MIG-333). */
+    Optional<Found> found(long tenantId, long id) {
         Optional<CustomerRunStore.Row> row = this.store.find(tenantId, id);
         if (!row.isPresent()) {
             return Optional.empty();

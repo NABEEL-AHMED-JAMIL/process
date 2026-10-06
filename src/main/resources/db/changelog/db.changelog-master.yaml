@@ -215,3 +215,6 @@ databaseChangeLog:
   # V202: MIG-334 -- the customer API's read side: run_output's file id and sha256, the API's downloads in file_access_log, and job_queue (tenant_id, job_queue_id) for GET /v1/runs.
   - include:
       file: db/changelog/yaml/V202.0-customer-reads.yaml
+  # V203: MIG-333 -- the customer API's events out: api_event_out, written by triggers on job_queue, run_output and form_submission and by the review service, relayed to platform.customer.events.v1.
+  - include:
+      file: db/changelog/yaml/V203.0-customer-events.yaml

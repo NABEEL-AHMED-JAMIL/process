@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 203.0-customer-events
+      author: nabeel.amd93
+      description: "MIG-333 (ADR-025 decision 9): the customer API's events out -- api_event_out, written by triggers on job_queue (Running, Completed, Failed), run_output (a made file) and form_submission (settled), and by the review service; CustomerEventRelay publishes each to platform.customer.events.v1. Under row security"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V203.0-customer-events/V203__customer_events.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V203.0-customer-events/V203__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
