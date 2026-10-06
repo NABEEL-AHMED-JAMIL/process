@@ -212,13 +212,18 @@ public class CustomerEventRelay {
             return;
         }
         Map<String, Object> summary = this.reviews.summary(found.get().run, found.get().job);
-        String reviewWord = CustomerViews.reviewWordOf(summary.get("reviewStatus"));
+        boolean completed = CustomerEventTypes.RUN_COMPLETED.equals(type);
+        // The review as it stood when the run completed: waiting for every party it names, nothing decided -- no decision can
+        // come before the completion. Read now, a decision made in the second before this row is relayed would otherwise
+        // drop run.review.requested and say "approved" on run.completed (MIG-336: webhook_check's customer approves at once).
+        Map<String, Object> review = completed ? reviewAtCompletion(summary) : null;
+        String reviewWord = completed ? (String) review.get("status") : CustomerViews.reviewWordOf(summary.get("reviewStatus"));
         Map<String, Object> run = CustomerViews.run(asItStood(found.get().row, row), reviewWord);
         events.add(new Event(type, subjectOfRun(row.jobQueueId), run));
-        if (CustomerEventTypes.RUN_COMPLETED.equals(type) && "pending".equals(reviewWord) && asksTheCustomer(summary)) {
+        if (completed && "pending".equals(reviewWord) && asksTheCustomer(summary)) {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("run", run);
-            data.put("review", CustomerViews.review(summary));
+            data.put("review", review);
             events.add(new Event(CustomerEventTypes.REVIEW_REQUESTED, subjectOfRun(row.jobQueueId), data));
         }
     }
@@ -300,6 +305,22 @@ public class CustomerEventRelay {
     static boolean asksTheCustomer(Map<String, Object> summary) {
         Object required = summary.get("required");
         return required instanceof List && ((List<Object>) required).contains("customer");
+    }
+
+    /**
+     * A completed run's review as it stood at the completion: pending for the parties the summary requires (not required
+     * when it names none), with no decision, no decision time and no rerun yet.
+     */
+    @SuppressWarnings("unchecked")
+    static Map<String, Object> reviewAtCompletion(Map<String, Object> summary) {
+        Map<String, Object> review = CustomerViews.review(summary);
+        Object required = summary.get("required");
+        boolean anyParty = required instanceof List && !((List<Object>) required).isEmpty();
+        review.put("status", anyParty ? "pending" : "not_required");
+        review.put("decidedAt", null);
+        review.put("rerunRunId", null);
+        review.put("decisions", new java.util.ArrayList<>());
+        return review;
     }
 
     static String subjectOfRun(long jobQueueId) {

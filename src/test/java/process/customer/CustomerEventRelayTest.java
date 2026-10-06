@@ -57,6 +57,29 @@ class CustomerEventRelayTest {
         assertThat(CustomerEventRelay.asksTheCustomer(summary)).isFalse();
     }
 
+    /** MIG-336: a decision made before the completion is relayed does not change what the completion announces. */
+    @Test
+    void aCompletionAnnouncesTheReviewAsItStoodThenEvenIfDecidedSince() {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("reviewStatus", "APPROVED");
+        summary.put("required", Collections.singletonList("customer"));
+        summary.put("decidedAt", java.time.LocalDateTime.parse("2026-10-06T09:00:01"));
+        summary.put("rerunJobQueueId", 9L);
+        Map<String, Object> decision = new LinkedHashMap<>();
+        decision.put("party", "customer");
+        decision.put("decision", "APPROVED");
+        summary.put("decisions", Collections.singletonList(decision));
+        Map<String, Object> then = CustomerEventRelay.reviewAtCompletion(summary);
+        assertThat(then.get("status")).isEqualTo("pending");
+        assertThat(then.get("required")).isEqualTo(Collections.singletonList("customer"));
+        assertThat((java.util.List<?>) then.get("decisions")).isEmpty();
+        assertThat(then.get("decidedAt")).isNull();
+        assertThat(then.get("rerunRunId")).isNull();
+        summary.put("required", Collections.emptyList());
+        summary.put("reviewStatus", null);
+        assertThat(CustomerEventRelay.reviewAtCompletion(summary).get("status")).isEqualTo("not_required");
+    }
+
     private static CustomerRunStore.Row row(String status) {
         CustomerRunStore.Row row = new CustomerRunStore.Row();
         row.runId = 7;
