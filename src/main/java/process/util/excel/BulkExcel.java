@@ -2,8 +2,6 @@ package process.util.excel;
 
 import java.util.List;
 import com.google.gson.Gson;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.poi.ss.util.CellRangeAddressList;
 import org.springframework.stereotype.Component;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -36,8 +34,6 @@ import org.apache.poi.ss.usermodel.IndexedColors;
  * */
 @Component
 public class BulkExcel {
-
-    private Logger logger = LogManager.getLogger(BulkExcel.class);
 
     private final ThreadLocal<XSSFWorkbook> wb = new ThreadLocal<>();
     private final ThreadLocal<XSSFSheet> sheet = new ThreadLocal<>();

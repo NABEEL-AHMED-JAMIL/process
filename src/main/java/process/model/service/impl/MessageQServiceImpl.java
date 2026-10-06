@@ -1,7 +1,5 @@
 package process.model.service.impl;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import process.notifications.JobMail;
 import process.engine.BulkAction;
@@ -38,8 +36,6 @@ import static process.util.ProcessUtil.ERROR;
  * */
 @Service
 public class MessageQServiceImpl implements MessageQService {
-
-    private Logger logger = LoggerFactory.getLogger(MessageQServiceImpl.class);
 
     private final String SOURCE_JOB_QUEUES = "sourceJobQueues";
     private final String JOB_STATUS_STATISTICS = "jobStatusStatistic";

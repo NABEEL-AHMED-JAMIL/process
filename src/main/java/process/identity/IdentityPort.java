@@ -62,9 +62,6 @@ public interface IdentityPort {
     /** Workspaces by id; ids that name none are absent. */
     List<Workspace> workspaces(Collection<Long> tenantIds);
 
-    /** Every workspace that is not deleted, newest first. */
-    List<Workspace> liveWorkspaces();
-
     /**
      * The people who are not deleted, in this scope: every workspace's for AllTenants, one workspace's
      * otherwise, nobody for a caller scoped to nothing. The dashboard's people list (MIG-107): it used to

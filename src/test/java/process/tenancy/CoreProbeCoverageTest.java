@@ -150,11 +150,7 @@ class CoreProbeCoverageTest {
 
         // /internal: the gateway answers 404 for /internal from outside, and each checks X-Internal-Token first.
         String service = "service token only (X-Internal-Token); no tenant reaches it -- the calling service names the tenant";
-        NOTHING_TO_AIM.put("POST internal/billingDirectory/tenants", service
-            + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/billingDirectory/usageFacts", service
-            + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
-        NOTHING_TO_AIM.put("POST internal/billingDirectory/userNames", service
             + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/identity/events", service
             + " (InternalIdentityEventsRestApiPostgresTest.withoutTheServiceTokenNothingIsWritten)");
@@ -196,8 +192,6 @@ class CoreProbeCoverageTest {
         NOTHING_TO_AIM.put("POST internal/slo/runs", service
             + " (InternalSloRestApiTest.noTokenOrTheWrongOneIsRefusedBeforeAnythingIsRead)");
         NOTHING_TO_AIM.put("POST internal/storageDirectory/kafkaReferences", service
-            + " (InternalStorageDirectoryRestApiTest.withoutTheInternalTokenNothingIsRead)");
-        NOTHING_TO_AIM.put("POST internal/storageDirectory/userNames", service
             + " (InternalStorageDirectoryRestApiTest.withoutTheInternalTokenNothingIsRead)");
     }
 

@@ -64,10 +64,6 @@ class RowSecurityContractTest extends RowSecurityContract {
         paths.put("RunWorkspace.of",
             "a worker's callback names only its run: the run's workspace is read by its id, before anything else");
         // /internal: service-token endpoints another service calls for any workspace
-        paths.put("InternalBillingDirectoryRestApi.tenants",
-            "billing lists every live workspace to invoice (service token)");
-        paths.put("InternalBillingDirectoryRestApi.userNames",
-            "billing names the people on its invoices by id, whichever workspace they are in (service token)");
         paths.put("InternalNotificationRelayRestApi.notice",
             "a service's notice names its recipient by id; a platform administrator has no workspace (service token)");
         paths.put("InternalNotificationRelayRestApi.mail",
@@ -76,8 +72,6 @@ class RowSecurityContractTest extends RowSecurityContract {
             "AI asks whether any workspace's pipeline still uses a prompt before it deletes it (service token)");
         paths.put("InternalStorageDirectoryRestApi.kafkaReferences",
             "storage asks which Kafka profiles of any workspace name an object before it deletes it (service token)");
-        paths.put("InternalStorageDirectoryRestApi.userNames",
-            "storage names the people on its rows by id, whichever workspace they are in (service token)");
         paths.put("FormShareLinks: in code #1",
             "a share link's visitor names no workspace: the link is found by its token's hash alone");
         paths.put("InternalLineageRestApi.runs",

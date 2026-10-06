@@ -15,25 +15,22 @@ import org.springframework.web.bind.annotation.RestController;
 import process.model.enums.Status;
 import process.model.pojo.KafkaConnectionProfile;
 import process.model.repository.KafkaConnectionProfileRepository;
-import process.util.UserNameResolver;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * What Storage asks Core about the connections it now owns (MIG-68 B): which Kafka profiles name a
  * storage alias for a keystore or truststore -- so a connection is not renamed, retired or deleted
- * out from under one -- and who the user ids stamped on a connection are. Storage decides which of
- * the named profiles actually resolve to a given connection; Core only says which name it.
+ * out from under one. Storage decides which of the named profiles actually resolve to a given
+ * connection; Core only says which name it. Who a user id is, Storage asks identity-service
+ * (/internal/identity/people); the /userNames lookup that used to sit here is gone (MIG-329).
  *
- * Internal-token only: neither answer is scoped to a signed-in caller.
+ * Internal-token only: the answer is not scoped to a signed-in caller.
  */
 @RestController
 @RequestMapping("/internal/storageDirectory")
@@ -41,13 +38,11 @@ public class InternalStorageDirectoryRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(InternalStorageDirectoryRestApi.class);
     private final KafkaConnectionProfileRepository profiles;
-    private final UserNameResolver names;
     private final byte[] token;
 
-    public InternalStorageDirectoryRestApi(KafkaConnectionProfileRepository profiles, UserNameResolver names,
+    public InternalStorageDirectoryRestApi(KafkaConnectionProfileRepository profiles,
         @Value("${internal.service-token:}") String token) {
         this.profiles = profiles;
-        this.names = names;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
     }
 
@@ -75,30 +70,6 @@ public class InternalStorageDirectoryRestApi {
             }
         }
         return new ResponseEntity<>(references, HttpStatus.OK);
-    }
-
-    /** Body {"ids": [..]}; answers {"<id>": "<display name>"} for the ids that are still people. */
-    @PostMapping(value = "/userNames", produces = MediaType.APPLICATION_JSON_VALUE)
-    @AcrossTenants("storage names the people on its rows by id, whichever workspace they are in (service token)")
-    public ResponseEntity<?> userNames(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
-        @RequestBody Map<String, Object> body) {
-        if (!this.admits(presented)) {
-            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
-        }
-        Set<Long> ids = new HashSet<>();
-        Object raw = body == null ? null : body.get("ids");
-        if (raw instanceof Collection) {
-            for (Object id : (Collection<?>) raw) {
-                if (id instanceof Number) {
-                    ids.add(((Number) id).longValue());
-                }
-            }
-        }
-        Map<String, String> answer = new LinkedHashMap<>();
-        for (Map.Entry<Long, String> name : this.names.namesFor(ids).entrySet()) {
-            answer.put(String.valueOf(name.getKey()), name.getValue());
-        }
-        return new ResponseEntity<>(answer, HttpStatus.OK);
     }
 
     private boolean admits(String presented) {

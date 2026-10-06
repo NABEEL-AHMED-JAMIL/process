@@ -6,31 +6,27 @@ import org.springframework.http.ResponseEntity;
 import process.model.enums.Status;
 import process.model.pojo.KafkaConnectionProfile;
 import process.model.repository.KafkaConnectionProfileRepository;
-import process.util.UserNameResolver;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * What Storage asks Core about its connections (MIG-68 B): which Kafka profiles name an alias, and
- * who a user id is. Internal-token only, since neither answer is scoped to a signed-in caller.
+ * What Storage asks Core about its connections (MIG-68 B): which Kafka profiles name an alias.
+ * Internal-token only, since the answer is not scoped to a signed-in caller.
  */
 class InternalStorageDirectoryRestApiTest {
 
     private static final String TOKEN = "internal-secret";
 
     private final KafkaConnectionProfileRepository profiles = mock(KafkaConnectionProfileRepository.class);
-    private final UserNameResolver names = mock(UserNameResolver.class);
-    private final InternalStorageDirectoryRestApi api = new InternalStorageDirectoryRestApi(this.profiles, this.names, TOKEN);
+    private final InternalStorageDirectoryRestApi api = new InternalStorageDirectoryRestApi(this.profiles, TOKEN);
 
     private static KafkaConnectionProfile profile(String name, Long tenantId, String truststore, String keystore) {
         KafkaConnectionProfile profile = new KafkaConnectionProfile();
@@ -64,29 +60,15 @@ class InternalStorageDirectoryRestApiTest {
     }
 
     @Test
-    void namesComeBackByIdAndUnknownIdsAreLeftOut() {
-        Map<Long, String> found = new HashMap<>();
-        found.put(42L, "Ada Admin");
-        when(this.names.namesFor(anyCollection())).thenReturn(found);
-
-        ResponseEntity<?> answer = this.api.userNames(TOKEN, Collections.singletonMap("ids", Arrays.asList(42, 43)));
-
-        assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(answer.getBody()).isEqualTo(Collections.singletonMap("42", "Ada Admin"));
-    }
-
-    @Test
     void withoutTheInternalTokenNothingIsRead() {
         assertThat(this.api.kafkaReferences(null, aliasBody("kafka-certs")).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(this.api.kafkaReferences("wrong", aliasBody("kafka-certs")).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(this.api.userNames("wrong", Collections.singletonMap("ids", Collections.singletonList(42))).getStatusCode())
-            .isEqualTo(HttpStatus.UNAUTHORIZED);
-        verifyNoInteractions(this.profiles, this.names);
+        verifyNoInteractions(this.profiles);
     }
 
     @Test
     void anUnconfiguredTokenRefusesEveryoneRatherThanMatchingABlankOne() {
-        InternalStorageDirectoryRestApi unconfigured = new InternalStorageDirectoryRestApi(this.profiles, this.names, "");
+        InternalStorageDirectoryRestApi unconfigured = new InternalStorageDirectoryRestApi(this.profiles, "");
         assertThat(unconfigured.kafkaReferences("", aliasBody("kafka-certs")).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 

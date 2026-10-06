@@ -187,11 +187,6 @@ public class HttpIdentity implements IdentityPort {
     }
 
     @Override
-    public List<Workspace> liveWorkspaces() {
-        return this.rows("liveWorkspaces", Collections.emptyMap()).stream().map(HttpIdentity::toWorkspace).collect(Collectors.toList());
-    }
-
-    @Override
     public List<Person> members(TenantScope scope) {
         Map<String, Object> body = new LinkedHashMap<>();
         if (scope.isAllTenants()) {

@@ -1,7 +1,5 @@
 package process.util;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import process.model.enums.Frequency;
 import process.model.pojo.Scheduler;
@@ -28,8 +26,6 @@ import java.util.Objects;
  * */
 @Component
 public class ProcessTimeUtil {
-
-    private Logger logger = LoggerFactory.getLogger(ProcessTimeUtil.class);
 
     public static final List<String> checked = Collections.unmodifiableList(Arrays.asList("True", "False"));
 
