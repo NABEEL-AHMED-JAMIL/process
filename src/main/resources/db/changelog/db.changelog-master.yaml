@@ -1,7 +1,211 @@
 databaseChangeLog:
+  # One baseline, then everything after it.
+  #
+  # Until V50 this file listed V1 through V49, and it could not build an empty database. Sixteen
+  # tables -- tenant, app_user, the job spine, the Kafka routing pair, the pipeline form builder,
+  # storage_connection, notification, ai_agent, document_converter_task -- and twenty-three of
+  # the thirty-four sequences were never created by any changeset. They existed because dev runs
+  # ddl-auto=update and Hibernate made them. Stage and prod run validate, which makes nothing.
+  #
+  # The old header here recorded the symptom without naming it: V4-V7 were excluded because
+  # they "would just fail the same way V8 originally did (ALTER against tables/columns Hibernate
+  # hasn't created yet at Liquibase-run time)". That was the whole schema's condition, not four
+  # changesets'. A run against an empty database reached V12 -- foreign keys on tenant and
+  # app_user -- and stopped there.
+  #
+  # V50 is the public schema as it actually stands, captured from the only complete instance of
+  # it. From here the schema is declared rather than inferred, and a new database and an old one
+  # end up the same shape. V1-V49 are kept under changelog-sets/archive and yaml/archive: they
+  # are the record of how this schema was arrived at, and several carry the reasoning behind a
+  # column that would otherwise look arbitrary. They are no longer executed.
+  #
+  # Anything after V50 is an ordinary changeset again. Add it below.
   - include:
-      file: db/changelog/yaml/V1.0-init.yaml
-#  - include:
-#      file: db/changelog/yaml/V2.0-init.yaml
-#  - include:
-#      file: db/changelog/yaml/V3.0-init.yaml
+      file: db/changelog/yaml/V50.0-schema-baseline.yaml
+  - include:
+      file: db/changelog/yaml/V51.0-one-invoice-per-month-unique-receipts.yaml
+  - include:
+      file: db/changelog/yaml/V52.0-notification-moves-to-notifications-db.yaml
+  - include:
+      file: db/changelog/yaml/V53.0-platform-outbox.yaml
+  - include:
+      file: db/changelog/yaml/V54.0-document-converter-task-moves-to-media-db.yaml
+  - include:
+      file: db/changelog/yaml/V55.0-storage-connection-alias-per-tenant.yaml
+  - include:
+      file: db/changelog/yaml/V55.1-drop-recreated-platform-wide-alias-constraint.yaml
+  - include:
+      file: db/changelog/yaml/V56.0-analytics-rows-carry-storage-connection-id.yaml
+  - include:
+      file: db/changelog/yaml/V56.1-stamp-platform-admin-analytics-rows.yaml
+  - include:
+      file: db/changelog/yaml/V57.0-storage-connection-read-only.yaml
+  - include:
+      file: db/changelog/yaml/V58.0-atomic-billing-numbers.yaml
+  - include:
+      file: db/changelog/yaml/V59.0-invoice-line-tenant.yaml
+  - include:
+      file: db/changelog/yaml/V60.0-one-quantity-scale.yaml
+  - include:
+      file: db/changelog/yaml/V61.0-billing-tables-read-only.yaml
+  - include:
+      file: db/changelog/yaml/V62.0-analytics-tables-read-only.yaml
+  - include:
+      file: db/changelog/yaml/V63.0-ai-tables-read-only.yaml
+  - include:
+      file: db/changelog/yaml/V64.0-username-unique-ignoring-case.yaml
+  - include:
+      file: db/changelog/yaml/V65.0-user-page-access-tenant.yaml
+  - include:
+      file: db/changelog/yaml/V66.0-app-user-token-version.yaml
+  - include:
+      file: db/changelog/yaml/V67.0-retire-billing-page-key.yaml
+  - include:
+      file: db/changelog/yaml/V68.0-identity-signing-key.yaml
+  - include:
+      file: db/changelog/yaml/V69.0-tenant-seed-backfills.yaml
+  - include:
+      file: db/changelog/yaml/V69.1-identity-cutover.yaml
+  # Numbered from V70, so the other tracks' changesets (identity took V64-V67; core-dispatch adds its own)
+  # cannot clash with these ids.
+  - include:
+      file: db/changelog/yaml/V70.0-one-scheduler-per-job-one-default-kafka-profile.yaml
+  - include:
+      file: db/changelog/yaml/V70.1-job-queue-day-index-and-entity-indexes.yaml
+  - include:
+      file: db/changelog/yaml/V70.2-seed-platform-default-kafka-connection.yaml
+  - include:
+      file: db/changelog/yaml/V70.3-source-task-references-are-bigint-foreign-keys.yaml
+  - include:
+      file: db/changelog/yaml/V70.4-retire-task-form-names.yaml
+  - include:
+      file: db/changelog/yaml/V70.5-seed-reference-lookups.yaml
+  - include:
+      file: db/changelog/yaml/V80.0-worker-callback-receipts.yaml
+  - include:
+      file: db/changelog/yaml/V81.0-refused-callback-on-run.yaml
+  - include:
+      file: db/changelog/yaml/V82.0-job-queue-correlation-id.yaml
+  - include:
+      file: db/changelog/yaml/V83.0-one-in-flight-run-per-job.yaml
+  - include:
+      file: db/changelog/yaml/V84.0-scheduler-dispatch-eligible.yaml
+  - include:
+      file: db/changelog/yaml/V85.0-source-job-assigned-username.yaml
+  - include:
+      file: db/changelog/yaml/V86.0-pre-dispatch-phase.yaml
+  - include:
+      file: db/changelog/yaml/V87.0-dispatch-outbox.yaml
+  - include:
+      file: db/changelog/yaml/V88.0-orchestration-setting.yaml
+  # V100-V119: timestamptz (MIG-28/96/163) and tenant_id (MIG-29/164).
+  - include:
+      file: db/changelog/yaml/V100.0-timestamps-are-instants.yaml
+  - include:
+      file: db/changelog/yaml/V102.0-tenant-id-on-child-tables.yaml
+  - include:
+      file: db/changelog/yaml/V130.0-source-task-date-created.yaml
+  - include:
+      file: db/changelog/yaml/V131.0-scheduler-day-of-month-integer.yaml
+  # V140-V159: MIG-167 -- lookup_data decomposed and retired; the pipeline configuration store.
+  - include:
+      file: db/changelog/yaml/V140.0-lookup-data-test-residue.yaml
+  - include:
+      file: db/changelog/yaml/V141.0-task-reference.yaml
+  - include:
+      file: db/changelog/yaml/V142.0-orchestration-setting-watermarks.yaml
+  - include:
+      file: db/changelog/yaml/V143.0-pipeline-config.yaml
+  - include:
+      file: db/changelog/yaml/V144.0-lookup-data-read-only.yaml
+  # V160-V161: MIG-166 / MIG-153 -- the identity directory and the compensating controls for the demoted keys.
+  - include:
+      file: db/changelog/yaml/V160.0-user-directory.yaml
+  - include:
+      file: db/changelog/yaml/V161.0-demote-identity-foreign-keys.yaml
+  # V162: MIG-94 -- the correlation id on every hop, and on both audit stores (V160-V161 are MIG-166/153).
+  - include:
+      file: db/changelog/yaml/V162.0-job-audit-logs-correlation-id.yaml
+  # V163: MIG-166 follow-up -- a Suspended or Inactive workspace's schedules are paused (owner decision 2026-09-24).
+  - include:
+      file: db/changelog/yaml/V163.0-workspace-directory.yaml
+  # V164: every enum-backed status column takes only its enum's exact spellings (task 7, 2026-09-24).
+  - include:
+      file: db/changelog/yaml/V164.0-enum-status-spellings.yaml
+  # V174: MIG-196 -- the path that closed a run, and an index on when it ended, for the pipeline execution SLO.
+  - include:
+      file: db/changelog/yaml/V174.0-job-queue-end-reason.yaml
+  # V178: a tenant user sees their own jobs only (owner decision 2026-09-24) -- the index behind created_by.
+  - include:
+      file: db/changelog/yaml/V178.0-source-job-created-by-index.yaml
+  # V180: MIG-225 -- Core's round-trip and execution tables (steps, run datasets, results, reviews). V179 left free.
+  - include:
+      file: db/changelog/yaml/V180.0-round-trip-execution.yaml
+  # V181: MIG-258 -- row-level security on every tenant table; the application works as process_app (SET ROLE).
+  - include:
+      file: db/changelog/yaml/V181.0-row-level-security.yaml
+  # V182: Wave 4 (MIG-242) -- the AI model a run asks for (schedule, "Run with...") and what each AI step ran on. V181 is
+  # MIG-258's (row-level security).
+  - include:
+      file: db/changelog/yaml/V182.0-ai-model-choice.yaml
+  # V183: MIG-230 -- pipelines as ordered steps: the stored definition (JSON, a version per save), each step's run
+  # (step_execution, V180) with its key, tries and on-error, and its log (step_log). Both new tables are guarded as V181.
+  - include:
+      file: db/changelog/yaml/V183.0-pipeline-steps.yaml
+  # V185: MIG-239 -- the inbox: a job's trigger on a file arriving in its workspace's inbox, each arrival's outcome, and
+  # the file on the run. V183-V184 are MIG-230's (the step engine).
+  - include:
+      file: db/changelog/yaml/V185.0-inbox-trigger.yaml
+  # V186: MIG-231 -- the Task Registry's per-workspace switches (task_registry_override), guarded as V181. V184 is
+  # reserved; V185 is MIG-239's (the inbox).
+  - include:
+      file: db/changelog/yaml/V186.0-task-registry-override.yaml
+  # V187: Wave 4 -- the Cron frequency: scheduler.cron_expression. Expand-only; scheduler is already guarded (V181).
+  - include:
+      file: db/changelog/yaml/V187.0-cron-schedule.yaml
+  # V188: Wave 4 -- a run's result manifest (run_output): the files its steps wrote, guarded as V181.
+  - include:
+      file: db/changelog/yaml/V188.0-run-output.yaml
+  # V189: MIG-237 -- two-party result review of a run (run_review, run_review_decision), guarded as V181. V190 is MIG-243's.
+  - include:
+      file: db/changelog/yaml/V189.0-run-review.yaml
+  # V190: MIG-243 -- retention_log (what the retention sweep removed) and file_access_log (every run dataset download),
+  # guarded as V181. V189 is reserved by another branch.
+  - include:
+      file: db/changelog/yaml/V190.0-retention-and-access-log.yaml
+  # V191: MIG-255 -- run_output.format also allows pdf (the render_pdf step's report); expand-only.
+  - include:
+      file: db/changelog/yaml/V191.0-run-output-pdf.yaml
+  # V192: Wave 5 Forms (lite) -- a workspace's forms (form_definition) and what they collected (form_submission, with
+  # the run a submission started), guarded as V181. Expand-only: two new tables.
+  - include:
+      file: db/changelog/yaml/V192.0-forms-lite.yaml
+  # V193: MIG-277 -- the fields at each form version (form_version) and the files and signatures a form collects
+  # (form_upload); guarded as V181. Expand-only: two new tables.
+  - include:
+      file: db/changelog/yaml/V193.0-form-uploads.yaml
+  # V194: MIG-279 -- a form's workflow and Analytics dataset, and a submission's request and its status. Expand-only:
+  # nullable columns.
+  - include:
+      file: db/changelog/yaml/V194.0-form-workflow-dataset.yaml
+  # V195: owner 2026-10-01 -- drop five empty leftovers (moved to ai_db/analytics_db/billing_db; V100's gap table) and their
+  # sequences. Only an empty table is dropped; the copies that still hold rows stay for the owner to decide.
+  - include:
+      file: db/changelog/yaml/V195.0-drop-moved-tables.yaml
+  # V196: owner 2026-10-01 -- drop the 15 read-only copies that still held rows (ai_*, analytics_*, billing_account,
+  # billing_document, billing_number_counter, invoice_line, notification_moved_mig21, document_converter_task_moved_mig41)
+  # and their sequences, after a backup (etl-platform/backups/2026-10-01-*.sql) and a row-by-row check against each service.
+  - include:
+      file: db/changelog/yaml/V196.0-drop-moved-copies.yaml
+  # V197: MIG-280 -- the step a submission's request waits at now (form_submission.workflow_stage). Expand-only.
+  - include:
+      file: db/changelog/yaml/V197.0-form-submission-stage.yaml
+  # V198: MIG-278 -- forms shared by link: form_share_policy (off by default), form_share_link, form_submission.share_link_id.
+  - include:
+      file: db/changelog/yaml/V198.0-form-share-links.yaml
+  # V199: event audit E2 -- platform_outbox.dead_at: an event that can never be sent is parked, not retried ahead of every later one.
+  - include:
+      file: db/changelog/yaml/V199.0-outbox-dead.yaml
+  # V200: scale review P0 #1/#2 -- job_queue (job_id, job_queue_id) for a job's newest runs; the run's Chicago day for the report.
+  - include:
+      file: db/changelog/yaml/V200.0-run-history-indexes.yaml

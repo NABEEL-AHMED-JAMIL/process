@@ -1,0 +1,70 @@
+databaseChangeLog:
+  - changeSet:
+      id: 70.1-job-queue-day-index
+      author: nabeel.amd93
+      description: "An index on the day of job_queue.date_created, which every per-day Dashboard read filters on (MIG-62, DEF-131)"
+      # Dashboard endpoints 4-7, the drill-down and the run log all filter on date(date_created) or
+      # cast(date_created as date) -- one expression to Postgres -- and nothing indexed it: a plain B-tree on
+      # date_created cannot serve a function-wrapped column, so every request read the whole table, four
+      # times a minute per open home page. The index is on the very expression the queries use, in the
+      # column's own zone-less wall clock, so no day or hour bucket moves (DEF-033/DEF-130 stay untouched).
+      #
+      # CONCURRENTLY, outside a transaction: job_queue takes inserts every dispatch cycle and a plain CREATE
+      # INDEX would hold them for the length of the build. A concurrent build that fails leaves an INVALID
+      # index behind, which IF NOT EXISTS would then mistake for done, so an invalid one is dropped first.
+      runInTransaction: false
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+                    WHERE c.relname = 'idx_job_queue_date_created_day' AND NOT i.indisvalid) THEN
+                  DROP INDEX public.idx_job_queue_date_created_day;
+                END IF;
+              END $$;
+        - sql:
+            sql: CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_job_queue_date_created_day ON public.job_queue ((date(date_created)))
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS public.idx_job_queue_date_created_day
+  - changeSet:
+      id: 70.1-entity-declared-indexes
+      author: nabeel.amd93
+      description: "Every index an entity declares, created where it is missing (MIG-62)"
+      # @Table(indexes = ...) materialises only where ddl-auto=update runs, and validate does not check
+      # indexes -- so stage and prod, which run validate, may simply not have these, and every join through
+      # them is a scan. The V50 baseline has them all (it was captured from dev, where update runs); this
+      # makes sure of them anywhere else. A no-op on dev and on any database built from the changelog.
+      # DashboardIndexPostgresTest reads the entities' own annotations and checks each one exists.
+      changes:
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_app_user_tenant_id ON public.app_user (tenant_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_job_audit_logs_job_queue_id ON public.job_audit_logs (job_queue_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_job_queue_job_id ON public.job_queue (job_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_kcp_tenant_id ON public.kafka_connection_profile (tenant_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_page_access_profile_tenant_id ON public.page_access_profile (tenant_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_source_job_assigned_user_id ON public.source_job (assigned_user_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_source_job_tenant_id ON public.source_job (tenant_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_source_task_tenant_id ON public.source_task (tenant_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_stt_kafka_profile_id ON public.source_task_type (kafka_connection_profile_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_stt_tenant_id ON public.source_task_type (tenant_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_ttkr_profile_id ON public.tenant_task_type_kafka_route (kafka_connection_profile_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_ttkr_task_type_id ON public.tenant_task_type_kafka_route (source_task_type_id)
+        - sql:
+            sql: CREATE INDEX IF NOT EXISTS idx_ttkr_tenant_id ON public.tenant_task_type_kafka_route (tenant_id)
+      # Nothing to undo: on every database this has run against so far, the indexes were already there.
+      rollback:
+        - empty

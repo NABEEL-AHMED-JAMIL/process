@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MIG-213: the SpotBugs findings that are not bugs, each with the reason it is not. A real one is fixed,
+  never added here. How to run it: QUALITY.md.
+-->
+<FindBugsFilter>
+  <!-- EI_EXPOSE_REP / EI_EXPOSE_REP2: Spring beans keep the collaborators they are given, and entities and DTOs hand back the collections and dates they hold. Nothing crosses a trust boundary through them; copying every one would add allocation and change no behaviour. -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+  </Match>
+  <!-- Public fields of request bodies, JSON documents and row records: Jackson and the JDBC row mappers write them, and Jackson reads them when it writes the answer. SpotBugs sees neither. -->
+  <Match>
+    <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD,URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD,NP_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD,UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+  </Match>
+  <!-- BX_UNBOXING_IMMEDIATELY_REBOXED / DM_BOXED_PRIMITIVE_FOR_PARSING: `value == null ? 0 : value` defaults and Long.valueOf(...) parses whose result is stored boxed (a Set<Long>, a Long field). The extra box is of a value that is kept boxed anyway. -->
+  <Match>
+    <Bug pattern="BX_UNBOXING_IMMEDIATELY_REBOXED,DM_BOXED_PRIMITIVE_FOR_PARSING"/>
+  </Match>
+  <!-- NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE: every site is a getter read twice: checked for null, then used (getRequiredType(), getParent(), body()): which answers the same both times, or an INSERT ... RETURNING through JdbcTemplate.queryForObject, which returns the key or throws; it never answers null. -->
+  <Match>
+    <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+  </Match>
+  <!-- REC_CATCH_EXCEPTION: parsers and probes that answer "unreadable" (null, empty, false) for any failure, runtime ones included, on purpose: a bad payload or certificate is an answer, not an error. -->
+  <Match>
+    <Bug pattern="REC_CATCH_EXCEPTION"/>
+  </Match>
+  <!-- VA_FORMAT_STRING_USES_NEWLINE: the format strings build SQL text for Postgres, where \n is the line break wanted; %n would put the platform's separator into a query. -->
+  <Match>
+    <Class name="process.model.service.impl.QueryService"/>
+    <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+  </Match>
+  <!-- The Excel header rows of the bulk upload and download: read by the sheet writers, never written. -->
+  <Match>
+    <Class name="process.util.ProcessUtil"/>
+    <Bug pattern="MS_MUTABLE_ARRAY"/>
+  </Match>
+  <!-- WoundMeasure: `i / w` is a pixel's row number, integer division by design; the sum of rows is then averaged as a double. -->
+  <Match>
+    <Class name="process.pipeline.image.WoundMeasure$Region"/>
+    <Bug pattern="ICAST_IDIV_CAST_TO_DOUBLE"/>
+  </Match>
+  <!-- The query reads a temporary file this method named itself (quote-escaped); no request text reaches it. -->
+  <Match>
+    <Class name="process.pipeline.data.ParquetRows"/>
+    <Bug pattern="SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE"/>
+  </Match>
+  <!-- A three-way answer on purpose: true listed, false not listed, null "the model list could not be read". -->
+  <Match>
+    <Class name="process.model.service.impl.EmbeddingServiceImpl"/>
+    <Method name="modelIsListed"/>
+    <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+  </Match>
+  <!-- getMostSpecificCause() never answers null; the check is defensive and costs nothing. -->
+  <Match>
+    <Class name="process.config.GlobalExceptionHandler"/>
+    <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+  </Match>
+  <!-- The loop only runs for a duplicate certificate alias (a handful of characters, once or twice). -->
+  <Match>
+    <Class name="process.util.KafkaCertificateUtil"/>
+    <Bug pattern="SBSC_USE_STRINGBUFFER_CONCATENATION"/>
+  </Match>
+  <!-- PreparedStatementCreators: JdbcTemplate closes what they return, and a statement orphaned by setArray throwing is closed with the pooled connection (Hikari tracks it). The same exclusion as the other services'. -->
+  <Match>
+    <Or>
+      <Class name="process.ai.JdbcModelChoiceStore"/>
+      <Class name="process.directory.UserDirectory"/>
+    </Or>
+    <Bug pattern="OBL_UNSATISFIED_OBLIGATION_EXCEPTION_EDGE"/>
+  </Match>
+</FindBugsFilter>

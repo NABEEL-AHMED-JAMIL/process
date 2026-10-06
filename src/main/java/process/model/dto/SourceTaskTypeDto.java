@@ -4,21 +4,31 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.Status;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceTaskTypeDto {
+public class SourceTaskTypeDto implements AuditNamed {
+    private Long createdBy;
+
+    private String createdByName;
+    private String updatedByName;
 
     private Long sourceTaskTypeId;
+    private Long tenantId;
     private String serviceName;
     private String description;
     private String queueTopicPartition;
     private Status status;
-    private boolean isSchemaRegister;
-    private String schemaPayload;
+
+    private Long kafkaConnectionProfileId;
+
+    private String kafkaConnectionProfileName;
+
+    private Long totalTaskLink;
 
     public SourceTaskTypeDto() {
     }
@@ -29,6 +39,14 @@ public class SourceTaskTypeDto {
 
     public void setSourceTaskTypeId(Long sourceTaskTypeId) {
         this.sourceTaskTypeId = sourceTaskTypeId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getServiceName() {
@@ -63,24 +81,99 @@ public class SourceTaskTypeDto {
         this.status = status;
     }
 
-    public boolean isSchemaRegister() {
-        return isSchemaRegister;
+    public Long getKafkaConnectionProfileId() {
+        return kafkaConnectionProfileId;
     }
 
-    public void setSchemaRegister(boolean schemaRegister) {
-        isSchemaRegister = schemaRegister;
+    public void setKafkaConnectionProfileId(Long kafkaConnectionProfileId) {
+        this.kafkaConnectionProfileId = kafkaConnectionProfileId;
     }
 
-    public String getSchemaPayload() {
-        return schemaPayload;
+    public String getKafkaConnectionProfileName() {
+        return kafkaConnectionProfileName;
     }
 
-    public void setSchemaPayload(String schemaPayload) {
-        this.schemaPayload = schemaPayload;
+    public void setKafkaConnectionProfileName(String kafkaConnectionProfileName) {
+        this.kafkaConnectionProfileName = kafkaConnectionProfileName;
+    }
+
+    public Long getTotalTaskLink() {
+        return totalTaskLink;
+    }
+
+    public void setTotalTaskLink(Long totalTaskLink) {
+        this.totalTaskLink = totalTaskLink;
     }
 
     @Override
     public String toString() {
         return new Gson().toJson(this);
     }
+
+    @Override
+    public Long auditKey() {
+        return sourceTaskTypeId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    /** One line per pipeline on the topic -- what a profile's Topics table shows in the row. */
+    public static class PipelineSummary {
+        private Long pipelineKey;
+        private String pipelineId;
+        private String pipelineName;
+        private String status;
+        private int fields;
+
+        public PipelineSummary() { }
+
+        public PipelineSummary(Long pipelineKey, String pipelineId, String pipelineName, String status, int fields) {
+            this.pipelineKey = pipelineKey;
+            this.pipelineId = pipelineId;
+            this.pipelineName = pipelineName;
+            this.status = status;
+            this.fields = fields;
+        }
+
+        public Long getPipelineKey() { return pipelineKey; }
+
+        public String getPipelineId() { return pipelineId; }
+
+        public String getPipelineName() { return pipelineName; }
+
+        public String getStatus() { return status; }
+
+        public int getFields() { return fields; }
+    }
+
+    private List<PipelineSummary> pipelines;
+
+    public List<PipelineSummary> getPipelines() { return pipelines; }
+
+    public void setPipelines(List<PipelineSummary> pipelines) { this.pipelines = pipelines; }
 }

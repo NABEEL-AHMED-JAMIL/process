@@ -1,0 +1,32 @@
+databaseChangeLog:
+  - changeSet:
+      id: 102.0-tenant-id-on-child-tables
+      author: nabeel.amd93
+      description: "tenant_id on job_queue, scheduler, job_audit_logs, source_task_payload and pipeline_field, backfilled by JOIN through each one's parent and held to it (MIG-29, MIG-164, P2)"
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            V102 cannot give every row its parent's tenant: some rows' parents have no tenant. Find them with
+            SELECT 'job_queue', q.job_queue_id FROM job_queue q JOIN source_job j ON j.job_id = q.job_id WHERE j.tenant_id IS NULL
+            UNION ALL SELECT 'scheduler', s.scheduler_id FROM scheduler s JOIN source_job j ON j.job_id = s.job_id WHERE j.tenant_id IS NULL
+            UNION ALL SELECT 'source_task_payload', p.task_payload_id FROM source_task_payload p LEFT JOIN source_task t ON t.task_detail_id = p.payload_id WHERE t.tenant_id IS NULL
+            UNION ALL SELECT 'pipeline_field', f.pipeline_field_id FROM pipeline_field f JOIN pipeline p ON p.pipeline_key = f.pipeline_key WHERE p.tenant_id IS NULL;
+            A job, task or pipeline with no tenant is invisible to every tenant already; give the parent its tenant
+            (or delete what hangs off it) and start again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT (SELECT count(*) FROM public.job_queue q JOIN public.source_job j ON j.job_id = q.job_id WHERE j.tenant_id IS NULL)
+                   + (SELECT count(*) FROM public.scheduler s JOIN public.source_job j ON j.job_id = s.job_id WHERE j.tenant_id IS NULL)
+                   + (SELECT count(*) FROM public.source_task_payload p LEFT JOIN public.source_task t ON t.task_detail_id = p.payload_id WHERE t.tenant_id IS NULL)
+                   + (SELECT count(*) FROM public.pipeline_field f JOIN public.pipeline p ON p.pipeline_key = f.pipeline_key WHERE p.tenant_id IS NULL)
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V102.0-tenant-id-on-child-tables/V102__tenant_id_on_child_tables.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V102.0-tenant-id-on-child-tables/V102__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

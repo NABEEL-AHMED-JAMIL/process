@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 49.0-rate-cards
+      author: nabeel.amd93
+      description: "Rate cards: the card an invoice was priced with, and the calculation detail on its lines"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V49.0-rate-cards/V49__rate_cards.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: ALTER TABLE invoice DROP COLUMN IF EXISTS rate_card_name; ALTER TABLE invoice_line DROP COLUMN IF EXISTS included_quantity; ALTER TABLE invoice_line DROP COLUMN IF EXISTS billable_quantity; ALTER TABLE invoice_line DROP COLUMN IF EXISTS pricing_detail;

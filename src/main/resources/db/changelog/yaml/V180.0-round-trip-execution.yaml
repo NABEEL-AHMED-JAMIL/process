@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 180.0-round-trip-execution
+      author: nabeel.amd93
+      description: "MIG-225: step_execution, run_dataset, result_record and result_review -- Core's part of the round-trip and execution schema (feature plan 21.3); expand-only"
+      # V180, not V179: V179 is left free for the branches still in flight (mig-166-compensating may add one). The
+      # other MIG-225 tables live in the databases of their owners (integration_db, storage_db, ai_db, identity_db);
+      # the customer intake, manifest, destination/delivery and API client tables are deferred (owner, 2026-09-28).
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V180.0-round-trip-execution/V180__round_trip_execution.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V180.0-round-trip-execution/V180__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

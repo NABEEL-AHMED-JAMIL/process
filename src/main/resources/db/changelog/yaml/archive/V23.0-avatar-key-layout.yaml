@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 23.0-avatar-key-layout
+      author: nabeel.amd93
+      description: "Correct the avatar_key comment: pictures are stored per user folder, not under a flat avatars/ prefix"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V23.0-avatar-key-layout/V23__avatar_key_layout.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              COMMENT ON COLUMN app_user.avatar_key IS 'Object key of the user''s picture, under the avatars/ prefix.';

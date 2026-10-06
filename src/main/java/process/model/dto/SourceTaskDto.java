@@ -8,17 +8,27 @@ import java.util.List;
 
 /**
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceTaskDto {
+public class SourceTaskDto implements AuditNamed {
+    private String createdByName;
+    private String updatedByName;
+    private Long createdBy;
 
     private Long taskDetailId;
+    private Long tenantId;
+    /** The workspace's name, for a platform administrator's list of every workspace (MIG-296). */
+    private String tenantName;
     private String taskName;
     private Status taskStatus;
     private String homePageId;
     private String pipelineId;
+    private String groupId;
     private String taskPayload;
+    private String bucket;
+    private String inputFolder;
+    private String outputFolder;
     private SourceTaskTypeDto sourceTaskType;
     private List<ConfigurationMakerRequest.TagInfo> xmlTagsInfo;
     private Long totalLinksJobs;
@@ -31,6 +41,22 @@ public class SourceTaskDto {
 
     public void setTaskDetailId(Long taskDetailId) {
         this.taskDetailId = taskDetailId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getTenantName() {
+        return tenantName;
+    }
+
+    public void setTenantName(String tenantName) {
+        this.tenantName = tenantName;
     }
 
     public String getTaskName() {
@@ -65,12 +91,44 @@ public class SourceTaskDto {
         this.pipelineId = pipelineId;
     }
 
+    public String getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(String groupId) {
+        this.groupId = groupId;
+    }
+
     public String getTaskPayload() {
         return taskPayload;
     }
 
     public void setTaskPayload(String taskPayload) {
         this.taskPayload = taskPayload;
+    }
+
+    public String getBucket() {
+        return bucket;
+    }
+
+    public void setBucket(String bucket) {
+        this.bucket = bucket;
+    }
+
+    public String getInputFolder() {
+        return inputFolder;
+    }
+
+    public void setInputFolder(String inputFolder) {
+        this.inputFolder = inputFolder;
+    }
+
+    public String getOutputFolder() {
+        return outputFolder;
+    }
+
+    public void setOutputFolder(String outputFolder) {
+        this.outputFolder = outputFolder;
     }
 
     public SourceTaskTypeDto getSourceTaskType() {
@@ -102,4 +160,35 @@ public class SourceTaskDto {
         return new Gson().toJson(this);
     }
 
+    @Override
+    public Long auditKey() {
+        return taskDetailId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
 }

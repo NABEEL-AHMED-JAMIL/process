@@ -1,0 +1,49 @@
+databaseChangeLog:
+  - changeSet:
+      id: 62.0-analytics-tables-read-only
+      author: nabeel.amd93
+      description: "Analytics Studio's tables are analytics_db's (MIG-117/128); these copies are read-only until they are dropped"
+      # Moved to analytics_db on 2026-09-24: counts and checksums identical, every sequence past its table's
+      # maximum, no orphaned reference, nothing written during the switch. process no longer has any code
+      # that reads or writes them. A trigger refuses every write so nothing can quietly diverge from
+      # analytics_db before the drop.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE OR REPLACE FUNCTION analytics_moved_read_only() RETURNS trigger AS $$
+              BEGIN
+                RAISE EXCEPTION '% is read-only: Analytics Studio lives in analytics_db since MIG-117', TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME;
+              END;
+              $$ LANGUAGE plpgsql;
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE t text;
+              BEGIN
+                FOREACH t IN ARRAY ARRAY['public.analytics_dataset', 'public.analytics_query', 'public.analytics_query_run',
+                    'public.analytics_analysis', 'public.analytics_dashboard', 'public.analytics_dashboard_widget',
+                    'public.analytics_benchmark_result'] LOOP
+                  IF to_regclass(t) IS NOT NULL THEN
+                    EXECUTE format('CREATE TRIGGER analytics_moved_read_only BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %s '
+                      'FOR EACH STATEMENT EXECUTE PROCEDURE analytics_moved_read_only()', t);
+                  END IF;
+                END LOOP;
+              END $$;
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE t text;
+              BEGIN
+                FOREACH t IN ARRAY ARRAY['public.analytics_dataset', 'public.analytics_query', 'public.analytics_query_run',
+                    'public.analytics_analysis', 'public.analytics_dashboard', 'public.analytics_dashboard_widget',
+                    'public.analytics_benchmark_result'] LOOP
+                  IF to_regclass(t) IS NOT NULL THEN
+                    EXECUTE format('DROP TRIGGER IF EXISTS analytics_moved_read_only ON %s', t);
+                  END IF;
+                END LOOP;
+                DROP FUNCTION IF EXISTS analytics_moved_read_only();
+              END $$;

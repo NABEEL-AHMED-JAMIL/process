@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 22.0-audit-columns
+      author: nabeel.amd93
+      description: "Add created_by/updated_by to every user-editable entity so screens can show who made and last changed each thing"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V22.0-audit-columns/V22__audit_columns.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE source_job               DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE source_task              DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE source_task_type         DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE lookup_data              DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE dynamic_form             DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE storage_connection       DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE kafka_connection_profile DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE ai_agent                 DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE tenant                   DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE app_user                 DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS updated_by;
+              ALTER TABLE task_form                DROP COLUMN IF EXISTS updated_by;

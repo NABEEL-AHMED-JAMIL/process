@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: 34.0-analytics-workspace
+      author: nabeel.amd93
+      description: "Add analytics_analysis, analytics_dashboard and analytics_dashboard_widget so a Canvas analysis can be saved and reopened and results can be arranged on a page -- the analysis configuration as JSON because its shape is still moving, and every widget reference keyed on (id, tenant_id) so the database itself refuses a widget pointing at another workspace's row"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V34.0-analytics-workspace/V34__analytics_workspace.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP TABLE IF EXISTS analytics_dashboard_widget;
+              DROP TABLE IF EXISTS analytics_dashboard;
+              DROP TABLE IF EXISTS analytics_analysis;
+              DROP SEQUENCE IF EXISTS analytics_dashboard_widget_seq;
+              DROP SEQUENCE IF EXISTS analytics_dashboard_seq;
+              DROP SEQUENCE IF EXISTS analytics_analysis_seq;
+              ALTER TABLE analytics_query DROP CONSTRAINT IF EXISTS uk_analytics_query_id_tenant;

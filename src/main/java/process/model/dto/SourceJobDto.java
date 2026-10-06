@@ -1,10 +1,12 @@
 package process.model.dto;
 
+import process.util.BusinessTime;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
+import process.util.RunStall;
 import process.model.enums.Status;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -13,14 +15,24 @@ import java.util.Set;
 
 /**
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceJobDto {
+public class SourceJobDto implements AuditNamed {
+    private String createdByName;
+    private String updatedByName;
+    private Long createdBy;
 
     private Long jobId;
+    /** Whose job this is, and (for a platform administrator's list of every workspace) its name (MIG-296). */
+    private Long tenantId;
+    private String tenantName;
     private String jobName;
     private SourceTaskDto taskDetail;
+
+    private Long assignedUserId;
+
+    private String assignedUsername;
     private Status jobStatus;
     private JobStatus jobRunningStatus;
     private LocalDateTime lastJobRun;
@@ -28,6 +40,11 @@ public class SourceJobDto {
     private SchedulerDto scheduler;
     private Execution execution;
     private Integer priority;
+    // Optional on create, unlike priority: both have a database default that reproduces the
+    // no-retry behaviour every job had before these existed, so a caller that says nothing about
+    // retry gets exactly what it used to.
+    private Integer maxAttempts;
+    private Integer retryBackoffSeconds;
     private Timestamp dateCreated;
     private List<Integer> jobIds;
     private boolean completeJob;
@@ -61,6 +78,22 @@ public class SourceJobDto {
         this.taskDetail = taskDetail;
     }
 
+    public Long getAssignedUserId() {
+        return assignedUserId;
+    }
+
+    public void setAssignedUserId(Long assignedUserId) {
+        this.assignedUserId = assignedUserId;
+    }
+
+    public String getAssignedUsername() {
+        return assignedUsername;
+    }
+
+    public void setAssignedUsername(String assignedUsername) {
+        this.assignedUsername = assignedUsername;
+    }
+
     public Status getJobStatus() {
         return jobStatus;
     }
@@ -83,6 +116,11 @@ public class SourceJobDto {
 
     public void setLastJobRun(LocalDateTime lastJobRun) {
         this.lastJobRun = lastJobRun;
+    }
+
+    /** The server's stall verdict (MIG-63): see RunStall. Derived, so it can never disagree with the row. */
+    public boolean isStalled() {
+        return RunStall.isStalled(this.jobRunningStatus, this.lastJobRun, BusinessTime.now());
     }
 
     public Set<SchedulerDto> getSchedulers() {
@@ -115,6 +153,22 @@ public class SourceJobDto {
 
     public void setPriority(Integer priority) {
         this.priority = priority;
+    }
+
+    public Integer getMaxAttempts() {
+        return maxAttempts;
+    }
+
+    public void setMaxAttempts(Integer maxAttempts) {
+        this.maxAttempts = maxAttempts;
+    }
+
+    public Integer getRetryBackoffSeconds() {
+        return retryBackoffSeconds;
+    }
+
+    public void setRetryBackoffSeconds(Integer retryBackoffSeconds) {
+        this.retryBackoffSeconds = retryBackoffSeconds;
     }
 
     public Timestamp getDateCreated() {
@@ -170,4 +224,51 @@ public class SourceJobDto {
         return new Gson().toJson(this);
     }
 
+    @Override
+    public Long auditKey() {
+        return jobId;
+    }
+
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getTenantName() {
+        return tenantName;
+    }
+
+    public void setTenantName(String tenantName) {
+        this.tenantName = tenantName;
+    }
 }

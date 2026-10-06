@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 43.0-pipelines-under-topics
+      author: nabeel.amd93
+      description: "task_form becomes pipeline, task_form_field becomes pipeline_field; a pipeline names its topic"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V43.0-pipelines-under-topics/V43__pipelines_under_topics.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP INDEX IF EXISTS ix_pipeline_topic;
+              ALTER TABLE pipeline DROP COLUMN IF EXISTS source_task_type_id;
+              ALTER INDEX ix_pipeline_tenant RENAME TO ix_task_form_tenant;
+              ALTER INDEX ix_pipeline_field_pipeline RENAME TO ix_task_form_field_form;
+              ALTER INDEX ux_pipeline_id_tenant RENAME TO ux_task_form_pipeline_tenant;
+              ALTER INDEX pipeline_field_pkey RENAME TO task_form_field_pkey;
+              ALTER INDEX pipeline_pkey RENAME TO task_form_pkey;
+              ALTER TABLE pipeline_field RENAME COLUMN pipeline_key TO task_form_id;
+              ALTER TABLE pipeline_field RENAME COLUMN pipeline_field_id TO task_form_field_id;
+              ALTER TABLE pipeline RENAME COLUMN status TO form_status;
+              ALTER TABLE pipeline RENAME COLUMN pipeline_name TO form_name;
+              ALTER TABLE pipeline RENAME COLUMN pipeline_key TO task_form_id;
+              ALTER SEQUENCE pipeline_source_seq RENAME TO task_form_source_seq;
+              ALTER TABLE pipeline_field RENAME TO task_form_field;
+              ALTER TABLE pipeline RENAME TO task_form;

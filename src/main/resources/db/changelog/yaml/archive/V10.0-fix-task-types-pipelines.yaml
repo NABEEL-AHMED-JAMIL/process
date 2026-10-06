@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 10.0-fix-source-task-type-and-pipeline-ids
+      author: nabeel.amd93
+      description: "Reconcile source_task_type and PIPELINE_IDS against the real job-search Kafka listeners"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V10.0-fix-task-types-pipelines/V10__fix_source_task_type_and_pipeline_ids.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;

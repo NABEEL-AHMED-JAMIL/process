@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 6001
+      author: nabeel.amd93
+      comment: Fix CLOB columns to TEXT for PostgreSQL compatibility
+      changes:
+        - modifyDataType:
+            tableName: job_queue
+            columnName: job_status_message
+            newDataType: TEXT
+        - modifyDataType:
+            tableName: job_audit_logs
+            columnName: log_detail
+            newDataType: TEXT
+
+

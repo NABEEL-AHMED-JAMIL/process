@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 42.0-run-callback-token
+      author: nabeel.amd93
+      description: "A callback token per run: hash, attempt and expiry on job_queue"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V42.0-run-callback-token/V42__run_callback_token.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE job_queue DROP COLUMN IF EXISTS callback_token_hash;
+              ALTER TABLE job_queue DROP COLUMN IF EXISTS callback_token_attempt;
+              ALTER TABLE job_queue DROP COLUMN IF EXISTS callback_token_expires_at;

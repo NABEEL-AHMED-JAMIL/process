@@ -1,0 +1,180 @@
+package process.util;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * @author Nabeel Ahmed
+ * */
+public final class ContentTypeUtil {
+
+    private ContentTypeUtil() {}
+
+    private static final Map<String, String> EXTENSION_CONTENT_TYPES = new HashMap<>();
+
+    static {
+        EXTENSION_CONTENT_TYPES.put("json", "application/json");
+        EXTENSION_CONTENT_TYPES.put("csv", "text/csv");
+        EXTENSION_CONTENT_TYPES.put("txt", "text/plain");
+        EXTENSION_CONTENT_TYPES.put("xml", "application/xml");
+        EXTENSION_CONTENT_TYPES.put("md", "text/markdown");
+        EXTENSION_CONTENT_TYPES.put("pdf", "application/pdf");
+        EXTENSION_CONTENT_TYPES.put("mp3", "audio/mpeg");
+        EXTENSION_CONTENT_TYPES.put("m4a", "audio/mp4");
+        EXTENSION_CONTENT_TYPES.put("mp4", "video/mp4");
+        EXTENSION_CONTENT_TYPES.put("jpg", "image/jpeg");
+        EXTENSION_CONTENT_TYPES.put("jpeg", "image/jpeg");
+        EXTENSION_CONTENT_TYPES.put("png", "image/png");
+        EXTENSION_CONTENT_TYPES.put("gif", "image/gif");
+        EXTENSION_CONTENT_TYPES.put("webp", "image/webp");
+        EXTENSION_CONTENT_TYPES.put("svg", "image/svg+xml");
+        EXTENSION_CONTENT_TYPES.put("bmp", "image/bmp");
+        EXTENSION_CONTENT_TYPES.put("html", "text/html");
+        EXTENSION_CONTENT_TYPES.put("htm", "text/html");
+        EXTENSION_CONTENT_TYPES.put("doc", "application/msword");
+        EXTENSION_CONTENT_TYPES.put("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
+        EXTENSION_CONTENT_TYPES.put("odt", "application/vnd.oasis.opendocument.text");
+        EXTENSION_CONTENT_TYPES.put("ott", "application/vnd.oasis.opendocument.text-template");
+        EXTENSION_CONTENT_TYPES.put("dotx", "application/vnd.openxmlformats-officedocument.wordprocessingml.template");
+        EXTENSION_CONTENT_TYPES.put("rtf", "text/rtf");
+        EXTENSION_CONTENT_TYPES.put("ods", "application/vnd.oasis.opendocument.spreadsheet");
+        EXTENSION_CONTENT_TYPES.put("ots", "application/vnd.oasis.opendocument.spreadsheet-template");
+        EXTENSION_CONTENT_TYPES.put("xls", "application/vnd.ms-excel");
+        EXTENSION_CONTENT_TYPES.put("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        EXTENSION_CONTENT_TYPES.put("xltx", "application/vnd.openxmlformats-officedocument.spreadsheetml.template");
+        EXTENSION_CONTENT_TYPES.put("tsv", "text/tab-separated-values");
+        EXTENSION_CONTENT_TYPES.put("odp", "application/vnd.oasis.opendocument.presentation");
+        EXTENSION_CONTENT_TYPES.put("otp", "application/vnd.oasis.opendocument.presentation-template");
+        EXTENSION_CONTENT_TYPES.put("ppt", "application/vnd.ms-powerpoint");
+        EXTENSION_CONTENT_TYPES.put("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+        EXTENSION_CONTENT_TYPES.put("potx", "application/vnd.openxmlformats-officedocument.presentationml.template");
+        EXTENSION_CONTENT_TYPES.put("odg", "application/vnd.oasis.opendocument.graphics");
+        EXTENSION_CONTENT_TYPES.put("otg", "application/vnd.oasis.opendocument.graphics-template");
+
+        EXTENSION_CONTENT_TYPES.put("fodt", "application/vnd.oasis.opendocument.text-flat-xml");
+        EXTENSION_CONTENT_TYPES.put("fods", "application/vnd.oasis.opendocument.spreadsheet-flat-xml");
+        EXTENSION_CONTENT_TYPES.put("fodp", "application/vnd.oasis.opendocument.presentation-flat-xml");
+        EXTENSION_CONTENT_TYPES.put("fodg", "application/vnd.oasis.opendocument.graphics-flat-xml");
+        EXTENSION_CONTENT_TYPES.put("tif", "image/tiff");
+        EXTENSION_CONTENT_TYPES.put("tiff", "image/tiff");
+        EXTENSION_CONTENT_TYPES.put("vsd", "application/vnd.visio");
+        EXTENSION_CONTENT_TYPES.put("vsdx", "application/vnd.ms-visio.drawing");
+
+        EXTENSION_CONTENT_TYPES.put("xhtml", "application/xhtml+xml");
+        EXTENSION_CONTENT_TYPES.put("sxw", "application/vnd.sun.xml.writer");
+        EXTENSION_CONTENT_TYPES.put("sxc", "application/vnd.sun.xml.calc");
+        EXTENSION_CONTENT_TYPES.put("sxi", "application/vnd.sun.xml.impress");
+        EXTENSION_CONTENT_TYPES.put("wpd", "application/wordperfect");
+        EXTENSION_CONTENT_TYPES.put("swf", "application/x-shockwave-flash");
+    }
+
+    private static final Set<String> PREVIEWABLE_EXTENSIONS = new HashSet<>(Arrays.asList(
+        "json", "csv", "txt", "xml", "md", "pdf", "mp3", "m4a", "mp4",
+        "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "doc", "docx"));
+
+    /**
+     * The broad kind of content a key names, for anything that needs a materially different
+     * chat prompt per kind rather than one prompt trying to fit all of them -- an image
+     * description and an audio transcript are both model-generated summaries of the file, not
+     * its literal text, and neither should be handed the document prompt's unconditional
+     * bucket/path fact or its CSV/Excel/PDF export instructions (see FileChatServiceImpl's
+     * per-category prompt builders). A boolean "isImage" check alone left audio falling through
+     * to the document prompt with the exact same problem the image-specific prompt fixed --
+     * this enum is the generalization: the next content kind that needs its own prompt is a new
+     * case here, not a second special-cased boolean next to the first.
+     */
+    public enum ContentCategory { IMAGE, AUDIO, DOCUMENT }
+
+    /**
+     * Gzip-aware: acceptsFileType (FileChatServiceImpl) already unwraps a ".gz" wrapper before
+     * checking file type, since a wrapped file is classified by what it becomes once unwrapped,
+     * not by the wrapper extension itself -- this reuses the same unwrap so an image or audio
+     * file that happened to be gzipped is not silently misclassified as a plain document.
+     */
+    public static ContentCategory categoryOf(String key) {
+        String extension = isGzip(key) ? innerExtensionOfGzip(key) : extensionOf(key);
+        String contentType = EXTENSION_CONTENT_TYPES.get(extension);
+        if (contentType != null && contentType.startsWith("image/")) {
+            return ContentCategory.IMAGE;
+        }
+        if (contentType != null && contentType.startsWith("audio/")) {
+            return ContentCategory.AUDIO;
+        }
+        return ContentCategory.DOCUMENT;
+    }
+
+    /** Whether this key names an image file, by its registered content type -- reuses the same
+        extension-to-MIME map contentTypeFor() does rather than a second hardcoded extension set
+        that could quietly drift out of sync with it. */
+    public static boolean isImage(String key) {
+        return categoryOf(key) == ContentCategory.IMAGE;
+    }
+
+    public static String extensionOf(String key) {
+        if (key == null) {
+            return "";
+        }
+        int dot = key.lastIndexOf('.');
+        return dot >= 0 && dot < key.length() - 1 ? key.substring(dot + 1).toLowerCase() : "";
+    }
+
+    /** The last path segment: what a person calls the file. */
+    public static String fileNameOf(String key) {
+        if (key == null) {
+            return "";
+        }
+        int slash = key.lastIndexOf('/');
+        return slash >= 0 ? key.substring(slash + 1) : key;
+    }
+
+    public static String contentTypeFor(String key) {
+        String contentType = EXTENSION_CONTENT_TYPES.get(extensionOf(key));
+        return contentType != null ? contentType : "application/octet-stream";
+    }
+
+    /**
+     * The extension underneath a .gz wrapper -- "audit.json.gz" -> "json". Log storage is full
+     * of gzipped text (CloudTrail writes every file this way), and what matters for preview is
+     * what the file becomes once unwrapped, not the wrapper. Returns "" when there is no inner
+     * extension to read.
+     */
+    public static String innerExtensionOfGzip(String key) {
+        if (!"gz".equals(extensionOf(key))) {
+            return "";
+        }
+        return extensionOf(key.substring(0, key.length() - ".gz".length()));
+    }
+
+    public static boolean isGzip(String key) {
+        return "gz".equals(extensionOf(key));
+    }
+
+    /** Gzipped text can be previewed; gzipped anything-else can't. */
+    public static boolean isPreviewableGzip(String key) {
+        return isGzip(key) && GZIP_PREVIEWABLE_INNER.contains(innerExtensionOfGzip(key));
+    }
+
+    private static final Set<String> GZIP_PREVIEWABLE_INNER =
+        new HashSet<>(Arrays.asList("json", "csv", "txt", "xml", "md", "log", "tsv", "ndjson"));
+
+    /**
+     * Whether the object browser offers "View" for this key. Since the viewer learned to show a
+     * table, a converted document, an archive's entries and a text glance at anything whose
+     * bytes are text, the answer is yes for every file: the viewer says "no inline preview" for
+     * the genuinely binary rest, with the bytes it fetched to decide that, instead of the
+     * listing deciding by name what a person may look at.
+     */
+    public static boolean isPreviewable(String key) {
+        return key != null && !key.endsWith("/");
+    }
+
+    /** The kinds the viewer draws natively, kept for callers that need the narrow answer. */
+    public static boolean isNativelyPreviewable(String key) {
+        return PREVIEWABLE_EXTENSIONS.contains(extensionOf(key)) || isPreviewableGzip(key);
+    }
+
+}

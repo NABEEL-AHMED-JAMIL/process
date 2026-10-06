@@ -1,0 +1,53 @@
+databaseChangeLog:
+  # What the seed points at. Spring passes both from the deployment's own Kafka settings (see
+  # spring.liquibase.parameters.* in each profile); these defaults are Spring Kafka's own, for a run of the
+  # changelog outside Spring. A parameter passed in always wins over a property declared here.
+  - property:
+      name: platformKafkaBootstrapServers
+      value: localhost:9092
+  - property:
+      name: platformKafkaSecurityProtocol
+      value: PLAINTEXT
+  - changeSet:
+      id: 70.2-seed-platform-default-kafka-connection
+      author: nabeel.amd93
+      description: "A platform default Kafka connection on the configured brokers, for a database that has none (MIG-45, DEF-127)"
+      # No changeset ever inserted a kafka_connection_profile. On a fresh database all four resolver tiers
+      # miss, KafkaTemplateProvider hands back the auto-configured fallback template, and dispatch succeeds
+      # with nothing logged -- so a tenant that expected its own brokers had its payloads put on the shared
+      # ones. The degrade-never-fail fallback itself stays (Appendix A); what was missing is anything seeded
+      # for it to degrade from.
+      #
+      # Seeded as default outright: addProfile always writes isDefault = false and needs a setAsDefault call
+      # after it, which a changeset has no reason to imitate. Id 1, below the sequence's first value (1000),
+      # so nothing the console creates can take it -- the reserved-range rule MIG-32 records.
+      #
+      # Only where there is no profile at all, and only for a PLAINTEXT broker. A database that has any
+      # profile has already been set up by hand and is not second-guessed, and a secured broker needs
+      # credentials a changeset must not carry: that platform default is made on Kafka connections, once.
+      preConditions:
+        - onFail: MARK_RAN
+        - onFailMessage: >-
+            kafka_connection_profile already has rows, or the platform broker is not PLAINTEXT; no platform
+            default seeded. Set one on the Kafka connections screen if the platform has none.
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM kafka_connection_profile
+        - changeLogPropertyDefined:
+            property: platformKafkaSecurityProtocol
+            value: PLAINTEXT
+      changes:
+        - insert:
+            tableName: kafka_connection_profile
+            columns:
+              - column: {name: kafka_connection_profile_id, valueNumeric: 1}
+              - column: {name: profile_name, value: "Platform default broker"}
+              - column: {name: bootstrap_servers, value: "${platformKafkaBootstrapServers}"}
+              - column: {name: security_protocol, value: PLAINTEXT}
+              - column: {name: is_default, valueBoolean: true}
+              - column: {name: status, value: Active}
+              - column: {name: environment_label, value: "Seeded by V70.2 from the deployment's Kafka settings"}
+              - column: {name: date_created, valueComputed: now()}
+      rollback:
+        - sql:
+            sql: DELETE FROM kafka_connection_profile WHERE kafka_connection_profile_id = 1 AND profile_name = 'Platform default broker'

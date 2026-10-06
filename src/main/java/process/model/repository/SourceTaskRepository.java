@@ -1,8 +1,11 @@
 package process.model.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.Status;
 import process.model.pojo.SourceTask;
 import process.model.projection.SourceTaskProjection;
@@ -11,45 +14,82 @@ import java.util.Optional;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 @Repository
 public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
 
-    /**
-     * Note :- Method use to find the all source task
-     * @return List<Long>
-     * */
-    @Query(value = "select task_detail_id, task_name from source_task\n" +
-        "where task_status = 'Active'", nativeQuery = true)
-    public List<Long> findAllSourceTask();
+    long countByTenantIdAndTaskStatusNot(Long tenantId, Status status);
 
     /**
-     * Note :- Method use to find the task by task detai id and task status
-     * @param taskDetailId
-     * @param taskStatus
-     * @return Optional<SourceTask>
-     * */
-    public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId, Status taskStatus);
+     * How many DIFFERENT pipelines a workspace runs, as against how many tasks it has.
+     *
+     * The two are not the same and neither implies the other: the demo workspace has 19 tasks
+     * across 15 pipelines, because four pipelines carry two tasks each. Nothing else on the
+     * tenants screen distinguishes "nineteen tasks all doing one thing" from "nineteen tasks
+     * doing fifteen different things" -- source_task_type is a single service row and stays at
+     * 1 whatever the tasks underneath it are.
+     *
+     * Blank ids are excluded rather than counted as a pipeline of their own; a task with no
+     * pipeline is unconfigured, not a sixteenth kind of work.
+     */
+    @Query("select count(distinct st.pipelineId) from SourceTask st "
+        + "where st.tenantId = ?1 and st.taskStatus <> ?2 "
+        + "and st.pipelineId is not null and st.pipelineId <> ''")
+    long countDistinctPipelinesByTenantId(Long tenantId, Status status);
+
+    @Transactional
+    @Modifying
+    @Query("update SourceTask s set s.tenantId = ?1 where s.tenantId is null")
+    int backfillTenantId(Long tenantId);
+
+    @Query(value = "select task_detail_id from source_task where task_status = 'Active'", nativeQuery = true)
+    List<Long> findAllSourceTask();
+
+    @Query(value = "select task_detail_id from source_task where task_status = 'Active' and tenant_id = :tenantId", nativeQuery = true)
+    List<Long> findAllSourceTaskForTenant(@Param("tenantId") Long tenantId);
+
+    Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId, Status taskStatus);
+
+    /** A task with its tag rows in one read, for a caller outside a transaction (MIG-67). */
+    @Query("select distinct st from SourceTask st left join fetch st.sourceTaskPayload where st.taskDetailId = ?1")
+    Optional<SourceTask> findWithPayloadByTaskDetailId(Long taskDetailId);
 
     /**
-     * Note :- Method use to find the download source task
-     * @return List<SourceTaskProjection>
-     * */
-    @Query(value = "select st.task_detail_id as taskDetailId, st.task_name as taskName,\n" +
+     * Live tasks -- Active or Inactive, not deleted -- that name this task_reference row as their home page or group.
+     * What stops a home page or group being deleted out from under them (MIG-165, MIG-167).
+     */
+    default long countLiveTasksReferencing(Long taskReferenceId) {
+        return this.countTasksReferencingOutsideStatus(taskReferenceId, Status.Delete);
+    }
+
+    @Query("select count(st) from SourceTask st where (st.homePageId = :referenceId or st.groupId = :referenceId) "
+        + "and st.taskStatus <> :excluded")
+    long countTasksReferencingOutsideStatus(@Param("referenceId") Long referenceId, @Param("excluded") Status excluded);
+
+    /**
+     * Live tasks of one workspace whose payload contains this exact text -- a ${config:KEY} or ${secret:KEY}
+     * reference (MIG-167). strpos, not LIKE: a key's underscores are LIKE wildcards.
+     */
+    @Query(value = "select count(*) from source_task where tenant_id = :tenantId and task_status <> 'Delete' "
+        + "and strpos(task_payload, :reference) > 0", nativeQuery = true)
+    long countLiveTasksWithPayloadContaining(@Param("tenantId") Long tenantId, @Param("reference") String reference);
+
+    String DOWNLOAD_LIST_SOURCE_TASK_SELECT = "select st.task_detail_id as taskDetailId, st.task_name as taskName,\n" +
         " st.task_payload  as taskPayload, st.task_status as taskStatus,\n" +
         "stt.queue_topic_partition as queueTopicPartition, stt.service_name as serviceName," +
-        "stt.task_type_status as taskTypeStatus, st.pipeline_id as pipelineTaskId, st.home_page_id as homePage\n" +
+        "stt.task_type_status as taskTypeStatus, st.pipeline_id as pipelineTaskId, st.home_page_id as homePage,\n" +
+        "ldg.name as groupLabel\n" +
         "from source_task st\n" +
-        "inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id", nativeQuery = true)
-    public List<SourceTaskProjection> downloadListSourceTask();
+        "inner join source_task_type stt on stt.source_task_type_id = st.source_task_type_id\n" +
+        "left join task_reference ldg on ldg.id = st.group_id\n";
 
-    /**
-     * Note :- Method use to link source task with source task type id
-     * @param sourceTaskTypeId
-     * @return List<SourceTaskProjection>
-     * */
-    @Query(value = "select task_detail_id as taskDetailId, task_name as taskName, task_status as taskStatus\n" +
-        "from source_task where source_task_type_id = ?1", nativeQuery = true)
-    public List<SourceTaskProjection> fetchAllLinkSourceTaskWithSourceTaskTypeId(Long sourceTaskTypeId);
+    @Query(value = DOWNLOAD_LIST_SOURCE_TASK_SELECT +
+
+        "where st.task_status != 'Delete'", nativeQuery = true)
+    List<SourceTaskProjection> downloadListSourceTask();
+
+    @Query(value = DOWNLOAD_LIST_SOURCE_TASK_SELECT +
+        "where st.task_status != 'Delete' and st.tenant_id = :tenantId", nativeQuery = true)
+    List<SourceTaskProjection> downloadListSourceTaskForTenant(@Param("tenantId") Long tenantId);
 
 }

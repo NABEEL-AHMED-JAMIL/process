@@ -1,0 +1,284 @@
+version: '3.8'
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  kafka_data:
+  redis_data:
+  redisinsight_data:
+  meter_spool:
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is not set in process/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-etl_job}
+    ports:
+      # Host port 5433 -> container 5432 -- the host machine may already have its own Postgres
+      # on 5432 (e.g. a Homebrew/Postgres.app install for other projects); the app itself never
+      # uses this host mapping (SPRING_DATASOURCE_URL connects via the Docker network hostname
+      # "postgres:5432", not localhost), so this only affects external tools (a GUI client, psql
+      # from the host) -- point those at localhost:5433 instead.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # First start of a new volume only: creates notifications_db (MIG-21).
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  # Kafka Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    restart: always
+    depends_on:
+      zookeeper:
+        condition: service_started
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Expose two listeners: INTERNAL for container-to-container, EXTERNAL for host access
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093
+      # Advertise INTERNAL as kafka:9092 for other containers, and advertise EXTERNAL as localhost:9093 for host clients
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+
+  # Redis -- backs the per-user WebSocket presence registry (WebSocketPresenceService) and
+  # general read-heavy caching (CacheConfig). Persisted (appendonly) so presence/cache survive
+  # a container restart rather than silently going cold.
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Browser UI for the broker: topics, partitions, consumer groups and lag, and a message
+  # browser. Reaches the broker on the INTERNAL listener because it is a container itself --
+  # localhost:9093 is the address for tools running on the host, not for its neighbours.
+  #
+  # Read-only by design: DYNAMIC_CONFIG_ENABLED is left off, so nothing here can create or
+  # delete a topic. Inspecting a broker and administering one are different jobs.
+  kafka_ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka_ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: etl-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: "false"
+
+  # Browser UI for Redis. Was started by hand with docker run, which meant it disappeared on
+  # compose down and never came back on up; here it is part of the project like everything else.
+  # The named volume keeps its saved connection, so the database only has to be added once.
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: redisinsight
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/data
+
+  # AWS for local development: S3 for the platform's two buckets (etl-avatar, etl-config -- billing
+  # documents live under billing/ in the latter) and SES for all outbound mail. It used to be a
+  # container started by hand, declared nowhere, so it vanished and nothing said how to bring it
+  # back. Declared here, with localstack/init-platform.sh recreating the buckets and the verified
+  # sender on every start. process reaches it through host.docker.internal:4566 (AWS_ENDPOINT).
+  #
+  # The image needs an auth token: LocalStack 2026.x quits at start without one ("License
+  # activation failed"), ACTIVATE_PRO=0 included. Supply it from the environment or a .env file
+  # beside this compose file -- never written here -- and start it with its profile:
+  #
+  #   LOCALSTACK_AUTH_TOKEN=... docker compose --profile aws up -d localstack
+  #
+  # The profile keeps a plain `docker compose up` from starting a container that can only
+  # crash-loop while no token is set.
+  #
+  # sts and iam (MIG-216): storage-service vends Analytics a GetFederationToken credential scoped to
+  # one bucket instead of the connection's own key. ENFORCE_IAM asks LocalStack to honour that
+  # scope, but the freemium license ignores it (checked 2026-09-24: an IAM user with no policy still
+  # lists every bucket), so analytics-service's second-bucket test skips here with that reason and
+  # MinIO, which does enforce a session policy, carries the negative case. The platform's own
+  # "test" key is the account root, which enforcement would leave unrestricted anyway.
+  localstack:
+    image: localstack/localstack-pro:latest
+    container_name: localstack-aws
+    profiles: ["aws"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:-}
+      SERVICES: ${LOCALSTACK_SERVICES:-s3,ses,sts,iam}
+      ENFORCE_IAM: ${LOCALSTACK_ENFORCE_IAM:-1}
+    volumes:
+      - ./localstack/init-platform.sh:/etc/localstack/init/ready.d/init-platform.sh:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/init/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Spring Boot Application
+  # Azure Blob Storage for the storage adapter contract suite (MIG-160): Microsoft's own emulator,
+  # holding nothing but test containers. The account is Azurite's published development account
+  # (devstoreaccount1 and its documented key), not a credential. Opt-in, like LocalStack:
+  #
+  #   docker compose --profile storage-test up -d azurite
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: azurite
+    profiles: ["storage-test"]
+    restart: unless-stopped
+    command: ["azurite-blob", "--blobHost", "0.0.0.0", "--loose", "--skipApiVersionCheck"]
+    ports:
+      - "127.0.0.1:10000:10000"
+
+  process_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: process_app
+    restart: always
+    ports:
+      # Callers reach process through the API gateway (../api-gateway), which owns host port 9098
+      # and reaches this container as process_app:9098 on this project's network. This mapping is
+      # for debugging process directly and is bound to loopback, so nothing else on the network
+      # can bypass the gateway.
+      - "127.0.0.1:9099:9098"
+    networks:
+      default:
+        # How the gateway addresses this container. Not "process_app": an underscore is not legal
+        # in a hostname, java.net.URI reads such an address as having no host at all, and the
+        # gateway's routes to it come out as "http:".
+        aliases:
+          - process
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etl_job
+      # Shared with notifications-service, which redeems secretRefs with it. Set in .env.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      # storage-service owns storage (MIG-68/70): every storage call process makes goes there -- the
+      # guarded ones as the signed-in user, the four trusted callers and the directory with the
+      # service token above. process has no storage code or table access of its own.
+      STORAGE_SERVICE_URL: http://storage:9120
+      # MIG-107: local until the cutover (identity-service/scripts/copy-from-etl-job.sh), then remote.
+      IDENTITY_MODE: ${IDENTITY_MODE:-remote}
+      IDENTITY_URL: http://identity:9160
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-nabeel.amd93}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is not set in process/.env}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      EFS_FILE_DIRE: ${EFS_FILE_DIRE:-/tmp/efs}
+      # process's AWS identity: SES for outbound mail and S3 for staging mail attachments for
+      # Notifications. The platform buckets (etl-avatar, etl-config) are storage-service's since MIG-70,
+      # reached through it like every other bucket. LocalStack here, so mail is stored, not delivered.
+      # On a real environment clear AWS_ENDPOINT and supply a scoped key pair.
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://host.docker.internal:4566}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-test}
+      AWS_SECRET_KEY: ${AWS_SECRET_KEY:-test}
+      # MIG-5: secrets are sealed under PROCESS_ENCRYPTION_KEY, tagged with PROCESS_ENCRYPTION_KEY_ID
+      # (openssl rand -base64 32), from process/.env -- never from here: the key this file once held
+      # as a fallback was committed, so it was retired. LOOKUP_ENCRYPTION_KEY is that retired key, set
+      # only while EncryptionReseal still reports values under it.
+      PROCESS_ENCRYPTION_KEY_ID: ${PROCESS_ENCRYPTION_KEY_ID:?PROCESS_ENCRYPTION_KEY_ID is not set in process/.env}
+      PROCESS_ENCRYPTION_KEY: ${PROCESS_ENCRYPTION_KEY:?PROCESS_ENCRYPTION_KEY is not set in process/.env}
+      LOOKUP_ENCRYPTION_KEY: ${LOOKUP_ENCRYPTION_KEY:-}
+      # The shared HS256 secret of the transition to RS256 (MIG-92). From process/.env, never a value
+      # here (MIG-5: the one this file held was committed). Optional now: tokens are Identity's, verified
+      # against its JWKS, and HS256 is read only while JWT_ACCEPT_HS256 is on AND this is set. The owner
+      # sets JWT_ACCEPT_HS256=false in process/.env (identity-service reads the same file), then removes
+      # JWT_SECRET_KEY -- and process must still come up, so it is no longer required here.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      JWT_ACCEPT_HS256: ${JWT_ACCEPT_HS256:-true}
+      # The metering service (job-search's etl_meter): usage is reported there and read back
+      # for Cost & usage. Empty METER_URL means the console runs without metering.
+      METER_URL: ${METER_URL:-http://host.docker.internal:8200}
+      METER_SERVICE_KEY: ${METER_SERVICE_KEY:-}
+      # Usage the meter could not take yet, and what it refused: kept across redeploys (MIG-15).
+      METER_SPOOL_DIR: /app/meter-spool
+      # Bucket Browser storage. Credentials now live in the storage_connection table
+      # (encrypted, managed under Settings > Storage Connections) -- StorageConnectionBootstrap
+      # copied whatever was configured here into that table on first startup. These are kept
+      # only as an unset passthrough so an existing deployment can still perform that one-time
+      # migration; nothing reads them once a bucket has a connection row. No inline defaults:
+      # a real secret written here ends up committed to the repository.
+      # Worker callbacks (/changeState, /addLogs, /addLogsBatch) are proved by a token minted
+      # per run at dispatch and echoed back as X-Worker-Token -- nothing to configure. The
+      # shared secret below only covers a run dispatched before per-run tokens existed (no hash
+      # on its job_queue row); drop it once every worker echoes the run token. Budget hours is
+      # how long a run's token stays good after dispatch (default 24).
+      WORKER_CALLBACK_TOKEN: ${WORKER_CALLBACK_TOKEN:-}
+      WORKER_CALLBACK_BUDGET_HOURS: ${WORKER_CALLBACK_BUDGET_HOURS:-24}
+      # Job audit logs (OpenSearchAuditLogClient) -- OpenSearch is a separate compose project's
+      # container (job-search), reached via the published host port, since process_app isn't on
+      # that project's docker network.
+      OPENSEARCH_URL: ${OPENSEARCH_URL:-http://host.docker.internal:9200}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - /tmp/efs:/tmp/efs
+      - meter_spool:/app/meter-spool
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9098/api/v1/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s

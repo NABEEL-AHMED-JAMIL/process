@@ -1,0 +1,48 @@
+-- task_form_field.field_options now carries a value AND a label per choice.
+--
+-- V19 created the column and described it, in a comment on the file rather than on the column,
+-- as "Newline-separated choices for a select". That was the whole truth until 2026-09-14: one
+-- choice per line, and the line was bound to both an <option>'s value and its visible text at
+-- once. An author building a pipeline form therefore had to pick which audience to disappoint --
+-- write `lines` and the operator reads a token, write `JSON Lines (one object per line)` and the
+-- worker receives a sentence it cannot parse. This changeset does not alter the column. It
+-- records the format that now applies to it, because V19 is applied and its file cannot be
+-- edited without breaking its checksum, and because a stale comment on a free-text column is how
+-- the next person writes a second, incompatible reader.
+--
+-- THE FORMAT, stated once, here, since this is the only place both readers can be pointed at:
+--
+--   * One choice per line.
+--   * On each line, the FIRST '=' optionally separates the stored value from the displayed
+--     label -- `lines=JSON Lines (one object per line)`.
+--   * Everything after that first '=' is the label, taken verbatim. A label may contain '=',
+--     ':' or ',' with no escaping, because the split never looks past the first one.
+--   * A line with NO '=' is the legacy form and is its own value and its own label. This is not
+--     a courtesy. Every task saved before this reads its answer back by matching the tag it
+--     already stored against an option's value, and drops the tag entirely when nothing matches
+--     -- so the day a legacy line stops resolving to itself is the day every existing task on
+--     that pipeline opens blank and silently loses its answer on save.
+--   * A '=' at the start of a line leaves no value, so that line is legacy too.
+--
+-- WHAT THE FORMAT CANNOT SAY: a literal '=' inside a VALUE. There is no escape character, and
+-- that is a choice rather than an omission -- any escape would have to reinterpret backslashes
+-- that legacy rows may already contain, which trades a rare break for a rarer and far more
+-- surprising one. The authoring dialog refuses such a value by name instead. The one genuinely
+-- incompatible case is therefore a row written before this date whose plain choice text happened
+-- to contain a '=': it now reads as a value/label pair. Values are XML tag contents chosen by
+-- the form's author, so this is narrow, and the dialog shows the parsed halves the moment such a
+-- form is opened rather than hiding the reinterpretation.
+--
+-- The two readers that have to agree on all of the above are parseFieldChoices() in
+-- scheduler1/next/src/app/features/settings/forms/task-form-dialog.ts and choiceValues() in
+-- process/src/main/java/process/model/service/impl/TaskFormServiceImpl.java.
+--
+-- NOT DONE HERE, deliberately: normalising the comma-separated rows the ETL demo seeder wrote
+-- (`records,lines` and eight more like it). Both readers already tolerate that shape on read,
+-- under a guard narrow enough to leave a genuine one-line choice such as `Doe, John` alone, and
+-- re-saving such a form through the dialog rewrites it in the canonical shape. An UPDATE here
+-- would apply that same heuristic to every tenant's data at once with no one watching and no
+-- rollback worth writing, to buy consistency that the reader already provides.
+
+COMMENT ON COLUMN task_form_field.field_options IS
+  'Choices for a select; ignored by every other field type. One per line, and on each line the first "=" optionally separates the stored value from the displayed label (lines=JSON Lines). Everything after that first "=" is the label, so a label may contain "=", ":" or "," freely. A line with no "=" is the legacy form and is both value and label -- existing tasks match their saved tag against an option value, so that must not change. A value cannot contain "=" and there is no escape character.';

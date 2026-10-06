@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 55.0-storage-connection-alias-per-tenant
+      author: nabeel.amd93
+      description: "An alias is unique within a workspace, not across the platform (MIG-53, P4)"
+      # coalesce(tenant_id, 0), not tenant_id: Postgres treats NULLs as distinct, so a plain
+      # (tenant_id, alias) index would let two platform rows claim one name -- the hole
+      # uq_bucket_credential_tenant_bucket has. That a workspace may not take a PLATFORM name, nor the
+      # platform a workspace's, is the application's rule (StorageConnectionLookup.aliasUnavailable):
+      # an index cannot say it.
+      changes:
+        - dropUniqueConstraint:
+            tableName: storage_connection
+            constraintName: uq_storage_connection_alias
+        - sql:
+            sql: CREATE UNIQUE INDEX uq_storage_connection_tenant_alias ON storage_connection (coalesce(tenant_id, 0), alias)
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS uq_storage_connection_tenant_alias
+        - addUniqueConstraint:
+            tableName: storage_connection
+            columnNames: alias
+            constraintName: uq_storage_connection_alias

@@ -1,64 +1,148 @@
 package process.model.service.impl;
 
+import process.identity.WorkspaceNames;
 import org.slf4j.Logger;
+import process.util.BusinessTime;
+import process.util.CronSchedule;
+import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import process.engine.ProducerBulkEngine;
-import process.model.dto.*;
 import process.model.enums.Execution;
 import process.model.enums.Frequency;
-import process.model.enums.JobStatus;
+import process.model.enums.NotificationSeverity;
+import process.model.enums.NotificationType;
 import process.model.enums.Status;
-import process.model.pojo.*;
-import process.model.repository.*;
+import process.model.enums.UserRole;
+import process.model.projection.JobAuditLogProjection;
+import process.identity.IdentityPort;
 import process.model.service.SourceJobService;
+import org.barco.platform.tenancy.TenantScope;
+import process.security.TenantContext;
+import process.security.JobOwnership;
+import process.security.TenantFilterHelper;
+import process.security.TenantOwnership;
+import process.util.OpenSearchAuditLogClient;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.time.LocalTime;
 import java.util.stream.Collectors;
-import static process.util.ProcessUtil.*;
+import org.barco.notifications.contract.JobLifecycleChanged;
+import process.notifications.Notices;
+import process.notifications.NotificationPort;
+import process.model.dto.SourceJobDto;
+import process.model.dto.ResponseDto;
+import process.model.dto.SchedulerDto;
+import process.model.dto.SourceTaskDto;
+import process.model.dto.SourceTaskTypeDto;
+import process.model.dto.SourceJobQueueDto;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.pojo.SourceJob;
+import process.model.pojo.SourceTask;
+import process.model.pojo.Scheduler;
+import java.util.List;
+import java.util.Map;
+import process.model.pojo.SourceTaskType;
+import process.model.pojo.JobQueue;
+import static process.util.ProcessUtil.ERROR;
+import java.util.Optional;
+import static process.util.ProcessUtil.SUCCESS;
+import java.util.Objects;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Collections;
+import java.util.Set;
+import java.util.LinkedHashSet;
+import process.model.dto.UserActivityDto;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 @Service
 public class SourceJobServiceImpl implements SourceJobService {
 
     private Logger logger = LoggerFactory.getLogger(SourceJobServiceImpl.class);
 
-    private SourceJobRepository sourceJobRepository;
-    private SchedulerRepository schedulerRepository;
-    private SourceTaskRepository sourceTaskRepository;
-    private JobAuditLogRepository jobAuditLogRepository;
-    private JobQueueRepository jobQueueRepository;
-    private LookupDataRepository lookupDataRepository;
-    private ProducerBulkEngine producerBulkEngine;
+    private final SourceJobRepository sourceJobRepository;
+    private final SchedulerRepository schedulerRepository;
+    private final SourceTaskRepository sourceTaskRepository;
+    private final JobAuditLogRepository jobAuditLogRepository;
+        private final JobQueueRepository jobQueueRepository;
+    private final TaskReferenceRepository taskReferenceRepository;
+    private final IdentityPort identity;
+    private final ProducerBulkEngine producerBulkEngine;
+    private final TenantFilterHelper tenantFilterHelper;
+    private final OpenSearchAuditLogClient openSearchAuditLogClient;
+    private final NotificationPort notifications;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    private final UserNameResolver userNameResolver;
 
     public SourceJobServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         SourceTaskRepository sourceTaskRepository,
         JobAuditLogRepository jobAuditLogRepository,
         JobQueueRepository jobQueueRepository,
-        LookupDataRepository lookupDataRepository,
-        ProducerBulkEngine producerBulkEngine) {
+        TaskReferenceRepository taskReferenceRepository,
+        IdentityPort identity,
+        ProducerBulkEngine producerBulkEngine,
+        TenantFilterHelper tenantFilterHelper,
+        OpenSearchAuditLogClient openSearchAuditLogClient,
+        NotificationPort notifications,
+        UserNameResolver userNameResolver) {
+        this.userNameResolver = userNameResolver;
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.sourceTaskRepository = sourceTaskRepository;
         this.jobAuditLogRepository = jobAuditLogRepository;
         this.jobQueueRepository = jobQueueRepository;
-        this.lookupDataRepository = lookupDataRepository;
+        this.taskReferenceRepository = taskReferenceRepository;
+        this.identity = identity;
         this.producerBulkEngine = producerBulkEngine;
+        this.tenantFilterHelper = tenantFilterHelper;
+        this.openSearchAuditLogClient = openSearchAuditLogClient;
+        this.notifications = notifications;
+    }
+
+    private void notifyTaskAssigned(SourceJob sourceJob, Long previousAssignedUserId) {
+        Long newAssignedUserId = sourceJob.getAssignedUserId();
+        if (newAssignedUserId == null || newAssignedUserId.equals(previousAssignedUserId)
+            || newAssignedUserId.equals(TenantContext.getAppUserId())) {
+            return;
+        }
+        this.notifications.notificationCreated(sourceJob.getTenantId(), Notices.notice(newAssignedUserId, NotificationType.TASK_ASSIGNED, NotificationSeverity.INFO, "Task assigned to you", sourceJob.getJobName() + " was assigned to you by " + TenantContext.getUsername() + ".", "/jobList"));
     }
 
     /**
-     * Method use to add the source job
-     * @param sourceJobDto
-     * @return ResponseDto
-     * */
+     * Every by-id read and write of a job here asks this: the caller's tenant, and for a tenant user that the
+     * job names them (JobOwnership, owner decision 2026-09-24). A job that fails it is answered as not found.
+     */
+    private boolean isOwnedByCaller(SourceJob sourceJob) {
+        return JobOwnership.isVisibleToCaller(sourceJob);
+    }
+
+    private boolean isOwnedByCaller(SourceTask sourceTask) {
+        return sourceTask != null && TenantOwnership.isOwnedByCaller(sourceTask.getTenantId());
+    }
+
     @Override
+    @Transactional
     public ResponseDto addSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobName())) {
             return new ResponseDto(ERROR, "SourceJob jobName missing.");
@@ -66,47 +150,256 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, "SourceJob taskDetail missing.");
         } else if (ProcessUtil.isNull(sourceJobDto.getTaskDetail().getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceJob taskDetailId missing.");
+        } else if (ProcessUtil.isNull(sourceJobDto.getExecution())) {
+            // Not-null in the database, so omitting it used to surface as a constraint violation
+            // at commit and reach the caller as "Some internal error occurred contact with
+            // support." Named here instead, like every other required field.
+            return new ResponseDto(ERROR, "SourceJob execution missing — Auto or Manual.");
+        } else if (ProcessUtil.isNull(sourceJobDto.getPriority())) {
+            // Exactly the same trap as execution above, and it was still open: priority is
+            // not-null in the database and was written straight through from the DTO, so a
+            // caller that omitted it got HTTP 500 "Some internal error occurred contact with
+            // support." rather than being told which field was missing. The console always
+            // sends it, which is why this only ever bit the API.
+            return new ResponseDto(ERROR, "SourceJob priority missing — 1 (highest) to 9.");
+        } else if (sourceJobDto.getPriority() < 1 || sourceJobDto.getPriority() > 9) {
+            // The console offers 1-9 and validates it; without the same check here the range is
+            // decoration, and a job saved outside it sorts unpredictably against the rest.
+            return new ResponseDto(ERROR, String.format(
+                "SourceJob priority must be between 1 (highest) and 9; got %d.",
+                sourceJobDto.getPriority()));
+        } else if (retryPolicyError(sourceJobDto) != null) {
+            return new ResponseDto(ERROR, retryPolicyError(sourceJobDto));
+        } else if (Status.Delete.equals(sourceJobDto.getJobStatus())) {
+            // Delete is the soft-delete tombstone, not something a job is born in. Honouring it
+            // below would write a job that is invisible to every list and every count the moment
+            // it exists, and the caller would be told it was saved.
+            return new ResponseDto(ERROR, "SourceJob cannot be created as Delete — create it Active or Inactive.");
         }
-        // validation for scheduler list -> if any missing then
+        String schedulerCardinalityError = this.refuseMoreThanOneScheduler(sourceJobDto);
+        if (schedulerCardinalityError != null) {
+            return new ResponseDto(ERROR, schedulerCardinalityError);
+        }
+        String cronError = cronScheduleError(sourceJobDto);
+        if (cronError != null) {
+            return new ResponseDto(ERROR, cronError);
+        }
+
+        Optional<SourceTask> taskDetail = this.sourceTaskRepository.findById(
+             sourceJobDto.getTaskDetail().getTaskDetailId());
+        if (!taskDetail.isPresent() || !this.isOwnedByCaller(taskDetail.get())) {
+            return new ResponseDto(ERROR, String.format("SourceTask not found with %d.",
+                sourceJobDto.getTaskDetail().getTaskDetailId()));
+        }
+        Long tenantId = taskDetail.get().getTenantId();
+        if (ProcessUtil.isNull(tenantId)) {
+            return new ResponseDto(ERROR, "Selected sourceTask has no owning tenant — fix its tenant before creating jobs against it.");
+        }
+        Long assignedUserId = !ProcessUtil.isNull(sourceJobDto.getAssignedUserId())
+            ? sourceJobDto.getAssignedUserId() : TenantContext.getAppUserId();
+        String assigneeError = this.validateAssignee(assignedUserId, tenantId);
+        if (assigneeError != null) {
+            return new ResponseDto(ERROR, assigneeError);
+        }
         SourceJob sourceJob = new SourceJob();
         sourceJob.setJobName(sourceJobDto.getJobName());
-        sourceJob.setTaskDetail(this.sourceTaskRepository.findById(
-             sourceJobDto.getTaskDetail().getTaskDetailId()).get());
-        sourceJob.setJobStatus(Status.Active);
+        sourceJob.setTenantId(tenantId);
+        sourceJob.setTaskDetail(taskDetail.get());
+        /*
+         * The caller's choice, not a constant. This was hard-coded to Active, so every path that
+         * asks for an inactive job got a live one instead: the console's Clone button posts
+         * Inactive and then says "it starts inactive", and the create form's Status field offered
+         * Inactive and was ignored. Cloning an Auto job therefore doubled its runs from the next
+         * slot onwards -- exactly what the clone was written to avoid -- and the toast told the
+         * operator there was nothing to undo. Active stays the default for a caller that says
+         * nothing, which is what the old behaviour was for.
+         */
+        sourceJob.setJobStatus(!ProcessUtil.isNull(sourceJobDto.getJobStatus())
+            ? sourceJobDto.getJobStatus() : Status.Active);
         sourceJob.setExecution(sourceJobDto.getExecution());
         sourceJob.setPriority(sourceJobDto.getPriority());
+        // Left at the entity's own default when the caller says nothing, rather than written as
+        // null -- the columns are not-null, and null here would be the 500 that omitting priority
+        // used to produce.
+        if (!ProcessUtil.isNull(sourceJobDto.getMaxAttempts())) {
+            sourceJob.setMaxAttempts(sourceJobDto.getMaxAttempts());
+        }
+        if (!ProcessUtil.isNull(sourceJobDto.getRetryBackoffSeconds())) {
+            sourceJob.setRetryBackoffSeconds(sourceJobDto.getRetryBackoffSeconds());
+        }
         sourceJob.setCompleteJob(sourceJobDto.isCompleteJob());
         sourceJob.setFailJob(sourceJobDto.isFailJob());
         sourceJob.setSkipJob(sourceJobDto.isSkipJob());
+
+        this.assign(sourceJob, assignedUserId);
         this.sourceJobRepository.saveAndFlush(sourceJob);
+        this.notifyTaskAssigned(sourceJob, null);
         if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && !sourceJobDto.getSchedulers().isEmpty()) {
             sourceJobDto.getSchedulers()
                 .forEach(schedulerDto -> {
                     Scheduler scheduler = new Scheduler();
-                    scheduler.setStartDate(schedulerDto.getStartDate());
-                    if (!StringUtils.isEmpty(schedulerDto.getEndDate())) {
-                        scheduler.setEndDate(schedulerDto.getEndDate());
-                    }
-                    scheduler.setStartTime(schedulerDto.getStartTime());
-                    scheduler.setFrequency(schedulerDto.getFrequency());
-                    if (!StringUtils.isEmpty(schedulerDto.getRecurrence())) {
-                        scheduler.setRecurrence(schedulerDto.getRecurrence());
-                    }
-                    scheduler.setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
-                        schedulerDto.getStartDate(), schedulerDto.getStartTime().toString()));
-                    scheduler.setJobId(sourceJob.getJobId());
+                    scheduler.setTenantId(sourceJob.getTenantId());
+                    this.applySchedulerFields(scheduler, schedulerDto, sourceJob.getJobId());
                     this.schedulerRepository.save(scheduler);
                 });
         }
+        this.notifications.jobLifecycleChanged(sourceJob.getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.getJobId()).setChange(JobLifecycleChanged.Change.updated));
         return new ResponseDto(SUCCESS, String.format("Job save with jobId %d.", sourceJob.getJobId()));
     }
 
     /**
-     * Method use to update the source job
-     * @param sourceJobDto
-     * @return ResponseDto
-     * */
+     * Copies one posted timetable onto a Scheduler row and seeds its next run.
+     *
+     * Create and update wrote the same nine assignments in two places, which is how the update
+     * side came to be missing the branch that creates a row at all; sharing them means the two
+     * cannot drift again.
+     */
+    /** Whether a posted timetable is the stored one; an empty interval means "unchanged", as applySchedulerFields reads it. */
+    static boolean sameTimetable(Scheduler stored, SchedulerDto posted) {
+        // A Cron schedule's start date and time may be left out (see applySchedulerFields): left out is "unchanged".
+        boolean cron = Frequency.Cron.name().equals(posted.getFrequency());
+        return (Objects.equals(stored.getStartDate(), posted.getStartDate()) || (cron && posted.getStartDate() == null))
+            && Objects.equals(stored.getEndDate(), posted.getEndDate())
+            && (Objects.equals(stored.getStartTime(), posted.getStartTime()) || (cron && posted.getStartTime() == null))
+            && Objects.equals(stored.getFrequency(), posted.getFrequency())
+            && (!cron || Objects.equals(stored.getCronExpression(), CronSchedule.normalise(posted.getCronExpression())))
+            && Objects.equals(stored.getDaysOfWeek(), posted.getDaysOfWeek())
+            && Objects.equals(stored.getDayOfMonth(), posted.getDayOfMonth())
+            && (!StringUtils.hasLength(posted.getIntervalValue())
+                || Objects.equals(stored.getIntervalValue(), posted.getIntervalValue()));
+    }
+
+    private void applySchedulerFields(Scheduler scheduler, SchedulerDto schedulerDto, Long jobId) {
+        boolean cron = Frequency.Cron.name().equals(schedulerDto.getFrequency());
+        if (!cron || schedulerDto.getStartDate() != null) {
+            scheduler.setStartDate(schedulerDto.getStartDate());
+        }
+        /*
+         * Written whatever it holds, including nothing.
+         *
+         * This was guarded, so an absent end date left the stored one alone -- and since the DTO
+         * carries one nullable LocalDate, "the caller left it out" and "the caller cleared it" are
+         * the same value. Clearing End date in the editor and saving therefore reported "Job save
+         * with jobId N." while the old end date stayed in the row, and the job went on stopping on
+         * a date the operator had just deleted and could see was gone. Nothing warned, and the
+         * only way to notice was that the job stopped running.
+         *
+         * Every other field on this method's timetable -- start date, start time, frequency, the
+         * days of the week and the day of the month -- is already copied unconditionally, because
+         * a posted schedule replaces the stored one wholesale rather than being merged into it.
+         * The end date was the single exception, and it is the only one of them that is optional,
+         * which is exactly why the hole was there and nowhere else.
+         */
+        scheduler.setEndDate(schedulerDto.getEndDate());
+        if (!cron || schedulerDto.getStartTime() != null) {
+            scheduler.setStartTime(schedulerDto.getStartTime());
+        }
+        scheduler.setFrequency(schedulerDto.getFrequency());
+        if (StringUtils.hasLength(schedulerDto.getIntervalValue())) {
+            scheduler.setIntervalValue(schedulerDto.getIntervalValue());
+        }
+        scheduler.setDaysOfWeek(schedulerDto.getDaysOfWeek());
+        scheduler.setDayOfMonth(schedulerDto.getDayOfMonth());
+        /*
+         * Cron (Wave 4): the expression is the cadence, stored tidied; every other frequency stores none, so a
+         * schedule moved off Cron does not carry a stale expression. A Cron schedule's start date and time only bound
+         * it, so a caller may leave them out: the stored ones stand, else it starts now (today, 00:00 -- the first
+         * slot is still the first one after now).
+         */
+        scheduler.setCronExpression(cron ? CronSchedule.normalise(schedulerDto.getCronExpression()) : null);
+        if (cron) {
+            if (scheduler.getStartDate() == null) {
+                scheduler.setStartDate(BusinessTime.today());
+            }
+            if (scheduler.getStartTime() == null) {
+                scheduler.setStartTime(LocalTime.MIDNIGHT);
+            }
+        }
+        ProcessTimeUtil.applyInitialSchedule(scheduler);
+        scheduler.setJobId(jobId);
+    }
+
+    /**
+     * What is wrong with a posted Cron schedule, as a sentence; null when nothing is (or the schedule is not Cron).
+     * Checked before anything is written, like every other refusal on these paths.
+     */
+    static String cronScheduleError(SourceJobDto sourceJobDto) {
+        if (ProcessUtil.isNull(sourceJobDto.getSchedulers())) {
+            return null;
+        }
+        for (SchedulerDto schedulerDto : sourceJobDto.getSchedulers()) {
+            if (schedulerDto != null && Frequency.Cron.name().equals(schedulerDto.getFrequency())) {
+                String problem = CronSchedule.problem(schedulerDto.getCronExpression());
+                if (problem != null) {
+                    return "SourceJob schedule: " + problem;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Whether the payload asks for more than one timetable on one job.
+     *
+     * Nothing downstream can cope with a second row. Every reader -- this service in five
+     * places, the dashboard, the bulk export and the job assistant -- goes through
+     * SchedulerRepository.findSchedulerByJobId, a derived query returning Optional over a column
+     * with no uniqueness, so a job with two rows makes Spring Data throw
+     * IncorrectResultSizeDataAccessException. The job then cannot be opened, edited, re-activated
+     * or skipped: every one of those is HTTP 500 "Some internal error occurred contact with
+     * support." The field is a Set, but SchedulerDto declares no equals, so two identical JSON
+     * entries stay two elements and really do produce two rows. Refusing the payload is the only
+     * point at which this is still recoverable by the caller.
+     */
+    /** Widest retry policy a job may be given; the same ceiling the database enforces. */
+    private static final int MAX_ATTEMPTS_CEILING = 10;
+    /** A run-history read's window when the caller names none, and the most one may ask for (scale review P0 #1). */
+    static final int RUN_HISTORY_DEFAULT = 500;
+    static final int RUN_HISTORY_MAX = 1000;
+    /** The most jobs one listSourceJob?jobIds= call re-reads, and the largest page it serves (P1 #20, #21). */
+    static final int LIST_BY_IDS_MAX = 200;
+    static final int LIST_PAGE_MAX = 500;
+
+    /** Longest base backoff a job may be given, in seconds; the same ceiling the database enforces. */
+    private static final int MAX_BACKOFF_SECONDS_CEILING = 60 * 60;
+
+    /**
+     * The retry policy's complaint as a sentence, or null when there is nothing wrong with it.
+     *
+     * Checked here as well as by the CHECK constraints so the caller is told which field is wrong
+     * and what the range is. Reaching the constraint instead produces a DataIntegrityViolation at
+     * commit, which arrives as "Some internal error occurred contact with support." -- the exact
+     * trap priority and execution were each fixed for, and it would be a third instance of it.
+     *
+     * Both fields are optional: null means "leave whatever the job has", which for a new job is
+     * the no-retry default. Only a value that is present and out of range is an error.
+     */
+    private static String retryPolicyError(SourceJobDto sourceJobDto) {
+        Integer maxAttempts = sourceJobDto.getMaxAttempts();
+        if (!ProcessUtil.isNull(maxAttempts) && (maxAttempts < 1 || maxAttempts > MAX_ATTEMPTS_CEILING)) {
+            return String.format(
+                "SourceJob maxAttempts must be between 1 (no retry) and %d; got %d.",
+                MAX_ATTEMPTS_CEILING, maxAttempts);
+        }
+        Integer backoff = sourceJobDto.getRetryBackoffSeconds();
+        if (!ProcessUtil.isNull(backoff) && (backoff < 1 || backoff > MAX_BACKOFF_SECONDS_CEILING)) {
+            return String.format(
+                "SourceJob retryBackoffSeconds must be between 1 and %d; got %d.",
+                MAX_BACKOFF_SECONDS_CEILING, backoff);
+        }
+        return null;
+    }
+
+    private String refuseMoreThanOneScheduler(SourceJobDto sourceJobDto) {
+        if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && sourceJobDto.getSchedulers().size() > 1) {
+            return String.format("A job has one schedule; %d were sent. Post a single schedulers entry.",
+                sourceJobDto.getSchedulers().size());
+        }
+        return null;
+    }
+
     @Override
+    @Transactional
     public ResponseDto updateSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob job-id missing.");
@@ -117,13 +410,29 @@ public class SourceJobServiceImpl implements SourceJobService {
         } else if (ProcessUtil.isNull(sourceJobDto.getTaskDetail().getTaskDetailId())) {
             return new ResponseDto(ERROR, "SourceJob taskDetailId missing.");
         }
+        String schedulerCardinalityError = this.refuseMoreThanOneScheduler(sourceJobDto);
+        if (schedulerCardinalityError != null) {
+            return new ResponseDto(ERROR, schedulerCardinalityError);
+        }
+        String cronError = cronScheduleError(sourceJobDto);
+        if (cronError != null) {
+            return new ResponseDto(ERROR, cronError);
+        }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
+
+        if (sourceJob.isPresent() && (!this.isOwnedByCaller(sourceJob.get())
+            || Status.Delete.equals(sourceJob.get().getJobStatus()))) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
+        }
         if (sourceJob.isPresent()) {
             sourceJob.get().setJobName(sourceJobDto.getJobName());
-            // check source active then allow to link
+
             Optional<SourceTask> sourceTask = this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(
                  sourceJobDto.getTaskDetail().getTaskDetailId(), Status.Active);
-            if (sourceTask.isPresent()) {
+            if (sourceTask.isPresent() && !this.isOwnedByCaller(sourceTask.get())) {
+                return new ResponseDto(ERROR, "Selected sourceTask not active.");
+            } else if (sourceTask.isPresent()) {
                 sourceJob.get().setTaskDetail(sourceTask.get());
             } else {
                 return new ResponseDto(ERROR, "Selected sourceTask not active.");
@@ -135,147 +444,334 @@ public class SourceJobServiceImpl implements SourceJobService {
                 sourceJob.get().setExecution(sourceJobDto.getExecution());
             }
             if (!ProcessUtil.isNull(sourceJobDto.getPriority())) {
+                // Same range the console offers and addSourceJob enforces. An update is the
+                // other way a job's priority is set, so leaving it unchecked here would let
+                // an out-of-range value in through the back door.
+                if (sourceJobDto.getPriority() < 1 || sourceJobDto.getPriority() > 9) {
+                    return new ResponseDto(ERROR, String.format(
+                        "SourceJob priority must be between 1 (highest) and 9; got %d.",
+                        sourceJobDto.getPriority()));
+                }
                 sourceJob.get().setPriority(sourceJobDto.getPriority());
+            }
+            String retryError = retryPolicyError(sourceJobDto);
+            if (retryError != null) {
+                return new ResponseDto(ERROR, retryError);
+            }
+            if (!ProcessUtil.isNull(sourceJobDto.getMaxAttempts())) {
+                sourceJob.get().setMaxAttempts(sourceJobDto.getMaxAttempts());
+            }
+            if (!ProcessUtil.isNull(sourceJobDto.getRetryBackoffSeconds())) {
+                sourceJob.get().setRetryBackoffSeconds(sourceJobDto.getRetryBackoffSeconds());
             }
             sourceJob.get().setCompleteJob(sourceJobDto.isCompleteJob());
             sourceJob.get().setFailJob(sourceJobDto.isFailJob());
             sourceJob.get().setSkipJob(sourceJobDto.isSkipJob());
+            Long previousAssignedUserId = sourceJob.get().getAssignedUserId();
+            if (!ProcessUtil.isNull(sourceJobDto.getAssignedUserId())) {
+                String assigneeError = this.validateAssignee(sourceJobDto.getAssignedUserId(), sourceJob.get().getTenantId());
+                if (assigneeError != null) {
+                    return new ResponseDto(ERROR, assigneeError);
+                }
+                this.assign(sourceJob.get(), sourceJobDto.getAssignedUserId());
+            }
             this.sourceJobRepository.saveAndFlush(sourceJob.get());
+            this.notifyTaskAssigned(sourceJob.get(), previousAssignedUserId);
             if (!ProcessUtil.isNull(sourceJobDto.getSchedulers()) && !sourceJobDto.getSchedulers().isEmpty()) {
                 sourceJobDto.getSchedulers()
                     .forEach(schedulerDto -> {
                         Optional<Scheduler> scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJobDto.getJobId());
-                        if (scheduler.isPresent()) {
-                            scheduler.get().setStartDate(schedulerDto.getStartDate());
-                            if (!StringUtils.isEmpty(schedulerDto.getEndDate())) {
-                                scheduler.get().setEndDate(schedulerDto.getEndDate());
-                            }
-                            scheduler.get().setStartTime(schedulerDto.getStartTime());
-                            scheduler.get().setFrequency(schedulerDto.getFrequency());
-                            if (!StringUtils.isEmpty(schedulerDto.getRecurrence())) {
-                                scheduler.get().setRecurrence(schedulerDto.getRecurrence());
-                            }
-                            scheduler.get().setRecurrenceTime(ProcessTimeUtil.getRecurrenceTime(
-                                schedulerDto.getStartDate(), schedulerDto.getStartTime().toString()));
-                            scheduler.get().setJobId(sourceJob.get().getJobId());
-                            this.schedulerRepository.save(scheduler.get());
+                        /*
+                         * The row is created when there isn't one. Only the present case was
+                         * handled, with no else, so a posted timetable for a job that had never
+                         * had one went nowhere and the caller was told "Job save with jobId N."
+                         * A Manual job carries no scheduler row -- the console omits the whole
+                         * schedulers block for one -- so switching it to Auto and filling in the
+                         * timetable saved the execution change and silently discarded the
+                         * schedule. The job then sat Active and Auto with nothing for
+                         * findDueSchedulers to find: it never ran, the list showed no schedule
+                         * against it, and Skip next answered that it had none.
+                         */
+                        /*
+                         * An unchanged timetable is left alone. Every save re-posts it -- Email notifications,
+                         * a priority change, the editor -- and re-applying it re-seeds next_run_at from the start
+                         * date, which brought back a run the operator had skipped while the Skip row stayed in
+                         * the history (UI review 2026-09-24).
+                         */
+                        if (scheduler.isPresent() && sameTimetable(scheduler.get(), schedulerDto)) {
+                            return;
                         }
+                        Scheduler target = scheduler.isPresent() ? scheduler.get() : new Scheduler();
+                        if (target.getTenantId() == null) {
+                            target.setTenantId(sourceJob.get().getTenantId());
+                        }
+                        this.applySchedulerFields(target, schedulerDto, sourceJob.get().getJobId());
+                        this.schedulerRepository.save(target);
                     });
             }
+            this.notifications.jobLifecycleChanged(sourceJob.get().getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.get().getJobId()).setChange(JobLifecycleChanged.Change.updated));
             return new ResponseDto(SUCCESS, String.format("Job save with jobId %d.", sourceJobDto.getJobId()));
         }
         return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
     }
 
-    /**
-     * Method use to delete teh source job
-     * @param sourceJobDto
-     * @return ResponseDto
-     * */
     @Override
+    @Transactional
     public ResponseDto deleteSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
+        if (sourceJob.isPresent() && !this.isOwnedByCaller(sourceJob.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
+        }
         if (sourceJob.isPresent()) {
+
             sourceJob.get().setJobStatus(Status.Delete);
             this.sourceJobRepository.save(sourceJob.get());
-            return new ResponseDto(SUCCESS, String.format("SourceJob successfully update with %d.", sourceJobDto.getJobId()));
+
+            try {
+                int updated = this.jobQueueRepository.updateStatusByJobId(sourceJobDto.getJobId(), Status.Delete.name());
+                if (updated > 0) {
+
+                    this.jobAuditLogRepository.updateStatusByJobId(sourceJobDto.getJobId(), Status.Delete.name());
+                }
+            } catch (Exception ex) {
+                logger.error("An error occurred while updating related job queue/audit logs during deleteSourceJob :- {}.", ex);
+            }
+
+            this.notifications.jobLifecycleChanged(sourceJob.get().getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.get().getJobId()).setChange(JobLifecycleChanged.Change.deleted));
+            return new ResponseDto(SUCCESS, String.format("SourceJob successfully updated with ID %d.", sourceJobDto.getJobId()));
         }
         return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
     }
 
-    /**
-     * Method use to run the source job
-     * @param sourceJobDto
-     * @return ResponseDto
-     * */
     @Override
-    public ResponseDto runSourceJob(SourceJobDto sourceJobDto) throws Exception {
+    @Transactional
+    public ResponseDto toggleSourceJobStatus(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
-        Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
-        if (!sourceJob.isPresent()) {
-            return new ResponseDto(ERROR, "SourceJob not found with jobId.");
-        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus()) && (sourceJob.get().getJobRunningStatus().equals(JobStatus.Queue) ||
-            sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
-            return new ResponseDto(ERROR, "SourceJob can't be run if its in ('Queue', 'Running') state.");
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findById(sourceJobDto.getJobId());
+        if (sourceJob.isPresent() && !this.isOwnedByCaller(sourceJob.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
         }
-        this.producerBulkEngine.addManualJobInQueue(sourceJob.get());
-        sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
-        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.", sourceJob);
+        if (!sourceJob.isPresent()) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
+        }
+        if (sourceJob.get().getJobStatus() == Status.Delete) {
+            return new ResponseDto(ERROR, "Can't change status of a deleted job.");
+        }
+        // Honour the state that was asked for when one is given, and only flip when it is not.
+        // Ignoring it made the call non-idempotent: a retry after a timeout, or a second click,
+        // put the job back exactly where it started with no way for the caller to tell.
+        Status requested = sourceJobDto.getJobStatus();
+        Status newStatus;
+        if (Status.Active.equals(requested) || Status.Inactive.equals(requested)) {
+            newStatus = requested;
+        } else {
+            newStatus = sourceJob.get().getJobStatus() == Status.Active ? Status.Inactive : Status.Active;
+        }
+        sourceJob.get().setJobStatus(newStatus);
+        this.sourceJobRepository.save(sourceJob.get());
+
+        if (Status.Active.equals(newStatus)) {
+            // next_run_at only moves when a job is dispatched, and a paused job never is -- so it
+            // sits at whatever slot was next when the job was paused. Resuming without this, the
+            // job is overdue the instant it comes back: it fires immediately, and every slot that
+            // went by while it was deliberately paused is written down as Missed. A pause is a
+            // decision, not an outage, so the schedule is moved on to its next real slot instead.
+            this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId())
+                .ifPresent(scheduler -> {
+                    ProcessTimeUtil.applyInitialSchedule(scheduler);
+                    this.schedulerRepository.save(scheduler);
+                });
+        }
+        this.notifications.jobLifecycleChanged(sourceJob.get().getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.get().getJobId()).setChange(JobLifecycleChanged.Change.toggled));
+        return new ResponseDto(SUCCESS, String.format("Job %s.", newStatus == Status.Active ? "activated" : "deactivated"), newStatus.name());
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto runSourceJob(SourceJobDto sourceJobDto) throws Exception {
+        return this.runSourceJob(sourceJobDto, null);
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto runSourceJob(SourceJobDto sourceJobDto, String modelProfiles) throws Exception {
+        if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
+            return new ResponseDto(ERROR, "SourceJob jobId missing.");
+        }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Object queued = this.queueRun(sourceJobDto.getJobId(), modelProfiles);
+        if (queued instanceof ResponseDto) {
+            return (ResponseDto) queued;
+        }
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
+        // A DTO, not the entity (MIG-67). Jackson walked the entity after the transaction closed: its lazy
+        // tenant and assignee, its task's payload rows, and the task type's Kafka profile -- encrypted SASL
+        // and keystore passwords included, which no response should carry. Neither console reads it.
+        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.",
+            sourceJob.map(this::mapSourceJobToDto).orElse(null));
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto runSourceJobFor(Long jobId, String reason) throws Exception {
+        if (ProcessUtil.isNull(jobId)) {
+            return new ResponseDto(ERROR, "SourceJob jobId missing.");
+        }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Object queued = this.queueRun(jobId, null);
+        if (queued instanceof ResponseDto) {
+            return (ResponseDto) queued;
+        }
+        JobQueue run = (JobQueue) queued;
+        if (reason != null && !reason.isBlank()) {
+            this.producerBulkEngine.auditRun(run.getJobQueueId(), reason);
+        }
+        return new ResponseDto(SUCCESS, "SourceJob job successfully added into queue.", run.getJobQueueId());
     }
 
     /**
-     * Method use to run the source job
-     * @param sourceJobDto
-     * @return ResponseDto
-     * */
+     * Run now's rules, the one place they live: the job is active and the caller's, its last run is not still in flight,
+     * and its workspace is not paused. Its callers are public and transactional and switch the tenant filter on first. Answers the queued run, or the refusal (a ResponseDto) saying which rule stopped it.
+     */
+    private Object queueRun(Long jobId, String modelProfiles) {
+        Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(jobId, Status.Active);
+        if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
+            return new ResponseDto(ERROR, "SourceJob not found with jobId.");
+        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus())
+            && sourceJob.get().getJobRunningStatus().isInFlight()) {
+            // Start included: a run just dispatched sits there until its worker reports, and a
+            // second one would write into the same output folder.
+            return new ResponseDto(ERROR,
+                "A job can't be run while its last run is still in flight ('Queue', 'Start', 'Running').");
+        }
+        // Owner decision 2026-09-24: a Suspended or Inactive workspace's jobs are paused, by hand as on schedule.
+        // Core's local view answers; Identity is not called.
+        Optional<String> paused = this.producerBulkEngine.workspacePause(sourceJob.get().getTenantId());
+        if (paused.isPresent()) {
+            return new ResponseDto(ERROR, String.format("This job's workspace is %s, so its runs are paused; "
+                + "it can be run again once the workspace is Active.", paused.get()));
+        }
+        return this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles);
+    }
+
     @Override
+    @Transactional
     public ResponseDto skipNextSourceJob(SourceJobDto sourceJobDto) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(sourceJobDto.getJobId(), Status.Active);
-        if (!sourceJob.isPresent()) {
+        if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");
-        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus()) && (sourceJob.get().getJobRunningStatus().equals(JobStatus.Queue) ||
-            sourceJob.get().getJobRunningStatus().equals(JobStatus.Running))) {
-            return new ResponseDto(ERROR, "SourceJob can't be run if its in ('Queue', 'Running') state.");
+        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus())
+            && sourceJob.get().getJobRunningStatus().isInFlight()) {
+            return new ResponseDto(ERROR,
+                "A job's next run can't be skipped while its last run is still in flight ('Queue', 'Start', 'Running').");
         } else if (!sourceJob.get().getExecution().equals(Execution.Auto)) {
             return new ResponseDto(ERROR, "SourceJob skip only work with 'auto' source job.");
         }
-        Scheduler scheduler = this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId()).get();
-        LocalDateTime nextJobRun = this.getLocalDateTime(scheduler);
-        if (!ProcessUtil.isNull(scheduler.getEndDate())) {
-            LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
-            if (!ProcessUtil.isNull(nextJobRun) && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
-                this.producerBulkEngine.skipManualJobInQueue(scheduler);
-                scheduler.setRecurrenceTime(nextJobRun);
-                this.schedulerRepository.save(scheduler);
-                return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
-            }
-        } else if (!ProcessUtil.isNull(nextJobRun)) {
-            this.producerBulkEngine.skipManualJobInQueue(scheduler);
-            scheduler.setRecurrenceTime(nextJobRun);
-            this.schedulerRepository.save(scheduler);
-            return new ResponseDto(SUCCESS, "SourceJob skip successfully.", scheduler);
+        Optional<Scheduler> schedulerOpt = this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId());
+        if (!schedulerOpt.isPresent()) {
+
+            return new ResponseDto(ERROR, "SourceJob has no scheduler to skip.");
         }
-        return new ResponseDto(ERROR, "No more flight skip.");
+        Scheduler scheduler = schedulerOpt.get();
+        LocalDateTime nextJobRun = ProcessTimeUtil.computeNextRun(scheduler);
+        /*
+         * The end date bounds a day, not an instant, and this is the one place that read it
+         * otherwise.
+         *
+         * The bound used to be endDate at the schedule's START TIME, so any slot later in the
+         * final day counted as past the end. On a daily or slower schedule that is invisible --
+         * there is only ever one slot a day and it falls at the start time -- but an hourly or
+         * minute-level schedule has slots all day, and on its last day every one of them after
+         * the first was judged to be beyond the window. Skip next run then answered "No more
+         * flight skip." for a job with a dozen runs still to come that afternoon, and there was
+         * no other way to skip one of them.
+         *
+         * applyNextRun and isLastFlight both compare the date alone -- a slot is in the window
+         * while its DATE is not after the end date -- and they are what the engine actually
+         * dispatches by, so a schedule refused here was one the engine would have gone on running.
+         * Asking the same question the same way is what keeps the answer honest.
+         */
+        boolean stillHasMoreFlights = !ProcessUtil.isNull(nextJobRun) && (ProcessUtil.isNull(scheduler.getEndDate()) ||
+            !nextJobRun.toLocalDate().isAfter(scheduler.getEndDate()));
+        if (!stillHasMoreFlights) {
+            return new ResponseDto(ERROR, "No more flight skip.");
+        }
+        this.producerBulkEngine.skipManualJobInQueue(scheduler);
+        ProcessTimeUtil.applyNextRun(scheduler);
+        this.schedulerRepository.save(scheduler);
+        // The schedule as a DTO, not the entity and its lazy job graph behind it (MIG-67).
+        return new ResponseDto(SUCCESS, "SourceJob skip successfully.", this.getSchedulerDto(scheduler));
     }
 
-    /**
-     * Method use to find the source job audit log
-     * @param jobQueueId
-     * @param jobId
-     * @return ResponseDto
-     * */
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto findSourceJobAuditLog(Long jobQueueId, Long jobId) throws Exception {
         if (jobQueueId == null) {
             return new ResponseDto(ERROR, "JobQueueId missing.");
         }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+
+        Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
+        if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())
+            || Status.Delete.equals(sourceJobOpt.get().getJobStatus())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
+        }
+        Optional<JobQueue> jobQueueOpt = this.jobQueueRepository.findById(jobQueueId)
+            .filter(queue -> jobId.equals(queue.getJobId()));
+        if (!jobQueueOpt.isPresent()) {
+            return new ResponseDto(ERROR, String.format("JobQueue not found with %d for job %d.", jobQueueId, jobId));
+        }
         Map<String, Object> payload = new HashMap<>();
-        payload.put("auditLogs", jobAuditLogRepository.findAllByJobQueueIdV1(jobQueueId));
-        sourceJobRepository.findById(jobId).ifPresent(sourceJob -> {
-            SourceJobDto sourceJobDto = mapSourceJobToDto(sourceJob);
-            schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> sourceJobDto.setScheduler(getSchedulerDto(s)));
-            payload.put("sourceJob", sourceJobDto);
-        });
-        jobQueueRepository.findById(jobQueueId).ifPresent(queue -> payload.put("sourceJobQueue", getSourceJobQueueDto(queue)));
-        return new ResponseDto(SUCCESS, "SourceJob skip successfully.", payload);
+
+        payload.put("auditLogs", mergeAuditLogs(
+            this.openSearchAuditLogClient.searchByJobQueueId(jobQueueId),
+            this.jobAuditLogRepository.findAllByJobQueueIdV1(jobQueueId)));
+        SourceJobDto sourceJobDto = mapSourceJobToDto(sourceJobOpt.get());
+        schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> sourceJobDto.setScheduler(getSchedulerDto(s)));
+        payload.put("sourceJob", sourceJobDto);
+        payload.put("sourceJobQueue", getSourceJobQueueDto(jobQueueOpt.get()));
+        return new ResponseDto(SUCCESS, String.format("SourceJob audit log found with %d.", jobQueueId), payload);
     }
 
-    /**
-     * Method use to fetch source job detail with source job id
-     * @param jobId
-     * @return ResponseDto
-     * */
+    private List<JobAuditLogProjection> mergeAuditLogs(
+        List<? extends JobAuditLogProjection> openSearchLogs,
+        List<? extends JobAuditLogProjection> dbLogs) {
+        LinkedHashMap<String, JobAuditLogProjection> byKey = new LinkedHashMap<>();
+        for (JobAuditLogProjection log : dbLogs) {
+            byKey.put(auditLogDedupeKey(log), log);
+        }
+        for (JobAuditLogProjection log : openSearchLogs) {
+            byKey.put(auditLogDedupeKey(log), log);
+        }
+        List<JobAuditLogProjection> merged = new ArrayList<>(byKey.values());
+        merged.sort(Comparator.comparing(JobAuditLogProjection::getDateCreated));
+        return merged;
+    }
+
+    private String auditLogDedupeKey(JobAuditLogProjection log) {
+        return !ProcessUtil.isNull(log.getExternalId())
+            ? "ext:" + log.getExternalId()
+            : "content:" + log.getJobQueueId() + "|" + log.getDateCreated() + "|" + log.getLogsDetail();
+    }
+
     @Override
+    @Transactional(readOnly = true)
     public ResponseDto fetchSourceJobDetailWithSourceJobId(Long jobId) {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         return sourceJobRepository.findById(jobId)
+            .filter(this::isOwnedByCaller)
+            .filter(sourceJob -> !Status.Delete.equals(sourceJob.getJobStatus()))
             .map(sourceJob -> {
                 SourceJobDto dto = mapSourceJobToDto(sourceJob);
                 schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
@@ -283,93 +779,252 @@ public class SourceJobServiceImpl implements SourceJobService {
             }).orElseGet(() -> new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId)));
     }
 
-    /**
-     * Method use the list source job
-     * @return ResponseDto
-     * */
     @Override
-    public ResponseDto listSourceJob() throws Exception {
-        List<SourceJobDto> sourceJobDtoList = sourceJobRepository.findAll(Sort.by(Sort.Direction.ASC, "jobId"))
-            .stream()
+    @Transactional(readOnly = true)
+    public ResponseDto fetchSourceJobQueueListWithJobId(Long jobId, Integer limit, Long beforeId) throws Exception {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+
+        Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
+        if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
+        }
+        // A deleted job has no history to show. It is gone from every list and every count, so
+        // serving its runs here would be the one place it survived -- reachable by anyone who
+        // still had the link.
+        if (Status.Delete.equals(sourceJobOpt.get().getJobStatus())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
+        }
+        /*
+         * The newest window, in SQL (scale review P0 #1). This read the job's every run and sorted them
+         * here -- 525,000 rows a year for a job that runs each minute, on a call the console repeats on
+         * every status push. One row past the window says whether there is more without counting it.
+         */
+        int window = runHistoryWindow(limit);
+        long before = beforeId == null || beforeId <= 0 ? Long.MAX_VALUE : beforeId;
+        List<JobQueue> rows = jobQueueRepository.findRecentByJobId(jobId, before, window + 1);
+        boolean hasMore = rows.size() > window;
+        List<SourceJobQueueDto> jobQueues = rows.stream()
+            .limit(window)
+            .map(this::getSourceJobQueueDto)
+            .collect(Collectors.toList());
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("jobQueues", jobQueues);
+        payload.put("hasMore", hasMore);
+        payload.put("limit", window);
+        return new ResponseDto(SUCCESS, String.format("SourceJobQueue found with %d.", jobId), payload);
+    }
+
+    /** A run-history window: the default when none is asked for, never more than the ceiling. */
+    static int runHistoryWindow(Integer limit) {
+        if (limit == null || limit <= 0) {
+            return RUN_HISTORY_DEFAULT;
+        }
+        return Math.min(limit, RUN_HISTORY_MAX);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ResponseDto listSourceJob(Integer page, Integer size, List<Long> onlyJobIds) throws Exception {
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        List<SourceJob> jobs = this.listedJobs(page, size, onlyJobIds);
+        List<Long> jobIds = jobs.stream().map(SourceJob::getJobId).collect(Collectors.toList());
+        // One array parameter each, not an IN list per id (scale review P1 #20).
+        String idArray = JobQueueRepository.idArray(jobIds);
+        Map<Long, Scheduler> schedulerByJobId = jobIds.isEmpty() ? Collections.emptyMap()
+            : schedulerRepository.findAllForJobIds(idArray).stream()
+                .collect(Collectors.toMap(Scheduler::getJobId, s -> s, (a, b) -> a));
+        // tabActive only asks whether a job has ever run, so it is an exists() per job, not a count of every run.
+        Set<Long> jobsWithRuns = jobIds.isEmpty() ? Collections.emptySet()
+            : jobQueueRepository.findJobIdsWithRuns(idArray).stream().map(Number::longValue).collect(Collectors.toSet());
+
+        // The entities are already in hand here, so the names cost one lookup and no re-fetch.
+        this.userNameResolver.attachNames(jobs);
+        /*
+         * The last three per-row lookups on this path, batched like the schedulers and the queue
+         * counts above them. mapSourceJobToDto resolved the assignee's name with its own findById
+         * per job, and mapSourceTaskToDto did the same for the task's home page and pipeline, so
+         * the most-loaded screen in the console paid up to three extra round trips for every
+         * distinct value in the list -- on top of the one query the list itself was carefully
+         * built to be. The persistence context de-duplicated repeats inside the transaction, so
+         * the cost tracked the number of distinct assignees and lookups rather than the number of
+         * rows, which is why it grew with the team rather than with the job count.
+         */
+        Map<Long, String> usernameByUserId = this.resolveAssigneeNames(jobs);
+        Map<Long, String> lookupTypeByLookupId = this.resolveTaskLookupTypes(jobs);
+        List<SourceJobDto> sourceJobDtoList = jobs.stream()
             .map(job -> {
-                SourceJobDto dto = mapSourceJobToDto(job);
-                schedulerRepository.findSchedulerByJobId(job.getJobId()).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
-                dto.setTabActive(jobQueueRepository.getCountForJobByJobId(job.getJobId()) > 0);
+                SourceJobDto dto = mapSourceJobToDto(job, usernameByUserId, lookupTypeByLookupId);
+                Optional.ofNullable(schedulerByJobId.get(job.getJobId())).ifPresent(s -> dto.setScheduler(getSchedulerDto(s)));
+                dto.setTabActive(jobsWithRuns.contains(job.getJobId()));
+                // The task's XML payload rides along at roughly 600 bytes a row and no list
+                // view shows it -- only the single-job detail call needs it. Dropping it here
+                // takes this response from 54KB to about 30KB for 41 jobs, and the saving
+                // grows with the list.
+                if (dto.getTaskDetail() != null) {
+                    dto.getTaskDetail().setTaskPayload(null);
+                }
                 return dto;
             }).collect(Collectors.toList());
+        // Whose job each row is, for a platform administrator's list of every workspace (MIG-296).
+        Map<Long, String> workspaceNames = WorkspaceNames.forCaller(this.identity,
+            jobs.stream().map(SourceJob::getTenantId).collect(Collectors.toList()));
+        sourceJobDtoList.forEach(dto -> dto.setTenantName(workspaceNames.get(dto.getTenantId())));
         return new ResponseDto(SUCCESS, "Fetch source jobs.", sourceJobDtoList);
     }
 
     /**
-     * Method use to map the source job to dto
-     * @param sourceJob
-     * @return SourceJobDto
+     * The jobs a list call asks for: the named ones (at most LIST_BY_IDS_MAX), a page in job id order,
+     * or every one -- the console's lists still read them all, and an absent size keeps that answer.
      */
+    private List<SourceJob> listedJobs(Integer page, Integer size, List<Long> onlyJobIds) {
+        Sort byId = Sort.by(Sort.Direction.ASC, "jobId");
+        if (onlyJobIds != null && !onlyJobIds.isEmpty()) {
+            List<Long> ids = onlyJobIds.stream().filter(Objects::nonNull).distinct().limit(LIST_BY_IDS_MAX)
+                .collect(Collectors.toList());
+            return ids.isEmpty() ? Collections.emptyList()
+                : sourceJobRepository.findActiveAndInactiveJobsByIds(Status.Active, Status.Inactive, ids, byId);
+        }
+        if (size != null && size > 0) {
+            int pageSize = Math.min(size, LIST_PAGE_MAX);
+            int pageNumber = page == null || page < 0 ? 0 : page;
+            return sourceJobRepository.findActiveAndInactiveJobPage(Status.Active, Status.Inactive,
+                PageRequest.of(pageNumber, pageSize, byId));
+        }
+        return sourceJobRepository.findAllActiveAndInactiveJobs(Status.Active, Status.Inactive, byId);
+    }
+
+    /** Every distinct assignee in the list, resolved to a username in one query. */
+    private Map<Long, String> resolveAssigneeNames(List<SourceJob> jobs) {
+        List<Long> userIds = jobs.stream()
+            .map(SourceJob::getAssignedUserId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        if (userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, String> usernameByUserId = new HashMap<>();
+        this.identity.people(userIds).values()
+            .forEach(person -> usernameByUserId.put(person.getAppUserId(), person.getUsername()));
+        return usernameByUserId;
+    }
+
+    /** Every distinct home page behind the list's tasks, by name, in one query (task_reference since MIG-167). */
+    private Map<Long, String> resolveTaskLookupTypes(List<SourceJob> jobs) {
+        Set<Long> homePageIds = new LinkedHashSet<>();
+        for (SourceJob job : jobs) {
+            if (!ProcessUtil.isNull(job.getTaskDetail()) && job.getTaskDetail().getHomePageId() != null) {
+                homePageIds.add(job.getTaskDetail().getHomePageId());
+            }
+        }
+        if (homePageIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, String> nameById = new HashMap<>();
+        this.taskReferenceRepository.findAllById(homePageIds).forEach(row -> nameById.put(row.getId(), row.getName()));
+        return nameById;
+    }
+
+    /** The assignee, and their username beside the id (MIG-107): read from Identity, not joined from app_user. */
+    private void assign(SourceJob sourceJob, Long assignedUserId) {
+        sourceJob.setAssignedUserId(assignedUserId);
+        sourceJob.setAssignedUsername(assignedUserId == null ? null
+            : this.identity.person(assignedUserId).map(IdentityPort.Person::getUsername).orElse(null));
+    }
+
+    private String validateAssignee(Long assignedUserId, Long tenantId) {
+        Optional<IdentityPort.Person> assignee = this.identity.person(assignedUserId);
+        if (!assignee.isPresent() || assignee.get().isDeleted()) {
+            return String.format("Assigned user not found with %d.", assignedUserId);
+        }
+
+        if (UserRole.PLATFORM_ADMIN.name().equals(assignee.get().getUserRole())) {
+            return null;
+        }
+        if (!ProcessUtil.isNull(tenantId) && !tenantId.equals(assignee.get().getTenantId())) {
+            return "Assigned user must belong to the same tenant as this job.";
+        }
+        return null;
+    }
+
+    /** One job on its own, where a single extra lookup each is cheaper than prefetching. */
     private SourceJobDto mapSourceJobToDto(SourceJob sourceJob) {
+        return this.mapSourceJobToDto(sourceJob, null, null);
+    }
+
+    /**
+     * A null map means "resolve it yourself", which is what the single-job callers want; the list
+     * passes maps it has already filled so the same mapping costs no queries at all.
+     */
+    private SourceJobDto mapSourceJobToDto(SourceJob sourceJob,
+        Map<Long, String> usernameByUserId, Map<Long, String> lookupTypeByLookupId) {
         SourceJobDto dto = new SourceJobDto();
         dto.setJobId(sourceJob.getJobId());
+        dto.setTenantId(sourceJob.getTenantId());
         dto.setJobStatus(sourceJob.getJobStatus());
         dto.setJobRunningStatus(sourceJob.getJobRunningStatus());
         dto.setLastJobRun(sourceJob.getLastJobRun());
         dto.setJobName(sourceJob.getJobName());
+        dto.setCreatedByName(sourceJob.getCreatedByName());
+        dto.setUpdatedByName(sourceJob.getUpdatedByName());
+        dto.setCreatedBy(sourceJob.getCreatedBy());
         dto.setDateCreated(sourceJob.getDateCreated());
         dto.setPriority(sourceJob.getPriority());
+        dto.setMaxAttempts(sourceJob.getMaxAttempts());
+        dto.setRetryBackoffSeconds(sourceJob.getRetryBackoffSeconds());
         dto.setExecution(sourceJob.getExecution());
         dto.setCompleteJob(sourceJob.isCompleteJob());
         dto.setFailJob(sourceJob.isFailJob());
         dto.setSkipJob(sourceJob.isSkipJob());
         if (!ProcessUtil.isNull(sourceJob.getTaskDetail())) {
-            dto.setTaskDetail(mapSourceTaskToDto(sourceJob.getTaskDetail()));
+            dto.setTaskDetail(mapSourceTaskToDto(sourceJob.getTaskDetail(), lookupTypeByLookupId));
+        }
+        if (!ProcessUtil.isNull(sourceJob.getAssignedUserId())) {
+            dto.setAssignedUserId(sourceJob.getAssignedUserId());
+            if (usernameByUserId != null) {
+                dto.setAssignedUsername(usernameByUserId.get(sourceJob.getAssignedUserId()));
+            } else {
+                this.identity.person(sourceJob.getAssignedUserId())
+                    .ifPresent(person -> dto.setAssignedUsername(person.getUsername()));
+            }
         }
         return dto;
     }
 
-    /**
-     * Method use to map the source task to dto
-     * @param sourceTask
-     * @return SourceTaskDto
-     */
-    private SourceTaskDto mapSourceTaskToDto(SourceTask sourceTask) {
+    private SourceTaskDto mapSourceTaskToDto(SourceTask sourceTask, Map<Long, String> lookupTypeByLookupId) {
         SourceTaskDto dto = new SourceTaskDto();
         dto.setTaskDetailId(sourceTask.getTaskDetailId());
         dto.setTaskName(sourceTask.getTaskName());
         dto.setTaskStatus(sourceTask.getTaskStatus());
         dto.setTaskPayload(sourceTask.getTaskPayload());
-        if (!ProcessUtil.isNull(sourceTask.getHomePageId())) {
-            dto.setHomePageId(lookupDataRepository.findById(Long.valueOf(sourceTask.getHomePageId()))
-                .map(ld -> ld.getLookupType()).orElse(null));
+        dto.setBucket(sourceTask.getBucket());
+        dto.setInputFolder(sourceTask.getInputFolder());
+        dto.setOutputFolder(sourceTask.getOutputFolder());
+        Long homePageId = sourceTask.getHomePageId();
+        if (homePageId != null) {
+            dto.setHomePageId(lookupTypeByLookupId != null
+                ? lookupTypeByLookupId.get(homePageId)
+                : taskReferenceRepository.findById(homePageId).map(row -> row.getName()).orElse(null));
         }
-        if (!ProcessUtil.isNull(sourceTask.getPipelineId())) {
-            dto.setPipelineId(lookupDataRepository.findById(Long.valueOf(sourceTask.getPipelineId()))
-               .map(ld -> ld.getLookupType()).orElse(null));
-        }
+        // pipeline_id is the raw id the worker routes on ("F768930"); the PIPELINE_IDS lookup family it once named
+        // was dropped by V28, and lookup_data is retired (MIG-167), so it is shown as it is stored.
+        dto.setPipelineId(sourceTask.getPipelineId());
         if (!ProcessUtil.isNull(sourceTask.getSourceTaskType())) {
             dto.setSourceTaskType(getSourceTaskTypeDto(sourceTask.getSourceTaskType()));
         }
         return dto;
     }
 
-    /**
-     * Method use to get the source task type dto
-     * @param sourceTaskType
-     * @return SourceTaskTypeDto
-     * */
     private SourceTaskTypeDto getSourceTaskTypeDto(SourceTaskType sourceTaskType) {
         SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
         sourceTaskTypeDto.setSourceTaskTypeId(sourceTaskType.getSourceTaskTypeId());
         sourceTaskTypeDto.setServiceName(sourceTaskType.getServiceName());
         sourceTaskTypeDto.setQueueTopicPartition(sourceTaskType.getQueueTopicPartition());
         sourceTaskTypeDto.setDescription(sourceTaskType.getDescription());
-        sourceTaskTypeDto.setSchemaPayload(sourceTaskType.getSchemaPayload());
-        sourceTaskTypeDto.setSchemaRegister(sourceTaskType.isSchemaRegister());
+        sourceTaskTypeDto.setKafkaConnectionProfileId(sourceTaskType.getKafkaConnectionProfileId());
         return sourceTaskTypeDto;
     }
 
-    /***
-     * Method use to get the scheduler dto
-     * @param scheduler
-     * @return SchedulerDto
-     */
     private SchedulerDto getSchedulerDto(Scheduler scheduler) {
         SchedulerDto schedulerDto = new SchedulerDto();
         schedulerDto.setSchedulerId(scheduler.getSchedulerId());
@@ -377,16 +1032,16 @@ public class SourceJobServiceImpl implements SourceJobService {
         schedulerDto.setEndDate(scheduler.getEndDate());
         schedulerDto.setStartTime(scheduler.getStartTime());
         schedulerDto.setFrequency(scheduler.getFrequency());
-        schedulerDto.setRecurrence(scheduler.getRecurrence());
-        schedulerDto.setRecurrenceTime(scheduler.getRecurrenceTime());
+        schedulerDto.setIntervalValue(scheduler.getIntervalValue());
+        schedulerDto.setDaysOfWeek(scheduler.getDaysOfWeek());
+        schedulerDto.setDayOfMonth(scheduler.getDayOfMonth());
+        schedulerDto.setCronExpression(scheduler.getCronExpression());
+        schedulerDto.setNextRunAt(scheduler.getNextRunAt());
+        schedulerDto.setExpired(scheduler.isExpired());
+        schedulerDto.setLastFlight(!scheduler.isExpired() && ProcessTimeUtil.isLastFlight(scheduler));
         return schedulerDto;
     }
 
-    /**
-     * Method use to get the source job queue dto
-     * @param jobQueue
-     * @return SourceJobQueueDto
-     * */
     private SourceJobQueueDto getSourceJobQueueDto(JobQueue jobQueue) {
         SourceJobQueueDto sourceJobQueueDto = new SourceJobQueueDto();
         sourceJobQueueDto.setJobQueueId(jobQueue.getJobQueueId());
@@ -397,28 +1052,93 @@ public class SourceJobServiceImpl implements SourceJobService {
         sourceJobQueueDto.setJobStatusMessage(jobQueue.getJobStatusMessage());
         sourceJobQueueDto.setSkipTime(jobQueue.getSkipTime());
         sourceJobQueueDto.setStartTime(jobQueue.getStartTime());
+        // These three were never copied, and jobSend is a primitive boolean on the DTO, so
+        // every row came back false regardless of what was stored -- 197 of job 1244's 210
+        // runs have job_send true in the database and the API reported none of them.
+        sourceJobQueueDto.setJobSend(jobQueue.isJobSend());
+        sourceJobQueueDto.setRunManual(jobQueue.getRunManual());
+        sourceJobQueueDto.setSkipManual(jobQueue.getSkipManual());
         return sourceJobQueueDto;
     }
 
+
     /**
-     * Method use to get the local datetime for next flight
-     * @param scheduler
-     * @return LocalDateTime
-     * */
-    private LocalDateTime getLocalDateTime(Scheduler scheduler) {
-        LocalDateTime nextJobRun = null;
-        if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !ProcessUtil.isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.parseLong(scheduler.getRecurrence()));
+     * The profile screen's activity card, in one query pair instead of the whole job list.
+     *
+     * Scoped to the caller's own appUserId, which comes from the token rather than the request, so
+     * nothing here can be asked on somebody else's behalf -- which is why the endpoint takes no user
+     * parameter. And to the caller's workspace as well (MIG-166): the id alone also matched another
+     * workspace's job naming them as its assignee, which nothing in the schema forbids, and the card
+     * then showed that workspace's job by name. A caller scoped to no workspace has no activity.
+     *
+     * Returns an empty shape rather than an error when nobody is signed in or nothing has run --
+     * this card is supplementary, and a profile that fails to load because a person has no jobs
+     * yet would be worse than one that says so.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ResponseDto fetchMyActivity(int limit, int windowDays) throws Exception {
+        UserActivityDto activity = new UserActivityDto();
+        activity.setWindowDays(windowDays);
+        Long callerId = TenantContext.getAppUserId();
+        if (callerId == null) {
+            return new ResponseDto(SUCCESS, "No activity.", activity);
         }
-        return nextJobRun;
+
+        TenantScope scope = TenantContext.scope();
+        boolean allTenants = scope.isAllTenants();
+        long tenantId = allTenants ? TenantScope.NO_TENANT_MATCHES : ((TenantScope.Scoped) scope).tenantId();
+        if (!allTenants && tenantId == TenantScope.NO_TENANT_MATCHES) {
+            return new ResponseDto(SUCCESS, "No activity.", activity);
+        }
+
+        List<Object[]> assigned = this.sourceJobRepository.countAssignedTo(callerId, allTenants, tenantId);
+        if (!assigned.isEmpty() && assigned.get(0) != null) {
+            activity.setJobsAssigned(this.asLong(assigned.get(0)[0]));
+            activity.setActiveJobs(this.asLong(assigned.get(0)[1]));
+        }
+
+        List<Object[]> counts = this.jobQueueRepository.countRecentRunsForAssignee(
+            callerId, allTenants, tenantId, BusinessTime.timestampOf(BusinessTime.now().minusDays(windowDays)));
+        if (!counts.isEmpty() && counts.get(0) != null) {
+            activity.setRecentRuns(this.asLong(counts.get(0)[0]));
+            activity.setRecentFailures(this.asLong(counts.get(0)[1]));
+        }
+
+        for (Object[] row : this.jobQueueRepository.findRecentRunsForAssignee(callerId, allTenants, tenantId, limit)) {
+            UserActivityDto.Run run = new UserActivityDto.Run();
+            run.setJobQueueId(this.asLongOrNull(row[0]));
+            run.setJobId(this.asLongOrNull(row[1]));
+            run.setJobName((String) row[2]);
+            run.setJobStatus((String) row[3]);
+            run.setStartTime(this.asDateTime(row[4]));
+            run.setEndTime(this.asDateTime(row[5]));
+            // Only on a run that went wrong. A completed run's message says nothing worth a line
+            // on a profile page, and some of them are long.
+            if (row[3] != null && "FAILED".equalsIgnoreCase(String.valueOf(row[3]))) {
+                run.setJobStatusMessage((String) row[6]);
+            }
+            activity.getRuns().add(run);
+        }
+        for (Object[] row : this.sourceJobRepository.outcomesForAssignee(callerId, allTenants, tenantId)) {
+            activity.getOutcomes().add(new UserActivityDto.Outcome(
+                String.valueOf(row[0]), this.asLong(row[1])));
+        }
+        return new ResponseDto(SUCCESS, "Activity fetched successfully.", activity);
+    }
+
+    /** Native counts come back as whatever the driver picked -- Long, BigInteger, Integer. */
+    private long asLong(Object value) {
+        return value instanceof Number ? ((Number) value).longValue() : 0L;
+    }
+
+    private Long asLongOrNull(Object value) {
+        return value instanceof Number ? ((Number) value).longValue() : null;
+    }
+
+    /** A run's time as the profile shows it: Chicago wall-clock (the cell is an instant since V100). */
+    private LocalDateTime asDateTime(Object value) {
+        return BusinessTime.wallClockOf(value);
     }
 
 }

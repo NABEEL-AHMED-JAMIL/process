@@ -1,24 +1,30 @@
 package process.api;
 
+import org.barco.platform.security.BuilderAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import process.model.dto.MessageQSearchDto;
 import process.model.dto.QueueMessageStatusDto;
 import process.model.dto.ResponseDto;
 import process.model.service.MessageQService;
 import process.util.ProcessUtil;
-import process.util.exception.ExceptionUtil;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * Api use to perform crud operation on dashboard
  * @author Nabeel Ahmed
- */
+ * */
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping(value = "/message.json")
+@PreAuthorize("hasRole('TENANT_USER')")
 public class MessageQRestApi {
 
     private Logger logger = LoggerFactory.getLogger(MessageQRestApi.class);
@@ -29,67 +35,50 @@ public class MessageQRestApi {
         this.messageQService = messageQService;
     }
 
-    /**
-     * Fetch all message queue by create time (default week data)
-     * @param messageQSearch
-     * @return ResponseEntity
-     * */
     @RequestMapping(value = "/fetchLogs", method = RequestMethod.POST)
     public ResponseEntity<?> fetchLogs(
         @RequestBody MessageQSearchDto messageQSearch) {
         try {
             return new ResponseEntity<>(this.messageQService.fetchLogs(messageQSearch), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while fetchLogs ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            logger.error("An error occurred while fetchLogs ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    /**
-     * Only the queue job be failed
-     * @param jobQId
-     * @return ResponseEntity
-     * */
+    @BuilderAction
     @RequestMapping(value = "/failJobLogs", method = RequestMethod.DELETE)
     public ResponseEntity<?> failJobLogs(
         @RequestParam Long jobQId) {
         try {
             return new ResponseEntity<>(this.messageQService.failJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while failJobLogs ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            logger.error("An error occurred while failJobLogs ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    /**
-     * Only the queue job be interrupted
-     * @param jobQId
-     * @return ResponseEntity
-     * */
+    @BuilderAction
     @RequestMapping(value = "/interruptJobLogs", method = RequestMethod.DELETE)
     public ResponseEntity<?> interruptJobLogs(
         @RequestParam Long jobQId) {
         try {
             return new ResponseEntity<>(this.messageQService.interruptJobLogs(jobQId), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while interruptJobLogs ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            logger.error("An error occurred while interruptJobLogs ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    /**
-     * Api use to change the status of running job
-     * @param queueMessageStatus
-     * @return ResponseEntity
-     * */
+    @BuilderAction
     @RequestMapping(value = "/changeJobStatus", method = RequestMethod.PUT)
     public ResponseEntity<?> changeJobStatus(
         @RequestBody QueueMessageStatusDto queueMessageStatus) {
         try {
             return new ResponseEntity<>(this.messageQService.changeJobStatus(queueMessageStatus), HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("An error occurred while changeJobStatus ", ExceptionUtil.getRootCause(ex));
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.BAD_REQUEST);
+            logger.error("An error occurred while changeJobStatus ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }

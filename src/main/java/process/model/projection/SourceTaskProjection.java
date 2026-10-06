@@ -6,25 +6,27 @@ import process.model.enums.Status;
 
 /**
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface SourceTaskProjection {
 
-    public Long getTaskDetailId();
+    Long getTaskDetailId();
 
-    public String getTaskName();
+    String getTaskName();
 
-    public String getTaskPayload();
+    String getTaskPayload();
 
-    public Status getTaskStatus();
+    Status getTaskStatus();
 
-    public String getQueueTopicPartition();
+    String getQueueTopicPartition();
 
-    public String getServiceName();
+    String getServiceName();
 
-    public String getHomePage();
+    Long getHomePage();
 
-    public String getPipelineTaskId();
+    String getPipelineTaskId();
+
+    String getGroupLabel();
 
 }

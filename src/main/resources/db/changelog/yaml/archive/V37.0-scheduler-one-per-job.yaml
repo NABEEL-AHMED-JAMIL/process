@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 37.0-scheduler-one-per-job
+      author: nabeel.amd93
+      description: "One scheduler row per job, as a constraint -- the code has always assumed it (findSchedulerByJobId returns a single row, so a second turns every by-id read of that job into a 500) and nothing enforced it; refuses to apply where duplicates already exist, which is the right failure because those jobs are already broken"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V37.0-scheduler-one-per-job/V37__scheduler_one_per_job.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE scheduler DROP CONSTRAINT IF EXISTS uk_scheduler_job_id;

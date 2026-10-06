@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 35.0-analytics-query-second-dataset
+      author: nabeel.amd93
+      description: "Give analytics_query somewhere to keep a second dataset, so a saved SQL query that joins two files keeps both of its inputs -- two nullable columns holding the connection ALIAS and path of the file the engine registers as dataset2, constrained as a pair because half a location cannot be resolved -- and the same pair on analytics_query_run, so the audit line names every file a run actually read"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V35.0-analytics-query-second-dataset/V35__analytics_query_second_dataset.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE analytics_query_run DROP COLUMN IF EXISTS second_dataset_path;
+              ALTER TABLE analytics_query_run DROP COLUMN IF EXISTS second_connection_alias;
+              ALTER TABLE analytics_query DROP CONSTRAINT IF EXISTS ck_analytics_query_second_dataset_pair;
+              ALTER TABLE analytics_query DROP COLUMN IF EXISTS second_dataset_path;
+              ALTER TABLE analytics_query DROP COLUMN IF EXISTS second_connection_alias;

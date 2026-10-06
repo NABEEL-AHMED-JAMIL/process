@@ -1,0 +1,2 @@
+# Fully-qualified names kept inline on purpose: a simple-name conflict in that file.
+src/main/java/process/config/StorageClientFactory.java|software.amazon.awssdk.services.s3.model.Bucket

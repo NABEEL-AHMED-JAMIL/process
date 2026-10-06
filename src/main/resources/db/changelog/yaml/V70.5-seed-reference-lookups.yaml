@@ -1,0 +1,86 @@
+databaseChangeLog:
+  # The reference rows every etl_job needs, for a database that has none of them (MIG-32).
+  #
+  # The id rule this records, and that SeedIdRangeTest holds every changeset to: a row a changeset seeds with a
+  # fixed id takes one below 1000; every sequence in the V50 baseline starts at 1000 and owns everything above.
+  # The two ranges cannot meet, so a seed can be added at any time without asking what the sequence has handed
+  # out. (The old convention -- V2 hardcoded 1001-1019, V9 seeded at 1020+ "to avoid" them -- lived inside the
+  # sequence's own range and was written down nowhere; it is retired with V1-V49.) Ids 1-999 are allocated in
+  # the order changesets claim them: 1 kafka_connection_profile (V70.2), 2-4 lookup_data (here).
+  #
+  # Seeded by name, not id: a long-lived database already has these families at the ids V2 gave them (1002,
+  # 1017, 1033 on dev), code only ever finds them by lookup_type, and each changeset marks itself ran there.
+  #
+  # QUEUE_FETCH_LIMIT is 1000, what ProducerBulkEngine already dispatched without it (DEFAULT_QUEUE_FETCH_LIMIT);
+  # the setting now exists to be changed, and the "missing, dispatching 1000" warning stops. Not encrypted:
+  # the engine reads it directly (SettingServiceImpl refuses to encrypt it). The two families are top-level and
+  # platform-owned; each workspace's home pages and groups are rows under them, stamped with its tenant.
+  - changeSet:
+      id: 70.5-seed-lookup-queue-fetch-limit
+      author: nabeel.amd93
+      description: "Seed the QUEUE_FETCH_LIMIT lookup where there is none (MIG-32)"
+      preConditions:
+        - onFail: MARK_RAN
+        - onFailMessage: QUEUE_FETCH_LIMIT already exists; kept as it is.
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM lookup_data WHERE lookup_type = 'QUEUE_FETCH_LIMIT'
+      changes:
+        - insert:
+            tableName: lookup_data
+            columns:
+              - column: {name: lookup_id, valueNumeric: 2}
+              - column: {name: lookup_type, value: QUEUE_FETCH_LIMIT}
+              - column: {name: lookup_value, value: "1000"}
+              - column: {name: description, value: "This Queue fetch size use to fetch the limit of data from db"}
+              - column: {name: is_encrypted, valueBoolean: false}
+              - column: {name: date_created, valueComputed: now()}
+      rollback:
+        - sql:
+            sql: DELETE FROM lookup_data WHERE lookup_id = 2 AND lookup_type = 'QUEUE_FETCH_LIMIT'
+  - changeSet:
+      id: 70.5-seed-lookup-pipeline-home-pages
+      author: nabeel.amd93
+      description: "Seed the PIPELINE_HOME_PAGES lookup where there is none (MIG-32)"
+      preConditions:
+        - onFail: MARK_RAN
+        - onFailMessage: PIPELINE_HOME_PAGES already exists; kept as it is.
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM lookup_data WHERE lookup_type = 'PIPELINE_HOME_PAGES'
+      changes:
+        - insert:
+            tableName: lookup_data
+            columns:
+              - column: {name: lookup_id, valueNumeric: 3}
+              - column: {name: lookup_type, value: PIPELINE_HOME_PAGES}
+              - column: {name: lookup_value, value: "Home Pages"}
+              - column: {name: description, value: "Add internal and external Home Page URLs to redirect users after job completion."}
+              - column: {name: is_encrypted, valueBoolean: false}
+              - column: {name: date_created, valueComputed: now()}
+      rollback:
+        - sql:
+            sql: DELETE FROM lookup_data WHERE lookup_id = 3 AND lookup_type = 'PIPELINE_HOME_PAGES'
+  - changeSet:
+      id: 70.5-seed-lookup-task-groups
+      author: nabeel.amd93
+      description: "Seed the TASK_GROUPS lookup where there is none (MIG-32)"
+      preConditions:
+        - onFail: MARK_RAN
+        - onFailMessage: TASK_GROUPS already exists; kept as it is.
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM lookup_data WHERE lookup_type = 'TASK_GROUPS'
+      changes:
+        - insert:
+            tableName: lookup_data
+            columns:
+              - column: {name: lookup_id, valueNumeric: 4}
+              - column: {name: lookup_type, value: TASK_GROUPS}
+              - column: {name: lookup_value, value: "TASK_GROUPS"}
+              - column: {name: description, value: "Manage and organize tasks into groups for easier configuration and execution."}
+              - column: {name: is_encrypted, valueBoolean: false}
+              - column: {name: date_created, valueComputed: now()}
+      rollback:
+        - sql:
+            sql: DELETE FROM lookup_data WHERE lookup_id = 4 AND lookup_type = 'TASK_GROUPS'

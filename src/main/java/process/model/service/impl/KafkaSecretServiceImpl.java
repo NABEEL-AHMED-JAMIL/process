@@ -1,0 +1,360 @@
+package process.model.service.impl;
+
+import process.util.BusinessTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import process.model.dto.KafkaSecretDto;
+import process.model.dto.ObjectContentDto;
+import process.model.dto.ResponseDto;
+import process.model.enums.KafkaSecretKind;
+import process.model.enums.UserRole;
+import process.identity.IdentityPort;
+import process.config.StoragePropertyDefaults;
+import process.model.service.KafkaSecretService;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
+import process.storage.TrustedStorageOperations;
+import process.security.TenantContext;
+import process.util.EncryptionUtil;
+import process.util.KafkaCertificateUtil;
+import process.util.KafkaSecretPath;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static process.util.ProcessUtil.ERROR;
+import static process.util.ProcessUtil.SUCCESS;
+import java.util.Date;
+
+/**
+ * @author Nabeel Ahmed
+ * */
+@Service
+public class KafkaSecretServiceImpl implements KafkaSecretService {
+
+    private final Logger logger = LoggerFactory.getLogger(KafkaSecretServiceImpl.class);
+
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    /** Said for a file that is gone and for a bucket that cannot be reached alike; both are true. */
+    private static final String UNREADABLE =
+        "That file could not be read from storage. Check it is still there, or upload it again.";
+
+    /** Certificates and keys are a few kilobytes; a store is tens. Anything larger is a mistake. */
+    @Value("${kafka.secret.max-file-size-kb:512}")
+    private int maxFileSizeKb;
+
+    /** The trusted principals this class presents (MIG-65): paths it builds for the caller's own profile. */
+    private static final TrustedAccess STORE_CERTIFICATE =
+        TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "store Kafka key material under a path built for the caller's profile");
+    private static final TrustedAccess READ_CERTIFICATE =
+        TrustedAccess.of(TrustedCaller.KAFKA_SECRETS, "read Kafka key material the caller's profile references");
+
+    private final TrustedStorageOperations storageBrowserService;
+    private final IdentityPort identity;
+    private final EncryptionUtil encryptionUtil;
+    /** The platform's config bucket, read through the same expression its guard and its seeding use. */
+    private final String secretBucket;
+
+    public KafkaSecretServiceImpl(TrustedStorageOperations storageBrowserService,
+        IdentityPort identity, EncryptionUtil encryptionUtil,
+        @Value(StoragePropertyDefaults.CONFIG_BUCKET) String secretBucket) {
+        this.storageBrowserService = storageBrowserService;
+        this.identity = identity;
+        this.encryptionUtil = encryptionUtil;
+        this.secretBucket = secretBucket;
+    }
+
+    @Override
+    public String secretBucket() {
+        return this.secretBucket;
+    }
+
+    @Override
+    public ResponseDto uploadSecret(MultipartFile file, KafkaSecretKind kind) throws Exception {
+        if (file == null || file.isEmpty()) {
+            return new ResponseDto(ERROR, "Choose a file to upload.");
+        }
+        if (kind == null) {
+            return new ResponseDto(ERROR, "Say what kind of file this is.");
+        }
+        Long callerId = TenantContext.getAppUserId();
+        if (callerId == null) {
+            return new ResponseDto(ERROR, "Kafka files can only be uploaded by a signed-in user.");
+        }
+        if (file.getSize() > (long) this.maxFileSizeKb * 1024L) {
+            return new ResponseDto(ERROR, String.format(
+                "That file is larger than the %dKB limit for Kafka certificates.", this.maxFileSizeKb));
+        }
+
+        byte[] bytes = this.readAll(file);
+        KafkaSecretDto summary;
+        try {
+            // Parsed before it is stored, not after: a file that is not what it claims to be should
+            // be refused while the person is still looking at the form, and refusing early also
+            // keeps unreadable rubbish out of the bucket.
+            summary = this.describe(bytes, kind);
+        } catch (IllegalArgumentException invalid) {
+            return new ResponseDto(ERROR, invalid.getMessage());
+        }
+
+        KafkaSecretPath path = KafkaSecretPath.newUpload(callerId, file.getOriginalFilename(), BusinessTime.today());
+        this.storageBrowserService.uploadForWorkflow(STORE_CERTIFICATE, this.secretBucket, path.key(),
+            new ByteArrayInputStream(bytes), bytes.length, "application/octet-stream");
+
+        this.fill(summary, kind, path, (long) bytes.length);
+        // The key is logged; the contents never are.
+        this.logger.info("Stored Kafka {} for user {} at {}/{}.", kind, callerId, this.secretBucket, path.key());
+        return new ResponseDto(SUCCESS, "File uploaded and checked.", summary);
+    }
+
+    @Override
+    public ResponseDto generateTruststore(List<String> caObjectKeys) throws Exception {
+        if (caObjectKeys == null || caObjectKeys.isEmpty()) {
+            return new ResponseDto(ERROR, "Choose at least one CA certificate.");
+        }
+        List<X509Certificate> certificates = new ArrayList<>();
+        for (String objectKey : caObjectKeys) {
+            if (!this.canUseObject(this.secretBucket, objectKey)) {
+                return new ResponseDto(ERROR, "That certificate could not be found.");
+            }
+            try {
+                certificates.addAll(KafkaCertificateUtil.readCertificates(this.read(objectKey)));
+            } catch (IllegalArgumentException invalid) {
+                return new ResponseDto(ERROR, invalid.getMessage());
+            }
+        }
+
+        String password = this.newStorePassword();
+        byte[] store = KafkaCertificateUtil.buildTruststore(certificates, password.toCharArray());
+        // Encrypted before the bytes are written, because the ciphertext is the only way back into
+        // the store: encrypt() fails outright where lookup.encryption.key is not configured, and
+        // doing it afterwards left a PKCS12 in the bucket on every attempt that nothing could open
+        // and no profile could ever point at.
+        String storePassword = this.encryptionUtil.encrypt(password);
+        // Written beside the certificate it was built from, so the pair can be recognised later and
+        // removed together when the CA is rotated.
+        KafkaSecretPath source = KafkaSecretPath.parse(caObjectKeys.get(0));
+        KafkaSecretPath target = source.sibling(generatedStoreName("truststore"));
+        this.storageBrowserService.uploadForWorkflow(STORE_CERTIFICATE, this.secretBucket, target.key(),
+            new ByteArrayInputStream(store), store.length, "application/x-pkcs12");
+
+        KafkaSecretDto dto = new KafkaSecretDto();
+        this.fill(dto, KafkaSecretKind.TRUSTSTORE, target, (long) store.length);
+        dto.setStorePasswordEnc(storePassword);
+        this.logger.info("Built a truststore for user {} from {} certificate(s) at {}.",
+            TenantContext.getAppUserId(), certificates.size(), target.key());
+        return new ResponseDto(SUCCESS, String.format(
+            "Truststore built from %d certificate%s.", certificates.size(),
+            certificates.size() == 1 ? "" : "s"), dto);
+    }
+
+    @Override
+    public ResponseDto generateKeystore(String certificateObjectKey, String privateKeyObjectKey) throws Exception {
+        if (certificateObjectKey == null || privateKeyObjectKey == null) {
+            return new ResponseDto(ERROR, "A keystore needs both the client certificate and its private key.");
+        }
+        if (!this.canUseObject(this.secretBucket, certificateObjectKey)
+            || !this.canUseObject(this.secretBucket, privateKeyObjectKey)) {
+            return new ResponseDto(ERROR, "Those files could not be found.");
+        }
+
+        List<X509Certificate> chain;
+        PrivateKey privateKey;
+        try {
+            chain = KafkaCertificateUtil.readCertificates(this.read(certificateObjectKey));
+            privateKey = KafkaCertificateUtil.readPrivateKey(this.read(privateKeyObjectKey));
+        } catch (IllegalArgumentException invalid) {
+            return new ResponseDto(ERROR, invalid.getMessage());
+        }
+        if (!KafkaCertificateUtil.keyMatchesCertificate(privateKey, chain.get(0))) {
+            // Caught here rather than at the handshake, which happens on a different machine hours
+            // later and says only that the connection failed.
+            return new ResponseDto(ERROR,
+                "That private key does not belong to that certificate. Check you uploaded the pair "
+                + "the broker issued together.");
+        }
+
+        String password = this.newStorePassword();
+        byte[] store = KafkaCertificateUtil.buildKeystore(privateKey, chain, password.toCharArray());
+        // Encrypted first, for the reason given in generateTruststore.
+        String storePassword = this.encryptionUtil.encrypt(password);
+        KafkaSecretPath target = KafkaSecretPath.parse(certificateObjectKey)
+            .sibling(generatedStoreName("keystore"));
+        this.storageBrowserService.uploadForWorkflow(STORE_CERTIFICATE, this.secretBucket, target.key(),
+            new ByteArrayInputStream(store), store.length, "application/x-pkcs12");
+
+        KafkaSecretDto dto = new KafkaSecretDto();
+        this.fill(dto, KafkaSecretKind.KEYSTORE, target, (long) store.length);
+        dto.setStorePasswordEnc(storePassword);
+        this.logger.info("Built a keystore for user {} at {}.", TenantContext.getAppUserId(), target.key());
+        return new ResponseDto(SUCCESS, "Keystore built from the certificate and key.", dto);
+    }
+
+    /**
+     * Who may point a connection profile at a stored file.
+     *
+     * A tenant admin is included because it owns its tenant's connections and would otherwise be
+     * unable to finish a profile one of its own users started. It is resolved through the owner's
+     * tenant rather than the key, because the key names a user and says nothing about which tenant
+     * that user is in.
+     *
+     * That reach stops at tenant users, the same line Identity draws on the users
+     * screen: an administrator's authority runs over the people it manages, not over its peers.
+     * Sharing a tenant was enough on its own here, so one administrator could attach another's
+     * client private key to a profile of its own and speak to a broker as them.
+     */
+    @Override
+    public boolean canUseObject(String bucket, String objectKey) {
+        if (!this.secretBucket.equals(bucket)) {
+            return false;
+        }
+        KafkaSecretPath path = KafkaSecretPath.parse(objectKey);
+        if (path == null) {
+            return false;
+        }
+        if (TenantContext.isPlatformAdmin()) {
+            return true;
+        }
+        Long caller = TenantContext.getAppUserId();
+        if (caller != null && caller.equals(path.getAppUserId())) {
+            return true;
+        }
+        if (!"TENANT_ADMIN".equals(TenantContext.getUserRole()) || TenantContext.getTenantId() == null) {
+            return false;
+        }
+        Optional<IdentityPort.Person> owner = this.identity.person(path.getAppUserId());
+        return owner.isPresent()
+            && TenantContext.getTenantId().equals(owner.get().getTenantId())
+            && UserRole.TENANT_USER.name().equals(owner.get().getUserRole());
+    }
+
+    /** Checks the bytes really are what the caller called them, and summarises what was found. */
+    private KafkaSecretDto describe(byte[] bytes, KafkaSecretKind kind) {
+        KafkaSecretDto dto = new KafkaSecretDto();
+        if (kind.isCertificate()) {
+            List<X509Certificate> certificates = KafkaCertificateUtil.readCertificates(bytes);
+            X509Certificate first = certificates.get(0);
+            dto.setSubject(this.commonName(first.getSubjectX500Principal().getName()));
+            dto.setIssuer(this.commonName(first.getIssuerX500Principal().getName()));
+            dto.setExpiresOn(DAY.format(first.getNotAfter().toInstant()
+                .atZone(BusinessTime.ZONE).toLocalDate()));
+            dto.setExpired(first.getNotAfter().before(new Date()));
+            return dto;
+        }
+        if (kind == KafkaSecretKind.CLIENT_PRIVATE_KEY) {
+            // Parsed and thrown away. The point is the refusal message, which names PKCS#1 and
+            // encrypted keys specifically -- both are what openssl hands people by default.
+            KafkaCertificateUtil.readPrivateKey(bytes);
+            return dto;
+        }
+        // A pre-built store cannot be opened without its password, which the profile carries and
+        // this request does not. Accepted as given; a wrong one surfaces when the connection is
+        // tested, which is the earliest point anything could tell.
+        if (bytes.length == 0) {
+            throw new IllegalArgumentException("That store file is empty.");
+        }
+        return dto;
+    }
+
+    private void fill(KafkaSecretDto dto, KafkaSecretKind kind, KafkaSecretPath path, Long size) {
+        dto.setKind(kind);
+        dto.setBucket(this.secretBucket);
+        dto.setObjectKey(path.key());
+        dto.setFileName(path.getFileName());
+        dto.setUploadId(path.getUploadId());
+        dto.setUploadedOn(DAY.format(path.getUploadedOn()));
+        dto.setSizeBytes(size);
+    }
+
+    /**
+     * Reads a stored file, or fails the way the rest of this class fails.
+     *
+     * canUseObject settles whose key it is; it says nothing about whether the object is still in
+     * the bucket. A certificate deleted underneath a console that still lists it comes back as the
+     * storage provider's own RuntimeException, and letting that out of here turned "that file is
+     * gone" into a 500 with no message on it -- for the one case the caller can actually fix.
+     */
+    private byte[] read(String objectKey) throws Exception {
+        ObjectContentDto content;
+        try {
+            content = this.storageBrowserService.readForWorkflow(READ_CERTIFICATE, this.secretBucket, objectKey);
+        } catch (RuntimeException unreadable) {
+            // Logged rather than reported: a bucket that is unreachable and a file that is gone
+            // look the same from here, and only one of them is the caller's to do anything about.
+            this.logger.warn("Could not read Kafka secret {}/{}.", this.secretBucket, objectKey, unreadable);
+            throw new IllegalArgumentException(UNREADABLE);
+        }
+        if (content == null || content.getContent() == null) {
+            throw new IllegalArgumentException(UNREADABLE);
+        }
+        try (InputStream in = content.getContent()) {
+            return this.drain(in);
+        }
+    }
+
+    private byte[] readAll(MultipartFile file) throws Exception {
+        try (InputStream in = file.getInputStream()) {
+            return this.drain(in);
+        }
+    }
+
+    private byte[] drain(InputStream in) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int read;
+        while ((read = in.read(chunk)) != -1) {
+            out.write(chunk, 0, read);
+        }
+        return out.toByteArray();
+    }
+
+    /**
+     * A password for a store the server both writes and reads.
+     *
+     * Random and never shown to anybody: a PKCS12 file has to have one, but nothing here needs a
+     * human to type it, so making it memorable would only weaken it. It is stored encrypted on the
+     * profile and decrypted when the Kafka client is built.
+     */
+    private String newStorePassword() {
+        return UUID.randomUUID().toString() + UUID.randomUUID().toString();
+    }
+
+    /**
+     * A name of its own for each generated store, in the folder of the certificate it came from.
+     *
+     * The folder keeps the pair together; the suffix is what stops a second generation writing
+     * over the first. They are not interchangeable files -- each store carries its own random
+     * password, held encrypted on whichever profile was saved against it -- so a fixed name meant
+     * building a second store from the same certificate left every earlier profile pointing at a
+     * file its password no longer opens, and nothing said so until the next handshake.
+     */
+    private static String generatedStoreName(String kind) {
+        return kind + "-" + UUID.randomUUID().toString().substring(0, 8) + ".p12";
+    }
+
+    private String commonName(String distinguishedName) {
+        if (distinguishedName == null) {
+            return null;
+        }
+        for (String part : distinguishedName.split(",")) {
+            String trimmed = part.trim();
+            if (trimmed.regionMatches(true, 0, "CN=", 0, 3)) {
+                return trimmed.substring(3).trim();
+            }
+        }
+        return distinguishedName;
+    }
+
+}

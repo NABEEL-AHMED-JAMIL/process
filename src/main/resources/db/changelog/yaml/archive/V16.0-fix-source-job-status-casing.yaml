@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 16.0-fix-source-job-status-casing
+      author: nabeel.amd93
+      description: "Normalize source_job.job_status casing (ACTIVE/INACTIVE/DELETE -> Active/Inactive/Delete) so it matches the Status enum's case-sensitive @Enumerated(STRING) mapping -- fixes jobs silently missing from listSourceJob and a hard crash on any full-entity fetch of the affected rows"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V16.0-fix-source-job-status-casing/V16__fix_source_job_status_casing.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Not reversible -- the original casing was itself the bug, not a valid prior
+              -- state worth restoring. No-op rollback.
+              SELECT 1;

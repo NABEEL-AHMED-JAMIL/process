@@ -2,38 +2,164 @@ package process.model.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import process.model.enums.Status;
 import process.model.pojo.SourceTaskType;
 import process.model.projection.SourceTaskTypeProjection;
+import process.model.projection.TopicOptionProjection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
+import org.springframework.data.domain.Pageable;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 @Repository
 public interface SourceTaskTypeRepository extends JpaRepository<SourceTaskType, Long> {
 
-    /**
-     * Note :- Method use to find the source task type by source task type id and status
-     * @param sourceTaskTypeId
-     * @param status
-     * @return List<SourceTaskType>
-     * */
-    public Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
+    String TOPIC_OPTION_SELECT = "select source_task_type_id as sourceTaskTypeId, service_name as serviceName,\n" +
+        "queue_topic_partition as queueTopicPartition, kafka_connection_profile_id as kafkaConnectionProfileId, tenant_id as tenantId,\n" +
+        "CONCAT(UPPER(SUBSTR(CAST(task_type_status as varchar), 1, 1)), LOWER(SUBSTR(CAST(task_type_status as varchar), 2))) as status\n" +
+        "from source_task_type where task_type_status <> 'Delete'\n";
 
     /**
-     * Note :- Method use to find all soruce task type
-     * @return List<SourceTaskTypeProjection>
-     * */
-    @Query(value = "select source_task_type.source_task_type_id as sourceTaskTypeId, source_task_type.description as description, task_type_status as status,\n" +
+     * The topics a picker offers for what was typed: the first {@code limit} whose name or
+     * Kafka topic contains the (already lower-cased, %-wrapped) term; blank matches everything.
+     * A tenant id of 0 means every workspace -- a platform admin's view.
+     */
+    @Query(value = TOPIC_OPTION_SELECT +
+        "and (:allTenants = true or tenant_id = :tenantId)\n" +
+        "and (:q = '' or lower(service_name) like :q or lower(coalesce(queue_topic_partition, '')) like :q)\n" +
+        "order by service_name asc", nativeQuery = true)
+    List<TopicOptionProjection> searchTopicOptions(@Param("allTenants") boolean allTenants, @Param("tenantId") long tenantId,
+        @Param("q") String q,
+        Pageable limit);
+
+    /** The picker rows for known ids -- how a box shows the label of a value it was handed. */
+    @Query(value = TOPIC_OPTION_SELECT + "and source_task_type_id in (:ids) order by service_name asc", nativeQuery = true)
+    List<TopicOptionProjection> fetchTopicOptionsByIds(@Param("ids") Collection<Long> ids);
+
+    /** One Kafka profile's topics as picker rows; on the default profile the workspace's unrouted topics ride along. */
+    @Query(value = TOPIC_OPTION_SELECT +
+        "and (kafka_connection_profile_id = :profileId\n" +
+        "     or (:includeUnrouted = true and kafka_connection_profile_id is null and tenant_id = :tenantId))\n" +
+        "order by service_name asc", nativeQuery = true)
+    List<TopicOptionProjection> fetchTopicOptionsForProfile(@Param("profileId") long profileId,
+        @Param("includeUnrouted") boolean includeUnrouted, @Param("tenantId") long tenantId);
+
+    /**
+     * The platform default profile's topics as picker rows: those that name it, plus the unrouted
+     * topics of every workspace with no Kafka profile of its own -- the resolver sends those here
+     * (KafkaConnectionResolver tier 4). See {@link #PLATFORM_DEFAULT_SCOPE}.
+     */
+    @Query(value = TOPIC_OPTION_SELECT + "and " + PLATFORM_DEFAULT_SCOPE +
+        "order by service_name asc", nativeQuery = true)
+    List<TopicOptionProjection> fetchTopicOptionsForPlatformDefault(@Param("profileId") long profileId,
+        @Param("allTenants") boolean allTenants, @Param("tenantId") Long tenantId);
+
+    Optional<SourceTaskType> findSourceTaskTypeBySourceTaskTypeIdAndStatus(Long sourceTaskTypeId, Status status);
+
+    long countByTenantIdAndStatusNot(Long tenantId, Status status);
+
+    /**
+     * Topics a workspace is actually running: an active topic with at least one live task on
+     * it. A catalogue of ten thousand seeded topics nobody sends to is not ten thousand
+     * topic-hours a night; the ones with a task are what the platform keeps consumers for.
+     */
+    @Query(value = "select count(distinct st.source_task_type_id) from source_task st"
+        + " join source_task_type stt on stt.source_task_type_id = st.source_task_type_id"
+        + " where stt.tenant_id = :tenantId and stt.task_type_status = 'Active' and st.task_status <> 'Delete'", nativeQuery = true)
+    long countTopicsInUse(@Param("tenantId") Long tenantId);
+
+    List<SourceTaskType> findByStatus(Status status);
+
+    /**
+     * Whether a task type that still exists points at this Kafka connection profile.
+     *
+     * Deliberately not a plain existsByKafkaConnectionProfileId. A task type is never removed from
+     * this table -- deleteSourceTaskType only sets task_type_status = Delete and leaves
+     * kafka_connection_profile_id sitting on the row -- so the unqualified check counted task types
+     * that no screen lists and nobody can reassign, and the profile they once used could never be
+     * deleted again.
+     */
+    boolean existsByKafkaConnectionProfileIdAndStatusNot(Long kafkaConnectionProfileId, Status status);
+
+    String FETCH_ALL_SOURCE_TASK_TYPE_SELECT = "select source_task_type.source_task_type_id as sourceTaskTypeId, source_task_type.description as description, \n" +
+        "CONCAT(UPPER(SUBSTR(CAST(task_type_status as varchar), 1, 1)), LOWER(SUBSTR(CAST(task_type_status as varchar), 2))) as status,\n" +
         "source_task_type.queue_topic_partition as queueTopicPartition, source_task_type.service_name as serviceName,\n" +
-        "count(source_task.source_task_type_id) as totalTaskLink, source_task_type.is_schema_register as schemaRegister, source_task_type.schema_payload as schemaPayload\n" +
+        "source_task_type.kafka_connection_profile_id as kafkaConnectionProfileId,\n" +
+        "count(source_task.source_task_type_id) as totalTaskLink\n" +
         "from source_task_type\n" +
+
         "left join source_task on source_task.source_task_type_id = source_task_type.source_task_type_id\n" +
+        "and source_task.task_status != 'Delete'\n";
+
+    @Query(value = FETCH_ALL_SOURCE_TASK_TYPE_SELECT +
         "group by source_task_type.source_task_type_id\n" +
         "order by source_task_type.source_task_type_id asc", nativeQuery = true)
-    public List<SourceTaskTypeProjection> fetchAllSourceTaskType();
+    List<SourceTaskTypeProjection> fetchAllSourceTaskType();
+
+    // One workspace, its own task types, and nothing else.
+    //
+    // This used to carry "or source_task_type.tenant_id is null", because a NULL owner meant
+    // "the platform's, shared with everyone". That reading was load-bearing for exactly one row
+    // and an accident for five others: a platform admin creating a task type got a NULL owner
+    // (SettingServiceImpl.getSourceTaskType), so five per-workspace types called "Test User 1-5
+    // Task" were on every tenant's Task Types screen, carrying their Kafka topic names with them.
+    // V39 gave every row an owner and made the column NOT NULL, so there is no longer a value
+    // that means "everyone" and no clause here to honour one.
+    @Query(value = FETCH_ALL_SOURCE_TASK_TYPE_SELECT +
+        "where source_task_type.tenant_id = :tenantId\n" +
+        "group by source_task_type.source_task_type_id\n" +
+        "order by source_task_type.source_task_type_id asc", nativeQuery = true)
+    List<SourceTaskTypeProjection> fetchAllSourceTaskTypeForTenant(@Param("tenantId") Long tenantId);
+
+    /**
+     * The topics that publish through one Kafka profile: those that name it, plus -- when the
+     * profile is that workspace's default -- the workspace's topics that name no profile at all,
+     * since the resolver sends those here. Asked per profile so a workspace with ten thousand
+     * topics loads the pane it is looking at, not every pane at once.
+     */
+    @Query(value = FETCH_ALL_SOURCE_TASK_TYPE_SELECT +
+        "where source_task_type.task_type_status <> 'Delete' and ("
+        + "source_task_type.kafka_connection_profile_id = :profileId "
+        + "or (:includeUnrouted = true and source_task_type.kafka_connection_profile_id is null "
+        // The platform's own profile has no workspace, and Hibernate binds that null as bytea, which
+        // Postgres will neither compare with nor cast to a bigint (the Kafka connections screen got a
+        // 500). Through text, a null stays null and a real id stays itself.
+        + "    and source_task_type.tenant_id = cast(cast(:tenantId as text) as bigint)))\n" +
+        "group by source_task_type.source_task_type_id\n" +
+        "order by source_task_type.service_name asc", nativeQuery = true)
+    List<SourceTaskTypeProjection> fetchTopicsForProfile(@Param("profileId") Long profileId,
+        @Param("includeUnrouted") boolean includeUnrouted, @Param("tenantId") Long tenantId);
+
+    /**
+     * Which topics publish through the platform default profile, as a condition on source_task_type.
+     *
+     * Those that name it, and those that name no profile in a workspace that has no Kafka profile
+     * of its own -- "of its own" as the resolver reads it: any row not deleted, inactive included,
+     * since a workspace that brought its own brokers is refused rather than put on the platform's.
+     * allTenants is a platform admin's view; a tenant caller sees its own workspace's topics only,
+     * including the ones that name the platform profile explicitly.
+     *
+     * tenantId is null for a platform admin, so it goes through text for the same reason as in
+     * fetchTopicsForProfile: Hibernate binds an untyped null as bytea.
+     */
+    String PLATFORM_DEFAULT_SCOPE =
+        "(:allTenants = true or source_task_type.tenant_id = cast(cast(:tenantId as text) as bigint))\n"
+        + "and (source_task_type.kafka_connection_profile_id = :profileId\n"
+        + "     or (source_task_type.kafka_connection_profile_id is null and not exists (\n"
+        + "         select 1 from kafka_connection_profile own where own.tenant_id = source_task_type.tenant_id\n"
+        + "         and own.status <> 'Delete')))\n";
+
+    /** The platform default profile's topics for the Kafka pane; see {@link #PLATFORM_DEFAULT_SCOPE}. */
+    @Query(value = FETCH_ALL_SOURCE_TASK_TYPE_SELECT +
+        "where source_task_type.task_type_status <> 'Delete' and " + PLATFORM_DEFAULT_SCOPE +
+        "group by source_task_type.source_task_type_id\n" +
+        "order by source_task_type.service_name asc", nativeQuery = true)
+    List<SourceTaskTypeProjection> fetchTopicsForPlatformDefault(@Param("profileId") Long profileId,
+        @Param("allTenants") boolean allTenants, @Param("tenantId") Long tenantId);
 
 }

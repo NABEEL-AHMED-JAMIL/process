@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 161.0-demote-identity-foreign-keys
+      author: nabeel.amd93
+      description: "Every foreign key from a Core table onto Identity's six tables goes, in every etl_job, cutover or not (MIG-166)"
+      # V69.1 dropped them on a database whose Identity tables were frozen and copied to identity_db -- the live one
+      # (2026-09-24: none left). A database built from this changelog skipped V69.1 and still carried them: the
+      # tenant fan-in (every .tenant_id onto tenant.tenant_id) and the audit stamps onto app_user. Here they are
+      # demoted unconditionally: the columns stay, as opaque ids, and the compensating controls carry the guarantee
+      # (Identity's lifecycle events, WorkspaceRetirement, the nightly orphan audit, IdentityPort.live on writes).
+      # Keys inside Identity's cluster (C14/C16, user_page_access's cascades) and inside Core are not touched.
+      # On a database where V69.1 already ran, this finds nothing and changes nothing.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE fk record;
+              BEGIN
+                FOR fk IN SELECT conrelid::regclass AS owner, conname FROM pg_constraint
+                  WHERE contype = 'f'
+                    AND confrelid::regclass::text IN ('tenant', 'app_user', 'tenant_request', 'page_access_profile',
+                      'page_access_profile_page', 'user_page_access')
+                    AND conrelid::regclass::text NOT IN ('tenant', 'app_user', 'tenant_request', 'page_access_profile',
+                      'page_access_profile_page', 'user_page_access')
+                LOOP
+                  EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', fk.owner, fk.conname);
+                END LOOP;
+              END $$;
+      # Rolling back leaves the keys demoted: they cannot come back once a row names a workspace or person that
+      # exists only in identity_db, and demoted is the state every etl_job is in after V69.1 anyway.
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: SELECT 1;

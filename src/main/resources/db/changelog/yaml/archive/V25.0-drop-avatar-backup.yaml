@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 25.0-drop-avatar-backup
+      author: nabeel.amd93
+      description: "Drop avatar_backup_20260824 -- a pre-migration snapshot with no rows, no references and no remaining purpose"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V25.0-drop-avatar-backup/V25__drop_avatar_backup.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE TABLE IF NOT EXISTS avatar_backup_20260824 (
+                app_user_id   BIGINT,
+                avatar_bucket VARCHAR(255),
+                avatar_key    VARCHAR(512)
+              );

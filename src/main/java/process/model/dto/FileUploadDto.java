@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({ "file", "files", "data" })
 public class FileUploadDto<T> {
@@ -24,6 +24,9 @@ public class FileUploadDto<T> {
     @JsonRawValue
     @JsonProperty("data")
     private T data;
+
+    @JsonProperty("tenantId")
+    private Long tenantId;
 
     public FileUploadDto() { }
 
@@ -61,6 +64,14 @@ public class FileUploadDto<T> {
 
     public void setData(T data) {
         this.data = data;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     @Override

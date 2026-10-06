@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 192.0-forms-lite
+      author: nabeel.amd93
+      description: "Wave 5 Forms (lite): form_definition and form_submission, guarded as V181; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V192.0-forms-lite/V192__forms_lite.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V192.0-forms-lite/V192__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

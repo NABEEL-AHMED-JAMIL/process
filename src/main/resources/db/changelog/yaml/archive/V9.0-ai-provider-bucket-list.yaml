@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 9.0-insert-ai-provider-and-bucket-list
+      author: nabeel.amd93
+      description: "Seed AI_PROVIDER (OpenAI/Anthropic/Ollama) and BUCKET_LIST lookups"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V9.0-ai-provider-bucket-list/V9__insert_ai_provider_and_bucket_list.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DELETE FROM lookup_data WHERE lookup_id IN (1021, 1022, 1023, 1020, 1025, 1026, 1027, 1024);

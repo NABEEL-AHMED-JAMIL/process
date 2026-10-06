@@ -1,0 +1,345 @@
+package process.schema;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * etl_job built from nothing by its own changelog, as a new environment would build it.
+ *
+ * Opt-in, like NotificationStorePostgresTest: runs when NOTIFICATIONS_TEST_DB_URL and its user and
+ * password point at a Postgres server; builds one throwaway database for the class (ScratchEtlJob) and
+ * drops it after. A test that writes rows uses ids no other test here uses.
+ */
+class EtlJobChangelogPostgresTest {
+
+    private static ScratchEtlJob db;
+
+    /** What V195 and V196 drop: the moved tables' copies here and their sequences (those owned by a column go with it). */
+    private static final String[] MOVED_COPIES_DROPPED = {"ai_agent", "analytics_benchmark_result", "analytics_dataset", "payment",
+        "timestamptz_v100_unrepresentable", "ai_agent_seq", "analytics_benchmark_result_seq", "analytics_dataset_seq",
+        "payment_payment_id_seq",
+        // V196
+        "ai_model_connection", "ai_prompt", "ai_prompt_version", "ai_prompt_run", "analytics_query", "analytics_query_run",
+        "analytics_analysis", "analytics_dashboard", "analytics_dashboard_widget", "billing_account", "billing_document",
+        "billing_number_counter", "invoice_line", "notification_moved_mig21", "document_converter_task_moved_mig41",
+        "ai_model_connection_seq", "ai_prompt_seq", "ai_prompt_run_seq", "analytics_analysis_seq", "analytics_dashboard_seq",
+        "analytics_dashboard_widget_seq", "analytics_query_seq", "analytics_query_run_seq", "document_converter_task_id_seq",
+        "billing_account_billing_account_id_seq", "billing_document_billing_document_id_seq", "invoice_line_invoice_line_id_seq",
+        "notification_notification_id_seq"};
+
+    @BeforeAll
+    static void build() throws Exception {
+        db = ScratchEtlJob.build("etl_job_fresh", Arrays.asList("platformKafkaBootstrapServers=broker.platform.test:9092",
+            "platformKafkaSecurityProtocol=PLAINTEXT"));
+    }
+
+    @AfterAll
+    static void drop() throws Exception {
+        if (db != null) {
+            db.close();
+        }
+    }
+
+    @Test
+    void aFreshEtlJobHasNoNotificationTable() {
+        JdbcTemplate sql = db.sql();
+        // It lives in notifications_db now; an empty leftover here would invite someone to write to it.
+        assertThat(sql.queryForObject("SELECT to_regclass('public.notification') IS NULL", Boolean.class)).isTrue();
+        // And document_converter_task lives in media_db (MIG-41, V54).
+        assertThat(sql.queryForObject("SELECT to_regclass('public.document_converter_task') IS NULL", Boolean.class)).isTrue();
+        assertThat(sql.queryForObject("SELECT to_regclass('public.app_user') IS NOT NULL", Boolean.class)).isTrue();
+
+        // MIG-53 (V55): an alias is unique within a workspace, and a platform name (no tenant)
+        // is unique among platform rows -- NULLs must not be distinct here, or two platform rows
+        // could claim one name, the hole bucket_credential has.
+        // MIG-53 part b (V56) gave every analytics alias the connection's id beside it; the analytics tables that carried it
+        // are analytics_db's, and V195/V196 dropped the copies here.
+        // MIG-70 (V57): storage_connection is storage-service's now. The copy here is kept for its
+        // retention period, read-only: every write is refused, and says where the table went.
+        assertThat(sql.queryForObject("SELECT to_regclass('public.storage_connection') IS NOT NULL", Boolean.class)).isTrue();
+        assertThatThrownBy(() -> sql.update("INSERT INTO storage_connection (storage_connection_id, tenant_id, alias, "
+            + "connection_name, is_default, provider, status) VALUES (9001, NULL, 'x', 'c', false, 'MINIO', 'Active')"))
+            .as("insert").hasMessageContaining("storage-service");
+        assertThatThrownBy(() -> sql.update("UPDATE storage_connection SET alias = 'y'")).as("update").hasMessageContaining("storage-service");
+        assertThatThrownBy(() -> sql.update("DELETE FROM storage_connection")).as("delete").hasMessageContaining("storage-service");
+        // MIG-88/89 (V61): billing's tables are billing_db's now. invoice is the one copy left here (V195 dropped payment,
+        // V196 billing_account, billing_document, billing_number_counter and invoice_line): read-only, reads still
+        // answer, and every kind of write -- a truncate included -- is refused naming billing_db.
+        assertThat(sql.queryForObject("SELECT count(*) FROM invoice", Integer.class)).isZero();
+        assertThatThrownBy(() -> sql.update("UPDATE invoice SET status = 'paid'")).as("update").hasMessageContaining("billing_db");
+        assertThatThrownBy(() -> sql.update("DELETE FROM invoice")).as("delete").hasMessageContaining("billing_db");
+        assertThatThrownBy(() -> sql.execute("TRUNCATE invoice")).as("truncate").hasMessageContaining("billing_db");
+        // MIG-147 / MIG-150 (V63): the AI tables are ai_db's (ADR-020). A pipeline step names a prompt by id, and prompts
+        // exist only in ai_db, so pipeline_field.prompt_id is a plain bigint with no foreign key (C2).
+        assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE conrelid = 'pipeline_field'::regclass "
+            + "AND contype = 'f' AND pg_get_constraintdef(oid) LIKE '%(prompt_id)%'", Integer.class)).as("C2 demoted").isZero();
+        // V195 and V196 (owner 2026-10-01): the copies left behind by the moves to ai_db (MIG-147/150), analytics_db
+        // (MIG-128), billing_db (MIG-88/89), notifications_db (MIG-21) and media_db (MIG-41) are gone, with their sequences.
+        for (String relation : MOVED_COPIES_DROPPED) {
+            assertThat(sql.queryForObject("SELECT to_regclass('public.' || ?) IS NULL", Boolean.class, relation)).as(relation).isTrue();
+        }
+        // ai_moved_read_only() and analytics_moved_read_only() guard nothing any more, but stay: V196's rollback puts
+        // them back on the tables it recreates.
+    }
+
+    /**
+     * V196 (owner 2026-10-01) drops the moved tables' copies with their rows; its rollback brings each back empty. Built to
+     * just before V196, run, rolled back: every column, key, index, trigger, policy, comment, grant and sequence of the
+     * copies is as the changelog built it. (The two *_moved_mig* copies were never built by the changelog -- the move
+     * scripts renamed the originals on long-lived instances -- so a built database has neither before nor after.)
+     */
+    @Test
+    void v196RollbackRecreatesTheDroppedCopiesAsTheChangelogBuiltThem() throws Exception {
+        try (ScratchEtlJob scratch = ScratchEtlJob.buildUpTo("etl_job_v196", "196.0-drop-moved-copies")) {
+            JdbcTemplate sql = scratch.sql();
+            List<String> before = shapeOfTheCopies(sql);
+            assertThat(before).as("V196 has something to drop").anyMatch(line -> line.startsWith("column invoice_line."));
+            assertThat(before).noneMatch(line -> line.contains("_moved_mig"));
+
+            scratch.finish();
+            assertThat(shapeOfTheCopies(sql)).as("after V196").isEmpty();
+
+            // V196 and every changeset after it, so a later changeset does not turn this into a test of that one.
+            Integer fromV196 = sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE orderexecuted >= "
+                + "(SELECT orderexecuted FROM databasechangelog WHERE id = '196.0-drop-moved-copies')", Integer.class);
+            scratch.rollback(fromV196 == null ? 1 : fromV196);
+            assertThat(shapeOfTheCopies(sql)).isEqualTo(before);
+        }
+    }
+
+    /** The catalog's account of every relation V196 drops, one line per fact, sorted: what a rollback must restore. */
+    private static List<String> shapeOfTheCopies(JdbcTemplate sql) {
+        String names = "ARRAY['ai_model_connection', 'ai_prompt', 'ai_prompt_version', 'ai_prompt_run', 'analytics_query', "
+            + "'analytics_query_run', 'analytics_analysis', 'analytics_dashboard', 'analytics_dashboard_widget', 'billing_account', "
+            + "'billing_document', 'billing_number_counter', 'invoice_line', 'notification_moved_mig21', "
+            + "'document_converter_task_moved_mig41', 'ai_model_connection_seq', 'ai_prompt_seq', 'ai_prompt_run_seq', "
+            + "'analytics_analysis_seq', 'analytics_dashboard_seq', 'analytics_dashboard_widget_seq', 'analytics_query_seq', "
+            + "'analytics_query_run_seq', 'document_converter_task_id_seq', 'billing_account_billing_account_id_seq', "
+            + "'billing_document_billing_document_id_seq', 'invoice_line_invoice_line_id_seq', 'notification_notification_id_seq']";
+        String rel = "SELECT oid FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname = ANY (" + names + ")";
+        return sql.queryForList(
+            "SELECT 'relation ' || c.relname || ' ' || c.relkind::text || ' rls=' || c.relrowsecurity || ' force=' || c.relforcerowsecurity "
+                + "|| ' acl=' || coalesce(c.relacl::text, '') || ' comment=' || coalesce(obj_description(c.oid, 'pg_class'), '') "
+                + "FROM pg_class c WHERE c.oid IN (" + rel + ") "
+            + "UNION ALL SELECT 'column ' || a.attrelid::regclass::text || '.' || a.attname || ' ' || format_type(a.atttypid, a.atttypmod) "
+                + "|| ' notnull=' || a.attnotnull || ' default=' || coalesce(pg_get_expr(d.adbin, d.adrelid), '') "
+                + "|| ' comment=' || coalesce(col_description(a.attrelid, a.attnum), '') "
+                + "FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum "
+                + "WHERE a.attrelid IN (" + rel + ") AND a.attnum > 0 AND NOT a.attisdropped AND a.attrelid IN "
+                + "(SELECT oid FROM pg_class WHERE relkind = 'r') "
+            + "UNION ALL SELECT 'constraint ' || conrelid::regclass::text || '.' || conname || ' ' || pg_get_constraintdef(oid) "
+                + "FROM pg_constraint WHERE conrelid IN (" + rel + ") "
+            + "UNION ALL SELECT 'index ' || pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid IN (" + rel + ") "
+            + "UNION ALL SELECT 'trigger ' || pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid IN (" + rel + ") AND NOT tgisinternal "
+            + "UNION ALL SELECT 'policy ' || tablename || '.' || policyname || ' ' || cmd || ' ' || roles::text || ' ' "
+                + "|| coalesce(qual, '') || ' ' || coalesce(with_check, '') FROM pg_policies WHERE schemaname = 'public' "
+                + "AND tablename = ANY (" + names + ") "
+            + "UNION ALL SELECT 'sequence ' || s.seqrelid::regclass::text || ' ' || s.seqstart || ' ' || s.seqincrement || ' ' || s.seqcache "
+                + "|| ' owned=' || coalesce((SELECT d.refobjid::regclass::text || '.' || d.refobjsubid FROM pg_depend d "
+                + "WHERE d.objid = s.seqrelid AND d.classid = 'pg_class'::regclass AND d.deptype IN ('a', 'i')), '') "
+                + "FROM pg_sequence s WHERE s.seqrelid IN (" + rel + ") "
+            + "ORDER BY 1", String.class);
+    }
+
+    /**
+     * MIG-71 (V70.0): one scheduler per job and one default Kafka connection per tenant, and one for the
+     * platform, held by the database rather than only by the service layer -- a second instance or a second
+     * service writing either table broke both silently. Two sessions race here as two instances would.
+     */
+    @Test
+    void oneSchedulerPerJobAndOneDefaultKafkaProfilePerOwner() throws Exception {
+        JdbcTemplate sql = db.sql();
+        sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (7101, 'Active', 'T71A', 'Seventy-one A')");
+        sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (7102, 'Active', 'T71B', 'Seventy-one B')");
+        sql.update("INSERT INTO source_job (job_id, date_created, execution, job_name, job_status, priority, tenant_id) "
+            + "VALUES (7101, now(), 'Auto', 'j', 'Active', 1, 7101)");
+        String scheduler = "INSERT INTO scheduler (scheduler_id, frequency, job_id, start_date, start_time) VALUES (?, 'Daily', 7101, current_date, '09:00')";
+
+        assertThat(race(scheduler, new Object[] {7101L}, scheduler, new Object[] {7102L}))
+            .as("two instances scheduling one job").containsExactlyInAnyOrder("ok", "uk_scheduler_job_id");
+        assertThat(sql.queryForObject("SELECT count(*) FROM scheduler WHERE job_id = 7101", Integer.class)).isEqualTo(1);
+
+        String profile = "INSERT INTO kafka_connection_profile (kafka_connection_profile_id, bootstrap_servers, is_default, profile_name, "
+            + "security_protocol, status, tenant_id) VALUES (?, 'b:9092', ?, ?, 'PLAINTEXT', 'Active', ?)";
+        sql.update(profile, 7101L, true, "A default", 7101L);
+        sql.update(profile, 7102L, false, "A other", 7101L);
+        sql.update(profile, 7103L, true, "B default", 7102L);
+        // setAsDefault's two statements -- demote the others, promote this one -- run by two instances at
+        // once for two different profiles of the same tenant. Before the index both committed.
+        String demote = "UPDATE kafka_connection_profile SET is_default = false WHERE tenant_id = 7101 AND kafka_connection_profile_id <> ?";
+        String promote = "UPDATE kafka_connection_profile SET is_default = true WHERE kafka_connection_profile_id = ?";
+        sql.update(demote, 7101L);
+        assertThat(race(promote, new Object[] {7101L}, promote, new Object[] {7102L}))
+            .as("two instances promoting").containsExactlyInAnyOrder("ok", "ux_kcp_one_default_per_tenant");
+        assertThat(sql.queryForObject("SELECT count(*) FROM kafka_connection_profile WHERE tenant_id = 7101 AND is_default",
+            Integer.class)).isEqualTo(1);
+        // Another tenant's default is its own business, and a non-default is never limited.
+        sql.update(profile, 7104L, false, "B other", 7102L);
+        // The platform (no tenant) gets exactly one too: NULLs must not make every platform row distinct.
+        // V70.2 seeded the platform's default, so a second is refused outright.
+        assertThatThrownBy(() -> sql.update(profile, 7106L, true, "Platform two", null))
+            .hasMessageContaining("ux_kcp_one_platform_default");
+    }
+
+    /**
+     * Runs two statements in two sessions at once, each in its own transaction, both started before
+     * either commits. Returns "ok" or the name of the constraint that refused, per session.
+     */
+    private static List<String> race(String first, Object[] firstArgs, String second, Object[] secondArgs) throws Exception {
+        List<String> outcomes = new ArrayList<>();
+        try (Connection a = db.connect(); Connection b = db.connect()) {
+            a.setAutoCommit(false);
+            b.setAutoCommit(false);
+            outcomes.add(attempt(a, first, firstArgs));
+            ExecutorService other = Executors.newSingleThreadExecutor();
+            try {
+                // b blocks on a's uncommitted row until a commits, then fails -- or, without the constraint, succeeds.
+                Future<String> blocked = other.submit(() -> attempt(b, second, secondArgs));
+                Thread.sleep(300);
+                a.commit();
+                String outcome = blocked.get(10, TimeUnit.SECONDS);
+                if ("ok".equals(outcome)) {
+                    b.commit();
+                } else {
+                    b.rollback();
+                }
+                outcomes.add(outcome);
+            } finally {
+                other.shutdownNow();
+            }
+        }
+        return outcomes;
+    }
+
+    private static String attempt(Connection session, String statement, Object[] args) {
+        try (PreparedStatement prepared = session.prepareStatement(statement)) {
+            for (int i = 0; i < args.length; i++) {
+                prepared.setObject(i + 1, args[i]);
+            }
+            prepared.executeUpdate();
+            return "ok";
+        } catch (SQLException refused) {
+            return refused.getMessage().replaceAll("(?s).*constraint \"([^\"]+)\".*", "$1");
+        }
+    }
+
+    /**
+     * MIG-45 (V70.2): a database built from the changelog has a platform default Kafka connection on the
+     * brokers the deployment is configured with, so the resolver's last tier finds a profile rather than
+     * nothing -- and every dispatch stops going out on the auto-configured fallback template unannounced.
+     * The resolver's tier-4 and tier-3 reads, as the repository issues them, find the seeded row.
+     */
+    @Test
+    void aBuiltDatabaseHasAPlatformDefaultKafkaConnection() {
+        JdbcTemplate sql = db.sql();
+        List<Map<String, Object>> platformDefault = sql.queryForList("SELECT kafka_connection_profile_id, bootstrap_servers, "
+            + "security_protocol FROM kafka_connection_profile WHERE tenant_id IS NULL AND is_default = true AND status = 'Active'");
+
+        assertThat(platformDefault).hasSize(1);
+        assertThat(platformDefault.get(0).get("kafka_connection_profile_id")).isEqualTo(1L);
+        assertThat(platformDefault.get(0).get("bootstrap_servers")).isEqualTo("broker.platform.test:9092");
+        assertThat(platformDefault.get(0).get("security_protocol")).isEqualTo("PLAINTEXT");
+        // Below the sequence's first value (1000), so no profile the console creates can ever take its id.
+        assertThat(sql.queryForObject("SELECT start_value FROM pg_sequences WHERE sequencename = 'kafka_connection_profile_seq'",
+            Long.class)).isGreaterThan(1L);
+        // A new tenant has no default of its own (tier 3 misses) and lands on the seeded platform default.
+        sql.update("INSERT INTO tenant (tenant_id, status, tenant_code, tenant_name) VALUES (7201, 'Active', 'T72', 'Seventy-two')");
+        assertThat(sql.queryForList("SELECT kafka_connection_profile_id FROM kafka_connection_profile WHERE tenant_id = 7201 "
+            + "AND is_default = true AND status = 'Active'", Long.class)).isEmpty();
+    }
+
+    /** A secured platform broker needs credentials a changeset must not carry: nothing is seeded for it. */
+    @Test
+    void aSecuredPlatformBrokerIsNotSeeded() throws Exception {
+        try (ScratchEtlJob secured = ScratchEtlJob.build("etl_job_sasl", Arrays.asList(
+                "platformKafkaBootstrapServers=broker.secure.test:9094", "platformKafkaSecurityProtocol=SASL_SSL"))) {
+            assertThat(secured.sql().queryForObject("SELECT count(*) FROM kafka_connection_profile", Integer.class)).isZero();
+        }
+    }
+
+    /**
+     * MIG-59: V25-V30 and V46 removed whole features on purpose. A database built from the changelog must
+     * carry nothing of them -- no table, no sequence, no lookup family -- and no object still named for
+     * task_form, the pipeline builder's old name (V43, finished by V70.4).
+     */
+    @Test
+    void theDroppedFeaturesLeaveNothingBehind() {
+        JdbcTemplate sql = db.sql();
+        for (String relation : new String[] {"avatar_backup_20260824", "dynamic_form", "dynamic_form_field", "dynamic_form_submission",
+            "dynamic_form_seq", "dynamic_form_field_seq", "dynamic_form_submission_seq", "query_definition", "query_schedule",
+            "query_execution", "database_connection_profile", "query_definition_seq", "query_schedule_seq", "query_execution_seq",
+            "database_connection_profile_seq", "pdf_highlighter_task", "pdf_highlighter_field", "pdf_highlighter_task_id_seq",
+            "pdf_highlighter_field_id_seq", "task_form", "task_form_field", "task_form_source_seq"}) {
+            assertThat(sql.queryForObject("SELECT to_regclass(?) IS NULL", Boolean.class, "public." + relation)).as(relation).isTrue();
+        }
+        assertThat(sql.queryForObject("SELECT count(*) FROM lookup_data WHERE lookup_type IN ('PIPELINE_IDS', 'EMAIL_RECEIVER', 'AI_PROVIDER')",
+            Integer.class)).isZero();
+        assertThat(sql.queryForList("SELECT conname FROM pg_constraint WHERE conname LIKE '%task_form%' "
+            + "UNION ALL SELECT relname FROM pg_class WHERE relname LIKE '%task_form%'", String.class)).isEmpty();
+        assertThat(sql.queryForObject("SELECT count(*) FROM pg_constraint WHERE conname = 'fk_pipeline_field_pipeline' "
+            + "AND confrelid = 'pipeline'::regclass", Integer.class)).isEqualTo(1);
+    }
+
+    /**
+     * MIG-87 / MIG-100 (contradictions B2, B3): nothing re-seeds V3's task types. A built database has no task
+     * type at all -- V50 seeds none, and since V39 every task type has one owning tenant, so V3's and V10's
+     * platform-wide rows (1000-1011) could not exist -- and no row routes to comparison-topic.
+     */
+    @Test
+    void noV3TaskTypeIsSeeded() {
+        JdbcTemplate sql = db.sql();
+        assertThat(sql.queryForObject("SELECT count(*) FROM source_task_type WHERE source_task_type_id BETWEEN 1000 AND 1011",
+            Integer.class)).isZero();
+        assertThat(sql.queryForObject("SELECT count(*) FROM source_task_type WHERE queue_topic_partition LIKE '%comparison-topic%'",
+            Integer.class)).isZero();
+        assertThat(sql.queryForObject("SELECT is_nullable FROM information_schema.columns WHERE table_name = 'source_task_type' "
+            + "AND column_name = 'tenant_id'", String.class)).isEqualTo("NO");
+    }
+
+    /**
+     * MIG-32 (V70.5): the reference rows every database needs, seeded under the id rule the decision records
+     * -- a seeded row takes a fixed id below 1000, every sequence starts at 1000, so the two can never meet.
+     * Before, a built database had no lookup at all: no QUEUE_FETCH_LIMIT (the engine fell back to 1000 and
+     * warned every cycle) and no PIPELINE_HOME_PAGES or TASK_GROUPS family, so no workspace could add a home
+     * page or a group.
+     */
+    @Test
+    void theReferenceFamiliesAreSeededBelowTheSequence() {
+        JdbcTemplate sql = db.sql();
+        List<Map<String, Object>> seeded = sql.queryForList("SELECT lookup_id, lookup_type, lookup_value, is_encrypted, tenant_id, "
+            + "parent_lookup_id FROM lookup_data WHERE lookup_type IN ('QUEUE_FETCH_LIMIT', 'PIPELINE_HOME_PAGES', 'TASK_GROUPS') ORDER BY lookup_id");
+
+        // QUEUE_FETCH_LIMIT is seeded by V70.5 and then moved out of lookup_data by V88 (MIG-136): one dial.
+        assertThat(seeded).extracting(row -> row.get("lookup_type"))
+            .containsExactly("PIPELINE_HOME_PAGES", "TASK_GROUPS");
+        assertThat(seeded).allSatisfy(row -> {
+            assertThat(((Number) row.get("lookup_id")).longValue()).isBetween(1L, 999L);
+            assertThat(row.get("tenant_id")).isNull();
+            assertThat(row.get("parent_lookup_id")).isNull();
+            assertThat(row.get("is_encrypted")).isEqualTo(false);
+        });
+        // QUEUE_FETCH_LIMIT stays resolvable, readable as a number, and what the engine already used without it.
+        assertThat(sql.queryForObject("SELECT setting_value FROM orchestration_setting WHERE setting_key = 'QUEUE_FETCH_LIMIT'",
+            String.class)).isEqualTo("1000");
+        // The next row the console adds takes the sequence's id, 1000 or later -- never a seeded one.
+        assertThat(sql.queryForObject("SELECT start_value FROM pg_sequences WHERE sequencename = 'lookup_id_seq'", Long.class))
+            .isGreaterThanOrEqualTo(1000L);
+    }
+}

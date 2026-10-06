@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 39.0-task-type-tenant-owner
+      author: nabeel.amd93
+      description: "Every task type belongs to exactly one workspace; a NULL tenant no longer means shared with all of them"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V39.0-task-type-tenant-owner/V39__task_type_tenant_owner.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE source_task_type ALTER COLUMN tenant_id DROP NOT NULL;

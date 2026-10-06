@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: 86.0-pre-dispatch-phase
+      author: nabeel.amd93
+      description: "job_queue.prepared_at / dispatch_payload / prepare_lease_until: the pre-dispatch phase resolves a run's AI steps off the dispatch thread and hands the dispatcher a prepared document (MIG-134, MIG-25)"
+      # A run is enqueued (Queue), PREPARED by the pre-dispatch phase -- its configuration checked and
+      # its server AI steps answered into dispatch_payload -- and only then dispatched. The dispatcher
+      # takes prepared rows only, so a slow model call holds nothing but its own run. Every run the
+      # phase declines is closed there and then; one it is working on carries a lease, so no two
+      # preparers take it and a preparer that dies leaves it to be taken again when the lease runs out.
+      # Times are the application's clock, passed in, as next_attempt_at is.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              ALTER TABLE job_queue ADD COLUMN IF NOT EXISTS prepared_at TIMESTAMP,
+                                    ADD COLUMN IF NOT EXISTS dispatch_payload TEXT,
+                                    ADD COLUMN IF NOT EXISTS prepare_lease_until TIMESTAMP;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: ALTER TABLE job_queue DROP COLUMN IF EXISTS prepared_at, DROP COLUMN IF EXISTS dispatch_payload, DROP COLUMN IF EXISTS prepare_lease_until;

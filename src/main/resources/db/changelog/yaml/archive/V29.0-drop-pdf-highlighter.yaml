@@ -1,0 +1,57 @@
+databaseChangeLog:
+  - changeSet:
+      id: 29.0-drop-pdf-highlighter
+      author: nabeel.amd93
+      description: "Drop pdf_highlighter_task and pdf_highlighter_field -- PDF Highlighter was removed whole on 2026-09-07; both were empty and, per .ai/discovery/database.md, reachable only through the never-migrated legacy screen"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V29.0-drop-pdf-highlighter/V29__drop_pdf_highlighter.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            # Best-effort structural recreation from the live schema captured immediately before
+            # the drop -- columns, types, nullability, primary keys, both foreign keys, and the
+            # one index observed. NOT guaranteed identical to the original: sequence
+            # increment/cache settings are reproduced as observed (initial value 1000 per the
+            # entities' own @GenericGenerator config) but the entity that configured them is gone.
+            # A rollback of a drop is a safety net, not a promise -- it exists so this changeset
+            # is reversible in principle, not so the exact prior state is guaranteed byte-for-byte.
+            sql: |
+              CREATE SEQUENCE IF NOT EXISTS pdf_highlighter_task_id_seq START WITH 1000;
+              CREATE SEQUENCE IF NOT EXISTS pdf_highlighter_field_id_seq START WITH 1000;
+
+              CREATE TABLE IF NOT EXISTS pdf_highlighter_task (
+                pdf_highlighter_task_id BIGINT NOT NULL PRIMARY KEY,
+                date_created             TIMESTAMP NOT NULL,
+                description              VARCHAR(255),
+                file_content_type        VARCHAR(255),
+                file_name                VARCHAR(255),
+                file_size                BIGINT,
+                highlighter_status       VARCHAR(255) NOT NULL,
+                status                   VARCHAR(255) NOT NULL,
+                task_name                VARCHAR(255) NOT NULL,
+                tenant_id                BIGINT,
+                CONSTRAINT fk_pdf_highlighter_task_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(tenant_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_pdf_highlighter_task_tenant_id ON pdf_highlighter_task(tenant_id);
+
+              CREATE TABLE IF NOT EXISTS pdf_highlighter_field (
+                pdf_highlighter_field_id BIGINT NOT NULL PRIMARY KEY,
+                display_order            INTEGER,
+                height                   DOUBLE PRECISION NOT NULL,
+                label                    VARCHAR(255) NOT NULL,
+                page                     INTEGER NOT NULL,
+                pdf_highlighter_task_id  BIGINT NOT NULL,
+                selector_path            VARCHAR(255),
+                selector_prefix          VARCHAR(255),
+                selector_suffix          VARCHAR(255),
+                selector_text            TEXT,
+                use_xpath_first          BOOLEAN NOT NULL DEFAULT false,
+                width                    DOUBLE PRECISION NOT NULL,
+                x                        DOUBLE PRECISION NOT NULL,
+                y                        DOUBLE PRECISION NOT NULL,
+                CONSTRAINT fk_pdf_highlighter_field_task FOREIGN KEY (pdf_highlighter_task_id) REFERENCES pdf_highlighter_task(pdf_highlighter_task_id)
+              );

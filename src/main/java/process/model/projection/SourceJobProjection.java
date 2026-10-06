@@ -2,27 +2,36 @@ package process.model.projection;
 
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import java.time.LocalDateTime;
+import java.sql.Timestamp;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface SourceJobProjection {
 
-    public Long getJobId();
+    Long getJobId();
 
-    public Status getJobStatus();
+    Status getJobStatus();
 
-    public JobStatus getJobRunningStatus();
+    JobStatus getJobRunningStatus();
 
-    public LocalDateTime getLastJobRun();
+    /** The instant; BusinessTime.wallClockOf gives what the event carries. */
+    Timestamp getLastJobRun();
 
-    public String getRecurrenceTime();
+    String getNextRunAt();
 
-    public String getExecution();
+    String getExecution();
+
+    String getAssignedUsername();
+
+    Long getAssignedUserId();
+
+    Long getTenantId();
+
+    String getJobName();
 
 }

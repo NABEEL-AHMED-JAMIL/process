@@ -1,0 +1,33 @@
+databaseChangeLog:
+  - changeSet:
+      id: 69.0-tenant-seed-backfills
+      author: nabeel.amd93
+      description: "TenantSeedService's backfills, run once as a reviewed changeset (MIG-106); the service is deleted"
+      # TenantSeedService ran these at every start of process. They now run once, here, and no startup
+      # hook in any service writes another service's tables. The default workspace and the platform
+      # administrator are Identity's (identity-service: V1.1 and PlatformAdminSeed). On 2026-09-24 every
+      # statement below matched no row in etl_job: 0 jobs or tasks without a tenant, 0 bucket lookups
+      # without one, 0 jobs without an assignee.
+      # app_user.tenant_id is deliberately NOT backfilled -- a tenantless person is a reachable state.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              UPDATE source_job j SET tenant_id = t.tenant_id FROM tenant t
+              WHERE t.tenant_code = 'default' AND j.tenant_id IS NULL;
+        - sql:
+            splitStatements: false
+            sql: >
+              UPDATE source_task s SET tenant_id = t.tenant_id FROM tenant t
+              WHERE t.tenant_code = 'default' AND s.tenant_id IS NULL;
+        - sql:
+            splitStatements: false
+            sql: >
+              UPDATE lookup_data l SET tenant_id = t.tenant_id FROM tenant t
+              WHERE t.tenant_code = 'default' AND l.tenant_id IS NULL
+                AND l.parent_lookup_id IN (SELECT p.lookup_id FROM lookup_data p WHERE p.lookup_type = 'BUCKET_LIST');
+        - sql:
+            splitStatements: false
+            sql: >
+              UPDATE source_job j SET assigned_user_id = u.app_user_id FROM app_user u
+              WHERE lower(u.username) = 'admin@platform.local' AND u.status <> 'Delete' AND j.assigned_user_id IS NULL;

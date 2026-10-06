@@ -1,0 +1,116 @@
+databaseChangeLog:
+  - changeSet:
+      id: 27.0-drop-query-engine
+      author: nabeel.amd93
+      description: "Drop database_connection_profile, query_definition, query_execution and query_schedule -- Query Engine and Search Engine were removed whole on 2026-09-05; all four were empty and unreferenced everywhere they were checked"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V27.0-drop-query-engine/V27__drop_query_engine.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            # Best-effort structural recreation from the live schema captured immediately before
+            # the drop -- columns, types, nullability, primary keys, every foreign key (including
+            # the ones onto tenant/app_user), and the indexes observed. NOT guaranteed identical to
+            # the original: sequence increment/cache settings are reproduced as observed but were
+            # never verified against Hibernate's own generator configuration, since the entity
+            # that configured them is gone. A rollback of a drop is a safety net, not a promise --
+            # it exists so this changeset is reversible in principle, not so the exact prior
+            # state is guaranteed byte-for-byte.
+            sql: |
+              CREATE SEQUENCE IF NOT EXISTS database_connection_profile_seq;
+              CREATE SEQUENCE IF NOT EXISTS query_definition_seq;
+              CREATE SEQUENCE IF NOT EXISTS query_execution_seq;
+              CREATE SEQUENCE IF NOT EXISTS query_schedule_seq;
+
+              CREATE TABLE IF NOT EXISTS database_connection_profile (
+                database_connection_profile_id BIGINT NOT NULL PRIMARY KEY,
+                additional_properties           TEXT,
+                created_at                       TIMESTAMP,
+                created_by                       BIGINT,
+                database_name                    VARCHAR(255) NOT NULL,
+                database_type                    VARCHAR(255) NOT NULL,
+                host                             VARCHAR(255) NOT NULL,
+                password_encrypted               VARCHAR(1000),
+                port                             INTEGER NOT NULL,
+                profile_name                     VARCHAR(255) NOT NULL,
+                status                           VARCHAR(255) NOT NULL,
+                tenant_id                        BIGINT NOT NULL,
+                updated_at                       TIMESTAMP,
+                updated_by                       BIGINT,
+                username                         VARCHAR(255) NOT NULL,
+                CONSTRAINT fk_database_connection_profile_created_by FOREIGN KEY (created_by) REFERENCES app_user(app_user_id),
+                CONSTRAINT fk_database_connection_profile_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(tenant_id),
+                CONSTRAINT fk_database_connection_profile_updated_by FOREIGN KEY (updated_by) REFERENCES app_user(app_user_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_db_connection_profile_tenant_id ON database_connection_profile(tenant_id);
+
+              CREATE TABLE IF NOT EXISTS query_definition (
+                query_id                        BIGINT NOT NULL PRIMARY KEY,
+                created_at                       TIMESTAMP,
+                created_by                       BIGINT,
+                database_connection_profile_id   BIGINT NOT NULL,
+                query_name                       VARCHAR(255) NOT NULL,
+                query_text                       TEXT NOT NULL,
+                status                           VARCHAR(255) NOT NULL,
+                tenant_id                        BIGINT NOT NULL,
+                updated_at                       TIMESTAMP,
+                updated_by                       BIGINT,
+                version                          INTEGER,
+                CONSTRAINT fk_query_definition_created_by FOREIGN KEY (created_by) REFERENCES app_user(app_user_id),
+                CONSTRAINT fk_query_definition_db_profile FOREIGN KEY (database_connection_profile_id) REFERENCES database_connection_profile(database_connection_profile_id),
+                CONSTRAINT fk_query_definition_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(tenant_id),
+                CONSTRAINT fk_query_definition_updated_by FOREIGN KEY (updated_by) REFERENCES app_user(app_user_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_query_definition_tenant_id ON query_definition(tenant_id);
+
+              CREATE TABLE IF NOT EXISTS query_schedule (
+                schedule_id                      BIGINT NOT NULL PRIMARY KEY,
+                created_at                       TIMESTAMP,
+                created_by                       BIGINT,
+                database_connection_profile_id   BIGINT NOT NULL,
+                interval_minutes                 INTEGER NOT NULL,
+                next_run_at                      TIMESTAMP NOT NULL,
+                output_bucket                    VARCHAR(255) NOT NULL,
+                output_file_name_template        VARCHAR(255) NOT NULL,
+                output_prefix                    VARCHAR(255) NOT NULL,
+                query_id                         BIGINT NOT NULL,
+                status                           VARCHAR(255) NOT NULL,
+                tenant_id                        BIGINT NOT NULL,
+                updated_at                       TIMESTAMP,
+                updated_by                       BIGINT,
+                CONSTRAINT fk_query_schedule_created_by FOREIGN KEY (created_by) REFERENCES app_user(app_user_id),
+                CONSTRAINT fk_query_schedule_db_profile FOREIGN KEY (database_connection_profile_id) REFERENCES database_connection_profile(database_connection_profile_id),
+                CONSTRAINT fk_query_schedule_query_definition FOREIGN KEY (query_id) REFERENCES query_definition(query_id),
+                CONSTRAINT fk_query_schedule_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(tenant_id),
+                CONSTRAINT fk_query_schedule_updated_by FOREIGN KEY (updated_by) REFERENCES app_user(app_user_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_query_schedule_tenant_id ON query_schedule(tenant_id);
+              CREATE INDEX IF NOT EXISTS idx_query_schedule_next_run_at ON query_schedule(next_run_at);
+
+              CREATE TABLE IF NOT EXISTS query_execution (
+                execution_id                     BIGINT NOT NULL PRIMARY KEY,
+                completed_at                     TIMESTAMP,
+                created_at                       TIMESTAMP,
+                created_by                       BIGINT,
+                database_connection_profile_id   BIGINT NOT NULL,
+                error_message                    TEXT,
+                output_bucket                    VARCHAR(255),
+                output_key                       VARCHAR(255),
+                query_id                         BIGINT NOT NULL,
+                row_count                        BIGINT,
+                schedule_id                      BIGINT,
+                started_at                       TIMESTAMP,
+                status                           VARCHAR(255) NOT NULL,
+                tenant_id                        BIGINT NOT NULL,
+                CONSTRAINT fk_query_execution_created_by FOREIGN KEY (created_by) REFERENCES app_user(app_user_id),
+                CONSTRAINT fk_query_execution_db_profile FOREIGN KEY (database_connection_profile_id) REFERENCES database_connection_profile(database_connection_profile_id),
+                CONSTRAINT fk_query_execution_query_definition FOREIGN KEY (query_id) REFERENCES query_definition(query_id),
+                CONSTRAINT fk_query_execution_query_schedule FOREIGN KEY (schedule_id) REFERENCES query_schedule(schedule_id),
+                CONSTRAINT fk_query_execution_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(tenant_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_query_execution_tenant_id ON query_execution(tenant_id);
+              CREATE INDEX IF NOT EXISTS idx_query_execution_query_id ON query_execution(query_id);

@@ -1,8 +1,47 @@
-
-# Ignore build output
+# Maven
 /target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+.flattened-pom.xml
 
-logs/process.log
-
-# IDE files
+# IDE
 .idea/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled Classes
+*.class
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Application specific
+/tmp/
+/logs/
+.env
+.env.local
+# .env holds real credentials -- the datasource and mail passwords were committed here
+# before this line existed. Keep secrets out of the repo; .env.example documents the keys.
+!.env.example
+*.jks
+*.p12
+
+
+# The .env rule above matches only a file named exactly ".env". A backup copy slipped past it
+# once already (.env.bak.<timestamp>) and was committed with real credentials.
+.env.bak.*
+.env.*.bak

@@ -1,5 +1,8 @@
 package process.util.validation;
 
+import process.util.PlatformDatabases;
+import process.settings.TaskConfigRules;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
@@ -17,11 +20,9 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 /**
- * This SourceTaskValidation validate the information of the sheet
- * if the date not valid its stop the process and through the valid msg
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SourceTaskValidation {
 
@@ -108,44 +109,43 @@ public class SourceTaskValidation {
         return errorMsg;
     }
 
+    /**
+     * Adds one reason. The console lists a row's reasons one per line, so each is plain text on its
+     * own line; the "<br>" these were once written with (for an HTML page) is dropped.
+     */
     public void setErrorMsg(String errorMsg) {
-        if (isNull(this.errorMsg)) {
-            this.errorMsg = errorMsg;
-        } else {
-            this.errorMsg += errorMsg;
+        String reason = errorMsg == null ? "" : errorMsg.replaceAll("(?i)<br\\s*/?>", "").trim();
+        if (reason.isEmpty()) {
+            return;
         }
+        this.errorMsg = isNull(this.errorMsg) ? reason : this.errorMsg + "\n" + reason;
     }
 
-    /**
-     * This isValidJobDetail use to validate the
-     * job detail of the job valid return true
-     * if non-valid return false
-     * @return boolean true|false
-     * */
     public void isValidSourceTask() {
         if (isNull(this.sourceTaskTypeId)) {
-            this.setErrorMsg(String.format("Task type id should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Task type id should not be empty at row %s.", rowCounter));
         }
         if (isNull(this.taskName)) {
-            this.setErrorMsg(String.format("Task name should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Task name should not be empty at row %s.", rowCounter));
         }
         if (isNull(this.taskPayload)) {
-            this.setErrorMsg(String.format("Task payload should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Task payload should not be empty at row %s.", rowCounter));
         }
+        // The same rule as a task saved one at a time: no pipeline data in a platform database.
+        PlatformDatabases.refusal(this.taskPayload).ifPresent(refusal ->
+            this.setErrorMsg(String.format("%s (row %s)", refusal, rowCounter)));
+        // And the same configuration rules (MIG-167): no credential as plain text, no malformed ${...} reference.
+        TaskConfigRules.payloadRefusal(this.taskPayload).ifPresent(refusal ->
+            this.setErrorMsg(String.format("%s (row %s)", refusal, rowCounter)));
         try {
             if (!isNull(this.taskPayload)) {
                 this.setXmlTagsInfo(this.parseXmlToRequest(this.taskPayload));
             }
         } catch (Exception ex) {
-            this.setErrorMsg(String.format("Task payload not valid at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Task payload not valid at row %s.", rowCounter));
         }
     }
 
-    /**
-     * Method use to parse xml to request
-     * @param xml
-     * @return List<ConfigurationMakerRequest.TagInfo>
-     * */
     public List<ConfigurationMakerRequest.TagInfo> parseXmlToRequest(String xml) throws Exception {
         List<ConfigurationMakerRequest.TagInfo> tagInfos = new ArrayList<>();
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -157,17 +157,11 @@ public class SourceTaskValidation {
         return tagInfos;
     }
 
-    /**
-     * Method use to traverse the xml
-     * @param node
-     * @param parent
-     * @param tagInfos
-     * */
     private void traverseXml(Node node, String parent, List<ConfigurationMakerRequest.TagInfo> tagInfos) {
         if (node.getNodeType() != Node.ELEMENT_NODE) return;
         NodeList children = node.getChildNodes();
         boolean hasElementChild = false;
-        // check if node has element children
+
         for (int i = 0; i < children.getLength(); i++) {
             if (children.item(i).getNodeType() == Node.ELEMENT_NODE) {
                 hasElementChild = true;
@@ -178,13 +172,13 @@ public class SourceTaskValidation {
         if (!hasElementChild) {
             value = node.getTextContent() != null ? node.getTextContent().trim() : null;
         }
-        // Create TagInfo (tagKey is required, other fields can be null)
+
         ConfigurationMakerRequest.TagInfo tagInfo = new ConfigurationMakerRequest.TagInfo();
         tagInfo.setTagKey(node.getNodeName());
         tagInfo.setTagParent(parent);
         tagInfo.setTagValue(value);
         tagInfos.add(tagInfo);
-        // traverse children
+
         for (int i = 0; i < children.getLength(); i++) {
             Node child = children.item(i);
             if (child.getNodeType() == Node.ELEMENT_NODE) {

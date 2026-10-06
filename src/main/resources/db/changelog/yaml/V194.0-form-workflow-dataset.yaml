@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 194.0-form-workflow-dataset
+      author: nabeel.amd93
+      description: "MIG-279: a form's workflow and dataset; a submission's request and its status; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V194.0-form-workflow-dataset/V194__form_workflow_dataset.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V194.0-form-workflow-dataset/V194__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

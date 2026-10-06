@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: 57.0-storage-connection-read-only
+      author: nabeel.amd93
+      description: "storage_connection is storage-service's (MIG-68/70); this copy is kept read-only until its retention period ends"
+      # Moved to storage_db on 2026-09-23 (StorageMove: ids, aliases and statuses identical, every secret
+      # re-sealed under Storage's key). Nothing in process reads or writes it any more. Kept, not dropped,
+      # for one retention period; a trigger refuses every write so nothing can quietly diverge from
+      # storage_db meanwhile. Dropping it is a later changeset, after an explicit yes.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE OR REPLACE FUNCTION storage_connection_read_only() RETURNS trigger AS $$
+              BEGIN
+                RAISE EXCEPTION 'storage_connection is read-only: storage connections live in storage-service (storage_db) since MIG-68';
+              END;
+              $$ LANGUAGE plpgsql;
+        - sql:
+            sql: >
+              CREATE TRIGGER storage_connection_read_only BEFORE INSERT OR UPDATE OR DELETE ON storage_connection
+              FOR EACH STATEMENT EXECUTE PROCEDURE storage_connection_read_only();
+      rollback:
+        - sql:
+            sql: >
+              DROP TRIGGER IF EXISTS storage_connection_read_only ON storage_connection;
+              DROP FUNCTION IF EXISTS storage_connection_read_only();

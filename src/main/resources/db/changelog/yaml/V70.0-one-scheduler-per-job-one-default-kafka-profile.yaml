@@ -1,0 +1,58 @@
+databaseChangeLog:
+  - changeSet:
+      id: 70.0-one-scheduler-per-job-one-default-kafka-profile
+      author: nabeel.amd93
+      description: "One scheduler per job and one default Kafka connection per tenant (and one for the platform), held by the database (MIG-71)"
+      # Both invariants lived only in the service layer: SourceJobServiceImpl finds-or-creates a job's scheduler,
+      # and setAsDefault demotes the other profiles before promoting one. A second instance, or a second service,
+      # writing either table broke them silently -- and KafkaConnectionResolver reads the default with a
+      # single-result query, so two defaults for one tenant turn every dispatch for that tenant into an
+      # IncorrectResultSizeDataAccessException.
+      #
+      # uk_scheduler_job_id is in the V50 baseline, captured from dev, where ddl-auto made it from V37. An
+      # environment that ran validate never got it, so it is added here if missing. The Kafka default is two
+      # partial indexes because tenant_id is null for the platform's own profiles, and NULLs are distinct in
+      # a unique index -- one index over (tenant_id) would let the platform have any number of defaults.
+      #
+      # Stops rather than guesses when rows already break either rule: which scheduler or which default wins
+      # is a decision about someone's data. dev had none on 2026-09-24 (63 schedulers on 63 distinct jobs; each
+      # of five tenants and the platform with exactly one default).
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            Rows already break one of the rules this changeset enforces. Find them with
+            SELECT job_id FROM scheduler GROUP BY job_id HAVING count(*) > 1, and
+            SELECT tenant_id FROM kafka_connection_profile WHERE is_default GROUP BY tenant_id HAVING count(*) > 1
+            (tenant_id NULL is the platform), resolve them by hand, and deploy again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM (SELECT job_id FROM scheduler GROUP BY job_id HAVING count(*) > 1) duplicates
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM (SELECT tenant_id FROM kafka_connection_profile WHERE is_default GROUP BY tenant_id HAVING count(*) > 1) duplicates
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.scheduler'::regclass
+                    AND contype = 'u' AND conkey = ARRAY[(SELECT attnum FROM pg_attribute
+                      WHERE attrelid = 'public.scheduler'::regclass AND attname = 'job_id')]) THEN
+                  ALTER TABLE public.scheduler ADD CONSTRAINT uk_scheduler_job_id UNIQUE (job_id);
+                END IF;
+              END $$;
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX ux_kcp_one_default_per_tenant ON public.kafka_connection_profile (tenant_id)
+              WHERE is_default AND tenant_id IS NOT NULL
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX ux_kcp_one_platform_default ON public.kafka_connection_profile ((tenant_id IS NULL))
+              WHERE is_default AND tenant_id IS NULL
+      # uk_scheduler_job_id is left: it is the baseline's as much as this changeset's.
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS public.ux_kcp_one_platform_default
+        - sql:
+            sql: DROP INDEX IF EXISTS public.ux_kcp_one_default_per_tenant

@@ -1,0 +1,299 @@
+package process.engine;
+
+import org.barco.platform.tenancy.RowSecurity;
+import org.barco.platform.tenancy.AcrossTenants;
+import process.model.enums.RunEnd;
+import process.util.BusinessTime;
+import org.barco.platform.correlation.CorrelationId;
+import org.barco.platform.correlation.CorrelationScope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
+import process.ai.AiStepService;
+import process.ai.ModelChoiceStore;
+import process.ai.ModelProfiles;
+import process.ai.RunAiStep;
+import process.model.enums.Status;
+import process.model.pojo.JobQueue;
+import process.model.pojo.SourceJob;
+import process.model.service.impl.TransactionServiceImpl;
+import process.notifications.JobMail;
+import process.pipeline.StepEngine;
+import process.util.exception.ExceptionUtil;
+
+import javax.annotation.PreDestroy;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * The pre-dispatch phase: between the enqueuer and the dispatcher, it decides whether each queued run
+ * can be sent at all and answers its server AI steps into the document to send (MIG-134, MIG-25).
+ *
+ * AI steps used to run on the dispatcher's own thread, inside its seven-minute budget and its ten-minute
+ * lock, so one slow model call held up every other queued job and could outlive the lock. They run here
+ * instead, on their own threads: a run with AI steps is prepared on one of a few AI threads, a run with
+ * none on the pass's thread, and the dispatcher only ever takes a run this phase has finished with. A
+ * model call that stalls holds its own run, and nothing else.
+ *
+ * <b>Every run this phase takes leaves it prepared or closed.</b> {@link #prepare} is the only way out of
+ * a claim: it writes the prepared document, or it closes the run through {@link DispatchFailures} --
+ * configuration faults and failed AI steps as final failures, anything thrown as a transient one that
+ * the job's retry policy may try again -- and a Throwable escaping the decision is caught and closed the
+ * same way. A run that is neither dispatched nor closed permanently disables its job, because the
+ * dispatcher counts Queue, Start and Running to decide the job is busy; a row left in Queue while AI runs
+ * asynchronously is exactly that failure, so there is no path that returns without one or the other.
+ * The only exception is the process dying mid-call: the claim's lease then runs out and the run is taken
+ * again, and the AI service hands back any answer it already recorded for it.
+ *
+ * Replicas share the phase with no coordinator: runs are claimed FOR UPDATE SKIP LOCKED and leased
+ * (DispatchTiming.PREPARE_LEASE), so no two preparers take one run.
+ */
+@Component
+public class PreDispatchPhase {
+
+    private static final Logger logger = LoggerFactory.getLogger(PreDispatchPhase.class);
+
+    /** What the phase decided for one run. */
+    static final class Decision {
+
+        final String payload;
+        final String refusal;
+        final boolean retryable;
+        final List<String> notes;
+        /** Each AI step as it went (MIG-242): written to run_ai_step with the verdict. */
+        final List<RunAiStep> steps = new ArrayList<>();
+        /** What a refusal that is not retried counts as for the SLI (MIG-196): configuration, or an AI step. */
+        final RunEnd refusedAs;
+
+        private Decision(String payload, String refusal, boolean retryable, List<String> notes, RunEnd refusedAs) {
+            this.payload = payload;
+            this.refusal = refusal;
+            this.retryable = retryable;
+            this.notes = notes;
+            this.refusedAs = refusedAs;
+        }
+
+        static Decision prepared(String payload, List<String> notes) {
+            return new Decision(payload, null, false, notes, null);
+        }
+
+        static Decision refused(String refusal, boolean retryable, List<String> notes) {
+            return new Decision(null, refusal, retryable, notes, RunEnd.REFUSED);
+        }
+
+        /** An AI step failed and its rule fails the run: never retried, and not the dispatcher's refusal. */
+        static Decision aiStepFailed(String refusal, List<String> notes) {
+            return new Decision(null, refusal, false, notes, RunEnd.AI_STEP);
+        }
+
+        boolean isPrepared() {
+            return this.refusal == null;
+        }
+    }
+
+    private final TransactionServiceImpl transactionService;
+    private final BulkAction bulkAction;
+    private final AiStepService aiStepService;
+    private final ModelChoiceStore modelChoices;
+    private final DispatchFailures failures;
+    private final TransactionOperations transactions;
+    private final ExecutorService aiThreads;
+    /** Runs this instance is preparing, so a pass never hands one to a second thread. */
+    private final Set<Long> inProgress = ConcurrentHashMap.newKeySet();
+    /**
+     * MIG-230: runs of a pipeline with a stored step definition go to the step engine instead of being prepared for a
+     * worker. A setter, so a phase built by hand in a test -- and every run of a pipeline without a definition, which is
+     * every pipeline today -- takes exactly the path it took before.
+     */
+    private StepEngine stepEngine;
+
+    @Autowired
+    public PreDispatchPhase(TransactionServiceImpl transactionService, BulkAction bulkAction, AiStepService aiStepService,
+        ModelChoiceStore modelChoices, JobMail jobMail, PlatformTransactionManager transactionManager) {
+        this(transactionService, bulkAction, aiStepService, modelChoices, jobMail, new TransactionTemplate(transactionManager),
+            newAiThreads());
+    }
+
+    PreDispatchPhase(TransactionServiceImpl transactionService, BulkAction bulkAction, AiStepService aiStepService,
+        ModelChoiceStore modelChoices, JobMail jobMail, TransactionOperations transactions, ExecutorService aiThreads) {
+        this.transactionService = transactionService;
+        this.bulkAction = bulkAction;
+        this.aiStepService = aiStepService;
+        this.modelChoices = modelChoices;
+        this.failures = new DispatchFailures(bulkAction, transactionService, jobMail, transactions);
+        this.transactions = transactions;
+        this.aiThreads = aiThreads;
+    }
+
+    @Autowired(required = false)
+    public void useStepEngine(StepEngine stepEngine) {
+        this.stepEngine = stepEngine;
+    }
+
+    private static ExecutorService newAiThreads() {
+        AtomicInteger count = new AtomicInteger();
+        return Executors.newFixedThreadPool(DispatchTiming.PREPARE_AI_THREADS, runnable -> {
+            Thread thread = new Thread(runnable, "pre-dispatch-ai-" + count.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @PreDestroy
+    void stop() {
+        this.aiThreads.shutdownNow();
+    }
+
+    /**
+     * One pass: claims the runs waiting to be prepared, prepares those without AI steps here and hands
+     * the rest to the AI threads. Returns how many it took.
+     */
+    @AcrossTenants("pre-dispatch claims and prepares every workspace's queued runs")
+    public int runPass() {
+        LocalDateTime now = BusinessTime.now();
+        List<Long> claimed;
+        try {
+            claimed = this.transactions.execute(status -> this.transactionService.claimRunsToPrepare(now,
+                DispatchTiming.PREPARE_BATCH, now.plus(DispatchTiming.PREPARE_LEASE)));
+        } catch (RuntimeException ex) {
+            logger.error("Pre-dispatch could not claim runs: {}.", ExceptionUtil.getRootCauseMessage(ex));
+            return 0;
+        }
+        if (claimed == null || claimed.isEmpty()) {
+            return 0;
+        }
+        List<Long> taken = new ArrayList<>(claimed);
+        for (Long jobQueueId : taken) {
+            if (!this.inProgress.add(jobQueueId)) {
+                continue;
+            }
+            try {
+                Optional<JobQueue> run = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+                if (!run.isPresent()) {
+                    this.inProgress.remove(jobQueueId);
+                    continue;
+                }
+                Optional<SourceJob> job = this.transactionService.findByJobIdAndJobStatus(run.get().getJobId(), Status.Active);
+                // MIG-230: a run of a pipeline with a stored step definition is the step engine's, which takes it as its
+                // worker and releases it here when it is done. Every other run -- the legacy wrap -- goes on below,
+                // unchanged.
+                Optional<StepEngine.StepPlan> plan = this.stepEngine == null || !job.isPresent() ? Optional.empty()
+                    : this.stepEngine.planFor(job.get(), run.get());
+                if (plan.isPresent()) {
+                    this.stepEngine.submit(plan.get(), () -> this.inProgress.remove(jobQueueId));
+                    continue;
+                }
+                if (job.isPresent() && job.get().getTaskDetail() != null
+                    && this.aiStepService.hasSteps(job.get().getTenantId(), job.get().getTaskDetail().getPipelineId())) {
+                    // Its own thread: the run's workspace, named (the pass's grant does not travel).
+                    Long tenant = run.get().getTenantId();
+                    long tenantId = tenant == null ? 0L : tenant;
+                    this.aiThreads.execute(() -> RowSecurity.forTenant(tenantId, () -> this.prepareAndRelease(job, run.get())));
+                } else {
+                    this.prepareAndRelease(job, run.get());
+                }
+            } catch (RuntimeException ex) {
+                this.inProgress.remove(jobQueueId);
+                logger.error("Pre-dispatch could not take run {}: {}.", jobQueueId, ExceptionUtil.getRootCauseMessage(ex));
+            }
+        }
+        return taken.size();
+    }
+
+    private void prepareAndRelease(Optional<SourceJob> job, JobQueue run) {
+        try {
+            this.prepare(job, run);
+        } finally {
+            this.inProgress.remove(run.getJobQueueId());
+        }
+    }
+
+    /**
+     * Prepares one run or closes it -- never neither. The job must be active; its task must route
+     * somewhere (DispatchRoute, rows 1 to 4); its AI steps must answer or be allowed to fail (row 5).
+     * Anything thrown is a transient failure (row 6): the run is closed as retryable.
+     */
+    void prepare(Optional<SourceJob> job, JobQueue run) {
+        if (run.getCorrelationId() == null) {
+            run.setCorrelationId(CorrelationId.generate());
+        }
+        // The run's id while it is prepared; the tick's id back afterwards (MIG-94, X5).
+        CorrelationScope scope = CorrelationScope.open(run.getCorrelationId());
+        try {
+            Decision decision;
+            try {
+                decision = this.decide(job, run);
+            } catch (Throwable ex) {
+                decision = Decision.refused(String.format("Job %s could not be dispatched: %s", run.getJobId(),
+                    DispatchFailures.reasonFor(ex)), true, Collections.emptyList());
+                logger.error("Pre-dispatch of run {} threw: {}.", run.getJobQueueId(), ExceptionUtil.getRootCauseMessage(ex));
+            }
+            this.finish(run, decision);
+        } catch (RuntimeException ex) {
+            // Writing the outcome itself failed: the lease runs out and the run is taken again.
+            logger.error("Pre-dispatch could not record the outcome for run {}: {}.", run.getJobQueueId(),
+                ExceptionUtil.getRootCauseMessage(ex));
+        } finally {
+            scope.close();
+        }
+    }
+
+    Decision decide(Optional<SourceJob> job, JobQueue run) {
+        if (!job.isPresent()) {
+            return Decision.refused(String.format(
+                "Job %s failed in the queue because the main job is deleted or inactive.", run.getJobId()), false,
+                Collections.emptyList());
+        }
+        DispatchRoute route = DispatchRoute.of(job.get(), run.getJobId());
+        if (route.refused()) {
+            return Decision.refused(route.refusal, false, Collections.emptyList());
+        }
+        // The pipeline's AI steps write their answers into the task's document; the worker then sees
+        // ordinary tags. A step that fails (and says the run must) closes the run without a send. Each step asks for
+        // the model the run was started with (MIG-242): its "Run with...", else its schedule's, else the step's default.
+        AiStepService.Outcome steps = this.aiStepService.apply(new AiStepService.Run(job.get().getTenantId(),
+            job.get().getTaskDetail().getPipelineId(), run.getJobQueueId(), run.getAttempt(), job.get().getTaskDetail().getTaskDetailId(),
+            ModelProfiles.of(job.get().getModelProfiles(), run.getModelProfiles())), job.get().getTaskDetail().getTaskPayload());
+        Decision decision = steps.failed()
+            ? Decision.aiStepFailed(String.format("Job %s: %s", run.getJobId(), steps.failure), steps.notes)
+            : Decision.prepared(steps.payload, steps.notes);
+        decision.steps.addAll(steps.steps);
+        return decision;
+    }
+
+    /** The notes and the verdict, in one local transaction. */
+    private void finish(JobQueue run, Decision decision) {
+        this.transactions.execute(status -> {
+            // The narrative first, then the verdict: a failed step's notes are in the history before the Failed.
+            for (String note : decision.notes) {
+                this.bulkAction.saveJobAuditLogs(run.getJobQueueId(), note);
+            }
+            // What each AI step asked for and ran on, with the verdict: the run's manifest never says less than it did.
+            if (!decision.steps.isEmpty()) {
+                this.modelChoices.recordSteps(decision.steps);
+            }
+            if (decision.isPrepared()) {
+                int prepared = this.transactionService.markPrepared(run.getJobQueueId(), decision.payload,
+                    BusinessTime.now(), run.getCorrelationId());
+                if (prepared == 0) {
+                    logger.info("Run {} was closed or dispatched while it was being prepared; left as it is.", run.getJobQueueId());
+                }
+            } else {
+                this.failures.close(run, decision.refusal, decision.retryable, decision.refusedAs);
+            }
+            return null;
+        });
+    }
+}

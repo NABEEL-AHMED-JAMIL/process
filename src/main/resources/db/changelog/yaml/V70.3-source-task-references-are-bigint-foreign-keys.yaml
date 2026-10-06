@@ -1,0 +1,79 @@
+databaseChangeLog:
+  - changeSet:
+      id: 70.3-source-task-references-are-bigint-foreign-keys
+      author: nabeel.amd93
+      description: "source_task.home_page_id and group_id become bigint foreign keys to lookup_data (MIG-165, P3)"
+      # Both hold a lookup_data.lookup_id -- a home page from PIPELINE_HOME_PAGES, a group from TASK_GROUPS --
+      # and were varchars joined through cast(lookup_id as varchar(10)). The cast defeated lookup_data's key,
+      # so every task list and download walked the table, and it truncates any id past ten digits. As foreign
+      # keys the join uses the key and the database refuses an id that is no lookup row.
+      #
+      # They point at lookup_data for now. MIG-167 moves the two families into Core's own task_reference with
+      # their ids unchanged; these constraints are then re-pointed at it, a change of target and nothing else.
+      #
+      # ON DELETE SET NULL: a task that was deleted (a tombstone) must not stop a home page from being removed.
+      # A live task is protected in the application instead -- SettingServiceImpl refuses to delete a home
+      # page or group an Active or Inactive task still uses, and says which.
+      #
+      # dev on 2026-09-24: 385 tasks; home_page_id '' on 48, 1275 on one, NULL on the rest; group_id '' on 45,
+      # 1280 on one. Nothing non-numeric, nothing over ten digits, nothing dangling. The empty strings are the
+      # console's "none" and become NULL.
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            source_task has home_page_id and group_id values that are not the id of a lookup_data row. Find them
+            with SELECT task_detail_id, home_page_id, group_id FROM source_task WHERE (btrim(home_page_id) <> ''
+            AND NOT EXISTS (SELECT 1 FROM lookup_data l WHERE l.lookup_id::text = btrim(home_page_id))) OR
+            (btrim(group_id) <> '' AND NOT EXISTS (SELECT 1 FROM lookup_data l WHERE l.lookup_id::text = btrim(group_id)));
+            decide what each should point at (or clear it), and deploy again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >
+              SELECT count(*) FROM source_task
+              WHERE (btrim(home_page_id) <> '' AND NOT EXISTS (SELECT 1 FROM lookup_data l WHERE l.lookup_id::text = btrim(home_page_id)))
+                 OR (btrim(group_id) <> '' AND NOT EXISTS (SELECT 1 FROM lookup_data l WHERE l.lookup_id::text = btrim(group_id)))
+      changes:
+        - sql:
+            sql: UPDATE source_task SET home_page_id = NULL WHERE btrim(home_page_id) = ''
+        - sql:
+            sql: UPDATE source_task SET group_id = NULL WHERE btrim(group_id) = ''
+        - sql:
+            sql: >
+              ALTER TABLE source_task
+                ALTER COLUMN home_page_id TYPE bigint USING btrim(home_page_id)::bigint,
+                ALTER COLUMN group_id TYPE bigint USING btrim(group_id)::bigint
+        - sql:
+            sql: >
+              ALTER TABLE source_task ADD CONSTRAINT fk_source_task_home_page
+                FOREIGN KEY (home_page_id) REFERENCES lookup_data (lookup_id) ON DELETE SET NULL
+        - sql:
+            sql: >
+              ALTER TABLE source_task ADD CONSTRAINT fk_source_task_group
+                FOREIGN KEY (group_id) REFERENCES lookup_data (lookup_id) ON DELETE SET NULL
+        - sql:
+            sql: CREATE INDEX idx_source_task_home_page_id ON source_task (home_page_id)
+        - sql:
+            sql: CREATE INDEX idx_source_task_group_id ON source_task (group_id)
+        - sql:
+            sql: >
+              COMMENT ON COLUMN source_task.home_page_id IS 'Where people land after a run of this task completes: a
+              PIPELINE_HOME_PAGES row of the task''s workspace (lookup_data, moving to task_reference under MIG-167).'
+        - sql:
+            sql: >
+              COMMENT ON COLUMN source_task.group_id IS 'The group this task is filed under: a TASK_GROUPS row of the
+              task''s workspace (lookup_data, moving to task_reference under MIG-167).'
+      # The empty strings do not come back: NULL is what they meant.
+      rollback:
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_source_task_group_id
+        - sql:
+            sql: DROP INDEX IF EXISTS idx_source_task_home_page_id
+        - sql:
+            sql: ALTER TABLE source_task DROP CONSTRAINT IF EXISTS fk_source_task_group
+        - sql:
+            sql: ALTER TABLE source_task DROP CONSTRAINT IF EXISTS fk_source_task_home_page
+        - sql:
+            sql: >
+              ALTER TABLE source_task
+                ALTER COLUMN home_page_id TYPE character varying(255) USING home_page_id::text,
+                ALTER COLUMN group_id TYPE character varying(255) USING group_id::text

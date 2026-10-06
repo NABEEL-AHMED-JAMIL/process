@@ -1,0 +1,68 @@
+databaseChangeLog:
+  - changeSet:
+      id: 84.0-scheduler-dispatch-eligible
+      author: nabeel.amd93
+      description: "scheduler.dispatch_eligible, kept by triggers in the same transaction as every source_job write, and a partial index on next_run_at for the enqueuer's SKIP LOCKED claim (MIG-152)"
+      # The enqueuer's loop becomes O(due) instead of O(scheduler JOIN source_job): whether a schedule may
+      # be enqueued at all (its job Active and Auto -- the execution = 'Auto' clause is a recorded bug fix:
+      # without it a job switched Auto to Manual kept being enqueued) is kept on the scheduler row itself.
+      # Triggers keep it, because a source_job write happens through Hibernate AND through native bulk
+      # updates (a task or task type switched off takes its jobs with it in one UPDATE), and a trigger is
+      # the one place every one of them passes, in its own transaction. IS TRUE, so a job with no
+      # execution recorded is simply not eligible rather than a NOT NULL violation.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              ALTER TABLE scheduler ADD COLUMN IF NOT EXISTS dispatch_eligible BOOLEAN NOT NULL DEFAULT false;
+        - sql:
+            splitStatements: false
+            sql: >
+              UPDATE scheduler s SET dispatch_eligible = COALESCE((SELECT (j.job_status = 'Active' AND j.execution = 'Auto') IS TRUE
+                FROM source_job j WHERE j.job_id = s.job_id), false);
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE OR REPLACE FUNCTION scheduler_dispatch_eligible_from_job() RETURNS trigger AS $$
+              BEGIN
+                UPDATE scheduler SET dispatch_eligible = ((NEW.job_status = 'Active' AND NEW.execution = 'Auto') IS TRUE)
+                WHERE job_id = NEW.job_id
+                  AND dispatch_eligible IS DISTINCT FROM ((NEW.job_status = 'Active' AND NEW.execution = 'Auto') IS TRUE);
+                RETURN NULL;
+              END;
+              $$ LANGUAGE plpgsql;
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE TRIGGER source_job_dispatch_eligible AFTER INSERT OR UPDATE OF job_status, execution ON source_job
+              FOR EACH ROW EXECUTE PROCEDURE scheduler_dispatch_eligible_from_job();
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE OR REPLACE FUNCTION scheduler_dispatch_eligible_on_write() RETURNS trigger AS $$
+              BEGIN
+                NEW.dispatch_eligible := COALESCE((SELECT (j.job_status = 'Active' AND j.execution = 'Auto') IS TRUE
+                  FROM source_job j WHERE j.job_id = NEW.job_id), false);
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE TRIGGER scheduler_dispatch_eligible BEFORE INSERT OR UPDATE OF job_id ON scheduler
+              FOR EACH ROW EXECUTE PROCEDURE scheduler_dispatch_eligible_on_write();
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE INDEX IF NOT EXISTS idx_scheduler_due ON scheduler (next_run_at) WHERE dispatch_eligible AND NOT expired;
+      rollback:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            sql: >
+              DROP TRIGGER IF EXISTS scheduler_dispatch_eligible ON scheduler;
+              DROP TRIGGER IF EXISTS source_job_dispatch_eligible ON source_job;
+              DROP FUNCTION IF EXISTS scheduler_dispatch_eligible_on_write();
+              DROP FUNCTION IF EXISTS scheduler_dispatch_eligible_from_job();
+              DROP INDEX IF EXISTS idx_scheduler_due;
+              ALTER TABLE scheduler DROP COLUMN IF EXISTS dispatch_eligible;

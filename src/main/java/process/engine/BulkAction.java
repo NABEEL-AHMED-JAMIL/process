@@ -1,91 +1,186 @@
 package process.engine;
 
-import com.google.gson.Gson;
+import process.correlation.RunCorrelation;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import process.model.enums.Frequency;
+import org.springframework.transaction.annotation.Transactional;
 import process.model.enums.JobStatus;
+import process.model.enums.RunEnd;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.pojo.JobQueue;
 import process.model.pojo.Scheduler;
 import process.model.projection.SourceJobProjection;
 import process.model.service.impl.TransactionServiceImpl;
-import process.socket.NotificationService;
+import process.util.BusinessTime;
+import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
 import java.time.LocalDateTime;
-import java.util.*;
+import org.barco.notifications.contract.JobStatusChanged;
+import process.notifications.NotificationPort;
+import process.slo.RunOutcomes;
+import process.slo.RunSlo;
+import java.util.List;
+import java.util.Optional;
+import java.util.Arrays;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 @Component
+@Transactional
 public class BulkAction {
 
     public Logger logger = LogManager.getLogger(BulkAction.class);
 
-    @Autowired
-    private TransactionServiceImpl transactionService;
-    @Autowired
-    private NotificationService notificationService;
+    private final TransactionServiceImpl transactionService;
+    /** Every push, notice and mail leaves through here (MIG-20). */
+    private final NotificationPort notifications;
+    /** The pipeline execution SLI's counter (MIG-196). */
+    private final RunOutcomes outcomes;
 
-    /**
-     * This method use the change the status of main job
-     * @param jobId
-     * @param jobStatus
-     * */
+    public BulkAction(TransactionServiceImpl transactionService, NotificationPort notifications) {
+        this(transactionService, notifications, RunOutcomes.detached());
+    }
+
+    @Autowired
+    public BulkAction(TransactionServiceImpl transactionService, NotificationPort notifications, RunOutcomes outcomes) {
+        this.transactionService = transactionService;
+        this.notifications = notifications;
+        this.outcomes = outcomes;
+    }
+
     public void changeJobStatus(Long jobId, JobStatus jobStatus) {
         Optional<SourceJob> sourceJob = this.transactionService.findByJobId(jobId);
+        if (!sourceJob.isPresent()) {
+
+            this.logger.warn("changeJobStatus: SourceJob not found with jobId {}, skipping.", jobId);
+            return;
+        }
         sourceJob.get().setJobRunningStatus(jobStatus);
         this.transactionService.saveOrUpdateJob(sourceJob.get());
+        // Announced here rather than at each caller. Every transition the platform makes --
+        // Queue when a job is enqueued, Start when the engine picks it up, Interrupt, and the
+        // engine's own Failed -- passes through this one method, while only the external
+        // worker callback announced itself, through NotifyService. Publishing at the callers
+        // meant nine sites of which eight were silent, so a job sat at its old status until
+        // someone pressed Refresh; publishing here means the next caller added cannot forget.
+        //
+        // Unconditional, including a repeat of the status already held. Start -> Start and
+        // Running -> Running are legal transitions (see NotifyServiceImpl.isValidStatusTransition)
+        // because that is how a worker says it is still alive, and the jobs table advances its
+        // lastJobRun on each one. Suppressing repeats as "not a change" would therefore switch
+        // off the heartbeat and let a healthy long run be reported as stalled.
+        //
+        // After commit, because this class is @Transactional and the engine calls it inside
+        // longer units of work: announcing as the row is written announces it before it is
+        // durable, and a rollback then leaves every open jobs table showing a transition the
+        // database does not have.
+        if (jobStatus != null) {
+            this.notifications.jobStatusChanged(sourceJob.get().getTenantId(),
+                new JobStatusChanged().setJobId(jobId).setJobRunningStatus(jobStatus.name()));
+        }
     }
 
-    /**
-     * This method use the change the status of sub job
-     * @param jobQueueId
-     * @param jobStatus
-     * */
     public void changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus) {
+        this.changeJobQueueStatus(jobQueueId, jobStatus, null);
+    }
+
+    /** @return the run's status before this write, for runEnded; null when there is no such run */
+    public JobStatus changeJobQueueStatus(Long jobQueueId, JobStatus jobStatus, String message) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (!jobQueue.isPresent()) {
+            this.logger.warn("changeJobQueueStatus: JobQueue not found with jobQueueId {}, skipping.", jobQueueId);
+            return null;
+        }
+        JobStatus before = jobQueue.get().getJobStatus();
         jobQueue.get().setJobStatus(jobStatus);
+        if (!ProcessUtil.isNull(message)) {
+            jobQueue.get().setJobStatusMessage(message);
+        }
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
+        return before;
     }
 
     /**
-     * This method use the add the end date of running job
-     * @param jobQueueId
-     * @param endTime
-     * */
+     * The other half of a terminal write (MIG-196): records why the run ended and counts it for the pipeline
+     * execution SLI. {@code before} is what changeJobQueueStatus returned. A status still in flight (a heartbeat)
+     * does nothing. The reason is written with every terminal status, so it always explains the current one; the run
+     * is counted only when it leaves flight (RunOutcomes).
+     */
+    public void runEnded(Long jobQueueId, JobStatus before, JobStatus status, RunEnd reason) {
+        if (!RunSlo.isTerminal(status) || before == null) {
+            return;
+        }
+        Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (!jobQueue.isPresent()) {
+            return;
+        }
+        jobQueue.get().setEndReason(reason);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
+        this.outcomes.ended(before, status, reason);
+    }
+
+    /** Counts a run whose row the caller closed and saved itself, end reason included (the stall sweep). */
+    public void countRunEnd(JobStatus before, JobStatus status, RunEnd reason) {
+        this.outcomes.ended(before, status, reason);
+    }
+
     public void changeJobQueueEndDate(Long jobQueueId, LocalDateTime endTime) {
         Optional<JobQueue> jobQueue = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (!jobQueue.isPresent()) {
+            this.logger.warn("changeJobQueueEndDate: JobQueue not found with jobQueueId {}, skipping.", jobQueueId);
+            return;
+        }
         jobQueue.get().setEndTime(endTime);
-        jobQueue.get().setJobStatusMessage(String.format("Job %s now complete.", jobQueue.get().getJobId()));
+        if (ProcessUtil.isNull(jobQueue.get().getJobStatusMessage())) {
+            // The fallback has to follow the status. Assuming completion produced runs reading
+            // "Failed -- Job 1196 now complete.", which is not merely unhelpful but actively
+            // contradicts itself: the reason the run failed was never recorded, and the
+            // placeholder then claimed it had succeeded.
+            jobQueue.get().setJobStatusMessage(fallbackMessage(jobQueue.get()));
+        }
         this.transactionService.saveOrUpdateJobQueue(jobQueue.get());
     }
 
     /**
-     * This method use to run the last job in the main job
-     * @param jobId
-     * @param lastJobRun
-     * */
+     * What to say about a run that ended without saying anything.
+     *
+     * A missing message is itself information -- the worker stopped without reporting -- so
+     * the text says that rather than inventing an outcome.
+     */
+    private static String fallbackMessage(JobQueue jobQueue) {
+        Long jobId = jobQueue.getJobId();
+        JobStatus status = jobQueue.getJobStatus();
+        if (status == null) {
+            return String.format("Job %s ended without reporting a status.", jobId);
+        }
+        switch (status) {
+            case Completed:
+                return String.format("Job %s now complete.", jobId);
+            case Failed:
+                return String.format("Job %s failed without reporting a reason. Check its logs.", jobId);
+            case Interrupt:
+                return String.format("Job %s was interrupted before it finished.", jobId);
+            case Skip:
+                return String.format("Job %s was skipped.", jobId);
+            default:
+                return String.format("Job %s ended while marked %s.", jobId, status);
+        }
+    }
+
     public void changeJobLastJobRun(Long jobId, LocalDateTime lastJobRun) {
         Optional<SourceJob> sourceJob = this.transactionService.findByJobIdAndJobStatus(jobId, Status.Active);
+        if (!sourceJob.isPresent()) {
+            this.logger.warn("changeJobLastJobRun: active SourceJob not found with jobId {}, skipping.", jobId);
+            return;
+        }
         sourceJob.get().setLastJobRun(lastJobRun);
         this.transactionService.saveOrUpdateJob(sourceJob.get());
     }
 
-    /**
-     * This method use to add the job into the job-queue in the queue state
-     * the schedule pick the job from the job-queue and push into the queue
-     * @param jobId
-     * @param scheduledTime
-     * @param jobStatus
-     * @param message
-     * @param isSkip
-     * @return JobQueueDto
-     * */
     public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime,
         JobStatus jobStatus, String message, Boolean isSkip) {
         JobQueue jobQueue = new JobQueue();
@@ -97,20 +192,14 @@ public class BulkAction {
         jobQueue.setJobStatus(jobStatus);
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatusMessage(String.format(message, jobId));
+        this.applyJobSnapshot(jobQueue, jobId);
+        RunEnd born = bornEnded(jobStatus);
+        jobQueue.setEndReason(born);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        this.outcomes.born(jobStatus, born);
         return jobQueue;
     }
 
-    /**
-     * This method use to add the job into the job-queue in the queue state
-     * the schedule pick the job from the job-queue and push into the queue
-     * @param jobId
-     * @param scheduledTime
-     * @param jobStatus
-     * @param message
-     * @param isSkip
-     * @return JobQueueDto
-     * */
     public JobQueue createJobQueueV1(Long jobId, LocalDateTime scheduledTime,
         JobStatus jobStatus, String message, Boolean isSkip) {
         JobQueue jobQueue = new JobQueue();
@@ -124,90 +213,279 @@ public class BulkAction {
         jobQueue.setJobStatus(jobStatus);
         jobQueue.setJobId(jobId);
         jobQueue.setJobStatusMessage(String.format(message, jobId));
+        // Made by a request (Run now, Skip next): the run is worked and called back under that request's id.
+        RunCorrelation.stamp(jobQueue);
+        this.applyJobSnapshot(jobQueue, jobId);
+        RunEnd born = bornEnded(jobStatus);
+        jobQueue.setEndReason(born);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        this.outcomes.born(jobStatus, born);
         return jobQueue;
     }
 
+    /** The reason a run made already over carries: Skip and Missed are the only ones the engine makes. */
+    private static RunEnd bornEnded(JobStatus status) {
+        if (status == JobStatus.Skip) {
+            return RunEnd.SKIPPED;
+        }
+        return status == JobStatus.Missed ? RunEnd.MISSED : null;
+    }
+
+    /** What the run takes from its job when it is made: the job's tenant (V102, MIG-29), its bucket and output folder. */
+    private void applyJobSnapshot(JobQueue jobQueue, Long jobId) {
+        this.transactionService.findByJobId(jobId).ifPresent(sourceJob -> {
+            jobQueue.setTenantId(sourceJob.getTenantId());
+            if (sourceJob.getTaskDetail() != null) {
+                jobQueue.setBucket(sourceJob.getTaskDetail().getBucket());
+                jobQueue.setOutputFolder(sourceJob.getTaskDetail().getOutputFolder());
+            }
+        });
+    }
+
     /**
-     * this method use to add the current job logs into the audit logs table
-     * @param jobQueueId
-     * @param logsDetail
-     * */
+     * For a caller that already holds the queue row -- it loaded it, or it just created it, so
+     * the run it is writing against is not in question. A caller that was given the job and the
+     * run as two separate values has to use the overload that takes both.
+     */
+    /**
+     * The one ceiling on a computed backoff, in seconds.
+     *
+     * The wait doubles per attempt, and the column allows ten attempts on an hour's base, so the
+     * ninth doubling of 3600 is twenty-one days. Nobody configuring "retry up to ten times, an
+     * hour apart" is asking for a run that sits in the queue until October, and because a queued
+     * run occupies its job, such a row would take that job off its own schedule for the duration.
+     * Capping the interval keeps the attempt count meaning what it says.
+     */
+    private static final long MAX_BACKOFF_SECONDS = 60 * 60;
+
+    /**
+     * Puts a failed run back in the queue to be attempted again, or reports that it is finished.
+     *
+     * <b>The return value decides whether the caller announces a failure.</b> True means this run
+     * is going round again and nothing has failed yet as far as anyone outside is concerned -- no
+     * Failed status, no failure email. False means the run is genuinely over and the caller should
+     * close it exactly as it did before this method existed. Callers that ignore the result send a
+     * failure mail per attempt, which is worse than the problem retry set out to solve.
+     *
+     * Only transient failures should reach here. A run whose job has been deleted, or which a
+     * person deliberately failed from the console, will not succeed by being tried again, and
+     * retrying it just delays the news by the length of the backoff.
+     *
+     * The row is re-used rather than replaced, so the retry continues to occupy the single
+     * in-flight slot its job is allowed -- two attempts of one job running at once would have two
+     * workers writing the same output folder. The consequence worth knowing is that a job whose
+     * backoff outlasts its own interval will skip its next slot, and that is the intended
+     * ordering: finish the slot you are on before starting the next.
+     */
+    public boolean scheduleRetry(JobQueue jobQueue, String reason) {
+        if (ProcessUtil.isNull(jobQueue) || ProcessUtil.isNull(jobQueue.getJobId())) {
+            return false;
+        }
+        boolean retried = this.scheduleRetry(jobQueue.getJobQueueId(), jobQueue.getJobId(), reason);
+        if (retried) {
+            // Keep the caller's copy in step with what was just written. It is what a failure
+            // email would be built from if the caller went on to send one, and a stale copy there
+            // reports the run as Failed moments after this method put it back in the queue.
+            Optional<JobQueue> written = this.transactionService.findJobQueueByJobQueueId(jobQueue.getJobQueueId());
+            if (written.isPresent()) {
+                jobQueue.setAttempt(written.get().getAttempt());
+                jobQueue.setNextAttemptAt(written.get().getNextAttemptAt());
+                jobQueue.setJobStatus(written.get().getJobStatus());
+                jobQueue.setJobSend(written.get().isJobSend());
+                jobQueue.setEndTime(written.get().getEndTime());
+                jobQueue.setJobStatusMessage(written.get().getJobStatusMessage());
+            }
+        }
+        return retried;
+    }
+
+    /**
+     * As above, for a caller holding only the run's identity rather than the entity.
+     *
+     * The live worker callback is one of these: it arrives as a DTO off the wire, and loading the
+     * entity purely to pass it in would be work this method immediately repeats.
+     */
+    public boolean scheduleRetry(Long jobQueueId, Long jobId, String reason) {
+        if (ProcessUtil.isNull(jobQueueId) || ProcessUtil.isNull(jobId)) {
+            return false;
+        }
+        Optional<SourceJob> sourceJob = this.transactionService.findByJobId(jobId);
+        if (!sourceJob.isPresent()) {
+            // Nothing to read a retry policy from, and a run whose job is gone is not coming back.
+            return false;
+        }
+        // Read by id rather than taking an entity from the caller, which is what makes the attempt
+        // count trustworthy. The Kafka path reaches retry from a send callback fired long after
+        // its entity was loaded, so the copy it holds is detached and may be several attempts
+        // behind -- and a stale count read as the current one retries a run that has already
+        // exhausted its attempts, for ever. Every other writer in this class re-reads for the
+        // same reason.
+        Optional<JobQueue> current = this.transactionService.findJobQueueByJobQueueId(jobQueueId);
+        if (!current.isPresent()) {
+            this.logger.warn("scheduleRetry: JobQueue not found with jobQueueId {}, not retrying.", jobQueueId);
+            return false;
+        }
+        JobQueue row = current.get();
+        int maxAttempts = ProcessUtil.isNull(sourceJob.get().getMaxAttempts())
+            ? 1 : sourceJob.get().getMaxAttempts();
+        // A row written before this column existed reads 0 through a projection or a hand-edited
+        // database; treat anything below 1 as the first attempt rather than as "already past the
+        // limit", which would disable retry on exactly the rows most likely to be odd.
+        int attempt = Math.max(1, row.getAttempt());
+        if (attempt >= maxAttempts) {
+            return false;
+        }
+        int nextAttempt = attempt + 1;
+        long base = ProcessUtil.isNull(sourceJob.get().getRetryBackoffSeconds())
+            ? 60L : sourceJob.get().getRetryBackoffSeconds().longValue();
+        // Shift rather than Math.pow, and bounded before it is applied: attempt is already capped
+        // at ten by the column's constraint, but the arithmetic should not depend on a constraint
+        // in another table to avoid overflowing.
+        long multiplier = 1L << Math.min(attempt - 1, 20);
+        long backoffSeconds = Math.min(base * multiplier, MAX_BACKOFF_SECONDS);
+        LocalDateTime dueAt = BusinessTime.now().plusSeconds(backoffSeconds);
+
+        row.setAttempt(nextAttempt);
+        row.setNextAttemptAt(dueAt);
+        row.setJobStatus(JobStatus.Queue);
+        // Both of these are what makes the row eligible again: the dispatcher's pick-up query
+        // takes Queue rows with job_send false, and this row has had it set true if it ever
+        // reached the broker. Leaving it set means the retry is written down and then never
+        // dispatched -- a run that waits for ever, which reads as a hang rather than a failure.
+        row.setJobSend(false);
+        // The run has not ended. An end time left over from the failed attempt makes its duration
+        // read as negative once the retry finally completes.
+        row.setEndTime(null);
+        // Prepared afresh (MIG-134): the pre-dispatch phase reads the task as it is at the retry, and
+        // the AI service hands back any answer it already recorded for this run.
+        row.setPreparedAt(null);
+        row.setDispatchPayload(null);
+        // Not ended: the same row goes round again and is counted once, when its last attempt ends (MIG-196, C7c).
+        row.setEndReason(null);
+        row.setJobStatusMessage(String.format(
+            "Attempt %s of %s failed: %s Retrying at %s.", attempt, maxAttempts, endWithStop(reason), dueAt));
+        this.transactionService.saveOrUpdateJobQueue(row);
+        this.changeJobStatus(jobId, JobStatus.Queue);
+        this.saveJobAuditLogs(jobQueueId, String.format(
+            "Attempt %s of %s failed: %s Queued for attempt %s at %s.",
+            attempt, maxAttempts, endWithStop(reason), nextAttempt, dueAt));
+        this.sendJobStatusNotification(jobId);
+        this.logger.warn("scheduleRetry --> job {} run {} attempt {} of {} failed; retrying at {}.",
+            jobId, jobQueueId, attempt, maxAttempts, dueAt);
+        return true;
+    }
+
+    /**
+     * The reason as a sentence, so the text built around it does not read "failed: timeout Retrying".
+     */
+    private static String endWithStop(String reason) {
+        if (ProcessUtil.isNull(reason)) {
+            return "no reason recorded.";
+        }
+        String trimmed = reason.trim();
+        return trimmed.endsWith(".") || trimmed.endsWith("!") || trimmed.endsWith("?")
+            ? trimmed : trimmed + ".";
+    }
+
     public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
         this.transactionService.saveJobAuditLogs(jobQueueId, logsDetail);
     }
 
+    /** Many lines at once, for a worker that buffers rather than posting per line. */
+    public void saveJobAuditLogs(Long jobQueueId, List<String> logDetails) {
+        this.transactionService.saveJobAuditLogs(jobQueueId, logDetails);
+    }
+
     /**
-     * this method use to get the count of job which is inQueue
-     * @param jobId
-     * */
+     * For a caller holding a job id and a queue id that arrived independently -- a worker
+     * callback quotes both, and neither one proves anything about the other. The write refuses
+     * unless the queue row says it belongs to that job, so a caller naming a job it is entitled
+     * to cannot append to another tenant's run by quoting that run's queue id.
+     */
+    public void saveJobAuditLogs(Long jobId, Long jobQueueId, String logsDetail) {
+        this.transactionService.saveJobAuditLogs(jobId, jobQueueId, logsDetail);
+    }
+
+    /** The batched form of the checked write. */
+    public void saveJobAuditLogs(Long jobId, Long jobQueueId, List<String> logDetails) {
+        this.transactionService.saveJobAuditLogs(jobId, jobQueueId, logDetails);
+    }
+
     public Integer getCountForInQueueJobByJobId(Long jobId) {
         return this.transactionService.getCountForInQueueJobByJobId(jobId);
     }
 
-    /**
-     * this method use to update the scheduler next running time
-     * @param scheduler
-     * */
     public void updateNextScheduler(Scheduler scheduler) {
-        LocalDateTime nextJobRun = null;
-        if (scheduler.getFrequency().equals(Frequency.Mint.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMinutes(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Hr.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusHours(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Daily.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusDays(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Weekly.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusWeeks(Long.parseLong(scheduler.getRecurrence()));
-        } else if (scheduler.getFrequency().equals(Frequency.Monthly.name()) && !isNull(scheduler.getRecurrence())) {
-            nextJobRun = scheduler.getRecurrenceTime().plusMonths(Long.parseLong(scheduler.getRecurrence()));
+        List<LocalDateTime> missedRuns = ProcessTimeUtil.computeMissedRuns(scheduler);
+        ProcessTimeUtil.applyNextRun(scheduler);
+        this.transactionService.saveOrUpdateScheduler(scheduler);
+        if (scheduler.isExpired()) {
+            logger.info("No more next job for jobId: {} -- schedule has expired.", scheduler.getJobId());
         }
-        if (scheduler.getEndDate() != null) {
-            LocalDateTime schedulerEndDateTime = scheduler.getEndDate().atTime(scheduler.getStartTime());
-            if (nextJobRun != null && (schedulerEndDateTime.equals(nextJobRun) || schedulerEndDateTime.isAfter(nextJobRun))) {
-                scheduler.setRecurrenceTime(nextJobRun);
-                this.transactionService.saveOrUpdateScheduler(scheduler);
-                return;
-            }
-            logger.info("No More Nex Job for jobId :- {}.", scheduler.getJobId());
-        } else if (nextJobRun != null) {
-            scheduler.setRecurrenceTime(nextJobRun);
-            this.transactionService.saveOrUpdateScheduler(scheduler);
+        for (LocalDateTime missedAt : missedRuns) {
+            this.recordMissedRun(scheduler.getJobId(), missedAt);
+        }
+        // One push for the whole catch-up, not one per slot (MIG-151): every slot left the job in the
+        // same state, and a fifty-slot replay read the same job fifty times to say so fifty times.
+        // The live push, but not an outcome announcement: a missed slot leaves the job's running
+        // status holding the PREVIOUS run's outcome, so the one-argument form re-announced it -- one
+        // "Job completed" per missed slot, each dated to a moment nothing ran. The same fix the skip
+        // path has (ProducerBulkEngine.skipManualJobInQueue).
+        if (!missedRuns.isEmpty()) {
+            this.sendJobStatusNotification(scheduler.getJobId(), false);
         }
     }
 
-    /**
-     * This method use the change the status of main job
-     * @param jobId
-     * */
+    private void recordMissedRun(Long jobId, LocalDateTime missedAt) {
+        String template = "Job %s missed its scheduled run at " + missedAt + " -- the system was catching up after downtime.";
+        JobQueue jobQueue = this.createJobQueue(jobId, missedAt, JobStatus.Missed, template, true);
+        this.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(template, jobId));
+        logger.warn("Job {} missed its scheduled run at {}.", jobId, missedAt);
+    }
+
     public void sendJobStatusNotification(Long jobId) {
-        List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
-        if (!sourceJob.isEmpty()) {
-            this.notificationService.sendNotificationToSpecificUser(this.getSourceJobDetail(sourceJob.get(0)));
-        }
+        this.sendJobStatusNotification(jobId, true);
+    }
+
+    public void sendJobStatusNotification(Long jobId, boolean isNewTransition) {
+        this.sendJobStatusNotification(jobId, null, isNewTransition);
     }
 
     /**
-     * Method use to get the source job detail
-     * @param sourceJobProjection
-     * @return String
-     * */
-    private String getSourceJobDetail(SourceJobProjection sourceJobProjection) {
-        HashMap<String, Object> jsonObject = new HashMap<>();
-        jsonObject.put("jobId", sourceJobProjection.getJobId());
-        jsonObject.put("jobStatus", sourceJobProjection.getJobStatus());
-        jsonObject.put("jobRunningStatus", sourceJobProjection.getJobRunningStatus());
-        if (!ProcessUtil.isNull(sourceJobProjection.getLastJobRun())) {
-            jsonObject.put("lastJobRun", sourceJobProjection.getLastJobRun().toString());
+     * The owner's side of a status change. The tenant's live feed was already told by
+     * changeJobStatus; this adds, for a NEW Completed or Failed, the owner's notice.
+     *
+     * {@code isNewTransition} is decided here in Core and only carried: skip and missed pass false
+     * because the job's running status still holds the previous run's outcome. Nothing is published
+     * to the feed for a non-outcome -- a skip fires while a run is in flight, and pushing that
+     * in-flight status would move the console's lastJobRun and hide a stalled run.
+     *
+     * {@code jobQueueId} is the run the outcome belongs to: it and the run's attempt are the key the
+     * notice is sent once on, so a replayed Failed callback raises one notice, not two.
+     */
+    public void sendJobStatusNotification(Long jobId, Long jobQueueId, boolean isNewTransition) {
+        List<SourceJobProjection> sourceJob = this.transactionService.fetchRunningJobEvent(Arrays.asList(jobId));
+        if (sourceJob.isEmpty()) {
+            return;
         }
-        if (!ProcessUtil.isNull(sourceJobProjection.getRecurrenceTime())) {
-            jsonObject.put("recurrenceTime", sourceJobProjection.getRecurrenceTime().toString());
+        SourceJobProjection jobEvent = sourceJob.get(0);
+        JobStatus runningStatus = jobEvent.getJobRunningStatus();
+        boolean outcome = runningStatus == JobStatus.Completed || runningStatus == JobStatus.Failed;
+        if (!isNewTransition || !outcome) {
+            return;
         }
-        jsonObject.put("execution", sourceJobProjection.getExecution());
-        return new Gson().toJson(jsonObject);
+        this.notifications.jobStatusChanged(jobEvent.getTenantId(), new JobStatusChanged()
+            .setJobId(jobEvent.getJobId())
+            .setJobQueueId(jobQueueId)
+            .setAttempt(jobQueueId == null ? null : this.attemptOf(jobQueueId))
+            .setJobRunningStatus(runningStatus.name())
+            .setNewTransition(true)
+            .setJobName(jobEvent.getJobName())
+            .setRecipientUserId(jobEvent.getAssignedUserId())
+            .setRecipientUsername(jobEvent.getAssignedUsername()));
     }
 
-    private static boolean isNull(String filed) {
-        return filed == null || filed.isEmpty();
+    private Integer attemptOf(Long jobQueueId) {
+        return this.transactionService.findJobQueueByJobQueueId(jobQueueId).map(JobQueue::getAttempt).orElse(1);
     }
 }

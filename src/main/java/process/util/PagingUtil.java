@@ -9,14 +9,14 @@ import java.util.List;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 public class PagingUtil {
 
     private static final String ID = "id";
     private static final String ASC = "asc";
     private static final String DESC = "desc";
-    private static final Long DEFAULT_PAGE_NUMBER = 0l;
-    private static final Long DEFAULT_MAX_NO_OF_ROWS = 10l;
+    private static final Long DEFAULT_PAGE_NUMBER = 0L;
+    private static final Long DEFAULT_MAX_NO_OF_ROWS = 10L;
 
     public static Object convertEntityToPagingDTO(Long totalCount, Pageable page) {
         PagingDto pdto = new PagingDto();
@@ -26,28 +26,36 @@ public class PagingUtil {
         return pdto;
     }
 
-    /* Page = current page And size is Limit*/
-    public static Pageable ApplyPaging(String orderBy, String direction, Long page, Long limit) {
-        return ApplyPagingAndSorting(orderBy, direction, page != null ? page - 1 : 0l, limit);
+    /** `page` is one-based here, as the list endpoints receive it; PageRequest counts from zero. */
+    public static Pageable applyPaging(String orderBy, String direction, Long page, Long limit) {
+        return applyPagingAndSorting(orderBy, direction, page != null ? page - 1 : 0L, limit);
     }
 
-    /* Apply If Needed */
-    public static Pageable ApplyPagingAndSorting(String orderBy, String direction, Long page, Long limit) {
+    public static Pageable applyPagingAndSorting(String orderBy, String direction, Long page, Long limit) {
         List<Sort.Order> orders = new ArrayList<>();
-        orders.add(new Sort.Order(getSortDirection(direction), orderBy != null ? orderBy: ID));
-        if (page == null) {
+        orders.add(new Sort.Order(getSortDirection(direction), orderBy != null ? orderBy : ID));
+        // Both values arrive straight off the query string, and PageRequest.of throws on a
+        // negative index or a size below one. Only null was being handled, so "?page=0" -- the
+        // natural guess for the first page, and what a zero-based client sends -- answered with
+        // the internal-error page instead of a list. Out-of-range means the default, the same
+        // as leaving it off.
+        if (page == null || page < 0L) {
             page = DEFAULT_PAGE_NUMBER;
         }
-        if (limit == null) {
+        if (limit == null || limit < 1L) {
             limit = DEFAULT_MAX_NO_OF_ROWS;
         }
-        return PageRequest.of(page.intValue(), limit.intValue(), Sort.by(orders));
+        // Narrowed with a ceiling rather than intValue() alone: a Long past Integer.MAX_VALUE
+        // wraps to a negative int, which PageRequest rejects the same way a negative page does.
+        return PageRequest.of(toBoundedInt(page), toBoundedInt(limit), Sort.by(orders));
+    }
+
+    private static int toBoundedInt(Long value) {
+        return (int) Math.min(value, (long) Integer.MAX_VALUE);
     }
 
     private static Sort.Direction getSortDirection(String direction) {
-        if (direction.equalsIgnoreCase(ASC)) {
-            return Sort.Direction.ASC;
-        } else if (direction.equalsIgnoreCase(DESC)) {
+        if (direction != null && direction.equalsIgnoreCase(DESC)) {
             return Sort.Direction.DESC;
         }
         return Sort.Direction.ASC;

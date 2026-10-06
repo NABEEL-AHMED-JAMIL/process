@@ -2,28 +2,59 @@ package process.model.pojo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
-import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Index;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.ManyToOne;
+import javax.persistence.JoinColumn;
+import javax.persistence.OneToMany;
+import javax.persistence.CascadeType;
 
+@Entity
+@Table(name = "source_task", indexes = {
+    @Index(name = "idx_source_task_tenant_id", columnList = "tenant_id")
+})
 /**
  * @author Nabeel Ahmed
- */
-@Entity
-@Table(name = "source_task")
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceTask {
+@EntityListeners(AuditListener.class)
+public class SourceTask implements Audited {
+    @Transient
+    private String createdByName;
+
+    @Transient
+    private String updatedByName;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
 
     @GenericGenerator(
         name = "taskDetailSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "task_detail_source_Seq"),
+            @Parameter(name = "sequence_name", value = "task_detail_source_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }
@@ -33,6 +64,9 @@ public class SourceTask {
     @GeneratedValue(generator = "taskDetailSequenceGenerator")
     private Long taskDetailId;
 
+    @Column(name = "tenant_id")
+    private Long tenantId;
+
     @Column(name = "task_name",
         nullable = false)
     private String taskName;
@@ -41,20 +75,29 @@ public class SourceTask {
     @Enumerated(EnumType.STRING)
     private Status taskStatus;
 
+    /** A PIPELINE_HOME_PAGES lookup_data row; a bigint foreign key since V70.3 (MIG-165). */
     @Column(name = "home_page_id")
-    private String homePageId;
+    private Long homePageId;
 
-    /**
-     * pipeline id use to move the data to the
-     * right path if kafka topic using for multiple pipeline
-     * */
     @Column(name = "pipeline_id")
     private String pipelineId;
 
-    // save lob data for job detail
+    /** A TASK_GROUPS lookup_data row; a bigint foreign key since V70.3 (MIG-165). */
+    @Column(name = "group_id")
+    private Long groupId;
+
     @Column(name = "task_payload",
         columnDefinition = "text")
     private String taskPayload;
+
+    @Column(name = "bucket")
+    private String bucket;
+
+    @Column(name = "input_folder")
+    private String inputFolder;
+
+    @Column(name = "output_folder")
+    private String outputFolder;
 
     @ManyToOne
     @JoinColumn(name = "source_task_type_id")
@@ -68,6 +111,14 @@ public class SourceTask {
 
     public Long getTaskDetailId() {
         return taskDetailId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public void setTaskDetailId(Long taskDetailId) {
@@ -90,11 +141,11 @@ public class SourceTask {
         this.taskStatus = taskStatus;
     }
 
-    public String getHomePageId() {
+    public Long getHomePageId() {
         return homePageId;
     }
 
-    public void setHomePageId(String homePageId) {
+    public void setHomePageId(Long homePageId) {
         this.homePageId = homePageId;
     }
 
@@ -106,12 +157,44 @@ public class SourceTask {
         this.pipelineId = pipelineId;
     }
 
+    public Long getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(Long groupId) {
+        this.groupId = groupId;
+    }
+
     public String getTaskPayload() {
         return taskPayload;
     }
 
     public void setTaskPayload(String taskPayload) {
         this.taskPayload = taskPayload;
+    }
+
+    public String getBucket() {
+        return bucket;
+    }
+
+    public void setBucket(String bucket) {
+        this.bucket = bucket;
+    }
+
+    public String getInputFolder() {
+        return inputFolder;
+    }
+
+    public void setInputFolder(String inputFolder) {
+        this.inputFolder = inputFolder;
+    }
+
+    public String getOutputFolder() {
+        return outputFolder;
+    }
+
+    public void setOutputFolder(String outputFolder) {
+        this.outputFolder = outputFolder;
     }
 
     public SourceTaskType getSourceTaskType() {
@@ -133,7 +216,46 @@ public class SourceTask {
 
     @Override
     public String toString() {
-        return new Gson().toJson(this);
+        return EntityStrings.of(this);
     }
 
+    @Override
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    @Override
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    @Override
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    @Override
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    @Override
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
 }

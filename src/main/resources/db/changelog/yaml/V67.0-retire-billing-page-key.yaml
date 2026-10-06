@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 67.0-retire-billing-page-key
+      author: nabeel.amd93
+      description: "The billing page key is retired (MIG-34): profiles and exceptions stop naming it"
+      # PageKey.BILLING promised that an access profile could withhold Cost & usage from a tenant admin.
+      # Nothing could: admins hold no profile and page access is evaluated for tenant users only, and a
+      # tenant user never reaches billing (TENANT_ADMIN at the floor). The key is gone from PageKey;
+      # these rows naming it opened nothing, but an exception still counted on the users screen.
+      # Nothing to restore on rollback: the rows had no effect.
+      changes:
+        - sql:
+            sql: DELETE FROM page_access_profile_page WHERE page_key = 'billing'
+        - sql:
+            sql: DELETE FROM user_page_access WHERE page_key = 'billing'
+      rollback:
+        - sql:
+            sql: SELECT 1

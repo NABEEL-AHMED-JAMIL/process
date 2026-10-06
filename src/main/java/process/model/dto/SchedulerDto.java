@@ -10,8 +10,8 @@ import java.time.LocalTime;
 
 /**
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SchedulerDto {
 
@@ -20,10 +20,16 @@ public class SchedulerDto {
     private LocalDate endDate;
     private LocalTime startTime;
     private String frequency;
-    private String recurrence;
+    private String intervalValue;
+    private String daysOfWeek;
+    private Integer dayOfMonth;
+    /** A Cron schedule's expression (Wave 4): five fields, or six with seconds 0; null for the other frequencies. */
+    private String cronExpression;
     private Long jobId;
     private Timestamp dateCreated;
-    private LocalDateTime recurrenceTime;
+    private LocalDateTime nextRunAt;
+    private boolean expired;
+    private boolean lastFlight;
 
     public SchedulerDto() {}
 
@@ -67,12 +73,36 @@ public class SchedulerDto {
         this.frequency = frequency;
     }
 
-    public String getRecurrence() {
-        return recurrence;
+    public String getIntervalValue() {
+        return intervalValue;
     }
 
-    public void setRecurrence(String recurrence) {
-        this.recurrence = recurrence;
+    public void setIntervalValue(String intervalValue) {
+        this.intervalValue = intervalValue;
+    }
+
+    public String getDaysOfWeek() {
+        return daysOfWeek;
+    }
+
+    public void setDaysOfWeek(String daysOfWeek) {
+        this.daysOfWeek = daysOfWeek;
+    }
+
+    public Integer getDayOfMonth() {
+        return dayOfMonth;
+    }
+
+    public void setDayOfMonth(Integer dayOfMonth) {
+        this.dayOfMonth = dayOfMonth;
+    }
+
+    public String getCronExpression() {
+        return cronExpression;
+    }
+
+    public void setCronExpression(String cronExpression) {
+        this.cronExpression = cronExpression;
     }
 
     public Long getJobId() {
@@ -91,12 +121,28 @@ public class SchedulerDto {
         this.dateCreated = dateCreated;
     }
 
-    public LocalDateTime getRecurrenceTime() {
-        return recurrenceTime;
+    public LocalDateTime getNextRunAt() {
+        return nextRunAt;
     }
 
-    public void setRecurrenceTime(LocalDateTime recurrenceTime) {
-        this.recurrenceTime = recurrenceTime;
+    public void setNextRunAt(LocalDateTime nextRunAt) {
+        this.nextRunAt = nextRunAt;
+    }
+
+    public boolean isExpired() {
+        return expired;
+    }
+
+    public void setExpired(boolean expired) {
+        this.expired = expired;
+    }
+
+    public boolean isLastFlight() {
+        return lastFlight;
+    }
+
+    public void setLastFlight(boolean lastFlight) {
+        this.lastFlight = lastFlight;
     }
 
     @Override

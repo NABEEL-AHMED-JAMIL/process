@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 82.0-job-queue-correlation-id
+      author: nabeel.amd93
+      description: "job_queue.correlation_id: stamped at dispatch with the callback token hash, so a callback that echoes no X-Correlation-Id is logged under its dispatch's id (MIG-95)"
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              ALTER TABLE job_queue ADD COLUMN IF NOT EXISTS correlation_id VARCHAR(64);
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: ALTER TABLE job_queue DROP COLUMN IF EXISTS correlation_id;

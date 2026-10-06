@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 185.0-inbox-trigger
+      author: nabeel.amd93
+      description: "MIG-239 (Core's half of the inbox): job_inbox_trigger (start this job when a file arrives in its workspace's inbox, optionally only files whose name matches a glob), inbox_arrival (each arrival's outcome per job, unique per arrival and job -- start once), and the file on the run (job_queue.input_bucket, input_key); both new tables are tenant tables under row security as V181; expand-only"
+      # V185, not V183/V184: those are reserved for MIG-230 (the step engine), running in parallel.
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V185.0-inbox-trigger/V185__inbox_trigger.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V185.0-inbox-trigger/V185__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

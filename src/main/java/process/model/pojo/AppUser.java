@@ -1,0 +1,323 @@
+package process.model.pojo;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.GenericGenerator;
+import org.hibernate.annotations.ParamDef;
+import org.hibernate.annotations.Parameter;
+import process.model.enums.Status;
+import process.model.enums.UserRole;
+import java.sql.Timestamp;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Index;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+
+@Entity
+@Table(name = "app_user", indexes = {
+
+    @Index(name = "idx_app_user_tenant_id", columnList = "tenant_id")
+})
+/**
+ * @author Nabeel Ahmed
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@EntityListeners(AuditListener.class)
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+// MIG-13: a person belongs to exactly one tenant and a platform admin's row to none, so a plain
+// equality -- a tenant caller never sees a platform row through a filtered query. The reads that
+// must cross tenants (sign-in, "is this name taken", created-by names, the internal user directory)
+// are native queries in AppUserRepository, which the filter does not reach. Loads by id are not
+// filtered either; scopedFind and TenantOwnership remain the guard on those.
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+public class AppUser implements Audited {
+    @Transient
+    private String createdByName;
+
+    @Transient
+    private String updatedByName;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
+
+    @GenericGenerator(
+        name = "appUserSequenceGenerator",
+        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
+        parameters = {
+            @Parameter(name = "sequence_name", value = "app_user_seq"),
+            @Parameter(name = "initial_value", value = "1000"),
+            @Parameter(name = "increment_size", value = "1")
+        }
+    )
+    @Id
+    @Column(name = "app_user_id")
+    @GeneratedValue(generator = "appUserSequenceGenerator")
+    private Long appUserId;
+
+    @Column(name = "uuid", unique = true, length = 36)
+    private String uuid;
+
+    @Column(name = "tenant_id")
+    private Long tenantId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
+    private Tenant tenant;
+
+    @Column(name = "username", nullable = false, unique = true)
+    private String username;
+
+    @JsonIgnore
+    @Column(name = "password", nullable = false)
+    private String password;
+
+    @Column(name = "full_name", nullable = false)
+    private String fullName;
+
+    @Column(name = "user_role", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private UserRole userRole;
+
+    @Column(name = "status", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
+    @Column(name = "date_created")
+    private Timestamp dateCreated;
+
+    @Column(name = "last_login_at")
+    private Timestamp lastLoginAt;
+
+    /**
+     * Where the user's picture lives. Both halves are stored because a bucket is reachable
+     * only through the storage connection that owns it -- a key on its own could not be
+     * resolved back to a provider.
+     */
+    /** E.164, so the country code travels with the number rather than in a second column. */
+    @Column(name = "phone_number", length = 20)
+    private String phoneNumber;
+
+    /** Job title, e.g. Software Engineer. Separate from userRole, which is the permission level. */
+    @Column(name = "position", length = 120)
+    private String position;
+
+    /**
+     * The access profile this person holds, or null for the workspace default. Only ever
+     * meaningful on a TENANT_USER: admins open every page whatever this says.
+     */
+    @Column(name = "page_access_profile_id")
+    private Long pageAccessProfileId;
+
+    /**
+     * Set when the account was created with a generated password. Cleared the moment the person
+     * chooses their own, which is what makes the emailed credential a one-time one.
+     */
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
+    /**
+     * Moves up whenever the person's standing changes -- role, tenant, status, an administrator's
+     * password reset, their tenant's suspension -- and a token minted under a lower one is refused
+     * (MIG-14). Never written through the entity: only AppUserRepository.bumpTokenVersion moves it,
+     * in SQL, so an entity loaded before a bump cannot put the old number back when it is saved.
+     */
+    @Column(name = "token_version", insertable = false, updatable = false)
+    private Integer tokenVersion;
+
+    @Column(name = "avatar_bucket")
+    private String avatarBucket;
+
+    @Column(name = "avatar_key")
+    private String avatarKey;
+
+    public AppUser() {}
+
+    public Long getAppUserId() {
+        return appUserId;
+    }
+
+    public void setAppUserId(Long appUserId) {
+        this.appUserId = appUserId;
+    }
+
+    public String getUuid() {
+        return uuid;
+    }
+
+    public void setUuid(String uuid) {
+        this.uuid = uuid;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public Tenant getTenant() {
+        return tenant;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public UserRole getUserRole() {
+        return userRole;
+    }
+
+    public void setUserRole(UserRole userRole) {
+        this.userRole = userRole;
+    }
+
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        this.status = status;
+    }
+
+    public Timestamp getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(Timestamp dateCreated) {
+        this.dateCreated = dateCreated;
+    }
+
+    public Timestamp getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public void setLastLoginAt(Timestamp lastLoginAt) {
+        this.lastLoginAt = lastLoginAt;
+    }
+
+    @Override
+    public String toString() {
+        return EntityStrings.of(this);
+    }
+
+    public String getPosition() {
+        return position;
+    }
+
+    public void setPosition(String position) {
+        this.position = position;
+    }
+
+    public String getAvatarBucket() {
+        return avatarBucket;
+    }
+
+    public void setAvatarBucket(String avatarBucket) {
+        this.avatarBucket = avatarBucket;
+    }
+
+    public String getAvatarKey() {
+        return avatarKey;
+    }
+
+    public void setAvatarKey(String avatarKey) {
+        this.avatarKey = avatarKey;
+    }
+
+    public boolean isMustChangePassword() { return mustChangePassword; }
+
+    public Integer getTokenVersion() { return tokenVersion; }
+
+    public void setTokenVersion(Integer tokenVersion) { this.tokenVersion = tokenVersion; }
+
+    public Long getPageAccessProfileId() { return pageAccessProfileId; }
+
+    public void setPageAccessProfileId(Long pageAccessProfileId) { this.pageAccessProfileId = pageAccessProfileId; }
+
+    public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
+
+    @Override
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    @Override
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    @Override
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    @Override
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    @Override
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+}

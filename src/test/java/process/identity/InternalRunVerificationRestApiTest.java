@@ -1,0 +1,289 @@
+package process.identity;
+
+import process.ai.InMemoryModelChoiceStore;
+import process.ai.RunAiStep;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
+import process.model.enums.JobStatus;
+import process.model.enums.Status;
+import process.model.pojo.JobQueue;
+import process.model.pojo.Pipeline;
+import process.model.pojo.PipelineField;
+import process.model.pojo.SourceJob;
+import process.model.pojo.SourceTask;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.PipelineRepository;
+import process.model.repository.SourceJobRepository;
+import process.security.RunCallbackTokens;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+/**
+ * MIG-189: a worker's run token is Core's to check, so the AI service asks here rather than reading
+ * job_queue itself. The answer carries what AI needs to run the step without any Core table --
+ * the job, its tenant, its pipeline and the steps that pipeline hands to a worker -- and a refusal
+ * carries nothing at all: the six reasons are logged here and never disclosed, because "expired" or
+ * "wrong job" would confirm a guess. Both variants exist, because a usage report may arrive after
+ * the run is over and a callback may not.
+ */
+class InternalRunVerificationRestApiTest {
+
+    private static final String SERVICE = "t0ken";
+
+    private final RunCallbackTokens tokens = mock(RunCallbackTokens.class);
+    private final JobQueueRepository runs = mock(JobQueueRepository.class);
+    private final SourceJobRepository jobs = mock(SourceJobRepository.class);
+    private final PipelineRepository pipelines = mock(PipelineRepository.class);
+    private final InMemoryModelChoiceStore modelChoices = new InMemoryModelChoiceStore();
+    private final InternalRunVerificationRestApi api = new InternalRunVerificationRestApi(this.tokens, this.runs, this.jobs,
+        this.pipelines, this.modelChoices, SERVICE);
+
+    private static Map<String, Object> body(Long jobId, String token, String variant) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("jobId", jobId);
+        body.put("token", token);
+        body.put("variant", variant);
+        return body;
+    }
+
+    private static PipelineField step(String tag, String runIn, long promptId, int position) {
+        PipelineField field = new PipelineField();
+        field.setFieldType("ai");
+        field.setTagKey(tag);
+        field.setRunIn(runIn);
+        field.setPromptId(promptId);
+        field.setPosition(position);
+        return field;
+    }
+
+    private void aLiveRun(JobStatus status) {
+        JobQueue run = new JobQueue();
+        run.setJobQueueId(900L);
+        run.setJobId(77L);
+        run.setJobStatus(status);
+        when(this.runs.findById(900L)).thenReturn(Optional.of(run));
+        SourceTask task = new SourceTask();
+        task.setPipelineId("F100001");
+        SourceJob job = new SourceJob();
+        job.setJobId(77L);
+        job.setTenantId(2901L);
+        job.setTaskDetail(task);
+        when(this.jobs.findByJobIdAndJobStatus(77L, Status.Active)).thenReturn(Optional.of(job));
+        Pipeline pipeline = new Pipeline();
+        pipeline.setFields(Arrays.asList(step("summary", "server", 5, 1), step("caption", "worker", 6, 2), step("tags", "worker", 7, 3)));
+        when(this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot("F100001", 2901L, Status.Delete))
+            .thenReturn(Collections.singletonList(pipeline));
+    }
+
+    @Test
+    void withoutTheServiceTokenNothingIsAnswered() {
+        assertThat(this.api.verifyCallback(null, 900L, body(77L, "w", "callback")).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.verifyCallback("wrong", 900L, body(77L, "w", "callback")).getStatusCodeValue()).isEqualTo(401);
+        verifyNoInteractions(this.tokens, this.runs);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aValidTokenAnswersWhoseRunItIsAndTheStepsItHandsToAWorker() {
+        aLiveRun(JobStatus.Running);
+        when(this.tokens.verify(77L, 900L, "w")).thenReturn(Optional.empty());
+
+        ResponseEntity<?> answer = this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback"));
+
+        Map<String, Object> verdict = (Map<String, Object>) answer.getBody();
+        assertThat(verdict).containsEntry("valid", true).containsEntry("jobId", 77L).containsEntry("jobQueueId", 900L)
+            .containsEntry("tenantId", 2901L).containsEntry("pipelineId", "F100001").containsEntry("terminal", false);
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) verdict.get("workerSteps");
+        assertThat(steps).extracting(s -> s.get("stepTag")).containsExactly("caption", "tags");
+        assertThat(steps).extracting(s -> s.get("promptId")).containsExactly(6L, 7L);
+    }
+
+    /** One flat answer for all six reasons: the reason is for the log, not for the caller. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void everyRefusalLooksTheSame() {
+        aLiveRun(JobStatus.Running);
+        for (RunCallbackTokens.Refusal reason : RunCallbackTokens.Refusal.values()) {
+            when(this.tokens.verify(anyLong(), anyLong(), anyString())).thenReturn(Optional.of(reason));
+            Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback")).getBody();
+            assertThat(verdict).as(reason.name()).containsOnlyKeys("valid").containsEntry("valid", false);
+        }
+    }
+
+    /** Status stops callbacks, expiry stops reports: a finished run may still report its usage. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theReportVariantAcceptsAFinishedRunAndSaysItIsOver() {
+        aLiveRun(JobStatus.Completed);
+        when(this.tokens.verifyForReport(77L, 900L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "report")).getBody();
+
+        assertThat(verdict).containsEntry("valid", true).containsEntry("terminal", true);
+        verify(this.tokens, never()).verify(any(), any(), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRunWhoseJobHasNoTaskIsValidButHandsNoSteps() {
+        JobQueue run = new JobQueue();
+        run.setJobQueueId(901L);
+        run.setJobId(78L);
+        when(this.runs.findById(901L)).thenReturn(Optional.of(run));
+        when(this.jobs.findByJobIdAndJobStatus(78L, Status.Active)).thenReturn(Optional.empty());
+        when(this.tokens.verify(78L, 901L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 901L, body(78L, "w", "callback")).getBody();
+
+        assertThat(verdict).containsEntry("valid", true).containsEntry("pipelineId", null);
+        assertThat((List<?>) verdict.get("workerSteps")).isEmpty();
+    }
+
+    @Test
+    void anUnknownVariantIsRefusedBeforeAnyTokenIsChecked() {
+        assertThat(this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "anything")).getStatusCodeValue()).isEqualTo(400);
+        verifyNoInteractions(this.tokens);
+    }
+
+    // ---- MIG-188: the prompt-delete guard ----------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void thePromptDeleteGuardCountsThePipelinesUsingAPrompt() {
+        when(this.pipelines.countUsingPrompt(eq(6L))).thenReturn(2L);
+        Map<String, Object> answer = (Map<String, Object>) this.api.countUsingPrompt(SERVICE, Collections.singletonMap("promptId", 6)).getBody();
+        assertThat(answer).containsEntry("promptId", 6L).containsEntry("count", 2L);
+        assertThat(this.api.countUsingPrompt(null, Collections.singletonMap("promptId", 6)).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.countUsingPrompt(SERVICE, Collections.emptyMap()).getStatusCodeValue()).isEqualTo(400);
+    }
+
+    /**
+     * Owner rule "keep the bill" (2026-09-24): a run whose job was deleted after it started still reports its usage.
+     * The run row and its token are the proof, not the job's current status: the workspace is the one stamped on the
+     * run (V102), and the job is found whatever its status now -- so AI's usage report for such a run is accepted
+     * with its tenant, never answered "valid" with no tenant (which the caller cannot bill).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRunWhoseJobWasDeletedMidRunStillNamesItsWorkspaceSoItsUsageIsBilled() {
+        JobQueue run = new JobQueue();
+        run.setJobQueueId(901L);
+        run.setJobId(78L);
+        run.setTenantId(2901L);
+        run.setJobStatus(JobStatus.Completed);
+        when(this.runs.findById(901L)).thenReturn(Optional.of(run));
+        SourceTask task = new SourceTask();
+        task.setPipelineId("F100001");
+        SourceJob deleted = new SourceJob();
+        deleted.setJobId(78L);
+        deleted.setTenantId(2901L);
+        deleted.setJobStatus(Status.Delete);
+        deleted.setTaskDetail(task);
+        when(this.jobs.findByJobIdAndJobStatus(78L, Status.Active)).thenReturn(Optional.empty());
+        when(this.jobs.findById(78L)).thenReturn(Optional.of(deleted));
+        when(this.tokens.verifyForReport(78L, 901L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 901L, body(78L, "w", "report")).getBody();
+
+        assertThat(verdict).containsEntry("valid", true).containsEntry("tenantId", 2901L).containsEntry("pipelineId", "F100001")
+            .containsEntry("terminal", true);
+    }
+
+    /** The run's own stamp holds even when its job's row cannot be found at all. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theRunsOwnWorkspaceHoldsWithoutItsJobRow() {
+        JobQueue run = new JobQueue();
+        run.setJobQueueId(902L);
+        run.setJobId(79L);
+        run.setTenantId(2902L);
+        run.setJobStatus(JobStatus.Completed);
+        when(this.runs.findById(902L)).thenReturn(Optional.of(run));
+        when(this.tokens.verifyForReport(79L, 902L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 902L, body(79L, "w", "report")).getBody();
+
+        assertThat(verdict).containsEntry("valid", true).containsEntry("tenantId", 2902L);
+    }
+    // ---- MIG-242: the model each worker step runs on --------------------------------------------------------------
+
+    private static RunAiStep prepared(String stepKey, String profile, String source) {
+        RunAiStep step = new RunAiStep();
+        step.jobQueueId = 900L;
+        step.attempt = 1;
+        step.stepKey = stepKey;
+        step.runIn = RunAiStep.WORKER;
+        step.outcome = RunAiStep.HANDED;
+        step.modelProfile = profile;
+        step.profileSource = source;
+        return step;
+    }
+
+    /**
+     * Each worker step names the model the run was prepared with -- as run_ai_step recorded it -- and the pipeline's
+     * source task, so ai-service runs the worker's call on that model and that step's list. A schedule changed since
+     * does not move a running run; a step recorded on its default stays on it.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void workerStepsNameTheModelTheRunWasPreparedWith() {
+        aLiveRun(JobStatus.Running);
+        SourceJob job = this.jobs.findByJobIdAndJobStatus(77L, Status.Active).get();
+        job.getTaskDetail().setTaskDetailId(8801L);
+        job.setModelProfiles("{\"caption\":\"3100\",\"tags\":\"3200\"}");
+        this.modelChoices.recordSteps(Arrays.asList(prepared("caption", "2100", "run"), prepared("tags", null, null)));
+        when(this.tokens.verify(77L, 900L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback")).getBody();
+
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) verdict.get("workerSteps");
+        assertThat(steps.get(0)).containsEntry("stepTag", "caption").containsEntry("modelProfile", "2100").containsEntry("sourceTaskId", 8801L);
+        assertThat(steps.get(1)).containsEntry("stepTag", "tags").containsEntry("sourceTaskId", 8801L).doesNotContainKey("modelProfile");
+    }
+
+    /** A run prepared before V182 recorded nothing: its "Run with..." and its job's setting, as they are now. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRunWithNothingRecordedFallsBackToItsSettings() {
+        aLiveRun(JobStatus.Running);
+        this.jobs.findByJobIdAndJobStatus(77L, Status.Active).get().setModelProfiles("{\"caption\":\"3100\",\"tags\":\"3200\"}");
+        this.runs.findById(900L).get().setModelProfiles("{\"tags\":\"4200\"}");
+        when(this.tokens.verify(77L, 900L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback")).getBody();
+
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) verdict.get("workerSteps");
+        assertThat(steps).extracting(step -> step.get("modelProfile")).containsExactly("3100", "4200");
+        assertThat(steps.get(0)).as("no task id known: none said").doesNotContainKey("sourceTaskId");
+    }
+
+    /** Another attempt's record is not this attempt's: a retry is prepared afresh. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void anEarlierAttemptsRecordIsNotUsed() {
+        aLiveRun(JobStatus.Running);
+        this.runs.findById(900L).get().setAttempt(2);
+        this.modelChoices.recordSteps(Collections.singletonList(prepared("caption", "2100", "run")));
+        when(this.tokens.verify(77L, 900L, "w")).thenReturn(Optional.empty());
+
+        Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback")).getBody();
+
+        assertThat((List<Map<String, Object>>) verdict.get("workerSteps")).allSatisfy(step -> assertThat(step).doesNotContainKey("modelProfile"));
+    }
+}

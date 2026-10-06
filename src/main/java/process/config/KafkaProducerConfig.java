@@ -1,11 +1,8 @@
 package process.config;
 
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Value;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,20 +14,11 @@ import java.util.Map;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 @Configuration
 public class KafkaProducerConfig {
 
     public Logger logger = LogManager.getLogger(KafkaProducerConfig.class);
-
-    @Value("${tpd.test-topic}")
-    private String testTopic;
-
-    @Value("${tpd.truck-topic}")
-    private String trucksTopic;
-
-    @Value("${tpd.scrapping-topic}")
-    private String scrappingTopic;
 
     private final KafkaProperties kafkaProperties;
 
@@ -40,11 +28,14 @@ public class KafkaProducerConfig {
 
     @Bean
     public Map<String, Object> producerConfigs() {
-        Map<String, Object> props = new HashMap<>(kafkaProperties.buildProducerProperties());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.ACKS_CONFIG, "all");
-        props.put(ProducerConfig.RETRIES_CONFIG, 0);
+        // Same durability as a profile-based template. This is the platform's own producer -- the
+        // outbox relay's platform.* events and the platform topics -- and never a workspace's: a
+        // workspace send that resolves to no profile is refused, not sent here (MIG-45).
+        Map<String, Object> props = KafkaTemplateProvider.applyProducerDefaults(new HashMap<>(kafkaProperties.buildProducerProperties()));
+        // Event audit E7: the outbox relay hands a batch over at once; idempotent, each key keeps its order through
+        // retries. Here only -- a workspace's own brokers (KafkaTemplateProvider) may not grant IdempotentWrite.
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
         return props;
     }
 
@@ -56,21 +47,6 @@ public class KafkaProducerConfig {
     @Bean
     public KafkaTemplate<String, String> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
-    }
-
-    @Bean
-    public NewTopic testTopic() {
-        return new NewTopic(this.testTopic, 5, (short) 1);
-    }
-
-    @Bean
-    public NewTopic trucksTopic() {
-        return new NewTopic(this.trucksTopic, 3, (short) 1);
-    }
-
-    @Bean
-    public NewTopic scrappingTopic() {
-        return new NewTopic(this.scrappingTopic, 3, (short) 1);
     }
 
 }

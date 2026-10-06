@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 55.1-drop-recreated-platform-wide-alias-constraint
+      author: nabeel.amd93
+      description: "Drop uq_storage_connection_alias again where Hibernate re-created it (MIG-53)"
+      # V55 dropped it; in dev, ddl-auto=update then re-created it from the entity's @UniqueConstraint
+      # on the next start, quietly restoring the platform-wide rule. The entity no longer declares
+      # it. Only where it exists.
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 1
+            sql: SELECT count(*) FROM pg_constraint WHERE conname = 'uq_storage_connection_alias'
+      changes:
+        - dropUniqueConstraint:
+            tableName: storage_connection
+            constraintName: uq_storage_connection_alias

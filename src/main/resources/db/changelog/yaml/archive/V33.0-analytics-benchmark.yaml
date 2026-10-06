@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 33.0-analytics-benchmark
+      author: nabeel.amd93
+      description: "Add analytics_benchmark_result so the module's Parquet-beats-CSV advice can be checked on this deployment rather than believed -- and so a stored duration always says what it measured, over what shape of data, after how many discarded warmups, and with what spread"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V33.0-analytics-benchmark/V33__analytics_benchmark.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP TABLE IF EXISTS analytics_benchmark_result;
+              DROP SEQUENCE IF EXISTS analytics_benchmark_result_seq;

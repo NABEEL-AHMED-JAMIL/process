@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 58.0-atomic-billing-numbers
+      author: nabeel.amd93
+      description: "Billing numbers from a locked counter per series; billing_document numbers unique (MIG-9)"
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            V58 cannot make billing_document.number unique: two documents already share a number. Find them with
+            SELECT number, count(*) FROM billing_document WHERE number IS NOT NULL GROUP BY 1 HAVING count(*) > 1;
+            A repeated statement number (STM-...) was a statement prepared twice for one range; keep the newer
+            document, renumber the older with a -1 suffix, and start again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT count(*) FROM (SELECT number FROM public.billing_document
+              WHERE number IS NOT NULL GROUP BY number HAVING count(*) > 1) d
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V58.0-atomic-billing-numbers/V58__atomic_billing_numbers.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP INDEX IF EXISTS public.ux_billing_document_number;
+              DROP TABLE IF EXISTS public.billing_number_counter;

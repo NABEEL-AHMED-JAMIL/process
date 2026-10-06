@@ -1,0 +1,50 @@
+databaseChangeLog:
+  - changeSet:
+      id: 61.0-billing-tables-read-only
+      author: nabeel.amd93
+      description: "Billing's and the meter's tables are billing_db's (MIG-88/89); these copies are kept read-only until their retention period ends"
+      # Moved to billing_db on 2026-09-24: counts identical, every sequence past its table's maximum, no
+      # orphaned reference. Nothing in process reads or writes them any more, and etl_meter writes
+      # billing_db's meter schema. Kept, not dropped, for one retention period; a trigger refuses every
+      # write so nothing can quietly diverge from billing_db meanwhile. Dropping them is a later
+      # changeset, after an explicit yes.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE OR REPLACE FUNCTION billing_moved_read_only() RETURNS trigger AS $$
+              BEGIN
+                RAISE EXCEPTION '% is read-only: billing and metering live in billing_db since MIG-88', TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME;
+              END;
+              $$ LANGUAGE plpgsql;
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE t text;
+              BEGIN
+                FOREACH t IN ARRAY ARRAY['public.billing_account', 'public.invoice', 'public.invoice_line', 'public.payment',
+                    'public.billing_document', 'public.billing_number_counter', 'meter.rate_card', 'meter.rate_card_item',
+                    'meter.usage_event', 'meter.usage_daily'] LOOP
+                  IF to_regclass(t) IS NOT NULL THEN
+                    EXECUTE format('CREATE TRIGGER billing_moved_read_only BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %s '
+                      'FOR EACH STATEMENT EXECUTE PROCEDURE billing_moved_read_only()', t);
+                  END IF;
+                END LOOP;
+              END $$;
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE t text;
+              BEGIN
+                FOREACH t IN ARRAY ARRAY['public.billing_account', 'public.invoice', 'public.invoice_line', 'public.payment',
+                    'public.billing_document', 'public.billing_number_counter', 'meter.rate_card', 'meter.rate_card_item',
+                    'meter.usage_event', 'meter.usage_daily'] LOOP
+                  IF to_regclass(t) IS NOT NULL THEN
+                    EXECUTE format('DROP TRIGGER IF EXISTS billing_moved_read_only ON %s', t);
+                  END IF;
+                END LOOP;
+                DROP FUNCTION IF EXISTS billing_moved_read_only();
+              END $$;

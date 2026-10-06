@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <property name="HOME_LOG" value="logs/process.log"/>
-    <!-- console logs  -->
     <appender name="CONSOLE-ROLLING" class="ch.qos.logback.core.ConsoleAppender">
         <layout class="ch.qos.logback.classic.PatternLayout">
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${hostName} --- [%15.15t] %-40.40c{1.} : %m%n%ex</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${HOSTNAME:-process} --- [%15.15t] [%X{correlationId:--} t=%X{tenantId:--} u=%X{userId:--}] %-40.40c{1.} : %m%n%ex</pattern>
         </layout>
     </appender>
     <appender name="FILE-ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -19,10 +18,16 @@
             <maxHistory>60</maxHistory>
         </rollingPolicy>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${hostName} --- [%15.15t] %-40.40c{1.} : %m%n%ex</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${HOSTNAME:-process} --- [%15.15t] [%X{correlationId:--} t=%X{tenantId:--} u=%X{userId:--}] %-40.40c{1.} : %m%n%ex</pattern>
         </encoder>
     </appender>
     <logger name="process" level="debug" additivity="false">
+        <appender-ref ref="CONSOLE-ROLLING"/>
+        <appender-ref ref="FILE-ROLLING"/>
+    </logger>
+    <!-- MIG-93: every all-tenants grant (TenantScope), with its correlation id. The root is ERROR, so
+         without this the audit trail would be written nowhere. -->
+    <logger name="org.barco.platform.audit" level="info" additivity="false">
         <appender-ref ref="CONSOLE-ROLLING"/>
         <appender-ref ref="FILE-ROLLING"/>
     </logger>

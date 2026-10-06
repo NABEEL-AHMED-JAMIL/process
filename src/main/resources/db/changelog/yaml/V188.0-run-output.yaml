@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 188.0-run-output
+      author: nabeel.amd93
+      description: "Wave 4: a run's result manifest -- run_output, one row per step per attempt that wrote a file (a kept file or a bucket upload); expand-only, row-level security as V181"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V188.0-run-output/V188__run_output.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V188.0-run-output/V188__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

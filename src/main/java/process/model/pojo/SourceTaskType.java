@@ -2,34 +2,71 @@ package process.model.pojo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
-import javax.persistence.*;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Index;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
 
+@Entity
+@Table(name = "source_task_type", indexes = {
+    @Index(name = "idx_stt_tenant_id", columnList = "tenant_id"),
+    @Index(name = "idx_stt_kafka_profile_id", columnList = "kafka_connection_profile_id")
+})
 /**
  * @author Nabeel Ahmed
- */
-@Entity
-@Table(name = "source_task_type")
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+// A task type with no tenant is the platform's, and every tenant is meant to use it -- the
+// listing query says the same thing in SQL -- so the filter has to let those rows through or
+// the shared task types would vanish from every tenant's screen.
+@Filter(name = "tenantFilter", condition = "(tenant_id = :tenantId or tenant_id is null)")
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceTaskType {
+@EntityListeners(AuditListener.class)
+public class SourceTaskType implements Audited {
+    @Transient
+    private String createdByName;
+
+    @Transient
+    private String updatedByName;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
 
     @GenericGenerator(
         name = "sourceTaskTypeSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "source_task_type_source_Seq"),
+            @Parameter(name = "sequence_name", value = "source_task_type_source_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }
     )
     @Id
-    @Column(name="source_task_type_id", unique=true, nullable=false)
+    @Column(name = "source_task_type_id", unique = true, nullable = false)
     @GeneratedValue(generator = "sourceTaskTypeSequenceGenerator")
     private Long sourceTaskTypeId;
+
+    @Column(name = "tenant_id")
+    private Long tenantId;
 
     @Column(name = "service_name",
         nullable = false)
@@ -39,25 +76,21 @@ public class SourceTaskType {
          nullable = false)
     private String description;
 
-    /**
-     * filed help to send the source job to the right queue
-     * */
     @Column(name = "queue_topic_partition",
          nullable = false)
     private String queueTopicPartition;
 
-    // status of job (active or disable or delete)
     @Column(name = "task_type_status",
         nullable = false)
     @Enumerated(EnumType.STRING)
     private Status status;
 
-    @Column(name = "is_schema_register")
-    private boolean isSchemaRegister;
+    @Column(name = "kafka_connection_profile_id")
+    private Long kafkaConnectionProfileId;
 
-    @Column(name = "schema_payload",
-        columnDefinition = "text")
-    private String schemaPayload;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "kafka_connection_profile_id", insertable = false, updatable = false)
+    private KafkaConnectionProfile kafkaConnectionProfile;
 
     public SourceTaskType() {}
 
@@ -80,6 +113,14 @@ public class SourceTaskType {
 
     public void setSourceTaskTypeId(Long sourceTaskTypeId) {
         this.sourceTaskTypeId = sourceTaskTypeId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getServiceName() {
@@ -114,25 +155,60 @@ public class SourceTaskType {
         this.status = status;
     }
 
-    public boolean isSchemaRegister() {
-        return isSchemaRegister;
+    public Long getKafkaConnectionProfileId() {
+        return kafkaConnectionProfileId;
     }
 
-    public void setSchemaRegister(boolean schemaRegister) {
-        isSchemaRegister = schemaRegister;
+    public void setKafkaConnectionProfileId(Long kafkaConnectionProfileId) {
+        this.kafkaConnectionProfileId = kafkaConnectionProfileId;
     }
 
-    public String getSchemaPayload() {
-        return schemaPayload;
-    }
-
-    public void setSchemaPayload(String schemaPayload) {
-        this.schemaPayload = schemaPayload;
+    public KafkaConnectionProfile getKafkaConnectionProfile() {
+        return kafkaConnectionProfile;
     }
 
     @Override
     public String toString() {
-        return new Gson().toJson(this);
+        return EntityStrings.of(this);
     }
 
+    @Override
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    @Override
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    @Override
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    @Override
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    @Override
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
 }

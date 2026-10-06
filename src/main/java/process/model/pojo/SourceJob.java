@@ -1,43 +1,77 @@
 package process.model.pojo;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.google.gson.Gson;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.FilterDefs;
+import org.hibernate.annotations.Filters;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.ParamDef;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.EntityListeners;
+import javax.persistence.Index;
+import javax.persistence.Transient;
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.persistence.GeneratedValue;
+import javax.persistence.ManyToOne;
+import javax.persistence.JoinColumn;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.PrePersist;
 
-/**
- * Detail for job
- * this class store the detail for job
- * like
- * jobName => must be unique
- * triggerDetail => detail for class
- * jobRunningStatus => describe the current status of the job either (blank,queue,running,fail,complete) or etc..
- * jobStatus => describe the status of job (active or disable or delete)
- * lastJobRun => describe the status of last job run on date
- * nextJobRun => describe the status of next job run
- * if the no more execution exist then the status of the job still same as the old one => DONE
- * */
+@Entity
+@Table(name = "source_job", indexes = {
+
+    @Index(name = "idx_source_job_tenant_id", columnList = "tenant_id"),
+
+    @Index(name = "idx_source_job_assigned_user_id", columnList = "assigned_user_id"),
+
+    @Index(name = "idx_source_job_created_by", columnList = "created_by")
+})
 /**
  * @author Nabeel Ahmed
- */
-@Entity
-@Table(name = "source_job")
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+// jobOwnerFilter: a TENANT_USER's JPQL reads of jobs, cut to the jobs that name them (process.security.JobOwnership,
+// owner decision 2026-09-24). TenantFilterHelper turns it on beside tenantFilter, for a restricted caller only.
+@FilterDefs({
+    @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long")),
+    @FilterDef(name = "jobOwnerFilter", parameters = @ParamDef(name = "appUserId", type = "long"))
+})
+@Filters({
+    @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId"),
+    @Filter(name = "jobOwnerFilter", condition = "(created_by = :appUserId or assigned_user_id = :appUserId)")
+})
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SourceJob {
+@EntityListeners(AuditListener.class)
+public class SourceJob implements Audited {
+    @Transient
+    private String createdByName;
+
+    @Transient
+    private String updatedByName;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
 
     @GenericGenerator(
         name = "sourceJobSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "source_job_source_Seq"),
+            @Parameter(name = "sequence_name", value = "source_job_source_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }
@@ -47,30 +81,38 @@ public class SourceJob {
     @GeneratedValue(generator = "sourceJobSequenceGenerator")
     private Long jobId;
 
-    // job name should be unique
+    @Column(name = "tenant_id")
+    private Long tenantId;
+
+    @Column(name = "assigned_user_id")
+    private Long assignedUserId;
+
+    /**
+     * The assignee's username, kept beside the id so the live job-event read never joins app_user (V85,
+     * MIG-151). Written with assigned_user_id, from IdentityPort (MIG-107).
+     */
+    @Column(name = "assigned_username")
+    private String assignedUsername;
+
     @Column(name = "job_name",
        length = 1000, nullable = false)
     private String jobName;
 
-    // which class or method trigger
     @ManyToOne
     @JoinColumn(name = "task_detail_id")
     private SourceTask sourceTask;
 
-    // status of job (active or disable or delete)
     @Column(name = "job_status",
          nullable = false)
     @Enumerated(EnumType.STRING)
     private Status jobStatus;
 
-    // status :- blank,queue,running,fail,complete
     @Column(name = "job_running_status")
     @Enumerated(EnumType.STRING)
     private JobStatus jobRunningStatus;
 
-    // describe the last job run
     @Column(name = "last_job_run",
-         columnDefinition = "TIMESTAMP")
+         columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime lastJobRun;
 
     @Enumerated(EnumType.STRING)
@@ -95,7 +137,47 @@ public class SourceJob {
     @Column(name = "skip_job")
     private boolean skipJob;
 
+    /**
+     * Total attempts a run of this job may make, including the first.
+     *
+     * 1 disables retry, and is what every job had before the column existed -- so a job nobody has
+     * configured behaves exactly as it always did. Per job rather than global because the right
+     * answer differs: a network-bound extract deserves three goes, a task that appends to a file
+     * or sends something outward deserves one, and only whoever built the job knows which it is.
+     */
+    @Column(name = "max_attempts", nullable = false)
+    private Integer maxAttempts = 1;
+
+    /**
+     * Base delay before retrying a failed run; the wait doubles with each attempt.
+     *
+     * Doubling rather than a fixed wait because the two failures worth retrying want opposite
+     * things -- a dropped connection clears in seconds, a broker or object store that is down
+     * wants to be left alone -- and backing off gives the first a fast retry without hammering
+     * the second.
+     */
+    @Column(name = "retry_backoff_seconds", nullable = false)
+    private Integer retryBackoffSeconds = 60;
+
+    /**
+     * The schedule's AI model per step (V182, MIG-242): {"<step tag>": "<ai-service model option id>"}, read by the
+     * pre-dispatch phase (process.ai.ModelProfiles). Read-only here: written only through the model-choice endpoint
+     * (JdbcModelChoiceStore), so saving a job from its form never puts back a setting somebody has since changed. Not on
+     * the job's wire; the console reads it from aiModelChoice.json/job.
+     */
+    @JsonIgnore
+    @Column(name = "model_profiles", columnDefinition = "TEXT", insertable = false, updatable = false)
+    private String modelProfiles;
+
     public SourceJob() {}
+
+    public String getModelProfiles() {
+        return modelProfiles;
+    }
+
+    public void setModelProfiles(String modelProfiles) {
+        this.modelProfiles = modelProfiles;
+    }
 
     @PrePersist
     protected void onCreate() {
@@ -104,6 +186,30 @@ public class SourceJob {
 
     public Long getJobId() {
         return jobId;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public Long getAssignedUserId() {
+        return assignedUserId;
+    }
+
+    public void setAssignedUserId(Long assignedUserId) {
+        this.assignedUserId = assignedUserId;
+    }
+
+    public String getAssignedUsername() {
+        return assignedUsername;
+    }
+
+    public void setAssignedUsername(String assignedUsername) {
+        this.assignedUsername = assignedUsername;
     }
 
     public void setJobId(Long jobId) {
@@ -166,6 +272,22 @@ public class SourceJob {
         this.priority = priority;
     }
 
+    public Integer getMaxAttempts() {
+        return maxAttempts;
+    }
+
+    public void setMaxAttempts(Integer maxAttempts) {
+        this.maxAttempts = maxAttempts;
+    }
+
+    public Integer getRetryBackoffSeconds() {
+        return retryBackoffSeconds;
+    }
+
+    public void setRetryBackoffSeconds(Integer retryBackoffSeconds) {
+        this.retryBackoffSeconds = retryBackoffSeconds;
+    }
+
     public Timestamp getDateCreated() {
         return dateCreated;
     }
@@ -200,7 +322,46 @@ public class SourceJob {
 
     @Override
     public String toString() {
-        return new Gson().toJson(this);
+        return EntityStrings.of(this);
     }
 
+    @Override
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    @Override
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    @Override
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    @Override
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    @Override
+    public String getCreatedByName() {
+        return createdByName;
+    }
+
+    @Override
+    public void setCreatedByName(String createdByName) {
+        this.createdByName = createdByName;
+    }
+
+    @Override
+    public String getUpdatedByName() {
+        return updatedByName;
+    }
+
+    @Override
+    public void setUpdatedByName(String updatedByName) {
+        this.updatedByName = updatedByName;
+    }
 }

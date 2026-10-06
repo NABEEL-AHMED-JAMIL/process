@@ -2,15 +2,22 @@ package process.model.projection;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 public interface JobAuditLogProjection {
 
-    public Long getJobAuditLogId();
+    Long getJobAuditLogId();
 
-    public Long getJobQueueId();
+    Long getJobQueueId();
 
-    public String getLogsDetail();
+    String getLogsDetail();
 
-    public String getDateCreated();
+    String getDateCreated();
+
+    String getStatus();
+
+    String getExternalId();
+
+    /** The correlation id of the work that wrote the line (MIG-94): one string joins the trail and every log. */
+    String getCorrelationId();
 
 }

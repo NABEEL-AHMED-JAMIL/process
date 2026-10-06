@@ -1,8 +1,8 @@
 package process.model.enums;
 
 /**
- * @author Nabeel.amd
- */
+ * @author Nabeel Ahmed
+ * */
 public enum Execution {
     Auto, Manual
 }

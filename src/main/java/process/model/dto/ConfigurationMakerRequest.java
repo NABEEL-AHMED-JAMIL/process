@@ -7,8 +7,8 @@ import java.util.List;
 
 /**
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ConfigurationMakerRequest {
 
@@ -100,13 +100,8 @@ public class ConfigurationMakerRequest {
 
         @Override
         public int compareTo(TagInfo o) {
-            if(taskPayloadId==o.taskPayloadId) {
-                return 0;
-            } else if(taskPayloadId>o.taskPayloadId) {
-                return 1;
-            } else {
-                return -1;
-            }
+            // By value: comparing the Long references made equal ids above 127 unequal (MIG-213).
+            return Long.compare(this.taskPayloadId, o.taskPayloadId);
         }
 
         @Override

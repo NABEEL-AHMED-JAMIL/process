@@ -1,0 +1,28 @@
+databaseChangeLog:
+  - changeSet:
+      id: 130.0-source-task-date-created
+      author: nabeel.amd93
+      description: "source_task.date_created, stamped by the database, so the task list's date range and created-date sort have a column to read"
+      # QueryService.listSourceTaskQuery has filtered on st.date_created, and listed it as a sort column, since
+      # before the V50 baseline -- and source_task never had one, in etl_job or in a database built from this
+      # changelog. Any range was a 500. The column is an instant (timestamptz, ADR-002), filled by the database
+      # on insert: SourceTask does not map it, so Hibernate never writes it and no JVM zone is involved.
+      # Tasks that already exist keep NULL. Nothing recorded when they were made, and their first job's date is
+      # not it, so a range does not claim them; they still list with no range.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              ALTER TABLE source_task ADD COLUMN IF NOT EXISTS date_created TIMESTAMPTZ;
+        - sql:
+            splitStatements: false
+            sql: >
+              ALTER TABLE source_task ALTER COLUMN date_created SET DEFAULT now();
+        - sql:
+            splitStatements: false
+            sql: >
+              COMMENT ON COLUMN source_task.date_created IS 'When the task was created, stamped by the database. NULL for tasks made before V130, when nothing recorded it.';
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: ALTER TABLE source_task DROP COLUMN IF EXISTS date_created;

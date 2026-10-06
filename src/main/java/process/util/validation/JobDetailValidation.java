@@ -1,40 +1,40 @@
 package process.util.validation;
 
+import process.util.BusinessTime;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import process.model.enums.Frequency;
+import process.util.CronSchedule;
 import process.util.ProcessTimeUtil;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static java.time.temporal.ChronoUnit.DAYS;
+import java.util.List;
+import java.util.Map;
 
 /**
- * This JobDetailValidation validate the information of the sheet
- * if the date not valid its stop the process and through the valid msg
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class JobDetailValidation {
 
     private Logger logger = LoggerFactory.getLogger(JobDetailValidation.class);
 
     private Integer rowCounter = 0;
-    // detail for advance validation
+
     private final List<String> frequencyDetail = ProcessTimeUtil.frequency;
     private final List<String> priorityDetail = ProcessTimeUtil.priority;
     private final List<String> checkedDetail = ProcessTimeUtil.checked;
     private final Map<String, List<?>> frequencyDetailByTime = ProcessTimeUtil.frequencyDetail;
-    // time format validation
+
     private final String timeFormat = "^(0[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$";
-    // date format validation
+
     private final String dateFormat = "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$";
 
     private String jobName;
@@ -152,76 +152,79 @@ public class JobDetailValidation {
         return errorMsg;
     }
 
+    /**
+     * Adds one reason. The console lists a row's reasons one per line, so each is plain text on its
+     * own line; the "<br>" these were once written with (for an HTML page) is dropped.
+     */
     public void setErrorMsg(String errorMsg) {
-        if (isNull(this.errorMsg)) {
-            this.errorMsg = errorMsg;
-        } else {
-            this.errorMsg += errorMsg;
+        String reason = errorMsg == null ? "" : errorMsg.replaceAll("(?i)<br\\s*/?>", "").trim();
+        if (reason.isEmpty()) {
+            return;
         }
+        this.errorMsg = isNull(this.errorMsg) ? reason : this.errorMsg + "\n" + reason;
     }
 
-    /**
-     * This isValidJobDetail use to validate the
-     * job detail of the job valid return true
-     * if non-valid return false
-     * @return boolean true|false
-     * */
     public void isValidJobDetail() {
         if (isNull(this.jobName)) {
-            this.setErrorMsg(String.format("JobName should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("JobName should not be empty at row %s.", rowCounter));
         }
         if (isNull(this.taskId)) {
-            this.setErrorMsg(String.format("TaskId should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("TaskId should not be empty at row %s.", rowCounter));
         }
         if (isNull(this.startDate)) {
-            this.setErrorMsg(String.format("StartDate should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("StartDate should not be empty at row %s.", rowCounter));
         }
         if (isNull(this.startTime)) {
-            this.setErrorMsg(String.format("StartTime should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("StartTime should not be empty at row %s.", rowCounter));
         }
         if (isNull(this.frequency)) {
-            this.setErrorMsg(String.format("Frequency should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Frequency should not be empty at row %s.", rowCounter));
         }
         if (isNull(this.priority)) {
-            this.setErrorMsg(String.format("Priority should not be empty at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Priority should not be empty at row %s.", rowCounter));
         }
         if (this.isValidPattern(this.startDate, this.dateFormat)) {
-            this.setErrorMsg(String.format("Invalid startDate at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Invalid startDate at row %s.", rowCounter));
         }
         if (this.isValidPattern(this.startTime, this.timeFormat)) {
-            this.setErrorMsg(String.format("Invalid startTime at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Invalid startTime at row %s.", rowCounter));
         }
         if (this.isValidFrequency()) {
-            this.setErrorMsg(String.format("Frequency not valid its should be %s at row %s.", this.frequencyDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("Frequency must be one of %s at row %s.", this.frequencyDetail.toString(), rowCounter));
         }
         if (!isNull(this.endDate) && this.isValidPattern(this.endDate, this.dateFormat)) {
-            this.setErrorMsg(String.format("Invalid endDate at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Invalid endDate at row %s.", rowCounter));
         }
         if (this.isValidPriority()) {
-            this.setErrorMsg(String.format("Priority not valid its should be %s at row %s.<br>", this.priorityDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("Priority must be one of %s at row %s.", this.priorityDetail.toString(), rowCounter));
         }
         if (!isNull(this.emailJobComplete)  && this.isValidChecked(this.emailJobComplete)) {
-            this.setErrorMsg(String.format("EmailJob complete not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("Email Job Complete must be one of %s at row %s.", this.checkedDetail.toString(), rowCounter));
         }
         if (!isNull(this.emailJobFail)  && this.isValidChecked(this.emailJobFail)) {
-            this.setErrorMsg(String.format("EmailJob fail not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("Email Job Fail must be one of %s at row %s.", this.checkedDetail.toString(), rowCounter));
         }
         if (!isNull(this.emailJobSkip)  && this.isValidChecked(this.emailJobSkip)) {
-            this.setErrorMsg(String.format("EmailJob skip not valid its should be %s at row %s.<br>", this.checkedDetail.toString(), rowCounter));
+            this.setErrorMsg(String.format("Email Job Skip must be one of %s at row %s.", this.checkedDetail.toString(), rowCounter));
         }
         this.isValidDetail();
     }
 
-    /**
-     * This isValidDetail validate detail for check the date time valid or not
-     * if the detail are valid then its return true if not then false
-     * @return void
-     * */
     private void isValidDetail() {
         try {
+            if (Frequency.Cron.name().equals(this.frequency)) {
+                // A Cron row's Recurrence cell is its cron expression (Wave 4): the sheet keeps its eleven columns. A
+                // blank one is refused by the upload with the other blank-Recurrence rows.
+                String problem = isNull(this.recurrence) ? null : CronSchedule.problem(this.recurrence);
+                if (problem != null) {
+                    this.setErrorMsg(String.format("Recurrence at row %s: %s", rowCounter, problem));
+                }
+                this.dateTimeValidation(false, false);
+                return;
+            }
             if (!isNull(this.recurrence) && this.frequencyDetailByTime.get(this.frequency)
                 .stream().noneMatch(x -> x.equals(Integer.valueOf(this.recurrence)))) {
-                this.setErrorMsg(String.format("Recurrence not valid its should be %s at row %s.",
+                this.setErrorMsg(String.format("Recurrence must be one of %s at row %s.",
                     this.frequencyDetailByTime.get(this.frequency), rowCounter));
             }
             if (this.frequency.equals(Frequency.Mint.name()) || this.frequency.equals(Frequency.Hr.name())
@@ -230,52 +233,29 @@ public class JobDetailValidation {
             } else if (this.frequency.equals(Frequency.Weekly.name())) {
                 this.dateTimeValidation(true, false);
             } else if (this.frequency.equals(Frequency.Monthly.name())) {
-                this.dateTimeValidation(false, true) ;
+                this.dateTimeValidation(false, true);
             }
         } catch (Exception ex) {
-            this.setErrorMsg(String.format("Issue with (Start Date, End Date, Start Time, Recurrence) at row %s.<br>", rowCounter));
+            this.setErrorMsg(String.format("Issue with (Start Date, End Date, Start Time, Recurrence) at row %s.", rowCounter));
         }
     }
 
-    /**
-     * Check the filed detail valid or not
-     * @param filed
-     * @return boolean true|false
-     * */
     private static boolean isNull(String filed) {
         return filed == null || filed.isEmpty();
     }
 
-    /**
-     * Validation the frequency
-     * @return boolean true|false
-     * */
     private boolean isValidFrequency() {
         return !this.frequencyDetail.contains(this.frequency);
     }
 
-    /**
-     * Validation the priority
-     * @return boolean true|false
-     * */
     private boolean isValidPriority() {
         return !this.priorityDetail.contains(this.priority);
     }
 
-    /**
-     * Validation the checked
-     * @param checkDetail
-     * @return boolean true|false
-     * */
     private boolean isValidChecked(String checkDetail) {
         return !this.checkedDetail.contains(StringUtils.capitalize(checkDetail.toLowerCase()));
     }
 
-    /**
-     * check is this valid date with the give time zone
-     * @param inputDate
-     * @return boolean true|false
-     * */
     private boolean isValidPattern(String inputDate, String dataFormat) {
         try {
             Pattern pattern = Pattern.compile(dataFormat);
@@ -286,39 +266,32 @@ public class JobDetailValidation {
         }
     }
 
-    /**
-     * This dateTimeValidation use to validate the date
-     * @param isMonthlyCheck param for check the weekday
-     * @param isWeekdayCheck param for check the monthly target date
-     * @return void
-     * */
     private void dateTimeValidation(boolean isWeekdayCheck, boolean isMonthlyCheck) {
-        // Check Start Date,End Date,Start Time
-        // 1st check the start-date it's should not be the yesterday date
+
         LocalDate userInputStartDate = LocalDate.parse(this.startDate);
         logger.info("User startDate valid :- {}.", userInputStartDate);
-        // check the current date with the given time with zone
-        LocalDate todayDateWithTimeZone = LocalDate.now();;
+
+        LocalDate todayDateWithTimeZone = BusinessTime.today();
         logger.info("System date with time zone :- {}.", todayDateWithTimeZone);
-        // 2021-03-13 == 2021-03-13 || 2021-03-13 > 2021-03-12
+
         if (userInputStartDate.isEqual(todayDateWithTimeZone) || userInputStartDate.isAfter(todayDateWithTimeZone)) {
-            // 2nd check the end-date it's should not be the yesterday
+
             if (!isNull(this.endDate)) {
                 LocalDate userInputEndDate = LocalDate.parse(this.endDate);
                 logger.info("User endDate valid " + userInputEndDate);
-                // 2021-03-13 != 2021-03-13 || 2021-03-13 < 2021-03-15
+
                 if (userInputEndDate.isBefore(userInputStartDate)) {
-                    this.setErrorMsg(String.format("EndDate should not be previous date at row %s.<br>", rowCounter));
+                    this.setErrorMsg(String.format("EndDate should not be previous date at row %s.", rowCounter));
                 } else if ((DAYS.between(userInputStartDate, userInputEndDate) < 6) && isWeekdayCheck) {
-                    this.setErrorMsg(String.format("EndDate must be 7 day difference from startDate at row %s.<br>", rowCounter));
+                    this.setErrorMsg(String.format("EndDate must be 7 day difference from startDate at row %s.", rowCounter));
                 } else if ((DAYS.between(userInputStartDate, userInputEndDate) < 30) && isMonthlyCheck) {
-                    this.setErrorMsg(String.format("EndDate must be 31 day difference from startDate at row %s.<br>", rowCounter));
+                    this.setErrorMsg(String.format("EndDate must be 31 day difference from startDate at row %s.", rowCounter));
                 }
             }
-            // use to split the time
-            String timeSplit[] = this.startTime.split(":");
-            if (LocalDateTime.now().isAfter(userInputStartDate.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1])))) {
-                this.setErrorMsg(String.format("StartTime should not be previous time at row %s.<br>", rowCounter));
+
+            String[] timeSplit = this.startTime.split(":");
+            if (BusinessTime.now().isAfter(userInputStartDate.atStartOfDay().plusHours(Integer.parseInt(timeSplit[0])).plusMinutes(Integer.parseInt(timeSplit[1])))) {
+                this.setErrorMsg(String.format("StartTime should not be previous time at row %s.", rowCounter));
             }
         } else {
             this.setErrorMsg(String.format("StartDate should not be previous date at row %s.", rowCounter));

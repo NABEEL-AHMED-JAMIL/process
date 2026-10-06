@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 187.0-cron-schedule
+      author: nabeel.amd93
+      description: "Wave 4: the Cron frequency -- scheduler.cron_expression, a schedule's own cron expression (five fields, or six with seconds 0); expand-only, one nullable column on a table V181 already guards"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V187.0-cron-schedule/V187__cron_schedule.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V187.0-cron-schedule/V187__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

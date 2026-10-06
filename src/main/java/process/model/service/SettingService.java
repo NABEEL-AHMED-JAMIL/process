@@ -1,31 +1,33 @@
 package process.model.service;
 
-import process.model.dto.LookupDataDto;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceTaskTypeDto;
-import process.model.projection.ItemResponse;
+import java.util.List;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 public interface SettingService {
 
-    public ResponseDto dynamicQueryResponse(ItemResponse itemResponse);
+    ResponseDto appSetting() throws Exception;
 
-    public ResponseDto appSetting() throws Exception;
+    ResponseDto topicsForProfile(Long kafkaConnectionProfileId) throws Exception;
 
-    public ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
+    /** Live health of one profile's brokers, for the caller's topics on it only (Kafka &amp; Topics). */
+    ResponseDto profileHealth(Long kafkaConnectionProfileId, boolean recheck) throws Exception;
 
-    public ResponseDto updateSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
+    ResponseDto topics(String q, Integer limit, List<Long> ids, Long kafkaConnectionProfileId) throws Exception;
 
-    public ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception;
+    ResponseDto addSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 
-    public ResponseDto addLookupData(LookupDataDto lookupDataDto) throws Exception;
+    ResponseDto updateSourceTaskType(SourceTaskTypeDto sourceTaskTypeDto) throws Exception;
 
-    public ResponseDto updateLookupData(LookupDataDto lookupDataDto) throws Exception;
+    ResponseDto deleteSourceTaskType(Long sourceTaskTypeId) throws Exception;
 
-    public ResponseDto fetchSubLookupByParentId(Long parentLookUpId) throws Exception;
+    ResponseDto fetchKafkaRoute(Long sourceTaskTypeId) throws Exception;
 
-    public ResponseDto deleteLookupData(LookupDataDto lookupDataDto) throws Exception;
+    ResponseDto setKafkaRoute(Long sourceTaskTypeId, Long kafkaConnectionProfileId) throws Exception;
+
+    ResponseDto deleteKafkaRoute(Long sourceTaskTypeId) throws Exception;
 
 }

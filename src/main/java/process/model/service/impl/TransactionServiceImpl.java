@@ -1,179 +1,255 @@
 package process.model.service.impl;
 
+import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import process.model.enums.Status;
-import process.model.pojo.*;
 import process.model.projection.SourceJobProjection;
-import process.model.repository.*;
+import process.security.TenantContext;
+import process.util.OpenSearchAuditLogClient;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import process.model.pojo.SourceJob;
+import process.model.pojo.Scheduler;
+import process.model.pojo.JobQueue;
+import process.model.pojo.SourceTask;
+import process.model.repository.SourceJobRepository;
+import process.model.repository.SchedulerRepository;
+import process.model.repository.JobQueueRepository;
+import process.model.repository.TaskReferenceRepository;
+import process.model.repository.JobAuditLogRepository;
+import process.model.repository.SourceTaskRepository;
+import process.model.pojo.JobAuditLogs;
 
 /**
  * @author Nabeel Ahmed
- */
+ * */
 @Service
 public class TransactionServiceImpl {
 
     private Logger logger = LoggerFactory.getLogger(TransactionServiceImpl.class);
 
-    private SourceJobRepository sourceJobRepository;
-    private SchedulerRepository schedulerRepository;
-    private JobQueueRepository jobQueueRepository;
-    private LookupDataRepository lookupDataRepository;
-    private JobAuditLogRepository jobAuditLogRepository;
-    private SourceTaskRepository sourceTaskRepository;
+    private final SourceJobRepository sourceJobRepository;
+    private final SchedulerRepository schedulerRepository;
+    private final JobQueueRepository jobQueueRepository;
+    private final TaskReferenceRepository taskReferenceRepository;
+    private final JobAuditLogRepository jobAuditLogRepository;
+    private final SourceTaskRepository sourceTaskRepository;
+    private final OpenSearchAuditLogClient openSearchAuditLogClient;
 
     public TransactionServiceImpl(SourceJobRepository sourceJobRepository,
         SchedulerRepository schedulerRepository,
         JobQueueRepository jobQueueRepository,
-        LookupDataRepository lookupDataRepository,
+        TaskReferenceRepository taskReferenceRepository,
         JobAuditLogRepository jobAuditLogRepository,
-        SourceTaskRepository sourceTaskRepository) {
+        SourceTaskRepository sourceTaskRepository,
+        OpenSearchAuditLogClient openSearchAuditLogClient) {
         this.sourceJobRepository = sourceJobRepository;
         this.schedulerRepository = schedulerRepository;
         this.jobQueueRepository = jobQueueRepository;
-        this.lookupDataRepository = lookupDataRepository;
+        this.taskReferenceRepository = taskReferenceRepository;
         this.jobAuditLogRepository = jobAuditLogRepository;
         this.sourceTaskRepository = sourceTaskRepository;
+        this.openSearchAuditLogClient = openSearchAuditLogClient;
     }
 
     /**
-     * The method use to save the logs for job
-     * @param jobQueueId
-     * @param logsDetail
+     * The caller already holds the queue row this line belongs to. A caller that was handed the
+     * job and the run as two separate values has to use the overload that takes both, so the
+     * pairing is checked rather than assumed.
      */
     public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        String externalId = UUID.randomUUID().toString();
+        if (this.openSearchAuditLogClient.index(externalId, jobQueueId, logsDetail, now)) {
+            return;
+        }
         JobAuditLogs jobAuditLogs = new JobAuditLogs();
+        // The id it was offered to OpenSearch under, so the two stores stay reconcilable (MIG-94).
+        jobAuditLogs.setExternalId(externalId);
         jobAuditLogs.setJobQueueId(jobQueueId);
+        jobAuditLogs.setTenantId(this.tenantOfRun(jobQueueId));
         jobAuditLogs.setLogsDetail(logsDetail);
         this.jobAuditLogRepository.save(jobAuditLogs);
     }
 
     /**
-     * The method use to update the job
-     * @param sourceJob
-     * */
+     * Many audit lines at once, for a worker that batches instead of posting per line.
+     *
+     * Same contract as the single-line path: OpenSearch first, the database only for what
+     * OpenSearch would not take. Asking which lines were rejected rather than whether the batch
+     * succeeded matters on a partial rejection -- writing the whole batch to the database then
+     * stored the accepted lines in both places, and since the merged view keys OpenSearch rows by
+     * external id and database rows by content, those lines rendered twice. The fallback loops
+     * rather than bulk-inserting because it is the cold path: if OpenSearch is refusing writes, a
+     * slower one is the least of the problems.
+     */
+    public void saveJobAuditLogs(Long jobQueueId, List<String> logDetails) {
+        if (logDetails == null || logDetails.isEmpty()) {
+            return;
+        }
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        List<Object[]> entries = new ArrayList<>();
+        for (String detail : logDetails) {
+            entries.add(new Object[]{ UUID.randomUUID().toString(), jobQueueId, detail, now });
+        }
+        Long tenantId = null;
+        for (Object[] rejected : this.openSearchAuditLogClient.indexAllReturningFailures(entries)) {
+            if (tenantId == null) {
+                tenantId = this.tenantOfRun(jobQueueId);
+            }
+            JobAuditLogs row = new JobAuditLogs();
+            row.setExternalId((String) rejected[0]);
+            row.setJobQueueId(jobQueueId);
+            row.setTenantId(tenantId);
+            row.setLogsDetail((String) rejected[2]);
+            this.jobAuditLogRepository.save(row);
+        }
+    }
+
+    /** The run's tenant, which its audit lines carry (V102, MIG-29); null for a run that does not exist. */
+    private Long tenantOfRun(Long jobQueueId) {
+        return this.jobQueueRepository.findById(jobQueueId).map(JobQueue::getTenantId).orElse(null);
+    }
+
+    /**
+     * The same write, for a caller handed the job and the run as two independent values.
+     *
+     * A worker callback names both in its request and nothing in the pair ties them together, so
+     * quoting a job the caller is entitled to next to somebody else's queue id landed the line on
+     * the latter. The endpoint that does this today checks first, but the check belongs on the
+     * write as well: any other path reaching here with an unverified pair gets the same answer.
+     * The queue row is the only thing that knows which job it belongs to, so it is what decides.
+     */
+    public void saveJobAuditLogs(Long jobId, Long jobQueueId, String logsDetail) {
+        if (!this.queueBelongsToJob(jobId, jobQueueId)) {
+            return;
+        }
+        this.saveJobAuditLogs(jobQueueId, logsDetail);
+    }
+
+    /** The batched form of the checked write, for a worker that buffers its lines. */
+    public void saveJobAuditLogs(Long jobId, Long jobQueueId, List<String> logDetails) {
+        if (!this.queueBelongsToJob(jobId, jobQueueId)) {
+            return;
+        }
+        this.saveJobAuditLogs(jobQueueId, logDetails);
+    }
+
+    private boolean queueBelongsToJob(Long jobId, Long jobQueueId) {
+        if (jobId == null || jobQueueId == null) {
+            return false;
+        }
+        Optional<JobQueue> jobQueue = this.jobQueueRepository.findById(jobQueueId);
+        if (jobQueue.isPresent() && jobId.equals(jobQueue.get().getJobId())) {
+            return true;
+        }
+        this.logger.warn("Refusing an audit log write: jobQueueId {} does not belong to jobId {}.", jobQueueId, jobId);
+        return false;
+    }
+
     public void saveOrUpdateJob(SourceJob sourceJob) {
         this.sourceJobRepository.saveAndFlush(sourceJob);
     }
 
-    /**
-     * The method use to update the scheduler
-     * @param scheduler
-     * */
     public void saveOrUpdateScheduler(Scheduler scheduler) {
         this.schedulerRepository.save(scheduler);
     }
 
-    /**
-     * The method use to update the job-queue
-     * @param jobQueue
-     * */
     public void saveOrUpdateJobQueue(JobQueue jobQueue) {
         this.jobQueueRepository.save(jobQueue);
     }
 
-    /**
-     * The method use to update the lookup-data
-     * @param lookupData
-     */
-    public void updateLookupDate(LookupData lookupData) {
-        this.lookupDataRepository.save(lookupData);
-    }
-
-    /**
-     * The method use to get the job by jobId and job status
-     * @param jobId
-     * @param status
-     * @return Job
-     */
     public Optional<SourceJob> findByJobIdAndJobStatus(Long jobId, Status status) {
         return this.sourceJobRepository.findByJobIdAndJobStatus(jobId, status);
     }
 
-    /**
-     * The method use to get the job by id
-     * @param jobId
-     * @return Job
-     */
     public Optional<SourceJob> findByJobId(Long jobId) {
         return this.sourceJobRepository.findById(jobId);
     }
 
-    /**
-     * The method use to get the JobQueue by
-     * @param jobQueueId
-     * @return JobQueue
-     */
     public Optional<JobQueue> findJobQueueByJobQueueId(Long jobQueueId) {
         return this.jobQueueRepository.findById(jobQueueId);
     }
 
-    /**
-     * The method use to get the scheduler for the current date
-     * @param lastSchedulerRun
-     * @param currentSchedulerTime
-     * @return List<?>
+    /*
+     * The times below are the application's -- Chicago wall-clock LocalDateTimes -- and this is where they become
+     * the instants the timestamptz columns are compared with (MIG-163): BusinessTime.timestampOf, never the JVM's
+     * zone. CutoffSelectionPostgresTest holds each query to the rows it selected before V100.
      */
-    public List<Scheduler> findAllSchedulerForTodayV2(LocalDateTime lastSchedulerRun, LocalDateTime currentSchedulerTime) {
-        return this.schedulerRepository.findAllSchedulerForToday(lastSchedulerRun, currentSchedulerTime);
+
+    /** For the caller's transaction: see SchedulerRepository.claimNextDueScheduler. */
+    public Optional<Scheduler> claimNextDueScheduler(LocalDateTime now, List<Long> passed) {
+        return this.schedulerRepository.claimNextDueScheduler(BusinessTime.timestampOf(now), passed);
     }
 
-    /**
-     * The method use to get the all job which status in queue state
-     * @param limit
-     * @return JobQueue
-     */
-    public List<JobQueue> findAllJobForTodayWithLimit(Long limit) {
-        return this.jobQueueRepository.findAllJobForTodayWithLimit(limit);
+    public List<JobQueue> findAllJobForTodayWithLimit(Long limit, LocalDateTime eligibleAt) {
+        return this.jobQueueRepository.findAllJobForTodayWithLimit(limit, BusinessTime.timestampOf(eligibleAt));
     }
 
+    public List<JobQueue> findStalledRuns(LocalDateTime startedBefore) {
+        return this.jobQueueRepository.findStalledRuns(BusinessTime.timestampOf(startedBefore));
+    }
 
-    /**
-     * Method use to update the job queue
-     * @param jobQueue
-     * */
+    /** For the caller's transaction: see JobQueueRepository.findRunsToPrepare. */
+    public List<Long> claimRunsToPrepare(LocalDateTime now, int limit, LocalDateTime leaseUntil) {
+        List<Long> ids = this.jobQueueRepository.findRunsToPrepare(BusinessTime.timestampOf(now), limit);
+        if (!ids.isEmpty()) {
+            this.jobQueueRepository.leaseForPreparation(ids, BusinessTime.timestampOf(leaseUntil));
+        }
+        return ids;
+    }
+
+    public int markPrepared(Long jobQueueId, String payload, LocalDateTime at, String correlationId) {
+        return this.jobQueueRepository.markPrepared(jobQueueId, payload, BusinessTime.timestampOf(at), correlationId);
+    }
+
+    public String findOrchestrationSetting(String settingKey) {
+        return this.jobQueueRepository.findOrchestrationSetting(settingKey);
+    }
+
+    public List<JobQueue> findRunsWithRefusedCallbacks() {
+        return this.jobQueueRepository.findRunsWithRefusedCallbacks();
+    }
+
+    public int noteRefusedCallback(Long jobQueueId, LocalDateTime refusedAt, String reportedStatus) {
+        return this.jobQueueRepository.noteRefusedCallback(jobQueueId, BusinessTime.timestampOf(refusedAt), reportedStatus);
+    }
+
+    public void saveJobQueue(JobQueue jobQueue) {
+        this.jobQueueRepository.save(jobQueue);
+    }
+
     public void updateJobQueue(JobQueue jobQueue) {
         this.jobQueueRepository.save(jobQueue);
     }
 
-    /**
-     * The method use to fine the lookup-data
-     * @param lookupType
-     * @return LookupData
-     */
-    public LookupData findByLookupType(String lookupType) {
-        return this.lookupDataRepository.findByLookupType(lookupType);
+    /** A home page's URL, which the dispatcher hands to the worker (MIG-167: task_reference, same ids as before). */
+    public String findHomePageUrl(Long taskReferenceId) {
+        return this.taskReferenceRepository.findHomePageUrl(taskReferenceId).orElse(null);
     }
 
-    /**
-     * Method use to fetch task detail by task status
-     * @return Optional<SourceTask>
-     */
     public Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId) {
-        return this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(taskDetailId, Status.Active);
+        return this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(taskDetailId, Status.Active)
+            .filter(task -> TenantContext.isPlatformAdmin() || Objects.equals(task.getTenantId(), TenantContext.getTenantId()));
     }
 
-    /**
-     * Method use to fetch all source task
-     * @return List<Long>
-     */
     public List<Long> findAllSourceTask() {
-        return this.sourceTaskRepository.findAllSourceTask();
+        return TenantContext.isPlatformAdmin()
+            ? this.sourceTaskRepository.findAllSourceTask()
+            : this.sourceTaskRepository.findAllSourceTaskForTenant(TenantContext.getTenantId());
     }
 
     public Integer getCountForInQueueJobByJobId(Long jobId) {
         return this.jobQueueRepository.getCountForInQueueJobByJobId(jobId);
     }
 
-    /**
-     * The method use to get the job by id
-     * @param jobIds
-     * @return List<SourceJobProjection>
-     */
     public List<SourceJobProjection> fetchRunningJobEvent(List<Long> jobIds) {
         return this.sourceJobRepository.fetchRunningJobEvent(jobIds);
     }

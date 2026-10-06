@@ -1,0 +1,735 @@
+package process.config;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
+import process.model.dto.ObjectContentDto;
+import process.model.pojo.KafkaConnectionProfile;
+import process.storage.TrustedAccess;
+import process.storage.TrustedCaller;
+import process.storage.TrustedStorageOperations;
+import process.util.EncryptionUtil;
+import process.util.KafkaCertificateUtil;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.UserPrincipal;
+import java.security.MessageDigest;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.Comparator;
+import java.util.stream.Stream;
+
+/**
+ * @author Nabeel Ahmed
+ * */
+@Component
+public class KafkaTemplateProvider {
+
+    private final Logger logger = LoggerFactory.getLogger(KafkaTemplateProvider.class);
+    private final Gson gson = new Gson();
+
+    private final EncryptionUtil encryptionUtil;
+    private final TrustedStorageOperations storageBrowserService;
+
+    /**
+     * Where downloaded truststores and keystores are cached. Left blank this falls back to the
+     * JVM temp dir, which on a shared host is readable by everything else running there, so a
+     * deployment holding real key material should point this at a directory of its own.
+     */
+    @Value("${kafka.secret-cache.dir:}")
+    private String secretCacheDir;
+
+    /**
+     * A store named without a bucket is a raw path on the application host rather than an object
+     * the storage layer authorised. Blank -- the default -- means no such path is allowed at all.
+     */
+    @Value("${kafka.ssl.local-store-dir:}")
+    private String localStoreDir;
+
+    /**
+     * Replication factor for topics this application auto-creates. One is right for a single
+     * broker on a laptop and wrong everywhere else; -1 lets the broker apply its own default.
+     */
+    @Value("${kafka.topic.default-replication-factor:1}")
+    private short defaultReplicationFactor;
+
+    /** rwx------ : the only mode a directory holding private keys should ever have. */
+    private static final Set<PosixFilePermission> OWNER_ONLY = Collections.unmodifiableSet(
+        new HashSet<>(Arrays.asList(PosixFilePermission.OWNER_READ,
+            PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE)));
+
+    private final Map<Long, CachedProducer> cache = new ConcurrentHashMap<>();
+
+    /**
+     * Templates, admin clients and key material for workspace Kafka connection profiles -- for a
+     * profile only. There is no template here for "no profile": the application's own brokers
+     * (spring.kafka.*) carry the platform's events through their own KafkaTemplate bean, and a
+     * workspace send that resolves to no profile is refused before it reaches this class (MIG-45).
+     */
+    public KafkaTemplateProvider(EncryptionUtil encryptionUtil, TrustedStorageOperations storageBrowserService) {
+        this.encryptionUtil = encryptionUtil;
+        this.storageBrowserService = storageBrowserService;
+    }
+
+    public KafkaTemplate<String, String> getTemplate(KafkaConnectionProfile profile) {
+        if (profile == null) {
+            // The fallback template that used to answer here is gone (MIG-45): resolve with
+            // KafkaConnectionResolver.require, which refuses with a reason, before asking for one.
+            throw new KafkaRouteUnresolvedException("No Kafka connection resolved for this send.");
+        }
+        KafkaConnectionProfile p = profile;
+        CachedProducer cached = this.cache.computeIfAbsent(p.getKafkaConnectionProfileId(), id -> {
+            this.logger.info("Building KafkaTemplate for profile '{}' ({}), tenantId={}.",
+                p.getProfileName(), p.getBootstrapServers(), p.getTenantId());
+            DefaultKafkaProducerFactory<String, String> factory = new DefaultKafkaProducerFactory<>(this.producerProps(p));
+            return new CachedProducer(factory, new KafkaTemplate<>(factory));
+        });
+        return cached.template;
+    }
+
+    public void invalidate(Long kafkaConnectionProfileId) {
+        CachedProducer removed = this.cache.remove(kafkaConnectionProfileId);
+        if (removed != null) {
+            try {
+                removed.factory.destroy();
+            } catch (Exception ex) {
+                this.logger.warn("Error closing Kafka producer factory for profile {}: {}", kafkaConnectionProfileId, ex.getMessage());
+            }
+        }
+        this.deleteQuietlyRecursive(this.secretCacheRoot().resolve(String.valueOf(kafkaConnectionProfileId)));
+    }
+
+    public Map<String, Object> commonClientProps(KafkaConnectionProfile profile) {
+        Map<String, Object> props = new HashMap<>();
+        // Tuning the operator typed by hand goes on first, so that nothing in it can restate where
+        // we connect, how we authenticate or whether the wire is encrypted -- the profile decides
+        // all three below, and only the profile's own columns are checked before it is saved.
+        this.mergeAdditionalProperties(props, profile.getAdditionalProperties());
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, profile.getBootstrapServers());
+        String securityProtocol = profile.getSecurityProtocol();
+        if (securityProtocol != null && !securityProtocol.trim().isEmpty()) {
+            props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
+        }
+        if (securityProtocol != null && securityProtocol.startsWith("SASL_")) {
+            props.put(SaslConfigs.SASL_MECHANISM, profile.getSaslMechanism());
+            String username = profile.getSaslUsername();
+            String password = profile.getSaslPassword() == null ? null : this.encryptionUtil.decrypt(profile.getSaslPassword());
+            String loginModule = "SCRAM-SHA-256".equals(profile.getSaslMechanism()) || "SCRAM-SHA-512".equals(profile.getSaslMechanism())
+                ? "org.apache.kafka.common.security.scram.ScramLoginModule"
+                : "org.apache.kafka.common.security.plain.PlainLoginModule";
+            props.put(SaslConfigs.SASL_JAAS_CONFIG, String.format(
+                "%s required username=\"%s\" password=\"%s\";", loginModule,
+                this.jaasEscape(username), this.jaasEscape(password)));
+        }
+        if ("SSL".equals(securityProtocol) || "SASL_SSL".equals(securityProtocol)) {
+            try {
+                this.putSslProps(props, profile);
+            } catch (RuntimeException ex) {
+                // MIG-214: a store that did arrive before the one that failed is nobody's to use.
+                if (profile.getKafkaConnectionProfileId() == null) {
+                    this.discardUnsaved(props);
+                }
+                throw ex;
+            }
+        }
+        return props;
+    }
+
+    private void putSslProps(Map<String, Object> props, KafkaConnectionProfile profile) {
+        if (profile.getSslTruststoreLocation() != null && !profile.getSslTruststoreLocation().trim().isEmpty()) {
+            String localPath = this.resolveLocalSecretFile(
+                profile, "truststore", profile.getSslTruststoreBucket(), profile.getSslTruststoreLocation());
+            props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, localPath);
+            props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+                this.storeTypeOf(profile.getSslTruststoreLocation()));
+            if (profile.getSslTruststorePasswordEnc() != null) {
+                props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslTruststorePasswordEnc()));
+            }
+        }
+        if (profile.getSslKeystoreLocation() != null && !profile.getSslKeystoreLocation().trim().isEmpty()) {
+            String localPath = this.resolveLocalSecretFile(
+                profile, "keystore", profile.getSslKeystoreBucket(), profile.getSslKeystoreLocation());
+            props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, localPath);
+            props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+                this.storeTypeOf(profile.getSslKeystoreLocation()));
+            if (profile.getSslKeystorePasswordEnc() != null) {
+                props.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslKeystorePasswordEnc()));
+            }
+            if (profile.getSslKeyPasswordEnc() != null) {
+                props.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, this.encryptionUtil.decrypt(profile.getSslKeyPasswordEnc()));
+            }
+        }
+
+        if (profile.getSslEndpointIdentificationAlgorithm() != null) {
+            props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, profile.getSslEndpointIdentificationAlgorithm());
+        }
+    }
+
+    /**
+     * MIG-214: takes an unsaved profile's downloaded stores -- the ones named in these client properties -- off disk,
+     * once its probe is done with them. They were left to deleteOnExit, so each Test Connection on an unsaved profile
+     * kept key material on disk, and two entries in the JVM's never-pruned DeleteOnExitHook set, until the process
+     * ended. A saved profile's cached store is left where it is.
+     */
+    public void discardUnsaved(Map<String, Object> props) {
+        if (props == null) {
+            return;
+        }
+        Path unsaved = this.secretCacheRoot().resolve("unsaved").toAbsolutePath().normalize();
+        for (String key : Arrays.asList(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG)) {
+            Object location = props.get(key);
+            if (!(location instanceof String)) {
+                continue;
+            }
+            Path dir = Paths.get((String) location).toAbsolutePath().normalize().getParent();
+            if (dir != null && dir.getParent() != null && dir.getParent().equals(unsaved)) {
+                this.deleteQuietlyRecursive(dir);
+            }
+        }
+    }
+
+    /**
+     * Which format a store file is in.
+     *
+     * Kafka defaults ssl.*.type to JKS while every store this application generates is PKCS12, so
+     * without this the two disagree. On the JDK 17 the image runs that disagreement is currently
+     * survivable -- the security property keystore.type.compat defaults to true, and a JKS-declared
+     * store quietly reads a PKCS12 file anyway. It stops being survivable on a Java 8 runtime,
+     * which this source level still permits, or wherever that property is turned off, and the
+     * failure then lands at the first handshake rather than anywhere near the upload.
+     *
+     * Declaring it is the honest thing regardless: the file's format is known at this point and
+     * relying on a compatibility shim to paper over a wrong answer is not the same as giving the
+     * right one. The type is read off the extension because that is what distinguishes the two on
+     * disk, so a store somebody built with keytool keeps whichever format they made.
+     *
+     * PKCS12 is the fallback rather than JKS: it is what is generated here, it is the JDK default
+     * from 9 onwards, and an unrecognised extension is likelier to be a renamed .p12 than a JKS.
+     */
+    private String storeTypeOf(String location) {
+        String name = location == null ? "" : location.trim().toLowerCase(Locale.ROOT);
+        if (name.endsWith(".jks")) {
+            return "JKS";
+        }
+        return KafkaCertificateUtil.STORE_TYPE;
+    }
+
+    private String resolveLocalSecretFile(KafkaConnectionProfile profile, String kind, String bucket, String objectKey) {
+        if (bucket == null || bucket.trim().isEmpty()) {
+            return this.confinedLocalPath(kind, objectKey);
+        }
+        Long profileId = profile.getKafkaConnectionProfileId();
+        Path localFile = this.secretCacheFile(this.verifiedSecretCacheRoot(), profileId, kind, bucket, objectKey);
+        // An unsaved profile -- Test Connection on a dialog that has never been saved -- has no id
+        // to cache under, so its download is private to the call and never read back.
+        if (profileId != null && Files.exists(localFile)) {
+            return localFile.toString();
+        }
+        try {
+            this.createPrivateDirectories(localFile.getParent());
+            // An unsaved profile's download is discarded by its probe (discardUnsaved), not by deleteOnExit.
+            ObjectContentDto content = this.downloadProfileSecret(profile.getTenantId(), bucket, objectKey);
+            this.writePrivateFile(content.getContent(), localFile);
+            this.logger.info("Cached {} for Kafka profile {} from bucket {}/{} -> {}", kind, profileId, bucket, objectKey, localFile);
+            return localFile.toString();
+        } catch (IOException | RuntimeException ex) {
+            if (profileId == null) {
+                this.deleteQuietlyRecursive(localFile.getParent());
+            }
+            throw new IllegalStateException(
+                "Could not download " + kind + " from bucket " + bucket + "/" + objectKey + " for Kafka profile " + profileId, ex);
+        }
+    }
+
+    /**
+     * Fetches a profile's TLS material through the storage layer's trusted path.
+     *
+     * Not the ordinary download, for two reasons. Scheduler and startup threads carry no
+     * TenantContext at all, so a browse-style call has nobody to authorise and refuses -- which is
+     * why an SSL profile could be tested successfully from the console and then fail on every
+     * dispatch afterwards. And the material usually sits in the platform's own bucket, which the
+     * browse path now refuses to anyone who is not a platform admin, as it should.
+     *
+     * What makes the trusted call correct here is that neither the bucket nor the key comes from
+     * a caller: both are read off the profile row, which the caller already had to be entitled to
+     * before it could be loaded. Standing in as the profile's tenant was the earlier attempt at
+     * this and it was the wrong shape -- it fabricated a principal, and still lost to the platform
+     * bucket.
+     */
+    private ObjectContentDto downloadProfileSecret(Long profileTenantId, String bucket, String objectKey) {
+        return this.storageBrowserService.readForWorkflow(
+            TrustedAccess.of(TrustedCaller.KAFKA_TEMPLATE_PROVIDER, "a Kafka profile's key material, from the profile row")
+                // Within the profile's workspace: its own alias for the secret's bucket is what the
+                // row names (aliases are per workspace, MIG-53).
+                .forTenant(profileTenantId),
+            bucket, objectKey);
+    }
+
+    /**
+     * Kafka opens whatever path it is handed, so a store named without a bucket may only ever sit
+     * under a directory the operator nominated. The failure says nothing about the path asked for:
+     * "missing" and "not a keystore" read differently, and that difference is a way to probe the
+     * host's filesystem one path at a time.
+     */
+    private String confinedLocalPath(String kind, String objectKey) {
+        if (this.localStoreDir == null || this.localStoreDir.trim().isEmpty()) {
+            throw new IllegalStateException("A storage bucket is required for the Kafka " + kind
+                + "; local store paths are only served from kafka.ssl.local-store-dir.");
+        }
+        Path base = this.canonical(Paths.get(this.localStoreDir.trim()));
+        Path candidate = this.canonical(base.resolve(objectKey));
+        if (!candidate.startsWith(base)) {
+            throw new IllegalStateException("The Kafka " + kind + " path is outside kafka.ssl.local-store-dir.");
+        }
+        return candidate.toString();
+    }
+
+    private Path canonical(Path path) {
+        Path normalized = path.toAbsolutePath().normalize();
+        try {
+            return Files.exists(normalized) ? normalized.toRealPath() : normalized;
+        } catch (IOException ex) {
+            // Unreadable is not resolvable, and an unresolved path must not be treated as confined.
+            throw new IllegalStateException("Could not resolve the configured Kafka store directory.", ex);
+        }
+    }
+
+    private Path secretCacheRoot() {
+        if (this.secretCacheDir != null && !this.secretCacheDir.trim().isEmpty()) {
+            return Paths.get(this.secretCacheDir.trim());
+        }
+        return Paths.get(System.getProperty("java.io.tmpdir"), "kafka-secrets-cache");
+    }
+
+    /**
+     * The cache root, checked rather than assumed, before any key material goes under it.
+     *
+     * Every name below it is derivable by anyone who can read the profile row, and the default sits
+     * in the shared temp dir, so a local account that creates the root first owns the parent of
+     * every profile's secrets: it can read what is written there, and it can plant a file at the
+     * name a later connection will pick up as that profile's trust anchor. Only a directory this
+     * process owns and nobody else can enter is usable, and one that is not fails the connection
+     * rather than being quietly used.
+     */
+    private Path verifiedSecretCacheRoot() {
+        Path root = this.secretCacheRoot();
+        try {
+            if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
+                // Created and then judged like any other, rather than trusted for having just been
+                // made: createDirectories returns quietly on a directory that appeared between the
+                // two calls, and returning here would hand whoever won that race the parent of
+                // every profile's key material -- the one thing this method exists to prevent.
+                this.createPrivateDirectories(root);
+            }
+            if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IllegalStateException("The Kafka secret cache path must be a directory of its own, not a file or a link.");
+            }
+            PosixFileAttributeView view = Files.getFileAttributeView(
+                root, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            if (view == null) {
+                // Non-POSIX filesystem: there are no ownership or mode bits here to judge it by.
+                return root;
+            }
+            PosixFileAttributes attributes = view.readAttributes();
+            UserPrincipal self = root.getFileSystem().getUserPrincipalLookupService()
+                .lookupPrincipalByName(System.getProperty("user.name"));
+            if (!attributes.owner().equals(self)) {
+                throw new IllegalStateException("The Kafka secret cache directory belongs to another account; "
+                    + "point kafka.secret-cache.dir at one of this application's own.");
+            }
+            // Writable by anyone else is not recoverable: something may already have been placed
+            // in here, and narrowing the directory now would lock that in rather than remove it.
+            if (attributes.permissions().contains(PosixFilePermission.GROUP_WRITE)
+                || attributes.permissions().contains(PosixFilePermission.OTHERS_WRITE)) {
+                throw new IllegalStateException("The Kafka secret cache directory is writable by other "
+                    + "accounts and its contents cannot be trusted; point kafka.secret-cache.dir at a "
+                    + "private directory.");
+            }
+            // Merely readable is recoverable, and refusing was a trap: a deployment upgraded from a
+            // build predating this check finds the directory already there at 0755, and every TLS
+            // connection then fails for good with a message that names a property rather than the
+            // directory. Nothing could have been planted, only read, so it is narrowed and used.
+            if (!OWNER_ONLY.equals(attributes.permissions())) {
+                try {
+                    Files.setPosixFilePermissions(root, OWNER_ONLY);
+                    this.logger.info("Narrowed the Kafka secret cache directory {} to owner-only access.", root);
+                } catch (IOException cannotNarrow) {
+                    throw new IllegalStateException("The Kafka secret cache directory is open to other accounts "
+                        + "and could not be narrowed; point kafka.secret-cache.dir at a private directory.",
+                        cannotNarrow);
+                }
+            }
+            return root;
+        } catch (IOException ex) {
+            throw new IllegalStateException("Could not verify the Kafka secret cache directory.", ex);
+        }
+    }
+
+    /**
+     * The cached name carries a digest of bucket and key, so replacing the object behind a profile
+     * cannot be served from the file downloaded for the previous one.
+     */
+    private Path secretCacheFile(Path root, Long profileId, String kind, String bucket, String objectKey) {
+        String fileName = kind + "-" + this.digestOf(bucket + "/" + objectKey) + this.extensionOf(objectKey);
+        if (profileId == null) {
+            return root.resolve("unsaved").resolve(UUID.randomUUID().toString()).resolve(fileName);
+        }
+        return root.resolve(String.valueOf(profileId)).resolve(fileName);
+    }
+
+    private String digestOf(String value) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                hex.append(String.format("%02x", hash[i]));
+            }
+            return hex.toString();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not derive a cache name for the Kafka store.", ex);
+        }
+    }
+
+    private void createPrivateDirectories(Path dir) throws IOException {
+        try {
+            Files.createDirectories(dir, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+        } catch (UnsupportedOperationException ex) {
+            // Non-POSIX filesystem: creating it is the most this can do.
+            Files.createDirectories(dir);
+        }
+    }
+
+    /**
+     * The file is created owner-only before a byte of key material goes into it, rather than
+     * copied first and tightened afterwards.
+     */
+    private void writePrivateFile(InputStream source, Path target) throws IOException {
+        Files.deleteIfExists(target);
+        try {
+            Files.createFile(target, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+        } catch (UnsupportedOperationException ex) {
+            Files.createFile(target);
+        }
+        try (InputStream in = source; OutputStream out = Files.newOutputStream(target)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        }
+    }
+
+    private String extensionOf(String objectKey) {
+        int dot = objectKey.lastIndexOf('.');
+        return dot >= 0 ? objectKey.substring(dot) : "";
+    }
+
+    /**
+     * The JAAS entry is read back with a tokenizer that treats a quote as the end of the value and
+     * a backslash as an escape, so an unescaped one in a username or password lets the rest of the
+     * entry be written by whoever typed it. Escaping keeps a password that legitimately contains
+     * either of them working instead of rejecting the profile outright.
+     *
+     * A line break ends the quoted value for that tokenizer just as a quote does, so it goes the
+     * same way -- as the escape the tokenizer reads back as the break itself, which is what keeps
+     * the promise above for a password that contains one.
+     */
+    private String jaasEscape(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    /**
+     * Names that do not look like security settings and decide as much as any of them.
+     * bootstrap.servers is the destination the profile's credentials are presented to -- the column
+     * is validated and shown, a property restating it is neither. The two class-name properties are
+     * instantiated by the client as it is built, and a text box does not get to name a class for
+     * this JVM to load.
+     */
+    private static final Set<String> DENIED_CLIENT_PROPERTIES = Collections.unmodifiableSet(
+        new HashSet<>(Arrays.asList("bootstrap.servers", "metric.reporters", "interceptor.classes")));
+
+    /**
+     * Whether a client property decides where we connect, how we authenticate or whether the wire is
+     * encrypted. These are computed from the profile and are not for the Advanced box to restate: a
+     * caller who could set sasl.jaas.config would be naming a login module for this JVM to
+     * instantiate, and one who could set bootstrap.servers would be choosing who receives the
+     * password behind a profile that still displays the broker it was approved for.
+     */
+    static boolean isReservedClientProperty(String key) {
+        if (key == null) {
+            return false;
+        }
+        String normalized = key.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("security.") || normalized.startsWith("sasl.")
+            || normalized.startsWith("ssl.") || DENIED_CLIENT_PROPERTIES.contains(normalized);
+    }
+
+    private void deleteQuietlyRecursive(Path dir) {
+        if (!Files.exists(dir)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.delete(p);
+                } catch (IOException ex) {
+                    this.logger.warn("Could not delete cached secret file {}: {}", p, ex.getMessage());
+                }
+            });
+        } catch (IOException ex) {
+            this.logger.warn("Could not walk cached secret dir {}: {}", dir, ex.getMessage());
+        }
+    }
+
+    private void mergeAdditionalProperties(Map<String, Object> props, String additionalPropertiesJson) {
+        if (additionalPropertiesJson == null || additionalPropertiesJson.trim().isEmpty()) {
+            return;
+        }
+        try {
+            Map<String, String> extra = this.gson.fromJson(additionalPropertiesJson, new TypeToken<Map<String, String>>() {}.getType());
+            if (extra == null) {
+                return;
+            }
+            List<String> rejected = new ArrayList<>();
+            for (Map.Entry<String, String> entry : extra.entrySet()) {
+                if (entry.getKey() == null) {
+                    continue;
+                }
+                if (isReservedClientProperty(entry.getKey())) {
+                    rejected.add(entry.getKey());
+                    continue;
+                }
+                props.put(entry.getKey(), entry.getValue());
+            }
+            if (!rejected.isEmpty()) {
+                // Names only; the value alongside one of these is very often a credential.
+                this.logger.warn("Ignoring reserved Kafka client properties in additionalProperties: {}", rejected);
+            }
+        } catch (Exception ex) {
+            this.logger.warn("Could not parse additionalProperties JSON, ignoring: {}", ex.getMessage());
+        }
+    }
+
+    /** How AdminClients are made: the real factory, or a test's. */
+    private Function<Map<String, Object>, AdminClient> adminClients = AdminClient::create;
+
+    /** An AdminClient on one profile's brokers (Kafka & Topics' live health); the caller closes it. */
+    public AdminClient adminClientFor(KafkaConnectionProfile profile) {
+        return this.adminClients.apply(this.commonClientProps(profile));
+    }
+
+    /** For the tests: an AdminClient of their own in place of a real broker's. */
+    void useAdminClients(Function<Map<String, Object>, AdminClient> adminClients) {
+        this.adminClients = adminClients;
+    }
+
+    /** How long one profile's broker may take to list its topics, and then to create the missing ones. */
+    static final long PROVISIONING_STEP_SECONDS = 10;
+
+    /** What provisioning one profile's topics did: reached (and how many created, how many already there), or not. */
+    public static final class TopicProvisioning {
+        private final boolean reached;
+        private final int created;
+        private final int existing;
+        private final String reason;
+
+        private TopicProvisioning(boolean reached, int created, int existing, String reason) {
+            this.reached = reached;
+            this.created = created;
+            this.existing = existing;
+            this.reason = reason;
+        }
+
+        public static TopicProvisioning reached(int created, int existing) {
+            return new TopicProvisioning(true, created, existing, null);
+        }
+
+        public static TopicProvisioning unreachable(String reason) {
+            return new TopicProvisioning(false, 0, 0, reason);
+        }
+
+        public boolean isReached() { return this.reached; }
+
+        public int getCreated() { return this.created; }
+
+        public int getExisting() { return this.existing; }
+
+        public String getReason() { return this.reason; }
+    }
+
+    /**
+     * Every topic one profile needs, with ONE AdminClient (startup provisioning): list once, create the missing ones
+     * in one request. A broker that answers gets exactly what ensureTopicExists gave it topic by topic -- the missing
+     * topics made with their partition count and the replication factor, an existing one left alone, a line per topic
+     * created and a warning per topic it refused. A profile whose client cannot be built, or whose broker does not
+     * list its topics within PROVISIONING_STEP_SECONDS, is answered as unreachable -- no line per topic: the caller
+     * says it once, for the profile.
+     */
+    public TopicProvisioning ensureTopicsExist(KafkaConnectionProfile profile, Map<String, Integer> topics) {
+        if (topics == null || topics.isEmpty()) {
+            return TopicProvisioning.reached(0, 0);
+        }
+        if (profile == null) {
+            return TopicProvisioning.unreachable("no Kafka connection resolved");
+        }
+        AdminClient adminClient;
+        try {
+            adminClient = this.adminClients.apply(this.commonClientProps(profile));
+        } catch (Exception ex) {
+            return TopicProvisioning.unreachable(reasonOf(ex));
+        }
+        try {
+            Set<String> existingTopics;
+            try {
+                existingTopics = adminClient.listTopics().names().get(PROVISIONING_STEP_SECONDS, TimeUnit.SECONDS);
+            } catch (Exception ex) {
+                return TopicProvisioning.unreachable(reasonOf(ex));
+            }
+            List<NewTopic> missing = new ArrayList<>();
+            int existing = 0;
+            for (Map.Entry<String, Integer> topic : topics.entrySet()) {
+                if (existingTopics.contains(topic.getKey())) {
+                    existing++;
+                } else {
+                    missing.add(new NewTopic(topic.getKey(), topic.getValue(), this.defaultReplicationFactor));
+                }
+            }
+            if (missing.isEmpty()) {
+                return TopicProvisioning.reached(0, existing);
+            }
+            Map<String, KafkaFuture<Void>> outcomes = adminClient.createTopics(missing).values();
+            int created = 0;
+            for (NewTopic topic : missing) {
+                try {
+                    outcomes.get(topic.name()).get(PROVISIONING_STEP_SECONDS, TimeUnit.SECONDS);
+                    created++;
+                    this.logger.info("Auto-created Kafka topic '{}' with {} partition(s).", topic.name(), topic.numPartitions());
+                } catch (ExecutionException ex) {
+                    if (ex.getCause() instanceof TopicExistsException) {
+                        existing++;
+                        continue;
+                    }
+                    this.logger.warn("Could not auto-create Kafka topic '{}': {}", topic.name(), ex.getMessage());
+                } catch (Exception ex) {
+                    this.logger.warn("Could not auto-create Kafka topic '{}': {}", topic.name(), ex.getMessage());
+                }
+            }
+            return TopicProvisioning.reached(created, existing);
+        } finally {
+            try {
+                // Bounded: close() with no timeout waits for whatever is still pending -- up to a minute against a
+                // broker that resolves but never answers, which is the wait this method exists to avoid.
+                adminClient.close(Duration.ofSeconds(1));
+            } catch (Exception ignored) {
+                // Closing a client that never connected can complain; there is nothing to do about it.
+            }
+        }
+    }
+
+    private static String reasonOf(Exception ex) {
+        Throwable root = ex;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String outer = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+        return root == ex || root.getMessage() == null ? outer : outer + " (" + root.getMessage() + ")";
+    }
+
+    public void ensureTopicExists(KafkaConnectionProfile profile, String topic, int partitions) {
+        if (topic == null || topic.trim().isEmpty() || profile == null) {
+            return;
+        }
+        try {
+            // Building the client properties can fail on its own -- an undecryptable password, a
+            // store that will not download -- and that is as much a provisioning failure as a
+            // broker that will not answer, so it is handled here rather than thrown at the caller.
+            Map<String, Object> adminProps = this.commonClientProps(profile);
+            try (AdminClient adminClient = AdminClient.create(adminProps)) {
+                Set<String> existingTopics = adminClient.listTopics().names().get(10, TimeUnit.SECONDS);
+                if (existingTopics.contains(topic)) {
+                    return;
+                }
+                adminClient.createTopics(Collections.singleton(new NewTopic(topic, partitions, this.defaultReplicationFactor)))
+                    .all().get(10, TimeUnit.SECONDS);
+                this.logger.info("Auto-created Kafka topic '{}' with {} partition(s).", topic, partitions);
+            }
+        } catch (ExecutionException ex) {
+            if (ex.getCause() instanceof TopicExistsException) {
+
+                return;
+            }
+            this.logger.warn("Could not auto-create Kafka topic '{}': {}", topic, ex.getMessage());
+        } catch (Exception ex) {
+            this.logger.warn("Could not auto-create Kafka topic '{}': {}", topic, ex.getMessage());
+        }
+    }
+
+    /**
+     * The one place a producer's durability is decided. KafkaProducerConfig builds the platform's own
+     * template through here too, so platform events and workspace dispatch send with one retry policy.
+     */
+    static Map<String, Object> applyProducerDefaults(Map<String, Object> props) {
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        props.put(ProducerConfig.RETRIES_CONFIG, 3);
+        props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 500);
+        return props;
+    }
+
+    private Map<String, Object> producerProps(KafkaConnectionProfile profile) {
+        return applyProducerDefaults(this.commonClientProps(profile));
+    }
+
+    private static class CachedProducer {
+        private final DefaultKafkaProducerFactory<String, String> factory;
+        private final KafkaTemplate<String, String> template;
+
+        private CachedProducer(DefaultKafkaProducerFactory<String, String> factory, KafkaTemplate<String, String> template) {
+            this.factory = factory;
+            this.template = template;
+        }
+    }
+
+}

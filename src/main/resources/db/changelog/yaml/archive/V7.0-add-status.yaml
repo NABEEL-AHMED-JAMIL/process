@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 7.0-add-status-columns
+      author: nabeel.amd93
+      description: "Add status columns to job_queue and job_audit_logs (default Active)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V7.0-add-status/V7__add_status_columns.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Rollback: remove status columns (use with caution)
+              ALTER TABLE job_queue DROP COLUMN IF EXISTS status;
+              ALTER TABLE job_audit_logs DROP COLUMN IF EXISTS status;
+

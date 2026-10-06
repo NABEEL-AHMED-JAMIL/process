@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20.0-user-position
+      author: nabeel.amd93
+      description: "Add app_user.position so a user carries a job title alongside their permission role"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V20.0-user-position/V20__user_position.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE app_user DROP COLUMN IF EXISTS position;

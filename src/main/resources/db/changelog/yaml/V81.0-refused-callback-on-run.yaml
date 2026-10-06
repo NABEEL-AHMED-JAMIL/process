@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 81.0-refused-callback-on-run
+      author: nabeel.amd93
+      description: "job_queue.refused_callback_at/status: a genuine report refused for an expired token, so the stall sweep can close the run (MIG-63)"
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              ALTER TABLE job_queue ADD COLUMN IF NOT EXISTS refused_callback_at TIMESTAMP,
+                                    ADD COLUMN IF NOT EXISTS refused_callback_status VARCHAR(16);
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: ALTER TABLE job_queue DROP COLUMN IF EXISTS refused_callback_at, DROP COLUMN IF EXISTS refused_callback_status;

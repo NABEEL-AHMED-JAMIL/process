@@ -17,13 +17,36 @@
     <description>This is bulk engine to run the kafka source job.</description>
 
     <properties>
+        <!--
+          The zone the tests' JVM runs in: UTC, as the containers do (MIG-163). Nothing in process may depend
+          on it (ModelApplication no longer tells the JVM it lives in Chicago), and a suite run on a laptop
+          in Chicago would hide exactly the code that still does. Pass test.timezone=Asia/Tokyo to rerun it
+          anywhere else.
+        -->
+        <test.timezone>UTC</test.timezone>
+        <!--
+          Bytecode level 17, the JDK the image ships (MIG-204). Until then it had to stay at 1.8:
+          Spring Boot 2.3.2's bundled ASM reads class files only up to Java 14, so at 17 the build
+          failed at spring-boot-maven-plugin:repackage ("Unsupported class file major version 61")
+          and component scan would have failed the same way at startup. Spring Boot 2.7 reads 17.
+        -->
         <java.version>17</java.version>
-        <commons-net.version>3.6</commons-net.version>
+        <swagger.version>2.9.2</swagger.version>
     </properties>
 
     <dependencies>
+        <!--
+          The Notifications contract (MIG-191) and, through it, platform-commons 1.1.0. Exact versions,
+          never ranges: a range lets two services disagree about a payload without anything failing.
+          JobEvent (MIG-76) was added to 1.5.0 without a bump (additive, wire unchanged), so this
+          needs a 1.5.0 built from notifications-contract at or after its MIG-76 commit.
+        -->
+        <dependency>
+            <groupId>org.barco</groupId>
+            <artifactId>notifications-contract</artifactId>
+            <version>1.5.0</version>
+        </dependency>
 
-        <!-- Spring Boot Starters (versions managed by parent) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -36,17 +59,62 @@
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-websocket</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Swagger -->
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-swagger2</artifactId>
+            <version>${swagger.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-swagger-ui</artifactId>
+            <version>${swagger.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-bean-validators</artifactId>
+            <version>${swagger.version}</version>
+        </dependency>
+
+        <!-- Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Monitoring -->
@@ -54,12 +122,6 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
             <scope>runtime</scope>
-        </dependency>
-
-        <!-- Kafka -->
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
         </dependency>
 
         <!-- Database -->
@@ -74,12 +136,37 @@
             <artifactId>liquibase-core</artifactId>
         </dependency>
 
+        <!-- Query Engine: CSV streaming (CsvExportService) and read-only SQL validation
+             (QueryValidator), both pure-Java, no heavyweight transitive deps, both Java 8
+             compatible (jsqlparser 4.6 is the last release before its Java 11 floor). -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>1.10.0</version>
+        </dependency>
+
+        <!-- MIG-231: the pipeline's Read CSV/JSON/Parquet reads Parquet through DuckDB, as media-service does
+             (same version), rather than Parquet's Hadoop-based jars. An in-memory DuckDB per read, one thread,
+             256 MB (process.pipeline.data.ParquetRows). The jar carries its native library for linux and mac. -->
+        <dependency>
+            <groupId>org.duckdb</groupId>
+            <artifactId>duckdb_jdbc</artifactId>
+            <version>1.1.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>4.6</version>
+        </dependency>
+
         <!-- ShedLock -->
         <dependency>
             <groupId>net.javacrumbs.shedlock</groupId>
             <artifactId>shedlock-spring</artifactId>
             <version>4.9.3</version>
         </dependency>
+
         <dependency>
             <groupId>net.javacrumbs.shedlock</groupId>
             <artifactId>shedlock-provider-jdbc-template</artifactId>
@@ -92,22 +179,11 @@
             <artifactId>poi-ooxml</artifactId>
             <version>3.15</version>
         </dependency>
+
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
             <version>3.15</version>
-        </dependency>
-
-        <!-- Velocity -->
-        <dependency>
-            <groupId>org.apache.velocity</groupId>
-            <artifactId>velocity</artifactId>
-            <version>1.7</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.velocity</groupId>
-            <artifactId>velocity-tools</artifactId>
-            <version>2.0</version>
         </dependency>
 
         <!-- Utils -->
@@ -123,15 +199,241 @@
             <version>2.8.6</version>
         </dependency>
 
+        <!-- MIG-230: a pipeline definition is JSON; YAML is a view of the same definition, read and written with
+             snakeyaml (safe constructor, no timestamps, no aliases). Declared, not borrowed from the Spring Boot
+             starter, which brings it at runtime scope only; the version is the parent's. -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+        </dependency>
+
+        <!-- OkHttp for process's own HTTP clients: Media (HttpMedia) and Storage (StorageServiceClient). -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.12.0</version>
+        </dependency>
+
+        <!-- Declared, not borrowed: JobDetailValidation uses StringUtils, and the commons-lang it
+             used to import only ever arrived through Velocity, which left with the mailer (MIG-22). -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+        </dependency>
+
+        <!-- S3 for the platform's own staging of mail attachments (MailAttachmentStaging), not storage. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.60</version>
+        </dependency>
+
+        <!-- Same SDK and version as s3 above. Outbound mail goes through SES rather than SMTP:
+             see process.emailer.SesMailSender for why, and for how it points at LocalStack. -->
+
+
+        <!-- platform-commons directly, at 1.5.0: ObjectChanged, Storage's announcement to Media (ADR-013), and
+             the one meter vocabulary and reporter every service reports usage through (MIG-80).
+             It overrides the 1.1.0 the notifications contract brings. -->
+        <dependency>
+            <groupId>org.barco</groupId>
+            <artifactId>platform-commons</artifactId>
+            <version>1.12.0</version>
+        </dependency>
+        <!-- The platform's envelope contract suite (MIG-103): the same rows every service's build runs. -->
+        <dependency>
+            <groupId>org.barco</groupId>
+            <artifactId>platform-commons</artifactId>
+            <version>1.12.0</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Google's phone number metadata: the per-country digit rules, kept current by
+             upstream. Hand-rolled length checks go stale the moment a country adds a range, and
+             they cannot tell a valid mobile prefix from an invalid one at the same length. -->
+        <dependency>
+            <groupId>com.googlecode.libphonenumber</groupId>
+            <artifactId>libphonenumber</artifactId>
+            <version>8.13.50</version>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- MIG-213: every javac lint category but the few QUALITY.md names with its reason, and a warning
+                 fails the build. release, not source/target: the Java 17 API whichever JDK runs the build. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>${java.version}</release>
+                    <showWarnings>true</showWarnings>
+                    <compilerArgs>
+                        <arg>-Xlint:all,-serial,-try,-processing,-classfile</arg>
+                        <arg>-Werror</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+
+            <!--
+              Build and test on the JDK the application image ships, whatever JVM launched Maven.
+
+              Without this the two drifted: `mvn` ran on a JDK 25 while the image runs 17, so
+              surefire forked 25 and every Kafka SASL test failed locally on something that
+              cannot happen in production. kafka-clients 2.5 authenticates through
+              Subject.getSubject, which went away with the SecurityManager in JDK 24. A build
+              that disagrees with what is deployed misleads in both directions, and this is the
+              cheap end of fixing that.
+
+              Needs a jdk entry for 17 in ~/.m2/toolchains.xml. The build fails with a clear
+              message when there is none, which is the intended outcome: silently compiling
+              against the wrong JDK is what this exists to stop.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-Duser.timezone=${test.timezone}</argLine>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-toolchains-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>toolchain</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <toolchains>
+                        <jdk>
+                            <version>17</version>
+                        </jdk>
+                    </toolchains>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <!--
+      The integration suites, behind a profile.
+
+      WHAT WAS ACTUALLY WRONG. Not "they never run" — run-e2e.sh has been running the five
+      *E2EIT classes plus HarnessSmokeIT for a while (86 tests, recorded in README.md), and
+      run-kafka-matrix.sh covers KafkaSecurityMatrixIT. What was true is that none of them sit in
+      a lifecycle phase: `mvn verify` did not reach one, so nothing could gate a build on them,
+      and two classes — ContextProbeIT and OpenSearchRagClientIT — match no script's -Dtest glob
+      and had genuinely never executed.
+
+      BEHIND A PROFILE, because every one of them needs infrastructure: Postgres, MinIO,
+      LocalStack, Kafka. `mvn verify` on a laptop with no Docker running must not go red, or the
+      first thing anybody does is stop running verify.
+
+      Run with: mvn -o verify -Pit
+    -->
+    <profiles>
+        <profile>
+            <id>it</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <!--
+                          Version deliberately omitted. spring-boot-dependencies manages it at the
+                          same 2.22.2 it pins surefire to, so the two providers cannot drift apart
+                          under this parent, and both are already in the local repository — which
+                          is what keeps `mvn -o` working with no new download.
+                        -->
+                        <configuration>
+                            <!--
+                              The one line the whole thing turns on. Failsafe runs at
+                              integration-test, which is AFTER package — and by then
+                              spring-boot-maven-plugin:repackage has replaced the jar with an
+                              executable one whose classes live under BOOT-INF/classes/ and which
+                              has nothing under process/ at the root. Left unset, Failsafe points
+                              at that jar and every IT dies at class-load on process.*.
+                            -->
+                            <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+                            <trimStackTrace>false</trimStackTrace>
+                            <excludes>
+                                <!--
+                                  Cannot pass on the host: every kafka-it listener advertises
+                                  host.docker.internal, which the host does not resolve. It has its
+                                  own runner, run-kafka-matrix.sh, which is a container on the
+                                  broker's own network.
+                                -->
+                                <exclude>**/KafkaSecurityMatrixIT.java</exclude>
+                            </excludes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>integration-tests</id>
+                                <goals>
+                                    <!--
+                                      Both goals. integration-test only RECORDS results; verify is
+                                      the one that fails the build on them, and a suite that runs
+                                      without being able to fail anything is decoration.
+                                    -->
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- On whenever config/checkstyle/checkstyle.xml is there, which is every checkout. The image copies a jar
+             built beforehand, so this changes nothing there. -->
+        <profile>
+            <id>platform-code-standard</id>
+            <activation>
+                <file>
+                    <exists>${basedir}/config/checkstyle/checkstyle.xml</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <!-- MIG-213: the platform code standard (config/checkstyle/checkstyle.xml, the same file in every
+                         repository). It runs on main and test sources in the validate phase; one violation fails the build. -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-checkstyle-plugin</artifactId>
+                        <version>3.2.2</version>
+                        <configuration>
+                            <configLocation>config/checkstyle/checkstyle.xml</configLocation>
+                            <consoleOutput>true</consoleOutput>
+                            <failOnViolation>true</failOnViolation>
+                            <violationSeverity>warning</violationSeverity>
+                            <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>platform-code-standard</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

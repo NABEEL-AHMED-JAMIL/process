@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 190.0-retention-and-access-log
+      author: nabeel.amd93
+      description: "MIG-243: retention_log (what the retention sweep removed) and file_access_log (every run dataset download); expand-only, row-level security as V181"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V190.0-retention-and-access-log/V190__retention_and_access_log.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V190.0-retention-and-access-log/V190__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

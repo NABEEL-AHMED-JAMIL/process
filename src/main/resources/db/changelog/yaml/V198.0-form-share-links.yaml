@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 198.0-form-share-links
+      author: nabeel.amd93
+      description: "MIG-278: forms shared by link -- form_share_policy (off by default), form_share_link (token hashes), form_submission.share_link_id"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V198.0-form-share-links/V198__form_share_links.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V198.0-form-share-links/V198__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

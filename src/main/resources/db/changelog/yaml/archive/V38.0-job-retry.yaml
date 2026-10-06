@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: 38.0-job-retry
+      author: nabeel.amd93
+      description: "Retry a failed run with backoff instead of failing it outright; defaults reproduce today's no-retry behaviour"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V38.0-job-retry/V38__job_retry.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE source_job DROP CONSTRAINT IF EXISTS ck_source_job_retry_backoff_seconds;
+              ALTER TABLE source_job DROP CONSTRAINT IF EXISTS ck_source_job_max_attempts;
+              ALTER TABLE source_job DROP COLUMN IF EXISTS retry_backoff_seconds;
+              ALTER TABLE source_job DROP COLUMN IF EXISTS max_attempts;
+              DROP INDEX IF EXISTS idx_job_queue_next_attempt_at;
+              ALTER TABLE job_queue DROP COLUMN IF EXISTS next_attempt_at;
+              ALTER TABLE job_queue DROP COLUMN IF EXISTS attempt;

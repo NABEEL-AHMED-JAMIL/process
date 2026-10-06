@@ -1,0 +1,52 @@
+databaseChangeLog:
+  - changeSet:
+      id: 63.0-ai-tables-read-only
+      author: nabeel.amd93
+      description: "The AI tables are ai_db's (ADR-020, MIG-147/150): pipeline_field loses its prompt foreign key (C2) and the copies here are read-only"
+      # Moved to ai_db on 2026-09-24: ai_model_connection, ai_prompt, ai_prompt_version and ai_prompt_run, with
+      # the model-connection keys re-sealed under the AI service's own key. ai_agent had no rows and was retired,
+      # not moved. A pipeline's AI step names its prompt by id, and a prompt created from now on exists only in
+      # ai_db, so pipeline_field.prompt_id keeps its bigint and loses its foreign key -- Core checks the prompt
+      # through the AI service at save instead (C2). A trigger refuses every write to the five copies.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              ALTER TABLE pipeline_field DROP CONSTRAINT IF EXISTS pipeline_field_prompt_id_fkey;
+        - sql:
+            splitStatements: false
+            sql: >
+              CREATE OR REPLACE FUNCTION ai_moved_read_only() RETURNS trigger AS $$
+              BEGIN
+                RAISE EXCEPTION '% is read-only: prompts, model connections and prompt runs live in ai_db since ADR-020', TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME;
+              END;
+              $$ LANGUAGE plpgsql;
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE t text;
+              BEGIN
+                FOREACH t IN ARRAY ARRAY['public.ai_model_connection', 'public.ai_prompt', 'public.ai_prompt_version',
+                    'public.ai_prompt_run', 'public.ai_agent'] LOOP
+                  IF to_regclass(t) IS NOT NULL THEN
+                    EXECUTE format('CREATE TRIGGER ai_moved_read_only BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %s '
+                      'FOR EACH STATEMENT EXECUTE PROCEDURE ai_moved_read_only()', t);
+                  END IF;
+                END LOOP;
+              END $$;
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE t text;
+              BEGIN
+                FOREACH t IN ARRAY ARRAY['public.ai_model_connection', 'public.ai_prompt', 'public.ai_prompt_version',
+                    'public.ai_prompt_run', 'public.ai_agent'] LOOP
+                  IF to_regclass(t) IS NOT NULL THEN
+                    EXECUTE format('DROP TRIGGER IF EXISTS ai_moved_read_only ON %s', t);
+                  END IF;
+                END LOOP;
+                DROP FUNCTION IF EXISTS ai_moved_read_only();
+              END $$;

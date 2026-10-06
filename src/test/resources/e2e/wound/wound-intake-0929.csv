@@ -1,0 +1,5 @@
+case_id,patient_id,visit_date,wound_site,image_key
+WC-0001,SYN-001,2026-09-29,left heel,${PREFIX}images/WC-0001.png
+WC-0002,SYN-002,2026-09-29,sacrum,${PREFIX}images/WC-0002.png
+WC-0003,SYN-003,2026-09-29,right shin,${PREFIX}images/WC-0003.png
+WC-0004,PATIENT-4,2026-09-29,left heel,${PREFIX}images/WC-0004.png

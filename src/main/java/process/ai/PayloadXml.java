@@ -1,0 +1,136 @@
+package process.ai;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import java.io.StringReader;
+import java.io.StringWriter;
+import org.xml.sax.InputSource;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Reads and writes one tag of a task's payload document (`<pipeline>…</pipeline>`), with the
+ * XML parser doing the escaping -- an AI answer can hold anything, and building the tag by
+ * string concatenation is how a stray `<` breaks the worker's parser. External entities and
+ * DTDs are off: the payload is data the console wrote, but the parser is configured as if it
+ * were not.
+ */
+public final class PayloadXml {
+
+    private final Document doc;
+
+    private PayloadXml(Document doc) { this.doc = doc; }
+
+    public static PayloadXml parse(String xml) throws Exception {
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        f.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        f.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        f.setExpandEntityReferences(false);
+        String source = xml == null || xml.trim().isEmpty() ? "<pipeline/>" : xml;
+        return new PayloadXml(f.newDocumentBuilder().parse(new InputSource(new StringReader(source))));
+    }
+
+    /** The text of the first element with this tag, or null when the document has none. */
+    public String get(String tag) {
+        NodeList found = this.doc.getElementsByTagName(tag);
+        return found.getLength() == 0 ? null : found.item(0).getTextContent();
+    }
+
+    /**
+     * The root's leaf children as tag -> text, in document order; the first of a repeated tag wins, as {@link #get}.
+     * A pipeline definition's "task" source reads the task payload through this (MIG-230): one row, one column per tag,
+     * parsed exactly as the AI steps parse it.
+     */
+    public Map<String, String> fields() {
+        Map<String, String> fields = new LinkedHashMap<>();
+        NodeList children = this.doc.getDocumentElement().getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child.getNodeType() != Node.ELEMENT_NODE || fields.containsKey(child.getNodeName())) {
+                continue;
+            }
+            boolean leaf = true;
+            NodeList inner = child.getChildNodes();
+            for (int j = 0; j < inner.getLength() && leaf; j++) {
+                leaf = inner.item(j).getNodeType() != Node.ELEMENT_NODE;
+            }
+            if (leaf) {
+                fields.put(child.getNodeName(), child.getTextContent());
+            }
+        }
+        return fields;
+    }
+
+    /** Sets the tag's text, adding the element under the root when it is not there yet. */
+    public void set(String tag, String value) {
+        NodeList found = this.doc.getElementsByTagName(tag);
+        Element element;
+        if (found.getLength() > 0) {
+            element = (Element) found.item(0);
+            while (element.getFirstChild() != null) element.removeChild(element.getFirstChild());
+        } else {
+            element = this.doc.createElement(tag);
+            Node root = this.doc.getDocumentElement();
+            root.appendChild(this.doc.createTextNode("\n  "));
+            root.appendChild(element);
+            root.appendChild(this.doc.createTextNode("\n"));
+        }
+        element.appendChild(this.doc.createTextNode(value == null ? "" : value));
+    }
+
+    /**
+     * Appends `<ai_step prompt= version= output= on_error=><var name= from= as=/>…</ai_step>` for
+     * a step the worker runs. The worker resolves the variables (a file's contents, when asked),
+     * calls aiPrompt.json/run, writes the answer to `output`, and drops the element.
+     */
+    public void addStep(String promptUuid, int version, String outputTag, String onError, Map<String, String> variableMap) {
+        Element step = this.doc.createElement("ai_step");
+        step.setAttribute("prompt", promptUuid);
+        step.setAttribute("version", String.valueOf(version));
+        step.setAttribute("output", outputTag);
+        step.setAttribute("on_error", onError == null ? "fail" : onError);
+        for (Map.Entry<String, String> e : variableMap.entrySet()) {
+            Element var = this.doc.createElement("var");
+            var.setAttribute("name", e.getKey());
+            String source = e.getValue() == null ? "" : e.getValue();
+            if (source.startsWith("object:")) {
+                // Once per object under the task's input folder: its contents, or its key.
+                var.setAttribute("from", "object");
+                var.setAttribute("as", "name".equals(source.substring(7)) ? "name" : "text");
+            } else {
+                boolean file = source.startsWith("file:");
+                var.setAttribute("from", file ? source.substring(5) : source);
+                var.setAttribute("as", file ? "file" : "text");
+            }
+            step.appendChild(var);
+        }
+        Node root = this.doc.getDocumentElement();
+        root.appendChild(this.doc.createTextNode("\n  "));
+        root.appendChild(step);
+        root.appendChild(this.doc.createTextNode("\n"));
+    }
+
+    @Override
+    public String toString() {
+        try {
+            Transformer t = TransformerFactory.newInstance().newTransformer();
+            t.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+            StringWriter out = new StringWriter();
+            t.transform(new DOMSource(this.doc), new StreamResult(out));
+            return out.toString();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not write the payload document.", ex);
+        }
+    }
+}

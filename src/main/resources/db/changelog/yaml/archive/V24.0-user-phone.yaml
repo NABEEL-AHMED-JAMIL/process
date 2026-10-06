@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 24.0-user-phone
+      author: nabeel.amd93
+      description: "Add app_user.phone_number, stored in E.164 so the country code travels with the number"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V24.0-user-phone/V24__user_phone.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE app_user DROP COLUMN IF EXISTS phone_number;

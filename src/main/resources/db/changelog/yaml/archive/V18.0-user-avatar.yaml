@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 18.0-user-avatar
+      author: nabeel.amd93
+      description: "Add avatar_bucket and avatar_key to app_user so a profile picture can be stored in object storage and resolved back through the connection that owns the bucket"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V18.0-user-avatar/V18__user_avatar.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE app_user DROP COLUMN IF EXISTS avatar_bucket;
+              ALTER TABLE app_user DROP COLUMN IF EXISTS avatar_key;

@@ -6,8 +6,8 @@ import com.google.gson.Gson;
 
 /**
  * @author Nabeel Ahmed
- */
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WeeklyHrJobDimensionStatisticsDto {
 
@@ -21,15 +21,21 @@ public class WeeklyHrJobDimensionStatisticsDto {
     private Long stop;
     private Long skip;
     private Long interrupt;
+    private Long missed;
     private Long total;
+    private Long tenantId;
+    /** The job's workspace name, for a platform administrator's all-workspaces hour (MIG-296). */
+    private String tenantName;
+    private Boolean allWorkspaces;
 
     public WeeklyHrJobDimensionStatisticsDto() {}
 
     public WeeklyHrJobDimensionStatisticsDto(Long jobId, String jobName,
         Long queue, Long start, Long running, Long failed, Long completed,
-        Long stop, Long skip, Long interrupt, Long total) {
+        Long stop, Long skip, Long interrupt, Long missed, Long total) {
         this.jobId = jobId;
-        this.jobName = jobName.equals("null") ? "Total Count" : jobName;
+
+        this.jobName = jobName == null || jobName.equals("null") ? "Total Count" : jobName;
         this.queue = queue;
         this.start = start;
         this.running = running;
@@ -38,11 +44,12 @@ public class WeeklyHrJobDimensionStatisticsDto {
         this.stop = stop;
         this.skip = skip;
         this.interrupt = interrupt;
+        this.missed = missed;
         this.total = total;
     }
 
     public WeeklyHrJobDimensionStatisticsDto(Long queue, Long start, Long running, Long failed,
-        Long completed, Long stop, Long skip, Long interrupt, Long total) {
+        Long completed, Long stop, Long skip, Long interrupt, Long missed, Long total) {
         this.queue = queue;
         this.start = start;
         this.running = running;
@@ -51,6 +58,7 @@ public class WeeklyHrJobDimensionStatisticsDto {
         this.stop = stop;
         this.skip = skip;
         this.interrupt = interrupt;
+        this.missed = missed;
         this.total = total;
     }
 
@@ -134,6 +142,14 @@ public class WeeklyHrJobDimensionStatisticsDto {
         this.interrupt = interrupt;
     }
 
+    public Long getMissed() {
+        return missed;
+    }
+
+    public void setMissed(Long missed) {
+        this.missed = missed;
+    }
+
     public Long getTotal() {
         return total;
     }
@@ -142,8 +158,34 @@ public class WeeklyHrJobDimensionStatisticsDto {
         this.total = total;
     }
 
+    /** The workspace this job is in; absent on the TOTAL row of a platform administrator (MIG-46). */
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    /** True on a TOTAL row that adds up every workspace (MIG-46). */
+    public Boolean getAllWorkspaces() {
+        return allWorkspaces;
+    }
+
+    public void setAllWorkspaces(Boolean allWorkspaces) {
+        this.allWorkspaces = allWorkspaces;
+    }
+
     @Override
     public String toString() {
         return new Gson().toJson(this);
+    }
+
+    public String getTenantName() {
+        return tenantName;
+    }
+
+    public void setTenantName(String tenantName) {
+        this.tenantName = tenantName;
     }
 }

@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 41.0-user-page-access
+      author: nabeel.amd93
+      description: "Per-person exceptions to an access profile: one row per page that differs"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V41.0-user-page-access/V41__user_page_access.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP TABLE IF EXISTS user_page_access;

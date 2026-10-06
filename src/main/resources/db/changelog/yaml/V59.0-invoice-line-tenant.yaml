@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 59.0-invoice-line-tenant
+      author: nabeel.amd93
+      description: "invoice_line carries its invoice's tenant_id, held to it by a composite foreign key (MIG-47, MIG-86)"
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            V59 cannot give invoice_line a tenant: some lines have no parent invoice to take one from. Find them with
+            SELECT l.* FROM invoice_line l LEFT JOIN invoice i ON i.invoice_id = l.invoice_id WHERE i.invoice_id IS NULL;
+            They cannot appear on any bill (the parent is gone); delete them and start again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT count(*) FROM public.invoice_line l LEFT JOIN public.invoice i ON i.invoice_id = l.invoice_id
+              WHERE i.invoice_id IS NULL
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V59.0-invoice-line-tenant/V59__invoice_line_tenant.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP INDEX IF EXISTS public.invoice_line_invoice_tenant;
+              ALTER TABLE public.invoice_line DROP CONSTRAINT IF EXISTS fk_invoice_line_invoice_tenant;
+              ALTER TABLE public.invoice DROP CONSTRAINT IF EXISTS ux_invoice_id_tenant;
+              ALTER TABLE public.invoice_line DROP COLUMN IF EXISTS tenant_id;

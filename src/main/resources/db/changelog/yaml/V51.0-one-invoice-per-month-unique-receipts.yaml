@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: 51.0-one-invoice-per-month-unique-receipts
+      author: nabeel.amd93
+      description: "One live invoice per workspace per month; receipt numbers unique"
+      # Halts rather than failing on a bare index error -- or worse, deleting rows. Which of
+      # several live invoices for one month is the real one is a person's call, and the message
+      # says exactly what to look at.
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            V51 cannot add its unique indexes: existing rows already break them, left there by the
+            defects V51 closes (DEF-001, DEF-002). Find them with
+            SELECT tenant_id, period_start, count(*) FROM invoice WHERE kind = 'invoice' AND status <> 'void'
+            GROUP BY 1, 2 HAVING count(*) > 1;
+            and
+            SELECT receipt_number, count(*) FROM payment WHERE receipt_number IS NOT NULL GROUP BY 1 HAVING count(*) > 1;
+            then void the extra invoices and renumber the duplicate receipts, and start again.
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT count(*) FROM (SELECT tenant_id, period_start FROM public.invoice
+              WHERE kind = 'invoice' AND status <> 'void' GROUP BY tenant_id, period_start HAVING count(*) > 1) d
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT count(*) FROM (SELECT receipt_number FROM public.payment
+              WHERE receipt_number IS NOT NULL GROUP BY receipt_number HAVING count(*) > 1) d
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V51.0-one-invoice-per-month-unique-receipts/V51__one_invoice_per_month_unique_receipts.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP INDEX IF EXISTS public.ux_invoice_one_per_tenant_month;
+              DROP INDEX IF EXISTS public.ux_payment_receipt_number;

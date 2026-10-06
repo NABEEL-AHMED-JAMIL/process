@@ -1,0 +1,61 @@
+databaseChangeLog:
+  - changeSet:
+      id: 56.0-analytics-rows-carry-storage-connection-id
+      author: nabeel.amd93
+      description: "Analytics rows carry the storage connection id beside its alias (MIG-53 part b)"
+      # No foreign key: storage_connection is leaving for storage_db. Backfilled by the rule Storage
+      # resolves with -- the row's own workspace's connection, else the platform's; an alias that names
+      # nothing stays NULL rather than guessed. New rows are stamped by AnalyticsConnectionStamp.
+      changes:
+        - addColumn:
+            tableName: analytics_analysis
+            columns:
+              - column:
+                  name: storage_connection_id
+                  type: BIGINT
+        - addColumn:
+            tableName: analytics_benchmark_result
+            columns:
+              - column:
+                  name: storage_connection_id
+                  type: BIGINT
+        - addColumn:
+            tableName: analytics_dataset
+            columns:
+              - column:
+                  name: storage_connection_id
+                  type: BIGINT
+        - addColumn:
+            tableName: analytics_query
+            columns:
+              - column:
+                  name: storage_connection_id
+                  type: BIGINT
+              - column:
+                  name: second_storage_connection_id
+                  type: BIGINT
+        - addColumn:
+            tableName: analytics_query_run
+            columns:
+              - column:
+                  name: storage_connection_id
+                  type: BIGINT
+              - column:
+                  name: second_storage_connection_id
+                  type: BIGINT
+        - sql:
+            sql: >
+              UPDATE analytics_analysis r SET storage_connection_id = (SELECT sc.storage_connection_id FROM storage_connection sc
+              WHERE sc.alias = r.connection_alias AND (sc.tenant_id = r.tenant_id OR sc.tenant_id IS NULL) ORDER BY (sc.tenant_id IS NULL) LIMIT 1);
+              UPDATE analytics_benchmark_result r SET storage_connection_id = (SELECT sc.storage_connection_id FROM storage_connection sc
+              WHERE sc.alias = r.connection_alias AND (sc.tenant_id = r.tenant_id OR sc.tenant_id IS NULL) ORDER BY (sc.tenant_id IS NULL) LIMIT 1);
+              UPDATE analytics_dataset r SET storage_connection_id = (SELECT sc.storage_connection_id FROM storage_connection sc
+              WHERE sc.alias = r.connection_alias AND (sc.tenant_id = r.tenant_id OR sc.tenant_id IS NULL) ORDER BY (sc.tenant_id IS NULL) LIMIT 1);
+              UPDATE analytics_query r SET storage_connection_id = (SELECT sc.storage_connection_id FROM storage_connection sc
+              WHERE sc.alias = r.connection_alias AND (sc.tenant_id = r.tenant_id OR sc.tenant_id IS NULL) ORDER BY (sc.tenant_id IS NULL) LIMIT 1),
+              second_storage_connection_id = (SELECT sc.storage_connection_id FROM storage_connection sc
+              WHERE sc.alias = r.second_connection_alias AND (sc.tenant_id = r.tenant_id OR sc.tenant_id IS NULL) ORDER BY (sc.tenant_id IS NULL) LIMIT 1);
+              UPDATE analytics_query_run r SET storage_connection_id = (SELECT sc.storage_connection_id FROM storage_connection sc
+              WHERE sc.alias = r.connection_alias AND (sc.tenant_id = r.tenant_id OR sc.tenant_id IS NULL) ORDER BY (sc.tenant_id IS NULL) LIMIT 1),
+              second_storage_connection_id = (SELECT sc.storage_connection_id FROM storage_connection sc
+              WHERE sc.alias = r.second_connection_alias AND (sc.tenant_id = r.tenant_id OR sc.tenant_id IS NULL) ORDER BY (sc.tenant_id IS NULL) LIMIT 1);

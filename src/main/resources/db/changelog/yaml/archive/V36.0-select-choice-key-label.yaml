@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 36.0-select-choice-key-label
+      author: nabeel.amd93
+      description: "Record on task_form_field.field_options that a select's choices now carry a stored value and a displayed label -- one per line, split at the first '=' -- and that a line without one is the legacy form and must keep resolving to itself, since every existing task matches its saved tag against an option's value. No structural change; V19's own comment cannot be corrected in place without breaking its checksum"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V36.0-select-choice-key-label/V36__select_choice_key_label.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+            endDelimiter: ;
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              -- Comments are documentation, not structure; restoring the absence of one restores
+              -- nothing worth having, and the format it describes is what the application reads
+              -- either way. No-op rollback, as V17.0-table-descriptions does for the same reason.
+              SELECT 1;

@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 195.0-drop-moved-tables
+      author: nabeel.amd93
+      description: "Owner 2026-10-01: drop the empty leftovers ai_agent, analytics_benchmark_result, analytics_dataset, payment, timestamptz_v100_unrepresentable (and their sequences); a table holding rows stays"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V195.0-drop-moved-tables/V195__drop_moved_tables.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V195.0-drop-moved-tables/V195__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

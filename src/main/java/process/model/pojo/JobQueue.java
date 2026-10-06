@@ -1,41 +1,51 @@
 package process.model.pojo;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.ParamDef;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.Filter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.Parameter;
 import process.model.enums.JobStatus;
-import process.util.LocalDateTimeAdapter;
+import process.model.enums.RunEnd;
+import process.model.enums.Status;
 
-import javax.persistence.*;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.Index;
+import javax.persistence.Id;
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Enumerated;
+import javax.persistence.EnumType;
+import javax.persistence.ManyToOne;
+import javax.persistence.FetchType;
+import javax.persistence.JoinColumn;
+import javax.persistence.PrePersist;
 
-/**
- * Detail for job-queue
- * this class store the detail for job-queue
- * like
- * startTime => start time of the job
- * endTime => end time of the job
- * job-status => job status for job
- * job-status-message => job status message for job
- * */
+@Entity
+
+@Table(name = "job_queue", indexes = {
+    @Index(name = "idx_job_queue_job_id", columnList = "job_id")
+})
 /**
  * @author Nabeel Ahmed
- */
-@Entity
-@Table(name = "job_queue")
-@JsonIgnoreProperties(ignoreUnknown=true)
+ * */
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class JobQueue {
 
     @GenericGenerator(
         name = "jobQueueSequenceGenerator",
         strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
         parameters = {
-            @Parameter(name = "sequence_name", value = "job_queue_source_Seq"),
+            @Parameter(name = "sequence_name", value = "job_queue_source_seq"),
             @Parameter(name = "initial_value", value = "1000"),
             @Parameter(name = "increment_size", value = "1")
         }
@@ -46,15 +56,15 @@ public class JobQueue {
     private Long jobQueueId;
 
     @Column(name = "start_time",
-        columnDefinition = "TIMESTAMP")
+        columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime startTime;
 
     @Column(name = "end_time",
-        columnDefinition = "TIMESTAMP")
+        columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime endTime;
 
     @Column(name = "skip_time",
-        columnDefinition = "TIMESTAMP")
+        columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private LocalDateTime skipTime;
 
     @Column(name = "job_status",
@@ -66,8 +76,18 @@ public class JobQueue {
         nullable = false)
     private Long jobId;
 
-    @Column(name = "job_status_message", length = 2500)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "job_id", insertable = false, updatable = false)
+    private SourceJob sourceJob;
+
+    @Column(name = "job_status_message", columnDefinition = "TEXT")
     private String jobStatusMessage;
+
+    @Column(name = "bucket")
+    private String bucket;
+
+    @Column(name = "output_folder")
+    private String outputFolder;
 
     @Column(name = "skip_manual")
     private Boolean skipManual;
@@ -82,11 +102,126 @@ public class JobQueue {
     @Column(name = "job_send")
     private boolean jobSend;
 
+    /**
+     * Which attempt this run is, starting at 1.
+     *
+     * A retry re-uses this row rather than inserting a new one -- see V38__job_retry.sql for why --
+     * so this is how anyone can tell that a run which finally succeeded took three goes to do it.
+     */
+    @Column(name = "attempt", nullable = false)
+    private int attempt = 1;
+
+    /**
+     * When a run awaiting retry becomes eligible for dispatch; null for every ordinary run.
+     *
+     * The dispatcher's pick-up query will not take a Queue row whose value here is still in the
+     * future, which is the whole of the backoff mechanism. Compared against the application clock
+     * passed in as the query's cutoff. (It was never the database's while the column held Chicago
+     * wall-clock and now() was UTC; since V100 both are instants, but the cutoff stays a parameter.)
+     */
+    @Column(name = "next_attempt_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    private LocalDateTime nextAttemptAt;
+
+    /**
+     * The run's callback token, as the server keeps it: a hash, the attempt it was minted for,
+     * and when it stops being accepted. The token itself goes to the worker in the run's message
+     * and is never stored. Null until dispatch, and again once the run ends. See V42.
+     */
+    @Column(name = "callback_token_hash", length = 64)
+    private String callbackTokenHash;
+
+    @Column(name = "callback_token_attempt")
+    private Integer callbackTokenAttempt;
+
+    @Column(name = "callback_token_expires_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    private LocalDateTime callbackTokenExpiresAt;
+
+    /**
+     * A report from this run's own worker that had to be refused because its token had expired, and
+     * what it said (V81, MIG-63). The refusal stands -- nothing here changes the run's status -- but it
+     * is proof the worker is no longer able to report, so the stall sweep closes the run on its next
+     * pass instead of leaving it in flight, blocking its job, until the six-hour rule catches it.
+     */
+    @Column(name = "refused_callback_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    private LocalDateTime refusedCallbackAt;
+
+    @Column(name = "refused_callback_status", length = 16)
+    private String refusedCallbackStatus;
+
+    /**
+     * The id the run's dispatch logged under, stamped in the same write as the callback token hash
+     * (V82, MIG-95). A worker that echoes no X-Correlation-Id on its callbacks is logged under this one,
+     * so one search finds the dispatch and every callback it caused. Kept across a retry: the retry is
+     * the same piece of work. Never an input to authentication.
+     */
+    @Column(name = "correlation_id", length = 64)
+    private String correlationId;
+
+    /**
+     * When the pre-dispatch phase finished with this run, and the document it prepared: the task's
+     * payload with every server AI step's answer written in (V86, MIG-134). The dispatcher takes only
+     * prepared runs and sends exactly this. A retry clears both, so the next attempt is prepared afresh
+     * from the task as it then is -- the AI service reuses any answer it already recorded for the run.
+     */
+    @Column(name = "prepared_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    private LocalDateTime preparedAt;
+
+    @Column(name = "dispatch_payload", columnDefinition = "TEXT")
+    private String dispatchPayload;
+
+    /**
+     * Why the run's current terminal status was written: the path that closed it (V174, MIG-196). Null while the run
+     * is in flight, and on runs that ended before V174. What the SLO report classifies a stored run by
+     * (process.slo.RunSlo). Not on the wire.
+     */
+    @JsonIgnore
+    @Column(name = "end_reason", length = 16)
+    @Enumerated(EnumType.STRING)
+    private RunEnd endReason;
+
+    /**
+     * This run's "Run with..." (V182, MIG-242): {"<step tag>": "<ai-service model option id>"}, set when a person runs
+     * the job by hand and winning over the schedule's setting for the steps it names (process.ai.ModelProfiles). Null
+     * for every other run. A retry is this same row, so it keeps the choice. Not on the wire.
+     */
+    @JsonIgnore
+    @Column(name = "model_profiles", columnDefinition = "TEXT")
+    private String modelProfiles;
+
+    /**
+     * The file this run was started for (V185, MIG-239): an inbox arrival's storage alias and key under intake/. Null
+     * for every other run. The dispatch carries them (inputBucket, inputKey) for the pipeline to read. Not on the wire
+     * to the console: sourceJob.json/inboxArrivals says which file started which run.
+     */
+    @JsonIgnore
+    @Column(name = "input_bucket")
+    private String inputBucket;
+
+    @JsonIgnore
+    @Column(name = "input_key", length = 1024)
+    private String inputKey;
+
+    @Column(name = "status",
+        nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Status status;
+    /**
+     * The job's tenant (V102, MIG-29/164): set when the row is written, and kept equal to the source_job row's by the database
+     * (fk_job_queue_job_tenant, ON UPDATE CASCADE) -- so never written again from here. What the tenant filter scopes on.
+     */
+    // Not on the wire: nothing a console sends or reads names it (the wire format is unchanged).
+    @JsonIgnore
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private Long tenantId;
+
     public JobQueue() {}
 
     @PrePersist
     protected void onCreate() {
         this.dateCreated = new Timestamp(System.currentTimeMillis());
+        if (this.status == null) {
+            this.status = Status.Active;
+        }
     }
 
     public Long getJobQueueId() {
@@ -137,12 +272,32 @@ public class JobQueue {
         this.jobId = jobId;
     }
 
+    public SourceJob getSourceJob() {
+        return sourceJob;
+    }
+
     public String getJobStatusMessage() {
         return jobStatusMessage;
     }
 
     public void setJobStatusMessage(String jobStatusMessage) {
         this.jobStatusMessage = jobStatusMessage;
+    }
+
+    public String getBucket() {
+        return bucket;
+    }
+
+    public void setBucket(String bucket) {
+        this.bucket = bucket;
+    }
+
+    public String getOutputFolder() {
+        return outputFolder;
+    }
+
+    public void setOutputFolder(String outputFolder) {
+        this.outputFolder = outputFolder;
     }
 
     public Boolean getSkipManual() {
@@ -177,12 +332,88 @@ public class JobQueue {
         this.jobSend = jobSend;
     }
 
-    @Override
-    public String toString() {
-        Gson gson = new GsonBuilder()
-        .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
-        .create();
-        return gson.toJson(this);
+    public int getAttempt() {
+        return attempt;
     }
 
+    public void setAttempt(int attempt) {
+        this.attempt = attempt;
+    }
+
+    public LocalDateTime getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public void setNextAttemptAt(LocalDateTime nextAttemptAt) {
+        this.nextAttemptAt = nextAttemptAt;
+    }
+
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        this.status = status;
+    }
+
+    @Override
+    public String toString() {
+        return EntityStrings.of(this);
+    }
+
+    public String getCallbackTokenHash() { return callbackTokenHash; }
+
+    public void setCallbackTokenHash(String callbackTokenHash) { this.callbackTokenHash = callbackTokenHash; }
+
+    public Integer getCallbackTokenAttempt() { return callbackTokenAttempt; }
+
+    public void setCallbackTokenAttempt(Integer callbackTokenAttempt) { this.callbackTokenAttempt = callbackTokenAttempt; }
+
+    public LocalDateTime getCallbackTokenExpiresAt() { return callbackTokenExpiresAt; }
+
+    public void setCallbackTokenExpiresAt(LocalDateTime callbackTokenExpiresAt) { this.callbackTokenExpiresAt = callbackTokenExpiresAt; }
+
+    public LocalDateTime getRefusedCallbackAt() { return refusedCallbackAt; }
+
+    public void setRefusedCallbackAt(LocalDateTime refusedCallbackAt) { this.refusedCallbackAt = refusedCallbackAt; }
+
+    public String getRefusedCallbackStatus() { return refusedCallbackStatus; }
+
+    public void setRefusedCallbackStatus(String refusedCallbackStatus) { this.refusedCallbackStatus = refusedCallbackStatus; }
+
+    public String getCorrelationId() { return correlationId; }
+
+    public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
+
+    public LocalDateTime getPreparedAt() { return preparedAt; }
+
+    public void setPreparedAt(LocalDateTime preparedAt) { this.preparedAt = preparedAt; }
+
+    public String getDispatchPayload() { return dispatchPayload; }
+
+    public void setDispatchPayload(String dispatchPayload) { this.dispatchPayload = dispatchPayload; }
+
+    public RunEnd getEndReason() { return endReason; }
+
+    public void setEndReason(RunEnd endReason) { this.endReason = endReason; }
+
+    public String getModelProfiles() { return modelProfiles; }
+
+    public void setModelProfiles(String modelProfiles) { this.modelProfiles = modelProfiles; }
+
+    public String getInputBucket() { return inputBucket; }
+
+    public void setInputBucket(String inputBucket) { this.inputBucket = inputBucket; }
+
+    public String getInputKey() { return inputKey; }
+
+    public void setInputKey(String inputKey) { this.inputKey = inputKey; }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
+    }
 }
