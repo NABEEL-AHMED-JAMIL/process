@@ -127,7 +127,7 @@ public class RenderPdfStepTask extends RegisteredTask {
         byte[] pdf = this.renderer.renderPdf(new ReportRenderer.Report(context.tenantId(), usageKey, fileName, title, fields, columns, rows,
             Configs.longValue(config, "templateId"), orientation, watermark == null ? null : Templates.fill(watermark, runValues)));
         context.keepFile(fileName, pdf, input.size(), columns);
-        context.recordOutput(RunOutput.file(fileName, "pdf", input.size(), pdf.length));
+        context.recordOutput(RunOutput.file(fileName, "pdf", input.size(), pdf.length).of(pdf));
         context.log(String.format("Rendered %d row(s) as %s (%,d bytes).", input.size(), fileName, pdf.length));
         return StepResult.nothing((long) input.size());
     }

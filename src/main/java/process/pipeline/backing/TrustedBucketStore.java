@@ -86,6 +86,12 @@ public class TrustedBucketStore implements BucketStore {
     }
 
     @Override
+    public Streamed stream(long tenantId, String bucket, String key) {
+        ObjectContentDto content = this.storage.readForWorkflow(this.access(tenantId, "customer api file"), bucket, key);
+        return new Streamed(content.getContent(), content.getSize(), content.getContentType());
+    }
+
+    @Override
     public void upload(long tenantId, String bucket, String key, byte[] content, String contentType) {
         this.storage.uploadForWorkflow(this.access(tenantId, "pipeline upload"), bucket, key, new ByteArrayInputStream(content),
             content.length, contentType);

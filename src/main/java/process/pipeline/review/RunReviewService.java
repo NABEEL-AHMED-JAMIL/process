@@ -1,5 +1,6 @@
 package process.pipeline.review;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.dto.ResponseDto;
@@ -33,7 +34,7 @@ import static process.util.ProcessUtil.SUCCESS;
  *
  * <b>Who.</b> The caller's party comes from their token ({@link ReviewParties}), never from the request: the console
  * (sourceJob.json/review/decide) records the INTERNAL review, by a tenant administrator of the run's workspace; the
- * customer's review will come through POST /v1/executions/{id}/review (MIG-234, deferred) as the API client, into
+ * customer's review comes through POST /v1/runs/{id}/review (MIG-334, process.customer.CustomerReviews) as the API client, into
  * {@link #decide} -- which refuses either side recording the other's review, whichever endpoint calls it.
  *
  * <b>What.</b> A completed run the caller may see (RunOwnership: another workspace's, or for a tenant user a colleague's,
@@ -57,6 +58,8 @@ public class RunReviewService {
     private final RunReviewStore store;
     private final SourceJobService sourceJobs;
     private final TransactionServiceImpl transactions;
+    /** MIG-334: how the customer's rejection runs the pipeline again; absent in hand-built tests. */
+    private CustomerRunAgain customerRunAgain;
 
     public RunReviewService(JobQueueRepository runs, SourceJobRepository jobs, RunReviews reviews, RunReviewStore store,
                             SourceJobService sourceJobs, TransactionServiceImpl transactions) {
@@ -66,6 +69,11 @@ public class RunReviewService {
         this.store = store;
         this.sourceJobs = sourceJobs;
         this.transactions = transactions;
+    }
+
+    @Autowired(required = false)
+    public void setCustomerRunAgain(CustomerRunAgain customerRunAgain) {
+        this.customerRunAgain = customerRunAgain;
     }
 
     /** The run's review: its status, required parties and decisions, and whether the caller may decide now. */
@@ -149,7 +157,7 @@ public class RunReviewService {
 
     /**
      * {@code party}'s decision on a run, as the caller. The one way a decision is recorded: the console's endpoint
-     * calls it for INTERNAL, the customer's (deferred) will for CUSTOMER; the caller's token must be that party.
+     * calls it for INTERNAL, the customer's (MIG-334) for CUSTOMER; the caller's token must be that party.
      */
     @Transactional
     public ResponseDto decide(RunReviewRequest request, ReviewParty party) {
@@ -244,8 +252,26 @@ public class RunReviewService {
         return RunReviewRules.refusal(required, this.reviews.decisionsByParty(this.store.decisionsOf(owned.run.getJobQueueId())), party);
     }
 
-    /** Run now, for a rejected run: the new run linked to it, and a line in each run's audit log. */
+    /**
+     * Run now, for a rejected run: the new run linked to it, and a line in each run's audit log. The customer's rejection
+     * (MIG-334) runs it again the API's way ({@link CustomerRunAgain}): an API client has no Run now of a person's.
+     */
     private Map<String, Object> runAgain(RunOwnership.Owned owned, RunReviewStore.Decision rejection) {
+        if (rejection.party == ReviewParty.CUSTOMER) {
+            Map<String, Object> outcome = new LinkedHashMap<>();
+            if (this.customerRunAgain == null) {
+                outcome.put("queued", false);
+                outcome.put("jobQueueId", null);
+                outcome.put("message", "The customer's re-run is not available here.");
+                return outcome;
+            }
+            outcome.putAll(this.customerRunAgain.runAgain(owned.run, owned.job));
+            Object queuedId = outcome.get("jobQueueId");
+            if (Boolean.TRUE.equals(outcome.get("queued")) && queuedId instanceof Number) {
+                this.linkAgain(owned.run.getJobQueueId(), ((Number) queuedId).longValue(), rejection);
+            }
+            return outcome;
+        }
         Map<String, Object> outcome = new LinkedHashMap<>();
         SourceJobDto again = new SourceJobDto();
         again.setJobId(owned.job.getJobId());
@@ -271,12 +297,17 @@ public class RunReviewService {
         outcome.put("jobQueueId", rerunId);
         outcome.put("message", queued.getMessage());
         if (rerunId != null) {
-            this.store.linkRerun(rejected, rerunId);
-            this.transactions.saveJobAuditLogs(rejected, String.format("Result review: run %d runs the job again.", rerunId));
-            this.transactions.saveJobAuditLogs(rerunId, String.format("Queued again: run %d's results were rejected (%s review by %s).",
-                rejected, PipelineDefinition.Review.wordOf(rejection.party), reviewer(rejection)));
+            this.linkAgain(rejected, rerunId, rejection);
         }
         return outcome;
+    }
+
+    /** The new run linked to the rejected one, and a line in each run's audit log. */
+    private void linkAgain(long rejected, long rerunId, RunReviewStore.Decision rejection) {
+        this.store.linkRerun(rejected, rerunId);
+        this.transactions.saveJobAuditLogs(rejected, String.format("Result review: run %d runs the job again.", rerunId));
+        this.transactions.saveJobAuditLogs(rerunId, String.format("Queued again: run %d's results were rejected (%s review by %s).",
+            rejected, PipelineDefinition.Review.wordOf(rejection.party), reviewer(rejection)));
     }
 
     private Map<String, Object> head(JobQueue run) {

@@ -24,6 +24,7 @@ import process.security.TenantContext;
 import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -391,5 +392,68 @@ class RunReviewServiceTest {
             .containsEntry("message", "A job can't be run while its last run is still in flight ('Queue', 'Start', 'Running').");
         assertThat(answer.getMessage()).contains("was not run again");
         assertThat(this.store.decisions).hasSize(1);
+    }
+
+    // ------------------------------------------------------------------------------------------- the customer's (MIG-334)
+
+    private void asCustomer() {
+        TenantContext.set(TENANT, "API_CLIENT", null, "client:cl_portal");
+        TenantContext.setApiClient("cl_portal", Collections.singleton("reviews:write"));
+    }
+
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
+    @Test
+    void theCustomersRejectionWithRerunRunsItAgainTheApisWayNotThroughRunNow() throws Exception {
+        this.requires("customer");
+        this.asCustomer();
+        Map<String, Object> again = new LinkedHashMap<>();
+        again.put("queued", true);
+        again.put("jobQueueId", RERUN);
+        again.put("message", "Run " + RERUN + " runs the pipeline again with the same intake.");
+        CustomerRunAgain customer = mock(CustomerRunAgain.class);
+        when(customer.runAgain(any(), any())).thenReturn(again);
+        this.service.setCustomerRunAgain(customer);
+
+        Map<String, Object> review = data(this.service.decide(request("REJECTED", "totals are off", true), ReviewParty.CUSTOMER));
+
+        assertThat(review).containsEntry("reviewStatus", "REJECTED").containsEntry("rerunJobQueueId", RERUN);
+        assertThat((Map<String, Object>) review.get("rerun")).containsEntry("queued", true).containsEntry("jobQueueId", RERUN);
+        verify(customer).runAgain(argThat(r -> r.getJobQueueId() == RUN), argThat(j -> j.getJobId() == JOB));
+        verify(this.sourceJobs, never()).runSourceJob(any(SourceJobDto.class));
+        verify(this.transactions).saveJobAuditLogs(eq(RERUN), contains("customer review by client:cl_portal"));
+    }
+
+    // Mockito captors and fixtures of generic types
+    @SuppressWarnings("unchecked")
+    @Test
+    void theCustomersRejectionStandsWhenItsRerunCannotStart() throws Exception {
+        this.requires("customer");
+        this.asCustomer();
+        Map<String, Object> notAgain = new LinkedHashMap<>();
+        notAgain.put("queued", false);
+        notAgain.put("jobQueueId", null);
+        notAgain.put("message", "Only a run started through the API is run again through it.");
+        CustomerRunAgain customer = mock(CustomerRunAgain.class);
+        when(customer.runAgain(any(), any())).thenReturn(notAgain);
+        this.service.setCustomerRunAgain(customer);
+
+        Map<String, Object> review = data(this.service.decide(request("REJECTED", "totals are off", true), ReviewParty.CUSTOMER));
+
+        assertThat(review).containsEntry("reviewStatus", "REJECTED").containsEntry("rerunJobQueueId", null);
+        assertThat((Map<String, Object>) review.get("rerun")).containsEntry("queued", false);
+        assertThat(this.store.decisions).hasSize(1);
+        assertThat(this.store.decisions.get(0).party).isEqualTo(ReviewParty.CUSTOMER);
+    }
+
+    @Test
+    void aCustomerApprovesOnlyWhatItsPipelineAsksItToReview() {
+        this.requires("internal");
+        this.asCustomer();
+        refused(this.service.decide(request("APPROVED", null, null), ReviewParty.CUSTOMER),
+            "This run's pipeline does not ask for a customer review.");
+        this.requires("customer");
+        assertThat(data(this.service.decide(request("APPROVED", null, null), ReviewParty.CUSTOMER))).containsEntry("reviewStatus", "APPROVED");
+        refused(this.service.decide(request("APPROVED", null, null), ReviewParty.CUSTOMER), "This run's results are already approved.");
     }
 }

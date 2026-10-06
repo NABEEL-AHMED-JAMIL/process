@@ -26,7 +26,7 @@ public class RunFiles {
         this.storage = storage;
     }
 
-    /** The workspace's files among these ids, by id, with id, name, bucket, key, sha256, bytes and contentType. */
+    /** The workspace's files among these ids, by id, with id, name, bucket, key, sha256, bytes, contentType, role, createdAt, expiresAt. */
     public Map<String, Map<String, Object>> of(long tenantId, Collection<String> ids) {
         Map<String, Map<String, Object>> found = new LinkedHashMap<>();
         if (ids.isEmpty()) {
@@ -41,7 +41,8 @@ public class RunFiles {
         }
         for (JsonNode file : answer.path("files")) {
             Map<String, Object> one = new LinkedHashMap<>();
-            for (String field : new String[] {"id", "name", "bucket", "key", "sha256", "contentType"}) {
+            // MIG-334: role, createdAt and expiresAt (UTC) too, for the read API's File; bucket and key never leave Core.
+            for (String field : new String[] {"id", "name", "bucket", "key", "sha256", "contentType", "role", "createdAt", "expiresAt"}) {
                 one.put(field, file.path(field).isMissingNode() || file.path(field).isNull() ? null : file.path(field).asText());
             }
             one.put("bytes", file.path("bytes").asLong());

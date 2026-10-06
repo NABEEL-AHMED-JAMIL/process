@@ -53,6 +53,8 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
                 // MIG-332: the customer API (the gateway's /v1). JwtAuthenticationFilter admits only an API client's token here
                 // and answers anything else with a problem; no person reaches it, and an API client reaches nothing else.
+                // MIG-334: a file's signed link -- the token in the query is the proof (FileLinks); it opens that one file only.
+                .antMatchers(HttpMethod.GET, "/customer/files/*/content").permitAll()
                 .antMatchers("/customer/**").hasRole("API_CLIENT")
                 // Liveness probes have no account, so health and info stay open. The rest --
                 // metrics and prometheus -- name every endpoint, its call rate and its 401/403

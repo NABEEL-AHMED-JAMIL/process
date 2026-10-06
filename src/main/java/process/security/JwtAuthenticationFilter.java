@@ -15,6 +15,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * @author Nabeel Ahmed
@@ -33,6 +34,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         FilterChain filterChain) throws ServletException, IOException {
         String header = request.getHeader("Authorization");
         String path = request.getRequestURI().substring(request.getContextPath().length());
+        if (isSignedLink(request.getMethod(), path)) {
+            // MIG-334: a file's signed link has no caller; its token is checked by FileLinks, and nobody is set here.
+            filterChain.doFilter(request, response);
+            return;
+        }
         if (path.startsWith(BearerAuthFilter.CUSTOMER_API) && !"OPTIONS".equalsIgnoreCase(request.getMethod())) {
             this.customerApi(request, response, filterChain, header, path);
             return;
@@ -73,6 +79,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             ManagementMode.clear();
         }
     }
+
+    /** MIG-334: GET /customer/files/{fileId}/content -- the one /customer path an API client's token does not open. */
+    static boolean isSignedLink(String method, String path) {
+        return "GET".equalsIgnoreCase(method) && SIGNED_LINK.matcher(path).matches();
+    }
+
+    private static final Pattern SIGNED_LINK = Pattern.compile("^/customer/files/[0-9A-Za-z]{1,64}/content$");
 
     /**
      * MIG-332: the customer API (/v1 at the gateway, /customer here). Only an API client's token opens it -- a person's

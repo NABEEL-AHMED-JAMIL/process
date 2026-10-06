@@ -4,7 +4,7 @@ package process.pipeline.review;
  * A review decision on a run's results (MIG-237): POST sourceJob.json/review/decide in the console. {@code decision}
  * is APPROVED or REJECTED; a rejection says why ({@code reason}) and may ask for the job to be run again
  * ({@code rerun}). {@code party} may be left out -- the console records the internal review -- and when given must be
- * "internal": the customer's review comes through the customer's own endpoint (deferred), never this one.
+ * "internal": the customer's review comes through the customer's own endpoint (POST /v1/runs/{id}/review), never this one.
  */
 public class RunReviewRequest {
 

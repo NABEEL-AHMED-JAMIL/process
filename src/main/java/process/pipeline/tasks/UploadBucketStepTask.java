@@ -60,7 +60,7 @@ public class UploadBucketStepTask extends RegisteredTask {
         }
         byte[] content = FileFormats.write(input, format);
         this.buckets.upload(context.tenantId(), bucket, key, content, FileFormats.contentType(format));
-        context.recordOutput(RunOutput.bucket(bucket, key, format, input.size(), content.length));
+        context.recordOutput(RunOutput.bucket(bucket, key, format, input.size(), content.length).of(content));
         context.log(String.format("Uploaded %d row(s) to %s/%s (%s, %,d bytes).", input.size(), bucket, key, format, content.length));
         return StepResult.nothing((long) input.size());
     }

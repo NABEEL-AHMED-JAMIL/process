@@ -212,3 +212,6 @@ databaseChangeLog:
   # V201: MIG-332 -- the customer API's inbound work: idempotency receipts per client, runs started through the API, event routes, events.
   - include:
       file: db/changelog/yaml/V201.0-customer-api.yaml
+  # V202: MIG-334 -- the customer API's read side: run_output's file id and sha256, the API's downloads in file_access_log, and job_queue (tenant_id, job_queue_id) for GET /v1/runs.
+  - include:
+      file: db/changelog/yaml/V202.0-customer-reads.yaml

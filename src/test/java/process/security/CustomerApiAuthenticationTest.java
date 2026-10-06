@@ -94,4 +94,23 @@ class CustomerApiAuthenticationTest {
         assertThat(seen.seen.get()).as("anonymous: Spring Security refuses it wherever a login is needed")
             .isEqualTo("null null null null false false");
     }
+
+    @Test
+    void aFilesSignedLinkHasNoCallerAndNeedsNoToken() throws Exception {
+        Seen seen = new Seen();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/customer/files/01JRESULT00000000000000000/content");
+        request.setContextPath("/api/v1");
+        request.setQueryString("token=abc.def");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        this.filter.doFilter(request, response, new MockFilterChain(seen));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(seen.seen.get()).as("no caller: the link's token is checked by FileLinks").isEqualTo("null null null null false false");
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/files/01JRESULT00000000000000000/content")).isTrue();
+        assertThat(JwtAuthenticationFilter.isSignedLink("POST", "/customer/files/01JRESULT00000000000000000/content")).isFalse();
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/files/01JRESULT00000000000000000")).isFalse();
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/files/x/../../runs/content")).isFalse();
+        // The file itself (its link and facts) still needs an API client's token.
+        assertThat(this.call("/customer/files/01JRESULT00000000000000000/meta", null, new Seen()).getStatus()).isEqualTo(401);
+    }
 }

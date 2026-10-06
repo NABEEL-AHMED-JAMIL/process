@@ -42,7 +42,7 @@ public class SaveFileStepTask extends RegisteredTask {
         Dataset input = context.input();
         byte[] content = FileFormats.write(input, format);
         context.keepFile(fileName, content, input.size(), input.getColumns());
-        context.recordOutput(RunOutput.file(fileName, format, input.size(), content.length));
+        context.recordOutput(RunOutput.file(fileName, format, input.size(), content.length).of(content));
         context.log(String.format("Saved %d row(s) as %s (%s, %,d bytes).", input.size(), fileName, format, content.length));
         return StepResult.nothing((long) input.size());
     }

@@ -62,6 +62,22 @@ public interface StepStore {
     /** The manifest row that named this dataset, if one did: what is left of a file dataset after the sweep removed it. */
     Optional<OutputRow> outputOfDataset(long runDatasetId);
 
+    /**
+     * MIG-334: the manifest row the customer API names by this file id, as the caller's session sees it (row-level
+     * security); empty when there is none.
+     */
+    default Optional<OutputRow> outputByFileId(String fileId) {
+        return Optional.empty();
+    }
+
+    /**
+     * MIG-334: the file id of a manifest row, given now when it has none yet (a row recorded before file ids); null when the
+     * row is not there for this session.
+     */
+    default String fileIdOf(long runOutputId) {
+        return null;
+    }
+
     /** A step as the plan names it. */
     final class Planned {
         public final int index;
@@ -137,6 +153,10 @@ public interface StepStore {
         public String objectKey;
         public Instant expiresAt;
         public LocalDateTime recordedAt;
+        /** MIG-334: the file id the customer API names it by (a ULID); null until given. */
+        public String fileId;
+        /** MIG-334: hex sha256 of what the step wrote; null for a row recorded before. */
+        public String sha256;
     }
 
     /** A dataset a step wrote -- never its storage key, which is the platform's. */

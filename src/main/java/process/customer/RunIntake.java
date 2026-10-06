@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import process.engine.OneRunInFlight;
 import process.engine.ProducerBulkEngine;
@@ -82,6 +83,9 @@ public class RunIntake {
     private final StorageServiceClient storage;
     private final JdbcTemplate sql;
     private final TransactionTemplate transactions;
+    /** MIG-334: a re-run is queued in its own transaction -- the review's decision around it stands whatever it answers. */
+    private final TransactionTemplate ownTransaction;
+    private final CustomerRunStore runs;
 
     public RunIntake(TransactionServiceImpl jobs, ProducerBulkEngine engine, BucketStore buckets, StorageServiceClient storage,
         JdbcTemplate sql, PlatformTransactionManager transactionManager) {
@@ -91,24 +95,18 @@ public class RunIntake {
         this.storage = storage;
         this.sql = sql;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.ownTransaction = new TransactionTemplate(transactionManager);
+        this.ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.runs = new CustomerRunStore(sql);
     }
 
     /** Starts the pipeline's run with this intake, or says why not. Nothing is written when it refuses before the file. */
     public Outcome start(PipelineCatalogue.Entry pipeline, Start start) {
         long tenantId = pipeline.tenantId;
         Optional<SourceJob> job = this.jobs.findByJobId(pipeline.jobId).filter(j -> j.getTenantId() != null && j.getTenantId() == tenantId);
-        if (!job.isPresent()) {
-            return refused(Problem.of(404, "No such pipeline."));
-        }
-        if (!"Active".equals(String.valueOf(job.get().getJobStatus()))) {
-            return refused(Problem.of(409, "The pipeline is not active.").kind("pipeline-inactive"));
-        }
-        Optional<String> paused = this.engine.workspacePause(tenantId);
-        if (paused.isPresent()) {
-            return refused(Problem.of(409, "This workspace is " + paused.get() + ", so its runs are paused.").kind("workspace-paused"));
-        }
-        if (job.get().getJobRunningStatus() != null && job.get().getJobRunningStatus().isInFlight()) {
-            return refused(busy());
+        Optional<Problem> refusal = this.refusal(pipeline, job);
+        if (refusal.isPresent()) {
+            return refused(refusal.get());
         }
         Optional<String> unavailable = this.buckets.unavailable();
         if (unavailable.isPresent()) {
@@ -135,13 +133,55 @@ public class RunIntake {
                 unwritten.getMessage());
             return refused(Problem.of(503, "Runs cannot be started right now. Try again in a moment."));
         }
+        return this.queue(this.transactions, pipeline, job.get(), inbox.alias, key, start.clientId, start.origin, start.reference,
+            start.eventId, fileIds(start.files));
+    }
+
+    /**
+     * MIG-334: a run started through the API, started again with the same intake -- the customer's rejection with rerun.
+     * Run now's rules apply as to a start; the new run has its own api_intake row (the same reference and files) and its own
+     * transaction.
+     */
+    public Outcome again(PipelineCatalogue.Entry pipeline, CustomerRunStore.Intake intake, String clientId, String origin) {
+        long tenantId = pipeline.tenantId;
+        Optional<SourceJob> job = this.jobs.findByJobId(pipeline.jobId).filter(j -> j.getTenantId() != null && j.getTenantId() == tenantId);
+        Optional<Problem> refusal = this.refusal(pipeline, job);
+        if (refusal.isPresent()) {
+            return refused(refusal.get());
+        }
+        return this.queue(this.ownTransaction, pipeline, job.get(), intake.inputBucket, intake.inputKey, clientId, origin, intake.reference,
+            intake.eventId, intake.fileIds.isEmpty() ? null : String.join(",", intake.fileIds));
+    }
+
+    /** Run now's rules for a start through the API: the job the workspace's and active, the workspace not paused, nothing in flight. */
+    private Optional<Problem> refusal(PipelineCatalogue.Entry pipeline, Optional<SourceJob> job) {
+        if (!job.isPresent()) {
+            return Optional.of(Problem.of(404, "No such pipeline."));
+        }
+        if (!"Active".equals(String.valueOf(job.get().getJobStatus()))) {
+            return Optional.of(Problem.of(409, "The pipeline is not active.").kind("pipeline-inactive"));
+        }
+        Optional<String> paused = this.engine.workspacePause(pipeline.tenantId);
+        if (paused.isPresent()) {
+            return Optional.of(Problem.of(409, "This workspace is " + paused.get() + ", so its runs are paused.").kind("workspace-paused"));
+        }
+        if (job.get().getJobRunningStatus() != null && job.get().getJobRunningStatus().isInFlight()) {
+            return Optional.of(busy());
+        }
+        return Optional.empty();
+    }
+
+    /** The run queued with this intake file as its input, and recorded in api_intake. */
+    private Outcome queue(TransactionTemplate within, PipelineCatalogue.Entry pipeline, SourceJob job, String bucket, String key, String clientId,
+        String origin, String reference, Long eventId, String fileIds) {
+        long tenantId = pipeline.tenantId;
         long runId;
         try {
-            runId = this.transactions.execute(status -> {
-                JobQueue run = this.engine.addApiJobInQueue(job.get(), inbox.alias, key, start.clientId, start.origin);
+            runId = within.execute(status -> {
+                JobQueue run = this.engine.addApiJobInQueue(job, bucket, key, clientId, origin);
                 this.sql.update("INSERT INTO api_intake (tenant_id, job_id, job_queue_id, client_id, reference, event_id, input_bucket, "
-                    + "input_key, file_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", tenantId, pipeline.jobId, run.getJobQueueId(), start.clientId,
-                    start.reference, start.eventId, inbox.alias, key, fileIds(start.files));
+                    + "input_key, file_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", tenantId, pipeline.jobId, run.getJobQueueId(), clientId,
+                    reference, eventId, bucket, key, fileIds);
                 return run.getJobQueueId();
             });
         } catch (RuntimeException failed) {
@@ -153,23 +193,16 @@ public class RunIntake {
         return new Outcome(this.run(tenantId, runId, pipeline), null);
     }
 
-    /** The Run schema for a run started through the API, read back as stored; times in UTC. */
+    /**
+     * The Run schema for a run started through the API, read back as stored (MIG-334: as GET /v1/runs/{id} answers it);
+     * times in UTC. Its review is pending when its pipeline asks for one: nothing has been decided on a run just queued.
+     */
     Map<String, Object> run(long tenantId, long runId, PipelineCatalogue.Entry pipeline) {
-        Map<String, Object> row = this.sql.queryForMap("SELECT q.job_queue_id, q.job_id, q.job_status, q.job_status_message, q.date_created, "
-            + "q.end_time, i.reference FROM job_queue q LEFT JOIN api_intake i ON i.job_queue_id = q.job_queue_id "
-            + "WHERE q.tenant_id = ? AND q.job_queue_id = ?", tenantId, runId);
-        Map<String, Object> run = new LinkedHashMap<>();
-        run.put("id", String.valueOf(row.get("job_queue_id")));
-        run.put("pipelineId", String.valueOf(row.get("job_id")));
-        String status = row.get("job_status") == null ? null : row.get("job_status").toString();
-        run.put("status", statusOf(status));
-        run.put("reference", row.get("reference"));
-        run.put("createdAt", ApiTimes.utc(row.get("date_created")));
-        run.put("startedAt", null);
-        run.put("endedAt", ApiTimes.utc(row.get("end_time")));
-        run.put("message", null);
-        run.put("review", pipeline.review().isEmpty() ? "not_required" : "pending");
-        return run;
+        Optional<CustomerRunStore.Row> row = this.runs.find(tenantId, runId);
+        if (!row.isPresent()) {
+            throw new IllegalStateException("Run " + runId + " was queued but cannot be read back.");
+        }
+        return CustomerViews.run(row.get(), pipeline.review().isEmpty() ? "not_required" : "pending");
     }
 
     /** The API's word for a run's status: Queue and Start are queued, Skip and Missed skipped. */

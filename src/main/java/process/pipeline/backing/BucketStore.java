@@ -1,5 +1,7 @@
 package process.pipeline.backing;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,6 +20,28 @@ public interface BucketStore {
     byte[] read(long tenantId, String bucket, String key, long maxBytes) throws Exception;
 
     void upload(long tenantId, String bucket, String key, byte[] content, String contentType) throws Exception;
+
+    /**
+     * MIG-334: the object as a stream, for the customer API's download of a file -- its bytes are never held whole. The
+     * default reads it whole (at most 100 MB, the upload limit); the trusted store streams it. The caller closes it.
+     */
+    default Streamed stream(long tenantId, String bucket, String key) throws Exception {
+        byte[] bytes = this.read(tenantId, bucket, key, 100L * 1024 * 1024);
+        return new Streamed(new ByteArrayInputStream(bytes), bytes.length, null);
+    }
+
+    /** An object's bytes as a stream, its size and, when storage knows it, its type. */
+    final class Streamed {
+        public final InputStream content;
+        public final long size;
+        public final String contentType;
+
+        public Streamed(InputStream content, long size, String contentType) {
+            this.content = content;
+            this.size = size;
+            this.contentType = contentType;
+        }
+    }
 
     final class Listing {
         public final List<Listed> objects;

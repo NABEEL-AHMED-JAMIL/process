@@ -12,15 +12,14 @@ import java.util.Optional;
  * <ul>
  *   <li><b>INTERNAL</b>: the workspace's own people in the console -- a tenant administrator or tenant user of the run's
  *       workspace. Of them, only a tenant administrator decides ({@link #mayDecide}); a tenant user reads.</li>
- *   <li><b>CUSTOMER</b>: the workspace's API clients (MIG-234, deferred with the customer integration), whose token will
- *       carry the role {@link #API_CLIENT_ROLE}. Nothing issues such a token yet, so today nobody is the customer
- *       party; POST /v1/executions/{id}/review will be its way in.</li>
+ *   <li><b>CUSTOMER</b>: the workspace's API clients (MIG-332), whose token carries the role {@link #API_CLIENT_ROLE};
+ *       POST /v1/runs/{id}/review (MIG-334) is its way in.</li>
  *   <li>Anyone else -- a platform administrator, a caller with no role -- is neither party and records no review.</li>
  * </ul>
  */
 public final class ReviewParties {
 
-    /** The role an API client's token will carry (MIG-234 names it; this is the one place to change it). */
+    /** The role an API client's token carries (MIG-332's TenantContext.API_CLIENT, the same word). */
     public static final String API_CLIENT_ROLE = "API_CLIENT";
 
     /** The internal review, asked of anyone who is not the workspace's own. */
@@ -42,7 +41,7 @@ public final class ReviewParties {
 
     /**
      * Why the caller may not record {@code party}'s review, in words a person reads; empty when they may. The rule the
-     * console's endpoint and the customer's (deferred) both go through.
+     * console's endpoint and the customer's (POST /v1/runs/{id}/review) both go through.
      */
     public static Optional<String> refusal(ReviewParty party) {
         Optional<ReviewParty> caller = ofCaller();
