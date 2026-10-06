@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.junit.jupiter.api.Test;
+import process.api.SourceJobRestApi;
 import process.engine.ProducerBulkEngine;
 import process.identity.TestIdentity;
 import process.model.dto.ResponseDto;
@@ -114,5 +115,21 @@ class SchedulePreviewTest {
         SchedulerDto badCron = timetable("Cron", null, null, null);
         badCron.setCronExpression("not a cron");
         assertThat(this.service.schedulePreview(badCron).getMessage()).startsWith("SourceJob schedule:");
+    }
+
+    /** The editor asks with a GET -- a read, so a managed-service session's audit does not record every keystroke. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theControllerReadsTheTimetableFromTheQuery() {
+        SourceJobRestApi api = new SourceJobRestApi(this.service, null, null);
+        LocalDate start = BusinessTime.today().plusDays(3);
+
+        ResponseDto answer = (ResponseDto) api.schedulePreview("Daily", "1", start.toString(), "02:00", null, null, null, null)
+            .getBody();
+        assertThat(runs(answer)).first().isEqualTo(start.atTime(2, 0));
+
+        ResponseDto unreadable = (ResponseDto) api.schedulePreview("Daily", "1", "06/10/2026", "02:00", null, null, null, null)
+            .getBody();
+        assertThat(unreadable.getMessage()).isEqualTo("Dates as yyyy-MM-dd and the time as HH:mm.");
     }
 }

@@ -17,6 +17,9 @@ import process.model.dto.ResponseDto;
 import process.model.dto.JobAssistantRequestDto;
 import process.model.service.impl.JobAssistantServiceImpl;
 import process.model.dto.SchedulerDto;
+import java.time.format.DateTimeParseException;
+import java.time.LocalTime;
+import java.time.LocalDate;
 import process.model.dto.SourceJobDto;
 import process.model.service.SourceJobService;
 import process.model.service.SourceJobBulkService;
@@ -25,6 +28,7 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -66,9 +70,30 @@ public class SourceJobRestApi {
         }
     }
 
-    /** MIG-321: the schedule editor's Next runs; reads nothing of the workspace and saves nothing. */
-    @RequestMapping(value = "/schedulePreview", method = RequestMethod.POST)
-    public ResponseEntity<?> schedulePreview(@RequestBody SchedulerDto scheduler) {
+    /**
+     * MIG-321: the schedule editor's Next runs; reads nothing of the workspace and saves nothing. A GET with the timetable
+     * in the query, so it is a read everywhere a read counts -- a managed-service session's audit records only writes.
+     */
+    @RequestMapping(value = "/schedulePreview", method = RequestMethod.GET)
+    public ResponseEntity<?> schedulePreview(@RequestParam(required = false) String frequency,
+        @RequestParam(required = false) String intervalValue, @RequestParam(required = false) String startDate,
+        @RequestParam(required = false) String startTime, @RequestParam(required = false) String endDate,
+        @RequestParam(required = false) String daysOfWeek, @RequestParam(required = false) Integer dayOfMonth,
+        @RequestParam(required = false) String cronExpression) {
+        SchedulerDto scheduler = new SchedulerDto();
+        scheduler.setFrequency(frequency);
+        scheduler.setIntervalValue(intervalValue);
+        scheduler.setDaysOfWeek(daysOfWeek);
+        scheduler.setDayOfMonth(dayOfMonth);
+        scheduler.setCronExpression(cronExpression);
+        try {
+            scheduler.setStartDate(StringUtils.hasText(startDate) ? LocalDate.parse(startDate.trim()) : null);
+            scheduler.setEndDate(StringUtils.hasText(endDate) ? LocalDate.parse(endDate.trim()) : null);
+            scheduler.setStartTime(StringUtils.hasText(startTime) ? LocalTime.parse(startTime.trim()) : null);
+        } catch (DateTimeParseException unreadable) {
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "Dates as yyyy-MM-dd and the time as HH:mm."),
+                HttpStatus.OK);
+        }
         return new ResponseEntity<>(this.sourceJobService.schedulePreview(scheduler), HttpStatus.OK);
     }
 
