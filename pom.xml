@@ -32,6 +32,19 @@
         -->
         <java.version>17</java.version>
         <swagger.version>2.9.2</swagger.version>
+        <!--
+          MIG-323: patched releases inside the lines Spring Boot 2.7 supports, overriding 2.7.18's managed
+          versions until the Boot 3 migration (after the 12 October demo). What each fixes and what stays
+          open: etl-platform/docs/security/dependency-vulnerabilities-2026-10-05.md.
+        -->
+        <tomcat.version>9.0.122</tomcat.version>
+        <netty.version>4.1.138.Final</netty.version>
+        <postgresql.version>42.7.13</postgresql.version>
+        <!-- 1.33, the last 1.x: Liquibase 4.9 (Boot 2.7's) calls SafeConstructor(), which SnakeYAML 2 removed. -->
+        <snakeyaml.version>1.33</snakeyaml.version>
+        <logback.version>1.2.13</logback.version>
+        <spring-framework.version>5.3.39</spring-framework.version>
+        <spring-security.version>5.7.14</spring-security.version>
     </properties>
 
     <dependencies>
@@ -79,10 +92,16 @@
             <version>${swagger.version}</version>
         </dependency>
 
+        <!--
+          MIG-323: only the UI moves, to 2.10.5: 2.9.2 bundles a Swagger UI with an XSS (CVE-2019-17495). The jar is
+          static files (swagger-ui.html and webjars/springfox-swagger-ui/), the same paths in both, reading the
+          same /v2/api-docs and /swagger-resources that springfox-swagger2 2.9.2 serves. springfox 2.10 and 3.0
+          change the Java API and its handler mappings, which SwaggerConfig works around for 2.9.2.
+        -->
         <dependency>
             <groupId>io.springfox</groupId>
             <artifactId>springfox-swagger-ui</artifactId>
-            <version>${swagger.version}</version>
+            <version>2.10.5</version>
         </dependency>
 
         <dependency>
@@ -91,10 +110,32 @@
             <version>${swagger.version}</version>
         </dependency>
 
-        <!-- Kafka -->
+        <!-- Kafka. spring-kafka and kafka-clients stay on Boot 2.7.18's 2.8.11 and 3.1.2 (MIG-323): 2.9 needs
+             kafka-clients 3.2+, and Core's client is not moved without the SASL matrix (run-kafka-matrix.sh). -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
+            <exclusions>
+                <!-- MIG-323: org.lz4 1.8.0 has two highs (CVE-2025-12183, CVE-2025-66566) and the project moved to
+                     at.yawk.lz4, same net.jpountz classes; 1.12.0 below has every method kafka-clients 3.1.2 calls. -->
+                <exclusion>
+                    <groupId>org.lz4</groupId>
+                    <artifactId>lz4-java</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>at.yawk.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+            <version>1.12.0</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- MIG-323: kafka-clients 3.1.2's snappy-java 1.1.8.4 has two highs (CVE-2023-34455, CVE-2023-43642). -->
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>1.1.10.8</version>
+            <scope>runtime</scope>
         </dependency>
 
         <dependency>
@@ -173,30 +214,32 @@
             <version>4.7.1</version>
         </dependency>
 
-        <!-- Apache POI -->
+        <!-- Apache POI 5.4.1 since MIG-323: 3.15 has a DoS (CVE-2017-12626) and its xmlbeans 2.6.0 an
+             entity-expansion critical (CVE-2021-23926); 5.4.1 brings xmlbeans 5.3.0. -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
-            <version>3.15</version>
+            <version>5.4.1</version>
         </dependency>
 
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
-            <version>3.15</version>
+            <version>5.4.1</version>
         </dependency>
 
         <!-- Utils -->
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
-            <version>2.7</version>
+            <!-- MIG-323: 2.20.0; 2.7 has CVE-2024-47554 (XmlStreamReader DoS). -->
+            <version>2.20.0</version>
         </dependency>
 
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
-            <version>2.8.6</version>
+            <!-- MIG-323: Boot 2.7's 2.9.1, as every other service; 2.8.6 has CVE-2022-25647. -->
         </dependency>
 
         <!-- MIG-230: a pipeline definition is JSON; YAML is a view of the same definition, read and written with
