@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import process.model.enums.Execution;
+import process.model.enums.JobStatus;
 import process.model.enums.NotificationSeverity;
 import process.model.enums.NotificationType;
 import process.model.enums.Status;
@@ -34,7 +36,7 @@ import process.security.TenantFilterHelper;
 import process.util.PagingUtil;
 import process.util.PlatformDatabases;
 import process.util.ProcessUtil;
-import process.util.EnumConverter;
+import process.util.EnumUtils;
 import process.util.TaskPayloadLocationUtil;
 import process.util.excel.BulkExcel;
 import process.util.excel.UploadedSheet;
@@ -449,8 +451,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return new ResponseDto(ERROR, String.format("SourceTask not found with %d.", sourceTaskDto.getTaskDetailId()));
     }
 
-    // EnumConverter is deprecated for new code; these legacy task screens still use it until they are retired.
-    @SuppressWarnings("deprecation")
     @Override
     public ResponseDto listSourceTask(String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
@@ -491,7 +491,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskDto.setTaskStatus(EnumConverter.toStatus(String.valueOf(obj[index])));
+                        sourceTaskDto.setTaskStatus(EnumUtils.parseEnum(Status.class, String.valueOf(obj[index])));
                     }
                     SourceTaskTypeDto sourceTaskTypeDto = new SourceTaskTypeDto();
                     index++;
@@ -512,7 +512,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceTaskTypeDto.setStatus(EnumConverter.toStatus(obj[index].toString()));
+                        sourceTaskTypeDto.setStatus(EnumUtils.parseEnum(Status.class, obj[index].toString()));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
@@ -558,8 +558,6 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return responseDto;
     }
 
-    // EnumConverter is deprecated for new code; these legacy task screens still use it until they are retired.
-    @SuppressWarnings("deprecation")
     @Override
     public ResponseDto fetchAllLinkJobsWithSourceTaskId(Long sourceTaskId, String startDate, String endDate,
         String columnName, String order, Pageable paging, SearchTextDto searchTextDto) throws Exception {
@@ -596,15 +594,15 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setJobStatus(EnumConverter.toStatus(String.valueOf(obj[index])));
+                        sourceJobDto.setJobStatus(EnumUtils.parseEnum(Status.class, String.valueOf(obj[index])));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setExecution(EnumConverter.toExecution(String.valueOf(obj[index])));
+                        sourceJobDto.setExecution(EnumUtils.parseEnum(Execution.class, String.valueOf(obj[index])));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setJobRunningStatus(EnumConverter.toJobStatus(String.valueOf(obj[index])));
+                        sourceJobDto.setJobRunningStatus(EnumUtils.parseEnum(JobStatus.class, String.valueOf(obj[index])));
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
