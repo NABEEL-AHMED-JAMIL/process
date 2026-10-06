@@ -87,6 +87,8 @@ class KafkaHealthTest {
         described.put("orders", done(new TopicDescription("orders", false, Collections.singletonList(
             new TopicPartitionInfo(0, BROKER, Arrays.asList(BROKER, new Node(2, "kafka-2", 9092)), Collections.singletonList(BROKER))))));
         described.put("missing", failed(new UnknownTopicOrPartitionException("no such topic")));
+        described.put("unused", done(new TopicDescription("unused", false, Collections.singletonList(
+            new TopicPartitionInfo(0, BROKER, Collections.singletonList(BROKER), Collections.singletonList(BROKER))))));
         when(topics.values()).thenReturn(described);
         when(admin.describeTopics(anyCollection())).thenReturn(topics);
 
@@ -95,7 +97,8 @@ class KafkaHealthTest {
             boolean latest = asked.values().iterator().next() instanceof OffsetSpec.LatestSpec;
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> out = new HashMap<>();
             for (TopicPartition tp : asked.keySet()) {
-                out.put(tp, new ListOffsetsResult.ListOffsetsResultInfo(latest ? 100 : 10, 0, Optional.empty()));
+                long offset = "unused".equals(tp.topic()) ? 0 : latest ? 100 : 10;
+                out.put(tp, new ListOffsetsResult.ListOffsetsResultInfo(offset, 0, Optional.empty()));
             }
             ListOffsetsResult result = mock(ListOffsetsResult.class);
             when(result.all()).thenReturn(done(out));
@@ -171,6 +174,18 @@ class KafkaHealthTest {
         Map<String, Object> totals = (Map<String, Object>) report.get("totals");
         assertThat(totals).containsEntry("topics", 2).containsEntry("missing", 1).containsEntry("underReplicated", 1)
             .containsEntry("groups", 2).containsEntry("groupsStable", 1L).containsEntry("maxLag", 60L);
+    }
+
+    /** MIG-321: nothing kept and nothing reading is Idle -- a step pipeline's topic -- not a missing consumer. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aTopicWithNoMessagesAndNoReaderIsIdleNotUnread() {
+        KafkaHealth health = new KafkaHealth(p -> broker(), Clock.systemUTC());
+
+        Map<String, Object> report = health.report(profile(), Collections.singletonList("unused"), true);
+
+        assertThat(topic(report, "unused")).containsEntry("messages", 0L).containsEntry("readers", 0).containsEntry("state", "Idle");
+        assertThat((Map<String, Object>) report.get("totals")).containsEntry("unread", 0L);
     }
 
     @Test
