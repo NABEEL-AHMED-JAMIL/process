@@ -85,7 +85,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return "GET".equalsIgnoreCase(method) && SIGNED_LINK.matcher(path).matches();
     }
 
-    private static final Pattern SIGNED_LINK = Pattern.compile("^/customer/files/[0-9A-Za-z]{1,64}/content$");
+    private static final Pattern SIGNED_LINK = Pattern.compile("^/customer/files/[^/]{1,128}/content$");
 
     /**
      * MIG-332: the customer API (/v1 at the gateway, /customer here). Only an API client's token opens it -- a person's

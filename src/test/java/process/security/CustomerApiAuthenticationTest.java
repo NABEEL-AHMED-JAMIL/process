@@ -110,6 +110,8 @@ class CustomerApiAuthenticationTest {
         assertThat(JwtAuthenticationFilter.isSignedLink("POST", "/customer/files/01JRESULT00000000000000000/content")).isFalse();
         assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/files/01JRESULT00000000000000000")).isFalse();
         assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/files/x/../../runs/content")).isFalse();
+        // Any one segment: a malformed id gets the controller's 404, not a 401 (the gateway's route is any {fileId}).
+        assertThat(JwtAuthenticationFilter.isSignedLink("GET", "/customer/files/api-check/content")).isTrue();
         // The file itself (its link and facts) still needs an API client's token.
         assertThat(this.call("/customer/files/01JRESULT00000000000000000/meta", null, new Seen()).getStatus()).isEqualTo(401);
     }
