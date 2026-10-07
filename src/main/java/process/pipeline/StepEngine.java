@@ -182,7 +182,7 @@ public class StepEngine {
 
     /** MIG-344: a run's memory budget in MB, and how many rows a streaming step reads at a time. */
     @Autowired
-    public void useMemory(@Value("${process.pipeline.run-memory-mb:256}") int runMemoryMb,
+    public void useMemory(@Value("${process.pipeline.run-memory-mb:128}") int runMemoryMb,
                           @Value("${process.pipeline.batch-rows:1024}") int batchRows) {
         this.runMemoryMb = Math.max(16, runMemoryMb);
         this.batchRows = Math.max(1, batchRows);

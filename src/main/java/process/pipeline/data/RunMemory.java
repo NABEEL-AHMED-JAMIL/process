@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class RunMemory {
 
-    public static final int DEFAULT_MB = 256;
+    public static final int DEFAULT_MB = 128;
 
     private final long budget;
     private final AtomicLong used = new AtomicLong();

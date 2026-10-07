@@ -179,7 +179,7 @@ class StreamingEngineTest {
         assertThat(this.steps.logText(RUN_ID, 1, "keep")).containsExactly("INFO 2700 of 3000 row(s) kept.",
             this.steps.logText(RUN_ID, 1, "keep").get(1));
         assertThat(this.steps.logText(RUN_ID, 1, "keep").get(1)).startsWith("INFO Streamed in batches of 1,024 row(s): at most about ")
-            .endsWith("of the run's 256.0 MB memory budget.");
+            .endsWith("of the run's 128.0 MB memory budget.");
         assertThat(this.steps.logText(RUN_ID, 1, "pick")).noneMatch(line -> line.contains("Streamed"));
         assertThat(this.files(".partial")).as("no half-written file").isEmpty();
         assertThat(this.root.resolve("scratch")).as("no spill left").satisfiesAnyOf(

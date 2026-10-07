@@ -533,7 +533,7 @@ class BigDataBench {
         StepEngine engine = new StepEngine(definitions, steps, tasks, new DefinitionValidator(new TaskRegistry(tasks, new InMemoryTaskOverrideStore())),
             datasets, worker, transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(), tryThread,
             duration -> { });
-        engine.useMemory(Integer.getInteger("bigdata.run-memory-mb", 256), Integer.getInteger("bigdata.batch-rows", 1024));
+        engine.useMemory(Integer.getInteger("bigdata.run-memory-mb", 128), Integer.getInteger("bigdata.batch-rows", 1024));
         long allocated0 = allocated(tryThreadRef.get()) + allocated();
         long began = System.nanoTime();
         windowStart.set(began);
